@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WA Blast — WhatsApp Mass Sender</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0f12;
+    --surface: #151820;
+    --surface2: #1c202b;
+    --surface3: #222736;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --green: #25D366;
+    --green-dim: #1a9a49;
+    --green-glow: rgba(37,211,102,0.12);
+    --text: #eef0f5;
+    --text2: #8892a4;
+    --text3: #525c6e;
+    --danger: #f0616b;
+    --warning: #f0b429;
+    --info: #4da6ff;
+    --radius: 10px;
+    --radius-lg: 16px;
+  }
+
+  html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+
+  /* ── Layout ── */
+  .app { display: flex; height: 100vh; overflow: hidden; }
+
+  .sidebar {
+    width: 220px;
+    min-width: 220px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+  }
+
+  .logo {
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-icon {
+    width: 34px; height: 34px;
+    background: var(--green);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .logo-icon svg { width: 18px; height: 18px; fill: #000; }
+  .logo-text { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 16px; color: var(--text); letter-spacing: -0.3px; }
+  .logo-text span { color: var(--green); }
+
+  nav { padding: 12px 10px; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    color: var(--text2);
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.15s, color 0.15s;
+    border: none; background: transparent; width: 100%; text-align: left;
+  }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: var(--green-glow); color: var(--green); border: 1px solid rgba(37,211,102,0.2); }
+  .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  .nav-section-label { padding: 10px 12px 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); font-weight: 500; }
+
+  .sidebar-footer {
+    padding: 14px 10px;
+    border-top: 1px solid var(--border);
+  }
+  .status-pill {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    background: var(--surface2);
+    border-radius: var(--radius);
+    font-size: 12px;
+    color: var(--text2);
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); flex-shrink: 0; }
+  .dot.red { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+
+  /* ── Main Content ── */
+  .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+
+  .page { display: none; flex: 1; flex-direction: column; padding: 32px 36px; gap: 24px; }
+  .page.active { display: flex; }
+
+  .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .page-title { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 700; color: var(--text); }
+  .page-sub { font-size: 13px; color: var(--text2); margin-top: 3px; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px 22px;
+  }
+  .card-title { font-size: 13px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .card-title svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ── Stats ── */
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .stat-card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px 18px; }
+  .stat-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 500; margin-bottom: 8px; }
+  .stat-val { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 700; color: var(--text); line-height: 1; }
+  .stat-val.green { color: var(--green); }
+  .stat-val.red { color: var(--danger); }
+  .stat-val.yellow { color: var(--warning); }
+
+  /* ── Forms ── */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-grid.cols3 { grid-template-columns: 1fr 1fr 1fr; }
+  .form-full { grid-column: 1 / -1; }
+
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 12px; font-weight: 500; color: var(--text2); }
+  .field input, .field select, .field textarea {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 9px 12px;
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--green); }
+  .field input[type="password"] { font-family: 'DM Mono', monospace; letter-spacing: 0.1em; }
+  .field textarea { resize: vertical; min-height: 90px; }
+  .field select option { background: var(--surface2); }
+  .field .hint { font-size: 11px; color: var(--text3); }
+
+  .secret-wrap { position: relative; }
+  .secret-wrap input { padding-right: 38px; }
+  .eye-btn {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer; color: var(--text3); padding: 4px;
+  }
+  .eye-btn:hover { color: var(--text2); }
+  .eye-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 9px 18px;
+    border-radius: var(--radius);
+    font-size: 13px; font-weight: 500;
+    cursor: pointer; border: none; transition: opacity 0.15s, transform 0.1s;
+    font-family: 'Inter', sans-serif;
+    white-space: nowrap;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  .btn-primary { background: var(--green); color: #000; font-weight: 600; }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-ghost { background: var(--surface2); color: var(--text2); border: 1px solid var(--border2); }
+  .btn-ghost:hover { color: var(--text); background: var(--surface3); }
+  .btn-danger { background: rgba(240,97,107,0.15); color: var(--danger); border: 1px solid rgba(240,97,107,0.25); }
+  .btn-danger:hover { background: rgba(240,97,107,0.22); }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+  /* ── Tags / badges ── */
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 99px; font-size: 11px; font-weight: 500; }
+  .badge-green { background: rgba(37,211,102,0.12); color: var(--green); }
+  .badge-red { background: rgba(240,97,107,0.12); color: var(--danger); }
+  .badge-yellow { background: rgba(240,180,41,0.12); color: var(--warning); }
+  .badge-gray { background: var(--surface3); color: var(--text2); }
+  .badge-blue { background: rgba(77,166,255,0.1); color: var(--info); }
+
+  /* ── Upload zone ── */
+  .upload-zone {
+    border: 1.5px dashed var(--border2);
+    border-radius: var(--radius-lg);
+    padding: 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    background: var(--surface2);
+  }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--green); background: var(--green-glow); }
+  .upload-zone p { font-size: 13px; color: var(--text2); margin-top: 8px; }
+  .upload-zone small { font-size: 11px; color: var(--text3); }
+  .upload-icon { width: 36px; height: 36px; margin: 0 auto 6px; opacity: 0.4; }
+
+  /* ── Table ── */
+  .table-wrap { overflow-x: auto; border-radius: var(--radius-lg); border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text3); background: var(--surface2); border-bottom: 1px solid var(--border); }
+  td { padding: 11px 14px; border-bottom: 1px solid var(--border); color: var(--text2); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+  td.mono { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); }
+
+  /* ── Progress bar ── */
+  .progress-bar { height: 6px; background: var(--surface3); border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--green); border-radius: 99px; transition: width 0.4s ease; }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed; bottom: 24px; right: 24px;
+    padding: 12px 18px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    font-size: 13px; color: var(--text);
+    display: flex; align-items: center; gap: 10px;
+    transform: translateY(80px); opacity: 0;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    z-index: 999; max-width: 320px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.success { border-color: rgba(37,211,102,0.3); }
+  #toast.error { border-color: rgba(240,97,107,0.3); }
+
+  /* ── Template preview ── */
+  .template-preview {
+    background: var(--surface3);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.7;
+    white-space: pre-wrap;
+    min-height: 60px;
+    border: 1px solid var(--border);
+    font-family: 'Inter', sans-serif;
+  }
+  .tpl-var { background: rgba(37,211,102,0.15); color: var(--green); padding: 1px 5px; border-radius: 4px; font-family: 'DM Mono', monospace; font-size: 12px; }
+
+  /* ── Divider ── */
+  .divider { height: 1px; background: var(--border); }
+
+  /* ── Row actions ── */
+  .row-actions { display: flex; gap: 6px; }
+
+  /* ── Send progress modal ── */
+  #send-modal {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center; justify-content: center;
+  }
+  #send-modal.open { display: flex; }
+  .modal-box {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-lg);
+    padding: 28px 32px;
+    width: 420px;
+    max-width: 95vw;
+  }
+  .modal-title { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+  .modal-sub { font-size: 13px; color: var(--text2); margin-bottom: 22px; }
+
+  /* ── Config sections ── */
+  .config-section { display: flex; flex-direction: column; gap: 16px; }
+  .section-divider { display: flex; align-items: center; gap: 10px; margin: 4px 0; }
+  .section-divider span { font-size: 11px; color: var(--text3); font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap; }
+  .section-divider::before, .section-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 99px; }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+    .form-grid.cols3 { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 600px) {
+    .sidebar { width: 56px; min-width: 56px; }
+    .logo-text, .nav-item span, .nav-section-label, .status-pill span { display: none; }
+    .page { padding: 20px 16px; }
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+    .form-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12.004 2.003c-5.514 0-9.997 4.482-9.997 9.995 0 1.762.46 3.477 1.338 4.988L2 22l5.15-1.33a10.014 10.014 0 004.854 1.24c5.515 0 9.997-4.482 9.997-9.996 0-5.513-4.482-9.911-9.997-9.911z"/></svg>
+      </div>
+      <span class="logo-text">WA<span>Blast</span></span>
+    </div>
+
+    <nav>
+      <span class="nav-section-label">Main</span>
+      <button class="nav-item active" onclick="showPage('send')">
+        <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        <span>Send Campaign</span>
+      </button>
+      <button class="nav-item" onclick="showPage('contacts')">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Contacts</span>
+      </button>
+      <button class="nav-item" onclick="showPage('templates')">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        <span>Templates</span>
+      </button>
+      <button class="nav-item" onclick="showPage('history')">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>History</span>
+      </button>
+      <span class="nav-section-label">Setup</span>
+      <button class="nav-item" onclick="showPage('config')">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M12 2v2M12 20v2M20 12h2M2 12h2M19.07 19.07l-1.41-1.41M4.93 19.07l1.41-1.41"/></svg>
+        <span>Configuration</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="status-pill" id="api-status-pill">
+        <span class="dot red" id="api-dot"></span>
+        <span id="api-status-text">Not configured</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- ═══ SEND PAGE ═══ -->
+    <div class="page active" id="page-send">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Send Campaign</div>
+          <div class="page-sub">Configure and send bulk messages via WhatsApp Cloud API</div>
+        </div>
+        <button class="btn btn-primary" onclick="startSend()">
+          <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Send Now
+        </button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Contacts loaded</div>
+          <div class="stat-val" id="stat-contacts">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Sent today</div>
+          <div class="stat-val green" id="stat-sent">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Failed</div>
+          <div class="stat-val red" id="stat-failed">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Rate limit delay</div>
+          <div class="stat-val yellow" id="stat-delay">1s</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          Recipient List
+        </div>
+        <div class="upload-zone" id="upload-zone" onclick="document.getElementById('csv-input').click()" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropFile(event)">
+          <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+          <p>Drop CSV file here or click to upload</p>
+          <small>Columns: phone, name (optional), and any custom variables</small>
+        </div>
+        <input type="file" id="csv-input" accept=".csv" style="display:none" onchange="loadCSV(this)">
+        <div id="contacts-preview" style="display:none; margin-top:16px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+            <span style="font-size:13px; color:var(--text2);" id="csv-summary"></span>
+            <button class="btn btn-ghost btn-sm" onclick="clearCSV()">Clear</button>
+          </div>
+          <div class="table-wrap">
+            <table id="contacts-table">
+              <thead id="contacts-thead"></thead>
+              <tbody id="contacts-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Message
+        </div>
+        <div class="form-grid">
+          <div class="field">
+            <label>Message Type</label>
+            <select id="msg-type" onchange="toggleMsgType()">
+              <option value="text">Plain Text</option>
+              <option value="template">Approved Template</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Rate limit delay (seconds between messages)</label>
+            <input type="number" id="rate-delay" value="1" min="0.1" step="0.1" onchange="document.getElementById('stat-delay').textContent=this.value+'s'">
+          </div>
+        </div>
+
+        <div id="text-msg-block" style="margin-top:16px;">
+          <div class="field">
+            <label>Message body <span style="color:var(--text3); font-weight:400;">— use {{name}} for variables</span></label>
+            <textarea id="msg-body" placeholder="Hi {{name}}, we have a special offer just for you! 🎉" oninput="updatePreview()"></textarea>
+          </div>
+          <div style="margin-top:12px;">
+            <div style="font-size:11px; color:var(--text3); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.06em;">Live preview</div>
+            <div class="template-preview" id="msg-preview">Your preview will appear here…</div>
+          </div>
+        </div>
+
+        <div id="template-msg-block" style="display:none; margin-top:16px;">
+          <div class="form-grid">
+            <div class="field">
+              <label>Template Name</label>
+              <input type="text" id="tpl-name" placeholder="hello_world">
+            </div>
+            <div class="field">
+              <label>Language Code</label>
+              <input type="text" id="tpl-lang" value="en_US" placeholder="en_US">
+            </div>
+            <div class="field form-full">
+              <label>Template Parameters (comma-separated, match column names from CSV)</label>
+              <input type="text" id="tpl-params" placeholder="name, promo_code, amount">
+              <div class="hint">These map to {{1}}, {{2}}, {{3}} in your approved template, pulled from CSV columns.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ CONTACTS PAGE ═══ -->
+    <div class="page" id="page-contacts">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Contacts</div>
+          <div class="page-sub">Manage and review your recipient database</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost" onclick="document.getElementById('csv-input2').click()">
+            <svg viewBox="0 0 24 24"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+            Import CSV
+          </button>
+          <button class="btn btn-primary" onclick="addContactRow()">
+            <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Contact
+          </button>
+        </div>
+        <input type="file" id="csv-input2" accept=".csv" style="display:none" onchange="loadCSV(this, true)">
+      </div>
+
+      <div class="card" style="padding:0;">
+        <div class="table-wrap" style="border:none; border-radius:var(--radius-lg);">
+          <table>
+            <thead>
+              <tr>
+                <th>Phone</th>
+                <th>Name</th>
+                <th>Custom 1</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="contacts-main-table">
+              <tr><td colspan="5" style="text-align:center; color:var(--text3); padding:32px;">No contacts yet — import a CSV file</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ TEMPLATES PAGE ═══ -->
+    <div class="page" id="page-templates">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Message Templates</div>
+          <div class="page-sub">Create reusable message templates with dynamic variables</div>
+        </div>
+        <button class="btn btn-primary" onclick="addTemplate()">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Template
+        </button>
+      </div>
+
+      <div id="templates-list" style="display:flex; flex-direction:column; gap:12px;"></div>
+    </div>
+
+    <!-- ═══ HISTORY PAGE ═══ -->
+    <div class="page" id="page-history">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Send History</div>
+          <div class="page-sub">Log of all sent campaigns and per-message status</div>
+        </div>
+        <button class="btn btn-ghost" onclick="clearHistory()">Clear log</button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total sent</div>
+          <div class="stat-val" id="h-total">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Delivered</div>
+          <div class="stat-val green" id="h-ok">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Failed</div>
+          <div class="stat-val red" id="h-fail">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Last campaign</div>
+          <div class="stat-val" id="h-last" style="font-size:16px; padding-top:4px;">—</div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:0;">
+        <div class="table-wrap" style="border:none; border-radius:var(--radius-lg);">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Phone</th>
+                <th>Name</th>
+                <th>Message preview</th>
+                <th>Status</th>
+                <th>Message ID</th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody">
+              <tr><td colspan="6" style="text-align:center; color:var(--text3); padding:32px;">No history yet</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ CONFIG PAGE ═══ -->
+    <div class="page" id="page-config">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Configuration</div>
+          <div class="page-sub">Meta Cloud API credentials and sending settings</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost" onclick="testConnection()">
+            <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.71 3.35 2 2 0 0 1 3.68 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.15a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            Test Connection
+          </button>
+          <button class="btn btn-primary" onclick="saveConfig()">
+            <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Save Config
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="config-section">
+          <div class="section-divider"><span>API Credentials</span></div>
+
+          <div class="form-grid">
+            <div class="field form-full">
+              <label>Access Token (permanent or temporary)</label>
+              <div class="secret-wrap">
+                <input type="password" id="cfg-token" placeholder="EAAxxxxxxx...">
+                <button class="eye-btn" onclick="toggleSecret('cfg-token', this)">
+                  <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+              </div>
+              <div class="hint">From Meta for Developers → Your App → WhatsApp → API Setup</div>
+            </div>
+
+            <div class="field">
+              <label>Phone Number ID</label>
+              <input type="text" id="cfg-phone-id" placeholder="1234567890123456">
+              <div class="hint">The ID of your registered sender phone number</div>
+            </div>
+
+            <div class="field">
+              <label>WhatsApp Business Account ID (WABA)</label>
+              <input type="text" id="cfg-waba-id" placeholder="1234567890123456">
+            </div>
+          </div>
+
+          <div class="section-divider"><span>Webhook (optional)</span></div>
+
+          <div class="form-grid">
+            <div class="field">
+              <label>Webhook Verify Token</label>
+              <div class="secret-wrap">
+                <input type="password" id="cfg-webhook-token" placeholder="your_verify_token">
+                <button class="eye-btn" onclick="toggleSecret('cfg-webhook-token', this)">
+                  <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="field">
+              <label>App Secret</label>
+              <div class="secret-wrap">
+                <input type="password" id="cfg-app-secret" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+                <button class="eye-btn" onclick="toggleSecret('cfg-app-secret', this)">
+                  <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-divider"><span>Sending Settings</span></div>
+
+          <div class="form-grid cols3">
+            <div class="field">
+              <label>API Version</label>
+              <select id="cfg-version">
+                <option>v19.0</option>
+                <option>v18.0</option>
+                <option>v17.0</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Default delay (sec)</label>
+              <input type="number" id="cfg-delay" value="1" min="0.1" step="0.1">
+              <div class="hint">Pause between each message to respect rate limits</div>
+            </div>
+
+            <div class="field">
+              <label>Max retries on failure</label>
+              <input type="number" id="cfg-retries" value="2" min="0" max="10">
+            </div>
+
+            <div class="field form-full">
+              <label>API Base URL</label>
+              <input type="text" id="cfg-base-url" value="https://graph.facebook.com">
+              <div class="hint">Default: https://graph.facebook.com — don't change unless using a proxy</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Config JSON preview -->
+      <div class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          Config JSON preview
+        </div>
+        <pre id="cfg-preview" style="font-family:'DM Mono',monospace; font-size:12px; color:var(--text2); white-space:pre-wrap; line-height:1.7; overflow-x:auto;">{
+  "token": "••••••••",
+  "phoneNumberId": "",
+  "wabaId": "",
+  "apiVersion": "v19.0",
+  "baseUrl": "https://graph.facebook.com",
+  "delay": 1,
+  "maxRetries": 2
+}</pre>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- SEND PROGRESS MODAL -->
+<div id="send-modal">
+  <div class="modal-box">
+    <div class="modal-title">Sending Messages</div>
+    <div class="modal-sub" id="modal-sub">Preparing campaign…</div>
+    <div class="progress-bar" style="margin-bottom:14px;">
+      <div class="progress-fill" id="modal-progress" style="width:0%"></div>
+    </div>
+    <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text3); margin-bottom:20px;">
+      <span id="modal-count">0 / 0</span>
+      <span id="modal-pct">0%</span>
+    </div>
+    <div id="modal-log" style="font-family:'DM Mono',monospace; font-size:11px; color:var(--text2); height:110px; overflow-y:auto; background:var(--surface2); border-radius:var(--radius); padding:10px 12px; line-height:2; border:1px solid var(--border);"></div>
+    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:18px;">
+      <button class="btn btn-danger btn-sm" id="stop-btn" onclick="stopSend()">Stop</button>
+      <button class="btn btn-ghost btn-sm" id="close-modal-btn" style="display:none;" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const state = {
+  contacts: [],
+  headers: [],
+  history: [],
+  config: {},
+  templates: [
+    { id: 1, name: 'Welcome message', body: 'Hi {{name}}! 👋 Welcome to our community. Your code is {{code}}.', vars: ['name','code'] },
+    { id: 2, name: 'Promo offer', body: 'Hello {{name}}, get {{discount}}% off your next purchase with code {{promo}}! 🎁', vars: ['name','discount','promo'] }
+  ],
+  sending: false,
+  stopFlag: false,
+  sentCount: 0,
+  failCount: 0
+};
+
+// ── Navigation ──────────────────────────────────────
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (id === 'templates') renderTemplates();
+  if (id === 'history') renderHistoryStats();
+  if (id === 'contacts') renderContactsPage();
+}
+
+// ── Config ──────────────────────────────────────────
+function saveConfig() {
+  state.config = {
+    token: document.getElementById('cfg-token').value,
+    phoneNumberId: document.getElementById('cfg-phone-id').value,
+    wabaId: document.getElementById('cfg-waba-id').value,
+    webhookToken: document.getElementById('cfg-webhook-token').value,
+    appSecret: document.getElementById('cfg-app-secret').value,
+    apiVersion: document.getElementById('cfg-version').value,
+    delay: parseFloat(document.getElementById('cfg-delay').value),
+    maxRetries: parseInt(document.getElementById('cfg-retries').value),
+    baseUrl: document.getElementById('cfg-base-url').value
+  };
+  localStorage.setItem('waBlastConfig', JSON.stringify(state.config));
+  updateConfigPreview();
+  updateApiStatus();
+  toast('Configuration saved!', 'success');
+}
+
+function loadConfig() {
+  const saved = localStorage.getItem('waBlastConfig');
+  if (!saved) return;
+  state.config = JSON.parse(saved);
+  document.getElementById('cfg-token').value = state.config.token || '';
+  document.getElementById('cfg-phone-id').value = state.config.phoneNumberId || '';
+  document.getElementById('cfg-waba-id').value = state.config.wabaId || '';
+  document.getElementById('cfg-webhook-token').value = state.config.webhookToken || '';
+  document.getElementById('cfg-app-secret').value = state.config.appSecret || '';
+  document.getElementById('cfg-delay').value = state.config.delay || 1;
+  document.getElementById('cfg-retries').value = state.config.maxRetries || 2;
+  document.getElementById('cfg-base-url').value = state.config.baseUrl || 'https://graph.facebook.com';
+  if (state.config.apiVersion) document.getElementById('cfg-version').value = state.config.apiVersion;
+  updateConfigPreview();
+  updateApiStatus();
+}
+
+function updateConfigPreview() {
+  const c = state.config;
+  const preview = {
+    token: c.token ? '••••••••' : '',
+    phoneNumberId: c.phoneNumberId || '',
+    wabaId: c.wabaId || '',
+    apiVersion: c.apiVersion || 'v19.0',
+    baseUrl: c.baseUrl || 'https://graph.facebook.com',
+    delay: c.delay || 1,
+    maxRetries: c.maxRetries || 2
+  };
+  document.getElementById('cfg-preview').textContent = JSON.stringify(preview, null, 2);
+}
+
+function updateApiStatus() {
+  const configured = state.config.token && state.config.phoneNumberId;
+  const dot = document.getElementById('api-dot');
+  const txt = document.getElementById('api-status-text');
+  if (configured) { dot.className = 'dot'; txt.textContent = 'API configured'; }
+  else { dot.className = 'dot red'; txt.textContent = 'Not configured'; }
+}
+
+async function testConnection() {
+  if (!state.config.token || !state.config.phoneNumberId) {
+    toast('Please save configuration first', 'error'); return;
+  }
+  toast('Testing connection…');
+  try {
+    const ver = state.config.apiVersion || 'v19.0';
+    const base = state.config.baseUrl || 'https://graph.facebook.com';
+    const res = await fetch(`${base}/${ver}/${state.config.phoneNumberId}?access_token=${state.config.token}`);
+    const data = await res.json();
+    if (data.error) toast('Connection failed: ' + data.error.message, 'error');
+    else toast('Connection successful! Phone: ' + (data.display_phone_number || data.id), 'success');
+  } catch(e) {
+    toast('Network error: ' + e.message, 'error');
+  }
+}
+
+function toggleSecret(id, btn) {
+  const inp = document.getElementById(id);
+  const isHidden = inp.type === 'password';
+  inp.type = isHidden ? 'text' : 'password';
+  btn.querySelector('svg').innerHTML = isHidden
+    ? '<line x1="1" y1="1" x2="23" y2="23"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><path d="M1 12s4-8 11-8"/>'
+    : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+}
+
+// ── CSV Upload ───────────────────────────────────────
+function loadCSV(input, forContacts) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const lines = e.target.result.trim().split('\n').filter(l => l.trim());
+    if (lines.length < 2) { toast('CSV must have a header row and at least one contact', 'error'); return; }
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g,''));
+    const rows = lines.slice(1).map(l => {
+      const vals = l.split(',').map(v => v.trim().replace(/"/g,''));
+      const obj = {};
+      headers.forEach((h, i) => obj[h] = vals[i] || '');
+      return obj;
+    });
+    state.contacts = rows;
+    state.headers = headers;
+    document.getElementById('stat-contacts').textContent = rows.length;
+    renderContactsPreview();
+    if (forContacts) renderContactsPage();
+    toast(`${rows.length} contacts loaded`, 'success');
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+function renderContactsPreview() {
+  const wrap = document.getElementById('contacts-preview');
+  wrap.style.display = 'block';
+  document.getElementById('csv-summary').textContent = `${state.contacts.length} contacts, columns: ${state.headers.join(', ')}`;
+  const thead = document.getElementById('contacts-thead');
+  const tbody = document.getElementById('contacts-tbody');
+  thead.innerHTML = '<tr>' + state.headers.map(h => `<th>${h}</th>`).join('') + '</tr>';
+  const rows = state.contacts.slice(0, 5);
+  tbody.innerHTML = rows.map(r => '<tr>' + state.headers.map(h => `<td>${r[h] || ''}</td>`).join('') + '</tr>').join('');
+  if (state.contacts.length > 5) tbody.innerHTML += `<tr><td colspan="${state.headers.length}" style="color:var(--text3); text-align:center;">… ${state.contacts.length - 5} more rows</td></tr>`;
+}
+
+function clearCSV() {
+  state.contacts = []; state.headers = [];
+  document.getElementById('contacts-preview').style.display = 'none';
+  document.getElementById('stat-contacts').textContent = '0';
+}
+
+function dragOver(e) { e.preventDefault(); document.getElementById('upload-zone').classList.add('drag'); }
+function dragLeave() { document.getElementById('upload-zone').classList.remove('drag'); }
+function dropFile(e) {
+  e.preventDefault(); dragLeave();
+  const file = e.dataTransfer.files[0];
+  if (file) { const fake = { files: [file] }; loadCSV(fake); }
+}
+
+// ── Message Preview ──────────────────────────────────
+function updatePreview() {
+  const body = document.getElementById('msg-body').value;
+  const sample = state.contacts[0] || {};
+  const preview = body.replace(/\{\{(\w+)\}\}/g, (_, k) => {
+    const val = sample[k] || `[${k}]`;
+    return `<span class="tpl-var">{{${k}}}=${val}</span>`;
+  });
+  document.getElementById('msg-preview').innerHTML = preview || 'Your preview will appear here…';
+}
+
+function toggleMsgType() {
+  const t = document.getElementById('msg-type').value;
+  document.getElementById('text-msg-block').style.display = t === 'text' ? 'block' : 'none';
+  document.getElementById('template-msg-block').style.display = t === 'template' ? 'block' : 'none';
+}
+
+// ── Templates Page ───────────────────────────────────
+function renderTemplates() {
+  const el = document.getElementById('templates-list');
+  el.innerHTML = state.templates.map(t => `
+    <div class="card">
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:12px;">
+        <div>
+          <div style="font-weight:500; font-size:14px; color:var(--text);">${t.name}</div>
+          <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
+            ${t.vars.map(v => `<span class="badge badge-green">{{${v}}}</span>`).join('')}
+          </div>
+        </div>
+        <div class="row-actions">
+          <button class="btn btn-ghost btn-sm" onclick="useTemplate(${t.id})">Use</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteTemplate(${t.id})">Delete</button>
+        </div>
+      </div>
+      <div class="template-preview">${t.body}</div>
+    </div>
+  `).join('');
+}
+
+function addTemplate() {
+  const name = prompt('Template name:');
+  if (!name) return;
+  const body = prompt('Template body (use {{variable}} for dynamic parts):');
+  if (!body) return;
+  const vars = [...new Set([...body.matchAll(/\{\{(\w+)\}\}/g)].map(m => m[1]))];
+  state.templates.push({ id: Date.now(), name, body, vars });
+  renderTemplates();
+}
+
+function deleteTemplate(id) {
+  if (!confirm('Delete this template?')) return;
+  state.templates = state.templates.filter(t => t.id !== id);
+  renderTemplates();
+}
+
+function useTemplate(id) {
+  const t = state.templates.find(t => t.id === id);
+  if (!t) return;
+  showPage('send'); document.querySelector('[onclick="showPage(\'send\')"]').click();
+  document.getElementById('msg-type').value = 'text';
+  toggleMsgType();
+  document.getElementById('msg-body').value = t.body;
+  updatePreview();
+  toast(`Template "${t.name}" loaded`, 'success');
+}
+
+// ── Contacts Page ────────────────────────────────────
+function renderContactsPage() {
+  const tbody = document.getElementById('contacts-main-table');
+  if (!state.contacts.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text3); padding:32px;">No contacts yet — import a CSV file</td></tr>';
+    return;
+  }
+  tbody.innerHTML = state.contacts.map((c, i) => `
+    <tr>
+      <td class="mono">${c.phone || c[state.headers[0]] || '—'}</td>
+      <td>${c.name || c[state.headers[1]] || '—'}</td>
+      <td>${c[state.headers[2]] || '—'}</td>
+      <td><span class="badge badge-gray">Pending</span></td>
+      <td><button class="btn btn-danger btn-sm" onclick="removeContact(${i})">Remove</button></td>
+    </tr>
+  `).join('');
+}
+
+function removeContact(i) {
+  state.contacts.splice(i, 1);
+  document.getElementById('stat-contacts').textContent = state.contacts.length;
+  renderContactsPage();
+}
+
+function addContactRow() {
+  const phone = prompt('Phone number (with country code, e.g. 5491122334455):');
+  if (!phone) return;
+  const name = prompt('Name (optional):') || '';
+  state.contacts.push({ phone, name });
+  if (!state.headers.includes('phone')) state.headers = ['phone', 'name', ...state.headers.filter(h => h !== 'phone' && h !== 'name')];
+  document.getElementById('stat-contacts').textContent = state.contacts.length;
+  renderContactsPage();
+}
+
+// ── History ──────────────────────────────────────────
+function renderHistoryStats() {
+  const ok = state.history.filter(h => h.status === 'sent').length;
+  const fail = state.history.filter(h => h.status === 'failed').length;
+  document.getElementById('h-total').textContent = state.history.length;
+  document.getElementById('h-ok').textContent = ok;
+  document.getElementById('h-fail').textContent = fail;
+  document.getElementById('h-last').textContent = state.history.length ? new Date(state.history[state.history.length-1].time).toLocaleTimeString() : '—';
+  const tbody = document.getElementById('history-tbody');
+  if (!state.history.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text3); padding:32px;">No history yet</td></tr>'; return; }
+  tbody.innerHTML = [...state.history].reverse().map(h => `
+    <tr>
+      <td>${new Date(h.time).toLocaleTimeString()}</td>
+      <td class="mono">${h.phone}</td>
+      <td>${h.name || '—'}</td>
+      <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${h.preview}</td>
+      <td><span class="badge ${h.status === 'sent' ? 'badge-green' : 'badge-red'}">${h.status}</span></td>
+      <td class="mono" style="font-size:11px;">${h.msgId || '—'}</td>
+    </tr>
+  `).join('');
+}
+
+function clearHistory() {
+  if (!confirm('Clear all history?')) return;
+  state.history = [];
+  state.sentCount = 0; state.failCount = 0;
+  document.getElementById('stat-sent').textContent = '0';
+  document.getElementById('stat-failed').textContent = '0';
+  renderHistoryStats();
+}
+
+// ── Sending ──────────────────────────────────────────
+async function startSend() {
+  if (!state.config.token || !state.config.phoneNumberId) { toast('Configure API credentials first', 'error'); return; }
+  if (!state.contacts.length) { toast('No contacts loaded. Upload a CSV first', 'error'); return; }
+  const msgType = document.getElementById('msg-type').value;
+  if (msgType === 'text' && !document.getElementById('msg-body').value.trim()) { toast('Enter a message body', 'error'); return; }
+  if (msgType === 'template' && !document.getElementById('tpl-name').value.trim()) { toast('Enter template name', 'error'); return; }
+
+  state.sending = true; state.stopFlag = false;
+  const modal = document.getElementById('send-modal');
+  const log = document.getElementById('modal-log');
+  modal.classList.add('open');
+  log.innerHTML = '';
+  document.getElementById('stop-btn').style.display = 'inline-flex';
+  document.getElementById('close-modal-btn').style.display = 'none';
+
+  const total = state.contacts.length;
+  let done = 0, failed = 0;
+
+  for (const contact of state.contacts) {
+    if (state.stopFlag) { addLog(log, '⚠ Sending stopped by user.', 'yellow'); break; }
+    const phone = contact.phone || contact[state.headers[0]] || '';
+    const name = contact.name || contact[state.headers[1]] || '';
+    if (!phone) { addLog(log, `✕ Skipped (no phone): ${JSON.stringify(contact)}`, 'red'); done++; failed++; continue; }
+
+    try {
+      const result = await sendMessage(contact, msgType);
+      const msgId = result?.messages?.[0]?.id || 'sim-' + Math.random().toString(36).slice(2,8);
+      done++;
+      state.history.push({ time: Date.now(), phone, name, preview: getPreview(contact, msgType), status: 'sent', msgId });
+      state.sentCount++;
+      addLog(log, `✓ Sent → ${phone} (${name || 'no name'}) [${msgId}]`, 'green');
+    } catch(e) {
+      done++; failed++;
+      state.history.push({ time: Date.now(), phone, name, preview: getPreview(contact, msgType), status: 'failed', msgId: '' });
+      state.failCount++;
+      addLog(log, `✕ Failed → ${phone}: ${e.message}`, 'red');
+    }
+
+    const pct = Math.round((done / total) * 100);
+    document.getElementById('modal-progress').style.width = pct + '%';
+    document.getElementById('modal-count').textContent = `${done} / ${total}`;
+    document.getElementById('modal-pct').textContent = pct + '%';
+    document.getElementById('modal-sub').textContent = `Sending… ${done} of ${total}`;
+    document.getElementById('stat-sent').textContent = state.sentCount;
+    document.getElementById('stat-failed').textContent = state.failCount;
+
+    const delay = (state.config.delay || 1) * 1000;
+    if (done < total) await sleep(delay);
+  }
+
+  state.sending = false;
+  document.getElementById('modal-sub').textContent = `Done — ${done - failed} sent, ${failed} failed`;
+  document.getElementById('stop-btn').style.display = 'none';
+  document.getElementById('close-modal-btn').style.display = 'inline-flex';
+  addLog(log, `─── Campaign complete ───`, 'dim');
+}
+
+async function sendMessage(contact, msgType) {
+  const cfg = state.config;
+  const base = cfg.baseUrl || 'https://graph.facebook.com';
+  const ver = cfg.apiVersion || 'v19.0';
+  const url = `${base}/${ver}/${cfg.phoneNumberId}/messages`;
+  const phone = (contact.phone || contact[state.headers[0]] || '').replace(/\D/g,'');
+
+  let body;
+  if (msgType === 'text') {
+    const text = document.getElementById('msg-body').value.replace(/\{\{(\w+)\}\}/g, (_, k) => contact[k] || '');
+    body = { messaging_product: 'whatsapp', to: phone, type: 'text', text: { body: text } };
+  } else {
+    const tplName = document.getElementById('tpl-name').value;
+    const tplLang = document.getElementById('tpl-lang').value || 'en_US';
+    const paramCols = document.getElementById('tpl-params').value.split(',').map(s => s.trim()).filter(Boolean);
+    const components = paramCols.length ? [{ type: 'body', parameters: paramCols.map(col => ({ type: 'text', text: contact[col] || '' })) }] : [];
+    body = { messaging_product: 'whatsapp', to: phone, type: 'template', template: { name: tplName, language: { code: tplLang }, components } };
+  }
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.token}` },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+  return data;
+}
+
+function getPreview(contact, msgType) {
+  if (msgType === 'text') {
+    const raw = document.getElementById('msg-body').value;
+    return raw.replace(/\{\{(\w+)\}\}/g, (_, k) => contact[k] || `[${k}]`).slice(0, 60);
+  }
+  return `[Template: ${document.getElementById('tpl-name').value}]`;
+}
+
+function stopSend() { state.stopFlag = true; }
+function closeModal() { document.getElementById('send-modal').classList.remove('open'); renderHistoryStats(); }
+
+function addLog(el, msg, color) {
+  const c = { green: 'var(--green)', red: 'var(--danger)', yellow: 'var(--warning)', dim: 'var(--text3)' }[color] || 'var(--text2)';
+  el.innerHTML += `<div style="color:${c};">${msg}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── Toast ────────────────────────────────────────────
+let toastTimer;
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = type ? `show ${type}` : 'show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 3000);
+}
+
+// ── Init ─────────────────────────────────────────────
+loadConfig();
+</script>
+</body>
+</html>

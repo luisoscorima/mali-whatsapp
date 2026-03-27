@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MALI WhatsApp</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&family=Cormorant+Garamond:ital,wght@0,500;1,500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="side-panel">
+        <div>
+          <p class="kicker">MVP interno</p>
+          <h1>MALI WhatsApp</h1>
+          <p class="lead">Campañas segmentadas con estado de entrega y lectura.</p>
+        </div>
+        <nav class="nav-sections" aria-label="Secciones principales">
+          <button class="nav-item is-active" type="button" data-target-section="send-campaign">Enviar Campaña</button>
+          <button class="nav-item" type="button" data-target-section="contacts">Contactos</button>
+          <button class="nav-item" type="button" data-target-section="templates">Plantillas</button>
+          <button class="nav-item" type="button" data-target-section="history">Historial</button>
+          <button class="nav-item" type="button" data-target-section="configuration">Configuración</button>
+        </nav>
+        <div class="endpoint-card">
+          <strong>Webhook público</strong>
+          <code><%= appBaseUrl %>/webhook</code>
+          <span>Usa este endpoint en Meta para validar y recibir estados.</span>
+        </div>
+      </aside>
+
+      <main class="main-panel">
+        <section class="top-metrics">
+          <% const totals = campaigns.reduce((acc, campaign) => {
+              acc.sent += Number(campaign.sent_count || 0);
+              acc.delivered += Number(campaign.delivered_count || 0);
+              acc.read += Number(campaign.read_count || 0);
+              acc.failed += Number(campaign.failed_count || 0);
+              return acc;
+            }, { sent: 0, delivered: 0, read: 0, failed: 0 });
+            const deliveryRate = totals.sent ? Math.round((totals.delivered / totals.sent) * 100) : 0;
+            const readRate = totals.sent ? Math.round((totals.read / totals.sent) * 100) : 0;
+            const errorRate = totals.sent ? Math.round((totals.failed / totals.sent) * 100) : 0;
+          %>
+
+          <article class="metric-card">
+            <p>Total enviados</p>
+            <strong><%= totals.sent %></strong>
+            <span>Sobre <%= campaigns.length %> campañas recientes</span>
+          </article>
+          <article class="metric-card">
+            <p>Tasa de entrega</p>
+            <strong><%= deliveryRate %>%</strong>
+            <span><%= totals.delivered %> mensajes entregados</span>
+          </article>
+          <article class="metric-card">
+            <p>Tasa de lectura</p>
+            <strong><%= readRate %>%</strong>
+            <span><%= totals.read %> mensajes leídos</span>
+          </article>
+          <article class="metric-card">
+            <p>Tasa de error</p>
+            <strong><%= errorRate %>%</strong>
+            <span><%= totals.failed %> errores</span>
+          </article>
+        </section>
+
+        <section class="content-section is-active" id="send-campaign">
+          <article class="surface-card section-card">
+            <h2>Enviar Campaña</h2>
+            <form method="POST" action="/campaigns/send" class="stack" id="campaign-form">
+              <label>
+                Segmento
+                <select name="segment" required>
+                  <% segments.forEach((segment) => { %>
+                    <option value="<%= segment.value %>"><%= segment.label %></option>
+                  <% }) %>
+                </select>
+              </label>
+
+              <label>
+                Nombre de plantilla
+                <input name="templateName" value="<%= defaults.templateName %>" required />
+              </label>
+
+              <label>
+                Código de idioma de la plantilla
+                <input name="languageCode" value="<%= defaults.templateLanguage %>" required placeholder="en_US o es" />
+              </label>
+
+              <p class="empty-hint">
+                Los valores rellenan las variables de cuerpo en el mismo orden que en Meta:
+                <code>{{1}}</code>
+                <% if (bodyParamUi.totalBodyVars > 1) { %>
+                  … <code>{{<%= bodyParamUi.totalBodyVars %>}}</code>
+                <% } %>.
+                <% if (bodyParamUi.firstFromContact) { %>
+                  <code>{{1}}</code> es el <strong>nombre del contacto</strong>; el formulario cubre desde <code>{{2}}</code>.
+                <% } %>
+              </p>
+
+              <% bodyParamUi.labels.forEach((label, idx) => { %>
+              <label>
+                <%= label %>
+                <input
+                  type="text"
+                  name="bodyParam_<%= idx %>"
+                  required
+                  maxlength="1024"
+                  autocomplete="off"
+                />
+              </label>
+              <% }); %>
+
+              <% if (bodyParamUi.formSlotCount === 0) { %>
+              <p class="empty-hint">
+                No hay campos de variables: revisa <code>TEMPLATE_BODY_VARIABLE_COUNT</code> y
+                <code>TEMPLATE_BODY_VARIABLE_1_FROM_CONTACT</code> en el entorno, o usa una plantilla en
+                <code>TEMPLATES_WITHOUT_COMPONENTS</code>.
+              </p>
+              <% } %>
+
+              <label>
+                URL pública de imagen (obligatoria si la plantilla tiene header tipo imagen en Meta)
+                <input name="imageUrl" placeholder="https://..." />
+              </label>
+
+              <div class="inline-fields">
+                <label>
+                  Tamaño de lote
+                  <input type="number" name="batchSize" value="40" min="1" max="100" />
+                </label>
+                <label>
+                  Pausa entre lotes (ms)
+                  <input type="number" name="batchDelayMs" value="1500" min="0" step="500" />
+                </label>
+              </div>
+
+              <button type="submit">Enviar campaña</button>
+            </form>
+            <p class="empty-hint">
+              Tip: <code>hello_world</code> va en <code>TEMPLATES_WITHOUT_COMPONENTS</code>: no usa variables de cuerpo ni imagen.
+            </p>
+          </article>
+        </section>
+
+        <section class="content-section" id="contacts">
+          <div class="panel-grid">
+            <article class="surface-card section-card">
+              <h2>Contactos</h2>
+              <% if (csvImport) { %>
+              <div class="import-banner <%= csvImport.err ? 'is-error' : 'is-ok' %>">
+                <% if (csvImport.err) { %>
+                  <% if (csvImport.err === 'no_file') { %>
+                    <strong>Importación CSV:</strong> no se seleccionó ningún archivo.
+                  <% } else if (csvImport.err === 'type') { %>
+                    <strong>Importación CSV:</strong> solo se permiten archivos <code>.csv</code>.
+                  <% } else if (csvImport.err === 'too_big') { %>
+                    <strong>Importación CSV:</strong> el archivo supera el tamaño máximo (5&nbsp;MB).
+                  <% } else if (csvImport.err === 'too_many') { %>
+                    <strong>Importación CSV:</strong> demasiadas filas (máx. <%= maxCsvRows %>).
+                  <% } else if (csvImport.err === 'empty') { %>
+                    <strong>Importación CSV:</strong> el archivo no tiene filas de datos.
+                  <% } else { %>
+                    <strong>Importación CSV:</strong> no se pudo leer el archivo (formato inválido).
+                  <% } %>
+                <% } else { %>
+                  <strong>Importación CSV:</strong>
+                  filas importadas o actualizadas: <strong><%= csvImport.ok %></strong>.
+                  <% if (csvImport.bad > 0) { %>
+                    Filas omitidas por error: <strong><%= csvImport.bad %></strong> (revisa el formato).
+                  <% } %>
+                <% } %>
+              </div>
+              <% } %>
+              <form method="POST" action="/contacts" class="stack">
+                <label>
+                  Nombre
+                  <input name="name" required />
+                </label>
+
+                <label>
+                  Teléfono en formato E.164 sin +
+                  <input name="phone" required placeholder="51999999999" />
+                </label>
+
+                <label>
+                  Segmento
+                  <select name="segment" required>
+                    <% segments.forEach((segment) => { %>
+                      <option value="<%= segment.value %>"><%= segment.label %></option>
+                    <% }) %>
+                  </select>
+                </label>
+
+                <button type="submit" class="secondary">Guardar contacto</button>
+              </form>
+
+              <h3 class="config-subtitle">Importar CSV</h3>
+              <p class="empty-hint">
+                Primera fila: cabeceras <code>name</code>, <code>phone</code>, <code>segment</code>
+                (o <code>nombre</code>, <code>telefono</code>, <code>segmento</code>).
+                Teléfono en formato E.164 sin <code>+</code>. Segmentos:
+                <code>suscriptor_1</code>, <code>suscriptor_2</code>, <code>suscriptor_3</code>, <code>asociado</code>.
+                Si el teléfono ya existe, se actualiza nombre y segmento.
+              </p>
+              <form
+                method="POST"
+                action="/contacts/import"
+                enctype="multipart/form-data"
+                class="stack"
+              >
+                <label>
+                  Archivo .csv
+                  <input type="file" name="csvfile" accept=".csv,text/csv" required />
+                </label>
+                <div class="inline-actions">
+                  <button type="submit" class="secondary">Importar contactos</button>
+                  <a class="sample-csv-link" href="/contacts/sample.csv">Descargar ejemplo</a>
+                </div>
+              </form>
+
+              <div class="segment-tags">
+                <p class="empty-hint">En modo prueba de Meta, solo se puede enviar a números en la lista permitida.</p>
+                <% if (stats.length === 0) { %>
+                  <p class="empty-hint">No hay contactos activos todavía.</p>
+                <% } %>
+                <% stats.forEach((item) => { %>
+                  <span class="segment-pill"><%= item.segment %>: <strong><%= item.total %></strong></span>
+                <% }) %>
+              </div>
+            </article>
+
+            <article class="surface-card section-card">
+              <div class="card-head">
+                <h2>Últimos contactos</h2>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Nombre</th>
+                      <th>Teléfono</th>
+                      <th>Segmento</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% contacts.forEach((contact) => { %>
+                      <tr>
+                        <td><%= contact.id %></td>
+                        <td><%= contact.name %></td>
+                        <td><%= contact.phone %></td>
+                        <td><span class="badge neutral"><%= contact.segment %></span></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="content-section" id="templates">
+          <article class="surface-card section-card">
+            <h2>Plantillas</h2>
+            <p class="empty-hint">Selecciona una plantilla rápida para rellenar automáticamente el formulario de campaña.</p>
+            <div class="template-list">
+              <button type="button" class="template-chip" data-template-name="hello_world" data-template-lang="en_US">
+                hello_world (en_US)
+              </button>
+              <button type="button" class="template-chip" data-template-name="mali_novedades_generales" data-template-lang="es">
+                mali_novedades_generales (es)
+              </button>
+            </div>
+            <p class="empty-hint">Puedes crear y aprobar más plantillas directamente en Meta Business Manager, luego usar aquí el nombre exacto.</p>
+          </article>
+        </section>
+
+        <section class="content-section" id="history">
+          <article class="surface-card section-card">
+            <div class="card-head">
+              <h2>Últimas campañas</h2>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Segmento</th>
+                    <th>Estado</th>
+                    <th>Progreso</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% campaigns.forEach((campaign) => { %>
+                    <% const base = Number(campaign.total_recipients || 0) || 1; %>
+                    <% const pct = Math.min(100, Math.round((Number(campaign.sent_count || 0) / base) * 100)); %>
+                    <tr>
+                      <td><%= campaign.id %></td>
+                      <td><%= campaign.segment %></td>
+                      <td><span class="badge <%= campaign.status %>"><%= campaign.status %></span></td>
+                      <td>
+                        <div class="progress-meta"><span><%= pct %>%</span><span><%= campaign.sent_count || 0 %>/<%= campaign.total_recipients %></span></div>
+                        <div class="progress-bar"><span style="width: <%= pct %>%"></span></div>
+                      </td>
+                      <td><a href="/campaigns/<%= campaign.id %>">Ver</a></td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="content-section" id="configuration">
+          <article class="surface-card section-card">
+            <h2>Configuración</h2>
+            <% if (settingsSaved) { %>
+            <p class="settings-saved">Configuración guardada. Los cambios aplican al instante (sin rebuild).</p>
+            <% } %>
+            <div class="config-grid">
+              <div class="config-item">
+                <strong>Webhook público</strong>
+                <code><%= appBaseUrl %>/webhook</code>
+              </div>
+              <div class="config-item">
+                <strong>Estado del sistema</strong>
+                <span>Health API: <a href="/health">/health</a></span>
+                <span>Dashboard API: <a href="/api/dashboard">/api/dashboard</a></span>
+              </div>
+              <div class="config-item">
+                <strong>Secretos (solo en .env)</strong>
+                <span>WHATSAPP_TOKEN, PHONE_NUMBER_ID, VERIFY_TOKEN, APP_SECRET</span>
+                <span>REQUIRE_AUTH, BASIC_AUTH_USER, BASIC_AUTH_PASS</span>
+              </div>
+            </div>
+
+            <h3 class="config-subtitle">Plantilla de campaña (variables {{1}}…)</h3>
+            <p class="empty-hint">
+              Estos valores se guardan en la base de datos y <strong>tienen prioridad</strong> sobre
+              <code>TEMPLATE_BODY_*</code> del <code>.env</code>. Deja vacíos los campos opcionales
+              para volver al valor del entorno (solo etiquetas y lista de plantillas sin cuerpo).
+            </p>
+            <form method="POST" action="/settings" class="stack settings-form">
+              <label>
+                Cantidad de variables en el cuerpo (N en Meta)
+                <input
+                  type="number"
+                  name="template_body_variable_count"
+                  min="0"
+                  max="20"
+                  value="<%= templateSettingsForm.variableCount %>"
+                  required
+                />
+              </label>
+              <label class="checkbox-row">
+                <input
+                  type="checkbox"
+                  name="template_body_variable_1_from_contact"
+                  value="1"
+                  <% if (templateSettingsForm.firstFromContact) { %>checked<% } %>
+                />
+                <span>{{1}} es el nombre del contacto (personalizado)</span>
+              </label>
+              <label>
+                Etiquetas de cada campo (mismo orden que {{n}}, separadas por comas)
+                <textarea
+                  name="template_body_variable_labels"
+                  rows="3"
+                  placeholder="Fecha y hora,Dirección,Link RSVP,Nota"
+                ><%= templateSettingsForm.labels %></textarea>
+              </label>
+              <label>
+                Plantillas sin variables de cuerpo (coma, ej. hello_world)
+                <input
+                  type="text"
+                  name="templates_without_components"
+                  value="<%= templateSettingsForm.templatesWithout %>"
+                  placeholder="Dejar vacío para usar solo TEMPLATES_WITHOUT_COMPONENTS del .env"
+                  autocomplete="off"
+                />
+              </label>
+              <button type="submit" class="secondary">Guardar configuración de plantilla</button>
+            </form>
+
+            <p class="empty-hint">
+              Guías: <code>PRODUCCION_WHATSAPP_META.md</code>,
+              <code>META_PLANTILLA_INVITACION_MALI.md</code>.
+            </p>
+          </article>
+        </section>
+
+        <footer class="footer-strip">
+          <span>Health API: <a href="/health">/health</a></span>
+          <span>Dashboard API: <a href="/api/dashboard">/api/dashboard</a></span>
+        </footer>
+      </main>
+    </div>
+    <script>
+      (function () {
+        const navItems = Array.from(document.querySelectorAll('.nav-item'));
+        const sections = Array.from(document.querySelectorAll('.content-section'));
+        const campaignForm = document.getElementById('campaign-form');
+        const templateButtons = Array.from(document.querySelectorAll('.template-chip'));
+
+        function setActiveSection(targetId) {
+          sections.forEach((section) => {
+            section.classList.toggle('is-active', section.id === targetId);
+          });
+          navItems.forEach((button) => {
+            button.classList.toggle('is-active', button.dataset.targetSection === targetId);
+          });
+        }
+
+        navItems.forEach((button) => {
+          button.addEventListener('click', () => setActiveSection(button.dataset.targetSection));
+        });
+
+        templateButtons.forEach((button) => {
+          button.addEventListener('click', () => {
+            const templateInput = campaignForm?.elements?.namedItem('templateName');
+            const languageInput = campaignForm?.elements?.namedItem('languageCode');
+            if (templateInput && languageInput) {
+              templateInput.value = button.dataset.templateName || '';
+              languageInput.value = button.dataset.templateLang || '';
+              setActiveSection('send-campaign');
+            }
+          });
+        });
+
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('settings_saved') === '1') {
+          setActiveSection('configuration');
+        }
+        if (params.get('contacts_import') === '1') {
+          setActiveSection('contacts');
+        }
+      })();
+    </script>
+  </body>
+</html>

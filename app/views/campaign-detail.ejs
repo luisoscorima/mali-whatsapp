@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Detalle de campaña</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&family=Cormorant+Garamond:ital,wght@0,500;1,500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <a class="back-link" href="/">← Volver al panel</a>
+
+      <section class="detail-card">
+        <h1>Campaña #<%= campaign.id %></h1>
+        <p><strong>Segmento:</strong> <%= campaign.segment %></p>
+        <p><strong>Plantilla:</strong> <%= campaign.template_name %></p>
+        <p><strong>Estado:</strong> <span class="badge <%= campaign.status %>"><%= campaign.status %></span></p>
+        <p><strong>Total destinatarios:</strong> <%= campaign.total_recipients %></p>
+        <p><strong>Parámetros de campaña:</strong> <%= campaign.message_text %></p>
+        <% if (campaign.image_url) { %>
+          <p><strong>Imagen:</strong> <a href="<%= campaign.image_url %>" target="_blank"><%= campaign.image_url %></a></p>
+        <% } %>
+      </section>
+
+      <section class="surface-card">
+        <h2>Logs</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Teléfono</th>
+                <th>Estado</th>
+                <th>Message ID</th>
+                <th>Respuesta</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% logs.forEach((log) => { %>
+                <tr>
+                  <td><%= log.phone %></td>
+                  <td><span class="badge <%= log.status %>"><%= log.status %></span></td>
+                  <td><%= log.whatsapp_message_id || '-' %></td>
+                  <td><pre><%= JSON.stringify(log.response, null, 2) %></pre></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

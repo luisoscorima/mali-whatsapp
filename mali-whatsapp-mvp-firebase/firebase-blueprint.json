@@ -1,0 +1,46 @@
+{
+  "entities": {
+    "Campaign": {
+      "title": "Campaign",
+      "description": "A WhatsApp messaging campaign",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the campaign" },
+        "status": { "type": "string", "enum": ["draft", "sending", "completed", "failed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "totalMessages": { "type": "integer" },
+        "sentCount": { "type": "integer" },
+        "deliveredCount": { "type": "integer" },
+        "readCount": { "type": "integer" },
+        "failedCount": { "type": "integer" },
+        "templateName": { "type": "string" },
+        "authorUid": { "type": "string" }
+      },
+      "required": ["name", "status", "createdAt", "authorUid"]
+    },
+    "Recipient": {
+      "title": "Recipient",
+      "description": "A recipient of a WhatsApp message in a campaign",
+      "type": "object",
+      "properties": {
+        "campaignId": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "name": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "sent", "delivered", "read", "failed"] },
+        "errorMessage": { "type": "string" },
+        "sentAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["campaignId", "phoneNumber", "status"]
+    }
+  },
+  "firestore": {
+    "/campaigns/{campaignId}": {
+      "schema": "Campaign",
+      "description": "Collection of messaging campaigns"
+    },
+    "/campaigns/{campaignId}/recipients/{recipientId}": {
+      "schema": "Recipient",
+      "description": "Recipients for a specific campaign"
+    }
+  }
+}
