@@ -1,5 +1,16 @@
 require('dotenv').config();
 
+const rawBasePath = String(process.env.BASE_PATH || '').trim();
+const basePath =
+  rawBasePath === ''
+    ? ''
+    : (rawBasePath.startsWith('/') ? rawBasePath : `/${rawBasePath}`).replace(/\/$/, '');
+
+function appPath(relativePath) {
+  const p = relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
+  return `${basePath}${p}`;
+}
+
 const express = require('express');
 const path = require('path');
 const axios = require('axios');
@@ -11,6 +22,7 @@ const multer = require('multer');
 const { parse: parseCsv } = require('csv-parse/sync');
 
 const app = express();
+app.set('trust proxy', 1);
 const port = Number(process.env.PORT || 3000);
 const nodeEnv = String(process.env.NODE_ENV || 'development').trim().toLowerCase();
 const isProduction = nodeEnv === 'production';
@@ -48,6 +60,12 @@ app.use(
 );
 app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 app.use(express.json({ limit: '100kb' }));
+
+app.use((req, res, next) => {
+  res.locals.basePath = basePath;
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 const globalLimiter = rateLimit({
@@ -722,7 +740,11 @@ app.get('/', async (req, res) => {
           }
         : null,
     maxCsvRows: MAX_CSV_ROWS,
-    appBaseUrl: process.env.APP_BASE_URL || `http://localhost:${port}`,
+    appBaseUrl: (() => {
+      const u = String(process.env.APP_BASE_URL || '').trim().replace(/\/$/, '');
+      if (u) return u;
+      return `http://localhost:${port}${basePath}`;
+    })(),
   });
 });
 
@@ -806,7 +828,7 @@ app.post('/contacts', async (req, res) => {
       [validation.value.name, validation.value.phone, validation.value.segment]
     );
     logInfo(req, 'Contacto creado', { phone: validation.value.phone, segment: validation.value.segment });
-    res.redirect('/');
+    res.redirect(appPath('/'));
   } catch (error) {
     logError(req, 'Error al crear contacto', error);
     res.status(400).send(`No se pudo guardar el contacto: ${error.message}`);
@@ -820,27 +842,27 @@ app.post(
     csvUpload.single('csvfile')(req, res, (err) => {
       if (err) {
         if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
-          return res.redirect('/?contacts_import=1&err=too_big');
+          return res.redirect(`${appPath('/')}?contacts_import=1&err=too_big`);
         }
-        return res.redirect('/?contacts_import=1&err=type');
+        return res.redirect(`${appPath('/')}?contacts_import=1&err=type`);
       }
       next();
     });
   },
   async (req, res) => {
     if (!req.file || !req.file.buffer.length) {
-      return res.redirect('/?contacts_import=1&err=no_file');
+      return res.redirect(`${appPath('/')}?contacts_import=1&err=no_file`);
     }
 
     try {
       const { rows, errors } = parseContactCsvBuffer(req.file.buffer);
 
       if (rows.length > MAX_CSV_ROWS) {
-        return res.redirect('/?contacts_import=1&err=too_many');
+        return res.redirect(`${appPath('/')}?contacts_import=1&err=too_many`);
       }
 
       if (rows.length === 0 && errors.length === 0) {
-        return res.redirect('/?contacts_import=1&err=empty');
+        return res.redirect(`${appPath('/')}?contacts_import=1&err=empty`);
       }
 
       if (rows.length === 0) {
@@ -849,7 +871,7 @@ app.post(
           ok: '0',
           bad: String(errors.length),
         });
-        return res.redirect(`/?${qp.toString()}`);
+        return res.redirect(`${appPath('/')}?${qp.toString()}`);
       }
 
       const client = await pool.connect();
@@ -879,14 +901,14 @@ app.post(
         ok: String(rows.length),
         bad: String(errors.length),
       });
-      res.redirect(`/?${qp.toString()}`);
+      res.redirect(`${appPath('/')}?${qp.toString()}`);
       logInfo(req, 'Importacion CSV contactos', {
         imported: rows.length,
         rowErrors: errors.length,
       });
     } catch (error) {
       logError(req, 'Error importando CSV', error);
-      res.redirect('/?contacts_import=1&err=parse');
+      res.redirect(`${appPath('/')}?contacts_import=1&err=parse`);
     }
   }
 );
@@ -895,7 +917,7 @@ app.post('/settings', async (req, res) => {
   try {
     await saveTemplateSettingsFromBody(req.body);
     logInfo(req, 'Configuracion de plantilla guardada');
-    res.redirect('/?settings_saved=1');
+    res.redirect(`${appPath('/')}?settings_saved=1`);
   } catch (error) {
     logError(req, 'Error guardando configuracion', error);
     res.status(500).send(`No se pudo guardar la configuracion: ${error.message}`);
@@ -995,7 +1017,7 @@ app.post('/campaigns/send', campaignLimiter, async (req, res) => {
     await query(`UPDATE campaigns SET status = 'completed' WHERE id = $1`, [campaignId]);
     logInfo(req, 'Campana completada', { campaignId, recipients: recipients.length });
 
-    res.redirect(`/campaigns/${campaignId}`);
+    res.redirect(appPath(`/campaigns/${campaignId}`));
   } catch (error) {
     logError(req, 'Error en envio de campana', error);
     res.status(500).send(`No se pudo enviar la campaña: ${error.message}`);
@@ -1082,7 +1104,8 @@ app.post('/webhook', async (req, res) => {
 async function boot() {
   await ensureAppSettingsTable();
   app.listen(port, '0.0.0.0', () => {
-    console.log(`Servidor listo en puerto ${port}`);
+    const suffix = basePath ? ` | BASE_PATH=${basePath}` : '';
+    console.log(`Servidor listo en puerto ${port}${suffix}`);
   });
 }
 

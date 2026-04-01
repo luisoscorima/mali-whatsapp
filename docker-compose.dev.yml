@@ -1,3 +1,4 @@
+# Desarrollo local: panel en http://localhost:3000 (puertos publicados; sin red NPM).
 services:
   app:
     build:

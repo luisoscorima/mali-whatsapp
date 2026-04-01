@@ -10,8 +10,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    ports:
-      - "3000:3000"
+    networks:
+      - default
+      - npm_proxy
 
   postgres:
     image: postgres:16-alpine
@@ -21,8 +22,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -31,6 +30,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - default
 
 volumes:
   postgres_data:
+
+# Nginx Proxy Manager debe poder resolver mali-whatsapp-app:3000 (misma red Docker).
+networks:
+  npm_proxy:
+    external: true
+    name: nginx-proxy-manager_default

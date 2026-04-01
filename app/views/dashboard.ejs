@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&family=Cormorant+Garamond:ital,wght@0,500;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/css/styles.css" />
+    <link rel="stylesheet" href="<%= basePath %>/css/styles.css" />
   </head>
   <body>
     <div class="app-shell">
@@ -73,7 +73,7 @@
         <section class="content-section is-active" id="send-campaign">
           <article class="surface-card section-card">
             <h2>Enviar Campaña</h2>
-            <form method="POST" action="/campaigns/send" class="stack" id="campaign-form">
+            <form method="POST" action="<%= basePath %>/campaigns/send" class="stack" id="campaign-form">
               <label>
                 Segmento
                 <select name="segment" required>
@@ -178,7 +178,7 @@
                 <% } %>
               </div>
               <% } %>
-              <form method="POST" action="/contacts" class="stack">
+              <form method="POST" action="<%= basePath %>/contacts" class="stack">
                 <label>
                   Nombre
                   <input name="name" required />
@@ -211,7 +211,7 @@
               </p>
               <form
                 method="POST"
-                action="/contacts/import"
+                action="<%= basePath %>/contacts/import"
                 enctype="multipart/form-data"
                 class="stack"
               >
@@ -221,7 +221,7 @@
                 </label>
                 <div class="inline-actions">
                   <button type="submit" class="secondary">Importar contactos</button>
-                  <a class="sample-csv-link" href="/contacts/sample.csv">Descargar ejemplo</a>
+                  <a class="sample-csv-link" href="<%= basePath %>/contacts/sample.csv">Descargar ejemplo</a>
                 </div>
               </form>
 
@@ -310,7 +310,7 @@
                         <div class="progress-meta"><span><%= pct %>%</span><span><%= campaign.sent_count || 0 %>/<%= campaign.total_recipients %></span></div>
                         <div class="progress-bar"><span style="width: <%= pct %>%"></span></div>
                       </td>
-                      <td><a href="/campaigns/<%= campaign.id %>">Ver</a></td>
+                      <td><a href="<%= basePath %>/campaigns/<%= campaign.id %>">Ver</a></td>
                     </tr>
                   <% }) %>
                 </tbody>
@@ -332,8 +332,8 @@
               </div>
               <div class="config-item">
                 <strong>Estado del sistema</strong>
-                <span>Health API: <a href="/health">/health</a></span>
-                <span>Dashboard API: <a href="/api/dashboard">/api/dashboard</a></span>
+                <span>Health API: <a href="<%= basePath %>/health">/health</a></span>
+                <span>Dashboard API: <a href="<%= basePath %>/api/dashboard">/api/dashboard</a></span>
               </div>
               <div class="config-item">
                 <strong>Secretos (solo en .env)</strong>
@@ -348,7 +348,7 @@
               <code>TEMPLATE_BODY_*</code> del <code>.env</code>. Deja vacíos los campos opcionales
               para volver al valor del entorno (solo etiquetas y lista de plantillas sin cuerpo).
             </p>
-            <form method="POST" action="/settings" class="stack settings-form">
+            <form method="POST" action="<%= basePath %>/settings" class="stack settings-form">
               <label>
                 Cantidad de variables en el cuerpo (N en Meta)
                 <input
@@ -391,15 +391,14 @@
             </form>
 
             <p class="empty-hint">
-              Guías: <code>PRODUCCION_WHATSAPP_META.md</code>,
-              <code>META_PLANTILLA_INVITACION_MALI.md</code>.
+              Guía: <code>PRODUCCION_WHATSAPP_META.md</code>
             </p>
           </article>
         </section>
 
         <footer class="footer-strip">
-          <span>Health API: <a href="/health">/health</a></span>
-          <span>Dashboard API: <a href="/api/dashboard">/api/dashboard</a></span>
+          <span>Health API: <a href="<%= basePath %>/health">/health</a></span>
+          <span>Dashboard API: <a href="<%= basePath %>/api/dashboard">/api/dashboard</a></span>
         </footer>
       </main>
     </div>

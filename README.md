@@ -2,7 +2,7 @@
 
 Demo funcional para campañas segmentadas por WhatsApp con:
 - Backend Node.js + Express
-- UI web tipo dashboard (inspirada en `mali-whatsapp-mvp-firebase`)
+- UI web tipo dashboard (EJS)
 - Persistencia PostgreSQL
 - Despliegue con Docker Compose
 
@@ -29,10 +29,8 @@ mali-whatsapp-mvp/
 
 ## Estado actual del demo
 
-- `app/` es la aplicación principal productiva del demo.
+- `app/` es la aplicación principal.
 - Importación masiva de contactos por **CSV** desde el panel (sección Contactos); ejemplo descargable en `/contacts/sample.csv`.
-- `mali-whatsapp-mvp-firebase/` queda como referencia visual y prototipo (no es requisito para ejecutar el MVP).
-- `whatsapp-business-jaspers-market/` queda como referencia oficial de Meta para flujos avanzados.
 
 ## Primer arranque
 
@@ -113,24 +111,20 @@ DEFAULT_TEMPLATE_LANGUAGE=es
 
 Si estás en sandbox y sale `131030`, agrega el número destino en la lista de destinatarios permitidos de Meta Developers.
 
-## Runbook de produccion
+## Guía de producción y operación
 
-Guia operativa completa paso a paso:
+Documento único (requisitos, despliegue Docker/NPM, plantillas Meta, uso del panel, errores, checklist):
 
-- `PRODUCCION_WHATSAPP_META.md`
+- [`PRODUCCION_WHATSAPP_META.md`](PRODUCCION_WHATSAPP_META.md)
 
-Ejemplo de plantilla de invitación (variables + imagen) y alineación con `.env`:
+### Publicación (resumen)
 
-- `META_PLANTILLA_INVITACION_MALI.md`
+El panel en producción vive en **`https://proyectosti.mali.pe/whatsapp`**.
 
-## Publicación detrás de Nginx Proxy Manager
-
-Cuando ya tengas el subdominio:
-- dominio: `whatsapp.mali.pe`
-- forward host: IP o hostname del host Docker
-- port: `3000`
-- SSL: Let's Encrypt
-- webhook en Meta: `https://whatsapp.mali.pe/webhook`
+- **NPM:** proxy host `proyectosti.mali.pe`; location `/whatsapp/` → contenedor `mali-whatsapp-app:3000` en la red Docker compartida con NPM.
+- **`.env`:** `BASE_PATH=/whatsapp`, `APP_BASE_URL=https://proyectosti.mali.pe/whatsapp`
+- **SSL:** Let’s Encrypt en el mismo proxy host.
+- **Webhook Meta:** `https://proyectosti.mali.pe/whatsapp/webhook`
 
 ## Notas del MVP
 
