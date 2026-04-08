@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Campaña #<%= campaign.id %></title>
+    <title>Conversaciones · MALI WhatsApp</title>
     <script>
       try {
         var _t = localStorage.getItem('mali-theme');
@@ -41,46 +41,35 @@
       </div>
 
       <div class="card">
-        <h1 class="card-title">Campaña #<%= campaign.id %></h1>
-        <% if (campaign.status === 'queued' || campaign.status === 'processing') { %>
-        <p class="toast toast--ok">Envío en segundo plano. Actualiza la página para ver el progreso.</p>
-        <% } %>
-        <dl class="detail-dl">
-          <div><dt>Segmento</dt><dd><%= campaign.segment %></dd></div>
-          <div><dt>Plantilla</dt><dd><%= campaign.template_name %></dd></div>
-          <div><dt>Estado</dt><dd><span class="badge <%= campaign.status %>"><%= campaign.status %></span></dd></div>
-          <div><dt>Destinatarios</dt><dd><%= campaign.total_recipients %></dd></div>
-          <div><dt>Parámetros</dt><dd><%= campaign.message_text %></dd></div>
-          <% if (campaign.image_url) { %>
-          <div><dt>Imagen</dt><dd><a href="<%= campaign.image_url %>" target="_blank" rel="noopener">Abrir enlace</a></dd></div>
-          <% } %>
-        </dl>
-      </div>
+        <h1 class="card-title">Conversaciones</h1>
+        <p class="card-lead">Mensajes entrantes vía webhook. Responde con texto solo dentro de la ventana de 24 h desde el último mensaje del usuario.</p>
 
-      <div class="card">
-        <h2 class="card-title">Registro de envíos</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Teléfono</th>
-                <th>Estado</th>
-                <th>ID mensaje</th>
-                <th>Detalle</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% logs.forEach((log) => { %>
+        <% if (conversations.length === 0) { %>
+          <p class="empty-state">Aún no hay conversaciones. Cuando un usuario escriba al número de WhatsApp de esta área, aparecerá aquí.</p>
+        <% } else { %>
+          <div class="table-wrap">
+            <table class="conversation-list">
+              <thead>
                 <tr>
-                  <td class="mono"><%= log.phone %></td>
-                  <td><span class="badge <%= log.status %>"><%= log.status %></span></td>
-                  <td class="mono"><%= log.whatsapp_message_id || '—' %></td>
-                  <td><pre class="log-pre"><%= JSON.stringify(log.response, null, 2) %></pre></td>
+                  <th>Teléfono</th>
+                  <th>Contacto</th>
+                  <th>Último mensaje</th>
+                  <th></th>
                 </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                <% conversations.forEach((c) => { %>
+                  <tr>
+                    <td class="mono"><%= c.phone %></td>
+                    <td><%= c.contact_name || '—' %></td>
+                    <td class="conversation-preview"><%= c.preview || '—' %></td>
+                    <td><a class="text-link" href="<%= basePath %>/conversations/<%= c.id %>">Abrir</a></td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
       </div>
     </div>
   </body>

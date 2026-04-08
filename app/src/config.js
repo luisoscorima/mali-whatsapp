@@ -1,0 +1,51 @@
+const rawBasePath = String(process.env.BASE_PATH || '').trim();
+const basePath =
+  rawBasePath === ''
+    ? ''
+    : (rawBasePath.startsWith('/') ? rawBasePath : `/${rawBasePath}`).replace(/\/$/, '');
+
+function appPath(relativePath) {
+  const p = relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
+  return `${basePath}${p}`;
+}
+
+const nodeEnv = String(process.env.NODE_ENV || 'development').trim().toLowerCase();
+const isProduction = nodeEnv === 'production';
+
+module.exports = {
+  basePath,
+  appPath,
+  port: Number(process.env.PORT || 3000),
+  nodeEnv,
+  isProduction,
+  requireWebhookSignature:
+    String(process.env.REQUIRE_WEBHOOK_SIGNATURE || (isProduction ? 'true' : 'false'))
+      .trim()
+      .toLowerCase() === 'true',
+  requireAuth:
+    String(process.env.REQUIRE_AUTH || (isProduction ? 'true' : 'false')).trim().toLowerCase() ===
+    'true',
+  sessionSecret: String(process.env.SESSION_SECRET || '').trim(),
+  GRAPH_API_VERSION: 'v23.0',
+  GRAPH_BASE: 'https://graph.facebook.com/v23.0',
+  AREA_LABELS: {
+    pam: 'Comercial (PAM)',
+    educacion: 'Educación',
+  },
+  MALI_EMAIL_REGEX: /^[^\s@]+@mali\.pe$/i,
+  DEFAULT_MASTER_EMAIL: 'loscorima@mali.pe',
+  SEGMENT_SLUG_REGEX: /^[a-z0-9_]{1,50}$/,
+  allowedLanguageCodeRegex: /^[a-z]{2}(?:_[A-Z]{2})?$/,
+  allowedTemplateNameRegex: /^[a-z0-9_]{1,128}$/,
+  e164NoPlusRegex: /^[1-9][0-9]{7,14}$/,
+  MAX_NAME_LEN: 120,
+  MAX_BODY_PARAM_LEN: 1024,
+  MAX_TEMPLATE_BODY_VARS: 20,
+  MAX_IMAGE_URL_LEN: 2048,
+  MAX_BATCH_SIZE: 100,
+  MAX_BATCH_DELAY_MS: 60000,
+  MAX_SESSION_TEXT_LEN: 4096,
+  SESSION_WINDOW_MS: 24 * 60 * 60 * 1000,
+  MAX_CSV_ROWS: 10000,
+  MAX_CSV_BYTES: 5 * 1024 * 1024,
+};

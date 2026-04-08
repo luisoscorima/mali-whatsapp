@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ingresar — MALI WhatsApp</title>
+    <script>
+      try {
+        var _t = localStorage.getItem('mali-theme');
+        if (_t === 'dark' || _t === 'light') document.documentElement.setAttribute('data-theme', _t);
+      } catch (e) {}
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="<%= basePath %>/css/styles.css" />
+    <script src="<%= basePath %>/js/theme.js" defer></script>
+  </head>
+  <body>
+    <div class="login-page">
+      <button type="button" class="theme-toggle login-theme-toggle" data-theme-toggle title="Modo claro / oscuro" aria-label="Cambiar tema">◐</button>
+      <div class="login-card card">
+        <span class="brand-mark">MALI</span>
+        <h1 class="login-title">Ingresar</h1>
+        <p class="login-lead">Correo <strong>@mali.pe</strong></p>
+        <% if (error) { %>
+          <p class="login-error" role="alert"><%= error %></p>
+        <% } %>
+        <form method="POST" action="<%= basePath %>/login" class="stack">
+          <label>
+            Correo institucional
+            <input type="email" name="email" autocomplete="email" placeholder="nombre@mali.pe" required autofocus />
+          </label>
+          <label>
+            Contraseña
+            <input type="password" name="password" autocomplete="current-password" required />
+          </label>
+          <button type="submit">Entrar</button>
+        </form>
+      </div>
+    </div>
+  </body>
+</html>
+

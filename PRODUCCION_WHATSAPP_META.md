@@ -69,16 +69,17 @@ En local (Docker dev o sin proxy): `BASE_PATH` vacío y `APP_BASE_URL=http://loc
 ### Seguridad recomendada en producción
 
 - `NODE_ENV=production`
-- `REQUIRE_AUTH=true` + `BASIC_AUTH_USER` + `BASIC_AUTH_PASS`
+- `REQUIRE_AUTH=true` + `SESSION_SECRET` (login con correo **@mali.pe** y sesión)
 - `REQUIRE_WEBHOOK_SIGNATURE=true`
 - `RATE_LIMIT_MAX=300`
 - `CAMPAIGN_RATE_LIMIT_MAX=5`
+- Usuarios adicionales: `docker compose exec app sh -c 'cd /usr/src/app && node scripts/create-user.js "correo@mali.pe" "clave" pam'` (ver `README.md`)
 
 ### Antes de salir a producción
 
 1. Rotar cualquier token o clave que haya estado expuesto.
 2. Confirmar que `.env` no se versiona (`.gitignore` en raíz).
-3. Contraseña fuerte para la autenticación básica del panel.
+3. Contraseña fuerte para los usuarios del panel (correos `@mali.pe`).
 4. No compartir secretos por canales inseguros.
 5. Mantener `APP_SECRET` y validación de firma del webhook activos.
 
@@ -319,7 +320,7 @@ Ante errores HTTP: `401/403` → token/permisos; `429` → bajar ritmo; `5xx` de
 ## 14. Go-live: lista bloqueante
 
 - [ ] Secretos rotados y `.env` protegido.
-- [ ] Autenticación básica activa para el panel.
+- [ ] `REQUIRE_AUTH` y `SESSION_SECRET` activos; usuarios con correo `@mali.pe`.
 - [ ] Firma de webhook obligatoria en producción.
 - [ ] Plantilla aprobada y validada en piloto.
 - [ ] Healthcheck y base de datos estables.

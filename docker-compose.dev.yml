@@ -1,4 +1,9 @@
 # Desarrollo local: panel en http://localhost:3000 (puertos publicados; sin red NPM).
+# Si tras cambiar package.json ves "Cannot find module ...": reconstruye la imagen y reinstala deps
+# en el volumen de node_modules, por ejemplo:
+#   docker compose -f docker-compose.dev.yml build --no-cache app
+#   docker compose -f docker-compose.dev.yml run --rm app npm install
+#   docker compose -f docker-compose.dev.yml up
 services:
   app:
     build:

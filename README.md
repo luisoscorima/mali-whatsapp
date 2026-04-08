@@ -17,6 +17,7 @@ mali-whatsapp-mvp/
     views/
       campaign-detail.ejs
       dashboard.ejs
+      login.ejs
     package.json
     server.js
   db/
@@ -41,12 +42,12 @@ cp .env.example .env
 ```
 
 2. Completa en `.env`:
-- `WHATSAPP_TOKEN`
-- `PHONE_NUMBER_ID`
+- `WHATSAPP_TOKEN_PAM` / `PHONE_NUMBER_ID_PAM` y `WHATSAPP_TOKEN_EDUCACION` / `PHONE_NUMBER_ID_EDUCACION` (o `WHATSAPP_TOKEN` / `PHONE_NUMBER_ID` como respaldo)
 - `VERIFY_TOKEN`
 - `APP_SECRET` (obligatorio en produccion)
 - `REQUIRE_WEBHOOK_SIGNATURE=true` en produccion
-- `REQUIRE_AUTH=true` + `BASIC_AUTH_USER` + `BASIC_AUTH_PASS`
+- `REQUIRE_AUTH=true` + `SESSION_SECRET` (login con correo **@mali.pe**; ver usuarios abajo)
+- Opcional: `MASTER_INITIAL_PASSWORD` para crear en el **primer arranque** el usuario master `loscorima@mali.pe` (o `MASTER_USER_EMAIL` si quieres otro correo); luego quita la variable del `.env`
 - `DEFAULT_TEMPLATE_NAME` y `DEFAULT_TEMPLATE_LANGUAGE` (ej. `hello_world` + `en_US` para cuentas de prueba)
 - `TEMPLATES_WITHOUT_COMPONENTS` (ej. `hello_world`)
 - credenciales de PostgreSQL
@@ -57,7 +58,22 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-4. Abre el panel:
+4. Usuarios del panel (correos **@mali.pe**; áreas **Comercial PAM** `pam` y **Educación** `educacion`):
+
+Las dependencias Node se instalan **solo al construir la imagen Docker** (`Dockerfile` + `npm install` dentro del contenedor). No hace falta ejecutar `npm` en tu sistema operativo.
+
+- **Usuario master inicial:** si en `.env` defines `MASTER_INITIAL_PASSWORD` (y opcionalmente `MASTER_USER_EMAIL`, por defecto `loscorima@mali.pe`), al arrancar el contenedor se crea **una sola vez** ese usuario con área `pam` y rol master. Entra al panel, cambia la contraseña si quieres y **elimina `MASTER_INITIAL_PASSWORD`** del entorno.
+
+- **Más usuarios** (desde el host, contra el contenedor `app`):
+
+```bash
+docker compose exec app sh -c 'cd /usr/src/app && node scripts/create-user.js "otro@mali.pe" "tu_clave" educacion'
+docker compose exec app sh -c 'cd /usr/src/app && node scripts/create-user.js "otro@mali.pe" "tu_clave" pam master'
+```
+
+El último argumento opcional `master` marca usuario master (insignia en el panel). Cada usuario normal solo ve datos de su área; los envíos usan `WHATSAPP_TOKEN_*` / `PHONE_NUMBER_ID_*` de esa área.
+
+5. Abre el panel:
 
 ```txt
 http://localhost:3000
@@ -71,6 +87,8 @@ Usa el compose de desarrollo para cambios en vivo:
 docker compose -f docker-compose.dev.yml up --build
 ```
 
+Si aparece `Cannot find module` tras añadir dependencias en `package.json`, el volumen de `node_modules` del contenedor puede estar desactualizado: `docker compose -f docker-compose.dev.yml build --no-cache app`, luego `docker compose -f docker-compose.dev.yml run --rm app npm install`, y vuelve a levantar el compose (o revisa el comentario en `docker-compose.dev.yml`).
+
 ## Endpoints útiles
 
 - `GET /` dashboard principal
@@ -79,35 +97,13 @@ docker compose -f docker-compose.dev.yml up --build
 - `GET /webhook` verificación de webhook en Meta
 - `POST /webhook` recepción de estados `sent/delivered/read/failed`
 
-## Plantillas e idioma (rápido)
+## Plantillas desde Meta
 
-Usa siempre el código exacto del idioma configurado para cada plantilla en WhatsApp Manager.
+El panel **sincroniza** las plantillas aprobadas desde la Graph API (cuenta de WhatsApp / WABA) con el botón **Sincronizar plantillas**. No hace falta escribir nombres ni idioma a mano: al elegir una plantilla, el formulario se adapta a su estructura (cabecera imagen/video/documento, textos `{{1}}`…, botones URL dinámicos).
 
-| Caso | Template | Language code |
-|---|---|---|
-| Sandbox Meta (recomendado para pruebas) | `hello_world` | `en_US` |
-| Producción MALI (ejemplo) | `mali_novedades_generales` | `es` |
+El token de la app debe poder leer `message_templates` (permisos de negocio / WhatsApp). Si falla la resolución automática del WABA, define en `.env` opcionalmente `WABA_ID_PAM` y/o `WABA_ID_EDUCACION`.
 
-Si la combinación no existe en Meta, verás el error `132001`.
-Si envías parámetros a una plantilla que no los espera, verás el error `132000`.
-
-## Presets para `.env`
-
-Para que no tengas que adivinar valores, copia uno de estos bloques:
-
-Sandbox / Test App:
-
-```env
-DEFAULT_TEMPLATE_NAME=hello_world
-DEFAULT_TEMPLATE_LANGUAGE=en_US
-```
-
-Producción (cuando la plantilla MALI esté aprobada y activa):
-
-```env
-DEFAULT_TEMPLATE_NAME=mali_novedades_generales
-DEFAULT_TEMPLATE_LANGUAGE=es
-```
+Si la combinación nombre/idioma no existe en Meta, verás el error `132001`. Si los parámetros no coinciden con la plantilla, verás el error `132000`.
 
 Si estás en sandbox y sale `131030`, agrega el número destino en la lista de destinatarios permitidos de Meta Developers.
 
