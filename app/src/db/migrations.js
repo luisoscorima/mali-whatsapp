@@ -1,3 +1,9 @@
+/**
+ * Esquema idempotente del panel MALI WhatsApp (PostgreSQL).
+ * Fuente única de verdad: arrancar la app en BD vacía crea todo lo necesario.
+ * Jerarquía de negocio: áreas → usuarios → segmentos → contactos; campañas y chat por área.
+ */
+
 async function runMigrations(query) {
   await query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -32,6 +38,20 @@ async function runMigrations(query) {
     )
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS contacts (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(150) NOT NULL,
+      phone VARCHAR(20) NOT NULL,
+      segment VARCHAR(50) NOT NULL,
+      area VARCHAR(20) NOT NULL DEFAULT 'pam' CHECK (area IN ('pam', 'educacion')),
+      opt_in BOOLEAN NOT NULL DEFAULT TRUE,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      UNIQUE (area, phone)
+    )
+  `);
   await query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS area VARCHAR(20)`);
   await query(`UPDATE contacts SET area = 'pam' WHERE area IS NULL OR area = ''`);
   await query(`ALTER TABLE contacts ALTER COLUMN area SET DEFAULT 'pam'`);
@@ -48,7 +68,23 @@ async function runMigrations(query) {
   } catch {
     /* restricción única ya presente */
   }
+  await query(`CREATE INDEX IF NOT EXISTS idx_contacts_segment ON contacts(segment)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_contacts_area ON contacts(area)`);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS campaigns (
+      id SERIAL PRIMARY KEY,
+      area VARCHAR(20) NOT NULL DEFAULT 'pam' CHECK (area IN ('pam', 'educacion')),
+      segment VARCHAR(50) NOT NULL,
+      template_name VARCHAR(100) NOT NULL,
+      message_text TEXT NOT NULL,
+      image_url TEXT,
+      status VARCHAR(30) NOT NULL DEFAULT 'queued',
+      total_recipients INTEGER NOT NULL DEFAULT 0,
+      campaign_payload JSONB,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
   await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS area VARCHAR(20)`);
   await query(`UPDATE campaigns SET area = 'pam' WHERE area IS NULL OR area = ''`);
   await query(`ALTER TABLE campaigns ALTER COLUMN area SET DEFAULT 'pam'`);
@@ -57,6 +93,22 @@ async function runMigrations(query) {
   } catch {
     /* ya NOT NULL */
   }
+  await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS campaign_payload JSONB`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_campaigns_area ON campaigns(area)`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS campaign_logs (
+      id SERIAL PRIMARY KEY,
+      campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
+      phone VARCHAR(20) NOT NULL,
+      whatsapp_message_id VARCHAR(150),
+      status VARCHAR(30) NOT NULL,
+      response JSONB,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_campaign_logs_campaign_id ON campaign_logs(campaign_id)`);
 
   const col = await query(
     `SELECT 1 AS ok FROM information_schema.columns WHERE table_name = 'app_settings' AND column_name = 'area'`
@@ -139,7 +191,18 @@ async function runMigrations(query) {
     `CREATE UNIQUE INDEX IF NOT EXISTS chat_messages_wa_unique ON chat_messages (wa_message_id) WHERE wa_message_id IS NOT NULL`
   );
 
-  await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS campaign_payload JSONB`);
+  try {
+    await query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+  } catch {
+    /* sin permiso CREATE EXTENSION en algunos entornos */
+  }
+  try {
+    await query(
+      `CREATE INDEX IF NOT EXISTS idx_chat_messages_body_trgm ON chat_messages USING gin (body_text gin_trgm_ops)`
+    );
+  } catch {
+    /* índice requiere pg_trgm */
+  }
 
   await query(`
     CREATE TABLE IF NOT EXISTS whatsapp_templates (

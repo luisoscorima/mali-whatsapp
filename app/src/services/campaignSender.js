@@ -80,6 +80,7 @@ async function runCampaignSendJob(query, ctx) {
 
           const messageId = apiResponse.messages?.[0]?.id || null;
 
+          // response: respuesta de la API Meta al enviar; estados posteriores se fusionan desde el webhook.
           await query(
             `INSERT INTO campaign_logs (campaign_id, contact_id, phone, whatsapp_message_id, status, response)
              VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,

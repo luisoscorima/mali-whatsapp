@@ -1,0 +1,19 @@
+<% if (!canReply) { %>
+  <p class="inline-warn">No puedes enviar texto libre hasta que el usuario te escriba de nuevo (ventana de 24 h).</p>
+<% } else { %>
+  <form method="POST" action="<%= basePath %>/conversations/<%= conversation.id %>/reply" class="reply-form reply-form--stack inbox-reply-form">
+    <% if (typeof segmentFilter !== 'undefined' && segmentFilter) { %>
+      <input type="hidden" name="inbox_segment" value="<%= segmentFilter %>" />
+    <% } %>
+    <% if (typeof searchQ !== 'undefined' && searchQ) { %>
+      <input type="hidden" name="inbox_q" value="<%= searchQ %>" />
+    <% } %>
+    <label class="field">
+      <span class="field-label">Mensaje (máx. 4096 caracteres)</span>
+      <textarea name="message" required maxlength="4096" placeholder="Escribe tu respuesta…"></textarea>
+    </label>
+    <div class="form-actions">
+      <button type="submit">Enviar por WhatsApp</button>
+    </div>
+  </form>
+<% } %>

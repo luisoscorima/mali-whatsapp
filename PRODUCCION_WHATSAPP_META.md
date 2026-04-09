@@ -8,7 +8,7 @@ Documento único: requisitos, despliegue (Docker y Nginx Proxy Manager), plantil
 
 - Operar campañas masivas con WhatsApp Cloud API usando el MVP actual.
 - Configurar Meta Developers y el webhook de forma coherente con la URL pública.
-- Dejar operativos los módulos: **Enviar campaña**, **Contactos**, **Plantillas**, **Historial**, **Configuración**.
+- Dejar operativos los módulos: **Enviar campaña** (con sincronización de plantillas Meta), **Contactos**, **Historial**, **Ajustes**.
 - Validar un flujo real: prueba → piloto → envío masivo controlado.
 
 ---
@@ -16,7 +16,7 @@ Documento único: requisitos, despliegue (Docker y Nginx Proxy Manager), plantil
 ## 2. Arquitectura
 
 - Aplicación: `app/server.js` (Node.js + Express + EJS).
-- Base de datos: PostgreSQL (`db/init.sql`).
+- Base de datos: PostgreSQL; el esquema se crea/actualiza al arrancar la app (`app/src/db/migrations.js`). `db/init.sql` es solo referencia.
 - Despliegue: `docker-compose.yml` + `Dockerfile`.
 - Webhook de estados de mensajes:
   - Verificación: `GET /webhook`
@@ -49,22 +49,25 @@ Completar en la raíz del proyecto:
 | `PHONE_NUMBER_ID` | ID del número emisor |
 | `VERIFY_TOKEN` | Mismo valor que configuras en Meta para el webhook |
 | `APP_SECRET` | Firma `X-Hub-Signature-256` del webhook |
-| `DEFAULT_TEMPLATE_NAME` | Plantilla por defecto |
-| `DEFAULT_TEMPLATE_LANGUAGE` | Código de idioma exacto en Meta (ej. `en_US`, `es`) |
+| `BASE_PATH` | Vacío (`BASE_PATH=`) si la app está en la raíz del host (p. ej. `whatsapp.mali.pe`) |
+| `APP_BASE_URL` | URL pública HTTPS **sin** barra final (p. ej. `https://whatsapp.mali.pe`) |
+| `WABA_ID_PAM` / `WABA_ID_EDUCACION` | Opcional si falla la detección automática del WABA al sincronizar plantillas |
 
-### URL pública detrás de NPM (subruta `/whatsapp`)
+### URL pública en producción (dominio dedicado)
 
-Producción MALI: **`https://proyectosti.mali.pe/whatsapp`**
+Producción MALI: **`https://whatsapp.mali.pe`**
 
 ```env
-BASE_PATH=/whatsapp
-APP_BASE_URL=https://proyectosti.mali.pe/whatsapp
+BASE_PATH=
+APP_BASE_URL=https://whatsapp.mali.pe
 ```
 
-- `BASE_PATH`: subruta pública **sin** barra final, con `/` inicial.
+- `BASE_PATH`: vacío cuando la app está en la **raíz** del host (recomendado con subdominio dedicado).
 - `APP_BASE_URL`: URL que ve el usuario y Meta; **sin** barra final.
 
 En local (Docker dev o sin proxy): `BASE_PATH` vacío y `APP_BASE_URL=http://localhost:3000`.
+
+**Nota:** Si en el futuro montaras la app bajo una subruta (p. ej. `/whatsapp`), entonces `BASE_PATH=/whatsapp` y `APP_BASE_URL` incluiría esa ruta; el proxy Nginx debe reescribir rutas según corresponda.
 
 ### Seguridad recomendada en producción
 
@@ -114,15 +117,15 @@ Panel en **`http://localhost:3000`** (puertos publicados; no usa la red NPM).
 
 ## 6. Despliegue: Nginx Proxy Manager
 
-URL pública del MVP: **`https://proyectosti.mali.pe/whatsapp`**.
+URL pública del MVP: **`https://whatsapp.mali.pe`**.
 
-Cuando Nginx reenvía con `proxy_pass .../`, el contenedor recibe rutas **sin** el prefijo `/whatsapp`. La app usa `BASE_PATH` y `APP_BASE_URL` para que el navegador y Meta sigan pidiendo `/whatsapp/...`.
+Crea un **Proxy Host** para `whatsapp.mali.pe` que apunte al contenedor `mali-whatsapp-app:3000` (misma red Docker que NPM). Con dominio dedicado suele bastar el formulario de NPM (**Forward Hostname / IP** + puerto), sin subruta.
 
-En el proxy host de `proyectosti.mali.pe`, en **Custom Nginx Configuration** o **Custom locations**:
+Si necesitas bloque Nginx personalizado (equivalente a raíz):
 
 ```nginx
-location /whatsapp/ {
-    proxy_pass http://mali-whatsapp-app:3000/;
+location / {
+    proxy_pass http://mali-whatsapp-app:3000;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -130,7 +133,6 @@ location /whatsapp/ {
 }
 ```
 
-- Barras finales en `location` y `proxy_pass` para **quitar** el prefijo al reenviar (el contenedor ve `/`, `/webhook`, `/css/...`).
 - `mali-whatsapp-app` y puerto `3000` deben coincidir con tu `docker-compose` y red Docker compartida con NPM.
 
 ### SSL
@@ -145,7 +147,7 @@ En **WhatsApp → Configuration → Webhook**:
 
 | Campo | Valor |
 |-------|--------|
-| Callback URL | `https://proyectosti.mali.pe/whatsapp/webhook` (debe ser `APP_BASE_URL` + `/webhook`) |
+| Callback URL | `https://whatsapp.mali.pe/webhook` (debe ser `APP_BASE_URL` + `/webhook`) |
 | Verify token | Igual que `VERIFY_TOKEN` en `.env` |
 
 Suscripciones mínimas recomendadas: `messages` y, si aplica, `message_template_status_update`.
@@ -165,9 +167,7 @@ Validar operativamente:
 - Verify token y app secret alineados con el webhook.
 - Versión de API coherente con el backend.
 
-**Checklist rápido:** `WHATSAPP_TOKEN`, `PHONE_NUMBER_ID`, `DEFAULT_TEMPLATE_NAME` y `DEFAULT_TEMPLATE_LANGUAGE` exactos a lo aprobado en Meta.
-
-Desde **Configuración** también puedes ajustar variables de plantilla (conteo, etiquetas, plantillas sin componentes, etc.); lo guardado en BD **tiene prioridad** sobre `TEMPLATE_BODY_*` en `.env` y no requiere rebuild.
+**Checklist rápido:** `WHATSAPP_TOKEN`, `PHONE_NUMBER_ID`, y en el panel **Sincronizar plantillas** para cargar las plantillas aprobadas desde Meta antes de enviar campañas.
 
 ---
 
@@ -251,14 +251,14 @@ Recomendación: empezar con un piloto pequeño (5–20 contactos) y tener opt-in
 
 ### Plantillas (reglas)
 
-- Solo plantillas **aprobadas** en Meta.
-- `templateName` y `languageCode` **exactos** a la traducción aprobada.
+- Solo plantillas **aprobadas** en Meta; se listan tras **Sincronizar plantillas**.
+- La estructura (cabecera, cuerpo, botones) se infiere de Meta; no hace falta configurar variables a mano.
 
 ### Enviar campaña
 
-1. Elegir segmento.
-2. `templateName` y `languageCode`.
-3. Texto principal y, si aplica, `imageUrl` pública HTTPS.
+1. **Sincronizar plantillas** (si hace falta actualizar la lista).
+2. Elegir segmento y plantilla en el desplegable.
+3. Rellenar los campos que pida la plantilla (textos, URL de media, etc.).
 4. Lote y pausa: `batchSize` 1–100, `batchDelayMs` 0–60000.
 
 Buenas prácticas: empezar con `batchSize=10` y `batchDelayMs=1500`; subir volumen tras validar entrega y lectura en historial.
@@ -277,7 +277,7 @@ Ante errores HTTP: `401/403` → token/permisos; `429` → bajar ritmo; `5xx` de
 
 | Código / síntoma | Causa probable | Qué revisar |
 |------------------|----------------|-------------|
-| **132000** | Número de parámetros distinto al de la plantilla | `TEMPLATE_BODY_VARIABLE_COUNT`, orden en Meta, formulario de campaña |
+| **132000** | Parámetros distintos a los que espera la plantilla | Vuelve a sincronizar plantillas y rellena todos los campos del formulario |
 | **132001** | Nombre o idioma de plantilla incorrecto | Nombre exacto y `languageCode` aprobado |
 | **131030** | Número no permitido en modo prueba | Lista de números permitidos en Meta (sandbox) |
 | `Invalid webhook signature` | Firma no válida o secreto mal configurado | `APP_SECRET`, `REQUIRE_WEBHOOK_SIGNATURE` |
@@ -312,7 +312,7 @@ Ante errores HTTP: `401/403` → token/permisos; `429` → bajar ritmo; `5xx` de
 ## 13. Troubleshooting rápido
 
 - **Plantilla**: nombre e idioma exactos; parámetros alineados con la plantilla en Meta.
-- **Estados**: webhook suscrito, URL HTTPS correcta (incluye `/whatsapp` si aplica).
+- **Estados**: webhook suscrito, URL HTTPS correcta (`APP_BASE_URL` + `/webhook`).
 - **Rendimiento**: lotes más pequeños y más delay entre lotes.
 
 ---

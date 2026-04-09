@@ -1,0 +1,15 @@
+<% if (messages.length === 0) { %>
+  <p class="empty-state">Sin mensajes almacenados.</p>
+<% } else { %>
+  <div class="chat-thread chat-thread--inbox" id="chat-thread">
+    <% messages.forEach((m) => { %>
+      <div class="chat-bubble <%= m.direction === 'outbound' ? 'chat-bubble--out' : 'chat-bubble--in' %>">
+        <div><%= m.body_text %></div>
+        <div class="chat-meta">
+          <%= m.direction === 'outbound' ? 'Tú' : 'Usuario' %> · <%= m.message_type %> ·
+          <%= new Date(m.created_at).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' }) %>
+        </div>
+      </div>
+    <% }); %>
+  </div>
+<% } %>

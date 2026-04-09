@@ -22,42 +22,11 @@
   </head>
   <body>
     <div class="app-shell">
-      <aside class="side-panel">
-        <div class="brand-block">
-          <span class="brand-mark">MALI</span>
-          <h1 class="brand-title">WhatsApp</h1>
-        </div>
-        <nav class="nav-sections" aria-label="Secciones">
-          <button class="nav-item is-active" type="button" data-target-section="send-campaign">Enviar</button>
-          <button class="nav-item" type="button" data-target-section="contacts">Contactos</button>
-          <button class="nav-item" type="button" data-target-section="segments">Segmentos</button>
-          <button class="nav-item" type="button" data-target-section="history">Historial</button>
-          <a class="nav-link" href="<%= basePath %>/conversations">Conversaciones</a>
-          <button class="nav-item" type="button" data-target-section="configuration">Ajustes</button>
-        </nav>
-        <details class="sidebar-details">
-          <summary>Webhook (Meta)</summary>
-          <code class="sidebar-code"><%= appBaseUrl %>/webhook</code>
-        </details>
-      </aside>
+      <%- include('partials/sidebar-nav', { basePath, appBaseUrl, activeNav: typeof activeNav !== 'undefined' ? activeNav : 'dashboard' }) %>
 
       <main class="main-panel">
         <header class="top-bar">
-          <div class="user-bar">
-            <button type="button" class="theme-toggle" data-theme-toggle title="Modo claro / oscuro" aria-label="Cambiar tema">◐</button>
-            <span class="area-pill"><%= areaLabel %></span>
-            <% if (requireAuth) { %>
-              <% if (currentUser.isMaster) { %>
-                <span class="area-pill area-pill--master" title="Master">Master</span>
-              <% } %>
-              <span class="user-name"><%= currentUser.email %></span>
-              <form method="post" action="<%= basePath %>/logout" class="logout-form">
-                <button type="submit" class="secondary small-btn">Salir</button>
-              </form>
-            <% } else { %>
-              <span class="muted">Dev · <%= areaLabel %></span>
-            <% } %>
-          </div>
+          <%- include('partials/top-bar-actions', { basePath, areaLabel, requireAuth, currentUser }) %>
         </header>
 
         <section class="metrics-row" aria-label="Resumen">
@@ -167,6 +136,12 @@
           <div class="panel-split">
             <div class="card">
               <h2 class="card-title">Añadir contacto</h2>
+              <% if (typeof contactUpdated !== 'undefined' && contactUpdated) { %>
+              <p class="toast toast--ok">Contacto actualizado.</p>
+              <% } %>
+              <% if (typeof contactDeleted !== 'undefined' && contactDeleted) { %>
+              <p class="toast toast--ok">Contacto eliminado.</p>
+              <% } %>
               <% if (csvImport) { %>
               <div class="toast <%= csvImport.err ? 'toast--err' : 'toast--ok' %>">
                 <% if (csvImport.err) { %>
@@ -231,22 +206,35 @@
                   <span class="segment-pill"><%= item.segment %> · <strong><%= item.total %></strong></span>
                 <% }) %>
               </div>
-              <h3 class="card-subtitle">Últimos</h3>
+              <h3 class="card-subtitle">Listado (hasta 400, más recientes primero)</h3>
               <div class="table-wrap table-wrap--compact">
-                <table>
+                <table class="contacts-table">
                   <thead>
                     <tr>
                       <th>Nombre</th>
                       <th>Tel.</th>
-                      <th>Seg.</th>
+                      <th>Segmento</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
+                    <% if (contacts.length === 0) { %>
+                      <tr>
+                        <td colspan="4" class="empty-state">No hay contactos en esta área.</td>
+                      </tr>
+                    <% } %>
                     <% contacts.forEach((contact) => { %>
+                      <% const contactPayload = encodeURIComponent(JSON.stringify({ id: contact.id, name: contact.name, phone: contact.phone, segment: contact.segment })); %>
                       <tr>
                         <td><%= contact.name %></td>
                         <td class="mono"><%= contact.phone %></td>
                         <td><span class="badge neutral"><%= contact.segment %></span></td>
+                        <td class="contacts-actions-cell">
+                          <button type="button" class="secondary small-btn js-edit-contact" data-contact="<%= contactPayload %>">Editar</button>
+                          <form method="POST" action="<%= basePath %>/contacts/<%= contact.id %>/delete" class="inline-delete-form" onsubmit="return confirm('¿Eliminar este contacto?');">
+                            <button type="submit" class="small-btn danger-outline">Eliminar</button>
+                          </form>
+                        </td>
                       </tr>
                     <% }) %>
                   </tbody>
@@ -259,7 +247,7 @@
         <section class="content-section" id="segments">
           <div class="card">
             <h2 class="card-title">Segmentos</h2>
-            <p class="card-lead">Por área (<strong><%= areaLabel %></strong>). El <em>slug</em> no se puede cambiar; úsalo en CSV y en Meta.</p>
+            <p class="card-lead">Por área (<strong><%= areaLabel %></strong>). Puedes <strong>editar la etiqueta y el orden</strong> de cada fila (botón Guardar). El <em>slug</em> es fijo (CSV, campañas, Meta); para renombrar el identificador crea un segmento nuevo y migra contactos.</p>
             <% if (segmentsSaved) { %>
             <p class="toast toast--ok">Segmentos actualizados.</p>
             <% } %>
@@ -287,8 +275,8 @@
               <table class="segment-table">
                 <thead>
                   <tr>
-                    <th>Slug</th>
-                    <th>Etiqueta y orden</th>
+                    <th>Slug (fijo)</th>
+                    <th>Editar etiqueta y orden</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -382,34 +370,106 @@
         </footer>
       </main>
     </div>
+
+    <dialog id="dialog-edit-contact" class="modal-dialog">
+      <form method="POST" id="form-edit-contact" class="modal-dialog-form">
+        <h3 class="modal-dialog-title">Editar contacto</h3>
+        <label class="field">
+          <span class="field-label">Nombre</span>
+          <input type="text" name="name" id="edit-contact-name" required maxlength="150" />
+        </label>
+        <label class="field">
+          <span class="field-label">Teléfono (E.164 sin +)</span>
+          <input type="text" name="phone" id="edit-contact-phone" required inputmode="numeric" />
+        </label>
+        <label class="field">
+          <span class="field-label">Segmento</span>
+          <select name="segment" id="edit-contact-segment" required>
+            <% segments.forEach((segment) => { %>
+              <option value="<%= segment.value %>"><%= segment.label %></option>
+            <% }) %>
+          </select>
+        </label>
+        <div class="modal-dialog-actions">
+          <button type="button" class="secondary" id="edit-contact-cancel">Cancelar</button>
+          <button type="submit">Guardar cambios</button>
+        </div>
+      </form>
+    </dialog>
+
     <script>
       (function () {
-        const navItems = Array.from(document.querySelectorAll('.nav-item'));
+        const VALID = new Set(['send-campaign', 'contacts', 'segments', 'history', 'configuration']);
+        function sectionFromHash() {
+          const h = (location.hash || '#send-campaign').slice(1);
+          return VALID.has(h) ? h : 'send-campaign';
+        }
+
+        const navItems = Array.from(document.querySelectorAll('.nav-item[data-target-section]'));
         const sections = Array.from(document.querySelectorAll('.content-section'));
 
         function setActiveSection(targetId) {
           sections.forEach((section) => {
             section.classList.toggle('is-active', section.id === targetId);
           });
-          navItems.forEach((button) => {
-            button.classList.toggle('is-active', button.dataset.targetSection === targetId);
+          navItems.forEach((el) => {
+            el.classList.toggle('is-active', el.dataset.targetSection === targetId);
           });
         }
 
-        navItems.forEach((button) => {
-          button.addEventListener('click', () => setActiveSection(button.dataset.targetSection));
+        function applyFromQueryOrHash() {
+          const params = new URLSearchParams(window.location.search);
+          if (params.get('contacts_import') === '1') {
+            setActiveSection('contacts');
+            return;
+          }
+          if (params.get('segments_saved') === '1') {
+            setActiveSection('segments');
+            return;
+          }
+          if (params.get('templates_synced') === '1') {
+            setActiveSection('send-campaign');
+            return;
+          }
+          if (params.get('contact_updated') === '1' || params.get('contact_deleted') === '1') {
+            setActiveSection('contacts');
+            return;
+          }
+          setActiveSection(sectionFromHash());
+        }
+
+        window.addEventListener('hashchange', function () {
+          setActiveSection(sectionFromHash());
         });
 
-        const params = new URLSearchParams(window.location.search);
-        if (params.get('contacts_import') === '1') {
-          setActiveSection('contacts');
-        }
-        if (params.get('segments_saved') === '1') {
-          setActiveSection('segments');
-        }
-        if (params.get('templates_synced') === '1') {
-          setActiveSection('send-campaign');
-        }
+        applyFromQueryOrHash();
+      })();
+    </script>
+    <script>
+      (function () {
+        var dlg = document.getElementById('dialog-edit-contact');
+        var form = document.getElementById('form-edit-contact');
+        if (!dlg || !form) return;
+        var basePath = '<%= basePath %>';
+        document.querySelectorAll('.js-edit-contact').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            try {
+              var raw = btn.getAttribute('data-contact');
+              if (!raw) return;
+              var c = JSON.parse(decodeURIComponent(raw));
+              form.action = basePath + '/contacts/' + c.id + '/update';
+              document.getElementById('edit-contact-name').value = c.name;
+              document.getElementById('edit-contact-phone').value = c.phone;
+              document.getElementById('edit-contact-segment').value = c.segment;
+              dlg.showModal();
+            } catch (e) {}
+          });
+        });
+        var cancel = document.getElementById('edit-contact-cancel');
+        if (cancel) cancel.addEventListener('click', function () { dlg.close(); });
+        dlg.addEventListener('click', function (e) {
+          if (e.target === dlg) dlg.close();
+        });
       })();
     </script>
   </body>

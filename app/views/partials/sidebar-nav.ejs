@@ -1,0 +1,36 @@
+<% const nav = typeof activeNav !== 'undefined' ? activeNav : ''; %>
+<aside class="side-panel">
+  <div class="brand-block">
+    <div class="brand-logo-wrap" aria-hidden="true">
+      <img
+        class="brand-logo-img brand-logo-img--light"
+        src="https://mali-assets.s3.us-east-1.amazonaws.com/assets-web-mali/Logo_MALI_Negro.png"
+        alt=""
+        width="160"
+        height="48"
+        decoding="async"
+      />
+      <img
+        class="brand-logo-img brand-logo-img--dark"
+        src="https://mali-assets.s3.us-east-1.amazonaws.com/assets-web-mali/Logo_MALI_Blanco.png"
+        alt=""
+        width="160"
+        height="48"
+        decoding="async"
+      />
+    </div>
+    <h1 class="brand-title">WhatsApp</h1>
+  </div>
+  <nav class="nav-sections" aria-label="Secciones">
+    <a class="nav-item nav-link" href="<%= basePath %>/#send-campaign" data-target-section="send-campaign">Enviar</a>
+    <a class="nav-item nav-link" href="<%= basePath %>/#contacts" data-target-section="contacts">Contactos</a>
+    <a class="nav-item nav-link" href="<%= basePath %>/#segments" data-target-section="segments">Segmentos</a>
+    <a class="nav-item nav-link" href="<%= basePath %>/#history" data-target-section="history">Historial</a>
+    <a class="nav-link <%= nav === 'conversations' ? 'is-active' : '' %>" href="<%= basePath %>/conversations">Conversaciones</a>
+    <a class="nav-item nav-link" href="<%= basePath %>/#configuration" data-target-section="configuration">Ajustes</a>
+  </nav>
+  <details class="sidebar-details">
+    <summary>Webhook (Meta)</summary>
+    <code class="sidebar-code"><%= appBaseUrl %>/webhook</code>
+  </details>
+</aside>

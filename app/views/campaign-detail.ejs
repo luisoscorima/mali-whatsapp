@@ -23,21 +23,9 @@
     <div class="page page--detail">
       <div class="detail-top">
         <div class="detail-top-start">
-          <button type="button" class="theme-toggle" data-theme-toggle title="Modo claro / oscuro" aria-label="Cambiar tema">◐</button>
           <a class="back-link" href="<%= basePath %>/">← Panel</a>
         </div>
-        <% if (typeof requireAuth !== 'undefined' && requireAuth) { %>
-          <div class="user-bar user-bar--inline">
-            <span class="area-pill"><%= areaLabel %></span>
-            <% if (currentUser.isMaster) { %>
-              <span class="area-pill area-pill--master">Master</span>
-            <% } %>
-            <span class="user-name"><%= currentUser.email %></span>
-            <form method="post" action="<%= basePath %>/logout" class="logout-form">
-              <button type="submit" class="secondary small-btn">Salir</button>
-            </form>
-          </div>
-        <% } %>
+        <%- include('partials/top-bar-actions', { basePath, areaLabel, requireAuth: typeof requireAuth !== 'undefined' ? requireAuth : true, currentUser, topBarVariant: 'detail' }) %>
       </div>
 
       <div class="card">

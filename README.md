@@ -11,26 +11,22 @@ Demo funcional para campañas segmentadas por WhatsApp con:
 ```txt
 mali-whatsapp-mvp/
   app/
+    src/
+      routes/          # Routers por función (auth, dashboard, campañas, conversaciones, webhook…)
+      db/migrations.js # Esquema PostgreSQL idempotente (fuente de verdad al arrancar)
     public/
-      css/
-        styles.css
     views/
-      campaign-detail.ejs
-      dashboard.ejs
-      login.ejs
-    package.json
     server.js
   db/
-    init.sql
-  .env.example
+    init.sql         # Nota: el esquema real lo aplica migrations.js al iniciar la app
   docker-compose.yml
-  Dockerfile
   README.md
 ```
 
 ## Estado actual del demo
 
 - `app/` es la aplicación principal.
+- Al **arrancar** el servidor se ejecutan las migraciones PostgreSQL (`app/src/db/migrations.js`): en una BD vacía se crean tablas e índices; no hace falta importar `db/init.sql` en Docker.
 - Importación masiva de contactos por **CSV** desde el panel (sección Contactos); ejemplo descargable en `/contacts/sample.csv`.
 
 ## Primer arranque
@@ -115,12 +111,12 @@ Documento único (requisitos, despliegue Docker/NPM, plantillas Meta, uso del pa
 
 ### Publicación (resumen)
 
-El panel en producción vive en **`https://proyectosti.mali.pe/whatsapp`**.
+El panel en producción vive en **`https://whatsapp.mali.pe`** (subdominio dedicado; sin subruta).
 
-- **NPM:** proxy host `proyectosti.mali.pe`; location `/whatsapp/` → contenedor `mali-whatsapp-app:3000` en la red Docker compartida con NPM.
-- **`.env`:** `BASE_PATH=/whatsapp`, `APP_BASE_URL=https://proyectosti.mali.pe/whatsapp`
+- **NPM:** proxy host `whatsapp.mali.pe` → contenedor `mali-whatsapp-app:3000` en la raíz (`/`), red Docker compartida con NPM.
+- **`.env`:** `BASE_PATH=` (vacío), `APP_BASE_URL=https://whatsapp.mali.pe`
 - **SSL:** Let’s Encrypt en el mismo proxy host.
-- **Webhook Meta:** `https://proyectosti.mali.pe/whatsapp/webhook`
+- **Webhook Meta:** `https://whatsapp.mali.pe/webhook`
 
 ## Notas del MVP
 

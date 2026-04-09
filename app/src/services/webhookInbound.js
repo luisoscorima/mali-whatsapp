@@ -31,6 +31,11 @@ function extractInboundMessagePreview(msg) {
   return { messageType: type || 'unknown', bodyText: `[${type || 'mensaje'}]` };
 }
 
+/**
+ * Persiste mensajes entrantes del usuario en chat_messages (direction inbound).
+ * Esas filas son el texto que el cliente "respondió" en WhatsApp; no confundir con
+ * campaign_logs.response (metadatos de API / estados de entrega de campañas).
+ */
 async function persistInboundMessagesFromWebhookValue(query, value) {
   const meta = value?.metadata || {};
   const phoneNumberId = meta.phone_number_id;
