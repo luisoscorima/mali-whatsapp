@@ -1,6 +1,9 @@
 const config = require('../config');
 const { normalizePhone } = require('../utils/phone');
-const { getWhatsAppCredentialsForArea } = require('./metaSettingsCache');
+const {
+  getWhatsAppCredentialsForArea,
+  getWabaIdOverrideForArea,
+} = require('./metaSettingsCache');
 
 function resolveAreaFromPhoneNumberId(phoneNumberId) {
   const id = String(phoneNumberId || '').trim();
@@ -9,6 +12,33 @@ function resolveAreaFromPhoneNumberId(phoneNumberId) {
   if (id && pam && id === pam) return 'pam';
   if (id && edu && id === edu) return 'educacion';
   return null;
+}
+
+/**
+ * Meta a veces envía `messages` sin `metadata.phone_number_id`. En webhooks de tipo
+ * whatsapp_business_account, `entry.id` es el WABA ID — lo usamos como respaldo.
+ */
+function resolveInboundArea(value, wabaEntryId) {
+  const metaPid = String(value?.metadata?.phone_number_id ?? '').trim();
+  let area = resolveAreaFromPhoneNumberId(metaPid);
+  if (area) return { area, source: 'phone_number_id' };
+
+  const waba = String(wabaEntryId ?? '').trim();
+  if (waba) {
+    const wabaPam = String(getWabaIdOverrideForArea('pam') || '').trim();
+    const wabaEdu = String(getWabaIdOverrideForArea('educacion') || '').trim();
+    if (wabaPam && waba === wabaPam) return { area: 'pam', source: 'waba_entry_id' };
+    if (wabaEdu && waba === wabaEdu) return { area: 'educacion', source: 'waba_entry_id' };
+  }
+
+  const pam = getWhatsAppCredentialsForArea('pam');
+  const edu = getWhatsAppCredentialsForArea('educacion');
+  const hasPam = !!pam.phoneNumberId;
+  const hasEdu = !!edu.phoneNumberId;
+  if (hasPam && !hasEdu) return { area: 'pam', source: 'single_configured_line' };
+  if (hasEdu && !hasPam) return { area: 'educacion', source: 'single_configured_line' };
+
+  return { area: null, source: null };
 }
 
 function extractInboundMessagePreview(msg) {
@@ -37,22 +67,42 @@ function extractInboundMessagePreview(msg) {
  * Esas filas son el texto que el cliente "respondió" en WhatsApp; no confundir con
  * campaign_logs.response (metadatos de API / estados de entrega de campañas).
  */
-async function persistInboundMessagesFromWebhookValue(query, value) {
-  const meta = value?.metadata || {};
-  const phoneNumberId = meta.phone_number_id;
-  const area = resolveAreaFromPhoneNumberId(phoneNumberId);
+async function persistInboundMessagesFromWebhookValue(query, value, context = {}) {
+  const messages = Array.isArray(value.messages) ? value.messages : [];
+  if (messages.length === 0) {
+    return;
+  }
+
+  const wabaEntryId = context.wabaEntryId;
+  const { area, source } = resolveInboundArea(value, wabaEntryId);
+  const metaPid = value?.metadata?.phone_number_id ?? null;
+
   if (!area) {
     console.log(
       JSON.stringify({
         level: 'warn',
-        message: 'Webhook: phone_number_id no coincide con ninguna area',
-        phoneNumberId: phoneNumberId || null,
+        message: 'Webhook: no se pudo resolver area para mensajes entrantes',
+        phoneNumberId: metaPid,
+        wabaEntryId: wabaEntryId || null,
+        webhookField: context.field || null,
+        hint:
+          'Define WABA_ID_PAM / WABA_ID_EDUCACION o deja solo una linea PHONE_NUMBER_ID_* configurada.',
       })
     );
     return;
   }
 
-  const messages = Array.isArray(value.messages) ? value.messages : [];
+  if (source !== 'phone_number_id') {
+    console.log(
+      JSON.stringify({
+        level: 'info',
+        message: 'Webhook inbound: area resuelta sin metadata.phone_number_id',
+        area,
+        source,
+        wabaEntryId: wabaEntryId || null,
+      })
+    );
+  }
   for (const msg of messages) {
     const from = normalizePhone(msg.from);
     const waId = String(msg.id || '').trim();
@@ -96,6 +146,7 @@ async function persistInboundMessagesFromWebhookValue(query, value) {
 
 module.exports = {
   resolveAreaFromPhoneNumberId,
+  resolveInboundArea,
   persistInboundMessagesFromWebhookValue,
   extractInboundMessagePreview,
 };

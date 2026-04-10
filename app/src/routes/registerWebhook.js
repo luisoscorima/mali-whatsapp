@@ -33,10 +33,14 @@ function registerWebhook(app, ctx) {
 
       for (const entry of entries) {
         const changes = entry.changes || [];
+        const wabaEntryId = entry.id;
 
         for (const change of changes) {
           const value = change.value || {};
-          await persistInboundMessagesFromWebhookValue(query, value);
+          await persistInboundMessagesFromWebhookValue(query, value, {
+            wabaEntryId,
+            field: change.field,
+          });
 
           const statuses = value.statuses || [];
 
