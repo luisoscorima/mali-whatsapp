@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Credenciales Meta · MALI WhatsApp</title>
+    <script>
+      try {
+        var _t = localStorage.getItem('mali-theme');
+        if (_t === 'dark' || _t === 'light') document.documentElement.setAttribute('data-theme', _t);
+      } catch (e) {}
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="<%= basePath %>/css/styles.css" />
+    <script src="<%= basePath %>/js/theme.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <%- include('partials/sidebar-nav', { basePath, appBaseUrl, activeNav, showAdminNav }) %>
+
+      <main class="main-panel">
+        <header class="top-bar">
+          <%- include('partials/top-bar-actions', { basePath, areaLabel, requireAuth, currentUser }) %>
+        </header>
+
+        <section class="content-section is-active">
+          <div class="card">
+            <h1 class="card-title">Credenciales Meta</h1>
+            <p class="card-lead">
+              Los valores guardados aquí tienen prioridad sobre <code>.env</code>. Deja un campo vacío y guarda para volver a usar solo el entorno.
+            </p>
+            <% if (metaSaved) { %>
+            <p class="toast toast--ok">Configuración guardada.</p>
+            <% } %>
+
+            <form method="post" action="<%= basePath %>/admin/meta" class="form-grid">
+              <h2 class="card-subtitle">Webhook (toda la app)</h2>
+              <label class="field">
+                <span class="field-label">Verify token (Meta)</span>
+                <input type="password" name="verify_token" autocomplete="off" value="<%= metaRows.global[keys.verifyToken] || '' %>" placeholder="Si vacío: VERIFY_TOKEN en .env" />
+              </label>
+              <label class="field">
+                <span class="field-label">App Secret</span>
+                <input type="password" name="app_secret" autocomplete="off" value="<%= metaRows.global[keys.appSecret] || '' %>" placeholder="Si vacío: APP_SECRET en .env" />
+              </label>
+
+              <h2 class="card-subtitle">Comercial (PAM)</h2>
+              <label class="field">
+                <span class="field-label">Token de acceso WhatsApp</span>
+                <input type="password" name="pam_whatsapp_token" autocomplete="off" value="<%= metaRows.pam[keys.whatsappToken] || '' %>" />
+              </label>
+              <label class="field">
+                <span class="field-label">Phone number ID</span>
+                <input type="text" name="pam_phone_number_id" value="<%= metaRows.pam[keys.phoneNumberId] || '' %>" />
+              </label>
+              <label class="field">
+                <span class="field-label">WABA ID (opcional)</span>
+                <input type="text" name="pam_waba_id" value="<%= metaRows.pam[keys.wabaId] || '' %>" />
+              </label>
+
+              <h2 class="card-subtitle">Educación</h2>
+              <label class="field">
+                <span class="field-label">Token de acceso WhatsApp</span>
+                <input type="password" name="edu_whatsapp_token" autocomplete="off" value="<%= metaRows.educacion[keys.whatsappToken] || '' %>" />
+              </label>
+              <label class="field">
+                <span class="field-label">Phone number ID</span>
+                <input type="text" name="edu_phone_number_id" value="<%= metaRows.educacion[keys.phoneNumberId] || '' %>" />
+              </label>
+              <label class="field">
+                <span class="field-label">WABA ID (opcional)</span>
+                <input type="text" name="edu_waba_id" value="<%= metaRows.educacion[keys.wabaId] || '' %>" />
+              </label>
+
+              <div class="field-row">
+                <button type="submit" class="primary">Guardar</button>
+              </div>
+            </form>
+
+            <p class="card-lead muted"><a href="<%= basePath %>/">← Volver al panel</a></p>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

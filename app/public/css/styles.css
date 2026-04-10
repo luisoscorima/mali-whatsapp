@@ -102,7 +102,7 @@ html[data-theme='dark'] .brand-logo-img--dark {
 
 .brand-mark {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.65rem;
+  font-size: 0.80rem;
   font-weight: 600;
   letter-spacing: 0.2em;
   color: var(--accent);
@@ -1068,18 +1068,69 @@ pre {
 .segment-update-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-end;
+  gap: 10px 12px;
+}
+
+.segment-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+
+.segment-field-lbl {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.segment-field--slug {
+  flex: 0 1 160px;
+  min-width: 120px;
+}
+
+.segment-field--order {
+  flex: 0 0 auto;
+}
+
+.segment-slug-input {
+  width: 100%;
+  font-size: 0.88rem;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
+  color: var(--ink);
 }
 
 .segment-label-input {
-  flex: 1 1 160px;
-  min-width: 120px;
+  flex: 1 1 180px;
+  min-width: 140px;
+  font-size: 0.9rem;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
+  color: var(--ink);
 }
 
 .segment-order-input {
   width: 88px;
   flex-shrink: 0;
+  font-size: 0.9rem;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
+  color: var(--ink);
+}
+
+.segment-save-btn {
+  align-self: flex-end;
+  margin-bottom: 1px;
 }
 
 .preset-manage-list {
@@ -1620,4 +1671,79 @@ html[data-theme='dark'] .small-btn.danger-outline:hover {
   .footer-strip {
     flex-direction: column;
   }
+}
+
+/* Master: selector de área y admin */
+.top-bar-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.area-switch-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: auto;
+}
+
+.area-switch-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.area-switch-select {
+  font: inherit;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.area-switch-btn {
+  flex-shrink: 0;
+}
+
+.nav-admin-label {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.field--checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.field--checkbox .field-label {
+  margin: 0;
+}
+
+.small-btn.danger {
+  border-color: #b91c1c;
+  color: #b91c1c;
+}
+
+html[data-theme='dark'] .small-btn.danger {
+  border-color: #f87171;
+  color: #f87171;
 }

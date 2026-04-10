@@ -1,6 +1,18 @@
 <% const barVariant = typeof topBarVariant !== 'undefined' ? topBarVariant : 'default'; %>
 <% const initial = requireAuth && currentUser && currentUser.email ? String(currentUser.email).charAt(0).toUpperCase() : '?'; %>
 <div class="top-bar-actions top-bar-actions--<%= barVariant %>">
+  <% if (requireAuth && currentUser && currentUser.isMaster) { %>
+  <form method="post" action="<%= basePath %>/admin/switch-area" class="area-switch-form" title="Solo master: cambiar área de trabajo">
+    <label class="area-switch-label">
+      <span class="muted">Área</span>
+      <select name="area" class="area-switch-select" aria-label="Cambiar área">
+        <option value="pam" <%= currentUser.area === 'pam' ? 'selected' : '' %>>PAM</option>
+        <option value="educacion" <%= currentUser.area === 'educacion' ? 'selected' : '' %>>Educación</option>
+      </select>
+    </label>
+    <button type="submit" class="small-btn secondary area-switch-btn">Cambiar</button>
+  </form>
+  <% } %>
   <button type="button" class="theme-toggle" data-theme-toggle title="Modo claro / oscuro" aria-label="Cambiar tema">◐</button>
   <% if (requireAuth) { %>
     <details class="user-menu">

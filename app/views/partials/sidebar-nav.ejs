@@ -28,6 +28,11 @@
     <a class="nav-item nav-link" href="<%= basePath %>/#history" data-target-section="history">Historial</a>
     <a class="nav-link <%= nav === 'conversations' ? 'is-active' : '' %>" href="<%= basePath %>/conversations">Conversaciones</a>
     <a class="nav-item nav-link" href="<%= basePath %>/#configuration" data-target-section="configuration">Ajustes</a>
+    <% if (typeof showAdminNav !== 'undefined' && showAdminNav) { %>
+    <span class="nav-admin-label" role="presentation">Admin</span>
+    <a class="nav-link <%= nav === 'admin-users' ? 'is-active' : '' %>" href="<%= basePath %>/admin/users">Usuarios</a>
+    <a class="nav-link <%= nav === 'admin-meta' ? 'is-active' : '' %>" href="<%= basePath %>/admin/meta">Credenciales Meta</a>
+    <% } %>
   </nav>
   <details class="sidebar-details">
     <summary>Webhook (Meta)</summary>

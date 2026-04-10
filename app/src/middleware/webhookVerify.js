@@ -1,8 +1,9 @@
 const crypto = require('crypto');
 const config = require('../config');
+const { getAppSecret } = require('../services/metaSettingsCache');
 
 function verifyWebhookSignature(req) {
-  const appSecret = process.env.APP_SECRET;
+  const appSecret = getAppSecret();
   const signature = req.get('x-hub-signature-256');
 
   if (config.requireWebhookSignature && !appSecret) {

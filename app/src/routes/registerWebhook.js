@@ -1,6 +1,7 @@
 const { logError } = require('../utils/logger');
 const { verifyWebhookSignature } = require('../middleware/webhookVerify');
 const { persistInboundMessagesFromWebhookValue } = require('../services/webhookInbound');
+const { getVerifyToken } = require('../services/metaSettingsCache');
 
 function registerWebhook(app, ctx) {
   const { query } = ctx;
@@ -9,8 +10,9 @@ function registerWebhook(app, ctx) {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
+    const expected = getVerifyToken();
 
-    if (mode === 'subscribe' && token === process.env.VERIFY_TOKEN) {
+    if (mode === 'subscribe' && expected && token === expected) {
       return res.status(200).send(challenge);
     }
 

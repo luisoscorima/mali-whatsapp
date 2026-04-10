@@ -1,10 +1,11 @@
 const config = require('../config');
 const { normalizePhone } = require('../utils/phone');
+const { getWhatsAppCredentialsForArea } = require('./metaSettingsCache');
 
 function resolveAreaFromPhoneNumberId(phoneNumberId) {
   const id = String(phoneNumberId || '').trim();
-  const pam = String(process.env.PHONE_NUMBER_ID_PAM || process.env.PHONE_NUMBER_ID || '').trim();
-  const edu = String(process.env.PHONE_NUMBER_ID_EDUCACION || '').trim();
+  const pam = getWhatsAppCredentialsForArea('pam').phoneNumberId;
+  const edu = getWhatsAppCredentialsForArea('educacion').phoneNumberId;
   if (id && pam && id === pam) return 'pam';
   if (id && edu && id === edu) return 'educacion';
   return null;

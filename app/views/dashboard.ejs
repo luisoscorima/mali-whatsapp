@@ -247,7 +247,7 @@
         <section class="content-section" id="segments">
           <div class="card">
             <h2 class="card-title">Segmentos</h2>
-            <p class="card-lead">Por área (<strong><%= areaLabel %></strong>). Puedes <strong>editar la etiqueta y el orden</strong> de cada fila (botón Guardar). El <em>slug</em> es fijo (CSV, campañas, Meta); para renombrar el identificador crea un segmento nuevo y migra contactos.</p>
+            <p class="card-lead">Por área (<strong><%= areaLabel %></strong>). En cada fila puedes editar <strong>slug</strong> (identificador en CSV y campañas), <strong>etiqueta</strong> y <strong>orden</strong>. Si cambias el slug, se actualizan los contactos y el histórico de campañas de ese segmento en esta área.</p>
             <% if (segmentsSaved) { %>
             <p class="toast toast--ok">Segmentos actualizados.</p>
             <% } %>
@@ -275,22 +275,40 @@
               <table class="segment-table">
                 <thead>
                   <tr>
-                    <th>Slug (fijo)</th>
-                    <th>Editar etiqueta y orden</th>
+                    <th>Slug, etiqueta y orden</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   <% segments.forEach((seg) => { %>
                   <tr>
-                    <td class="mono"><%= seg.value %></td>
                     <td>
                       <form method="POST" action="<%= basePath %>/settings/segment-update" class="segment-update-form">
                         <input type="hidden" name="id" value="<%= seg.id %>" />
                         <div class="segment-update-row">
-                          <input type="text" name="label" value="<%= seg.label %>" maxlength="120" required class="segment-label-input" />
-                          <input type="number" name="sort_order" value="<%= seg.sort_order %>" step="1" class="segment-order-input" />
-                          <button type="submit" class="secondary small-btn">Guardar</button>
+                          <label class="segment-field segment-field--slug">
+                            <span class="segment-field-lbl">Slug</span>
+                            <input
+                              type="text"
+                              name="slug"
+                              value="<%= seg.value %>"
+                              required
+                              pattern="[a-z0-9_]{1,50}"
+                              maxlength="50"
+                              class="segment-slug-input mono"
+                              title="Minusculas, numeros y guion bajo"
+                              autocomplete="off"
+                            />
+                          </label>
+                          <label class="segment-field">
+                            <span class="segment-field-lbl">Etiqueta</span>
+                            <input type="text" name="label" value="<%= seg.label %>" maxlength="120" required class="segment-label-input" />
+                          </label>
+                          <label class="segment-field segment-field--order">
+                            <span class="segment-field-lbl">Orden</span>
+                            <input type="number" name="sort_order" value="<%= seg.sort_order %>" step="1" class="segment-order-input" />
+                          </label>
+                          <button type="submit" class="secondary small-btn segment-save-btn">Guardar</button>
                         </div>
                       </form>
                     </td>

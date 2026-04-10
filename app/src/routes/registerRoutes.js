@@ -9,12 +9,14 @@ const { registerSegments } = require('./registerSegments');
 const { registerCampaigns } = require('./registerCampaigns');
 const { registerConversations } = require('./registerConversations');
 const { registerWebhook } = require('./registerWebhook');
+const { registerAdmin } = require('./registerAdmin');
 
 function createRegisterRoutes({ query, pool, appPath }) {
   const ctx = createRouteContext({ query, pool, appPath });
 
   function register(app) {
     registerAuth(app, ctx);
+    registerAdmin(app, ctx);
     registerDashboard(app, ctx);
     registerSystem(app, ctx);
     registerTemplates(app, ctx);

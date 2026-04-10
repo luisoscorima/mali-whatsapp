@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Usuarios · MALI WhatsApp</title>
+    <script>
+      try {
+        var _t = localStorage.getItem('mali-theme');
+        if (_t === 'dark' || _t === 'light') document.documentElement.setAttribute('data-theme', _t);
+      } catch (e) {}
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="<%= basePath %>/css/styles.css" />
+    <script src="<%= basePath %>/js/theme.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <%- include('partials/sidebar-nav', { basePath, appBaseUrl, activeNav, showAdminNav }) %>
+
+      <main class="main-panel">
+        <header class="top-bar">
+          <%- include('partials/top-bar-actions', { basePath, areaLabel, requireAuth, currentUser }) %>
+        </header>
+
+        <section class="content-section is-active">
+          <div class="card">
+            <div class="card-head">
+              <h1 class="card-title">Usuarios del panel</h1>
+              <a class="small-btn primary" href="<%= basePath %>/admin/users/new">Nuevo usuario</a>
+            </div>
+            <% if (userSaved) { %>
+            <p class="toast toast--ok">Cambios guardados.</p>
+            <% } %>
+            <% if (userErr === 'self') { %>
+            <p class="inline-warn">No puedes eliminar tu propia cuenta mientras tienes la sesión iniciada.</p>
+            <% } %>
+
+            <div class="table-wrap table-wrap--compact">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Correo</th>
+                    <th>Área</th>
+                    <th>Master</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% users.forEach(function (u) { %>
+                  <tr>
+                    <td><%= u.email %></td>
+                    <td><%= u.area %></td>
+                    <td><%= u.is_master ? 'Sí' : '—' %></td>
+                    <td class="table-actions">
+                      <a class="small-btn secondary" href="<%= basePath %>/admin/users/<%= u.id %>/edit">Editar</a>
+                      <% if (currentUser && currentUser.id !== u.id) { %>
+                      <form method="post" action="<%= basePath %>/admin/users/<%= u.id %>/delete" class="inline-delete-form" onsubmit="return confirm('¿Eliminar este usuario?');">
+                        <button type="submit" class="small-btn danger">Eliminar</button>
+                      </form>
+                      <% } %>
+                    </td>
+                  </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+            <p class="card-lead muted"><a href="<%= basePath %>/">← Volver al panel</a></p>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

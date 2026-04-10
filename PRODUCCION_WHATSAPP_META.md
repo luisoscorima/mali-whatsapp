@@ -1,57 +1,200 @@
 # Guía de producción y operación — WhatsApp API (MALI)
 
-Documento único: requisitos, despliegue (Docker y Nginx Proxy Manager), plantillas Meta, uso del panel, errores frecuentes y checklist de salida a producción.
+Documento único: requisitos, orden de despliegue, Git, Meta Developers, Docker, Nginx Proxy Manager, webhook, variables de entorno, plantillas, uso del panel, rol master (enfoque simple), errores frecuentes y checklist de salida a producción.
 
 ---
 
-## 1. Objetivo y alcance
+## Índice
 
-- Operar campañas masivas con WhatsApp Cloud API usando el MVP actual.
-- Configurar Meta Developers y el webhook de forma coherente con la URL pública.
-- Dejar operativos los módulos: **Enviar campaña** (con sincronización de plantillas Meta), **Contactos**, **Historial**, **Ajustes**.
+1. [Objetivo, alcance y principios operativos](#1-objetivo-alcance-y-principios-operativos)
+2. [Orden lógico de despliegue](#2-orden-lógico-de-despliegue)
+3. [Arquitectura](#3-arquitectura)
+4. [Flujo Git (desarrollo y servidor)](#4-flujo-git-desarrollo-y-servidor)
+5. [Infraestructura en el servidor](#5-infraestructura-en-el-servidor)
+6. [Meta Developers — paso a paso detallado](#6-meta-developers--paso-a-paso-detallado)
+7. [Credenciales, variables `.env` y mapa Meta → entorno](#7-credenciales-variables-env-y-mapa-meta--entorno)
+8. [Seguridad en producción y antes de salir a producción](#8-seguridad-en-producción-y-antes-de-salir-a-producción)
+9. [Despliegue: Docker](#9-despliegue-docker)
+10. [Despliegue: Nginx Proxy Manager](#10-despliegue-nginx-proxy-manager)
+11. [Webhook: configuración en Meta y pruebas con `curl`](#11-webhook-configuración-en-meta-y-pruebas-con-curl)
+12. [Configuración operativa (panel)](#12-configuración-operativa-panel)
+13. [Rol master, áreas y credenciales (enfoque simple)](#13-rol-master-áreas-y-credenciales-enfoque-simple)
+14. [Plantillas Meta: ejemplo invitación (Patronato / MALI)](#14-plantillas-meta-ejemplo-invitación-patronato--mali)
+15. [Uso operativo por módulo](#15-uso-operativo-por-módulo)
+16. [Errores frecuentes (API y plantillas)](#16-errores-frecuentes-api-y-plantillas)
+17. [Procedimiento: sandbox → piloto → masivo](#17-procedimiento-sandbox--piloto--masivo)
+18. [Troubleshooting rápido](#18-troubleshooting-rápido)
+19. [Go-live: lista bloqueante](#19-go-live-lista-bloqueante)
+20. [Mejoras posteriores (no bloqueantes)](#20-mejoras-posteriores-no-bloqueantes)
+
+---
+
+## 1. Objetivo, alcance y principios operativos
+
+- Operar campañas con WhatsApp Cloud API usando el MVP actual.
+- Configurar Meta Developers y el webhook de forma coherente con la **URL pública HTTPS**.
+- Dejar operativos: **Enviar campaña** (sincronización de plantillas Meta), **Contactos**, **Historial**, **Ajustes** (segmentos).
 - Validar un flujo real: prueba → piloto → envío masivo controlado.
 
+**Principios (operación diaria):** priorizar **facilidad de uso** frente a sobreingeniería. Donde este documento habla del usuario **master**, asume un **único operador** de ese rol (tú): no hace falta diseñar permisos complejos, auditorías ni catálogos dinámicos de “áreas” para el día a día.
+
 ---
 
-## 2. Arquitectura
+## 2. Orden lógico de despliegue
+
+Respeta este orden para evitar errores (especialmente en el webhook):
+
+1. **Dominio y DNS** apuntando al servidor.
+2. **Docker** en el servidor y red compartida con el proxy (si usas Nginx Proxy Manager).
+3. **Proxy inverso + SSL (HTTPS)** para el host público (p. ej. `whatsapp.mali.pe`).
+4. **Aplicación y Postgres** levantados (`docker compose`), `.env` completo en el host.
+5. **Comprobar** `/health` por HTTPS.
+6. **Solo entonces** registrar el **webhook** en Meta (Meta exige HTTPS en la callback URL).
+7. Plantillas en WhatsApp Manager y **Sincronizar plantillas** en el panel.
+
+Si configuras el webhook en Meta antes de que la URL HTTPS responda bien, la verificación fallará.
+
+---
+
+## 3. Arquitectura
 
 - Aplicación: `app/server.js` (Node.js + Express + EJS).
 - Base de datos: PostgreSQL; el esquema se crea/actualiza al arrancar la app (`app/src/db/migrations.js`). `db/init.sql` es solo referencia.
 - Despliegue: `docker-compose.yml` + `Dockerfile`.
-- Webhook de estados de mensajes:
-  - Verificación: `GET /webhook`
+- Webhook (Meta):
+  - Verificación: `GET /webhook` (singular; **no** uses `/webhooks`).
   - Eventos: `POST /webhook`
 
 ---
 
-## 3. Prerrequisitos en Meta (paso a paso)
+## 4. Flujo Git (desarrollo y servidor)
 
-1. Cuenta de Meta Business Manager (si aún no existe).
-2. [Meta for Developers](https://developers.facebook.com/).
-3. Crear una app de tipo **Business**.
-4. Añadir el producto **WhatsApp**.
-5. En **WhatsApp → API Setup** obtener:
-   - Token de acceso (temporal o permanente con System User).
-   - **Phone number ID**.
-   - **WhatsApp Business Account ID (WABA ID)**.
-6. Crear y **aprobar** una plantilla de mensaje en WhatsApp Manager.
-7. Si estás en entorno de prueba (sandbox), añadir los números destino permitidos.
+### En tu máquina (desarrollo)
+
+1. `git status` — revisa cambios locales.
+2. `git pull origin <rama>` — integra el remoto (p. ej. `main`).
+3. Commits con mensajes claros; `git push origin <rama>`.
+
+### En el servidor (producción)
+
+1. Entra al directorio del repositorio (donde está `docker-compose.yml`).
+2. `git fetch origin && git pull origin <rama>` — mismo código que en el remoto.
+3. Si cambiaste `Dockerfile`, `package.json` o dependencias: reconstruye la imagen (ver sección Docker).
+
+**Buenas prácticas**
+
+- El archivo **`.env` no se versiona** (debe estar en `.gitignore`). En el servidor, mantén una copia de respaldo en lugar seguro.
+- Tras `git pull`, si solo cambió código de aplicación: `docker compose up -d --build` suele ser suficiente para desplegar.
 
 ---
 
-## 4. Credenciales y variables (`.env`)
+## 5. Infraestructura en el servidor
 
-Completar en la raíz del proyecto:
+- **Docker** y **Docker Compose** instalados.
+- Red externa de Nginx Proxy Manager: el `docker-compose.yml` de producción usa la red `nginx-proxy-manager_default`. Debe existir antes de levantar la app:
+  - `docker network ls` — busca `nginx-proxy-manager_default` (suele crearse al instalar/levanter NPM al menos una vez).
+- **Nginx Proxy Manager (NPM):** Proxy Host del dominio público → contenedor `mali-whatsapp-app:3000` en la **misma red Docker** que NPM (ver sección 10).
+- **SSL (Let’s Encrypt en NPM)** activo para ese host **antes** de registrar el webhook en Meta.
+
+---
+
+## 6. Meta Developers — paso a paso detallado
+
+Entorno general: [Meta for Developers](https://developers.facebook.com/). Conviene tener acceso al **Meta Business** asociado al WhatsApp Business.
+
+### 6.1 Crear la app
+
+1. **Mis apps** → **Crear app**.
+2. Tipo de caso de uso: **Negocio / Business** (según el asistente actual de Meta).
+3. Completa nombre, email de contacto y vinculación a cuenta de negocio si lo solicita → **Crear app**.
+
+### 6.2 Añadir el producto WhatsApp
+
+1. En el panel de la app: **Añadir producto** (Add products).
+2. Localiza **WhatsApp** → **Configurar** / **Set up**.
+
+### 6.3 API Setup (credenciales de envío y plantillas)
+
+En el menú lateral: **WhatsApp** → **Introducción** / **API Setup** / **Getting started** (el nombre puede variar ligeramente).
+
+Anota o configura:
+
+| En la pantalla de Meta | Uso en el MVP |
+|------------------------|----------------|
+| **Token de acceso** (temporal ~24 h o de larga duración) | Variable `WHATSAPP_TOKEN` o `WHATSAPP_TOKEN_PAM` / `WHATSAPP_TOKEN_EDUCACION` |
+| **Phone number ID** (ID numérico largo; **no** es el número +51…) | `PHONE_NUMBER_ID` o `PHONE_NUMBER_ID_PAM` / `PHONE_NUMBER_ID_EDUCACION` |
+| **WhatsApp Business Account ID (WABA)** | Opcional: `WABA_ID_PAM` / `WABA_ID_EDUCACION` si falla la detección automática al sincronizar plantillas |
+| Números de **prueba** / lista de destinatarios permitidos | En modo desarrollo, solo esos números reciben mensajes |
+
+**Token de larga duración (recomendado en producción):** Meta cambia la interfaz con frecuencia; suele obtenerse desde **Administrador comercial** (usuarios del sistema y permisos sobre el activo de WhatsApp) o desde el flujo de generación de token en la sección WhatsApp de la app. El token debe permitir envío y gestión de plantillas según tu caso.
+
+### 6.4 App Secret (firma del webhook)
+
+1. **Configuración de la app** → **Básica** (App settings → Basic).
+2. **Clave secreta de la aplicación (App Secret)** → mostrar y copiar.
+3. En tu `.env`: **`APP_SECRET`** — se usa para validar el header `X-Hub-Signature-256` en `POST /webhook` cuando `REQUIRE_WEBHOOK_SIGNATURE=true`.
+
+### 6.5 Webhook en Meta (cuando HTTPS y la app ya respondan)
+
+1. **WhatsApp** → **Configuración** (Configuration).
+2. **Webhook** → **Editar**.
+3. **Callback URL:** `https://whatsapp.mali.pe/webhook`  
+   Debe ser exactamente **`APP_BASE_URL` + `/webhook`** (sin barra final en `APP_BASE_URL`). **Ruta singular:** `/webhook`.
+4. **Verify token:** una cadena secreta que inventas tú; la misma en **`VERIFY_TOKEN`** del `.env`.
+5. Tras guardar, Meta envía un **GET** de verificación; la app debe responder **200** con el `hub.challenge` si el token coincide (ver sección 11).
+6. **Campos suscritos:** como mínimo `messages`; si aplica, `message_template_status_update`.
+
+### 6.6 WhatsApp Manager (plantillas)
+
+Desde el ecosistema Meta / Business: **WhatsApp Manager** — crear plantillas, enviar a revisión y esperar estado **Aprobada**. Sin plantilla aprobada no hay envíos masivos “en frío” con texto libre.
+
+### 6.7 Orden mínimo resumido
+
+1. Business / acceso al portafolio correcto.  
+2. App en Developers + producto WhatsApp.  
+3. Phone number ID + token + (opcional) WABA.  
+4. App Secret.  
+5. HTTPS público funcionando → Webhook + Verify token.  
+6. Plantillas aprobadas → panel **Sincronizar plantillas**.
+
+---
+
+## 7. Credenciales, variables `.env` y mapa Meta → entorno
+
+Completa un archivo **`.env`** en la **raíz del proyecto** (en el servidor, junto al `docker-compose.yml`; no lo subas a Git). Puedes partir de `.env.example`.
+
+### Mapa rápido “dónde lo copio en Meta”
+
+| Variable `.env` | Origen típico en Meta / infra |
+|-----------------|--------------------------------|
+| `APP_BASE_URL` | URL pública HTTPS **sin** barra final (`https://whatsapp.mali.pe`) |
+| `BASE_PATH` | Vacío si la app está en la raíz del dominio |
+| `VERIFY_TOKEN` | Texto que **tú defines** en Webhook → Verify token (mismo valor) |
+| `APP_SECRET` | App → Configuración → Básica → App Secret |
+| `WHATSAPP_TOKEN` / `WHATSAPP_TOKEN_PAM` / `WHATSAPP_TOKEN_EDUCACION` | Token de la API (Graph) con permisos WhatsApp |
+| `PHONE_NUMBER_ID` / `PHONE_NUMBER_ID_PAM` / `PHONE_NUMBER_ID_EDUCACION` | WhatsApp → API Setup → **Phone number ID** |
+| `WABA_ID_PAM` / `WABA_ID_EDUCACION` | Opcional: ID de cuenta WhatsApp Business si la app no deduce el WABA |
+
+### Tabla ampliada de variables
 
 | Variable | Uso |
 |----------|-----|
-| `WHATSAPP_TOKEN` | Token de la API |
-| `PHONE_NUMBER_ID` | ID del número emisor |
-| `VERIFY_TOKEN` | Mismo valor que configuras en Meta para el webhook |
-| `APP_SECRET` | Firma `X-Hub-Signature-256` del webhook |
-| `BASE_PATH` | Vacío (`BASE_PATH=`) si la app está en la raíz del host (p. ej. `whatsapp.mali.pe`) |
-| `APP_BASE_URL` | URL pública HTTPS **sin** barra final (p. ej. `https://whatsapp.mali.pe`) |
-| `WABA_ID_PAM` / `WABA_ID_EDUCACION` | Opcional si falla la detección automática del WABA al sincronizar plantillas |
+| `PORT` | Puerto interno del contenedor (p. ej. `3000`). |
+| `NODE_ENV` | `production` en servidor. |
+| `APP_BASE_URL` | URL pública HTTPS **sin** barra final. |
+| `BASE_PATH` | Vacío (`BASE_PATH=`) si la app está en la raíz del host. |
+| `REQUIRE_AUTH` | `true` en producción para login con correo `@mali.pe`. |
+| `SESSION_SECRET` | Secreto para firmar la cookie de sesión (obligatorio si `REQUIRE_AUTH=true`). |
+| `DEV_AREA` | Solo desarrollo sin auth: `pam` o `educacion`. |
+| `VERIFY_TOKEN` | Igual que el **Verify token** del webhook en Meta. |
+| `APP_SECRET` | Firma `X-Hub-Signature-256` del webhook. |
+| `REQUIRE_WEBHOOK_SIGNATURE` | `true` en producción recomendado. |
+| `WHATSAPP_TOKEN` | Respaldo si no usas sufijos por área. |
+| `PHONE_NUMBER_ID` | Respaldo si no usas sufijos por área. |
+| `WHATSAPP_TOKEN_PAM` / `WHATSAPP_TOKEN_EDUCACION` | Token por área (Comercial PAM / Educación). |
+| `PHONE_NUMBER_ID_PAM` / `PHONE_NUMBER_ID_EDUCACION` | Phone number ID por área. |
+| `WABA_ID_PAM` / `WABA_ID_EDUCACION` | Opcional si falla la detección automática del WABA. |
+| `POSTGRES_*` / `DATABASE_URL` | Credenciales de PostgreSQL (compose usa servicio `postgres`). |
 
 ### URL pública en producción (dominio dedicado)
 
@@ -67,16 +210,26 @@ APP_BASE_URL=https://whatsapp.mali.pe
 
 En local (Docker dev o sin proxy): `BASE_PATH` vacío y `APP_BASE_URL=http://localhost:3000`.
 
-**Nota:** Si en el futuro montaras la app bajo una subruta (p. ej. `/whatsapp`), entonces `BASE_PATH=/whatsapp` y `APP_BASE_URL` incluiría esa ruta; el proxy Nginx debe reescribir rutas según corresponda.
+**Nota:** Si montaras la app bajo una subruta (p. ej. `/whatsapp`), entonces `BASE_PATH=/whatsapp` y `APP_BASE_URL` incluiría esa ruta; el proxy debe reescribir rutas según corresponda.
 
-### Seguridad recomendada en producción
+### Variables opcionales de plantillas y lotes
+
+Valores por defecto en `app/server.js` y en el panel **Configuración**; revisa `.env.example` y el panel para `TEMPLATE_BODY_VARIABLE_*`, límites de lote, etc.
+
+---
+
+## 8. Seguridad en producción y antes de salir a producción
+
+### Recomendado en producción
 
 - `NODE_ENV=production`
 - `REQUIRE_AUTH=true` + `SESSION_SECRET` (login con correo **@mali.pe** y sesión)
 - `REQUIRE_WEBHOOK_SIGNATURE=true`
-- `RATE_LIMIT_MAX=300`
+- `RATE_LIMIT_MAX=300` (u otro según tu proxy)
 - `CAMPAIGN_RATE_LIMIT_MAX=5`
-- Usuarios adicionales: `docker compose exec app sh -c 'cd /usr/src/app && node scripts/create-user.js "correo@mali.pe" "clave" pam'` (ver `README.md`)
+- Usuarios adicionales:  
+  `docker compose exec app sh -c 'cd /usr/src/app && node scripts/create-user.js "correo@mali.pe" "clave" pam'`  
+  (ver `README.md`; último argumento opcional `master` para usuario master).
 
 ### Antes de salir a producción
 
@@ -88,17 +241,25 @@ En local (Docker dev o sin proxy): `BASE_PATH` vacío y `APP_BASE_URL=http://loc
 
 ---
 
-## 5. Despliegue: Docker
+## 9. Despliegue: Docker
 
 ### Producción (`docker-compose.yml`)
 
 - **No** publica puertos en el host: la app habla con Postgres en la red interna y se expone a **Nginx Proxy Manager** por la red externa `nginx-proxy-manager_default`.
 - Esa red debe existir antes (`docker network ls`); suele crearse al levantar NPM al menos una vez.
-- Comando:
+- Carga variables desde `.env` en la raíz (`env_file: .env`).
 
 ```bash
 docker compose up -d --build
 ```
+
+Tras **editar solo `.env`**, suele bastar recrear el servicio para recargar variables:
+
+```bash
+docker compose up -d
+```
+
+Si el contenedor no toma los cambios, prueba: `docker compose up -d --force-recreate app`.
 
 ### Desarrollo local (hot reload)
 
@@ -111,15 +272,15 @@ Panel en **`http://localhost:3000`** (puertos publicados; no usa la red NPM).
 ### Comprobar salud
 
 - **Con puerto local** (dev): `curl -i http://localhost:3000/health` → `200` y `{"ok":true,"db":"up"}`.
-- **En servidor sin puerto publicado**: usa la URL HTTPS pública (`/health`) o `docker compose exec` contra el contenedor.
+- **En servidor** (HTTPS): `curl -sS "https://whatsapp.mali.pe/health"` (ajusta el dominio).
 
 ---
 
-## 6. Despliegue: Nginx Proxy Manager
+## 10. Despliegue: Nginx Proxy Manager
 
 URL pública del MVP: **`https://whatsapp.mali.pe`**.
 
-Crea un **Proxy Host** para `whatsapp.mali.pe` que apunte al contenedor `mali-whatsapp-app:3000` (misma red Docker que NPM). Con dominio dedicado suele bastar el formulario de NPM (**Forward Hostname / IP** + puerto), sin subruta.
+Crea un **Proxy Host** para `whatsapp.mali.pe` que apunte al contenedor **`mali-whatsapp-app:3000`** (misma red Docker que NPM). Con dominio dedicado suele bastar el formulario de NPM (**Forward Hostname / IP** + puerto), sin subruta.
 
 Si necesitas bloque Nginx personalizado (equivalente a raíz):
 
@@ -141,37 +302,78 @@ Activa HTTPS (Let’s Encrypt en NPM) **antes** de registrar el webhook en Meta.
 
 ---
 
-## 7. Webhook en Meta
+## 11. Webhook: configuración en Meta y pruebas con `curl`
 
-En **WhatsApp → Configuration → Webhook**:
+### En Meta (resumen)
+
+**WhatsApp** → **Configuration** → **Webhook**:
 
 | Campo | Valor |
 |-------|--------|
-| Callback URL | `https://whatsapp.mali.pe/webhook` (debe ser `APP_BASE_URL` + `/webhook`) |
+| Callback URL | `https://whatsapp.mali.pe/webhook` (= `APP_BASE_URL` + `/webhook`) |
 | Verify token | Igual que `VERIFY_TOKEN` en `.env` |
 
 Suscripciones mínimas recomendadas: `messages` y, si aplica, `message_template_status_update`.
 
-- Meta enviará `GET /webhook` con `hub.challenge`; la app responde `200` con el challenge si el token coincide.
-- Con `REQUIRE_WEBHOOK_SIGNATURE=true`, peticiones sin firma válida reciben `401`.
+- Meta envía **`GET /webhook`** con `hub.mode`, `hub.verify_token`, `hub.challenge`; la app responde **200** con el challenge si el token coincide.
+- Con `REQUIRE_WEBHOOK_SIGNATURE=true`, los **`POST`** sin firma válida reciben **401**.
+
+### Por qué `curl -I` puede confundir
+
+- **`curl -I https://…/webhook`** (solo cabeceras, método **HEAD**) **sin** query string **no** reproduce la verificación de Meta. La app puede responder **403** si faltan `hub.mode` / `hub.verify_token` correctos: eso significa “verificación fallida”, no necesariamente que el proxy esté mal.
+- Las rutas **`/`** o rutas equivocadas como **`/webhooks`** (plural) pueden redirigir **302** al login si `REQUIRE_AUTH=true` — la ruta correcta del proyecto es **`/webhook`** (singular).
+
+### Prueba manual (sustituye `TU_VERIFY_TOKEN`)
+
+```bash
+curl -sS "https://whatsapp.mali.pe/webhook?hub.mode=subscribe&hub.challenge=prueba_ok_123&hub.verify_token=TU_VERIFY_TOKEN"
+```
+
+Respuesta esperada: cuerpo de texto **`prueba_ok_123`** y HTTP **200**.
 
 ---
 
-## 8. Módulo Configuración (panel)
+## 12. Configuración operativa (panel)
 
 Validar operativamente:
 
 - Token de acceso vigente.
 - Phone Number ID correcto.
-- WABA ID acorde a Meta.
-- Verify token y app secret alineados con el webhook.
-- Versión de API coherente con el backend.
+- WABA alineado con Meta (o `WABA_ID_*` en `.env` si hace falta).
+- Verify token y App Secret coherentes con Meta y con `.env`.
+- Versión de API coherente con el backend (`GRAPH_API_VERSION` en código).
 
-**Checklist rápido:** `WHATSAPP_TOKEN`, `PHONE_NUMBER_ID`, y en el panel **Sincronizar plantillas** para cargar las plantillas aprobadas desde Meta antes de enviar campañas.
+**Checklist rápido:** `WHATSAPP_TOKEN_*`, `PHONE_NUMBER_ID_*`, y en el panel **Sincronizar plantillas** para cargar plantillas aprobadas antes de enviar campañas.
 
 ---
 
-## 9. Plantillas Meta: ejemplo invitación (Patronato / MALI)
+## 13. Rol master, áreas y credenciales (enfoque simple)
+
+Pensado para **un único operador master** (tú). Herramientas opcionales en el panel; el script `scripts/create-user.js` y el **`.env`** siguen siendo válidos.
+
+### Área activa y master
+
+- **Área** (`pam` | `educacion`): filtra campañas, contactos e historial. Viene del usuario al login y se guarda en sesión.
+- **Usuario master** (`is_master` en `users`): ve la barra lateral **Admin** (Usuarios, Credenciales Meta) y el **selector de área** en la barra superior (formulario “Cambiar” entre PAM y Educación). Al cambiar de área se actualizan sesión y fila del usuario master en BD para que no queden desalineados.
+
+### Usuarios del panel
+
+- **CRUD mínimo (solo master):** rutas **`/admin/users`** — listado, alta, edición (área, master, contraseña opcional), eliminación (no puedes borrar tu propia sesión activa).
+- Alternativa: **`node scripts/create-user.js`** como hasta ahora.
+
+### Credenciales Meta: `app_settings` + `.env`
+
+- La app lee primero **`app_settings`** (claves `meta.*`; área `global` para verify token y app secret; `pam` / `educacion` para token, phone number ID y WABA por área). Si un valor **no está en BD**, se usa **`process.env`** como hasta ahora.
+- **Pantalla (solo master):** **`/admin/meta`** — guardar actualiza BD y refresca la caché en memoria; **dejar un campo vacío y guardar** borra el override en BD y vuelve a aplicar solo `.env`.
+- Tras cambios solo en **`.env`**, recarga del contenedor según sección 9 (no hace falta entrar al panel).
+
+### “CRUD de áreas” nuevas
+
+- Siguen siendo **solo dos** áreas fijas en esquema (`pam`, `educacion`). No se añaden áreas dinámicas desde el panel.
+
+---
+
+## 14. Plantillas Meta: ejemplo invitación (Patronato / MALI)
 
 WhatsApp **no** permite texto largo libre en frío: hace falta una **plantilla aprobada**. El texto fijo va en la plantilla; lo variable son `{{1}}`, `{{2}}`, … rellenados desde el panel.
 
@@ -239,20 +441,20 @@ Para que `{{1}}` sea el nombre del contacto: `TEMPLATE_BODY_VARIABLE_1_FROM_CONT
 
 ---
 
-## 10. Uso operativo por módulo
+## 15. Uso operativo por módulo
 
 ### Contactos
 
 - `name`: obligatorio, máx. 120 caracteres.
 - `phone`: E.164 **sin** `+` (solo dígitos, 8–15).
-- `segment`: `suscriptor_1`, `suscriptor_2`, `suscriptor_3` o `asociado`.
+- `segment`: definido por **segmentos** en Ajustes (`suscriptor_1`, etc., según tu configuración).
 
 Recomendación: empezar con un piloto pequeño (5–20 contactos) y tener opt-in claro.
 
 ### Plantillas (reglas)
 
 - Solo plantillas **aprobadas** en Meta; se listan tras **Sincronizar plantillas**.
-- La estructura (cabecera, cuerpo, botones) se infiere de Meta; no hace falta configurar variables a mano.
+- La estructura (cabecera, cuerpo, botones) se infiere de Meta; no hace falta configurar variables a mano en muchos casos.
 
 ### Enviar campaña
 
@@ -273,7 +475,7 @@ Ante errores HTTP: `401/403` → token/permisos; `429` → bajar ritmo; `5xx` de
 
 ---
 
-## 11. Errores frecuentes (API y plantillas)
+## 16. Errores frecuentes (API y plantillas)
 
 | Código / síntoma | Causa probable | Qué revisar |
 |------------------|----------------|-------------|
@@ -286,12 +488,12 @@ Ante errores HTTP: `401/403` → token/permisos; `429` → bajar ritmo; `5xx` de
 
 ---
 
-## 12. Procedimiento: sandbox → piloto → masivo
+## 17. Procedimiento: sandbox → piloto → masivo
 
 ### Fase A — Sandbox
 
-- [ ] Healthcheck OK.
-- [ ] Webhook verificado por Meta.
+- [ ] Healthcheck OK (`/health` por HTTPS).
+- [ ] Webhook verificado por Meta (GET con challenge).
 - [ ] Plantilla de prueba (`hello_world`) funcionando.
 - [ ] Envío a un número permitido.
 
@@ -309,7 +511,7 @@ Ante errores HTTP: `401/403` → token/permisos; `429` → bajar ritmo; `5xx` de
 
 ---
 
-## 13. Troubleshooting rápido
+## 18. Troubleshooting rápido
 
 - **Plantilla**: nombre e idioma exactos; parámetros alineados con la plantilla en Meta.
 - **Estados**: webhook suscrito, URL HTTPS correcta (`APP_BASE_URL` + `/webhook`).
@@ -317,7 +519,7 @@ Ante errores HTTP: `401/403` → token/permisos; `429` → bajar ritmo; `5xx` de
 
 ---
 
-## 14. Go-live: lista bloqueante
+## 19. Go-live: lista bloqueante
 
 - [ ] Secretos rotados y `.env` protegido.
 - [ ] `REQUIRE_AUTH` y `SESSION_SECRET` activos; usuarios con correo `@mali.pe`.
@@ -328,8 +530,9 @@ Ante errores HTTP: `401/403` → token/permisos; `429` → bajar ritmo; `5xx` de
 
 ---
 
-## 15. Mejoras posteriores (no bloqueantes)
+## 20. Mejoras posteriores (no bloqueantes)
 
 - Cola de envíos con reintentos y backoff.
 - Alertas y métricas (entrega/error por campaña).
 - Pruebas automatizadas de rutas críticas.
+- Cifrado en reposo para secretos en `app_settings` (opcional, si el riesgo lo justifica).

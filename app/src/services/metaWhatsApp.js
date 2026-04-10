@@ -1,27 +1,9 @@
 const axios = require('axios');
 const config = require('../config');
-
-function getWhatsAppCredentialsForArea(area) {
-  const a = String(area || '').trim().toLowerCase();
-  const norm = a === 'educacion' ? 'educacion' : 'pam';
-  const token =
-    norm === 'educacion'
-      ? String(process.env.WHATSAPP_TOKEN_EDUCACION || process.env.WHATSAPP_TOKEN || '').trim()
-      : String(process.env.WHATSAPP_TOKEN_PAM || process.env.WHATSAPP_TOKEN || '').trim();
-  const phoneNumberId =
-    norm === 'educacion'
-      ? String(process.env.PHONE_NUMBER_ID_EDUCACION || process.env.PHONE_NUMBER_ID || '').trim()
-      : String(process.env.PHONE_NUMBER_ID_PAM || process.env.PHONE_NUMBER_ID || '').trim();
-  return { token, phoneNumberId, area: norm };
-}
-
-function getWabaIdOverride(area) {
-  const a = String(area || '').trim().toLowerCase();
-  if (a === 'educacion') {
-    return String(process.env.WABA_ID_EDUCACION || '').trim();
-  }
-  return String(process.env.WABA_ID_PAM || '').trim();
-}
+const {
+  getWhatsAppCredentialsForArea,
+  getWabaIdOverrideForArea,
+} = require('./metaSettingsCache');
 
 
 /**
@@ -77,7 +59,7 @@ async function fetchWabaIdFromPhoneNumberId(phoneNumberId, token) {
 }
 
 async function resolveWabaId(area, token, phoneNumberId) {
-  const override = getWabaIdOverride(area);
+  const override = getWabaIdOverrideForArea(area);
   if (override) return override;
   if (!phoneNumberId) {
     throw new Error('Falta PHONE_NUMBER_ID_* para resolver WABA');
@@ -190,6 +172,7 @@ async function sendSessionTextMessage({ to, text, area }) {
 
 module.exports = {
   getWhatsAppCredentialsForArea,
+  getWabaIdOverrideForArea,
   resolveWabaId,
   fetchAllApprovedTemplates,
   sendTemplateWithComponents,

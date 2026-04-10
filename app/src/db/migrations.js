@@ -221,6 +221,25 @@ async function runMigrations(query) {
   await query(
     `CREATE INDEX IF NOT EXISTS idx_whatsapp_templates_area ON whatsapp_templates(area)`
   );
+
+  /* Credenciales Meta globales: area = 'global' en app_settings */
+  try {
+    await query(`ALTER TABLE app_settings DROP CONSTRAINT IF EXISTS app_settings_area_check`);
+  } catch {
+    /* */
+  }
+  try {
+    await query(`ALTER TABLE app_settings DROP CONSTRAINT IF EXISTS app_settings_check`);
+  } catch {
+    /* */
+  }
+  try {
+    await query(
+      `ALTER TABLE app_settings ADD CONSTRAINT app_settings_area_check CHECK (area IN ('pam', 'educacion', 'global'))`
+    );
+  } catch {
+    /* ya aplicado o otro nombre de constraint */
+  }
 }
 
 module.exports = { runMigrations };

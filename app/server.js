@@ -4,11 +4,13 @@ const config = require('./src/config');
 const { query } = require('./src/db/pool');
 const { runMigrations } = require('./src/db/migrations');
 const { seedMasterUser } = require('./src/db/seed');
+const { refreshMetaSettingsCache } = require('./src/services/metaSettingsCache');
 const { createApp } = require('./src/createApp');
 
 async function boot() {
   await runMigrations(query);
   await seedMasterUser(query);
+  await refreshMetaSettingsCache(query);
 
   const { app, resumeQueuedCampaigns } = createApp();
   await resumeQueuedCampaigns();

@@ -39,6 +39,7 @@ function createResolveSessionUser(appPath) {
       };
       res.locals.currentUser = req.user;
       res.locals.areaLabel = config.AREA_LABELS[req.user.area] || req.user.area;
+      res.locals.showAdminNav = false;
       return next();
     }
     if (req.session && req.session.userId != null) {
@@ -50,10 +51,32 @@ function createResolveSessionUser(appPath) {
       };
       res.locals.currentUser = req.user;
       res.locals.areaLabel = config.AREA_LABELS[req.user.area] || req.user.area;
+      res.locals.showAdminNav = Boolean(req.user.isMaster);
       return next();
     }
     req.user = null;
+    res.locals.showAdminNav = false;
     return next();
+  };
+}
+
+function createRequireMaster() {
+  return function requireMaster(req, res, next) {
+    if (!config.requireAuth) {
+      if (req.accepts('html')) {
+        return res
+          .status(403)
+          .send('Las herramientas de administracion requieren REQUIRE_AUTH=true');
+      }
+      return res.status(403).json({ ok: false, error: 'Forbidden' });
+    }
+    if (req.user && req.user.isMaster) {
+      return next();
+    }
+    if (req.accepts('html')) {
+      return res.status(403).send('Acceso solo para usuario master');
+    }
+    return res.status(403).json({ ok: false, error: 'Forbidden' });
   };
 }
 
@@ -80,4 +103,5 @@ module.exports = {
   normalizeArea,
   createResolveSessionUser,
   createRequireSessionLogin,
+  createRequireMaster,
 };
