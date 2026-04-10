@@ -1,4 +1,4 @@
-const { logError } = require('../utils/logger');
+const { logError, logWarn, logInfo } = require('../utils/logger');
 const { verifyWebhookSignature } = require('../middleware/webhookVerify');
 const { persistInboundMessagesFromWebhookValue } = require('../services/webhookInbound');
 const { getVerifyToken } = require('../services/metaSettingsCache');
@@ -8,7 +8,7 @@ function registerWebhook(app, ctx) {
 
   app.get('/webhook', (req, res) => {
     const mode = req.query['hub.mode'];
-    const token = req.query['hub.verify_token'];
+    const token = String(req.query['hub.verify_token'] ?? '').trim();
     const challenge = req.query['hub.challenge'];
     const expected = getVerifyToken();
 
@@ -22,6 +22,10 @@ function registerWebhook(app, ctx) {
   app.post('/webhook', async (req, res) => {
     try {
       if (!verifyWebhookSignature(req)) {
+        logWarn(req, 'Webhook POST: firma invalida o APP_SECRET ausente', {
+          hasRawBody: Buffer.isBuffer(req.rawBody),
+          rawBodyLength: Buffer.isBuffer(req.rawBody) ? req.rawBody.length : 0,
+        });
         return res.status(401).json({ ok: false, error: 'Invalid webhook signature' });
       }
 
@@ -59,6 +63,10 @@ function registerWebhook(app, ctx) {
           }
         }
       }
+
+      logInfo(req, 'Webhook POST procesado', {
+        entries: Array.isArray(req.body.entry) ? req.body.entry.length : 0,
+      });
 
       res.sendStatus(200);
     } catch (error) {

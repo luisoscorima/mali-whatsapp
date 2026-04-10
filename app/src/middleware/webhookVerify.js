@@ -23,10 +23,11 @@ function verifyWebhookSignature(req) {
     return false;
   }
 
-  const expectedHash = crypto
-    .createHmac('sha256', appSecret)
-    .update(JSON.stringify(req.body))
-    .digest('hex');
+  const raw = Buffer.isBuffer(req.rawBody)
+    ? req.rawBody
+    : Buffer.from(JSON.stringify(req.body ?? {}), 'utf8');
+
+  const expectedHash = crypto.createHmac('sha256', appSecret).update(raw).digest('hex');
 
   try {
     return crypto.timingSafeEqual(Buffer.from(signatureHash), Buffer.from(expectedHash));

@@ -128,13 +128,51 @@ Anota o configura:
 
 **Token de larga duración (recomendado en producción):** Meta cambia la interfaz con frecuencia; suele obtenerse desde **Administrador comercial** (usuarios del sistema y permisos sobre el activo de WhatsApp) o desde el flujo de generación de token en la sección WhatsApp de la app. El token debe permitir envío y gestión de plantillas según tu caso.
 
-### 6.4 App Secret (firma del webhook)
+### 6.4 Registrar el número en Cloud API (`register`) — paso crítico
+
+Si el número aparece **Pendiente** en Business Suite / WhatsApp Manager y los envíos fallan con **`(#133010) Account not registered`**, muchas veces falta este paso: **registrar el número de teléfono** contra la API de WhatsApp Cloud usando el **Phone number ID** y el **PIN de verificación en dos pasos** que configuraste para ese número en Meta (no es el token de la app).
+
+**Requisitos previos**
+
+- Tener definido el **PIN de 6 dígitos** (dos pasos / two-step verification) para el número en el flujo de Meta (WhatsApp Manager o pestaña del número en Developers), según lo que pida la interfaz.
+- Usar un **token** con permisos para gestionar ese número (mismo token que usas para enviar, con alcance al activo correcto).
+- Sustituir `{PHONE_NUMBER_ID}` por el ID numérico de **API Setup** (no el +51 ni el WABA). La versión de la API en la URL puede ser la que uses en el proyecto (p. ej. `v20.0` o `v23.0`).
+
+**1) Solicitar código por SMS (opcional)**
+
+Solo si Meta aún no ha verificado la propiedad del número:
+
+```bash
+curl -X POST "https://graph.facebook.com/v20.0/{PHONE_NUMBER_ID}/request_code" \
+  -H "Authorization: Bearer {TOKEN}" \
+  -F "code_method=SMS" \
+  -F "language=es"
+```
+
+Si la respuesta indica **«Número de teléfono ya verificado»** (error OAuth, código **136024**, subcódigo **2388366**), **no hace falta** repetir este paso: la propiedad ya está verificada.
+
+**2) Registrar el número (obligatorio para pasar de Pendiente a Conectado)**
+
+```bash
+curl -X POST "https://graph.facebook.com/v20.0/{PHONE_NUMBER_ID}/register" \
+  -H "Authorization: Bearer {TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"messaging_product":"whatsapp","pin":"123456"}'
+```
+
+Sustituye `123456` por el **PIN de 6 dígitos** real configurado en Meta para ese número.
+
+Respuesta esperada: `{"success":true}`. Tras esto, el estado en el panel suele pasar a **Conectado** y los envíos por API dejan de responder **133010** (siempre que `PHONE_NUMBER_ID_*` y el token del `.env` coincidan con este número).
+
+**Seguridad:** no compartas tokens en chats, issues ni capturas; rota el token si se expuso en un terminal o documento.
+
+### 6.5 App Secret (firma del webhook)
 
 1. **Configuración de la app** → **Básica** (App settings → Basic).
 2. **Clave secreta de la aplicación (App Secret)** → mostrar y copiar.
 3. En tu `.env`: **`APP_SECRET`** — se usa para validar el header `X-Hub-Signature-256` en `POST /webhook` cuando `REQUIRE_WEBHOOK_SIGNATURE=true`.
 
-### 6.5 Webhook en Meta (cuando HTTPS y la app ya respondan)
+### 6.6 Webhook en Meta (cuando HTTPS y la app ya respondan)
 
 1. **WhatsApp** → **Configuración** (Configuration).
 2. **Webhook** → **Editar**.
@@ -144,18 +182,19 @@ Anota o configura:
 5. Tras guardar, Meta envía un **GET** de verificación; la app debe responder **200** con el `hub.challenge` si el token coincide (ver sección 11).
 6. **Campos suscritos:** como mínimo `messages`; si aplica, `message_template_status_update`.
 
-### 6.6 WhatsApp Manager (plantillas)
+### 6.7 WhatsApp Manager (plantillas)
 
 Desde el ecosistema Meta / Business: **WhatsApp Manager** — crear plantillas, enviar a revisión y esperar estado **Aprobada**. Sin plantilla aprobada no hay envíos masivos “en frío” con texto libre.
 
-### 6.7 Orden mínimo resumido
+### 6.8 Orden mínimo resumido
 
 1. Business / acceso al portafolio correcto.  
 2. App en Developers + producto WhatsApp.  
 3. Phone number ID + token + (opcional) WABA.  
-4. App Secret.  
-5. HTTPS público funcionando → Webhook + Verify token.  
-6. Plantillas aprobadas → panel **Sincronizar plantillas**.
+4. **Registrar el número** con `POST /{phone-number-id}/register` y el PIN de dos pasos (sección 6.4) si el estado sigue Pendiente o ves **133010** al enviar.  
+5. App Secret.  
+6. HTTPS público funcionando → Webhook + Verify token.  
+7. Plantillas aprobadas → panel **Sincronizar plantillas**.
 
 ---
 
@@ -316,7 +355,9 @@ Activa HTTPS (Let’s Encrypt en NPM) **antes** de registrar el webhook en Meta.
 Suscripciones mínimas recomendadas: `messages` y, si aplica, `message_template_status_update`.
 
 - Meta envía **`GET /webhook`** con `hub.mode`, `hub.verify_token`, `hub.challenge`; la app responde **200** con el challenge si el token coincide.
-- Con `REQUIRE_WEBHOOK_SIGNATURE=true`, los **`POST`** sin firma válida reciben **401**.
+- Con `REQUIRE_WEBHOOK_SIGNATURE=true`, los **`POST`** sin firma válida reciben **401**. La firma `X-Hub-Signature-256` se calcula sobre el **cuerpo JSON en bruto** del POST; la app debe usar ese mismo buffer (no `JSON.stringify` del objeto ya parseado).
+
+**`VERIFY_TOKEN` con caracteres especiales (`+`, `=`, `#`, espacios):** en `.env` usa comillas dobles, p. ej. `VERIFY_TOKEN="abc+def="`. Al probar con `curl`, codifica con `-G` y `--data-urlencode` (si pegas el token en la URL “a mano”, el `+` puede convertirse en espacio y fallará la verificación).
 
 ### Por qué `curl -I` puede confundir
 
@@ -325,8 +366,13 @@ Suscripciones mínimas recomendadas: `messages` y, si aplica, `message_template_
 
 ### Prueba manual (sustituye `TU_VERIFY_TOKEN`)
 
+Recomendado si el token lleva `+` u otros caracteres reservados en URL:
+
 ```bash
-curl -sS "https://whatsapp.mali.pe/webhook?hub.mode=subscribe&hub.challenge=prueba_ok_123&hub.verify_token=TU_VERIFY_TOKEN"
+curl -sS -G "https://whatsapp.mali.pe/webhook" \
+  --data-urlencode "hub.mode=subscribe" \
+  --data-urlencode "hub.verify_token=TU_VERIFY_TOKEN" \
+  --data-urlencode "hub.challenge=prueba_ok_123"
 ```
 
 Respuesta esperada: cuerpo de texto **`prueba_ok_123`** y HTTP **200**.
@@ -482,6 +528,8 @@ Ante errores HTTP: `401/403` → token/permisos; `429` → bajar ritmo; `5xx` de
 | **132000** | Parámetros distintos a los que espera la plantilla | Vuelve a sincronizar plantillas y rellena todos los campos del formulario |
 | **132001** | Nombre o idioma de plantilla incorrecto | Nombre exacto y `languageCode` aprobado |
 | **131030** | Número no permitido en modo prueba | Lista de números permitidos en Meta (sandbox) |
+| **133010** `Account not registered` | Número no registrado en Cloud API (suele quedar **Pendiente**) | Completar **sección 6.4**: `POST /{phone-number-id}/register` con `messaging_product` + PIN de dos pasos; revisar Phone number ID en `.env` |
+| **136024** (subcódigo 2388366) | «Número ya verificado» al pedir SMS | Normal si la propiedad ya está verificada: seguir directamente con **`/register`** |
 | `Invalid webhook signature` | Firma no válida o secreto mal configurado | `APP_SECRET`, `REQUIRE_WEBHOOK_SIGNATURE` |
 | No llegan estados | Webhook o red | Suscripción del webhook, URL HTTPS pública, firma |
 | Muchos errores por límite | Ritmo alto | Reducir `batchSize`, aumentar `batchDelayMs` |

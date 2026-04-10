@@ -17,6 +17,20 @@ const KEYS = {
   wabaId: 'meta.waba_id',
 };
 
+/** Quita BOM, espacios y comillas envolventes típicas de .env mal copiado. */
+function normalizeSecretValue(s) {
+  let v = String(s ?? '')
+    .replace(/^\uFEFF/, '')
+    .trim();
+  if (
+    (v.startsWith('"') && v.endsWith('"') && v.length >= 2) ||
+    (v.startsWith("'") && v.endsWith("'") && v.length >= 2)
+  ) {
+    v = v.slice(1, -1).trim();
+  }
+  return v;
+}
+
 async function refreshMetaSettingsCache(queryFn) {
   const empty = { global: {}, pam: {}, educacion: {} };
   try {
@@ -36,21 +50,21 @@ async function refreshMetaSettingsCache(queryFn) {
 }
 
 function getVerifyToken() {
-  return String(cache.global[KEYS.verifyToken] || process.env.VERIFY_TOKEN || '').trim();
+  return normalizeSecretValue(cache.global[KEYS.verifyToken] || process.env.VERIFY_TOKEN || '');
 }
 
 function getAppSecret() {
-  return String(cache.global[KEYS.appSecret] || process.env.APP_SECRET || '').trim();
+  return normalizeSecretValue(cache.global[KEYS.appSecret] || process.env.APP_SECRET || '');
 }
 
 function getWhatsAppCredentialsForArea(area) {
   const norm = String(area || '').trim().toLowerCase() === 'educacion' ? 'educacion' : 'pam';
   const row = cache[norm];
   const token =
-    String(row[KEYS.whatsappToken] || '').trim() ||
+    normalizeSecretValue(row[KEYS.whatsappToken] || '') ||
     (norm === 'educacion'
-      ? String(process.env.WHATSAPP_TOKEN_EDUCACION || process.env.WHATSAPP_TOKEN || '').trim()
-      : String(process.env.WHATSAPP_TOKEN_PAM || process.env.WHATSAPP_TOKEN || '').trim());
+      ? normalizeSecretValue(process.env.WHATSAPP_TOKEN_EDUCACION || process.env.WHATSAPP_TOKEN || '')
+      : normalizeSecretValue(process.env.WHATSAPP_TOKEN_PAM || process.env.WHATSAPP_TOKEN || ''));
   const phoneNumberId =
     String(row[KEYS.phoneNumberId] || '').trim() ||
     (norm === 'educacion'
@@ -77,4 +91,5 @@ module.exports = {
   getWhatsAppCredentialsForArea,
   getWabaIdOverrideForArea,
   KEYS,
+  normalizeSecretValue,
 };

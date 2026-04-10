@@ -23,7 +23,15 @@ function createApp() {
     })
   );
   app.use(express.urlencoded({ extended: true, limit: '100kb' }));
-  app.use(express.json({ limit: '100kb' }));
+  // Meta firma el cuerpo RAW del POST; guardamos el buffer para X-Hub-Signature-256 (ver webhookVerify.js).
+  app.use(
+    express.json({
+      limit: '100kb',
+      verify: (req, res, buf) => {
+        req.rawBody = buf;
+      },
+    })
+  );
 
   app.use((req, res, next) => {
     res.locals.basePath = config.basePath;

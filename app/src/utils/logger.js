@@ -33,4 +33,17 @@ function logError(req, message, error, meta = {}) {
   );
 }
 
-module.exports = { getRequestId, logInfo, logError };
+function logWarn(req, message, meta = {}) {
+  console.warn(
+    JSON.stringify({
+      level: 'warn',
+      message,
+      requestId: getRequestId(req),
+      path: req.path,
+      method: req.method,
+      ...meta,
+    })
+  );
+}
+
+module.exports = { getRequestId, logInfo, logError, logWarn };
