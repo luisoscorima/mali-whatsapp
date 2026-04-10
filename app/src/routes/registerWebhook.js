@@ -29,7 +29,28 @@ function registerWebhook(app, ctx) {
         return res.status(401).json({ ok: false, error: 'Invalid webhook signature' });
       }
 
+      const webhookDebug =
+        String(process.env.WEBHOOK_DEBUG || '').trim().toLowerCase() === 'true';
+
       const entries = req.body.entry || [];
+
+      if (webhookDebug) {
+        for (const entry of entries) {
+          for (const change of entry.changes || []) {
+            const v = change.value || {};
+            logInfo(req, 'Webhook DEBUG estructura (sin cuerpo del mensaje)', {
+              bodyObject: req.body.object || null,
+              entryId: entry.id || null,
+              field: change.field || null,
+              valueKeys: Object.keys(v),
+              metadataKeys: v.metadata && typeof v.metadata === 'object' ? Object.keys(v.metadata) : [],
+              metadataPhoneNumberId: v.metadata?.phone_number_id ?? null,
+              messagesCount: Array.isArray(v.messages) ? v.messages.length : 0,
+              statusesCount: Array.isArray(v.statuses) ? v.statuses.length : 0,
+            });
+          }
+        }
+      }
 
       for (const entry of entries) {
         const changes = entry.changes || [];

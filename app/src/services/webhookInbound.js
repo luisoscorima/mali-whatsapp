@@ -103,10 +103,18 @@ async function persistInboundMessagesFromWebhookValue(query, value, context = {}
       })
     );
   }
+
+  let saved = 0;
+  let skippedInvalidPhone = 0;
+  let skippedDuplicate = 0;
+
   for (const msg of messages) {
     const from = normalizePhone(msg.from);
     const waId = String(msg.id || '').trim();
-    if (!from || !config.e164NoPlusRegex.test(from)) continue;
+    if (!from || !config.e164NoPlusRegex.test(from)) {
+      skippedInvalidPhone += 1;
+      continue;
+    }
 
     const contactRow = await query(`SELECT id FROM contacts WHERE area = $1 AND phone = $2 LIMIT 1`, [
       area,
@@ -135,12 +143,39 @@ async function persistInboundMessagesFromWebhookValue(query, value, context = {}
          VALUES ($1, 'inbound', $2, $3, $4, $5::jsonb)`,
         [conversationId, waId || null, bodyText.slice(0, 8000), messageType, JSON.stringify(msg)]
       );
+      saved += 1;
     } catch (e) {
       if (e.code === '23505') {
+        skippedDuplicate += 1;
         continue;
       }
       throw e;
     }
+  }
+
+  if (saved > 0) {
+    console.log(
+      JSON.stringify({
+        level: 'info',
+        message: 'Webhook inbound guardado en chat_messages',
+        area,
+        saved,
+        source,
+      })
+    );
+  } else if (messages.length > 0) {
+    console.log(
+      JSON.stringify({
+        level: 'warn',
+        message: 'Webhook inbound: ningun mensaje insertado',
+        area,
+        source,
+        messageCount: messages.length,
+        skippedInvalidPhone,
+        skippedDuplicate,
+        sampleFrom: messages[0]?.from != null ? String(messages[0].from).slice(0, 32) : null,
+      })
+    );
   }
 }
 

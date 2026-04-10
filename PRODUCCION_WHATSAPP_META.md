@@ -565,6 +565,23 @@ Ante errores HTTP: `401/403` → token/permisos; `429` → bajar ritmo; `5xx` de
 - **Estados**: webhook suscrito, URL HTTPS correcta (`APP_BASE_URL` + `/webhook`).
 - **Rendimiento**: lotes más pequeños y más delay entre lotes.
 
+### Webhook: cómo descartar fallos (mensajes entrantes)
+
+1. **Dos pantallas distintas en Developers**  
+   La lista larga con `account_alerts`, `account_update`, etc. puede mostrar **No suscritos** y es normal. Lo que importa para WhatsApp es la sección donde aparecen **`messages`** y (opcional) **`message_template_status_update`**: ahí deben estar **Suscritos** (como en tu segunda captura).
+
+2. **¿Llega el POST al servidor?**  
+   En logs debe aparecer `Webhook POST procesado`. Si solo ves **401**, revisa `APP_SECRET` y firma (`REQUIRE_WEBHOOK_SIGNATURE`).
+
+3. **¿Meta envía `messages` en el JSON?**  
+   Pon temporalmente **`WEBHOOK_DEBUG=true`** en el `.env` del contenedor, reinicia la app y mira una línea `Webhook DEBUG estructura`: `messagesCount` > 0 cuando escribes desde el móvil. Si es **0** pero hay `statusesCount`, Meta no está mandando texto entrante en ese evento (o no hay respuesta en ventana permitida). **Quita `WEBHOOK_DEBUG` tras diagnosticar.**
+
+4. **Área (`pam` / `educacion`)**  
+   Si `metadata.phone_number_id` viene vacío, hace falta **`WABA_ID_PAM`** (o educación) coincidente con `entry.id` del webhook, o una sola línea `PHONE_NUMBER_ID_*` configurada. Busca en logs `Webhook inbound guardado` o el aviso `no se pudo resolver area`.
+
+5. **Teléfono del remitente**  
+   Si ves `Webhook inbound: ningun mensaje insertado` con `skippedInvalidPhone` > 0, el `from` de Meta no pasó validación E.164 sin `+` (revisa `sampleFrom` en el log).
+
 ---
 
 ## 19. Go-live: lista bloqueante
