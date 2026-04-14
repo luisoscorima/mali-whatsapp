@@ -10,6 +10,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # Adjuntos del hilo (vista previa en conversaciones); sin esto se pierden al --build.
+    volumes:
+      - chat_media:/usr/src/app/public/uploads/chat-media
     networks:
       - default
       - npm_proxy
@@ -34,6 +37,7 @@ services:
 
 volumes:
   postgres_data:
+  chat_media:
 
 # Nginx Proxy Manager debe poder resolver mali-whatsapp-app:3000 (misma red Docker).
 networks:
