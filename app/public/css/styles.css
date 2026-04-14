@@ -1927,7 +1927,7 @@ html[data-theme='dark'] .small-btn.danger {
   color: #f87171;
 }
 
-/* Fondo de olas (todas las vistas con has-wave-bg) */
+/* Fondo de olas: solo login (body.has-wave-bg + partial wave-background) */
 body.has-wave-bg {
   min-height: 100vh;
   position: relative;

@@ -16,11 +16,6 @@ html[data-theme='dark'] body.page-conversations {
   --wa-shell-bg: #0b141a;
 }
 
-/* Sin olas en esta vista */
-body.page-conversations .waveWrapper {
-  display: none !important;
-}
-
 /* Rail + lista + hilo (misma fila de variables que antes) */
 body.page-conversations .wa-layout--inbox.inbox-layout-wa.conversations-inbox {
   --wa-shell-bg: #dddbd1;

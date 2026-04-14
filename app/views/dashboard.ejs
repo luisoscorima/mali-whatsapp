@@ -21,8 +21,7 @@
     <script src="<%= basePath %>/js/theme.js" defer></script>
     <script src="<%= basePath %>/js/campaign-template.js" defer></script>
   </head>
-  <body class="has-wave-bg wa-body-dashboard">
-    <%- include('partials/wave-background') %>
+  <body class="wa-body-dashboard">
     <div class="wa-layout wa-layout--dashboard">
       <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav: typeof activeNav !== 'undefined' ? activeNav : 'dashboard', showAdminNav: typeof showAdminNav !== 'undefined' ? showAdminNav : false, requireAuth, currentUser, areaLabel }) %>
 
