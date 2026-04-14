@@ -174,6 +174,61 @@ async function sendSessionMediaMessage({ to, area, waType, mediaId, caption, doc
   }
 }
 
+/**
+ * Descarga un medio subido a WhatsApp (mensaje entrante) vía Graph API.
+ * GET /{media-id} → URL temporal; GET URL con Bearer → binario.
+ */
+async function downloadWhatsAppMediaBuffer({ mediaId, area }) {
+  const { token } = getWhatsAppCredentialsForArea(area);
+  if (!token) {
+    throw new Error(
+      'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_* y PHONE_NUMBER_ID_*'
+    );
+  }
+  const id = String(mediaId || '').trim();
+  if (!id) {
+    throw new Error('media id vacío');
+  }
+
+  const metaUrl = `${config.GRAPH_BASE}/${id}`;
+  const { data: meta } = await axios.get(metaUrl, {
+    params: {
+      fields: 'id,mime_type,sha256,file_size,url,messaging_product',
+    },
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const downloadUrl = meta?.url;
+  const mimeFromMeta = meta?.mime_type
+    ? String(meta.mime_type).split(';')[0].trim()
+    : 'application/octet-stream';
+
+  if (!downloadUrl) {
+    throw new Error('Meta no devolvió URL de descarga para el media');
+  }
+
+  const maxInboundBytes = 100 * 1024 * 1024;
+  if (meta.file_size != null && Number(meta.file_size) > maxInboundBytes) {
+    throw new Error('Archivo entrante demasiado grande para descargar en el panel');
+  }
+
+  const fileRes = await axios.get(downloadUrl, {
+    responseType: 'arraybuffer',
+    headers: { Authorization: `Bearer ${token}` },
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity,
+  });
+
+  const buffer = Buffer.from(fileRes.data);
+  if (buffer.length > maxInboundBytes) {
+    throw new Error('Descarga entrante supera el tamaño máximo permitido');
+  }
+
+  return {
+    buffer,
+    mimeType: mimeFromMeta,
+  };
+}
 
 /**
  * Resuelve el ID de WhatsApp Business Account (WABA) para listar plantillas.
@@ -351,4 +406,5 @@ module.exports = {
   classifyConversationUpload,
   uploadMediaToWhatsApp,
   sendSessionMediaMessage,
+  downloadWhatsAppMediaBuffer,
 };

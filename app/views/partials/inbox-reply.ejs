@@ -13,38 +13,49 @@
     <% if (typeof searchQ !== 'undefined' && searchQ) { %>
       <input type="hidden" name="inbox_q" value="<%= searchQ %>" />
     <% } %>
-    <label class="field">
-      <span class="field-label">Mensaje o pie de foto/video/documento (opcional si adjuntas archivo; máx. 4096 caracteres en solo texto)</span>
-      <textarea name="message" maxlength="4096" placeholder="Escribe tu respuesta o un pie de foto…"></textarea>
-    </label>
-    <label class="field reply-form__file">
-      <span class="field-label">Archivo (opcional)</span>
-      <input
-        type="file"
-        name="file"
-        class="reply-form-file-input"
-        accept="image/jpeg,image/png,video/mp4,audio/mpeg,audio/mp3,audio/ogg,audio/aac,audio/mp4,audio/x-m4a,audio/m4a,application/pdf"
-      />
-      <p class="reply-form-hint">
-        JPEG/PNG (máx. 5 MB), MP4 (máx. 16 MB), audio MP3/OGG/AAC/M4A (máx. 16 MB), PDF (máx. 100 MB). Con audio, el texto se envía como mensaje aparte si lo escribes.
-      </p>
-    </label>
-    <div class="reply-attachment-preview" id="reply-attachment-preview" hidden>
-      <div class="reply-attachment-preview__head">
-        <span class="reply-attachment-preview__title">Vista previa del adjunto</span>
-        <button type="button" class="reply-attachment-preview__clear" id="reply-attachment-clear" aria-label="Quitar archivo seleccionado">
-          Quitar
+    <div class="inbox-compose-stack">
+      <div class="reply-attachment-preview" id="reply-attachment-preview" hidden>
+        <div class="reply-attachment-preview__head">
+          <span class="reply-attachment-preview__title">Vista previa del adjunto</span>
+          <button type="button" class="reply-attachment-preview__clear" id="reply-attachment-clear" aria-label="Quitar archivo seleccionado">
+            Quitar
+          </button>
+        </div>
+        <div class="reply-attachment-preview__body" id="reply-attachment-preview-body"></div>
+      </div>
+      <div class="reply-link-preview" id="reply-link-preview" hidden>
+        <span class="reply-link-preview__title">Enlace en el mensaje</span>
+        <p class="reply-link-preview__hint">El aspecto en WhatsApp puede variar; las imágenes por URL solo se previsualizan si el servidor lo permite.</p>
+        <div class="reply-link-preview__body" id="reply-link-preview-body"></div>
+      </div>
+      <div class="inbox-compose-bar">
+        <label class="inbox-compose-file-btn" title="Adjuntar archivo">
+          <input
+            type="file"
+            name="file"
+            class="reply-form-file-input"
+            accept="image/jpeg,image/png,video/mp4,audio/mpeg,audio/mp3,audio/ogg,audio/aac,audio/mp4,audio/x-m4a,audio/m4a,application/pdf"
+          />
+          <span aria-hidden="true">📎</span>
+        </label>
+        <div class="inbox-compose-grow">
+          <label for="inbox-reply-message" class="sr-only">Mensaje o pie de foto/video/documento (opcional si adjuntas archivo; máx. 4096 caracteres en solo texto)</label>
+          <textarea
+            id="inbox-reply-message"
+            name="message"
+            maxlength="4096"
+            placeholder="Escribe un mensaje…"
+            class="inbox-compose-textarea"
+            rows="1"
+          ></textarea>
+        </div>
+        <button type="submit" class="inbox-compose-send" aria-label="Enviar por WhatsApp">
+          <span aria-hidden="true">➤</span>
         </button>
       </div>
-      <div class="reply-attachment-preview__body" id="reply-attachment-preview-body"></div>
-    </div>
-    <div class="reply-link-preview" id="reply-link-preview" hidden>
-      <span class="reply-link-preview__title">Enlace en el mensaje</span>
-      <p class="reply-link-preview__hint">El aspecto en WhatsApp puede variar; las imágenes por URL solo se previsualizan si el servidor lo permite.</p>
-      <div class="reply-link-preview__body" id="reply-link-preview-body"></div>
-    </div>
-    <div class="form-actions">
-      <button type="submit">Enviar por WhatsApp</button>
+      <p class="inbox-compose-hint-inline">
+        JPEG/PNG (máx. 5 MB), MP4 (máx. 16 MB), audio MP3/OGG/AAC/M4A (máx. 16 MB), PDF (máx. 100 MB). Con audio, el texto se envía como mensaje aparte si lo escribes.
+      </p>
     </div>
   </form>
 <% } %>

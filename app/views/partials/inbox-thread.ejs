@@ -11,6 +11,7 @@
        if (t === 'image') return '📷';
        if (t === 'video') return '🎬';
        if (t === 'audio') return '🎵';
+       if (t === 'voice') return '🎙️';
        if (t === 'document') return '📎';
        if (t === 'sticker') return '🎭';
        if (t === 'location') return '📍';
@@ -22,6 +23,7 @@
        if (t === 'image') return 'Imagen';
        if (t === 'video') return 'Video';
        if (t === 'audio') return 'Audio';
+       if (t === 'voice') return 'Nota de voz';
        if (t === 'document') return 'Documento';
        if (t === 'sticker') return 'Sticker';
        if (t === 'location') return 'Ubicación';
@@ -30,7 +32,7 @@
        return '';
      }
      function isMediaType(t) {
-       return ['image', 'video', 'audio', 'document'].indexOf(t) !== -1;
+       return ['image', 'video', 'audio', 'voice', 'document', 'sticker'].indexOf(t) !== -1;
      }
   %>
   <div class="chat-thread chat-thread--inbox" id="chat-thread">
@@ -47,7 +49,8 @@
             <span class="chat-msg-type-label"><%= mediaLabel(mt) || mt %></span>
           </div>
         <% } %>
-        <% if (mediaUrl && mt === 'image') { %>
+        <% const lpMime = lp && lp.mime ? String(lp.mime) : ''; %>
+        <% if (mediaUrl && (mt === 'image' || mt === 'sticker')) { %>
           <div class="chat-bubble__media">
             <img class="chat-msg-media chat-msg-media--img" src="<%= mediaUrl %>" alt="" loading="lazy" decoding="async" />
           </div>
@@ -55,17 +58,25 @@
           <div class="chat-bubble__media">
             <video class="chat-msg-media chat-msg-media--video" controls playsinline preload="metadata" src="<%= mediaUrl %>"></video>
           </div>
-        <% } else if (mediaUrl && mt === 'audio') { %>
+        <% } else if (mediaUrl && (mt === 'audio' || mt === 'voice')) { %>
           <div class="chat-bubble__media">
             <audio class="chat-msg-media chat-msg-media--audio" controls preload="metadata" src="<%= mediaUrl %>"></audio>
           </div>
         <% } else if (mediaUrl && mt === 'document') { %>
           <div class="chat-bubble__media chat-bubble__media--doc">
-            <iframe class="chat-msg-media chat-msg-media--pdf" title="Vista PDF" src="<%= mediaUrl %>"></iframe>
-            <a class="chat-msg-doc-link" href="<%= mediaUrl %>" target="_blank" rel="noopener noreferrer">Abrir PDF en pestaña nueva</a>
+            <% if (lpMime.indexOf('pdf') !== -1) { %>
+              <iframe class="chat-msg-media chat-msg-media--pdf" title="Vista PDF" src="<%= mediaUrl %>"></iframe>
+              <a class="chat-msg-doc-link" href="<%= mediaUrl %>" target="_blank" rel="noopener noreferrer">Abrir PDF en pestaña nueva</a>
+            <% } else { %>
+              <a class="chat-msg-doc-link" href="<%= mediaUrl %>" target="_blank" rel="noopener noreferrer">Abrir o descargar archivo</a>
+            <% } %>
           </div>
-        <% } else if (isMediaType(mt) && m.direction === 'outbound' && !mediaUrl) { %>
-          <p class="chat-msg-fallback">Adjunto enviado (sin copia local en el servidor).</p>
+        <% } else if (isMediaType(mt) && !mediaUrl) { %>
+          <% if (m.direction === 'outbound') { %>
+            <p class="chat-msg-fallback">Adjunto enviado (sin copia local en el servidor).</p>
+          <% } else { %>
+            <p class="chat-msg-fallback">No se pudo descargar la vista previa del archivo.</p>
+          <% } %>
         <% } %>
         <% if (m.body_text) { %>
           <div class="chat-bubble__text"><%= m.body_text %></div>

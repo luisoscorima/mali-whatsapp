@@ -1,5 +1,7 @@
 const config = require('../config');
 const { normalizePhone } = require('../utils/phone');
+const { downloadWhatsAppMediaBuffer } = require('./metaWhatsApp');
+const { saveInboundChatMediaFromBuffer } = require('../utils/chatMediaStorage');
 const {
   getWhatsAppCredentialsForArea,
   getWabaIdOverrideForArea,
@@ -48,10 +50,30 @@ function extractInboundMessagePreview(msg) {
     const body = String(msg?.text?.body ?? '').trim();
     return { messageType: 'text', bodyText: body || '(vacío)' };
   }
-  if (type === 'image') return { messageType: 'image', bodyText: '[Imagen]' };
-  if (type === 'audio' || type === 'voice') return { messageType: type, bodyText: '[Audio]' };
-  if (type === 'video') return { messageType: 'video', bodyText: '[Video]' };
-  if (type === 'document') return { messageType: 'document', bodyText: '[Documento]' };
+  if (type === 'image') {
+    const cap = String(msg?.image?.caption ?? '').trim();
+    return { messageType: 'image', bodyText: cap || '[Imagen]' };
+  }
+  if (type === 'video') {
+    const cap = String(msg?.video?.caption ?? '').trim();
+    return { messageType: 'video', bodyText: cap || '[Video]' };
+  }
+  if (type === 'document') {
+    const fn = String(msg?.document?.filename ?? '').trim();
+    const cap = String(msg?.document?.caption ?? '').trim();
+    const parts = [];
+    if (fn) parts.push(fn);
+    if (cap) parts.push(cap);
+    return { messageType: 'document', bodyText: parts.length ? parts.join(' · ') : '[Documento]' };
+  }
+  if (type === 'audio') {
+    const isVoice = msg.audio?.voice === true;
+    return {
+      messageType: isVoice ? 'voice' : 'audio',
+      bodyText: isVoice ? '[Nota de voz]' : '[Audio]',
+    };
+  }
+  if (type === 'voice') return { messageType: 'voice', bodyText: '[Nota de voz]' };
   if (type === 'sticker') return { messageType: 'sticker', bodyText: '[Sticker]' };
   if (type === 'location') return { messageType: 'location', bodyText: '[Ubicación]' };
   if (type === 'contacts') return { messageType: 'contacts', bodyText: '[Contacto]' };
@@ -61,6 +83,48 @@ function extractInboundMessagePreview(msg) {
   }
   if (type === 'interactive') return { messageType: 'interactive', bodyText: '[Interactivo]' };
   return { messageType: type || 'unknown', bodyText: `[${type || 'mensaje'}]` };
+}
+
+/** Referencia a media en payload de webhook (Graph API). */
+function extractInboundMediaRef(msg) {
+  const t = String(msg?.type || '').trim();
+  if (t === 'image' && msg.image?.id) return { mediaId: String(msg.image.id) };
+  if (t === 'video' && msg.video?.id) return { mediaId: String(msg.video.id) };
+  if (t === 'audio' && msg.audio?.id) return { mediaId: String(msg.audio.id) };
+  if (t === 'voice' && msg.voice?.id) return { mediaId: String(msg.voice.id) };
+  if (t === 'document' && msg.document?.id) return { mediaId: String(msg.document.id) };
+  if (t === 'sticker' && msg.sticker?.id) return { mediaId: String(msg.sticker.id) };
+  return null;
+}
+
+async function tryStoreInboundMedia(query, { chatMessageId, msg, area, conversationId }) {
+  const ref = extractInboundMediaRef(msg);
+  if (!ref) return;
+
+  try {
+    const { buffer, mimeType } = await downloadWhatsAppMediaBuffer({
+      mediaId: ref.mediaId,
+      area,
+    });
+    const localPreview = await saveInboundChatMediaFromBuffer({
+      buffer,
+      conversationId,
+      mimeType,
+    });
+    await query(
+      `UPDATE chat_messages SET raw_payload = COALESCE(raw_payload, '{}'::jsonb) || $1::jsonb WHERE id = $2`,
+      [JSON.stringify({ local_preview: localPreview }), chatMessageId]
+    );
+  } catch (e) {
+    console.log(
+      JSON.stringify({
+        level: 'warn',
+        message: 'Webhook inbound: no se pudo descargar o guardar media entrante',
+        error: e.message,
+        mediaId: ref.mediaId,
+      })
+    );
+  }
 }
 
 async function resolveAreaFromSenderPhones(query, senderPhones) {
@@ -181,12 +245,15 @@ async function persistInboundMessagesFromWebhookValue(query, value, context = {}
     const conversationId = convResult.rows[0].id;
 
     try {
-      await query(
+      const insertResult = await query(
         `INSERT INTO chat_messages (conversation_id, direction, wa_message_id, body_text, message_type, raw_payload)
-         VALUES ($1, 'inbound', $2, $3, $4, $5::jsonb)`,
+         VALUES ($1, 'inbound', $2, $3, $4, $5::jsonb)
+         RETURNING id`,
         [conversationId, waId || null, bodyText.slice(0, 8000), messageType, JSON.stringify(msg)]
       );
+      const chatMessageId = insertResult.rows[0].id;
       saved += 1;
+      await tryStoreInboundMedia(query, { chatMessageId, msg, area, conversationId });
     } catch (e) {
       if (e.code === '23505') {
         skippedDuplicate += 1;
@@ -228,4 +295,5 @@ module.exports = {
   resolveAreaFromSenderPhones,
   persistInboundMessagesFromWebhookValue,
   extractInboundMessagePreview,
+  extractInboundMediaRef,
 };

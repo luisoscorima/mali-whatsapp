@@ -12,6 +12,7 @@ function extFromMime(mimeType) {
   const map = {
     'image/jpeg': '.jpg',
     'image/png': '.png',
+    'image/webp': '.webp',
     'video/mp4': '.mp4',
     'application/pdf': '.pdf',
     'audio/mpeg': '.mp3',
@@ -27,17 +28,18 @@ function extFromMime(mimeType) {
 }
 
 /**
- * Guarda una copia del archivo enviado por WhatsApp para mostrarla en el hilo del panel.
- * Ruta pública: /uploads/chat-media/...
+ * Guarda binario en disco para el hilo del panel (entrante o saliente).
+ * Prefijo `c` = outbound, `i` = inbound.
  */
-async function saveOutboundChatMediaFile({ buffer, conversationId, mimeType }) {
+async function saveChatMediaFromBuffer({ buffer, conversationId, mimeType, direction }) {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
     throw new Error('Buffer vacío');
   }
   const publicDir = path.join(__dirname, '..', '..', 'public', UPLOAD_SUBDIR);
   await fs.mkdir(publicDir, { recursive: true });
   const ext = extFromMime(mimeType);
-  const name = `c${conversationId}-${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
+  const prefix = direction === 'inbound' ? 'i' : 'c';
+  const name = `${prefix}${conversationId}-${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
   const absPath = path.join(publicDir, name);
   await fs.writeFile(absPath, buffer);
   const url = `/${UPLOAD_SUBDIR}/${name}`.replace(/\\/g, '/');
@@ -49,4 +51,17 @@ async function saveOutboundChatMediaFile({ buffer, conversationId, mimeType }) {
   };
 }
 
-module.exports = { saveOutboundChatMediaFile, UPLOAD_SUBDIR };
+async function saveOutboundChatMediaFile({ buffer, conversationId, mimeType }) {
+  return saveChatMediaFromBuffer({ buffer, conversationId, mimeType, direction: 'outbound' });
+}
+
+async function saveInboundChatMediaFromBuffer({ buffer, conversationId, mimeType }) {
+  return saveChatMediaFromBuffer({ buffer, conversationId, mimeType, direction: 'inbound' });
+}
+
+module.exports = {
+  saveChatMediaFromBuffer,
+  saveOutboundChatMediaFile,
+  saveInboundChatMediaFromBuffer,
+  UPLOAD_SUBDIR,
+};
