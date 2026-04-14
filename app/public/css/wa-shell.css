@@ -2,50 +2,63 @@
  * Shell tipo WhatsApp Web: rail izquierdo + columna principal + terciaria (dashboard).
  */
 
-.wa-body-dashboard {
-  overflow-x: hidden;
+html {
+  height: 100%;
+}
+
+body.wa-body-dashboard {
+  margin: 0;
+  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .wa-layout {
   display: grid;
-  min-height: 100vh;
   max-width: 100%;
   margin: 0;
 }
 
+/* PC: columna central más estrecha (formularios, listas); derecha más ancha (info / contexto) */
 .wa-layout--dashboard {
-  grid-template-columns: 72px minmax(0, 1fr) minmax(260px, min(32vw, 360px));
-  background: var(--bg);
+  grid-template-columns: 72px minmax(280px, 380px) minmax(0, 1fr);
+  grid-template-rows: 1fr;
   min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+  align-items: stretch;
 }
 
 .wa-main-column {
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--line);
   background: var(--surface-strong);
-  max-height: 100vh;
   overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
+/* El main crece con el contenido; el scroll es de .wa-main-column */
 .wa-main-panel {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
 }
 
 .wa-tertiary {
   min-width: 0;
+  min-height: 0;
   background: var(--surface);
   border-left: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  max-height: 100vh;
   overflow-y: auto;
-  position: sticky;
-  top: 0;
-  align-self: start;
-  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .wa-tertiary-inner {
@@ -94,10 +107,8 @@
   background: var(--surface-strong);
   border-right: 1px solid var(--line);
   z-index: 20;
-  min-height: 100vh;
-  position: sticky;
-  top: 0;
-  align-self: start;
+  min-height: 0;
+  align-self: stretch;
 }
 
 .wa-rail__brand {
@@ -369,12 +380,71 @@ html[data-theme='dark'] .wa-rail__logo--dark {
   border-color: var(--accent);
 }
 
-@media (max-width: 1100px) {
+/* Móvil: rail abajo, columna central ocupa el resto; terciaria oculta en dashboard */
+@media (max-width: 768px) {
   .wa-layout--dashboard {
-    grid-template-columns: 72px 1fr;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    height: 100vh;
+    min-height: 100vh;
+    max-height: 100vh;
+    overflow: hidden;
   }
 
-  .wa-tertiary {
+  .wa-layout--dashboard .wa-rail {
+    grid-row: 2;
+    grid-column: 1;
+    width: 100%;
+    height: auto;
+    min-height: 56px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    align-content: center;
+    padding: 6px 8px 10px;
+    border-right: none;
+    border-top: 1px solid var(--line);
+    gap: 4px 8px;
+  }
+
+  .wa-layout--dashboard .wa-rail__brand {
+    margin: 0;
+    order: 0;
+  }
+
+  .wa-layout--dashboard .wa-rail__nav {
+    flex: 1 1 auto;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: space-evenly;
+    align-items: center;
+    min-width: 0;
+    padding: 4px 0;
+    gap: 2px;
+  }
+
+  .wa-layout--dashboard .wa-rail__item {
+    width: 44px;
+    min-height: 44px;
+    padding: 6px 4px;
+  }
+
+  .wa-layout--dashboard .wa-rail__footer {
+    flex-direction: row;
+    gap: 10px;
+    padding-top: 0;
+    width: auto;
+  }
+
+  .wa-layout--dashboard .wa-main-column {
+    grid-row: 1;
+    grid-column: 1;
+    min-height: 0;
+    border-right: none;
+  }
+
+  .wa-layout--dashboard .wa-tertiary {
     display: none;
   }
 }

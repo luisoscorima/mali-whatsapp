@@ -7,6 +7,9 @@ body.page-conversations {
   --wa-shell-bg: #dddbd1;
   background: var(--wa-shell-bg);
   min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
 }
 
 html[data-theme='dark'] body.page-conversations {
@@ -35,10 +38,14 @@ body.page-conversations .wa-layout--inbox.inbox-layout-wa.conversations-inbox {
   max-width: none;
   margin: 0;
   width: 100%;
-  min-height: 100vh;
+  min-height: 0;
+  height: 100vh;
   max-height: 100vh;
   display: grid;
+  /* Lista de chats más estrecha; hilo de conversación ocupa el resto */
   grid-template-columns: 72px minmax(280px, 380px) minmax(0, 1fr);
+  grid-template-rows: 1fr;
+  align-items: stretch;
   gap: 0;
   border: none;
   border-radius: 0;
@@ -230,6 +237,9 @@ html[data-theme='dark'] body.page-conversations .wa-layout--inbox.inbox-layout-w
   flex-direction: column;
   min-height: 0;
   min-width: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
   background: var(--wa-chat-bg);
   background-image: repeating-linear-gradient(
     45deg,
@@ -241,10 +251,20 @@ html[data-theme='dark'] body.page-conversations .wa-layout--inbox.inbox-layout-w
 }
 
 .inbox-layout-wa .inbox-empty-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px 16px;
+  min-height: 0;
   background: var(--wa-chat-bg);
 }
 
 .inbox-layout-wa .inbox-chat-header {
+  display: flex;
+  flex-shrink: 0;
   padding: 10px 16px;
   border-bottom: 1px solid var(--line);
   background: var(--wa-header-bg);
@@ -265,15 +285,18 @@ html[data-theme='dark'] body.page-conversations .wa-layout--inbox.inbox-layout-w
 }
 
 .inbox-layout-wa .inbox-chat-body {
-  padding: 8px 12px 12px;
-  flex: 1;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
   min-height: 0;
+  padding: 8px 12px 12px;
   overflow: hidden;
 }
 
 .inbox-layout-wa .chat-thread--inbox {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
-  max-height: 100%;
   padding: 4px 4px 12px;
   display: flex;
   flex-direction: column;
@@ -339,6 +362,7 @@ html[data-theme='dark'] .inbox-layout-wa .chat-bubble--out {
 
 /* --- Compositor --- */
 .inbox-layout-wa .inbox-compose {
+  flex-shrink: 0;
   padding: 8px 12px 12px;
   border-top: 1px solid var(--line);
   background: var(--wa-compose-bg);
@@ -492,27 +516,78 @@ html[data-theme='dark'] .inbox-compose-bar {
   border: 0;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 768px) {
   body.page-conversations .wa-layout--inbox.inbox-layout-wa.conversations-inbox {
-    min-height: 100vh;
-    max-height: none;
-    grid-template-columns: 72px 1fr;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    height: 100vh;
+    max-height: 100vh;
+    overflow: hidden;
+  }
+
+  body.page-conversations .wa-layout--inbox .wa-rail {
+    grid-row: 2;
+    grid-column: 1;
+    width: 100%;
+    height: auto;
+    min-height: 56px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    align-content: center;
+    padding: 6px 8px 10px;
+    border-right: none;
+    border-top: 1px solid var(--line);
+    gap: 4px 8px;
+  }
+
+  body.page-conversations .wa-layout--inbox .wa-rail__brand {
+    margin: 0;
+  }
+
+  body.page-conversations .wa-layout--inbox .wa-rail__nav {
+    flex: 1 1 auto;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: space-evenly;
+    align-items: center;
+    min-width: 0;
+    padding: 4px 0;
+    gap: 2px;
+  }
+
+  body.page-conversations .wa-layout--inbox .wa-rail__item {
+    width: 44px;
+    min-height: 44px;
+    padding: 6px 4px;
+  }
+
+  body.page-conversations .wa-layout--inbox .wa-rail__footer {
+    flex-direction: row;
+    gap: 10px;
+    padding-top: 0;
+    width: auto;
+  }
+
+  body.page-conversations .wa-layout--inbox .inbox-sidebar,
+  body.page-conversations .wa-layout--inbox .inbox-main {
+    grid-row: 1;
+    grid-column: 1;
+    min-height: 0;
   }
 
   body.page-conversations .wa-layout--inbox.conversations-inbox:not(.conversations-inbox--detail) .inbox-main {
     display: none !important;
   }
 
-  body.page-conversations .wa-layout--inbox.conversations-inbox:not(.conversations-inbox--detail) .inbox-sidebar {
-    grid-column: 2;
-  }
-
-  body.page-conversations .wa-layout--inbox.conversations-inbox.conversations-inbox--detail .inbox-sidebar {
+  body.page-conversations .wa-layout--inbox.conversations-inbox--detail .inbox-sidebar {
     display: none !important;
   }
 
-  body.page-conversations .wa-layout--inbox.conversations-inbox.conversations-inbox--detail .inbox-main {
-    grid-column: 2;
+  body.page-conversations .wa-layout--inbox.conversations-inbox--detail .inbox-main {
+    display: flex !important;
+    z-index: 2;
   }
 
   .inbox-back-mobile {
