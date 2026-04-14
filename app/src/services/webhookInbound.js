@@ -9,6 +9,7 @@ function resolveAreaFromPhoneNumberId(phoneNumberId) {
   const id = String(phoneNumberId || '').trim();
   const pam = getWhatsAppCredentialsForArea('pam').phoneNumberId;
   const edu = getWhatsAppCredentialsForArea('educacion').phoneNumberId;
+  if (id && pam && edu && id === pam && id === edu) return null;
   if (id && pam && id === pam) return 'pam';
   if (id && edu && id === edu) return 'educacion';
   return null;
@@ -62,6 +63,39 @@ function extractInboundMessagePreview(msg) {
   return { messageType: type || 'unknown', bodyText: `[${type || 'mensaje'}]` };
 }
 
+async function resolveAreaFromSenderPhones(query, senderPhones) {
+  if (!Array.isArray(senderPhones) || senderPhones.length === 0) return null;
+  const phones = Array.from(
+    new Set(senderPhones.map((p) => String(p || '').trim()).filter(Boolean))
+  );
+  if (phones.length === 0) return null;
+
+  const placeholders = phones.map((_, i) => `$${i + 1}`).join(', ');
+  const params = phones;
+
+  const [contactAreas, conversationAreas, campaignAreas] = await Promise.all([
+    query(`SELECT DISTINCT area FROM contacts WHERE phone IN (${placeholders})`, params),
+    query(`SELECT DISTINCT area FROM conversations WHERE phone IN (${placeholders})`, params),
+    query(
+      `SELECT DISTINCT c.area
+       FROM campaign_logs cl
+       JOIN campaigns c ON c.id = cl.campaign_id
+       WHERE cl.phone IN (${placeholders})`,
+      params
+    ),
+  ]);
+
+  const areas = new Set([
+    ...contactAreas.rows.map((r) => String(r.area || '').trim()),
+    ...conversationAreas.rows.map((r) => String(r.area || '').trim()),
+    ...campaignAreas.rows.map((r) => String(r.area || '').trim()),
+  ]);
+
+  areas.delete('');
+  if (areas.size === 1) return Array.from(areas)[0];
+  return null;
+}
+
 /**
  * Persiste mensajes entrantes del usuario en chat_messages (direction inbound).
  * Esas filas son el texto que el cliente "respondió" en WhatsApp; no confundir con
@@ -74,8 +108,17 @@ async function persistInboundMessagesFromWebhookValue(query, value, context = {}
   }
 
   const wabaEntryId = context.wabaEntryId;
-  const { area, source } = resolveInboundArea(value, wabaEntryId);
+  let { area, source } = resolveInboundArea(value, wabaEntryId);
   const metaPid = value?.metadata?.phone_number_id ?? null;
+  const senderPhones = messages.map((m) => normalizePhone(m.from));
+
+  if (!area) {
+    const areaByPhone = await resolveAreaFromSenderPhones(query, senderPhones);
+    if (areaByPhone) {
+      area = areaByPhone;
+      source = 'sender_phone_db';
+    }
+  }
 
   if (!area) {
     console.log(
@@ -182,6 +225,7 @@ async function persistInboundMessagesFromWebhookValue(query, value, context = {}
 module.exports = {
   resolveAreaFromPhoneNumberId,
   resolveInboundArea,
+  resolveAreaFromSenderPhones,
   persistInboundMessagesFromWebhookValue,
   extractInboundMessagePreview,
 };
