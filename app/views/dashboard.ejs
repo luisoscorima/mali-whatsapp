@@ -153,7 +153,7 @@
                   </select>
                   <% } %>
                 </label>
-                <button type="submit" class="secondary" <%= segments.length === 0 ? 'disabled' : '' %>>Guardar</button>
+                <button type="submit" <%= segments.length === 0 ? 'disabled' : '' %>>Guardar</button>
               </form>
 
               <div class="divider"></div>
@@ -196,13 +196,14 @@
                 <span class="field-label">Orden</span>
                 <input type="number" name="sort_order" value="0" step="1" />
               </label>
-              <button type="submit" class="secondary">Añadir segmento</button>
+              <button type="submit">Añadir segmento</button>
             </form>
           </div>
         </section>
 
         <section class="content-section" id="history">
-          <div class="metrics-row metrics-row--history" role="region" aria-label="Resumen de envíos">
+          <div class="card card--history">
+            <div class="metrics-row metrics-row--history" role="region" aria-label="Resumen de envíos">
             <div class="metric">
               <span class="metric-num"><%= totals.sent %></span>
               <span class="metric-lbl">Enviados</span>
@@ -219,8 +220,7 @@
               <span class="metric-num"><%= errorRate %>%</span>
               <span class="metric-lbl">Error</span>
             </div>
-          </div>
-          <div class="card">
+            </div>
             <h2 class="card-title">Campañas recientes</h2>
             <div class="table-wrap">
               <table>
@@ -245,7 +245,9 @@
                         <div class="progress-meta"><span><%= pct %>%</span><span><%= campaign.sent_count || 0 %>/<%= campaign.total_recipients %></span></div>
                         <div class="progress-bar"><span style="width: <%= pct %>%"></span></div>
                       </td>
-                      <td><a class="text-link" href="<%= basePath %>/campaigns/<%= campaign.id %>">Detalle</a></td>
+                      <td>
+                        <button type="button" class="text-link js-campaign-detail-btn" data-campaign-id="<%= campaign.id %>">Detalle</button>
+                      </td>
                     </tr>
                   <% }) %>
                 </tbody>
@@ -275,9 +277,6 @@
           </div>
         </section>
 
-        <footer class="footer-min">
-          <a href="<%= basePath %>/health">Salud</a>
-        </footer>
         </main>
       </div>
 
@@ -399,7 +398,7 @@
                               <span class="segment-field-lbl">Orden</span>
                               <input type="number" name="sort_order" value="<%= seg.sort_order %>" step="1" class="segment-order-input" />
                             </label>
-                            <button type="submit" class="secondary small-btn segment-save-btn">Guardar</button>
+                            <button type="submit" class="small-btn segment-save-btn">Guardar</button>
                           </div>
                         </form>
                       </td>
@@ -423,7 +422,13 @@
                 <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               </span>
               <h2 class="wa-placeholder-title">Historial</h2>
-              <p class="wa-placeholder-text">Indicadores y tabla de campañas recientes del área. El detalle de cada envío está en la columna central.</p>
+              <p class="wa-placeholder-text">Indicadores y tabla de campañas recientes. Pulsa <strong>Detalle</strong> en una fila para ver el desglose aquí.</p>
+            </div>
+          </div>
+          <div class="wa-tertiary-panel" data-tertiary-panel="campaign-detail" id="wa-tertiary-campaign-detail">
+            <div class="wa-campaign-detail-shell">
+              <button type="button" class="text-link wa-campaign-detail-back">← Volver al historial</button>
+              <div id="campaign-detail-root" class="wa-campaign-detail-root"></div>
             </div>
           </div>
           <div class="wa-tertiary-panel wa-tertiary-panel--hint" data-tertiary-panel="configuration">
@@ -432,7 +437,7 @@
                 <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
               </span>
               <h2 class="wa-placeholder-title">Ajustes</h2>
-              <p class="wa-placeholder-text">Webhook, enlaces de salud y API, y notas de documentación en la columna central.</p>
+              <p class="wa-placeholder-text">Webhook, API JSON y documentación en la columna central.</p>
             </div>
           </div>
         </div>
@@ -477,22 +482,236 @@
         const sections = Array.from(document.querySelectorAll('.content-section'));
         const layoutRoot = document.querySelector('.wa-layout--dashboard');
         const tertiaryPanels = Array.from(document.querySelectorAll('.wa-tertiary-panel'));
+        const campaignDetailRoot = document.getElementById('campaign-detail-root');
+        const apiBase = '<%= basePath %>';
+
+        let currentSection = 'send-campaign';
+        let campaignDetailOpen = false;
+
+        function tertiaryKeyForSection(sectionId) {
+          if (sectionId === 'contacts') return 'contacts';
+          if (sectionId === 'segments') return 'segments';
+          if (sectionId === 'history') return 'history';
+          if (sectionId === 'configuration') return 'configuration';
+          return 'send-campaign';
+        }
+
+        function clearCampaignDetailRoot() {
+          if (campaignDetailRoot) campaignDetailRoot.innerHTML = '';
+        }
+
+        function syncTertiaryPanels() {
+          tertiaryPanels.forEach(function (panel) {
+            var key = panel.getAttribute('data-tertiary-panel');
+            var active =
+              campaignDetailOpen && currentSection === 'history' && key === 'campaign-detail';
+            if (!active) {
+              active = !campaignDetailOpen && key === tertiaryKeyForSection(currentSection);
+            }
+            panel.classList.toggle('is-active', active);
+          });
+        }
+
+        function updateSplitLayout() {
+          if (!layoutRoot) return;
+          layoutRoot.classList.toggle(
+            'wa-layout--dashboard-split',
+            currentSection === 'contacts' ||
+              currentSection === 'segments' ||
+              (currentSection === 'history' && campaignDetailOpen)
+          );
+        }
 
         function setActiveSection(targetId) {
+          campaignDetailOpen = false;
+          clearCampaignDetailRoot();
+          currentSection = targetId;
           sections.forEach((section) => {
             section.classList.toggle('is-active', section.id === targetId);
           });
           navItems.forEach((el) => {
             el.classList.toggle('is-active', el.dataset.targetSection === targetId);
           });
-          if (layoutRoot) {
-            layoutRoot.classList.toggle(
-              'wa-layout--dashboard-split',
-              targetId === 'contacts' || targetId === 'segments'
-            );
+          var nextHash = '#' + targetId;
+          if (location.hash !== nextHash) {
+            history.replaceState(null, '', nextHash);
           }
-          tertiaryPanels.forEach(function (panel) {
-            panel.classList.toggle('is-active', panel.getAttribute('data-tertiary-panel') === targetId);
+          syncTertiaryPanels();
+          updateSplitLayout();
+        }
+
+        function renderCampaignDetail(data) {
+          if (!campaignDetailRoot) return;
+          var c = data.campaign;
+          var logs = data.logs || [];
+          var queued = c.status === 'queued' || c.status === 'processing';
+          var wrap = document.createElement('div');
+          var card1 = document.createElement('div');
+          card1.className = 'card wa-tertiary-card';
+          var h1 = document.createElement('h2');
+          h1.className = 'card-title';
+          h1.textContent = 'Campaña #' + c.id;
+          card1.appendChild(h1);
+          if (queued) {
+            var toast = document.createElement('p');
+            toast.className = 'toast toast--ok';
+            toast.textContent = 'Envío en segundo plano. Actualiza el historial para ver el progreso.';
+            card1.appendChild(toast);
+          }
+          var dl = document.createElement('dl');
+          dl.className = 'detail-dl';
+          function row(label, valueNode) {
+            var div = document.createElement('div');
+            var dt = document.createElement('dt');
+            dt.textContent = label;
+            var dd = document.createElement('dd');
+            dd.appendChild(valueNode);
+            div.appendChild(dt);
+            div.appendChild(dd);
+            dl.appendChild(div);
+          }
+          function ddText(t) {
+            var n = document.createElement('span');
+            n.textContent = t;
+            return n;
+          }
+          row('Segmento', ddText(c.segment || '—'));
+          row('Plantilla', ddText(c.template_name || '—'));
+          var st = document.createElement('span');
+          st.className = 'badge ' + (c.status || '');
+          st.textContent = c.status || '—';
+          row('Estado', st);
+          row('Destinatarios', ddText(String(c.total_recipients != null ? c.total_recipients : '—')));
+          row('Parámetros', ddText(c.message_text || '—'));
+          if (c.image_url) {
+            var a = document.createElement('a');
+            a.href = c.image_url;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            a.textContent = 'Abrir enlace';
+            row('Imagen', a);
+          }
+          card1.appendChild(dl);
+          wrap.appendChild(card1);
+
+          var card2 = document.createElement('div');
+          card2.className = 'card wa-tertiary-card';
+          var h2 = document.createElement('h2');
+          h2.className = 'card-title';
+          h2.textContent = 'Registro de envíos';
+          card2.appendChild(h2);
+          var tw = document.createElement('div');
+          tw.className = 'table-wrap';
+          var table = document.createElement('table');
+          var thead = document.createElement('thead');
+          var trh = document.createElement('tr');
+          ['Teléfono', 'Estado', 'ID mensaje', 'Detalle'].forEach(function (lbl) {
+            var th = document.createElement('th');
+            th.textContent = lbl;
+            trh.appendChild(th);
+          });
+          thead.appendChild(trh);
+          table.appendChild(thead);
+          var tbody = document.createElement('tbody');
+          logs.forEach(function (log) {
+            var tr = document.createElement('tr');
+            var td1 = document.createElement('td');
+            td1.className = 'mono';
+            td1.textContent = log.phone || '—';
+            var td2 = document.createElement('td');
+            var b = document.createElement('span');
+            b.className = 'badge ' + (log.status || '');
+            b.textContent = log.status || '—';
+            td2.appendChild(b);
+            var td3 = document.createElement('td');
+            td3.className = 'mono';
+            td3.textContent = log.whatsapp_message_id || '—';
+            var td4 = document.createElement('td');
+            var pre = document.createElement('pre');
+            pre.className = 'log-pre';
+            try {
+              pre.textContent = JSON.stringify(log.response, null, 2);
+            } catch (e) {
+              pre.textContent = String(log.response);
+            }
+            td4.appendChild(pre);
+            tr.appendChild(td1);
+            tr.appendChild(td2);
+            tr.appendChild(td3);
+            tr.appendChild(td4);
+            tbody.appendChild(tr);
+          });
+          if (logs.length === 0) {
+            var tr0 = document.createElement('tr');
+            var td0 = document.createElement('td');
+            td0.colSpan = 4;
+            td0.className = 'empty-state';
+            td0.textContent = 'Sin registros aún.';
+            tr0.appendChild(td0);
+            tbody.appendChild(tr0);
+          }
+          table.appendChild(tbody);
+          tw.appendChild(table);
+          card2.appendChild(tw);
+          wrap.appendChild(card2);
+
+          campaignDetailRoot.innerHTML = '';
+          campaignDetailRoot.appendChild(wrap);
+        }
+
+        function openCampaignDetail(id) {
+          if (currentSection !== 'history') {
+            setActiveSection('history');
+          }
+          campaignDetailOpen = true;
+          clearCampaignDetailRoot();
+          if (campaignDetailRoot) {
+            var p = document.createElement('p');
+            p.className = 'muted';
+            p.textContent = 'Cargando…';
+            campaignDetailRoot.appendChild(p);
+          }
+          syncTertiaryPanels();
+          updateSplitLayout();
+
+          fetch(apiBase + '/api/campaigns/' + id, { credentials: 'same-origin' })
+            .then(function (r) {
+              if (!r.ok) throw new Error('HTTP ' + r.status);
+              return r.json();
+            })
+            .then(function (data) {
+              renderCampaignDetail(data);
+            })
+            .catch(function () {
+              if (campaignDetailRoot) {
+                campaignDetailRoot.innerHTML = '';
+                var err = document.createElement('p');
+                err.className = 'inline-warn';
+                err.textContent = 'No se pudo cargar el detalle.';
+                campaignDetailRoot.appendChild(err);
+              }
+            });
+        }
+
+        function closeCampaignDetail() {
+          campaignDetailOpen = false;
+          clearCampaignDetailRoot();
+          syncTertiaryPanels();
+          updateSplitLayout();
+        }
+
+        document.querySelectorAll('.js-campaign-detail-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var id = btn.getAttribute('data-campaign-id');
+            if (!id) return;
+            openCampaignDetail(id);
+          });
+        });
+
+        var backBtn = document.querySelector('.wa-campaign-detail-back');
+        if (backBtn) {
+          backBtn.addEventListener('click', function () {
+            closeCampaignDetail();
           });
         }
 

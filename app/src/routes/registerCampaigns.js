@@ -120,6 +120,38 @@ function registerCampaigns(app, ctx) {
       activeNav: 'dashboard',
     });
   });
+
+  app.get('/api/campaigns/:id', async (req, res) => {
+    const campaignId = Number(req.params.id);
+    if (!Number.isInteger(campaignId) || campaignId <= 0) {
+      return res.status(400).json({ error: 'Id invalido' });
+    }
+
+    try {
+      const [campaignResult, logsResult] = await Promise.all([
+        query(`SELECT * FROM campaigns WHERE id = $1 AND area = $2`, [campaignId, req.user.area]),
+        query(
+          `SELECT id, phone, whatsapp_message_id, status, response, created_at
+           FROM campaign_logs
+           WHERE campaign_id = $1
+           ORDER BY id DESC`,
+          [campaignId]
+        ),
+      ]);
+
+      if (campaignResult.rowCount === 0) {
+        return res.status(404).json({ error: 'No encontrada' });
+      }
+
+      res.json({
+        campaign: campaignResult.rows[0],
+        logs: logsResult.rows,
+      });
+    } catch (error) {
+      logError(req, 'Error API campana', error);
+      res.status(500).json({ error: 'Error al cargar la campana' });
+    }
+  });
 }
 
 module.exports = { registerCampaigns };

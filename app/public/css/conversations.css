@@ -46,8 +46,8 @@ html[data-theme='dark'] body.page-conversations .wa-layout--inbox.inbox-layout-w
 
 .inbox-sidebar-header {
   padding: 14px 16px 10px;
-  border-bottom: 1px solid var(--line);
-  background: var(--wa-header-bg);
+  border-bottom: none;
+  background: var(--wa-list-bg);
 }
 
 .inbox-sidebar-title {
@@ -58,7 +58,7 @@ html[data-theme='dark'] body.page-conversations .wa-layout--inbox.inbox-layout-w
 }
 
 .inbox-layout-wa .inbox-filters {
-  padding: 12px 14px;
+  padding: 0 14px 12px;
   gap: 10px;
   border-bottom: 1px solid var(--line);
   background: var(--wa-list-bg);
@@ -207,13 +207,6 @@ html[data-theme='dark'] body.page-conversations .wa-layout--inbox.inbox-layout-w
   max-height: 100%;
   overflow: hidden;
   background: var(--wa-chat-bg);
-  background-image: repeating-linear-gradient(
-    45deg,
-    transparent,
-    transparent 8px,
-    var(--wa-chat-bg-pattern) 8px,
-    var(--wa-chat-bg-pattern) 9px
-  );
 }
 
 .inbox-layout-wa .inbox-empty-pane {
@@ -223,9 +216,35 @@ html[data-theme='dark'] body.page-conversations .wa-layout--inbox.inbox-layout-w
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 24px 16px;
+  padding: 24px 20px;
   min-height: 0;
   background: var(--wa-chat-bg);
+}
+
+.inbox-layout-wa .inbox-empty-hint {
+  max-width: 320px;
+}
+
+.inbox-layout-wa .inbox-empty-icon {
+  display: inline-flex;
+  color: var(--muted);
+  margin-bottom: 16px;
+  opacity: 0.88;
+}
+
+.inbox-layout-wa .inbox-empty-heading {
+  margin: 0 0 10px;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.inbox-layout-wa .inbox-empty-text {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--muted);
 }
 
 .inbox-layout-wa .inbox-chat-header {

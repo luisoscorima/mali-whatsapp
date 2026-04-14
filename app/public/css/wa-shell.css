@@ -10,7 +10,8 @@ html {
 body.wa-body-dashboard,
 body.page-conversations {
   --wa-shell-bg: #dddbd1;
-  --wa-list-bg: #f8f9fa;
+  /* Lista + rail misma base (blanco) para alinear columna 1 y 2 en claro */
+  --wa-list-bg: #ffffff;
   --wa-chat-bg: #e4dcd4;
   --wa-chat-bg-pattern: rgba(0, 0, 0, 0.04);
   --wa-header-bg: #f0f2f5;
@@ -61,7 +62,7 @@ html[data-theme='dark'] body.page-conversations {
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--line);
-  background: var(--wa-list-bg, var(--surface-strong));
+  background: var(--wa-list-bg);
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -87,14 +88,7 @@ html[data-theme='dark'] body.page-conversations {
 .wa-tertiary {
   min-width: 0;
   min-height: 0;
-  background-color: var(--wa-chat-bg, var(--surface));
-  background-image: repeating-linear-gradient(
-    45deg,
-    transparent,
-    transparent 8px,
-    var(--wa-chat-bg-pattern, transparent) 8px,
-    var(--wa-chat-bg-pattern, transparent) 9px
-  );
+  background: var(--wa-chat-bg, var(--surface));
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -161,6 +155,44 @@ html[data-theme='dark'] body.page-conversations {
   min-width: 0;
 }
 
+.wa-campaign-detail-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  align-items: stretch;
+}
+
+.wa-campaign-detail-back {
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin: 0 0 12px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  color: var(--accent);
+  text-align: left;
+}
+
+.wa-campaign-detail-back:hover {
+  text-decoration: underline;
+}
+
+.wa-campaign-detail-root {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.wa-campaign-detail-root .card + .card {
+  margin-top: 14px;
+}
+
 .wa-placeholder--tab-hint {
   max-width: 320px;
 }
@@ -205,6 +237,27 @@ body.wa-body-dashboard .metrics-row--history {
   margin-bottom: 16px;
 }
 
+body.wa-body-dashboard .card .metrics-row--history {
+  margin-top: 0;
+}
+
+body.wa-body-dashboard .card--history > .card-title {
+  margin-top: 4px;
+}
+
+body.wa-body-dashboard button.text-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 body.wa-body-dashboard .card,
 body.wa-body-dashboard .metric,
 body.wa-body-dashboard .detail-card,
@@ -232,7 +285,7 @@ html[data-theme='dark'] body.wa-body-dashboard .metric-card {
   width: 72px;
   flex-shrink: 0;
   padding: 10px 0 12px;
-  background: var(--wa-list-bg, var(--surface-strong));
+  background: var(--wa-list-bg);
   border-right: 1px solid var(--line);
   z-index: 20;
   min-height: 0;
