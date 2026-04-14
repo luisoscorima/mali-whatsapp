@@ -19,7 +19,8 @@
     <link rel="stylesheet" href="<%= basePath %>/css/styles.css" />
     <script src="<%= basePath %>/js/theme.js" defer></script>
   </head>
-  <body>
+  <body class="has-wave-bg">
+    <%- include('partials/wave-background') %>
     <div class="login-page">
       <button type="button" class="theme-toggle login-theme-toggle" data-theme-toggle title="Modo claro / oscuro" aria-label="Cambiar tema">◐</button>
       <div class="login-card card">

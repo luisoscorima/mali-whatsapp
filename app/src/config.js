@@ -45,6 +45,13 @@ module.exports = {
   MAX_BATCH_SIZE: 100,
   MAX_BATCH_DELAY_MS: 60000,
   MAX_SESSION_TEXT_LEN: 4096,
+  /** Captions en mensajes con media (WhatsApp Cloud API). */
+  MAX_MEDIA_CAPTION_LEN: 1024,
+  /** Límites aproximados Cloud API; validar también en servidor. */
+  MAX_MEDIA_IMAGE_BYTES: 5 * 1024 * 1024,
+  MAX_MEDIA_VIDEO_BYTES: 16 * 1024 * 1024,
+  MAX_MEDIA_AUDIO_BYTES: 16 * 1024 * 1024,
+  MAX_MEDIA_DOCUMENT_BYTES: 100 * 1024 * 1024,
   SESSION_WINDOW_MS: 24 * 60 * 60 * 1000,
   MAX_CSV_ROWS: 10000,
   MAX_CSV_BYTES: 5 * 1024 * 1024,

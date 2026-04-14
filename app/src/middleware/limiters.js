@@ -1,6 +1,7 @@
 const rateLimit = require('express-rate-limit');
 const multer = require('multer');
 const config = require('../config');
+const { ALLOWED_MEDIA_MIMES } = require('../services/metaWhatsApp');
 
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -49,6 +50,22 @@ const csvUpload = multer({
   },
 });
 
+/** Adjuntos en respuesta de conversación (WhatsApp Cloud API). Tope global = documento. */
+const conversationMediaUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: config.MAX_MEDIA_DOCUMENT_BYTES, files: 1 },
+  fileFilter: (req, file, cb) => {
+    const mime = String(file.mimetype || '')
+      .toLowerCase()
+      .split(';')[0]
+      .trim();
+    if (ALLOWED_MEDIA_MIMES.has(mime)) {
+      return cb(null, true);
+    }
+    cb(new Error('Tipo de archivo no permitido (JPEG, PNG, MP4, audio o PDF).'));
+  },
+});
+
 module.exports = {
   globalLimiter,
   campaignLimiter,
@@ -56,4 +73,5 @@ module.exports = {
   contactsImportLimiter,
   templateSyncLimiter,
   csvUpload,
+  conversationMediaUpload,
 };

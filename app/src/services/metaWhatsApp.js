@@ -1,9 +1,178 @@
+const path = require('path');
 const axios = require('axios');
+const FormData = require('form-data');
 const config = require('../config');
 const {
   getWhatsAppCredentialsForArea,
   getWabaIdOverrideForArea,
 } = require('./metaSettingsCache');
+
+/** MIME permitidos para adjuntos desde Conversaciones (subida a Graph + mensaje). */
+const ALLOWED_MEDIA_MIMES = new Set([
+  'image/jpeg',
+  'image/png',
+  'video/mp4',
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/ogg',
+  'application/ogg',
+  'audio/aac',
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/m4a',
+  'application/pdf',
+]);
+
+/**
+ * @returns {{ waType: 'image'|'video'|'audio'|'document', maxBytes: number }}
+ */
+function classifyConversationUpload(mimeType, sizeBytes) {
+  const mime = String(mimeType || '')
+    .toLowerCase()
+    .split(';')[0]
+    .trim();
+  if (!mime || !ALLOWED_MEDIA_MIMES.has(mime)) {
+    throw new Error(
+      'Tipo de archivo no permitido. Usa JPEG/PNG, MP4, audio (MP3/OGG/AAC/M4A) o PDF.'
+    );
+  }
+  let waType;
+  let maxBytes;
+  if (mime === 'image/jpeg' || mime === 'image/png') {
+    waType = 'image';
+    maxBytes = config.MAX_MEDIA_IMAGE_BYTES;
+  } else if (mime === 'video/mp4') {
+    waType = 'video';
+    maxBytes = config.MAX_MEDIA_VIDEO_BYTES;
+  } else if (mime === 'application/pdf') {
+    waType = 'document';
+    maxBytes = config.MAX_MEDIA_DOCUMENT_BYTES;
+  } else {
+    waType = 'audio';
+    maxBytes = config.MAX_MEDIA_AUDIO_BYTES;
+  }
+  if (typeof sizeBytes === 'number' && sizeBytes > maxBytes) {
+    throw new Error(`Archivo demasiado grande (máx. ${Math.round(maxBytes / (1024 * 1024))} MB para este tipo).`);
+  }
+  return { waType, maxBytes };
+}
+
+function sanitizeUploadFilename(originalName, waType) {
+  let base = path.basename(String(originalName || ''));
+  base = base.replace(/[^\w.\- ()áéíóúñÁÉÍÓÚÑ]/g, '_').trim();
+  if (!base) {
+    base =
+      waType === 'document'
+        ? 'documento.pdf'
+        : waType === 'image'
+          ? 'imagen.jpg'
+          : waType === 'video'
+            ? 'video.mp4'
+            : 'audio.m4a';
+  }
+  return base.slice(0, 200);
+}
+
+/**
+ * Sube binario a WhatsApp Cloud API y devuelve { id } del media handle.
+ */
+async function uploadMediaToWhatsApp({ area, buffer, mimeType, filename }) {
+  const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
+  if (!token || !phoneNumberId) {
+    throw new Error(
+      'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_PAM/PHONE_NUMBER_ID_PAM y WHATSAPP_TOKEN_EDUCACION/PHONE_NUMBER_ID_EDUCACION (o WHATSAPP_TOKEN/PHONE_NUMBER_ID como respaldo)'
+    );
+  }
+  if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+    throw new Error('Archivo vacío o inválido');
+  }
+  const { waType } = classifyConversationUpload(mimeType, buffer.length);
+  const safeName = sanitizeUploadFilename(filename, waType);
+
+  const form = new FormData();
+  form.append('messaging_product', 'whatsapp');
+  form.append('type', waType);
+  form.append('file', buffer, { filename: safeName, contentType: String(mimeType).split(';')[0].trim() });
+
+  const url = `${config.GRAPH_BASE}/${phoneNumberId}/media`;
+  try {
+    const { data } = await axios.post(url, form, {
+      headers: {
+        ...form.getHeaders(),
+        Authorization: `Bearer ${token}`,
+      },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    });
+    if (!data?.id) {
+      throw new Error('Respuesta de subida sin id de media');
+    }
+    return { mediaId: String(data.id), waType, safeFilename: safeName };
+  } catch (e) {
+    if (axios.isAxiosError(e) && e.response?.data) {
+      const err = e.response.data?.error || e.response.data;
+      const msg = err?.message || err?.error_user_msg || JSON.stringify(err);
+      throw new Error(`Error subiendo media: ${msg}`);
+    }
+    throw e;
+  }
+}
+
+/**
+ * Envía mensaje de sesión con media ya subida (id de Graph).
+ * Para audio, WhatsApp no aplica caption en el mismo payload; usar envío de texto aparte si hace falta.
+ */
+async function sendSessionMediaMessage({ to, area, waType, mediaId, caption, documentFilename }) {
+  const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
+  if (!token || !phoneNumberId) {
+    throw new Error(
+      'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_PAM/PHONE_NUMBER_ID_PAM y WHATSAPP_TOKEN_EDUCACION/PHONE_NUMBER_ID_EDUCACION (o WHATSAPP_TOKEN/PHONE_NUMBER_ID como respaldo)'
+    );
+  }
+  const cap =
+    caption != null && String(caption).trim()
+      ? String(caption).trim().slice(0, config.MAX_MEDIA_CAPTION_LEN)
+      : '';
+
+  const payload = {
+    messaging_product: 'whatsapp',
+    to,
+    type: waType,
+  };
+
+  if (waType === 'image') {
+    payload.image = { id: mediaId };
+    if (cap) payload.image.caption = cap;
+  } else if (waType === 'video') {
+    payload.video = { id: mediaId };
+    if (cap) payload.video.caption = cap;
+  } else if (waType === 'audio') {
+    payload.audio = { id: mediaId };
+  } else if (waType === 'document') {
+    const fn = documentFilename && String(documentFilename).trim() ? String(documentFilename).trim() : 'documento.pdf';
+    payload.document = { id: mediaId, filename: fn.slice(0, 240) };
+    if (cap) payload.document.caption = cap;
+  } else {
+    throw new Error('Tipo de media no soportado');
+  }
+
+  try {
+    const response = await axios.post(`${config.GRAPH_BASE}/${phoneNumberId}/messages`, payload, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    return response.data;
+  } catch (e) {
+    if (axios.isAxiosError(e) && e.response?.data) {
+      const err = e.response.data?.error || e.response.data;
+      const msg = err?.message || err?.error_user_msg || JSON.stringify(err);
+      throw new Error(`Error enviando media: ${msg}`);
+    }
+    throw e;
+  }
+}
 
 
 /**
@@ -178,4 +347,8 @@ module.exports = {
   sendTemplateWithComponents,
   sendSessionTextMessage,
   fetchWabaIdFromPhoneNumberId,
+  ALLOWED_MEDIA_MIMES,
+  classifyConversationUpload,
+  uploadMediaToWhatsApp,
+  sendSessionMediaMessage,
 };

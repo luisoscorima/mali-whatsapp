@@ -8,6 +8,14 @@ function sanitizeApiResponse(data) {
   };
 }
 
+/** Respuesta combinada subida de media + envío (inbox adjuntos). */
+function sanitizeMediaOutboundPayload(uploadResponse, sendResponse) {
+  return {
+    upload_media_id: uploadResponse?.id != null ? String(uploadResponse.id) : null,
+    ...sanitizeApiResponse(sendResponse),
+  };
+}
+
 function sanitizeApiErrorPayload(payload) {
   const error = payload?.error || {};
   return {
@@ -21,4 +29,4 @@ function sanitizeApiErrorPayload(payload) {
   };
 }
 
-module.exports = { sanitizeApiResponse, sanitizeApiErrorPayload };
+module.exports = { sanitizeApiResponse, sanitizeApiErrorPayload, sanitizeMediaOutboundPayload };

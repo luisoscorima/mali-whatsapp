@@ -21,7 +21,8 @@
     <link rel="stylesheet" href="<%= basePath %>/css/styles.css" />
     <script src="<%= basePath %>/js/theme.js" defer></script>
   </head>
-  <body>
+  <body class="has-wave-bg">
+    <%- include('partials/wave-background') %>
     <% const segmentLabel = function (slug) {
       if (!slug) return '';
       const s = segments.find(function (x) { return x.value === slug; });

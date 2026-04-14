@@ -20,7 +20,8 @@
     <script src="<%= basePath %>/js/theme.js" defer></script>
     <script src="<%= basePath %>/js/campaign-template.js" defer></script>
   </head>
-  <body>
+  <body class="has-wave-bg">
+    <%- include('partials/wave-background') %>
     <div class="app-shell">
       <%- include('partials/sidebar-nav', { basePath, appBaseUrl, activeNav: typeof activeNav !== 'undefined' ? activeNav : 'dashboard' }) %>
 
