@@ -1,5 +1,6 @@
-const { logError } = require('../utils/logger');
+const { logError, logWarn } = require('../utils/logger');
 const { sanitizeApiResponse, sanitizeMediaOutboundPayload } = require('../utils/apiSanitize');
+const { saveOutboundChatMediaFile } = require('../utils/chatMediaStorage');
 const { conversationReplyLimiter, conversationMediaUpload } = require('../middleware/limiters');
 const {
   sendSessionTextMessage,
@@ -210,6 +211,20 @@ function registerConversations(app, ctx) {
           bodyText = `[${label}] ${uploadResult.safeFilename}`.slice(0, 8000);
         }
 
+        let localPreview = null;
+        try {
+          localPreview = await saveOutboundChatMediaFile({
+            buffer: file.buffer,
+            conversationId,
+            mimeType: file.mimetype,
+          });
+        } catch (storeErr) {
+          logWarn(req, 'No se guardó copia local del adjunto para vista en el hilo', {
+            conversationId,
+            error: storeErr.message,
+          });
+        }
+
         await query(
           `INSERT INTO chat_messages (conversation_id, direction, wa_message_id, body_text, message_type, raw_payload)
            VALUES ($1, 'outbound', $2, $3, $4, $5::jsonb)`,
@@ -219,7 +234,7 @@ function registerConversations(app, ctx) {
             bodyText,
             uploadResult.waType,
             JSON.stringify(
-              sanitizeMediaOutboundPayload({ id: uploadResult.mediaId }, sendResp)
+              sanitizeMediaOutboundPayload({ id: uploadResult.mediaId }, sendResp, localPreview)
             ),
           ]
         );

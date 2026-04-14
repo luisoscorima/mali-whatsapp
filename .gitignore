@@ -13,3 +13,7 @@ pnpm-debug.log*
 dist/
 build/
 .DS_Store
+
+# Adjuntos guardados para vista previa en conversaciones (panel)
+app/public/uploads/chat-media/*
+!app/public/uploads/chat-media/.gitkeep

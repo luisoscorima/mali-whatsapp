@@ -1,12 +1,77 @@
 <% if (messages.length === 0) { %>
   <p class="empty-state">Sin mensajes almacenados.</p>
 <% } else { %>
+  <% const bp = typeof basePath !== 'undefined' ? basePath : ''; %>
+  <% function parsePayload(raw) {
+       if (!raw) return null;
+       if (typeof raw === 'object') return raw;
+       try { return JSON.parse(raw); } catch (e) { return null; }
+     }
+     function mediaIcon(t) {
+       if (t === 'image') return '📷';
+       if (t === 'video') return '🎬';
+       if (t === 'audio') return '🎵';
+       if (t === 'document') return '📎';
+       if (t === 'sticker') return '🎭';
+       if (t === 'location') return '📍';
+       if (t === 'contacts') return '👤';
+       if (t === 'interactive' || t === 'button') return '🔘';
+       return '';
+     }
+     function mediaLabel(t) {
+       if (t === 'image') return 'Imagen';
+       if (t === 'video') return 'Video';
+       if (t === 'audio') return 'Audio';
+       if (t === 'document') return 'Documento';
+       if (t === 'sticker') return 'Sticker';
+       if (t === 'location') return 'Ubicación';
+       if (t === 'contacts') return 'Contacto';
+       if (t === 'interactive' || t === 'button') return 'Interactivo';
+       return '';
+     }
+     function isMediaType(t) {
+       return ['image', 'video', 'audio', 'document'].indexOf(t) !== -1;
+     }
+  %>
   <div class="chat-thread chat-thread--inbox" id="chat-thread">
     <% messages.forEach((m) => { %>
+      <% const raw = parsePayload(m.raw_payload); %>
+      <% const lp = raw && raw.local_preview; %>
+      <% const mediaUrl = lp && lp.url ? bp + lp.url : ''; %>
+      <% const mt = String(m.message_type || 'text'); %>
+      <% const showTypeRow = isMediaType(mt) || (mt !== 'text' && mediaIcon(mt)); %>
       <div class="chat-bubble <%= m.direction === 'outbound' ? 'chat-bubble--out' : 'chat-bubble--in' %>">
-        <div><%= m.body_text %></div>
+        <% if (showTypeRow) { %>
+          <div class="chat-bubble__type" title="<%= mediaLabel(mt) || mt %>">
+            <span class="chat-msg-type-icon" aria-hidden="true"><%= mediaIcon(mt) || '📎' %></span>
+            <span class="chat-msg-type-label"><%= mediaLabel(mt) || mt %></span>
+          </div>
+        <% } %>
+        <% if (mediaUrl && mt === 'image') { %>
+          <div class="chat-bubble__media">
+            <img class="chat-msg-media chat-msg-media--img" src="<%= mediaUrl %>" alt="" loading="lazy" decoding="async" />
+          </div>
+        <% } else if (mediaUrl && mt === 'video') { %>
+          <div class="chat-bubble__media">
+            <video class="chat-msg-media chat-msg-media--video" controls playsinline preload="metadata" src="<%= mediaUrl %>"></video>
+          </div>
+        <% } else if (mediaUrl && mt === 'audio') { %>
+          <div class="chat-bubble__media">
+            <audio class="chat-msg-media chat-msg-media--audio" controls preload="metadata" src="<%= mediaUrl %>"></audio>
+          </div>
+        <% } else if (mediaUrl && mt === 'document') { %>
+          <div class="chat-bubble__media chat-bubble__media--doc">
+            <iframe class="chat-msg-media chat-msg-media--pdf" title="Vista PDF" src="<%= mediaUrl %>"></iframe>
+            <a class="chat-msg-doc-link" href="<%= mediaUrl %>" target="_blank" rel="noopener noreferrer">Abrir PDF en pestaña nueva</a>
+          </div>
+        <% } else if (isMediaType(mt) && m.direction === 'outbound' && !mediaUrl) { %>
+          <p class="chat-msg-fallback">Adjunto enviado (sin copia local en el servidor).</p>
+        <% } %>
+        <% if (m.body_text) { %>
+          <div class="chat-bubble__text"><%= m.body_text %></div>
+        <% } %>
         <div class="chat-meta">
-          <%= m.direction === 'outbound' ? 'Tú' : 'Usuario' %> · <%= m.message_type %> ·
+          <%= m.direction === 'outbound' ? 'Tú' : 'Usuario' %> · <%= mt %> ·
           <%= new Date(m.created_at).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' }) %>
         </div>
       </div>

@@ -9,11 +9,18 @@ function sanitizeApiResponse(data) {
 }
 
 /** Respuesta combinada subida de media + envío (inbox adjuntos). */
-function sanitizeMediaOutboundPayload(uploadResponse, sendResponse) {
-  return {
+function sanitizeMediaOutboundPayload(uploadResponse, sendResponse, localPreview) {
+  const base = {
     upload_media_id: uploadResponse?.id != null ? String(uploadResponse.id) : null,
     ...sanitizeApiResponse(sendResponse),
   };
+  if (localPreview && localPreview.url) {
+    base.local_preview = {
+      url: localPreview.url,
+      mime: localPreview.mime || null,
+    };
+  }
+  return base;
 }
 
 function sanitizeApiErrorPayload(payload) {
