@@ -1374,6 +1374,109 @@ html[data-theme='dark'] .small-btn.danger-outline:hover {
   line-height: 1.35;
 }
 
+.reply-attachment-preview,
+.reply-link-preview {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
+}
+
+.reply-attachment-preview__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.reply-attachment-preview__title,
+.reply-link-preview__title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.reply-attachment-preview__clear {
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.reply-attachment-preview__clear:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.reply-attachment-preview__body img,
+.reply-attachment-preview__body video {
+  display: block;
+  max-width: 100%;
+  max-height: 220px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: var(--surface);
+}
+
+.reply-attachment-preview__body iframe {
+  width: 100%;
+  min-height: 260px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.reply-attachment-preview__body audio {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.reply-attachment-preview__filename {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0;
+  word-break: break-all;
+}
+
+.reply-link-preview__title {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.reply-link-preview__hint {
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.reply-link-preview__body a {
+  word-break: break-all;
+  color: var(--accent);
+}
+
+.reply-link-preview__img-wrap {
+  margin-top: 8px;
+  max-height: 180px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.reply-link-preview__img-wrap img {
+  display: block;
+  max-width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+  margin: 0 auto;
+}
+
 .template-sync-row {
   display: flex;
   flex-wrap: wrap;

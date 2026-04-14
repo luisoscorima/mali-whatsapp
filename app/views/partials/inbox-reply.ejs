@@ -29,6 +29,20 @@
         JPEG/PNG (máx. 5 MB), MP4 (máx. 16 MB), audio MP3/OGG/AAC/M4A (máx. 16 MB), PDF (máx. 100 MB). Con audio, el texto se envía como mensaje aparte si lo escribes.
       </p>
     </label>
+    <div class="reply-attachment-preview" id="reply-attachment-preview" hidden>
+      <div class="reply-attachment-preview__head">
+        <span class="reply-attachment-preview__title">Vista previa del adjunto</span>
+        <button type="button" class="reply-attachment-preview__clear" id="reply-attachment-clear" aria-label="Quitar archivo seleccionado">
+          Quitar
+        </button>
+      </div>
+      <div class="reply-attachment-preview__body" id="reply-attachment-preview-body"></div>
+    </div>
+    <div class="reply-link-preview" id="reply-link-preview" hidden>
+      <span class="reply-link-preview__title">Enlace en el mensaje</span>
+      <p class="reply-link-preview__hint">El aspecto en WhatsApp puede variar; las imágenes por URL solo se previsualizan si el servidor lo permite.</p>
+      <div class="reply-link-preview__body" id="reply-link-preview-body"></div>
+    </div>
     <div class="form-actions">
       <button type="submit">Enviar por WhatsApp</button>
     </div>
