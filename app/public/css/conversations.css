@@ -1,35 +1,13 @@
 /**
- * UI conversaciones estilo WhatsApp Web (scope MALI).
- * Solo aplica con .inbox-layout-wa y body.page-conversations
+ * Inbox conversaciones (lista + hilo). Tokens de piel compartidos: wa-shell.css (body.page-conversations).
  */
 
-body.page-conversations {
-  --wa-shell-bg: #dddbd1;
-  background: var(--wa-shell-bg);
-  min-height: 100vh;
-  height: 100vh;
-  max-height: 100vh;
-  overflow: hidden;
-}
-
-html[data-theme='dark'] body.page-conversations {
-  --wa-shell-bg: #0b141a;
-}
-
-/* Rail + lista + hilo (misma fila de variables que antes) */
+/* Burbujas y layout del inbox (lista + hilo) */
 body.page-conversations .wa-layout--inbox.inbox-layout-wa.conversations-inbox {
-  --wa-shell-bg: #dddbd1;
-  --wa-list-bg: #f8f9fa;
-  --wa-chat-bg: #e4dcd4;
-  --wa-chat-bg-pattern: rgba(0, 0, 0, 0.04);
   --wa-bubble-out: color-mix(in srgb, var(--accent-soft) 75%, #d4f4e8);
   --wa-bubble-out-border: color-mix(in srgb, var(--accent) 22%, transparent);
   --wa-bubble-in: #ffffff;
   --wa-bubble-in-border: rgba(0, 0, 0, 0.06);
-  --wa-header-bg: #f0f2f5;
-  --wa-compose-bg: #f0f2f5;
-  --wa-active: color-mix(in srgb, var(--accent) 14%, transparent);
-  --wa-active-border: var(--accent);
   max-width: none;
   margin: 0;
   width: 100%;
@@ -50,17 +28,10 @@ body.page-conversations .wa-layout--inbox.inbox-layout-wa.conversations-inbox {
 }
 
 html[data-theme='dark'] body.page-conversations .wa-layout--inbox.inbox-layout-wa.conversations-inbox {
-  --wa-list-bg: #111b21;
-  --wa-chat-bg: #0b141a;
-  --wa-chat-bg-pattern: rgba(255, 255, 255, 0.03);
   --wa-bubble-out: color-mix(in srgb, var(--accent) 45%, #152228);
   --wa-bubble-out-border: color-mix(in srgb, var(--accent) 25%, rgba(0, 0, 0, 0.35));
   --wa-bubble-in: #1f2c33;
   --wa-bubble-in-border: rgba(255, 255, 255, 0.06);
-  --wa-header-bg: #202c33;
-  --wa-compose-bg: #202c33;
-  --wa-active: color-mix(in srgb, var(--accent) 16%, transparent);
-  --wa-active-border: var(--accent);
 }
 
 /* --- Columna lista --- */
