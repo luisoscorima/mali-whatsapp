@@ -61,6 +61,11 @@ function createApp() {
 
   const publicPath = path.join(__dirname, '..', 'public');
   app.use(express.static(publicPath));
+  // Las vistas usan basePath + '/css/...', '/uploads/...', etc. Si BASE_PATH está definido,
+  // el navegador pide /{basePath}/uploads/...; hay que servir public también bajo ese prefijo.
+  if (config.basePath) {
+    app.use(config.basePath, express.static(publicPath));
+  }
 
   const appPath = config.appPath;
   const resolveSessionUser = createResolveSessionUser(appPath);

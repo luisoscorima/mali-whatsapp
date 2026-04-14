@@ -34,12 +34,21 @@
      function isMediaType(t) {
        return ['image', 'video', 'audio', 'voice', 'document', 'sticker'].indexOf(t) !== -1;
      }
+     /** basePath + ruta guardada en local_preview (p. ej. /uploads/chat-media/...). */
+     function resolvePreviewMediaUrl(base, url) {
+       if (!url) return '';
+       var u = String(url).trim();
+       if (/^https?:\/\//i.test(u)) return u;
+       var pathPart = u.indexOf('/') === 0 ? u : '/' + u;
+       var b = String(base || '').replace(/\/$/, '');
+       return b + pathPart;
+     }
   %>
   <div class="chat-thread chat-thread--inbox" id="chat-thread">
     <% messages.forEach((m) => { %>
       <% const raw = parsePayload(m.raw_payload); %>
       <% const lp = raw && raw.local_preview; %>
-      <% const mediaUrl = lp && lp.url ? bp + lp.url : ''; %>
+      <% const mediaUrl = lp && lp.url ? resolvePreviewMediaUrl(bp, lp.url) : ''; %>
       <% const mt = String(m.message_type || 'text'); %>
       <% const showTypeRow = isMediaType(mt) || (mt !== 'text' && mediaIcon(mt)); %>
       <div class="chat-bubble <%= m.direction === 'outbound' ? 'chat-bubble--out' : 'chat-bubble--in' %>">
