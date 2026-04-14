@@ -17,18 +17,16 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="<%= basePath %>/css/styles.css" />
+    <link rel="stylesheet" href="<%= basePath %>/css/wa-shell.css" />
     <script src="<%= basePath %>/js/theme.js" defer></script>
   </head>
-  <body class="has-wave-bg">
+  <body class="has-wave-bg wa-body-dashboard">
     <%- include('partials/wave-background') %>
-    <div class="app-shell">
-      <%- include('partials/sidebar-nav', { basePath, appBaseUrl, activeNav, showAdminNav }) %>
+    <div class="wa-layout wa-layout--dashboard">
+      <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav, showAdminNav, requireAuth, currentUser, areaLabel }) %>
 
-      <main class="main-panel">
-        <header class="top-bar">
-          <%- include('partials/top-bar-actions', { basePath, areaLabel, requireAuth, currentUser }) %>
-        </header>
-
+      <div class="wa-main-column">
+        <main class="main-panel">
         <section class="content-section is-active">
           <div class="card">
             <h1 class="card-title"><%= mode === 'create' ? 'Nuevo usuario' : 'Editar usuario' %></h1>
@@ -78,7 +76,20 @@
             </form>
           </div>
         </section>
-      </main>
+        </main>
+      </div>
+
+      <aside class="wa-tertiary" aria-label="Información">
+        <div class="wa-tertiary-inner">
+          <div class="wa-placeholder">
+            <span class="wa-placeholder-icon" aria-hidden="true">
+              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </span>
+            <h2 class="wa-placeholder-title">Usuario</h2>
+            <p class="wa-placeholder-text">Alta o edición de acceso al panel MALI.</p>
+          </div>
+        </div>
+      </aside>
     </div>
   </body>
 </html>

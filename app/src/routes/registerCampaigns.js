@@ -3,7 +3,7 @@ const { campaignLimiter } = require('../middleware/limiters');
 const { runCampaignSendJob } = require('../services/campaignSender');
 
 function registerCampaigns(app, ctx) {
-  const { query, getSegmentSlugSet, validateCampaignWithSync, appPath } = ctx;
+  const { query, getSegmentSlugSet, validateCampaignWithSync, appPath, resolveAppBaseUrl } = ctx;
 
   app.post('/campaigns/send', campaignLimiter, async (req, res) => {
     const area = req.user.area;
@@ -115,6 +115,9 @@ function registerCampaigns(app, ctx) {
       areaLabel: res.locals.areaLabel,
       requireAuth: ctx.config.requireAuth,
       currentUser: req.user,
+      appBaseUrl: resolveAppBaseUrl(),
+      showAdminNav: res.locals.showAdminNav,
+      activeNav: 'dashboard',
     });
   });
 }

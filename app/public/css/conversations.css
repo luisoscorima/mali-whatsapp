@@ -18,7 +18,8 @@ body.page-conversations .waveWrapper {
   display: none !important;
 }
 
-.inbox-layout-wa {
+/* Rail + lista + hilo (misma fila de variables que antes) */
+body.page-conversations .wa-layout--inbox.inbox-layout-wa.conversations-inbox {
   --wa-shell-bg: #dddbd1;
   --wa-list-bg: #f8f9fa;
   --wa-chat-bg: #e4dcd4;
@@ -31,22 +32,22 @@ body.page-conversations .waveWrapper {
   --wa-compose-bg: #f0f2f5;
   --wa-active: color-mix(in srgb, var(--accent) 14%, transparent);
   --wa-active-border: var(--accent);
-  max-width: 1600px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   width: 100%;
-  min-height: calc(100vh - 72px);
-  max-height: calc(100vh - 72px);
+  min-height: 100vh;
+  max-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(300px, 380px) 1fr;
+  grid-template-columns: 72px minmax(280px, 380px) minmax(0, 1fr);
   gap: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border: none;
+  border-radius: 0;
   overflow: hidden;
   background: var(--wa-list-bg);
-  box-shadow: 0 1px 1px 0 rgba(0, 0, 0, 0.06), 0 2px 5px 0 rgba(0, 0, 0, 0.12);
+  box-shadow: none;
 }
 
-html[data-theme='dark'] .inbox-layout-wa {
+html[data-theme='dark'] body.page-conversations .wa-layout--inbox.inbox-layout-wa.conversations-inbox {
   --wa-list-bg: #111b21;
   --wa-chat-bg: #0b141a;
   --wa-chat-bg-pattern: rgba(255, 255, 255, 0.03);
@@ -60,16 +61,12 @@ html[data-theme='dark'] .inbox-layout-wa {
   --wa-active-border: var(--accent);
 }
 
-.main-panel--inbox.page-conversations-main {
-  padding-top: 8px;
-  padding-left: 12px;
-  padding-right: 12px;
-  padding-bottom: 12px;
-  background: transparent;
-}
-
 /* --- Columna lista --- */
 .inbox-layout-wa .inbox-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
   background: var(--wa-list-bg);
   border-right: 1px solid var(--line);
 }
@@ -229,6 +226,10 @@ html[data-theme='dark'] .inbox-layout-wa {
 
 /* --- Columna chat --- */
 .inbox-layout-wa .inbox-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
   background: var(--wa-chat-bg);
   background-image: repeating-linear-gradient(
     45deg,
@@ -492,28 +493,26 @@ html[data-theme='dark'] .inbox-compose-bar {
 }
 
 @media (max-width: 960px) {
-  .inbox-layout-wa {
-    min-height: min(88vh, calc(100vh - 56px));
+  body.page-conversations .wa-layout--inbox.inbox-layout-wa.conversations-inbox {
+    min-height: 100vh;
     max-height: none;
-    grid-template-columns: 1fr;
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
-    max-width: none;
-    margin: 0;
+    grid-template-columns: 72px 1fr;
   }
 
-  .main-panel--inbox.page-conversations-main {
-    padding-left: 8px;
-    padding-right: 8px;
+  body.page-conversations .wa-layout--inbox.conversations-inbox:not(.conversations-inbox--detail) .inbox-main {
+    display: none !important;
   }
 
-  .conversations-inbox:not(.conversations-inbox--detail) .inbox-main {
-    display: none;
+  body.page-conversations .wa-layout--inbox.conversations-inbox:not(.conversations-inbox--detail) .inbox-sidebar {
+    grid-column: 2;
   }
 
-  .conversations-inbox--detail .inbox-sidebar {
-    display: none;
+  body.page-conversations .wa-layout--inbox.conversations-inbox.conversations-inbox--detail .inbox-sidebar {
+    display: none !important;
+  }
+
+  body.page-conversations .wa-layout--inbox.conversations-inbox.conversations-inbox--detail .inbox-main {
+    grid-column: 2;
   }
 
   .inbox-back-mobile {

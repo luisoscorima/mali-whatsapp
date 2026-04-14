@@ -34,7 +34,7 @@
      function isMediaType(t) {
        return ['image', 'video', 'audio', 'voice', 'document', 'sticker'].indexOf(t) !== -1;
      }
-     /** basePath + ruta guardada en local_preview (p. ej. /uploads/chat-media/...). */
+     /** URL absoluta https (S3) o ruta bajo basePath (p. ej. /uploads/chat-media/...). */
      function resolvePreviewMediaUrl(base, url) {
        if (!url) return '';
        var u = String(url).trim();

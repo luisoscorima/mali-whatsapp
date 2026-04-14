@@ -9,6 +9,7 @@
     "create-user": "node scripts/create-user.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1030.0",
     "axios": "^1.7.9",
     "bcryptjs": "^2.4.3",
     "csv-parse": "^5.6.0",

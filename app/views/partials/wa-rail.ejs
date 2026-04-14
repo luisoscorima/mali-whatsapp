@@ -1,0 +1,139 @@
+<% const nav = typeof activeNav !== 'undefined' ? activeNav : ''; %>
+<% const showAdmin = typeof showAdminNav !== 'undefined' && showAdminNav; %>
+<% const railInitial = requireAuth && currentUser && currentUser.email ? String(currentUser.email).charAt(0).toUpperCase() : '?'; %>
+<aside class="wa-rail" aria-label="Navegación principal">
+  <div class="wa-rail__brand">
+    <a href="<%= basePath %>/" class="wa-rail__logo-link" title="MALI WhatsApp" aria-label="Inicio panel">
+      <span class="wa-rail__logo-wrap" aria-hidden="true">
+        <img
+          class="wa-rail__logo wa-rail__logo--light"
+          src="https://mali-assets.s3.us-east-1.amazonaws.com/assets-web-mali/Logo_MALI_Negro.png"
+          alt=""
+          width="40"
+          height="40"
+          decoding="async"
+        />
+        <img
+          class="wa-rail__logo wa-rail__logo--dark"
+          src="https://mali-assets.s3.us-east-1.amazonaws.com/assets-web-mali/Logo_MALI_Blanco.png"
+          alt=""
+          width="40"
+          height="40"
+          decoding="async"
+        />
+      </span>
+    </a>
+  </div>
+
+  <nav class="wa-rail__nav" aria-label="Secciones">
+    <a
+      class="wa-rail__item nav-item <%= nav === 'conversations' ? 'is-active' : '' %>"
+      href="<%= basePath %>/conversations"
+      aria-label="Conversaciones"
+      title="Conversaciones"
+    >
+      <span class="wa-rail__icon" aria-hidden="true"
+        ><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg
+      ></span>
+      <span class="wa-rail__label">Conversaciones</span>
+    </a>
+    <a
+      class="wa-rail__item nav-item"
+      href="<%= basePath %>/#send-campaign"
+      data-target-section="send-campaign"
+      aria-label="Envío masivo"
+      title="Envío masivo"
+    >
+      <span class="wa-rail__icon" aria-hidden="true"
+        ><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg
+      ></span>
+      <span class="wa-rail__label">Envío masivo</span>
+    </a>
+    <a
+      class="wa-rail__item nav-item"
+      href="<%= basePath %>/#contacts"
+      data-target-section="contacts"
+      aria-label="Contactos"
+      title="Contactos"
+    >
+      <span class="wa-rail__icon" aria-hidden="true"
+        ><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg
+      ></span>
+      <span class="wa-rail__label">Contactos</span>
+    </a>
+    <a
+      class="wa-rail__item nav-item"
+      href="<%= basePath %>/#segments"
+      data-target-section="segments"
+      aria-label="Segmentos"
+      title="Segmentos"
+    >
+      <span class="wa-rail__icon" aria-hidden="true"
+        ><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg
+      ></span>
+      <span class="wa-rail__label">Segmentos</span>
+    </a>
+    <a
+      class="wa-rail__item nav-item"
+      href="<%= basePath %>/#history"
+      data-target-section="history"
+      aria-label="Historial"
+      title="Historial"
+    >
+      <span class="wa-rail__icon" aria-hidden="true"
+        ><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg
+      ></span>
+      <span class="wa-rail__label">Historial</span>
+    </a>
+  </nav>
+
+  <div class="wa-rail__footer">
+    <button type="button" class="wa-rail__theme theme-toggle" data-theme-toggle title="Modo claro / oscuro" aria-label="Cambiar tema">
+      <span class="wa-rail__icon" aria-hidden="true">◐</span>
+    </button>
+    <% if (requireAuth) { %>
+    <details class="wa-rail__profile">
+      <summary class="wa-rail__profile-trigger" aria-label="Menú de cuenta">
+        <span class="wa-rail__avatar" aria-hidden="true"><%= railInitial %></span>
+      </summary>
+      <div class="wa-rail__dropdown">
+        <p class="wa-rail__dropdown-name"><%= currentUser.email %></p>
+        <p class="wa-rail__dropdown-meta">
+          <span class="area-pill area-pill--menu"><%= areaLabel %></span>
+          <% if (currentUser.isMaster) { %>
+          <span class="area-pill area-pill--master area-pill--menu">Master</span>
+          <% } %>
+        </p>
+        <% if (requireAuth && currentUser && currentUser.isMaster) { %>
+        <form method="post" action="<%= basePath %>/admin/switch-area" class="wa-rail__area-form">
+          <label class="wa-rail__area-label">
+            <span>Área</span>
+            <select name="area" class="area-switch-select" aria-label="Cambiar área">
+              <option value="pam" <%= currentUser.area === 'pam' ? 'selected' : '' %>>PAM</option>
+              <option value="educacion" <%= currentUser.area === 'educacion' ? 'selected' : '' %>>Educación</option>
+            </select>
+          </label>
+          <button type="submit" class="small-btn secondary wa-rail__area-btn">Cambiar área</button>
+        </form>
+        <% } %>
+        <div class="wa-rail__dropdown-links">
+          <a href="<%= basePath %>/#configuration">Ajustes</a>
+          <% if (showAdmin) { %>
+          <a href="<%= basePath %>/admin/users">Usuarios</a>
+          <a href="<%= basePath %>/admin/meta">Credenciales Meta</a>
+          <% } %>
+        </div>
+        <p class="wa-rail__webhook-hint">
+          <span class="muted">Webhook</span><br />
+          <code class="wa-rail__webhook-code"><%= appBaseUrl %>/webhook</code>
+        </p>
+        <form method="post" action="<%= basePath %>/logout" class="wa-rail__logout">
+          <button type="submit" class="secondary small-btn user-menu-logout-btn">Cerrar sesión</button>
+        </form>
+      </div>
+    </details>
+    <% } else { %>
+    <span class="wa-rail__dev-hint muted" title="Sin sesión">Dev</span>
+    <% } %>
+  </div>
+</aside>

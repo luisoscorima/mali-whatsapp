@@ -17,18 +17,16 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="<%= basePath %>/css/styles.css" />
+    <link rel="stylesheet" href="<%= basePath %>/css/wa-shell.css" />
     <script src="<%= basePath %>/js/theme.js" defer></script>
   </head>
-  <body class="has-wave-bg">
+  <body class="has-wave-bg wa-body-dashboard">
     <%- include('partials/wave-background') %>
-    <div class="app-shell">
-      <%- include('partials/sidebar-nav', { basePath, appBaseUrl, activeNav, showAdminNav }) %>
+    <div class="wa-layout wa-layout--dashboard">
+      <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav, showAdminNav, requireAuth, currentUser, areaLabel }) %>
 
-      <main class="main-panel">
-        <header class="top-bar">
-          <%- include('partials/top-bar-actions', { basePath, areaLabel, requireAuth, currentUser }) %>
-        </header>
-
+      <div class="wa-main-column">
+        <main class="main-panel">
         <section class="content-section is-active">
           <div class="card">
             <h1 class="card-title">Credenciales Meta</h1>
@@ -86,7 +84,20 @@
             <p class="card-lead muted"><a href="<%= basePath %>/">← Volver al panel</a></p>
           </div>
         </section>
-      </main>
+        </main>
+      </div>
+
+      <aside class="wa-tertiary" aria-label="Información">
+        <div class="wa-tertiary-inner">
+          <div class="wa-placeholder">
+            <span class="wa-placeholder-icon" aria-hidden="true">
+              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </span>
+            <h2 class="wa-placeholder-title">Credenciales Meta</h2>
+            <p class="wa-placeholder-text">Tokens y claves para WhatsApp Cloud API. No compartas esta pantalla.</p>
+          </div>
+        </div>
+      </aside>
     </div>
   </body>
 </html>

@@ -17,60 +17,81 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="<%= basePath %>/css/styles.css" />
+    <link rel="stylesheet" href="<%= basePath %>/css/wa-shell.css" />
     <script src="<%= basePath %>/js/theme.js" defer></script>
   </head>
-  <body class="has-wave-bg">
+  <body class="has-wave-bg wa-body-dashboard">
     <%- include('partials/wave-background') %>
-    <div class="page page--detail">
-      <div class="detail-top">
-        <div class="detail-top-start">
-          <a class="back-link" href="<%= basePath %>/">← Panel</a>
-        </div>
-        <%- include('partials/top-bar-actions', { basePath, areaLabel, requireAuth: typeof requireAuth !== 'undefined' ? requireAuth : true, currentUser, topBarVariant: 'detail' }) %>
+    <div class="wa-layout wa-layout--dashboard">
+      <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav: typeof activeNav !== 'undefined' ? activeNav : 'dashboard', showAdminNav: typeof showAdminNav !== 'undefined' ? showAdminNav : false, requireAuth: typeof requireAuth !== 'undefined' ? requireAuth : true, currentUser, areaLabel }) %>
+
+      <div class="wa-main-column">
+        <main class="main-panel">
+          <div class="page page--detail">
+            <div class="detail-top">
+              <div class="detail-top-start">
+                <a class="back-link" href="<%= basePath %>/">← Panel</a>
+              </div>
+            </div>
+
+            <div class="card">
+              <h1 class="card-title">Campaña #<%= campaign.id %></h1>
+              <% if (campaign.status === 'queued' || campaign.status === 'processing') { %>
+              <p class="toast toast--ok">Envío en segundo plano. Actualiza la página para ver el progreso.</p>
+              <% } %>
+              <dl class="detail-dl">
+                <div><dt>Segmento</dt><dd><%= campaign.segment %></dd></div>
+                <div><dt>Plantilla</dt><dd><%= campaign.template_name %></dd></div>
+                <div><dt>Estado</dt><dd><span class="badge <%= campaign.status %>"><%= campaign.status %></span></dd></div>
+                <div><dt>Destinatarios</dt><dd><%= campaign.total_recipients %></dd></div>
+                <div><dt>Parámetros</dt><dd><%= campaign.message_text %></dd></div>
+                <% if (campaign.image_url) { %>
+                <div><dt>Imagen</dt><dd><a href="<%= campaign.image_url %>" target="_blank" rel="noopener">Abrir enlace</a></dd></div>
+                <% } %>
+              </dl>
+            </div>
+
+            <div class="card">
+              <h2 class="card-title">Registro de envíos</h2>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Teléfono</th>
+                      <th>Estado</th>
+                      <th>ID mensaje</th>
+                      <th>Detalle</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% logs.forEach((log) => { %>
+                      <tr>
+                        <td class="mono"><%= log.phone %></td>
+                        <td><span class="badge <%= log.status %>"><%= log.status %></span></td>
+                        <td class="mono"><%= log.whatsapp_message_id || '—' %></td>
+                        <td><pre class="log-pre"><%= JSON.stringify(log.response, null, 2) %></pre></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
 
-      <div class="card">
-        <h1 class="card-title">Campaña #<%= campaign.id %></h1>
-        <% if (campaign.status === 'queued' || campaign.status === 'processing') { %>
-        <p class="toast toast--ok">Envío en segundo plano. Actualiza la página para ver el progreso.</p>
-        <% } %>
-        <dl class="detail-dl">
-          <div><dt>Segmento</dt><dd><%= campaign.segment %></dd></div>
-          <div><dt>Plantilla</dt><dd><%= campaign.template_name %></dd></div>
-          <div><dt>Estado</dt><dd><span class="badge <%= campaign.status %>"><%= campaign.status %></span></dd></div>
-          <div><dt>Destinatarios</dt><dd><%= campaign.total_recipients %></dd></div>
-          <div><dt>Parámetros</dt><dd><%= campaign.message_text %></dd></div>
-          <% if (campaign.image_url) { %>
-          <div><dt>Imagen</dt><dd><a href="<%= campaign.image_url %>" target="_blank" rel="noopener">Abrir enlace</a></dd></div>
-          <% } %>
-        </dl>
-      </div>
-
-      <div class="card">
-        <h2 class="card-title">Registro de envíos</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Teléfono</th>
-                <th>Estado</th>
-                <th>ID mensaje</th>
-                <th>Detalle</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% logs.forEach((log) => { %>
-                <tr>
-                  <td class="mono"><%= log.phone %></td>
-                  <td><span class="badge <%= log.status %>"><%= log.status %></span></td>
-                  <td class="mono"><%= log.whatsapp_message_id || '—' %></td>
-                  <td><pre class="log-pre"><%= JSON.stringify(log.response, null, 2) %></pre></td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
+      <aside class="wa-tertiary" aria-label="Información">
+        <div class="wa-tertiary-inner">
+          <div class="wa-placeholder">
+            <span class="wa-placeholder-icon" aria-hidden="true">
+              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+            </span>
+            <h2 class="wa-placeholder-title">Detalle de campaña</h2>
+            <p class="wa-placeholder-text">Vista de una campaña enviada. El hilo de chat con clientes está en <strong>Conversaciones</strong>.</p>
+            <p class="wa-placeholder-text"><a class="text-link" href="<%= basePath %>/conversations">Ir a conversaciones</a></p>
+          </div>
         </div>
-      </div>
+      </aside>
     </div>
   </body>
 </html>

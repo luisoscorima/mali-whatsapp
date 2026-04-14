@@ -19,6 +19,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="<%= basePath %>/css/styles.css" />
+    <link rel="stylesheet" href="<%= basePath %>/css/wa-shell.css" />
     <link rel="stylesheet" href="<%= basePath %>/css/conversations.css" />
     <script src="<%= basePath %>/js/theme.js" defer></script>
   </head>
@@ -52,115 +53,107 @@
       if (y1 === y2) return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
       return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: '2-digit' });
     } %>
-    <div class="app-shell">
-      <%- include('partials/sidebar-nav', { basePath, appBaseUrl, activeNav }) %>
+    <div
+      class="wa-layout wa-layout--inbox inbox-layout-wa conversations-inbox <%= typeof selectedConversation !== 'undefined' && selectedConversation ? 'conversations-inbox--detail' : '' %>"
+    >
+      <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav, showAdminNav: typeof showAdminNav !== 'undefined' ? showAdminNav : false, requireAuth, currentUser, areaLabel }) %>
 
-      <main class="main-panel main-panel--inbox page-conversations-main">
-        <header class="top-bar">
-          <%- include('partials/top-bar-actions', { basePath, areaLabel, requireAuth, currentUser }) %>
-        </header>
-
-        <div
-          class="conversations-inbox inbox-layout-wa <%= typeof selectedConversation !== 'undefined' && selectedConversation ? 'conversations-inbox--detail' : '' %>"
-        >
-          <aside class="inbox-sidebar" aria-label="Lista de conversaciones">
-            <div class="inbox-sidebar-header">
-              <h2 class="inbox-sidebar-title">Chats</h2>
-            </div>
-            <form class="inbox-filters" method="get" action="<%= basePath %>/conversations">
-              <label class="field field--inbox">
-                <span class="field-label">Segmento</span>
-                <select name="segment" class="inbox-select" data-inbox-filter>
-                  <option value="" <%= segmentFilter === '' ? 'selected' : '' %>>Todos</option>
-                  <option value="__none__" <%= segmentFilter === '__none__' ? 'selected' : '' %>>Sin segmento</option>
-                  <% segments.forEach(function (seg) { %>
-                    <option value="<%= seg.value %>" <%= segmentFilter === seg.value ? 'selected' : '' %>><%= seg.label %></option>
-                  <% }); %>
-                </select>
-              </label>
-              <label class="field field--inbox">
-                <span class="field-label">Buscar en todos los chats</span>
-                <div class="inbox-search-row">
-                  <input
-                    type="search"
-                    name="q"
-                    value="<%= searchQ %>"
-                    placeholder="Palabra o frase…"
-                    autocomplete="off"
-                    class="inbox-search-input"
-                  />
-                  <button type="submit" class="secondary small-btn">Buscar</button>
-                </div>
-              </label>
-            </form>
-
-            <% if (conversations.length === 0) { %>
-              <p class="empty-state inbox-empty-list">No hay conversaciones con estos filtros.</p>
-            <% } else { %>
-              <ul class="inbox-chat-list">
-                <% conversations.forEach(function (c) { %>
-                  <li class="inbox-chat-item <%= typeof selectedConversation !== 'undefined' && selectedConversation && selectedConversation.id === c.id ? 'is-active' : '' %>">
-                    <a class="inbox-chat-link" href="<%= basePath %>/conversations/<%= c.id %><%= inboxQuery %>">
-                      <span class="inbox-chat-avatar" aria-hidden="true"><%= inboxInitials(c.contact_name, c.phone) %></span>
-                      <span class="inbox-chat-link-main">
-                        <span class="inbox-chat-row-top">
-                          <span class="inbox-chat-title"><%= c.contact_name || c.phone %></span>
-                          <span class="inbox-chat-time"><%= formatChatTime(c.last_message_at) %></span>
-                        </span>
-                        <% if (c.contact_name) { %>
-                          <span class="inbox-chat-phone mono"><%= c.phone %></span>
-                        <% } %>
-                        <span class="inbox-chat-row-mid">
-                          <span class="inbox-chat-preview"><%= (c.preview || '—').slice(0, 120) %></span>
-                        </span>
-                        <% if (c.contact_segment) { %>
-                          <span class="inbox-chat-segment"><%= segmentLabel(c.contact_segment) %></span>
-                        <% } %>
-                      </span>
-                    </a>
-                  </li>
-                <% }); %>
-              </ul>
-            <% } %>
-          </aside>
-
-          <section class="inbox-main" aria-label="Hilo de mensajes">
-            <% if (typeof selectedConversation === 'undefined' || !selectedConversation) { %>
-              <div class="inbox-empty-pane">
-                <p class="inbox-empty-title">Conversaciones</p>
-                <p class="muted">Selecciona un chat para ver los mensajes. Las respuestas del cliente se guardan como mensajes entrantes.</p>
-              </div>
-            <% } else { %>
-              <div class="inbox-chat-header">
-                <a class="inbox-back-mobile" href="<%= basePath %>/conversations<%= inboxQuery %>">← Chats</a>
-                <span class="inbox-chat-avatar inbox-chat-avatar--header" aria-hidden="true"><%= inboxInitials(contact ? contact.name : '', selectedConversation.phone) %></span>
-                <div class="inbox-chat-header-main">
-                  <h1 class="inbox-chat-heading"><%= contact ? contact.name : selectedConversation.phone %></h1>
-                  <p class="inbox-chat-sub mono"><%= selectedConversation.phone %></p>
-                  <% if (contact && contact.segment) { %>
-                    <p class="inbox-chat-sub"><%= segmentLabel(contact.segment) %></p>
-                  <% } %>
-                  <p class="inbox-window-meta">
-                    Ventana 24 h:
-                    <% if (canReply) { %>
-                      <span class="badge sent">Abierta</span>
-                    <% } else { %>
-                      <span class="badge neutral">Cerrada</span>
-                    <% } %>
-                  </p>
-                </div>
-              </div>
-              <div class="inbox-chat-body">
-                <%- include('partials/inbox-thread', { messages, basePath }) %>
-              </div>
-              <div class="inbox-compose">
-                <h2 class="inbox-compose-title">Responder</h2>
-                <%- include('partials/inbox-reply', { conversation: selectedConversation, canReply, basePath, segmentFilter, searchQ }) %>
-              </div>
-            <% } %>
-          </section>
+      <aside class="inbox-sidebar" aria-label="Lista de conversaciones">
+        <div class="inbox-sidebar-header">
+          <h2 class="inbox-sidebar-title">Chats</h2>
         </div>
-      </main>
+        <form class="inbox-filters" method="get" action="<%= basePath %>/conversations">
+          <label class="field field--inbox">
+            <span class="field-label">Segmento</span>
+            <select name="segment" class="inbox-select" data-inbox-filter>
+              <option value="" <%= segmentFilter === '' ? 'selected' : '' %>>Todos</option>
+              <option value="__none__" <%= segmentFilter === '__none__' ? 'selected' : '' %>>Sin segmento</option>
+              <% segments.forEach(function (seg) { %>
+                <option value="<%= seg.value %>" <%= segmentFilter === seg.value ? 'selected' : '' %>><%= seg.label %></option>
+              <% }); %>
+            </select>
+          </label>
+          <label class="field field--inbox">
+            <span class="field-label">Buscar en todos los chats</span>
+            <div class="inbox-search-row">
+              <input
+                type="search"
+                name="q"
+                value="<%= searchQ %>"
+                placeholder="Palabra o frase…"
+                autocomplete="off"
+                class="inbox-search-input"
+              />
+              <button type="submit" class="secondary small-btn">Buscar</button>
+            </div>
+          </label>
+        </form>
+
+        <% if (conversations.length === 0) { %>
+          <p class="empty-state inbox-empty-list">No hay conversaciones con estos filtros.</p>
+        <% } else { %>
+          <ul class="inbox-chat-list">
+            <% conversations.forEach(function (c) { %>
+              <li class="inbox-chat-item <%= typeof selectedConversation !== 'undefined' && selectedConversation && selectedConversation.id === c.id ? 'is-active' : '' %>">
+                <a class="inbox-chat-link" href="<%= basePath %>/conversations/<%= c.id %><%= inboxQuery %>">
+                  <span class="inbox-chat-avatar" aria-hidden="true"><%= inboxInitials(c.contact_name, c.phone) %></span>
+                  <span class="inbox-chat-link-main">
+                    <span class="inbox-chat-row-top">
+                      <span class="inbox-chat-title"><%= c.contact_name || c.phone %></span>
+                      <span class="inbox-chat-time"><%= formatChatTime(c.last_message_at) %></span>
+                    </span>
+                    <% if (c.contact_name) { %>
+                      <span class="inbox-chat-phone mono"><%= c.phone %></span>
+                    <% } %>
+                    <span class="inbox-chat-row-mid">
+                      <span class="inbox-chat-preview"><%= (c.preview || '—').slice(0, 120) %></span>
+                    </span>
+                    <% if (c.contact_segment) { %>
+                      <span class="inbox-chat-segment"><%= segmentLabel(c.contact_segment) %></span>
+                    <% } %>
+                  </span>
+                </a>
+              </li>
+            <% }); %>
+          </ul>
+        <% } %>
+      </aside>
+
+      <section class="inbox-main" aria-label="Hilo de mensajes">
+        <% if (typeof selectedConversation === 'undefined' || !selectedConversation) { %>
+          <div class="inbox-empty-pane">
+            <p class="inbox-empty-title">Conversaciones</p>
+            <p class="muted">Selecciona un chat para ver los mensajes. Las respuestas del cliente se guardan como mensajes entrantes.</p>
+          </div>
+        <% } else { %>
+          <div class="inbox-chat-header">
+            <a class="inbox-back-mobile" href="<%= basePath %>/conversations<%= inboxQuery %>">← Chats</a>
+            <span class="inbox-chat-avatar inbox-chat-avatar--header" aria-hidden="true"><%= inboxInitials(contact ? contact.name : '', selectedConversation.phone) %></span>
+            <div class="inbox-chat-header-main">
+              <h1 class="inbox-chat-heading"><%= contact ? contact.name : selectedConversation.phone %></h1>
+              <p class="inbox-chat-sub mono"><%= selectedConversation.phone %></p>
+              <% if (contact && contact.segment) { %>
+                <p class="inbox-chat-sub"><%= segmentLabel(contact.segment) %></p>
+              <% } %>
+              <p class="inbox-window-meta">
+                Ventana 24 h:
+                <% if (canReply) { %>
+                  <span class="badge sent">Abierta</span>
+                <% } else { %>
+                  <span class="badge neutral">Cerrada</span>
+                <% } %>
+              </p>
+            </div>
+          </div>
+          <div class="inbox-chat-body">
+            <%- include('partials/inbox-thread', { messages, basePath }) %>
+          </div>
+          <div class="inbox-compose">
+            <h2 class="inbox-compose-title">Responder</h2>
+            <%- include('partials/inbox-reply', { conversation: selectedConversation, canReply, basePath, segmentFilter, searchQ }) %>
+          </div>
+        <% } %>
+      </section>
     </div>
     <script src="<%= basePath %>/js/conversations-inbox.js" defer></script>
     <script>

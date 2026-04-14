@@ -46,6 +46,7 @@ function registerConversations(app, ctx) {
       currentUser: req.user,
       appBaseUrl: resolveAppBaseUrl(),
       activeNav: 'conversations',
+      showAdminNav: res.locals.showAdminNav,
     });
   });
 
@@ -66,6 +67,7 @@ function registerConversations(app, ctx) {
       currentUser: req.user,
       appBaseUrl: resolveAppBaseUrl(),
       activeNav: 'conversations',
+      showAdminNav: res.locals.showAdminNav,
     });
   });
 

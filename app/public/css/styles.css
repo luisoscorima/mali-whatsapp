@@ -1845,22 +1845,7 @@ html[data-theme='dark'] .small-btn.danger-outline:hover {
     padding: 16px;
   }
 
-  .conversations-inbox {
-    grid-template-columns: 1fr;
-    min-height: min(88vh, 760px);
-  }
-
-  .conversations-inbox:not(.conversations-inbox--detail) .inbox-main {
-    display: none;
-  }
-
-  .conversations-inbox--detail .inbox-sidebar {
-    display: none;
-  }
-
-  .inbox-back-mobile {
-    display: inline;
-  }
+  /* Conversaciones: layout móvil en conversations.css (wa-layout) */
 
   .footer-strip {
     flex-direction: column;

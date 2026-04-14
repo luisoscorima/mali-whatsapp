@@ -12,6 +12,32 @@ function appPath(relativePath) {
 const nodeEnv = String(process.env.NODE_ENV || 'development').trim().toLowerCase();
 const isProduction = nodeEnv === 'production';
 
+/** Quitar comillas si vienen de .env tipo BUCKET_NAME="nombre" */
+function unquoteEnv(str) {
+  const s = String(str || '').trim();
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    return s.slice(1, -1).trim();
+  }
+  return s;
+}
+
+const s3ChatMedia = {
+  accessKeyId: unquoteEnv(process.env.ACCESS_KEY_S3),
+  secretAccessKey: unquoteEnv(process.env.SECRET_KEY_S3),
+  bucket: unquoteEnv(process.env.BUCKET_NAME),
+  folder: unquoteEnv(process.env.CARPETA) || 'assets-whatsapp-mali',
+  region: unquoteEnv(process.env.AWS_REGION) || 'us-east-1',
+};
+
+function isS3ChatMediaConfigured() {
+  return Boolean(
+    s3ChatMedia.accessKeyId &&
+      s3ChatMedia.secretAccessKey &&
+      s3ChatMedia.bucket &&
+      s3ChatMedia.region
+  );
+}
+
 module.exports = {
   basePath,
   appPath,
@@ -55,4 +81,6 @@ module.exports = {
   SESSION_WINDOW_MS: 24 * 60 * 60 * 1000,
   MAX_CSV_ROWS: 10000,
   MAX_CSV_BYTES: 5 * 1024 * 1024,
+  s3ChatMedia,
+  isS3ChatMediaConfigured,
 };
