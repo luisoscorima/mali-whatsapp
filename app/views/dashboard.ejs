@@ -283,22 +283,25 @@
 
       <aside class="wa-tertiary" aria-label="Panel lateral">
         <div class="wa-tertiary-inner wa-tertiary-inner--dashboard-panels">
-          <div class="wa-tertiary-panel is-active" data-tertiary-panel="send-campaign">
-            <div class="card wa-tertiary-card">
-              <h2 class="card-title">Envíos masivos</h2>
-              <p class="card-lead">Plantillas aprobadas por Meta a un segmento de contactos en esta área (<strong><%= areaLabel %></strong>).</p>
-              <ul class="wa-tertiary-info-list">
-                <li>Sincroniza plantillas para cargar las aprobadas de tu cuenta de WhatsApp.</li>
-                <li>Elige segmento y plantilla; si la plantilla tiene variables, aparecerán campos adicionales.</li>
-                <li>Usa lote y pausa entre lotes para espaciar el envío.</li>
-              </ul>
-              <p class="card-lead">Tras enviar, revisa resultados en <strong>Historial</strong> y mensajes entrantes en <strong>Conversaciones</strong> (icono de la barra izquierda).</p>
-              <div class="wa-tertiary-info-foot">
-                <a class="text-link" href="<%= basePath %>/conversations">Abrir conversaciones</a>
-              </div>
+          <div class="wa-tertiary-panel wa-tertiary-panel--hint is-active" data-tertiary-panel="send-campaign">
+            <div class="wa-placeholder wa-placeholder--tab-hint" role="status">
+              <span class="wa-placeholder-icon" aria-hidden="true">
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+              </span>
+              <h2 class="wa-placeholder-title">Envío masivo</h2>
+              <p class="wa-placeholder-text">Plantillas Meta y segmentos: completa el formulario en la columna central para lanzar una campaña.</p>
             </div>
           </div>
-          <div class="wa-tertiary-panel" data-tertiary-panel="contacts">
+          <div class="wa-tertiary-panel <%= contacts.length === 0 && stats.length === 0 ? 'wa-tertiary-panel--hint' : '' %>" data-tertiary-panel="contacts">
+            <% if (contacts.length === 0 && stats.length === 0) { %>
+            <div class="wa-placeholder wa-placeholder--tab-hint" role="status">
+              <span class="wa-placeholder-icon" aria-hidden="true">
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </span>
+              <h2 class="wa-placeholder-title">Contactos</h2>
+              <p class="wa-placeholder-text">Aún no hay contactos en esta área. Añade uno o importa un CSV desde la columna central.</p>
+            </div>
+            <% } else { %>
             <div class="card wa-tertiary-card">
               <h2 class="card-title">Activos por segmento</h2>
               <div class="segment-tags">
@@ -344,14 +347,21 @@
                 </table>
               </div>
             </div>
+            <% } %>
           </div>
-          <div class="wa-tertiary-panel" data-tertiary-panel="segments">
+          <div class="wa-tertiary-panel <%= segments.length === 0 ? 'wa-tertiary-panel--hint' : '' %>" data-tertiary-panel="segments">
+            <% if (segments.length === 0) { %>
+            <div class="wa-placeholder wa-placeholder--tab-hint" role="status">
+              <span class="wa-placeholder-icon" aria-hidden="true">
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+              </span>
+              <h2 class="wa-placeholder-title">Segmentos</h2>
+              <p class="wa-placeholder-text">No hay segmentos definidos. Crea el primero con el formulario en la columna central.</p>
+            </div>
+            <% } else { %>
             <div class="card wa-tertiary-card">
               <h2 class="card-title">Definidos</h2>
               <p class="card-lead">Slug, etiqueta y orden por fila. Borrar solo si no hay contactos.</p>
-              <% if (segments.length === 0) { %>
-              <p class="empty-state">Ninguno aún.</p>
-              <% } else { %>
               <div class="table-wrap">
                 <table class="segment-table">
                   <thead>
@@ -404,32 +414,25 @@
                   </tbody>
                 </table>
               </div>
-              <% } %>
+            </div>
+            <% } %>
+          </div>
+          <div class="wa-tertiary-panel wa-tertiary-panel--hint" data-tertiary-panel="history">
+            <div class="wa-placeholder wa-placeholder--tab-hint" role="status">
+              <span class="wa-placeholder-icon" aria-hidden="true">
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </span>
+              <h2 class="wa-placeholder-title">Historial</h2>
+              <p class="wa-placeholder-text">Indicadores y tabla de campañas recientes del área. El detalle de cada envío está en la columna central.</p>
             </div>
           </div>
-          <div class="wa-tertiary-panel" data-tertiary-panel="history">
-            <div class="card wa-tertiary-card">
-              <h2 class="card-title">Resumen e historial</h2>
-              <p class="card-lead">Los cuatro indicadores encima de la tabla agregan <strong>todas</strong> las campañas listadas en el historial del área.</p>
-              <ul class="wa-tertiary-info-list">
-                <li><strong>Enviados</strong>: total de mensajes contabilizados como enviados.</li>
-                <li><strong>Entrega</strong> y <strong>Lectura</strong>: porcentaje sobre ese total.</li>
-                <li><strong>Error</strong>: porcentaje de incidencias (fallidos, error, etc.) sobre el mismo total.</li>
-              </ul>
-              <p class="card-lead">La tabla muestra hasta 10 campañas recientes. <strong>Detalle</strong> abre el desglose por destinatario.</p>
-            </div>
-          </div>
-          <div class="wa-tertiary-panel" data-tertiary-panel="configuration">
-            <div class="card wa-tertiary-card">
-              <h2 class="card-title">Ajustes e integración</h2>
-              <p class="card-lead">Meta envía eventos al webhook de esta aplicación. Debe ser una URL pública con HTTPS.</p>
-              <p class="form-section-label">Webhook</p>
-              <code class="config-code"><%= appBaseUrl %>/webhook</code>
-              <ul class="wa-tertiary-info-list">
-                <li><a class="text-link" href="<%= basePath %>/health">Salud del servicio</a></li>
-                <li><a class="text-link" href="<%= basePath %>/api/dashboard">API JSON del panel</a></li>
-              </ul>
-              <p class="card-lead">Guía de despliegue y permisos: <code>PRODUCCION_WHATSAPP_META.md</code> en el repositorio (token de sistema, plantillas, webhook).</p>
+          <div class="wa-tertiary-panel wa-tertiary-panel--hint" data-tertiary-panel="configuration">
+            <div class="wa-placeholder wa-placeholder--tab-hint" role="status">
+              <span class="wa-placeholder-icon" aria-hidden="true">
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+              </span>
+              <h2 class="wa-placeholder-title">Ajustes</h2>
+              <p class="wa-placeholder-text">Webhook, enlaces de salud y API, y notas de documentación en la columna central.</p>
             </div>
           </div>
         </div>

@@ -151,31 +151,22 @@ html[data-theme='dark'] body.page-conversations {
   align-items: stretch;
 }
 
+.wa-tertiary-inner--dashboard-panels .wa-tertiary-panel--hint.is-active {
+  align-items: center;
+  justify-content: center;
+  padding: 24px 20px;
+}
+
 .wa-tertiary-inner--dashboard-panels .wa-tertiary-card {
   min-width: 0;
 }
 
-.wa-tertiary-info-list {
-  margin: 0 0 12px;
-  padding-left: 1.15rem;
-  font-size: 0.9rem;
-  color: var(--muted);
-  line-height: 1.5;
+.wa-placeholder--tab-hint {
+  max-width: 320px;
 }
 
-.wa-tertiary-info-list li {
-  margin-bottom: 6px;
-}
-
-.wa-tertiary-info-foot {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-  font-size: 0.88rem;
-}
-
-.wa-tertiary-inner--dashboard-panels .wa-tertiary-card .config-code {
-  margin: 0 0 12px;
+.wa-placeholder--tab-hint .wa-placeholder-text {
+  max-width: 28rem;
 }
 
 .wa-placeholder {
