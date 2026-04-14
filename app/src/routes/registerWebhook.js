@@ -4,23 +4,38 @@ const { persistInboundMessagesFromWebhookValue } = require('../services/webhookI
 const { getVerifyToken } = require('../services/metaSettingsCache');
 
 function registerWebhook(app, ctx) {
-  const { query } = ctx;
+  const { query, config } = ctx;
+  const webhookRoutes = Array.from(
+    new Set(['/webhook', config.basePath ? `${config.basePath}/webhook` : ''])
+  ).filter(Boolean);
 
-  app.get('/webhook', (req, res) => {
+  const handleVerify = (req, res) => {
     const mode = req.query['hub.mode'];
     const token = String(req.query['hub.verify_token'] ?? '').trim();
     const challenge = req.query['hub.challenge'];
     const expected = getVerifyToken();
+
+    logInfo(req, 'Webhook GET verificacion recibida', {
+      path: req.path,
+      hasExpectedToken: Boolean(expected),
+      mode: mode || null,
+    });
 
     if (mode === 'subscribe' && expected && token === expected) {
       return res.status(200).send(challenge);
     }
 
     return res.sendStatus(403);
-  });
+  };
 
-  app.post('/webhook', async (req, res) => {
+  const handleWebhookPost = async (req, res) => {
     try {
+      logInfo(req, 'Webhook POST recibido', {
+        path: req.path,
+        bodyObject: req.body?.object || null,
+        hasEntry: Array.isArray(req.body?.entry),
+      });
+
       if (!verifyWebhookSignature(req)) {
         logWarn(req, 'Webhook POST: firma invalida o APP_SECRET ausente', {
           hasRawBody: Buffer.isBuffer(req.rawBody),
@@ -98,7 +113,12 @@ function registerWebhook(app, ctx) {
       logError(req, 'Error procesando webhook', error);
       res.status(500).json({ ok: false, error: error.message });
     }
-  });
+  };
+
+  for (const route of webhookRoutes) {
+    app.get(route, handleVerify);
+    app.post(route, handleWebhookPost);
+  }
 }
 
 module.exports = { registerWebhook };

@@ -1,11 +1,19 @@
 const config = require('../config');
 
 function isProtectedPath(pathname) {
+  const p = String(pathname || '').trim();
+  const base = String(config.basePath || '').trim();
+  const withBase = (route) => (base ? `${base}${route}` : route);
+
   if (
-    pathname === '/health' ||
-    pathname === '/webhook' ||
-    pathname === '/login' ||
-    pathname === '/logout'
+    p === '/health' ||
+    p === withBase('/health') ||
+    p === '/webhook' ||
+    p === withBase('/webhook') ||
+    p === '/login' ||
+    p === withBase('/login') ||
+    p === '/logout' ||
+    p === withBase('/logout')
   ) {
     return false;
   }
