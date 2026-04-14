@@ -1781,15 +1781,13 @@ body.has-wave-bg .page {
   z-index: 1;
 }
 
+/* Solo traslación horizontal + loop; timing linear = velocidad constante por ciclo */
 @keyframes move_wave {
   0% {
-    transform: translateX(0) translateZ(0) scaleY(1);
-  }
-  50% {
-    transform: translateX(-25%) translateZ(0) scaleY(0.55);
+    transform: translateX(0) translateZ(0);
   }
   100% {
-    transform: translateX(-50%) translateZ(0) scaleY(1);
+    transform: translateX(-50%) translateZ(0);
   }
 }
 
@@ -1841,8 +1839,7 @@ body.has-wave-bg .page {
 }
 
 .waveAnimation .waveTop {
-  animation: move_wave 3s ease-in-out infinite;
-  animation-delay: 1s;
+  animation: move_wave 12s linear infinite;
 }
 
 .waveMiddle {
@@ -1850,7 +1847,7 @@ body.has-wave-bg .page {
 }
 
 .waveAnimation .waveMiddle {
-  animation: move_wave 10s linear infinite;
+  animation: move_wave 14s linear infinite;
 }
 
 .waveBottom {
@@ -1858,5 +1855,18 @@ body.has-wave-bg .page {
 }
 
 .waveAnimation .waveBottom {
-  animation: move_wave 15s linear infinite;
+  animation: move_wave 16s linear infinite;
+}
+
+/* Modo oscuro: mismos anclajes oscuros (#116726, #0d4a1c); sustituir verdes claros por tonos más profundos */
+html[data-theme='dark'] body.has-wave-bg {
+  background: linear-gradient(to top, #0d4a1c 0%, #116726 42%, #143d22 100%);
+}
+
+html[data-theme='dark'] .waveWrapperInner {
+  background-image: linear-gradient(to top, #116726 20%, #1a3d26 78%, #1e4a2e 100%);
+}
+
+html[data-theme='dark'] .waveWrapper .wave {
+  filter: brightness(0.5) saturate(0.9);
 }
