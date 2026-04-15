@@ -1,0 +1,31 @@
+<aside class="inbox-sidebar" aria-label="Administración">
+  <div class="inbox-sidebar-header">
+    <h2 class="inbox-sidebar-title">Admin</h2>
+  </div>
+  <ul class="inbox-chat-list">
+    <li class="inbox-chat-item <%= typeof adminSection !== 'undefined' && adminSection === 'users' ? 'is-active' : '' %>">
+      <a class="inbox-chat-link" href="<%= basePath %>/admin/users">
+        <span class="inbox-chat-link-main">
+          <span class="inbox-chat-row-top">
+            <span class="inbox-chat-title">Usuarios</span>
+          </span>
+          <span class="inbox-chat-row-mid">
+            <span class="inbox-chat-preview">Cuentas del panel</span>
+          </span>
+        </span>
+      </a>
+    </li>
+    <li class="inbox-chat-item <%= typeof adminSection !== 'undefined' && adminSection === 'meta' ? 'is-active' : '' %>">
+      <a class="inbox-chat-link" href="<%= basePath %>/admin/meta">
+        <span class="inbox-chat-link-main">
+          <span class="inbox-chat-row-top">
+            <span class="inbox-chat-title">Credenciales Meta</span>
+          </span>
+          <span class="inbox-chat-row-mid">
+            <span class="inbox-chat-preview">Tokens y WABA</span>
+          </span>
+        </span>
+      </a>
+    </li>
+  </ul>
+</aside>

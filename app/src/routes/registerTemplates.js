@@ -9,7 +9,7 @@ function registerTemplates(app, ctx) {
   app.post('/templates/sync', templateSyncLimiter, async (req, res) => {
     try {
       await syncTemplatesForArea(req.user.area);
-      res.redirect(`${appPath('/')}?templates_synced=1`);
+      res.redirect(`${appPath('/campaigns/new')}?templates_synced=1`);
     } catch (error) {
       logError(req, 'Error sincronizando plantillas', error);
       res

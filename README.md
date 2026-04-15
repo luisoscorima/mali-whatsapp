@@ -2,7 +2,7 @@
 
 Demo funcional para campañas segmentadas por WhatsApp con:
 - Backend Node.js + Express
-- UI web tipo dashboard (EJS)
+- UI web tipo inbox (EJS) con layout unificado
 - Persistencia PostgreSQL
 - Despliegue con Docker Compose
 
@@ -12,7 +12,7 @@ Demo funcional para campañas segmentadas por WhatsApp con:
 mali-whatsapp-mvp/
   app/
     src/
-      routes/          # Routers por función (auth, dashboard, campañas, conversaciones, webhook…)
+      routes/          # Routers por función (auth, inbox views, campañas, conversaciones, webhook…)
       db/migrations.js # Esquema PostgreSQL idempotente (fuente de verdad al arrancar)
     public/
     views/
@@ -28,6 +28,8 @@ mali-whatsapp-mvp/
 - `app/` es la aplicación principal.
 - Al **arrancar** el servidor se ejecutan las migraciones PostgreSQL (`app/src/db/migrations.js`): en una BD vacía se crean tablas e índices; no hace falta importar `db/init.sql` en Docker.
 - Importación masiva de contactos por **CSV** desde el panel (sección Contactos); ejemplo descargable en `/contacts/sample.csv`.
+- La capa de vistas usa un único patrón basado en `conversations.ejs`: `wa-rail` + `inbox-sidebar` + `inbox-main`.
+- Se eliminó el dashboard multipestaña (`hash tabs`) y ahora la navegación es por rutas reales.
 
 ## Primer arranque
 
@@ -85,11 +87,26 @@ docker compose -f docker-compose.dev.yml up --build
 
 Si aparece `Cannot find module` tras añadir dependencias en `package.json`, el volumen de `node_modules` del contenedor puede estar desactualizado: `docker compose -f docker-compose.dev.yml build --no-cache app`, luego `docker compose -f docker-compose.dev.yml run --rm app npm install`, y vuelve a levantar el compose (o revisa el comentario en `docker-compose.dev.yml`).
 
-## Endpoints útiles
+## Rutas principales del panel
 
-- `GET /` dashboard principal
+- `GET /` redirección a `GET /campaigns`
+- `GET /conversations` conversaciones (lista + hilo)
+- `GET /campaigns` campañas (lista)
+- `GET /campaigns/new` nueva campaña
+- `GET /campaigns/:id` detalle de campaña
+- `GET /contacts` contactos (lista)
+- `GET /contacts/new` nuevo contacto / importación CSV
+- `GET /contacts/:id` editar contacto
+- `GET /segments` segmentos (lista)
+- `GET /segments/:id` editar segmento
+- `GET /history` historial (lista + métricas)
+- `GET /history/:id` detalle desde historial
+- `GET /settings` ajustes
+
+## Endpoints útiles (API / sistema)
+
 - `GET /health` salud de app + DB
-- `GET /api/dashboard` datos JSON del dashboard
+- `GET /api/dashboard` datos agregados (compatibilidad para integraciones internas)
 - `GET /webhook` verificación de webhook en Meta
 - `POST /webhook` recepción de estados `sent/delivered/read/failed`
 
@@ -125,4 +142,4 @@ El panel en producción vive en **`https://whatsapp.mali.pe`** (subdominio dedic
 - En cuentas de prueba de Meta, solo se puede enviar a números agregados en la "lista de destinatarios permitidos".
 - El campo `imageUrl` asume una imagen pública.
 - Los estados `sent`, `delivered`, `read`, `failed` se actualizan desde `/webhook`.
-- Para una siguiente fase conviene agregar importación CSV, autenticación y cola con Redis.
+- Para una siguiente fase conviene agregar cola con Redis.

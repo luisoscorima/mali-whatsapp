@@ -625,6 +625,66 @@ html[data-theme='dark'] .inbox-compose-bar {
   border: 0;
 }
 
+.inbox-layout-wa .inbox-filters--campaign-new {
+  padding: 10px 14px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.inbox-layout-wa .inbox-chat-body--form {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 16px 20px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.inbox-layout-wa .inbox-chat-body--scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 8px 12px 16px;
+}
+
+.inbox-layout-wa .inbox-chat-header--static .inbox-chat-heading {
+  margin: 0;
+}
+
+.inbox-layout-wa .inbox-chat-header--spread {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.inbox-layout-wa .inbox-chat-header .inbox-chat-header-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.inbox-detail-footer-link {
+  margin: 12px 0 0;
+  font-size: 0.9rem;
+}
+
+.inbox-empty-pane--history {
+  justify-content: flex-start;
+  padding-top: 20px;
+  overflow-y: auto;
+}
+
+.history-metrics-hint {
+  max-width: 520px;
+  margin: 0 auto 20px;
+}
+
+.inbox-layout-wa .segments-page-list {
+  padding-top: 16px;
+}
+
+.inbox-layout-wa .segments-list-hint {
+  margin-bottom: 20px;
+}
+
 @media (max-width: 768px) {
   body.page-conversations .wa-layout--inbox.inbox-layout-wa.conversations-inbox {
     grid-template-columns: 1fr;
@@ -686,15 +746,15 @@ html[data-theme='dark'] .inbox-compose-bar {
     min-height: 0;
   }
 
-  body.page-conversations .wa-layout--inbox.conversations-inbox:not(.conversations-inbox--detail) .inbox-main {
+  body.page-conversations .wa-layout--inbox.conversations-inbox.conversations-page:not(.conversations-inbox--detail) .inbox-main {
     display: none !important;
   }
 
-  body.page-conversations .wa-layout--inbox.conversations-inbox--detail .inbox-sidebar {
+  body.page-conversations .wa-layout--inbox.conversations-inbox.conversations-page.conversations-inbox--detail .inbox-sidebar {
     display: none !important;
   }
 
-  body.page-conversations .wa-layout--inbox.conversations-inbox--detail .inbox-main {
+  body.page-conversations .wa-layout--inbox.conversations-inbox.conversations-page.conversations-inbox--detail .inbox-main {
     display: flex !important;
     z-index: 2;
   }

@@ -1,0 +1,8 @@
+    </div>
+    <% if (typeof footerScripts !== 'undefined' && footerScripts) { %>
+    <% footerScripts.forEach(function (src) { %>
+    <script src="<%= src %>" defer></script>
+    <% }); %>
+    <% } %>
+  </body>
+</html>

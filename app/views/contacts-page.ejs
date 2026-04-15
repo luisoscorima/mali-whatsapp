@@ -1,0 +1,178 @@
+<% const _contactSel = typeof selectedContactId !== 'undefined' ? selectedContactId : null; %>
+<%- include('layouts/inbox-shell-start', {
+  pageTitle,
+  basePath,
+  appBaseUrl,
+  requireAuth,
+  currentUser,
+  areaLabel,
+  activeNav,
+  showAdminNav,
+  layoutModifier: view === 'edit' ? 'conversations-inbox--detail' : '',
+  extraHeadScripts: null
+}) %>
+<aside class="inbox-sidebar" aria-label="Contactos">
+  <div class="inbox-sidebar-header inbox-sidebar-header--with-actions">
+    <h2 class="inbox-sidebar-title">Contactos</h2>
+    <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar contactos', refreshAriaLabel: 'Actualizar contactos' }) %>
+  </div>
+  <div class="inbox-filters inbox-filters--campaign-new">
+    <a href="<%= basePath %>/contacts/new" class="small-btn">Añadir contacto</a>
+  </div>
+  <% if (!contacts || contacts.length === 0) { %>
+  <p class="empty-state inbox-empty-list">No hay contactos en esta área.</p>
+  <% } else { %>
+  <ul class="inbox-chat-list">
+    <% contacts.forEach(function (c) { %>
+    <li class="inbox-chat-item <%= _contactSel === c.id ? 'is-active' : '' %>">
+      <a class="inbox-chat-link" href="<%= basePath %>/contacts/<%= c.id %>">
+        <span class="inbox-chat-link-main">
+          <span class="inbox-chat-row-top">
+            <span class="inbox-chat-title"><%= c.name || c.phone %></span>
+          </span>
+          <% if (c.name) { %>
+          <span class="inbox-chat-phone mono"><%= c.phone %></span>
+          <% } %>
+          <span class="inbox-chat-row-mid">
+            <span class="inbox-chat-preview"><span class="badge neutral"><%= c.segment %></span></span>
+          </span>
+        </span>
+      </a>
+    </li>
+    <% }); %>
+  </ul>
+  <% } %>
+</aside>
+<section class="inbox-main" aria-label="Detalle de contactos">
+  <% if (view === 'list') { %>
+  <div class="inbox-empty-pane" role="status">
+    <div class="inbox-empty-hint">
+      <span class="inbox-empty-icon" aria-hidden="true">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </span>
+      <h2 class="inbox-empty-heading">Contactos</h2>
+      <p class="inbox-empty-text">Selecciona un contacto en la lista o añade uno nuevo. Puedes importar un CSV desde «Añadir contacto».</p>
+      <% if (typeof contactUpdated !== 'undefined' && contactUpdated) { %>
+      <p class="toast toast--ok">Contacto actualizado.</p>
+      <% } %>
+      <% if (typeof contactDeleted !== 'undefined' && contactDeleted) { %>
+      <p class="toast toast--ok">Contacto eliminado.</p>
+      <% } %>
+    </div>
+  </div>
+  <% } else if (view === 'new') { %>
+  <div class="inbox-chat-header">
+    <a class="inbox-back-mobile" href="<%= basePath %>/contacts">← Contactos</a>
+    <div class="inbox-chat-header-main">
+      <h1 class="inbox-chat-heading">Añadir contacto</h1>
+    </div>
+  </div>
+  <div class="inbox-chat-body inbox-chat-body--form">
+    <% if (typeof contactUpdated !== 'undefined' && contactUpdated) { %>
+    <p class="toast toast--ok">Contacto actualizado.</p>
+    <% } %>
+    <% if (typeof contactDeleted !== 'undefined' && contactDeleted) { %>
+    <p class="toast toast--ok">Contacto eliminado.</p>
+    <% } %>
+    <% if (csvImport) { %>
+    <div class="toast <%= csvImport.err ? 'toast--err' : 'toast--ok' %>">
+      <% if (csvImport.err) { %>
+        <% if (csvImport.err === 'no_file') { %>Selecciona un archivo CSV.<% } else if (csvImport.err === 'type') { %>Solo archivos .csv.<% } else if (csvImport.err === 'too_big') { %>Archivo demasiado grande.<% } else if (csvImport.err === 'too_many') { %>Demasiadas filas (máx. <%= maxCsvRows %>).<% } else if (csvImport.err === 'empty') { %>CSV sin datos.<% } else { %>No se pudo leer el CSV.<% } %>
+      <% } else { %>
+        OK: <%= csvImport.ok %> fila(s).<% if (csvImport.bad > 0) { %> Omitidas: <%= csvImport.bad %>.<% } %>
+      <% } %>
+    </div>
+    <% } %>
+    <div class="card">
+      <h2 class="card-title">Datos</h2>
+      <form method="POST" action="<%= basePath %>/contacts" class="form-grid tight">
+        <label class="field">
+          <span class="field-label">Nombre</span>
+          <input name="name" required <%= segments.length === 0 ? 'disabled' : '' %> />
+        </label>
+        <label class="field">
+          <span class="field-label">Teléfono (E.164 sin +)</span>
+          <input name="phone" required placeholder="51999999999" inputmode="numeric" <%= segments.length === 0 ? 'disabled' : '' %> />
+        </label>
+        <label class="field">
+          <span class="field-label">Segmento</span>
+          <% if (segments.length === 0) { %>
+          <p class="inline-warn">Define segmentos en <strong>Segmentos</strong>.</p>
+          <select name="segment" disabled>
+            <option value="">—</option>
+          </select>
+          <% } else { %>
+          <select name="segment" required>
+            <% segments.forEach(function (segment) { %>
+            <option value="<%= segment.value %>"><%= segment.label %></option>
+            <% }) %>
+          </select>
+          <% } %>
+        </label>
+        <button type="submit" <%= segments.length === 0 ? 'disabled' : '' %>>Guardar</button>
+      </form>
+    </div>
+    <div class="card">
+      <h2 class="card-title">Importar CSV</h2>
+      <form method="POST" action="<%= basePath %>/contacts/import" enctype="multipart/form-data" class="form-grid tight">
+        <label class="field">
+          <span class="field-label">Archivo</span>
+          <input type="file" name="csvfile" accept=".csv,text/csv" required />
+        </label>
+        <div class="row-actions">
+          <button type="submit" class="secondary">Importar</button>
+          <a class="text-link" href="<%= basePath %>/contacts/sample.csv">Plantilla CSV</a>
+        </div>
+      </form>
+      <details class="inline-help">
+        <summary>Formato del CSV</summary>
+        <p>Columnas: <code>name</code>, <code>phone</code>, <code>segment</code>. Si el teléfono ya existe, se actualiza.</p>
+      </details>
+    </div>
+  </div>
+  <% } else if (view === 'edit' && contact) { %>
+  <div class="inbox-chat-header">
+    <a class="inbox-back-mobile" href="<%= basePath %>/contacts">← Contactos</a>
+    <div class="inbox-chat-header-main">
+      <h1 class="inbox-chat-heading"><%= contact.name || contact.phone %></h1>
+      <p class="inbox-chat-sub mono"><%= contact.phone %></p>
+    </div>
+  </div>
+  <div class="inbox-chat-body inbox-chat-body--form">
+    <% if (typeof contactUpdated !== 'undefined' && contactUpdated) { %>
+    <p class="toast toast--ok">Contacto actualizado.</p>
+    <% } %>
+    <% if (typeof contactDeleted !== 'undefined' && contactDeleted) { %>
+    <p class="toast toast--ok">Contacto eliminado.</p>
+    <% } %>
+    <div class="card">
+      <h2 class="card-title">Editar contacto</h2>
+      <form method="POST" action="<%= basePath %>/contacts/<%= contact.id %>/update" class="form-grid tight">
+        <label class="field">
+          <span class="field-label">Nombre</span>
+          <input type="text" name="name" value="<%= contact.name %>" required maxlength="150" />
+        </label>
+        <label class="field">
+          <span class="field-label">Teléfono (E.164 sin +)</span>
+          <input type="text" name="phone" value="<%= contact.phone %>" required inputmode="numeric" />
+        </label>
+        <label class="field">
+          <span class="field-label">Segmento</span>
+          <select name="segment" required>
+            <% segments.forEach(function (segment) { %>
+            <option value="<%= segment.value %>" <%= contact.segment === segment.value ? 'selected' : '' %>><%= segment.label %></option>
+            <% }) %>
+          </select>
+        </label>
+        <div class="form-actions">
+          <button type="submit">Guardar cambios</button>
+        </div>
+      </form>
+      <form method="POST" action="<%= basePath %>/contacts/<%= contact.id %>/delete" class="inline-delete-form" onsubmit="return confirm('¿Eliminar este contacto?');">
+        <button type="submit" class="small-btn danger-outline">Eliminar contacto</button>
+      </form>
+    </div>
+  </div>
+  <% } %>
+</section>
+<%- include('layouts/inbox-shell-end') %>

@@ -1,0 +1,36 @@
+<% const _listBase = typeof listBasePath !== 'undefined' ? listBasePath : '/campaigns'; %>
+<% const _title = typeof sidebarTitle !== 'undefined' ? sidebarTitle : 'Campañas'; %>
+<% const _showNew = typeof showNewLink !== 'undefined' ? showNewLink : true; %>
+<% const _sel = typeof selectedCampaignId !== 'undefined' ? selectedCampaignId : null; %>
+<aside class="inbox-sidebar" aria-label="<%= _title %>">
+  <div class="inbox-sidebar-header inbox-sidebar-header--with-actions">
+    <h2 class="inbox-sidebar-title"><%= _title %></h2>
+    <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar lista', refreshAriaLabel: 'Actualizar lista' }) %>
+  </div>
+  <% if (_showNew) { %>
+  <div class="inbox-filters inbox-filters--campaign-new">
+    <a href="<%= basePath %>/campaigns/new" class="small-btn">Nueva campaña</a>
+  </div>
+  <% } %>
+  <% if (!campaigns || campaigns.length === 0) { %>
+  <p class="empty-state inbox-empty-list">No hay campañas en esta área.</p>
+  <% } else { %>
+  <ul class="inbox-chat-list">
+    <% campaigns.forEach(function (c) { %>
+    <li class="inbox-chat-item <%= _sel === c.id ? 'is-active' : '' %>">
+      <a class="inbox-chat-link" href="<%= basePath %><%= _listBase %>/<%= c.id %>">
+        <span class="inbox-chat-link-main">
+          <span class="inbox-chat-row-top">
+            <span class="inbox-chat-title">#<%= c.id %> · <%= c.segment %></span>
+            <span class="inbox-chat-time"><span class="badge <%= c.status %>"><%= c.status %></span></span>
+          </span>
+          <span class="inbox-chat-row-mid">
+            <span class="inbox-chat-preview mono"><%= c.template_name || '—' %></span>
+          </span>
+        </span>
+      </a>
+    </li>
+    <% }); %>
+  </ul>
+  <% } %>
+</aside>

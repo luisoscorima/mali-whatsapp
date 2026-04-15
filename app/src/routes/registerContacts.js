@@ -24,7 +24,7 @@ function registerContacts(app, ctx) {
         segment: validation.value.segment,
         area: req.user.area,
       });
-      res.redirect(appPath('/'));
+      res.redirect(appPath('/contacts'));
     } catch (error) {
       logError(req, 'Error al crear contacto', error);
       res.status(400).send(`No se pudo guardar el contacto: ${error.message}`);
@@ -38,16 +38,16 @@ function registerContacts(app, ctx) {
       csvUpload.single('csvfile')(req, res, (err) => {
         if (err) {
           if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
-            return res.redirect(`${appPath('/')}?contacts_import=1&err=too_big`);
+            return res.redirect(`${appPath('/contacts')}?contacts_import=1&err=too_big`);
           }
-          return res.redirect(`${appPath('/')}?contacts_import=1&err=type`);
+          return res.redirect(`${appPath('/contacts')}?contacts_import=1&err=type`);
         }
         next();
       });
     },
     async (req, res) => {
       if (!req.file || !req.file.buffer.length) {
-        return res.redirect(`${appPath('/')}?contacts_import=1&err=no_file`);
+        return res.redirect(`${appPath('/contacts')}?contacts_import=1&err=no_file`);
       }
 
       try {
@@ -55,11 +55,11 @@ function registerContacts(app, ctx) {
         const { rows, errors } = parseContactCsvBuffer(req.file.buffer, segmentSet);
 
         if (rows.length > config.MAX_CSV_ROWS) {
-          return res.redirect(`${appPath('/')}?contacts_import=1&err=too_many`);
+          return res.redirect(`${appPath('/contacts')}?contacts_import=1&err=too_many`);
         }
 
         if (rows.length === 0 && errors.length === 0) {
-          return res.redirect(`${appPath('/')}?contacts_import=1&err=empty`);
+          return res.redirect(`${appPath('/contacts')}?contacts_import=1&err=empty`);
         }
 
         if (rows.length === 0) {
@@ -68,7 +68,7 @@ function registerContacts(app, ctx) {
             ok: '0',
             bad: String(errors.length),
           });
-          return res.redirect(`${appPath('/')}?${qp.toString()}`);
+          return res.redirect(`${appPath('/contacts')}?${qp.toString()}`);
         }
 
         const client = await pool.connect();
@@ -98,14 +98,14 @@ function registerContacts(app, ctx) {
           ok: String(rows.length),
           bad: String(errors.length),
         });
-        res.redirect(`${appPath('/')}?${qp.toString()}`);
+        res.redirect(`${appPath('/contacts')}?${qp.toString()}`);
         logInfo(req, 'Importacion CSV contactos', {
           imported: rows.length,
           rowErrors: errors.length,
         });
       } catch (error) {
         logError(req, 'Error importando CSV', error);
-        res.redirect(`${appPath('/')}?contacts_import=1&err=parse`);
+        res.redirect(`${appPath('/contacts')}?contacts_import=1&err=parse`);
       }
     }
   );
@@ -142,7 +142,7 @@ function registerContacts(app, ctx) {
         [validation.value.name, validation.value.phone, validation.value.segment, contactId, area]
       );
       logInfo(req, 'Contacto actualizado', { contactId, area });
-      res.redirect(`${appPath('/?contact_updated=1')}`);
+      res.redirect(`${appPath(`/contacts/${contactId}?contact_updated=1`)}`);
     } catch (error) {
       logError(req, 'Error al actualizar contacto', error);
       res.status(400).send(`No se pudo actualizar: ${error.message}`);
@@ -160,7 +160,7 @@ function registerContacts(app, ctx) {
       return res.status(404).send('Contacto no encontrado');
     }
     logInfo(req, 'Contacto eliminado', { contactId, area });
-    res.redirect(`${appPath('/?contact_deleted=1')}`);
+    res.redirect(`${appPath('/contacts?contact_deleted=1')}`);
   });
 }
 

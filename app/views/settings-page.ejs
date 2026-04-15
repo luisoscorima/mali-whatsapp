@@ -1,0 +1,57 @@
+<%- include('layouts/inbox-shell-start', {
+  pageTitle,
+  basePath,
+  appBaseUrl,
+  requireAuth,
+  currentUser,
+  areaLabel,
+  activeNav,
+  showAdminNav,
+  layoutModifier: '',
+  extraHeadScripts: null
+}) %>
+<aside class="inbox-sidebar" aria-label="Ajustes">
+  <div class="inbox-sidebar-header">
+    <h2 class="inbox-sidebar-title">Ajustes</h2>
+  </div>
+  <ul class="inbox-chat-list">
+    <li class="inbox-chat-item is-active">
+      <span class="inbox-chat-link" style="cursor: default">
+        <span class="inbox-chat-link-main">
+          <span class="inbox-chat-row-top">
+            <span class="inbox-chat-title">Aplicación</span>
+          </span>
+          <span class="inbox-chat-row-mid">
+            <span class="inbox-chat-preview">Webhook, API y documentación</span>
+          </span>
+        </span>
+      </span>
+    </li>
+  </ul>
+</aside>
+<section class="inbox-main" aria-label="Ajustes de la aplicación">
+  <div class="inbox-chat-header inbox-chat-header--static">
+    <h1 class="inbox-chat-heading">Ajustes</h1>
+  </div>
+  <div class="inbox-chat-body inbox-chat-body--form">
+    <div class="card">
+      <h2 class="card-title">Integración</h2>
+      <div class="config-compact">
+        <div>
+          <span class="config-k">Webhook</span>
+          <code class="config-code"><%= appBaseUrl %>/webhook</code>
+        </div>
+        <div class="config-links">
+          <a href="<%= basePath %>/health">Salud</a>
+          <span class="dot">·</span>
+          <a href="<%= basePath %>/api/dashboard">API JSON</a>
+        </div>
+      </div>
+      <details class="inline-help">
+        <summary>Documentación</summary>
+        <p><code>PRODUCCION_WHATSAPP_META.md</code> en el proyecto. Token de sistema con permisos para gestionar plantillas de WhatsApp.</p>
+      </details>
+    </div>
+  </div>
+</section>
+<%- include('layouts/inbox-shell-end') %>

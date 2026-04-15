@@ -1,94 +1,64 @@
-<!DOCTYPE html>
-<html lang="es">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Usuarios · MALI WhatsApp</title>
-    <script>
-      try {
-        var _t = localStorage.getItem('mali-theme');
-        if (_t === 'dark' || _t === 'light') document.documentElement.setAttribute('data-theme', _t);
-      } catch (e) {}
-    </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="<%= basePath %>/css/styles.css" />
-    <link rel="stylesheet" href="<%= basePath %>/css/wa-shell.css" />
-    <link rel="stylesheet" href="<%= basePath %>/css/conversations.css" />
-    <script src="<%= basePath %>/js/theme.js" defer></script>
-  </head>
-  <body class="wa-body-dashboard">
-    <div class="wa-layout wa-layout--dashboard inbox-layout-wa">
-      <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav, showAdminNav, requireAuth, currentUser, areaLabel }) %>
-
-      <div class="wa-main-column inbox-sidebar">
-        <div class="inbox-sidebar-header inbox-sidebar-header--with-actions">
-          <h2 class="inbox-sidebar-title">Usuarios del panel</h2>
-          <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar usuarios', refreshAriaLabel: 'Actualizar usuarios' }) %>
-        </div>
-        <main class="main-panel wa-main-panel wa-dashboard-sections">
-        <section class="content-section is-active">
-          <div class="card">
-            <div class="card-head card-head--actions-only">
-              <a class="small-btn primary" href="<%= basePath %>/admin/users/new">Nuevo usuario</a>
-            </div>
-            <% if (userSaved) { %>
-            <p class="toast toast--ok">Cambios guardados.</p>
-            <% } %>
-            <% if (userErr === 'self') { %>
-            <p class="inline-warn">No puedes eliminar tu propia cuenta mientras tienes la sesión iniciada.</p>
-            <% } %>
-
-            <div class="table-wrap table-wrap--compact">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Correo</th>
-                    <th>Área</th>
-                    <th>Master</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <% users.forEach(function (u) { %>
-                  <tr>
-                    <td><%= u.email %></td>
-                    <td><%= u.area %></td>
-                    <td><%= u.is_master ? 'Sí' : '—' %></td>
-                    <td class="table-actions">
-                      <a class="small-btn secondary" href="<%= basePath %>/admin/users/<%= u.id %>/edit">Editar</a>
-                      <% if (currentUser && currentUser.id !== u.id) { %>
-                      <form method="post" action="<%= basePath %>/admin/users/<%= u.id %>/delete" class="inline-delete-form" onsubmit="return confirm('¿Eliminar este usuario?');">
-                        <button type="submit" class="small-btn danger">Eliminar</button>
-                      </form>
-                      <% } %>
-                    </td>
-                  </tr>
-                  <% }); %>
-                </tbody>
-              </table>
-            </div>
-            <p class="card-lead muted"><a href="<%= basePath %>/">← Volver al panel</a></p>
-          </div>
-        </section>
-        </main>
+<%- include('layouts/inbox-shell-start', {
+  pageTitle: 'Usuarios · MALI WhatsApp',
+  basePath,
+  appBaseUrl,
+  requireAuth,
+  currentUser,
+  areaLabel,
+  activeNav: typeof activeNav !== 'undefined' ? activeNav : 'admin-users',
+  showAdminNav,
+  layoutModifier: '',
+  extraHeadScripts: null
+}) %>
+<%- include('partials/admin-sidebar', { basePath, adminSection: 'users' }) %>
+<section class="inbox-main" aria-label="Usuarios del panel">
+  <div class="inbox-chat-header inbox-chat-header--static inbox-chat-header--spread">
+    <h1 class="inbox-chat-heading">Usuarios del panel</h1>
+    <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar usuarios', refreshAriaLabel: 'Actualizar usuarios' }) %>
+  </div>
+  <div class="inbox-chat-body inbox-chat-body--form">
+    <div class="card">
+      <div class="card-head card-head--actions-only">
+        <a class="small-btn primary" href="<%= basePath %>/admin/users/new">Nuevo usuario</a>
       </div>
+      <% if (userSaved) { %>
+      <p class="toast toast--ok">Cambios guardados.</p>
+      <% } %>
+      <% if (userErr === 'self') { %>
+      <p class="inline-warn">No puedes eliminar tu propia cuenta mientras tienes la sesión iniciada.</p>
+      <% } %>
 
-      <aside class="wa-tertiary inbox-main" aria-label="Información">
-        <div class="wa-tertiary-inner">
-          <div class="wa-placeholder">
-            <span class="wa-placeholder-icon" aria-hidden="true">
-              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            </span>
-            <h2 class="wa-placeholder-title">Administración</h2>
-            <p class="wa-placeholder-text">Gestión de usuarios del panel. Las conversaciones y campañas siguen en el área principal.</p>
-          </div>
-        </div>
-      </aside>
+      <div class="table-wrap table-wrap--compact">
+        <table>
+          <thead>
+            <tr>
+              <th>Correo</th>
+              <th>Área</th>
+              <th>Master</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% users.forEach(function (u) { %>
+            <tr>
+              <td><%= u.email %></td>
+              <td><%= u.area %></td>
+              <td><%= u.is_master ? 'Sí' : '—' %></td>
+              <td class="table-actions">
+                <a class="small-btn secondary" href="<%= basePath %>/admin/users/<%= u.id %>/edit">Editar</a>
+                <% if (currentUser && currentUser.id !== u.id) { %>
+                <form method="post" action="<%= basePath %>/admin/users/<%= u.id %>/delete" class="inline-delete-form" onsubmit="return confirm('¿Eliminar este usuario?');">
+                  <button type="submit" class="small-btn danger">Eliminar</button>
+                </form>
+                <% } %>
+              </td>
+            </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+      <p class="card-lead muted"><a href="<%= basePath %>/campaigns">← Volver a campañas</a></p>
     </div>
-  </body>
-</html>
+  </div>
+</section>
+<%- include('layouts/inbox-shell-end') %>

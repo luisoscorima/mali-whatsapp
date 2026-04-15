@@ -1,0 +1,125 @@
+<% const _segSel = typeof selectedSegmentId !== 'undefined' ? selectedSegmentId : null; %>
+<%- include('layouts/inbox-shell-start', {
+  pageTitle,
+  basePath,
+  appBaseUrl,
+  requireAuth,
+  currentUser,
+  areaLabel,
+  activeNav,
+  showAdminNav,
+  layoutModifier: view === 'detail' ? 'conversations-inbox--detail' : '',
+  extraHeadScripts: null
+}) %>
+<aside class="inbox-sidebar" aria-label="Segmentos">
+  <div class="inbox-sidebar-header inbox-sidebar-header--with-actions">
+    <h2 class="inbox-sidebar-title">Segmentos</h2>
+    <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar segmentos', refreshAriaLabel: 'Actualizar segmentos' }) %>
+  </div>
+  <% if (!segments || segments.length === 0) { %>
+  <p class="empty-state inbox-empty-list">No hay segmentos definidos.</p>
+  <% } else { %>
+  <ul class="inbox-chat-list">
+    <% segments.forEach(function (seg) { %>
+    <li class="inbox-chat-item <%= _segSel === seg.id ? 'is-active' : '' %>">
+      <a class="inbox-chat-link" href="<%= basePath %>/segments/<%= seg.id %>">
+        <span class="inbox-chat-link-main">
+          <span class="inbox-chat-row-top">
+            <span class="inbox-chat-title"><%= seg.label %></span>
+          </span>
+          <span class="inbox-chat-row-mid">
+            <span class="inbox-chat-preview mono"><%= seg.value %></span>
+          </span>
+        </span>
+      </a>
+    </li>
+    <% }); %>
+  </ul>
+  <% } %>
+</aside>
+<section class="inbox-main" aria-label="Detalle de segmentos">
+  <% if (view === 'list') { %>
+  <div class="inbox-chat-body inbox-chat-body--form segments-page-list">
+    <div class="inbox-empty-hint segments-list-hint">
+      <span class="inbox-empty-icon" aria-hidden="true">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+      </span>
+      <h2 class="inbox-empty-heading">Segmentos</h2>
+      <p class="inbox-empty-text">Selecciona un segmento en la lista para editarlo, o añade uno nuevo aquí. Por área (<strong><%= areaLabel %></strong>).</p>
+      <% if (typeof segmentsSaved !== 'undefined' && segmentsSaved) { %>
+      <p class="toast toast--ok">Segmentos actualizados.</p>
+      <% } %>
+    </div>
+    <div class="card">
+      <h2 class="card-title">Añadir segmento</h2>
+      <form method="POST" action="<%= basePath %>/settings/segment-add" class="form-grid tight segment-add-form">
+        <label class="field">
+          <span class="field-label">Slug</span>
+          <input name="slug" required pattern="[a-z0-9_]{1,50}" placeholder="ej.: vip_cliente" autocomplete="off" title="Solo minúsculas, números y guion bajo" />
+        </label>
+        <label class="field">
+          <span class="field-label">Etiqueta</span>
+          <input name="label" required maxlength="120" placeholder="Nombre visible" />
+        </label>
+        <label class="field">
+          <span class="field-label">Orden</span>
+          <input type="number" name="sort_order" value="0" step="1" />
+        </label>
+        <%- include('partials/segment-color-field', { selectedColorKey: 'teal' }) %>
+        <button type="submit">Añadir segmento</button>
+      </form>
+    </div>
+  </div>
+  <% } else if (view === 'detail' && selectedSegment) { %>
+  <div class="inbox-chat-header">
+    <a class="inbox-back-mobile" href="<%= basePath %>/segments">← Segmentos</a>
+    <div class="inbox-chat-header-main">
+      <h1 class="inbox-chat-heading"><%= selectedSegment.label %></h1>
+      <p class="inbox-chat-sub mono"><%= selectedSegment.value %></p>
+    </div>
+  </div>
+  <div class="inbox-chat-body inbox-chat-body--form">
+    <% if (typeof segmentsSaved !== 'undefined' && segmentsSaved) { %>
+    <p class="toast toast--ok">Segmentos actualizados.</p>
+    <% } %>
+    <div class="card">
+      <h2 class="card-title">Editar segmento</h2>
+      <p class="card-lead">Si cambias el slug, se actualizan los contactos y el histórico de campañas de ese segmento en esta área.</p>
+      <form method="POST" action="<%= basePath %>/settings/segment-update" class="segment-update-form">
+        <input type="hidden" name="id" value="<%= selectedSegment.id %>" />
+        <div class="segment-update-row">
+          <label class="segment-field segment-field--slug">
+            <span class="segment-field-lbl">Slug</span>
+            <input
+              type="text"
+              name="slug"
+              value="<%= selectedSegment.value %>"
+              required
+              pattern="[a-z0-9_]{1,50}"
+              maxlength="50"
+              class="segment-slug-input mono"
+              title="Minusculas, numeros y guion bajo"
+              autocomplete="off"
+            />
+          </label>
+          <label class="segment-field">
+            <span class="segment-field-lbl">Etiqueta</span>
+            <input type="text" name="label" value="<%= selectedSegment.label %>" maxlength="120" required class="segment-label-input" />
+          </label>
+          <label class="segment-field segment-field--order">
+            <span class="segment-field-lbl">Orden</span>
+            <input type="number" name="sort_order" value="<%= selectedSegment.sort_order %>" step="1" class="segment-order-input" />
+          </label>
+          <%- include('partials/segment-color-field', { selectedColorKey: selectedSegment.colorKey || 'teal', compactRow: true }) %>
+          <button type="submit" class="small-btn segment-save-btn">Guardar</button>
+        </div>
+      </form>
+      <form method="POST" action="<%= basePath %>/settings/segment-delete" class="inline-delete-form" onsubmit="return confirm('¿Borrar este segmento? Solo si no hay contactos.');">
+        <input type="hidden" name="id" value="<%= selectedSegment.id %>" />
+        <button type="submit" class="small-btn danger-outline">Borrar</button>
+      </form>
+    </div>
+  </div>
+  <% } %>
+</section>
+<%- include('layouts/inbox-shell-end') %>

@@ -59,7 +59,7 @@
       return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: '2-digit' });
     } %>
     <div
-      class="wa-layout wa-layout--inbox inbox-layout-wa conversations-inbox <%= typeof selectedConversation !== 'undefined' && selectedConversation ? 'conversations-inbox--detail' : '' %>"
+      class="wa-layout wa-layout--inbox inbox-layout-wa conversations-inbox conversations-page <%= typeof selectedConversation !== 'undefined' && selectedConversation ? 'conversations-inbox--detail' : '' %>"
     >
       <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav, showAdminNav: typeof showAdminNav !== 'undefined' ? showAdminNav : false, requireAuth, currentUser, areaLabel }) %>
 

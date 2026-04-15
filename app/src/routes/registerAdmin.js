@@ -36,7 +36,7 @@ function registerAdmin(app, ctx) {
   app.post('/admin/switch-area', requireMaster, async (req, res) => {
     const area = normalizeArea(req.body.area);
     if (area !== 'pam' && area !== 'educacion') {
-      return res.redirect(appPath('/'));
+      return res.redirect(appPath('/campaigns'));
     }
     req.session.area = area;
     try {
@@ -44,7 +44,7 @@ function registerAdmin(app, ctx) {
     } catch {
       /* */
     }
-    res.redirect(appPath('/'));
+    res.redirect(appPath('/campaigns'));
   });
 
   app.get('/admin/users', requireMaster, async (req, res) => {

@@ -292,17 +292,20 @@ body.wa-body-dashboard .main-panel {
   gap: 16px;
 }
 
-body.wa-body-dashboard .metrics-row--history {
+body.wa-body-dashboard .metrics-row--history,
+body.page-conversations .metrics-row--history {
   margin-bottom: 8px;
 }
 
-body.wa-body-dashboard .metrics-row-hint {
+body.wa-body-dashboard .metrics-row-hint,
+body.page-conversations .metrics-row-hint {
   margin: 0 0 16px;
   font-size: 0.82rem;
   line-height: 1.45;
 }
 
-body.wa-body-dashboard .card .metrics-row--history {
+body.wa-body-dashboard .card .metrics-row--history,
+body.page-conversations .card .metrics-row--history {
   margin-top: 0;
 }
 

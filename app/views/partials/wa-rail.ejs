@@ -3,7 +3,7 @@
 <% const railInitial = requireAuth && currentUser && currentUser.email ? String(currentUser.email).charAt(0).toUpperCase() : '?'; %>
 <aside class="wa-rail" aria-label="Navegación principal">
   <div class="wa-rail__brand">
-    <a href="<%= basePath %>/" class="wa-rail__logo-link" title="MALI WhatsApp" aria-label="Inicio panel">
+    <a href="<%= basePath %>/campaigns" class="wa-rail__logo-link" title="MALI WhatsApp" aria-label="Inicio">
       <span class="wa-rail__logo-wrap" aria-hidden="true">
         <img
           class="wa-rail__logo wa-rail__logo--light"
@@ -38,21 +38,19 @@
       <span class="wa-rail__label">Conversaciones</span>
     </a>
     <a
-      class="wa-rail__item nav-item"
-      href="<%= basePath %>/#send-campaign"
-      data-target-section="send-campaign"
-      aria-label="Envío masivo"
-      title="Envío masivo"
+      class="wa-rail__item nav-item <%= nav === 'campaigns' ? 'is-active' : '' %>"
+      href="<%= basePath %>/campaigns"
+      aria-label="Campañas"
+      title="Campañas"
     >
       <span class="wa-rail__icon" aria-hidden="true"
         ><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg
       ></span>
-      <span class="wa-rail__label">Envío masivo</span>
+      <span class="wa-rail__label">Campañas</span>
     </a>
     <a
-      class="wa-rail__item nav-item"
-      href="<%= basePath %>/#contacts"
-      data-target-section="contacts"
+      class="wa-rail__item nav-item <%= nav === 'contacts' ? 'is-active' : '' %>"
+      href="<%= basePath %>/contacts"
       aria-label="Contactos"
       title="Contactos"
     >
@@ -62,9 +60,8 @@
       <span class="wa-rail__label">Contactos</span>
     </a>
     <a
-      class="wa-rail__item nav-item"
-      href="<%= basePath %>/#segments"
-      data-target-section="segments"
+      class="wa-rail__item nav-item <%= nav === 'segments' ? 'is-active' : '' %>"
+      href="<%= basePath %>/segments"
       aria-label="Segmentos"
       title="Segmentos"
     >
@@ -74,9 +71,8 @@
       <span class="wa-rail__label">Segmentos</span>
     </a>
     <a
-      class="wa-rail__item nav-item"
-      href="<%= basePath %>/#history"
-      data-target-section="history"
+      class="wa-rail__item nav-item <%= nav === 'history' ? 'is-active' : '' %>"
+      href="<%= basePath %>/history"
       aria-label="Historial"
       title="Historial"
     >
@@ -117,7 +113,7 @@
         </form>
         <% } %>
         <div class="wa-rail__dropdown-links">
-          <a href="<%= basePath %>/#configuration">Ajustes</a>
+          <a href="<%= basePath %>/settings">Ajustes</a>
           <% if (showAdmin) { %>
           <a href="<%= basePath %>/admin/users">Usuarios</a>
           <a href="<%= basePath %>/admin/meta">Credenciales Meta</a>

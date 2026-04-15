@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <%- include('../partials/app-head', { pageTitle, basePath, extraHeadScripts: typeof extraHeadScripts !== 'undefined' ? extraHeadScripts : null }) %>
+  </head>
+  <body class="page-conversations">
+    <div class="wa-layout wa-layout--inbox inbox-layout-wa conversations-inbox <%= typeof layoutModifier !== 'undefined' ? layoutModifier : '' %>">
+      <%- include('../partials/wa-rail', {
+        basePath,
+        appBaseUrl,
+        activeNav: typeof activeNav !== 'undefined' ? activeNav : '',
+        showAdminNav: typeof showAdminNav !== 'undefined' ? showAdminNav : false,
+        requireAuth,
+        currentUser,
+        areaLabel
+      }) %>

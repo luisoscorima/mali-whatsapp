@@ -1,106 +1,76 @@
-<!DOCTYPE html>
-<html lang="es">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Credenciales Meta · MALI WhatsApp</title>
-    <script>
-      try {
-        var _t = localStorage.getItem('mali-theme');
-        if (_t === 'dark' || _t === 'light') document.documentElement.setAttribute('data-theme', _t);
-      } catch (e) {}
-    </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="<%= basePath %>/css/styles.css" />
-    <link rel="stylesheet" href="<%= basePath %>/css/wa-shell.css" />
-    <link rel="stylesheet" href="<%= basePath %>/css/conversations.css" />
-    <script src="<%= basePath %>/js/theme.js" defer></script>
-  </head>
-  <body class="wa-body-dashboard">
-    <div class="wa-layout wa-layout--dashboard inbox-layout-wa">
-      <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav, showAdminNav, requireAuth, currentUser, areaLabel }) %>
+<%- include('layouts/inbox-shell-start', {
+  pageTitle: 'Credenciales Meta · MALI WhatsApp',
+  basePath,
+  appBaseUrl,
+  requireAuth,
+  currentUser,
+  areaLabel,
+  activeNav: typeof activeNav !== 'undefined' ? activeNav : 'admin-meta',
+  showAdminNav,
+  layoutModifier: '',
+  extraHeadScripts: null
+}) %>
+<%- include('partials/admin-sidebar', { basePath, adminSection: 'meta' }) %>
+<section class="inbox-main" aria-label="Credenciales Meta">
+  <div class="inbox-chat-header inbox-chat-header--static inbox-chat-header--spread">
+    <h1 class="inbox-chat-heading">Credenciales Meta</h1>
+    <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar credenciales', refreshAriaLabel: 'Actualizar credenciales' }) %>
+  </div>
+  <div class="inbox-chat-body inbox-chat-body--form">
+    <div class="card">
+      <p class="card-lead">
+        Los valores guardados aquí tienen prioridad sobre <code>.env</code>. Deja un campo vacío y guarda para volver a usar solo el entorno.
+      </p>
+      <% if (metaSaved) { %>
+      <p class="toast toast--ok">Configuración guardada.</p>
+      <% } %>
 
-      <div class="wa-main-column inbox-sidebar">
-        <div class="inbox-sidebar-header inbox-sidebar-header--with-actions">
-          <h2 class="inbox-sidebar-title">Credenciales Meta</h2>
-          <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar credenciales', refreshAriaLabel: 'Actualizar credenciales' }) %>
+      <form method="post" action="<%= basePath %>/admin/meta" class="form-grid">
+        <h2 class="card-subtitle">Webhook (toda la app)</h2>
+        <label class="field">
+          <span class="field-label">Verify token (Meta)</span>
+          <input type="password" name="verify_token" autocomplete="off" value="<%= metaRows.global[keys.verifyToken] || '' %>" placeholder="Si vacío: VERIFY_TOKEN en .env" />
+        </label>
+        <label class="field">
+          <span class="field-label">App Secret</span>
+          <input type="password" name="app_secret" autocomplete="off" value="<%= metaRows.global[keys.appSecret] || '' %>" placeholder="Si vacío: APP_SECRET en .env" />
+        </label>
+
+        <h2 class="card-subtitle">Comercial (PAM)</h2>
+        <label class="field">
+          <span class="field-label">Token de acceso WhatsApp</span>
+          <input type="password" name="pam_whatsapp_token" autocomplete="off" value="<%= metaRows.pam[keys.whatsappToken] || '' %>" />
+        </label>
+        <label class="field">
+          <span class="field-label">Phone number ID</span>
+          <input type="text" name="pam_phone_number_id" value="<%= metaRows.pam[keys.phoneNumberId] || '' %>" />
+        </label>
+        <label class="field">
+          <span class="field-label">WABA ID (opcional)</span>
+          <input type="text" name="pam_waba_id" value="<%= metaRows.pam[keys.wabaId] || '' %>" />
+        </label>
+
+        <h2 class="card-subtitle">Educación</h2>
+        <label class="field">
+          <span class="field-label">Token de acceso WhatsApp</span>
+          <input type="password" name="edu_whatsapp_token" autocomplete="off" value="<%= metaRows.educacion[keys.whatsappToken] || '' %>" />
+        </label>
+        <label class="field">
+          <span class="field-label">Phone number ID</span>
+          <input type="text" name="edu_phone_number_id" value="<%= metaRows.educacion[keys.phoneNumberId] || '' %>" />
+        </label>
+        <label class="field">
+          <span class="field-label">WABA ID (opcional)</span>
+          <input type="text" name="edu_waba_id" value="<%= metaRows.educacion[keys.wabaId] || '' %>" />
+        </label>
+
+        <div class="field-row">
+          <button type="submit" class="primary">Guardar</button>
         </div>
-        <main class="main-panel wa-main-panel wa-dashboard-sections">
-        <section class="content-section is-active">
-          <div class="card">
-            <p class="card-lead">
-              Los valores guardados aquí tienen prioridad sobre <code>.env</code>. Deja un campo vacío y guarda para volver a usar solo el entorno.
-            </p>
-            <% if (metaSaved) { %>
-            <p class="toast toast--ok">Configuración guardada.</p>
-            <% } %>
+      </form>
 
-            <form method="post" action="<%= basePath %>/admin/meta" class="form-grid">
-              <h2 class="card-subtitle">Webhook (toda la app)</h2>
-              <label class="field">
-                <span class="field-label">Verify token (Meta)</span>
-                <input type="password" name="verify_token" autocomplete="off" value="<%= metaRows.global[keys.verifyToken] || '' %>" placeholder="Si vacío: VERIFY_TOKEN en .env" />
-              </label>
-              <label class="field">
-                <span class="field-label">App Secret</span>
-                <input type="password" name="app_secret" autocomplete="off" value="<%= metaRows.global[keys.appSecret] || '' %>" placeholder="Si vacío: APP_SECRET en .env" />
-              </label>
-
-              <h2 class="card-subtitle">Comercial (PAM)</h2>
-              <label class="field">
-                <span class="field-label">Token de acceso WhatsApp</span>
-                <input type="password" name="pam_whatsapp_token" autocomplete="off" value="<%= metaRows.pam[keys.whatsappToken] || '' %>" />
-              </label>
-              <label class="field">
-                <span class="field-label">Phone number ID</span>
-                <input type="text" name="pam_phone_number_id" value="<%= metaRows.pam[keys.phoneNumberId] || '' %>" />
-              </label>
-              <label class="field">
-                <span class="field-label">WABA ID (opcional)</span>
-                <input type="text" name="pam_waba_id" value="<%= metaRows.pam[keys.wabaId] || '' %>" />
-              </label>
-
-              <h2 class="card-subtitle">Educación</h2>
-              <label class="field">
-                <span class="field-label">Token de acceso WhatsApp</span>
-                <input type="password" name="edu_whatsapp_token" autocomplete="off" value="<%= metaRows.educacion[keys.whatsappToken] || '' %>" />
-              </label>
-              <label class="field">
-                <span class="field-label">Phone number ID</span>
-                <input type="text" name="edu_phone_number_id" value="<%= metaRows.educacion[keys.phoneNumberId] || '' %>" />
-              </label>
-              <label class="field">
-                <span class="field-label">WABA ID (opcional)</span>
-                <input type="text" name="edu_waba_id" value="<%= metaRows.educacion[keys.wabaId] || '' %>" />
-              </label>
-
-              <div class="field-row">
-                <button type="submit" class="primary">Guardar</button>
-              </div>
-            </form>
-
-            <p class="card-lead muted"><a href="<%= basePath %>/">← Volver al panel</a></p>
-          </div>
-        </section>
-        </main>
-      </div>
-
-      <aside class="wa-tertiary inbox-main" aria-label="Información">
-        <div class="wa-tertiary-inner">
-          <div class="wa-placeholder">
-            <span class="wa-placeholder-icon" aria-hidden="true">
-              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            </span>
-            <h2 class="wa-placeholder-title">Credenciales Meta</h2>
-            <p class="wa-placeholder-text">Tokens y claves para WhatsApp Cloud API. No compartas esta pantalla.</p>
-          </div>
-        </div>
-      </aside>
+      <p class="card-lead muted"><a href="<%= basePath %>/campaigns">← Volver a campañas</a></p>
     </div>
-  </body>
-</html>
+  </div>
+</section>
+<%- include('layouts/inbox-shell-end') %>

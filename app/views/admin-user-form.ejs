@@ -1,98 +1,68 @@
-<!DOCTYPE html>
-<html lang="es">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title><%= mode === 'create' ? 'Nuevo usuario' : 'Editar usuario' %> · MALI WhatsApp</title>
-    <script>
-      try {
-        var _t = localStorage.getItem('mali-theme');
-        if (_t === 'dark' || _t === 'light') document.documentElement.setAttribute('data-theme', _t);
-      } catch (e) {}
-    </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="<%= basePath %>/css/styles.css" />
-    <link rel="stylesheet" href="<%= basePath %>/css/wa-shell.css" />
-    <link rel="stylesheet" href="<%= basePath %>/css/conversations.css" />
-    <script src="<%= basePath %>/js/theme.js" defer></script>
-  </head>
-  <body class="wa-body-dashboard">
-    <div class="wa-layout wa-layout--dashboard inbox-layout-wa">
-      <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav, showAdminNav, requireAuth, currentUser, areaLabel }) %>
+<%- include('layouts/inbox-shell-start', {
+  pageTitle: (mode === 'create' ? 'Nuevo usuario' : 'Editar usuario') + ' · MALI WhatsApp',
+  basePath,
+  appBaseUrl,
+  requireAuth,
+  currentUser,
+  areaLabel,
+  activeNav: typeof activeNav !== 'undefined' ? activeNav : 'admin-users',
+  showAdminNav,
+  layoutModifier: '',
+  extraHeadScripts: null
+}) %>
+<%- include('partials/admin-sidebar', { basePath, adminSection: 'users' }) %>
+<section class="inbox-main" aria-label="Usuario">
+  <div class="inbox-chat-header inbox-chat-header--static inbox-chat-header--spread">
+    <h1 class="inbox-chat-heading"><%= mode === 'create' ? 'Nuevo usuario' : 'Editar usuario' %></h1>
+    <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar formulario', refreshAriaLabel: 'Actualizar formulario' }) %>
+  </div>
+  <div class="inbox-chat-body inbox-chat-body--form">
+    <div class="card">
+      <% if (formError) { %>
+      <p class="inline-warn"><%= formError %></p>
+      <% } %>
 
-      <div class="wa-main-column inbox-sidebar">
-        <div class="inbox-sidebar-header inbox-sidebar-header--with-actions">
-          <h2 class="inbox-sidebar-title"><%= mode === 'create' ? 'Nuevo usuario' : 'Editar usuario' %></h2>
-          <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar formulario', refreshAriaLabel: 'Actualizar formulario' }) %>
+      <% const u = userRow || {}; %>
+      <form method="post" action="<%= mode === 'create' ? basePath + '/admin/users' : basePath + '/admin/users/' + u.id %>" class="form-grid tight">
+        <% if (mode === 'create') { %>
+        <label class="field">
+          <span class="field-label">Correo (@mali.pe)</span>
+          <input type="email" name="email" value="<%= u.email || '' %>" required autocomplete="username" />
+        </label>
+        <label class="field">
+          <span class="field-label">Contraseña</span>
+          <input type="password" name="password" required minlength="6" autocomplete="new-password" />
+        </label>
+        <% } else { %>
+        <label class="field">
+          <span class="field-label">Correo</span>
+          <input type="text" value="<%= u.email %>" disabled />
+        </label>
+        <label class="field">
+          <span class="field-label">Nueva contraseña (opcional)</span>
+          <input type="password" name="password" minlength="6" autocomplete="new-password" placeholder="Dejar vacío para no cambiar" />
+        </label>
+        <% } %>
+
+        <label class="field">
+          <span class="field-label">Área</span>
+          <select name="area" required>
+            <option value="pam" <%= (u.area || 'pam') === 'pam' ? 'selected' : '' %>>Comercial (PAM)</option>
+            <option value="educacion" <%= u.area === 'educacion' ? 'selected' : '' %>>Educación</option>
+          </select>
+        </label>
+
+        <label class="field field--checkbox">
+          <input type="checkbox" name="is_master" value="1" <%= u.is_master ? 'checked' : '' %> />
+          <span class="field-label">Usuario master</span>
+        </label>
+
+        <div class="field-row">
+          <button type="submit" class="primary">Guardar</button>
+          <a class="secondary small-btn" href="<%= basePath %>/admin/users">Cancelar</a>
         </div>
-        <main class="main-panel wa-main-panel wa-dashboard-sections">
-        <section class="content-section is-active">
-          <div class="card">
-            <% if (formError) { %>
-            <p class="inline-warn"><%= formError %></p>
-            <% } %>
-
-            <% const u = userRow || {}; %>
-            <form method="post" action="<%= mode === 'create' ? basePath + '/admin/users' : basePath + '/admin/users/' + u.id %>" class="form-grid tight">
-              <% if (mode === 'create') { %>
-              <label class="field">
-                <span class="field-label">Correo (@mali.pe)</span>
-                <input type="email" name="email" value="<%= u.email || '' %>" required autocomplete="username" />
-              </label>
-              <label class="field">
-                <span class="field-label">Contraseña</span>
-                <input type="password" name="password" required minlength="6" autocomplete="new-password" />
-              </label>
-              <% } else { %>
-              <label class="field">
-                <span class="field-label">Correo</span>
-                <input type="text" value="<%= u.email %>" disabled />
-              </label>
-              <label class="field">
-                <span class="field-label">Nueva contraseña (opcional)</span>
-                <input type="password" name="password" minlength="6" autocomplete="new-password" placeholder="Dejar vacío para no cambiar" />
-              </label>
-              <% } %>
-
-              <label class="field">
-                <span class="field-label">Área</span>
-                <select name="area" required>
-                  <option value="pam" <%= (u.area || 'pam') === 'pam' ? 'selected' : '' %>>Comercial (PAM)</option>
-                  <option value="educacion" <%= u.area === 'educacion' ? 'selected' : '' %>>Educación</option>
-                </select>
-              </label>
-
-              <label class="field field--checkbox">
-                <input type="checkbox" name="is_master" value="1" <%= u.is_master ? 'checked' : '' %> />
-                <span class="field-label">Usuario master</span>
-              </label>
-
-              <div class="field-row">
-                <button type="submit" class="primary">Guardar</button>
-                <a class="secondary small-btn" href="<%= basePath %>/admin/users">Cancelar</a>
-              </div>
-            </form>
-          </div>
-        </section>
-        </main>
-      </div>
-
-      <aside class="wa-tertiary inbox-main" aria-label="Información">
-        <div class="wa-tertiary-inner">
-          <div class="wa-placeholder">
-            <span class="wa-placeholder-icon" aria-hidden="true">
-              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            </span>
-            <h2 class="wa-placeholder-title">Usuario</h2>
-            <p class="wa-placeholder-text">Alta o edición de acceso al panel MALI.</p>
-          </div>
-        </div>
-      </aside>
+      </form>
     </div>
-  </body>
-</html>
+  </div>
+</section>
+<%- include('layouts/inbox-shell-end') %>

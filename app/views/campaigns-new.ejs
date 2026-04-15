@@ -1,0 +1,29 @@
+<%- include('layouts/inbox-shell-start', {
+  pageTitle,
+  basePath,
+  appBaseUrl,
+  requireAuth,
+  currentUser,
+  areaLabel,
+  activeNav,
+  showAdminNav,
+  layoutModifier: typeof layoutModifier !== 'undefined' ? layoutModifier : '',
+  extraHeadScripts: typeof extraHeadScripts !== 'undefined' ? extraHeadScripts : null
+}) %>
+<%- include('partials/campaign-list-sidebar', {
+  campaigns,
+  basePath,
+  listBasePath: '/campaigns',
+  sidebarTitle: 'Campañas',
+  showNewLink: true,
+  selectedCampaignId: null
+}) %>
+<section class="inbox-main" aria-label="Nueva campaña">
+  <div class="inbox-chat-header inbox-chat-header--static">
+    <h1 class="inbox-chat-heading">Nueva campaña</h1>
+  </div>
+  <div class="inbox-chat-body inbox-chat-body--form">
+    <%- include('partials/campaign-new-form', { basePath, segments, syncedTemplates, templatesSynced }) %>
+  </div>
+</section>
+<%- include('layouts/inbox-shell-end', { footerScripts: null }) %>

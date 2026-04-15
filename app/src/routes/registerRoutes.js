@@ -2,6 +2,7 @@ const { resumeQueuedCampaigns } = require('../services/campaignSender');
 const { createRouteContext } = require('./shared/routeContext');
 const { registerAuth } = require('./registerAuth');
 const { registerDashboard } = require('./registerDashboard');
+const { registerInboxViews } = require('./registerInboxViews');
 const { registerSystem } = require('./registerSystem');
 const { registerTemplates } = require('./registerTemplates');
 const { registerContacts } = require('./registerContacts');
@@ -18,6 +19,7 @@ function createRegisterRoutes({ query, pool, appPath }) {
     registerAuth(app, ctx);
     registerAdmin(app, ctx);
     registerDashboard(app, ctx);
+    registerInboxViews(app, ctx);
     registerSystem(app, ctx);
     registerTemplates(app, ctx);
     registerContacts(app, ctx);

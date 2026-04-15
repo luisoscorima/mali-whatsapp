@@ -1,0 +1,35 @@
+<%- include('layouts/inbox-shell-start', {
+  pageTitle,
+  basePath,
+  appBaseUrl,
+  requireAuth,
+  currentUser,
+  areaLabel,
+  activeNav,
+  showAdminNav,
+  layoutModifier: typeof layoutModifier !== 'undefined' ? layoutModifier : '',
+  extraHeadScripts: null
+}) %>
+<%- include('partials/campaign-list-sidebar', {
+  campaigns,
+  basePath,
+  listBasePath: '/campaigns',
+  sidebarTitle: 'Campañas',
+  showNewLink: true,
+  selectedCampaignId: null
+}) %>
+<section class="inbox-main" aria-label="Detalle">
+  <div class="inbox-empty-pane" role="status">
+    <div class="inbox-empty-hint">
+      <span class="inbox-empty-icon" aria-hidden="true">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+      </span>
+      <h2 class="inbox-empty-heading">Campañas</h2>
+      <p class="inbox-empty-text">Selecciona una campaña en la lista o crea una nueva para enviar una plantilla Meta a un segmento.</p>
+      <% if (typeof templatesSynced !== 'undefined' && templatesSynced) { %>
+      <p class="toast toast--ok">Plantillas sincronizadas desde Meta.</p>
+      <% } %>
+    </div>
+  </div>
+</section>
+<%- include('layouts/inbox-shell-end') %>

@@ -1,0 +1,65 @@
+<% const ct = typeof campaignTotals !== 'undefined' && campaignTotals ? campaignTotals : {};
+  const totals = {
+    sent: Number(ct.sent_count || 0),
+    delivered: Number(ct.delivered_count || 0),
+    read: Number(ct.read_count || 0),
+    failed: Number(ct.failed_count || 0),
+    totalLogs: Number(ct.total_logs || 0),
+  };
+  const deliveryRate = totals.sent ? Math.round((totals.delivered / totals.sent) * 100) : 0;
+  const readRate = totals.sent ? Math.round((totals.read / totals.sent) * 100) : 0;
+  const errorRate = totals.totalLogs ? Math.round((totals.failed / totals.totalLogs) * 100) : 0;
+%>
+<%- include('layouts/inbox-shell-start', {
+  pageTitle,
+  basePath,
+  appBaseUrl,
+  requireAuth,
+  currentUser,
+  areaLabel,
+  activeNav,
+  showAdminNav,
+  layoutModifier: typeof layoutModifier !== 'undefined' ? layoutModifier : '',
+  extraHeadScripts: null
+}) %>
+<%- include('partials/campaign-list-sidebar', {
+  campaigns,
+  basePath,
+  listBasePath: '/history',
+  sidebarTitle: 'Historial',
+  showNewLink: false,
+  selectedCampaignId: null
+}) %>
+<section class="inbox-main" aria-label="Historial">
+  <div class="inbox-empty-pane inbox-empty-pane--history" role="status">
+    <div class="metrics-row metrics-row--history" role="region" aria-label="Resumen de envíos">
+      <div class="metric">
+        <span class="metric-num"><%= totals.sent %></span>
+        <span class="metric-lbl">Enviados</span>
+      </div>
+      <div class="metric">
+        <span class="metric-num"><%= deliveryRate %>%</span>
+        <span class="metric-lbl">Entrega</span>
+      </div>
+      <div class="metric">
+        <span class="metric-num"><%= readRate %>%</span>
+        <span class="metric-lbl">Lectura</span>
+      </div>
+      <div class="metric">
+        <span class="metric-num"><%= errorRate %>%</span>
+        <span class="metric-lbl">Error</span>
+      </div>
+    </div>
+    <p class="muted metrics-row-hint history-metrics-hint">
+      Resumen de <strong>todas</strong> las campañas de esta área. Error % = fallos sobre el total de intentos en el registro. Lectura: mensajes con estado «read» vía webhook de Meta (si el usuario tiene lecturas activadas).
+    </p>
+    <div class="inbox-empty-hint">
+      <span class="inbox-empty-icon" aria-hidden="true">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </span>
+      <h2 class="inbox-empty-heading">Historial</h2>
+      <p class="inbox-empty-text">Selecciona una campaña en la lista para ver el desglose y el registro de envíos.</p>
+    </div>
+  </div>
+</section>
+<%- include('layouts/inbox-shell-end') %>

@@ -3,7 +3,7 @@ const { campaignLimiter } = require('../middleware/limiters');
 const { runCampaignSendJob } = require('../services/campaignSender');
 
 function registerCampaigns(app, ctx) {
-  const { query, getSegmentSlugSet, validateCampaignWithSync, appPath, resolveAppBaseUrl } = ctx;
+  const { query, getSegmentSlugSet, validateCampaignWithSync, appPath } = ctx;
 
   app.post('/campaigns/send', campaignLimiter, async (req, res) => {
     const area = req.user.area;
@@ -85,40 +85,6 @@ function registerCampaigns(app, ctx) {
       logError(req, 'Error en envio de campana', error);
       res.status(500).send(`No se pudo enviar la campaña: ${error.message}`);
     }
-  });
-
-  app.get('/campaigns/:id', async (req, res) => {
-    const campaignId = Number(req.params.id);
-    if (!Number.isInteger(campaignId) || campaignId <= 0) {
-      return res.status(400).send('Id de campana invalido');
-    }
-
-    const [campaignResult, logsResult] = await Promise.all([
-      query(`SELECT * FROM campaigns WHERE id = $1 AND area = $2`, [campaignId, req.user.area]),
-      query(
-        `SELECT id, phone, whatsapp_message_id, status, response, created_at
-         FROM campaign_logs
-         WHERE campaign_id = $1
-         ORDER BY id DESC`,
-        [campaignId]
-      ),
-    ]);
-
-    if (campaignResult.rowCount === 0) {
-      return res.status(404).send('Campaña no encontrada');
-    }
-
-    res.render('campaign-detail', {
-      campaign: campaignResult.rows[0],
-      logs: logsResult.rows,
-      basePath: ctx.config.basePath,
-      areaLabel: res.locals.areaLabel,
-      requireAuth: ctx.config.requireAuth,
-      currentUser: req.user,
-      appBaseUrl: resolveAppBaseUrl(),
-      showAdminNav: res.locals.showAdminNav,
-      activeNav: 'dashboard',
-    });
   });
 
   app.get('/api/campaigns/:id', async (req, res) => {

@@ -1,0 +1,70 @@
+<div class="card">
+  <h2 class="card-title">Nueva campaña</h2>
+  <% if (typeof templatesSynced !== 'undefined' && templatesSynced) { %>
+  <p class="toast toast--ok">Plantillas sincronizadas desde Meta.</p>
+  <% } %>
+  <div class="template-sync-row">
+    <form method="POST" action="<%= basePath %>/templates/sync" class="inline-form-sync">
+      <button type="submit" class="secondary">Sincronizar plantillas</button>
+    </form>
+    <p class="card-lead template-sync-hint">Trae la lista actualizada de plantillas <strong>aprobadas</strong> de tu cuenta WhatsApp (Meta). Hazlo cuando cambien o aprueben nuevas.</p>
+  </div>
+  <% if (!syncedTemplates || syncedTemplates.length === 0) { %>
+  <p class="inline-warn">No hay plantillas en caché. Pulsa <strong>Sincronizar plantillas</strong> (requiere token con permisos para la cuenta de WhatsApp).</p>
+  <% } %>
+  <form method="POST" action="<%= basePath %>/campaigns/send" class="form-grid" id="campaign-form" data-base-path="<%= basePath %>">
+    <div class="form-section">
+      <span class="form-section-label">Quién recibe</span>
+      <label class="field">
+        <span class="field-label">Segmento</span>
+        <% if (segments.length === 0) { %>
+        <p class="inline-warn">Añade segmentos en la sección <strong>Segmentos</strong>.</p>
+        <select name="segment" disabled>
+          <option value="">—</option>
+        </select>
+        <% } else { %>
+        <select name="segment" required>
+          <% segments.forEach(function (segment) { %>
+          <option value="<%= segment.value %>"><%= segment.label %></option>
+          <% }) %>
+        </select>
+        <% } %>
+      </label>
+    </div>
+
+    <div class="form-section">
+      <span class="form-section-label">Plantilla (Meta)</span>
+      <label class="field">
+        <span class="field-label">Seleccionar plantilla</span>
+        <select name="templateSyncId" id="template-sync-select" required <%= (!syncedTemplates || syncedTemplates.length === 0) ? 'disabled' : '' %>>
+          <option value="">— Elige una plantilla —</option>
+          <% if (syncedTemplates && syncedTemplates.length) { %>
+            <% syncedTemplates.forEach(function (t) { %>
+            <option value="<%= t.id %>"><%= t.name %> · <%= t.language %> · <%= t.category || '—' %></option>
+            <% }) %>
+          <% } %>
+        </select>
+      </label>
+    </div>
+
+    <div id="dynamic-template-fields" class="form-section" hidden></div>
+
+    <div class="form-section">
+      <span class="form-section-label">Envío</span>
+      <div class="field-row">
+        <label class="field">
+          <span class="field-label">Lote</span>
+          <input type="number" name="batchSize" value="40" min="1" max="100" />
+        </label>
+        <label class="field">
+          <span class="field-label">Pausa (ms)</span>
+          <input type="number" name="batchDelayMs" value="1500" min="0" step="500" />
+        </label>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" <%= segments.length === 0 || !syncedTemplates || syncedTemplates.length === 0 ? 'disabled' : '' %>>Enviar campaña</button>
+    </div>
+  </form>
+</div>

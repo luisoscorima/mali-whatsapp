@@ -23,7 +23,7 @@ function registerSegments(app, ctx) {
         `INSERT INTO segment_definitions (area, slug, label, sort_order, color_key) VALUES ($1, $2, $3, $4, $5)`,
         [normalizeArea(area), slug, label, sortOrder, colorKey]
       );
-      res.redirect(`${appPath('/')}?segments_saved=1`);
+      res.redirect(`${appPath('/segments')}?segments_saved=1`);
     } catch (error) {
       if (error.code === '23505') {
         return res.status(400).send('Ese slug ya existe en el area');
@@ -67,7 +67,7 @@ function registerSegments(app, ctx) {
         if (r.rowCount === 0) {
           return res.status(404).send('Segmento no encontrado');
         }
-        return res.redirect(`${appPath('/')}?segments_saved=1`);
+        return res.redirect(`${appPath('/segments')}?segments_saved=1`);
       } catch (error) {
         logError(req, 'Error actualizando segmento', error);
         return res.status(500).send(`No se pudo actualizar: ${error.message}`);
@@ -92,7 +92,7 @@ function registerSegments(app, ctx) {
         oldSlug,
       ]);
       await client.query('COMMIT');
-      res.redirect(`${appPath('/')}?segments_saved=1`);
+      res.redirect(`${appPath('/segments')}?segments_saved=1`);
     } catch (error) {
       try {
         await client.query('ROLLBACK');
@@ -132,7 +132,7 @@ function registerSegments(app, ctx) {
         return res.status(400).send('No se puede borrar: hay contactos con este segmento');
       }
       await query(`DELETE FROM segment_definitions WHERE id = $1 AND area = $2`, [id, normalizeArea(area)]);
-      res.redirect(`${appPath('/')}?segments_saved=1`);
+      res.redirect(`${appPath('/segments')}?segments_saved=1`);
     } catch (error) {
       logError(req, 'Error borrando segmento', error);
       res.status(500).send(`No se pudo borrar: ${error.message}`);
