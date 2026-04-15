@@ -234,15 +234,17 @@ function registerAdmin(app, ctx) {
   });
 
   app.get('/admin/areas', requireMaster, async (req, res) => {
-    const [usersByArea, contactsByArea, campaignsByArea] = await Promise.all([
+    const [usersByArea, contactsByArea, campaignsByArea, segmentsByArea] = await Promise.all([
       query(`SELECT area, COUNT(*)::int AS total FROM users GROUP BY area`),
       query(`SELECT area, COUNT(*)::int AS total FROM contacts GROUP BY area`),
       query(`SELECT area, COUNT(*)::int AS total FROM campaigns GROUP BY area`),
+      query(`SELECT area, COUNT(*)::int AS total FROM segment_definitions GROUP BY area`),
     ]);
 
     const usersMap = new Map(usersByArea.rows.map((row) => [String(row.area), Number(row.total || 0)]));
     const contactsMap = new Map(contactsByArea.rows.map((row) => [String(row.area), Number(row.total || 0)]));
     const campaignsMap = new Map(campaignsByArea.rows.map((row) => [String(row.area), Number(row.total || 0)]));
+    const segmentsMap = new Map(segmentsByArea.rows.map((row) => [String(row.area), Number(row.total || 0)]));
 
     const areaRows = AREA_DEFS.map((area) => ({
       slug: area.slug,
@@ -250,6 +252,7 @@ function registerAdmin(app, ctx) {
       users: usersMap.get(area.slug) || 0,
       contacts: contactsMap.get(area.slug) || 0,
       campaigns: campaignsMap.get(area.slug) || 0,
+      segments: segmentsMap.get(area.slug) || 0,
     }));
 
     res.render('admin-areas', {

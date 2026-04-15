@@ -25,6 +25,7 @@
               <th>Área</th>
               <th>Usuarios</th>
               <th>Contactos</th>
+              <th>Segmentos</th>
               <th>Campañas</th>
               <th></th>
             </tr>
@@ -35,6 +36,7 @@
               <td><%= a.label %> (<code><%= a.slug %></code>)</td>
               <td><%= a.users %></td>
               <td><%= a.contacts %></td>
+              <td><%= a.segments %></td>
               <td><%= a.campaigns %></td>
               <td>
                 <% if (currentUser && currentUser.area === a.slug) { %>
