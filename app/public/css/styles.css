@@ -1230,6 +1230,14 @@ html[data-theme='dark'] .small-btn.danger-outline:hover {
   flex-wrap: wrap;
 }
 
+.detail-top-end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
 .area-pill {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.72rem;

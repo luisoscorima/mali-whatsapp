@@ -66,6 +66,9 @@
       <aside class="inbox-sidebar" aria-label="Lista de conversaciones">
         <div class="inbox-sidebar-header">
           <h2 class="inbox-sidebar-title">Chats</h2>
+          <div class="wa-inbox-toolbar wa-inbox-toolbar--sidebar">
+            <%- include('partials/wa-refresh-btn', { refreshLabel: 'Actualizar', refreshTitle: 'Actualizar lista de chats', refreshAriaLabel: 'Actualizar lista de chats' }) %>
+          </div>
         </div>
         <form class="inbox-filters" method="get" action="<%= basePath %>/conversations">
           <label class="field field--inbox">
@@ -125,6 +128,9 @@
       </aside>
 
       <section class="inbox-main" aria-label="Hilo de mensajes">
+        <div class="wa-inbox-toolbar wa-inbox-toolbar--main">
+          <%- include('partials/wa-refresh-btn', { refreshLabel: 'Actualizar', refreshTitle: 'Actualizar conversaciones', refreshAriaLabel: 'Actualizar conversaciones' }) %>
+        </div>
         <% if (typeof selectedConversation === 'undefined' || !selectedConversation) { %>
           <div class="inbox-empty-pane" role="status">
             <div class="inbox-empty-hint">

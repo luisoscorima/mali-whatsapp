@@ -26,17 +26,21 @@
       <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav: typeof activeNav !== 'undefined' ? activeNav : 'dashboard', showAdminNav: typeof showAdminNav !== 'undefined' ? showAdminNav : false, requireAuth, currentUser, areaLabel }) %>
 
       <div class="wa-main-column">
+        <div class="wa-page-toolbar">
+          <%- include('partials/wa-refresh-btn', { refreshLabel: 'Actualizar', refreshTitle: 'Actualizar panel y campañas', refreshAriaLabel: 'Actualizar panel y campañas' }) %>
+        </div>
         <main class="main-panel wa-main-panel">
-        <% const totals = campaigns.reduce((acc, campaign) => {
-            acc.sent += Number(campaign.sent_count || 0);
-            acc.delivered += Number(campaign.delivered_count || 0);
-            acc.read += Number(campaign.read_count || 0);
-            acc.failed += Number(campaign.failed_count || 0);
-            return acc;
-          }, { sent: 0, delivered: 0, read: 0, failed: 0 });
+        <% const ct = typeof campaignTotals !== 'undefined' && campaignTotals ? campaignTotals : {};
+          const totals = {
+            sent: Number(ct.sent_count || 0),
+            delivered: Number(ct.delivered_count || 0),
+            read: Number(ct.read_count || 0),
+            failed: Number(ct.failed_count || 0),
+            totalLogs: Number(ct.total_logs || 0),
+          };
           const deliveryRate = totals.sent ? Math.round((totals.delivered / totals.sent) * 100) : 0;
           const readRate = totals.sent ? Math.round((totals.read / totals.sent) * 100) : 0;
-          const errorRate = totals.sent ? Math.round((totals.failed / totals.sent) * 100) : 0;
+          const errorRate = totals.totalLogs ? Math.round((totals.failed / totals.totalLogs) * 100) : 0;
         %>
         <section class="content-section is-active" id="send-campaign">
           <div class="card">
@@ -222,6 +226,9 @@
               <span class="metric-lbl">Error</span>
             </div>
             </div>
+            <p class="muted metrics-row-hint">
+              Resumen de <strong>todas</strong> las campañas de esta área (no solo la tabla de abajo). Error % = fallos sobre el total de intentos en el registro. Lectura: mensajes con estado «read» vía webhook de Meta (si el usuario tiene lecturas activadas).
+            </p>
             <h2 class="card-title">Campañas recientes</h2>
             <div class="table-wrap">
               <table>

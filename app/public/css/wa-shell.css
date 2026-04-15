@@ -85,6 +85,60 @@ html[data-theme='dark'] body.page-conversations {
   min-height: 0;
 }
 
+.wa-main-column > .wa-page-toolbar + .wa-main-panel.wa-main-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Barra superior con acción (p. ej. Actualizar) alineada a la derecha */
+.wa-page-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--wa-list-bg, var(--surface-strong));
+}
+
+.wa-inbox-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--wa-chat-bg, var(--wa-shell-bg));
+}
+
+.wa-inbox-toolbar--sidebar {
+  display: none;
+  padding: 0;
+  border-bottom: none;
+  background: transparent;
+}
+
+.wa-inbox-toolbar--main {
+  display: flex;
+}
+
+.wa-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wa-refresh-btn__icon {
+  display: inline-flex;
+  line-height: 0;
+}
+
+.wa-refresh-btn__icon svg {
+  display: block;
+}
+
 .wa-tertiary {
   min-width: 0;
   min-height: 0;
@@ -234,7 +288,13 @@ body.wa-body-dashboard .main-panel {
 }
 
 body.wa-body-dashboard .metrics-row--history {
-  margin-bottom: 16px;
+  margin-bottom: 8px;
+}
+
+body.wa-body-dashboard .metrics-row-hint {
+  margin: 0 0 16px;
+  font-size: 0.82rem;
+  line-height: 1.45;
 }
 
 body.wa-body-dashboard .card .metrics-row--history {

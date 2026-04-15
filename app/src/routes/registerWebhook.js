@@ -82,7 +82,9 @@ function registerWebhook(app, ctx) {
 
           for (const status of statuses) {
             const messageId = status.id;
-            const mappedStatus = status.status;
+            const mappedStatus = String(status.status || '')
+              .trim()
+              .toLowerCase();
 
             if (messageId && mappedStatus) {
               await query(
