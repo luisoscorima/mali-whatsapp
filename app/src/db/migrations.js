@@ -145,14 +145,6 @@ async function runMigrations(query) {
       ['ti', 'suscriptor_2', 'Suscriptor 2', 2],
       ['ti', 'suscriptor_3', 'Suscriptor 3', 3],
       ['ti', 'asociado', 'Asociado', 4],
-      ['pam', 'suscriptor_1', 'Suscriptor 1', 1],
-      ['pam', 'suscriptor_2', 'Suscriptor 2', 2],
-      ['pam', 'suscriptor_3', 'Suscriptor 3', 3],
-      ['pam', 'asociado', 'Asociado', 4],
-      ['educacion', 'suscriptor_1', 'Suscriptor 1', 1],
-      ['educacion', 'suscriptor_2', 'Suscriptor 2', 2],
-      ['educacion', 'suscriptor_3', 'Suscriptor 3', 3],
-      ['educacion', 'asociado', 'Asociado', 4],
     ];
     for (const [ar, slug, label, sort_order] of seedRows) {
       await query(
@@ -249,6 +241,7 @@ async function runMigrations(query) {
   }
 
   await migratePamSlugToTiThreeAreas(query);
+  await cleanUpCrossAreaSeededSegments(query);
 }
 
 /** Una sola vez: en BD antigua (solo pam+educacion) renombrar datos pam → ti; en BD nueva ya hay ti+pam+educacion sin tocar. */
@@ -299,17 +292,6 @@ async function migratePamSlugToTiThreeAreas(query) {
   await query(`UPDATE whatsapp_templates SET area = 'ti' WHERE area = 'pam'`);
   await query(`UPDATE app_settings SET area = 'ti' WHERE area = 'pam'`);
 
-  const pamSegAfter = await query(
-    `SELECT COUNT(*)::int AS c FROM segment_definitions WHERE area = 'pam'`
-  );
-  if (pamSegAfter.rows[0].c === 0) {
-    await query(`
-      INSERT INTO segment_definitions (area, slug, label, sort_order, color_key)
-      SELECT 'pam', slug, label, sort_order, color_key FROM segment_definitions WHERE area = 'ti'
-      ON CONFLICT (area, slug) DO NOTHING
-    `);
-  }
-
   await query(
     `INSERT INTO app_settings (area, key, value, updated_at) VALUES ('global', $1, '1', NOW())
      ON CONFLICT (area, key) DO UPDATE SET value = '1', updated_at = NOW()`,
@@ -347,6 +329,46 @@ async function ensureAreaConstraintsThreeWay(query) {
   );
   await add(
     `ALTER TABLE app_settings ADD CONSTRAINT app_settings_area_check CHECK (area IN ('ti', 'pam', 'educacion', 'global'))`
+  );
+}
+
+/**
+ * Limpia segmentos "clonados" automáticamente entre áreas para dejar cada una independiente.
+ * Solo borra en áreas sin uso real (sin contactos ni campañas) y cuando coincide exactamente
+ * con el set por defecto legacy.
+ */
+async function cleanUpCrossAreaSeededSegments(query) {
+  const flag = `migration.cleanup_cross_area_segments_v1`;
+  const done = await query(`SELECT 1 AS ok FROM app_settings WHERE area = 'global' AND key = $1`, [flag]);
+  if (done.rows.length > 0) return;
+
+  const defaultSlugs = ['suscriptor_1', 'suscriptor_2', 'suscriptor_3', 'asociado'];
+  for (const area of ['pam', 'educacion']) {
+    const seg = await query(
+      `SELECT slug FROM segment_definitions WHERE area = $1 ORDER BY slug ASC`,
+      [area]
+    );
+    const slugs = seg.rows.map((r) => String(r.slug || '').trim());
+    const isDefaultSet =
+      slugs.length === defaultSlugs.length &&
+      slugs.every((slug, idx) => slug === [...defaultSlugs].sort()[idx]);
+    if (!isDefaultSet) continue;
+
+    const [contactsCount, campaignsCount] = await Promise.all([
+      query(`SELECT COUNT(*)::int AS n FROM contacts WHERE area = $1`, [area]),
+      query(`SELECT COUNT(*)::int AS n FROM campaigns WHERE area = $1`, [area]),
+    ]);
+    const hasUsage =
+      Number(contactsCount.rows[0]?.n || 0) > 0 || Number(campaignsCount.rows[0]?.n || 0) > 0;
+    if (hasUsage) continue;
+
+    await query(`DELETE FROM segment_definitions WHERE area = $1`, [area]);
+  }
+
+  await query(
+    `INSERT INTO app_settings (area, key, value, updated_at) VALUES ('global', $1, '1', NOW())
+     ON CONFLICT (area, key) DO UPDATE SET value = '1', updated_at = NOW()`,
+    [flag]
   );
 }
 

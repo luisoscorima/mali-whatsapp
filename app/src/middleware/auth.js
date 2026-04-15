@@ -38,7 +38,12 @@ function createResolveSessionUser(appPath, query) {
       return;
     }
 
-    if (config.requireAuth && req.session && req.session.userId != null) {
+    if (
+      config.requireAuth &&
+      req.session &&
+      req.session.userId != null &&
+      !['ti', 'pam', 'educacion'].includes(String(req.session.area || '').trim().toLowerCase())
+    ) {
       try {
         const r = await query(`SELECT area, is_master FROM users WHERE id = $1`, [
           req.session.userId,

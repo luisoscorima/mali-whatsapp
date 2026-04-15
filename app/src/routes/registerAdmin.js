@@ -46,8 +46,16 @@ function registerAdmin(app, ctx) {
     req.session.area = area;
     try {
       await query(`UPDATE users SET area = $1 WHERE id = $2`, [area, req.session.userId]);
-    } catch {
-      /* */
+    } catch (e) {
+      console.error(
+        JSON.stringify({
+          level: 'warn',
+          message: 'No se pudo persistir cambio de area de master',
+          userId: req.session.userId || null,
+          area,
+          error: e?.message || 'unknown',
+        })
+      );
     }
     res.redirect(appPath('/campaigns'));
   });
