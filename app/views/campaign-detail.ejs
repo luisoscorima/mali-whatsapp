@@ -1,5 +1,4 @@
-<% const _listBase = typeof listBasePath !== 'undefined' ? listBasePath : '/campaigns'; %>
-<% const _backList = _listBase === '/history' ? '/history' : '/campaigns'; %>
+<% const _backList = '/campaigns'; %>
 <%- include('layouts/inbox-shell-start', {
   pageTitle,
   basePath,
@@ -15,7 +14,7 @@
 <%- include('partials/campaign-list-sidebar', {
   campaigns,
   basePath,
-  listBasePath: _listBase,
+  listBasePath: typeof listBasePath !== 'undefined' ? listBasePath : '/campaigns',
   sidebarTitle: typeof sidebarTitle !== 'undefined' ? sidebarTitle : 'Campañas',
   showNewLink: typeof showNewLink !== 'undefined' ? showNewLink : true,
   selectedCampaignId: campaign.id

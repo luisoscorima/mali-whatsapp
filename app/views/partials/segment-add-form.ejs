@@ -1,0 +1,19 @@
+<div class="card">
+  <h2 class="card-title">Añadir segmento</h2>
+  <form method="POST" action="<%= basePath %>/settings/segment-add" class="form-grid tight segment-add-form">
+    <label class="field">
+      <span class="field-label">Slug</span>
+      <input name="slug" required pattern="[a-z0-9_]{1,50}" placeholder="ej.: vip_cliente" autocomplete="off" title="Solo minúsculas, números y guion bajo" />
+    </label>
+    <label class="field">
+      <span class="field-label">Etiqueta</span>
+      <input name="label" required maxlength="120" placeholder="Nombre visible" />
+    </label>
+    <label class="field">
+      <span class="field-label">Orden</span>
+      <input type="number" name="sort_order" value="0" step="1" />
+    </label>
+    <%- include('./segment-color-field', { selectedColorKey: 'teal' }) %>
+    <button type="submit">Añadir segmento</button>
+  </form>
+</div>

@@ -16,6 +16,9 @@
     <h2 class="inbox-sidebar-title">Segmentos</h2>
     <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar segmentos', refreshAriaLabel: 'Actualizar segmentos' }) %>
   </div>
+  <div class="inbox-filters inbox-filters--campaign-new">
+    <a href="<%= basePath %>/segments/new" class="small-btn">Añadir segmento</a>
+  </div>
   <% if (!segments || segments.length === 0) { %>
   <p class="empty-state inbox-empty-list">No hay segmentos definidos.</p>
   <% } else { %>
@@ -39,36 +42,30 @@
 </aside>
 <section class="inbox-main" aria-label="Detalle de segmentos">
   <% if (view === 'list') { %>
-  <div class="inbox-chat-body inbox-chat-body--form segments-page-list">
-    <div class="inbox-empty-hint segments-list-hint">
+  <div class="inbox-empty-pane" role="status">
+    <div class="inbox-empty-hint">
       <span class="inbox-empty-icon" aria-hidden="true">
         <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
       </span>
       <h2 class="inbox-empty-heading">Segmentos</h2>
-      <p class="inbox-empty-text">Selecciona un segmento en la lista para editarlo, o añade uno nuevo aquí. Por área (<strong><%= areaLabel %></strong>).</p>
+      <p class="inbox-empty-text">Selecciona un segmento en la lista para editarlo, o pulsa <strong>Añadir segmento</strong>. Por área (<strong><%= areaLabel %></strong>).</p>
       <% if (typeof segmentsSaved !== 'undefined' && segmentsSaved) { %>
       <p class="toast toast--ok">Segmentos actualizados.</p>
       <% } %>
     </div>
-    <div class="card">
-      <h2 class="card-title">Añadir segmento</h2>
-      <form method="POST" action="<%= basePath %>/settings/segment-add" class="form-grid tight segment-add-form">
-        <label class="field">
-          <span class="field-label">Slug</span>
-          <input name="slug" required pattern="[a-z0-9_]{1,50}" placeholder="ej.: vip_cliente" autocomplete="off" title="Solo minúsculas, números y guion bajo" />
-        </label>
-        <label class="field">
-          <span class="field-label">Etiqueta</span>
-          <input name="label" required maxlength="120" placeholder="Nombre visible" />
-        </label>
-        <label class="field">
-          <span class="field-label">Orden</span>
-          <input type="number" name="sort_order" value="0" step="1" />
-        </label>
-        <%- include('partials/segment-color-field', { selectedColorKey: 'teal' }) %>
-        <button type="submit">Añadir segmento</button>
-      </form>
+  </div>
+  <% } else if (view === 'new') { %>
+  <div class="inbox-chat-header">
+    <a class="inbox-back-mobile" href="<%= basePath %>/segments">← Segmentos</a>
+    <div class="inbox-chat-header-main">
+      <h1 class="inbox-chat-heading">Añadir segmento</h1>
     </div>
+  </div>
+  <div class="inbox-chat-body inbox-chat-body--form">
+    <% if (typeof segmentsSaved !== 'undefined' && segmentsSaved) { %>
+    <p class="toast toast--ok">Segmentos actualizados.</p>
+    <% } %>
+    <%- include('partials/segment-add-form') %>
   </div>
   <% } else if (view === 'detail' && selectedSegment) { %>
   <div class="inbox-chat-header">

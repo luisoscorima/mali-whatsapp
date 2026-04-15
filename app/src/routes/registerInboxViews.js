@@ -128,58 +128,28 @@ function registerInboxViews(app, ctx) {
 
   app.get('/campaigns', async (req, res) => {
     const area = req.user.area;
-    const campaigns = await loadCampaignsRecent(area, 200);
+    const [campaigns, campaignTotals] = await Promise.all([loadCampaignsRecent(area, 200), loadCampaignTotals(area)]);
     res.render('campaigns-index', {
       ...commonLocals(req, res),
       activeNav: 'campaigns',
       pageTitle: 'Campañas · MALI WhatsApp',
       layoutModifier: '',
       campaigns,
+      campaignTotals,
       templatesSynced: String(req.query.templates_synced || '') === '1',
     });
   });
 
-  /* --- Historial --- */
-  app.get('/history/:id', async (req, res) => {
+  /* Redirecciones antiguas (historial unificado en Campañas) */
+  app.get('/history', (req, res) => {
+    res.redirect(302, appPath('/campaigns'));
+  });
+  app.get('/history/:id', (req, res) => {
     const campaignId = Number(req.params.id);
     if (!Number.isInteger(campaignId) || campaignId <= 0) {
-      return res.status(400).send('Id de campana invalido');
+      return res.redirect(302, appPath('/campaigns'));
     }
-    const area = req.user.area;
-    const detail = await loadCampaignDetail(area, campaignId);
-    if (!detail) {
-      return res.status(404).send('Campaña no encontrada');
-    }
-    const campaigns = await loadCampaignsRecent(area, 200);
-    const ct = await loadCampaignTotals(area);
-    res.render('campaign-detail', {
-      ...commonLocals(req, res),
-      activeNav: 'history',
-      pageTitle: `Campaña #${campaignId} · Historial · MALI WhatsApp`,
-      layoutModifier: 'conversations-inbox--detail',
-      campaign: detail.campaign,
-      logs: detail.logs,
-      campaigns,
-      listBasePath: '/history',
-      sidebarTitle: 'Historial',
-      showNewLink: false,
-      selectedCampaignId: campaignId,
-      campaignTotals: ct,
-      showHistoryMetrics: true,
-    });
-  });
-
-  app.get('/history', async (req, res) => {
-    const area = req.user.area;
-    const [campaigns, campaignTotals] = await Promise.all([loadCampaignsRecent(area, 200), loadCampaignTotals(area)]);
-    res.render('history-index', {
-      ...commonLocals(req, res),
-      activeNav: 'history',
-      pageTitle: 'Historial · MALI WhatsApp',
-      layoutModifier: '',
-      campaigns,
-      campaignTotals,
-    });
+    res.redirect(302, appPath(`/campaigns/${campaignId}`));
   });
 
   /* --- Contactos --- */
@@ -299,6 +269,22 @@ function registerInboxViews(app, ctx) {
   });
 
   /* --- Segmentos --- */
+  app.get('/segments/new', async (req, res) => {
+    const area = req.user.area;
+    const segmentsList = await loadSegments(area);
+    res.render('segments-page', {
+      ...commonLocals(req, res),
+      activeNav: 'segments',
+      pageTitle: 'Añadir segmento · MALI WhatsApp',
+      layoutModifier: '',
+      segments: segmentsList,
+      view: 'new',
+      selectedSegmentId: null,
+      selectedSegment: null,
+      segmentsSaved: String(req.query.segments_saved || '') === '1',
+    });
+  });
+
   app.get('/segments/:id', async (req, res) => {
     const segId = Number(req.params.id);
     if (!Number.isInteger(segId) || segId <= 0) {

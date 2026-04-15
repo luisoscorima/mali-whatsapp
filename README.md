@@ -98,10 +98,13 @@ Si aparece `Cannot find module` tras añadir dependencias en `package.json`, el 
 - `GET /contacts/new` nuevo contacto / importación CSV
 - `GET /contacts/:id` editar contacto
 - `GET /segments` segmentos (lista)
+- `GET /segments/new` añadir segmento
 - `GET /segments/:id` editar segmento
-- `GET /history` historial (lista + métricas)
-- `GET /history/:id` detalle desde historial
+- `GET /history` → redirección a `GET /campaigns` (compatibilidad)
+- `GET /history/:id` → redirección a `GET /campaigns/:id` (compatibilidad)
 - `GET /settings` ajustes
+
+En **Campañas** (`GET /campaigns`) se muestran la lista de campañas y el **resumen global de envíos** (indicadores); el detalle de cada campaña es `GET /campaigns/:id`.
 
 ## Endpoints útiles (API / sistema)
 
