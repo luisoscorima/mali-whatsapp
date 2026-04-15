@@ -71,6 +71,11 @@ html[data-theme='dark'] body.page-conversations .wa-layout--inbox.inbox-layout-w
   min-width: 0;
 }
 
+/* Chats: la línea bajo filtros separa de la lista; sin borde extra bajo el título */
+.conversations-inbox .inbox-sidebar-header--with-actions {
+  border-bottom: none;
+}
+
 .inbox-sidebar-header--detail {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

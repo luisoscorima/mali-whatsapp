@@ -64,8 +64,9 @@
       <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav, showAdminNav: typeof showAdminNav !== 'undefined' ? showAdminNav : false, requireAuth, currentUser, areaLabel }) %>
 
       <aside class="inbox-sidebar" aria-label="Lista de conversaciones">
-        <div class="inbox-sidebar-header">
+        <div class="inbox-sidebar-header inbox-sidebar-header--with-actions">
           <h2 class="inbox-sidebar-title">Chats</h2>
+          <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar chats', refreshAriaLabel: 'Actualizar chats' }) %>
         </div>
         <form class="inbox-filters" method="get" action="<%= basePath %>/conversations">
           <label class="field field--inbox">
