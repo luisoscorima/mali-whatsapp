@@ -5,7 +5,7 @@
 <aside class="inbox-sidebar" aria-label="<%= _title %>">
   <div class="inbox-sidebar-header inbox-sidebar-header--with-actions">
     <h2 class="inbox-sidebar-title"><%= _title %></h2>
-    <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar lista', refreshAriaLabel: 'Actualizar lista' }) %>
+    <%- include('./wa-refresh-btn', { refreshTitle: 'Actualizar lista', refreshAriaLabel: 'Actualizar lista' }) %>
   </div>
   <% if (_showNew) { %>
   <div class="inbox-filters inbox-filters--campaign-new">
