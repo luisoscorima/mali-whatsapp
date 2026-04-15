@@ -82,7 +82,7 @@
           </div>
         <% } else if (isMediaType(mt) && !mediaUrl) { %>
           <% if (m.direction === 'outbound') { %>
-            <p class="chat-msg-fallback">Adjunto enviado (sin copia local en el servidor).</p>
+            <p class="chat-msg-fallback">Adjunto enviado (vista previa no guardada: revisa S3 o permisos de escritura en uploads).</p>
           <% } else { %>
             <p class="chat-msg-fallback">No se pudo descargar la vista previa del archivo.</p>
           <% } %>

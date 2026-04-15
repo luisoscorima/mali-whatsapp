@@ -12,6 +12,7 @@ const {
 } = require('../../services/templateParser');
 const { isWithinUserServiceWindow } = require('../../utils/conversations');
 const { escapeForLikePattern } = require('../../utils/searchEscape');
+const { normalizeSegmentColorKey } = require('../../utils/segmentColors');
 
 function resolveAppBaseUrl() {
   const u = String(process.env.APP_BASE_URL || '').trim().replace(/\/$/, '');
@@ -27,7 +28,7 @@ function createRouteContext({ query, pool, appPath }) {
 
   async function loadSegments(area) {
     const r = await query(
-      `SELECT id, slug, label, sort_order FROM segment_definitions WHERE area = $1 ORDER BY sort_order ASC, slug ASC`,
+      `SELECT id, slug, label, sort_order, color_key FROM segment_definitions WHERE area = $1 ORDER BY sort_order ASC, slug ASC`,
       [normalizeArea(area)]
     );
     return r.rows.map((row) => ({
@@ -35,6 +36,7 @@ function createRouteContext({ query, pool, appPath }) {
       value: row.slug,
       label: row.label,
       sort_order: row.sort_order,
+      colorKey: normalizeSegmentColorKey(row.color_key),
     }));
   }
 

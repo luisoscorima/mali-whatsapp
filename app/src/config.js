@@ -21,12 +21,26 @@ function unquoteEnv(str) {
   return s;
 }
 
+/** URL base pública (sin barra final), ej. CloudFront o dominio propio; si está vacío se usa el host virtual de S3. */
+const s3PublicUrlBase = unquoteEnv(process.env.S3_PUBLIC_URL_BASE);
+/** Si el bucket no permite ACL, deja vacío y usa política de bucket con GetObject público en el prefijo chat-media. */
+const s3ChatMediaAclRaw = unquoteEnv(process.env.S3_CHAT_MEDIA_ACL).toLowerCase();
+const s3ChatMediaObjectAcl = s3ChatMediaAclRaw === 'public-read' ? 'public-read' : null;
+/** Si S3 está configurado pero PutObject falla, guardar igual en disco (volumen Docker) para no perder la vista previa. */
+const s3ChatMediaFallbackDisk =
+  String(process.env.S3_CHAT_MEDIA_FALLBACK_DISK || 'true')
+    .trim()
+    .toLowerCase() !== 'false';
+
 const s3ChatMedia = {
   accessKeyId: unquoteEnv(process.env.ACCESS_KEY_S3),
   secretAccessKey: unquoteEnv(process.env.SECRET_KEY_S3),
   bucket: unquoteEnv(process.env.BUCKET_NAME),
   folder: unquoteEnv(process.env.CARPETA) || 'assets-whatsapp-mali',
   region: unquoteEnv(process.env.AWS_REGION) || 'us-east-1',
+  publicUrlBase: s3PublicUrlBase,
+  objectAcl: s3ChatMediaObjectAcl,
+  fallbackDiskOnError: s3ChatMediaFallbackDisk,
 };
 
 function isS3ChatMediaConfigured() {

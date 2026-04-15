@@ -196,6 +196,7 @@
                 <span class="field-label">Orden</span>
                 <input type="number" name="sort_order" value="0" step="1" />
               </label>
+              <%- include('partials/segment-color-field', { selectedColorKey: 'teal' }) %>
               <button type="submit">Añadir segmento</button>
             </form>
           </div>
@@ -398,6 +399,7 @@
                               <span class="segment-field-lbl">Orden</span>
                               <input type="number" name="sort_order" value="<%= seg.sort_order %>" step="1" class="segment-order-input" />
                             </label>
+                            <%- include('partials/segment-color-field', { selectedColorKey: seg.colorKey || 'teal', compactRow: true }) %>
                             <button type="submit" class="small-btn segment-save-btn">Guardar</button>
                           </div>
                         </form>

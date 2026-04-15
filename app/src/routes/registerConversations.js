@@ -221,9 +221,10 @@ function registerConversations(app, ctx) {
             mimeType: file.mimetype,
           });
         } catch (storeErr) {
-          logWarn(req, 'No se guardó copia local del adjunto para vista en el hilo', {
+          logWarn(req, 'No se guardó vista previa del adjunto (S3 y disco fallaron)', {
             conversationId,
             error: storeErr.message,
+            code: storeErr.Code || storeErr.name,
           });
         }
 

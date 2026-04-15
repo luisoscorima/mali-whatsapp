@@ -29,6 +29,11 @@
       const s = segments.find(function (x) { return x.value === slug; });
       return s ? s.label : slug;
     }; %>
+    <% const segmentColorKey = function (slug) {
+      if (!slug) return 'slate';
+      const s = segments.find(function (x) { return x.value === slug; });
+      return s ? s.colorKey : 'slate';
+    }; %>
     <% function inboxInitials(contactName, phone) {
       var n = String(contactName || '').trim();
       if (n) {
@@ -109,7 +114,7 @@
                       <span class="inbox-chat-preview"><%= (c.preview || '—').slice(0, 120) %></span>
                     </span>
                     <% if (c.contact_segment) { %>
-                      <span class="inbox-chat-segment"><%= segmentLabel(c.contact_segment) %></span>
+                      <span class="inbox-chat-segment" data-seg-tone="<%= segmentColorKey(c.contact_segment) %>"><%= segmentLabel(c.contact_segment) %></span>
                     <% } %>
                   </span>
                 </a>
@@ -138,7 +143,7 @@
               <h1 class="inbox-chat-heading"><%= contact ? contact.name : selectedConversation.phone %></h1>
               <p class="inbox-chat-sub mono"><%= selectedConversation.phone %></p>
               <% if (contact && contact.segment) { %>
-                <p class="inbox-chat-sub"><%= segmentLabel(contact.segment) %></p>
+                <span class="inbox-chat-segment inbox-chat-segment--header" data-seg-tone="<%= segmentColorKey(contact.segment) %>"><%= segmentLabel(contact.segment) %></span>
               <% } %>
               <p class="inbox-window-meta">
                 Ventana 24 h:

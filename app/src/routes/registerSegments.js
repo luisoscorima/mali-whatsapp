@@ -1,5 +1,6 @@
 const { logError } = require('../utils/logger');
 const { normalizeArea } = require('../middleware/auth');
+const { normalizeSegmentColorKey } = require('../utils/segmentColors');
 
 function registerSegments(app, ctx) {
   const { query, pool, config, appPath } = ctx;
@@ -16,10 +17,11 @@ function registerSegments(app, ctx) {
     if (!label || label.length > 120) {
       return res.status(400).send('Etiqueta invalida');
     }
+    const colorKey = normalizeSegmentColorKey(req.body.color_key);
     try {
       await query(
-        `INSERT INTO segment_definitions (area, slug, label, sort_order) VALUES ($1, $2, $3, $4)`,
-        [normalizeArea(area), slug, label, sortOrder]
+        `INSERT INTO segment_definitions (area, slug, label, sort_order, color_key) VALUES ($1, $2, $3, $4, $5)`,
+        [normalizeArea(area), slug, label, sortOrder, colorKey]
       );
       res.redirect(`${appPath('/')}?segments_saved=1`);
     } catch (error) {
@@ -48,6 +50,7 @@ function registerSegments(app, ctx) {
     if (!config.SEGMENT_SLUG_REGEX.test(newSlug)) {
       return res.status(400).send('Slug invalido (minusculas, numeros y guion bajo, max 50)');
     }
+    const colorKey = normalizeSegmentColorKey(req.body.color_key);
 
     const sel = await query(`SELECT slug FROM segment_definitions WHERE id = $1 AND area = $2`, [id, area]);
     if (sel.rowCount === 0) {
@@ -58,8 +61,8 @@ function registerSegments(app, ctx) {
     if (newSlug === oldSlug) {
       try {
         const r = await query(
-          `UPDATE segment_definitions SET label = $1, sort_order = $2 WHERE id = $3 AND area = $4`,
-          [label, sortOrder, id, area]
+          `UPDATE segment_definitions SET label = $1, sort_order = $2, color_key = $3 WHERE id = $4 AND area = $5`,
+          [label, sortOrder, colorKey, id, area]
         );
         if (r.rowCount === 0) {
           return res.status(404).send('Segmento no encontrado');
@@ -75,8 +78,8 @@ function registerSegments(app, ctx) {
     try {
       await client.query('BEGIN');
       await client.query(
-        `UPDATE segment_definitions SET slug = $1, label = $2, sort_order = $3 WHERE id = $4 AND area = $5`,
-        [newSlug, label, sortOrder, id, area]
+        `UPDATE segment_definitions SET slug = $1, label = $2, sort_order = $3, color_key = $4 WHERE id = $5 AND area = $6`,
+        [newSlug, label, sortOrder, colorKey, id, area]
       );
       await client.query(`UPDATE contacts SET segment = $1, updated_at = NOW() WHERE area = $2 AND segment = $3`, [
         newSlug,

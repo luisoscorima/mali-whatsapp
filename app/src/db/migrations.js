@@ -134,6 +134,9 @@ async function runMigrations(query) {
   await query(
     `CREATE INDEX IF NOT EXISTS idx_segment_definitions_area ON segment_definitions(area)`
   );
+  await query(
+    `ALTER TABLE segment_definitions ADD COLUMN IF NOT EXISTS color_key VARCHAR(16) NOT NULL DEFAULT 'teal'`
+  );
 
   const segCount = await query(`SELECT COUNT(*)::int AS c FROM segment_definitions`);
   if (segCount.rows[0].c === 0) {

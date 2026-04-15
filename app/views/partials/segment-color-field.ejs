@@ -1,0 +1,29 @@
+<% const _segColor = typeof selectedColorKey !== 'undefined' ? selectedColorKey : 'teal'; %>
+<% const _compact = typeof compactRow !== 'undefined' && compactRow; %>
+<% if (_compact) { %>
+<label class="segment-field segment-field--color">
+  <span class="segment-field-lbl">Color</span>
+  <select name="color_key" class="segment-color-select segment-color-select--compact" required>
+    <option value="teal" <%= _segColor === 'teal' ? 'selected' : '' %>>MALI</option>
+    <option value="emerald" <%= _segColor === 'emerald' ? 'selected' : '' %>>Verde</option>
+    <option value="blue" <%= _segColor === 'blue' ? 'selected' : '' %>>Azul</option>
+    <option value="violet" <%= _segColor === 'violet' ? 'selected' : '' %>>Violeta</option>
+    <option value="amber" <%= _segColor === 'amber' ? 'selected' : '' %>>Ámbar</option>
+    <option value="rose" <%= _segColor === 'rose' ? 'selected' : '' %>>Rosa</option>
+    <option value="slate" <%= _segColor === 'slate' ? 'selected' : '' %>>Gris</option>
+  </select>
+</label>
+<% } else { %>
+<label class="field segment-color-field">
+  <span class="field-label">Color en conversaciones</span>
+  <select name="color_key" class="segment-color-select" required>
+    <option value="teal" <%= _segColor === 'teal' ? 'selected' : '' %>>Verde MALI</option>
+    <option value="emerald" <%= _segColor === 'emerald' ? 'selected' : '' %>>Verde intenso</option>
+    <option value="blue" <%= _segColor === 'blue' ? 'selected' : '' %>>Azul</option>
+    <option value="violet" <%= _segColor === 'violet' ? 'selected' : '' %>>Violeta</option>
+    <option value="amber" <%= _segColor === 'amber' ? 'selected' : '' %>>Ámbar</option>
+    <option value="rose" <%= _segColor === 'rose' ? 'selected' : '' %>>Rosa</option>
+    <option value="slate" <%= _segColor === 'slate' ? 'selected' : '' %>>Gris</option>
+  </select>
+</label>
+<% } %>
