@@ -69,7 +69,8 @@ module.exports = {
   GRAPH_API_VERSION: 'v23.0',
   GRAPH_BASE: 'https://graph.facebook.com/v23.0',
   AREA_LABELS: {
-    pam: 'Comercial (PAM)',
+    ti: 'TI (dev)',
+    pam: 'PAM',
     educacion: 'Educación',
   },
   MALI_EMAIL_REGEX: /^[^\s@]+@mali\.pe$/i,

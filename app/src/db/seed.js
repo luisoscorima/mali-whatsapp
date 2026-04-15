@@ -19,7 +19,7 @@ async function seedMasterUser(query) {
     }
     const hash = await bcrypt.hash(pass, 10);
     await query(
-      `INSERT INTO users (email, password_hash, area, is_master) VALUES ($1, $2, 'pam', TRUE)`,
+      `INSERT INTO users (email, password_hash, area, is_master) VALUES ($1, $2, 'ti', TRUE)`,
       [email, hash]
     );
     console.log(

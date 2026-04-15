@@ -12,9 +12,8 @@
 }) %>
 <%- include('partials/admin-sidebar', { basePath, adminSection: 'meta' }) %>
 <section class="inbox-main" aria-label="Credenciales Meta">
-  <div class="inbox-chat-header inbox-chat-header--static inbox-chat-header--spread">
+  <div class="inbox-chat-header inbox-chat-header--static">
     <h1 class="inbox-chat-heading">Credenciales Meta</h1>
-    <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar credenciales', refreshAriaLabel: 'Actualizar credenciales' }) %>
   </div>
   <div class="inbox-chat-body inbox-chat-body--form">
     <div class="card">
@@ -29,40 +28,79 @@
         <h2 class="card-subtitle">Webhook (toda la app)</h2>
         <label class="field">
           <span class="field-label">Verify token (Meta)</span>
-          <input type="password" name="verify_token" autocomplete="off" value="<%= metaRows.global[keys.verifyToken] || '' %>" placeholder="Si vacío: VERIFY_TOKEN en .env" />
+          <input type="password" name="verify_token" class="js-meta-secret" autocomplete="off" value="<%= metaRows.global[keys.verifyToken] || '' %>" placeholder="Si vacío: VERIFY_TOKEN en .env" />
         </label>
         <label class="field">
           <span class="field-label">App Secret</span>
-          <input type="password" name="app_secret" autocomplete="off" value="<%= metaRows.global[keys.appSecret] || '' %>" placeholder="Si vacío: APP_SECRET en .env" />
+          <input type="password" name="app_secret" class="js-meta-secret" autocomplete="off" value="<%= metaRows.global[keys.appSecret] || '' %>" placeholder="Si vacío: APP_SECRET en .env" />
         </label>
 
-        <h2 class="card-subtitle">Comercial (PAM)</h2>
-        <label class="field">
-          <span class="field-label">Token de acceso WhatsApp</span>
-          <input type="password" name="pam_whatsapp_token" autocomplete="off" value="<%= metaRows.pam[keys.whatsappToken] || '' %>" />
-        </label>
-        <label class="field">
-          <span class="field-label">Phone number ID</span>
-          <input type="text" name="pam_phone_number_id" value="<%= metaRows.pam[keys.phoneNumberId] || '' %>" />
-        </label>
-        <label class="field">
-          <span class="field-label">WABA ID (opcional)</span>
-          <input type="text" name="pam_waba_id" value="<%= metaRows.pam[keys.wabaId] || '' %>" />
-        </label>
+        <h2 class="card-subtitle">Credenciales por área</h2>
+        <div class="field-row">
+          <label class="field">
+            <span class="field-label">Área</span>
+            <select id="admin-meta-area-select" aria-label="Seleccionar área de credenciales">
+              <option value="ti">TI (dev)</option>
+              <option value="pam">PAM</option>
+              <option value="educacion">Educación</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="field-label">Visibilidad</span>
+            <button type="button" class="small-btn secondary" id="admin-meta-toggle-secrets">Mostrar credenciales</button>
+          </label>
+        </div>
 
-        <h2 class="card-subtitle">Educación</h2>
-        <label class="field">
-          <span class="field-label">Token de acceso WhatsApp</span>
-          <input type="password" name="edu_whatsapp_token" autocomplete="off" value="<%= metaRows.educacion[keys.whatsappToken] || '' %>" />
-        </label>
-        <label class="field">
-          <span class="field-label">Phone number ID</span>
-          <input type="text" name="edu_phone_number_id" value="<%= metaRows.educacion[keys.phoneNumberId] || '' %>" />
-        </label>
-        <label class="field">
-          <span class="field-label">WABA ID (opcional)</span>
-          <input type="text" name="edu_waba_id" value="<%= metaRows.educacion[keys.wabaId] || '' %>" />
-        </label>
+        <div class="admin-meta-area-panel" data-meta-area="ti">
+          <h3 class="card-subtitle">TI (dev)</h3>
+          <p class="muted card-lead" style="margin-top:0">Variables de respaldo en .env: <code>WHATSAPP_TOKEN_TI</code>, <code>PHONE_NUMBER_ID_TI</code>, <code>WABA_ID_TI</code>.</p>
+          <label class="field">
+            <span class="field-label">Token de acceso WhatsApp</span>
+            <input type="password" name="ti_whatsapp_token" class="js-meta-secret" autocomplete="off" value="<%= metaRows.ti[keys.whatsappToken] || '' %>" />
+          </label>
+          <label class="field">
+            <span class="field-label">Phone number ID</span>
+            <input type="text" name="ti_phone_number_id" value="<%= metaRows.ti[keys.phoneNumberId] || '' %>" />
+          </label>
+          <label class="field">
+            <span class="field-label">WABA ID (opcional)</span>
+            <input type="text" name="ti_waba_id" value="<%= metaRows.ti[keys.wabaId] || '' %>" />
+          </label>
+        </div>
+
+        <div class="admin-meta-area-panel" data-meta-area="pam" hidden>
+          <h3 class="card-subtitle">PAM</h3>
+          <p class="muted card-lead" style="margin-top:0">Respaldo: <code>WHATSAPP_TOKEN_PAM</code>, <code>PHONE_NUMBER_ID_PAM</code>, <code>WABA_ID_PAM</code>.</p>
+          <label class="field">
+            <span class="field-label">Token de acceso WhatsApp</span>
+            <input type="password" name="pam_whatsapp_token" class="js-meta-secret" autocomplete="off" value="<%= metaRows.pam[keys.whatsappToken] || '' %>" />
+          </label>
+          <label class="field">
+            <span class="field-label">Phone number ID</span>
+            <input type="text" name="pam_phone_number_id" value="<%= metaRows.pam[keys.phoneNumberId] || '' %>" />
+          </label>
+          <label class="field">
+            <span class="field-label">WABA ID (opcional)</span>
+            <input type="text" name="pam_waba_id" value="<%= metaRows.pam[keys.wabaId] || '' %>" />
+          </label>
+        </div>
+
+        <div class="admin-meta-area-panel" data-meta-area="educacion" hidden>
+          <h3 class="card-subtitle">Educación</h3>
+          <p class="muted card-lead" style="margin-top:0">Respaldo: <code>WHATSAPP_TOKEN_EDUCACION</code>, <code>PHONE_NUMBER_ID_EDUCACION</code>, <code>WABA_ID_EDUCACION</code>.</p>
+          <label class="field">
+            <span class="field-label">Token de acceso WhatsApp</span>
+            <input type="password" name="edu_whatsapp_token" class="js-meta-secret" autocomplete="off" value="<%= metaRows.educacion[keys.whatsappToken] || '' %>" />
+          </label>
+          <label class="field">
+            <span class="field-label">Phone number ID</span>
+            <input type="text" name="edu_phone_number_id" value="<%= metaRows.educacion[keys.phoneNumberId] || '' %>" />
+          </label>
+          <label class="field">
+            <span class="field-label">WABA ID (opcional)</span>
+            <input type="text" name="edu_waba_id" value="<%= metaRows.educacion[keys.wabaId] || '' %>" />
+          </label>
+        </div>
 
         <div class="field-row">
           <button type="submit" class="primary">Guardar</button>
@@ -73,4 +111,41 @@
     </div>
   </div>
 </section>
+<script>
+  (function () {
+    var areaSelect = document.getElementById('admin-meta-area-select');
+    var toggleBtn = document.getElementById('admin-meta-toggle-secrets');
+    var panels = Array.prototype.slice.call(document.querySelectorAll('.admin-meta-area-panel'));
+    var secretInputs = Array.prototype.slice.call(document.querySelectorAll('.js-meta-secret'));
+    var visible = false;
+
+    function syncAreaPanel() {
+      var selected = areaSelect ? areaSelect.value : 'ti';
+      panels.forEach(function (panel) {
+        panel.hidden = panel.getAttribute('data-meta-area') !== selected;
+      });
+    }
+
+    function syncSecrets() {
+      secretInputs.forEach(function (input) {
+        input.type = visible ? 'text' : 'password';
+      });
+      if (toggleBtn) {
+        toggleBtn.textContent = visible ? 'Ocultar credenciales' : 'Mostrar credenciales';
+      }
+    }
+
+    if (areaSelect) {
+      areaSelect.addEventListener('change', syncAreaPanel);
+      syncAreaPanel();
+    }
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', function () {
+        visible = !visible;
+        syncSecrets();
+      });
+    }
+    syncSecrets();
+  })();
+</script>
 <%- include('layouts/inbox-shell-end') %>

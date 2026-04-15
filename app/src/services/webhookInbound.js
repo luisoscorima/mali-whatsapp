@@ -9,11 +9,13 @@ const {
 
 function resolveAreaFromPhoneNumberId(phoneNumberId) {
   const id = String(phoneNumberId || '').trim();
-  const pam = getWhatsAppCredentialsForArea('pam').phoneNumberId;
-  const edu = getWhatsAppCredentialsForArea('educacion').phoneNumberId;
-  if (id && pam && edu && id === pam && id === edu) return null;
-  if (id && pam && id === pam) return 'pam';
-  if (id && edu && id === edu) return 'educacion';
+  const lines = [
+    { area: 'ti', pid: getWhatsAppCredentialsForArea('ti').phoneNumberId },
+    { area: 'pam', pid: getWhatsAppCredentialsForArea('pam').phoneNumberId },
+    { area: 'educacion', pid: getWhatsAppCredentialsForArea('educacion').phoneNumberId },
+  ].filter((x) => String(x.pid || '').trim());
+  const matching = lines.filter((x) => x.pid === id);
+  if (matching.length === 1) return matching[0].area;
   return null;
 }
 
@@ -28,18 +30,18 @@ function resolveInboundArea(value, wabaEntryId) {
 
   const waba = String(wabaEntryId ?? '').trim();
   if (waba) {
-    const wabaPam = String(getWabaIdOverrideForArea('pam') || '').trim();
-    const wabaEdu = String(getWabaIdOverrideForArea('educacion') || '').trim();
-    if (wabaPam && waba === wabaPam) return { area: 'pam', source: 'waba_entry_id' };
-    if (wabaEdu && waba === wabaEdu) return { area: 'educacion', source: 'waba_entry_id' };
+    for (const slug of ['ti', 'pam', 'educacion']) {
+      const w = String(getWabaIdOverrideForArea(slug) || '').trim();
+      if (w && w === waba) return { area: slug, source: 'waba_entry_id' };
+    }
   }
 
-  const pam = getWhatsAppCredentialsForArea('pam');
-  const edu = getWhatsAppCredentialsForArea('educacion');
-  const hasPam = !!pam.phoneNumberId;
-  const hasEdu = !!edu.phoneNumberId;
-  if (hasPam && !hasEdu) return { area: 'pam', source: 'single_configured_line' };
-  if (hasEdu && !hasPam) return { area: 'educacion', source: 'single_configured_line' };
+  const lines = [
+    { area: 'ti', ...getWhatsAppCredentialsForArea('ti') },
+    { area: 'pam', ...getWhatsAppCredentialsForArea('pam') },
+    { area: 'educacion', ...getWhatsAppCredentialsForArea('educacion') },
+  ].filter((x) => !!x.phoneNumberId);
+  if (lines.length === 1) return { area: lines[0].area, source: 'single_configured_line' };
 
   return { area: null, source: null };
 }
@@ -193,7 +195,7 @@ async function persistInboundMessagesFromWebhookValue(query, value, context = {}
         wabaEntryId: wabaEntryId || null,
         webhookField: context.field || null,
         hint:
-          'Define WABA_ID_PAM / WABA_ID_EDUCACION o deja solo una linea PHONE_NUMBER_ID_* configurada.',
+          'Define WABA_ID_TI / WABA_ID_PAM / WABA_ID_EDUCACION o deja solo una linea PHONE_NUMBER_ID_* configurada.',
       })
     );
     return;

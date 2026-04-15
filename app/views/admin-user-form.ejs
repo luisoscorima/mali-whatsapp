@@ -12,9 +12,8 @@
 }) %>
 <%- include('partials/admin-sidebar', { basePath, adminSection: 'users' }) %>
 <section class="inbox-main" aria-label="Usuario">
-  <div class="inbox-chat-header inbox-chat-header--static inbox-chat-header--spread">
+  <div class="inbox-chat-header inbox-chat-header--static">
     <h1 class="inbox-chat-heading"><%= mode === 'create' ? 'Nuevo usuario' : 'Editar usuario' %></h1>
-    <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar formulario', refreshAriaLabel: 'Actualizar formulario' }) %>
   </div>
   <div class="inbox-chat-body inbox-chat-body--form">
     <div class="card">
@@ -47,7 +46,8 @@
         <label class="field">
           <span class="field-label">Área</span>
           <select name="area" required>
-            <option value="pam" <%= (u.area || 'pam') === 'pam' ? 'selected' : '' %>>Comercial (PAM)</option>
+            <option value="ti" <%= (u.area || 'ti') === 'ti' ? 'selected' : '' %>>TI (dev)</option>
+            <option value="pam" <%= u.area === 'pam' ? 'selected' : '' %>>PAM</option>
             <option value="educacion" <%= u.area === 'educacion' ? 'selected' : '' %>>Educación</option>
           </select>
         </label>

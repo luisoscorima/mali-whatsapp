@@ -94,6 +94,7 @@
           <label class="wa-rail__area-label">
             <span>Área</span>
             <select name="area" class="area-switch-select" aria-label="Cambiar área">
+              <option value="ti" <%= currentUser.area === 'ti' ? 'selected' : '' %>>TI (dev)</option>
               <option value="pam" <%= currentUser.area === 'pam' ? 'selected' : '' %>>PAM</option>
               <option value="educacion" <%= currentUser.area === 'educacion' ? 'selected' : '' %>>Educación</option>
             </select>
@@ -106,6 +107,7 @@
           <% if (showAdmin) { %>
           <a href="<%= basePath %>/admin/users">Usuarios</a>
           <a href="<%= basePath %>/admin/meta">Credenciales Meta</a>
+          <a href="<%= basePath %>/admin/areas">Áreas</a>
           <% } %>
         </div>
         <p class="wa-rail__webhook-hint">

@@ -32,10 +32,15 @@ async function upsertMetaSetting(query, area, key, rawValue) {
 function registerAdmin(app, ctx) {
   const { query, resolveAppBaseUrl, appPath } = ctx;
   const requireMaster = createRequireMaster();
+  const AREA_DEFS = [
+    { slug: 'ti', label: 'TI (dev)' },
+    { slug: 'pam', label: 'PAM' },
+    { slug: 'educacion', label: 'Educación' },
+  ];
 
   app.post('/admin/switch-area', requireMaster, async (req, res) => {
     const area = normalizeArea(req.body.area);
-    if (area !== 'pam' && area !== 'educacion') {
+    if (area !== 'ti' && area !== 'pam' && area !== 'educacion') {
       return res.redirect(appPath('/campaigns'));
     }
     req.session.area = area;
@@ -98,7 +103,7 @@ function registerAdmin(app, ctx) {
         }),
       });
     }
-    if (area !== 'pam' && area !== 'educacion') {
+    if (area !== 'ti' && area !== 'pam' && area !== 'educacion') {
       return res.status(400).send('Area invalida');
     }
 
@@ -152,7 +157,7 @@ function registerAdmin(app, ctx) {
     const isMaster = String(req.body.is_master || '') === '1' || req.body.is_master === 'on';
     const password = String(req.body.password || '').trim();
 
-    if (area !== 'pam' && area !== 'educacion') {
+    if (area !== 'ti' && area !== 'pam' && area !== 'educacion') {
       return res.status(400).send('Area invalida');
     }
 
@@ -205,7 +210,7 @@ function registerAdmin(app, ctx) {
 
   app.get('/admin/meta', requireMaster, async (req, res) => {
     const r = await query(`SELECT area, key, value FROM app_settings WHERE key LIKE 'meta.%'`);
-    const rows = { global: {}, pam: {}, educacion: {} };
+    const rows = { global: {}, ti: {}, pam: {}, educacion: {} };
     for (const row of r.rows) {
       const a = String(row.area || '').trim();
       if (rows[a]) rows[a][row.key] = row.value;
@@ -220,11 +225,42 @@ function registerAdmin(app, ctx) {
     });
   });
 
+  app.get('/admin/areas', requireMaster, async (req, res) => {
+    const [usersByArea, contactsByArea, campaignsByArea] = await Promise.all([
+      query(`SELECT area, COUNT(*)::int AS total FROM users GROUP BY area`),
+      query(`SELECT area, COUNT(*)::int AS total FROM contacts GROUP BY area`),
+      query(`SELECT area, COUNT(*)::int AS total FROM campaigns GROUP BY area`),
+    ]);
+
+    const usersMap = new Map(usersByArea.rows.map((row) => [String(row.area), Number(row.total || 0)]));
+    const contactsMap = new Map(contactsByArea.rows.map((row) => [String(row.area), Number(row.total || 0)]));
+    const campaignsMap = new Map(campaignsByArea.rows.map((row) => [String(row.area), Number(row.total || 0)]));
+
+    const areaRows = AREA_DEFS.map((area) => ({
+      slug: area.slug,
+      label: area.label,
+      users: usersMap.get(area.slug) || 0,
+      contacts: contactsMap.get(area.slug) || 0,
+      campaigns: campaignsMap.get(area.slug) || 0,
+    }));
+
+    res.render('admin-areas', {
+      ...adminLocals(req, res, ctx, {
+        activeNav: 'admin-areas',
+        areaRows,
+      }),
+    });
+  });
+
   app.post('/admin/meta', requireMaster, async (req, res) => {
     const b = req.body;
 
     await upsertMetaSetting(query, 'global', KEYS.verifyToken, b.verify_token);
     await upsertMetaSetting(query, 'global', KEYS.appSecret, b.app_secret);
+
+    await upsertMetaSetting(query, 'ti', KEYS.whatsappToken, b.ti_whatsapp_token);
+    await upsertMetaSetting(query, 'ti', KEYS.phoneNumberId, b.ti_phone_number_id);
+    await upsertMetaSetting(query, 'ti', KEYS.wabaId, b.ti_waba_id);
 
     await upsertMetaSetting(query, 'pam', KEYS.whatsappToken, b.pam_whatsapp_token);
     await upsertMetaSetting(query, 'pam', KEYS.phoneNumberId, b.pam_phone_number_id);

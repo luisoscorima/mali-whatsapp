@@ -2,8 +2,8 @@ const { resolveWabaId, fetchAllApprovedTemplates, getWhatsAppCredentialsForArea 
 
 function normalizeArea(area) {
   const a = String(area || '').trim().toLowerCase();
-  if (a === 'pam' || a === 'educacion') return a;
-  return 'pam';
+  if (a === 'ti' || a === 'pam' || a === 'educacion') return a;
+  return 'ti';
 }
 
 /**

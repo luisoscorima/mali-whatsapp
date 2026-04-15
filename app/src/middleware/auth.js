@@ -22,12 +22,12 @@ function isProtectedPath(pathname) {
 
 function normalizeArea(area) {
   const a = String(area || '').trim().toLowerCase();
-  if (a === 'pam' || a === 'educacion') return a;
-  return 'pam';
+  if (a === 'ti' || a === 'pam' || a === 'educacion') return a;
+  return 'ti';
 }
 
-function createResolveSessionUser(appPath) {
-  return function resolveSessionUser(req, res, next) {
+function createResolveSessionUser(appPath, query) {
+  return async function resolveSessionUser(req, res, next) {
     if (
       config.requireAuth &&
       req.session &&
@@ -37,8 +37,23 @@ function createResolveSessionUser(appPath) {
       req.session.destroy(() => res.redirect(appPath('/login')));
       return;
     }
+
+    if (config.requireAuth && req.session && req.session.userId != null) {
+      try {
+        const r = await query(`SELECT area, is_master FROM users WHERE id = $1`, [
+          req.session.userId,
+        ]);
+        if (r.rows.length > 0) {
+          req.session.area = normalizeArea(r.rows[0].area);
+          req.session.isMaster = Boolean(r.rows[0].is_master);
+        }
+      } catch {
+        /* */
+      }
+    }
+
     if (!config.requireAuth) {
-      const devArea = normalizeArea(process.env.DEV_AREA || 'pam');
+      const devArea = normalizeArea(process.env.DEV_AREA || 'ti');
       req.user = {
         id: 0,
         email: 'dev@mali.pe',

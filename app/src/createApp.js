@@ -68,10 +68,12 @@ function createApp() {
   }
 
   const appPath = config.appPath;
-  const resolveSessionUser = createResolveSessionUser(appPath);
+  const resolveSessionUser = createResolveSessionUser(appPath, query);
   const requireSessionLogin = createRequireSessionLogin(appPath);
 
-  app.use(resolveSessionUser);
+  app.use((req, res, next) => {
+    Promise.resolve(resolveSessionUser(req, res, next)).catch(next);
+  });
   app.use(requireSessionLogin);
   app.use(globalLimiter);
 

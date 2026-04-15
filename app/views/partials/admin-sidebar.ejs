@@ -1,6 +1,7 @@
 <aside class="inbox-sidebar" aria-label="Administración">
-  <div class="inbox-sidebar-header">
+  <div class="inbox-sidebar-header inbox-sidebar-header--with-actions">
     <h2 class="inbox-sidebar-title">Admin</h2>
+    <%- include('./wa-refresh-btn', { refreshTitle: 'Actualizar admin', refreshAriaLabel: 'Actualizar admin' }) %>
   </div>
   <ul class="inbox-chat-list">
     <li class="inbox-chat-item <%= typeof adminSection !== 'undefined' && adminSection === 'users' ? 'is-active' : '' %>">
@@ -23,6 +24,18 @@
           </span>
           <span class="inbox-chat-row-mid">
             <span class="inbox-chat-preview">Tokens y WABA</span>
+          </span>
+        </span>
+      </a>
+    </li>
+    <li class="inbox-chat-item <%= typeof adminSection !== 'undefined' && adminSection === 'areas' ? 'is-active' : '' %>">
+      <a class="inbox-chat-link" href="<%= basePath %>/admin/areas">
+        <span class="inbox-chat-link-main">
+          <span class="inbox-chat-row-top">
+            <span class="inbox-chat-title">Áreas</span>
+          </span>
+          <span class="inbox-chat-row-mid">
+            <span class="inbox-chat-preview">PAM y Educación</span>
           </span>
         </span>
       </a>

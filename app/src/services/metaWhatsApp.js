@@ -80,7 +80,7 @@ async function uploadMediaToWhatsApp({ area, buffer, mimeType, filename }) {
   const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
   if (!token || !phoneNumberId) {
     throw new Error(
-      'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_PAM/PHONE_NUMBER_ID_PAM y WHATSAPP_TOKEN_EDUCACION/PHONE_NUMBER_ID_EDUCACION (o WHATSAPP_TOKEN/PHONE_NUMBER_ID como respaldo)'
+      'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_TI/PAM/EDUCACION y PHONE_NUMBER_ID_* (o WHATSAPP_TOKEN/PHONE_NUMBER_ID como respaldo)'
     );
   }
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
@@ -126,7 +126,7 @@ async function sendSessionMediaMessage({ to, area, waType, mediaId, caption, doc
   const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
   if (!token || !phoneNumberId) {
     throw new Error(
-      'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_PAM/PHONE_NUMBER_ID_PAM y WHATSAPP_TOKEN_EDUCACION/PHONE_NUMBER_ID_EDUCACION (o WHATSAPP_TOKEN/PHONE_NUMBER_ID como respaldo)'
+      'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_TI/PAM/EDUCACION y PHONE_NUMBER_ID_* (o WHATSAPP_TOKEN/PHONE_NUMBER_ID como respaldo)'
     );
   }
   const cap =
@@ -325,7 +325,7 @@ async function sendTemplateWithComponents({ to, templateName, languageCode, comp
   const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
   if (!token || !phoneNumberId) {
     throw new Error(
-      'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_PAM/PHONE_NUMBER_ID_PAM y WHATSAPP_TOKEN_EDUCACION/PHONE_NUMBER_ID_EDUCACION (o WHATSAPP_TOKEN/PHONE_NUMBER_ID como respaldo)'
+      'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_TI/PAM/EDUCACION y PHONE_NUMBER_ID_* (o WHATSAPP_TOKEN/PHONE_NUMBER_ID como respaldo)'
     );
   }
 
@@ -362,7 +362,7 @@ async function sendSessionTextMessage({ to, text, area }) {
   const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
   if (!token || !phoneNumberId) {
     throw new Error(
-      'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_PAM/PHONE_NUMBER_ID_PAM y WHATSAPP_TOKEN_EDUCACION/PHONE_NUMBER_ID_EDUCACION (o WHATSAPP_TOKEN/PHONE_NUMBER_ID como respaldo)'
+      'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_TI/PAM/EDUCACION y PHONE_NUMBER_ID_* (o WHATSAPP_TOKEN/PHONE_NUMBER_ID como respaldo)'
     );
   }
   const safe = String(text || '').trim();

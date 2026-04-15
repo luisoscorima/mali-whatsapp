@@ -1,0 +1,58 @@
+<%- include('layouts/inbox-shell-start', {
+  pageTitle: 'Áreas · Admin · MALI WhatsApp',
+  basePath,
+  appBaseUrl,
+  requireAuth,
+  currentUser,
+  areaLabel,
+  activeNav: typeof activeNav !== 'undefined' ? activeNav : 'admin-areas',
+  showAdminNav,
+  layoutModifier: '',
+  extraHeadScripts: null
+}) %>
+<%- include('partials/admin-sidebar', { basePath, adminSection: 'areas' }) %>
+<section class="inbox-main" aria-label="Áreas">
+  <div class="inbox-chat-header inbox-chat-header--static">
+    <h1 class="inbox-chat-heading">Áreas</h1>
+  </div>
+  <div class="inbox-chat-body inbox-chat-body--form">
+    <div class="card">
+      <p class="card-lead">Resumen por área y cambio rápido de área activa para el usuario master.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Área</th>
+              <th>Usuarios</th>
+              <th>Contactos</th>
+              <th>Campañas</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% areaRows.forEach(function (a) { %>
+            <tr>
+              <td><%= a.label %> (<code><%= a.slug %></code>)</td>
+              <td><%= a.users %></td>
+              <td><%= a.contacts %></td>
+              <td><%= a.campaigns %></td>
+              <td>
+                <% if (currentUser && currentUser.area === a.slug) { %>
+                <span class="badge sent">Activa</span>
+                <% } else { %>
+                <form method="post" action="<%= basePath %>/admin/switch-area" class="inline-delete-form">
+                  <input type="hidden" name="area" value="<%= a.slug %>" />
+                  <button type="submit" class="small-btn secondary">Activar</button>
+                </form>
+                <% } %>
+              </td>
+            </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+      <p class="card-lead muted"><a href="<%= basePath %>/campaigns">← Volver a campañas</a></p>
+    </div>
+  </div>
+</section>
+<%- include('layouts/inbox-shell-end') %>

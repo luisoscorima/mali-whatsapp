@@ -26,7 +26,6 @@
       <h1 class="inbox-chat-heading">Campaña #<%= campaign.id %></h1>
       <p class="inbox-chat-sub mono"><%= campaign.template_name %> · <%= campaign.segment %></p>
     </div>
-    <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar campaña', refreshAriaLabel: 'Actualizar campaña' }) %>
   </div>
   <div class="inbox-chat-body inbox-chat-body--scroll">
     <%- include('partials/campaign-detail-body', { campaign, logs }) %>

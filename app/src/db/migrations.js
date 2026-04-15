@@ -10,7 +10,7 @@ async function runMigrations(query) {
       id SERIAL PRIMARY KEY,
       email VARCHAR(120) NOT NULL UNIQUE,
       password_hash VARCHAR(120) NOT NULL,
-      area VARCHAR(20) NOT NULL CHECK (area IN ('pam', 'educacion')),
+      area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion')),
       is_master BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     )
@@ -30,7 +30,7 @@ async function runMigrations(query) {
 
   await query(`
     CREATE TABLE IF NOT EXISTS app_settings (
-      area VARCHAR(20) NOT NULL CHECK (area IN ('pam', 'educacion')),
+      area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion', 'global')),
       key TEXT NOT NULL,
       value TEXT NOT NULL,
       updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -44,7 +44,7 @@ async function runMigrations(query) {
       name VARCHAR(150) NOT NULL,
       phone VARCHAR(20) NOT NULL,
       segment VARCHAR(50) NOT NULL,
-      area VARCHAR(20) NOT NULL DEFAULT 'pam' CHECK (area IN ('pam', 'educacion')),
+      area VARCHAR(20) NOT NULL DEFAULT 'ti' CHECK (area IN ('ti', 'pam', 'educacion')),
       opt_in BOOLEAN NOT NULL DEFAULT TRUE,
       active BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -53,8 +53,8 @@ async function runMigrations(query) {
     )
   `);
   await query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS area VARCHAR(20)`);
-  await query(`UPDATE contacts SET area = 'pam' WHERE area IS NULL OR area = ''`);
-  await query(`ALTER TABLE contacts ALTER COLUMN area SET DEFAULT 'pam'`);
+  await query(`UPDATE contacts SET area = 'ti' WHERE area IS NULL OR area = ''`);
+  await query(`ALTER TABLE contacts ALTER COLUMN area SET DEFAULT 'ti'`);
   try {
     await query(`ALTER TABLE contacts ALTER COLUMN area SET NOT NULL`);
   } catch {
@@ -74,7 +74,7 @@ async function runMigrations(query) {
   await query(`
     CREATE TABLE IF NOT EXISTS campaigns (
       id SERIAL PRIMARY KEY,
-      area VARCHAR(20) NOT NULL DEFAULT 'pam' CHECK (area IN ('pam', 'educacion')),
+      area VARCHAR(20) NOT NULL DEFAULT 'ti' CHECK (area IN ('ti', 'pam', 'educacion')),
       segment VARCHAR(50) NOT NULL,
       template_name VARCHAR(100) NOT NULL,
       message_text TEXT NOT NULL,
@@ -86,8 +86,8 @@ async function runMigrations(query) {
     )
   `);
   await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS area VARCHAR(20)`);
-  await query(`UPDATE campaigns SET area = 'pam' WHERE area IS NULL OR area = ''`);
-  await query(`ALTER TABLE campaigns ALTER COLUMN area SET DEFAULT 'pam'`);
+  await query(`UPDATE campaigns SET area = 'ti' WHERE area IS NULL OR area = ''`);
+  await query(`ALTER TABLE campaigns ALTER COLUMN area SET DEFAULT 'ti'`);
   try {
     await query(`ALTER TABLE campaigns ALTER COLUMN area SET NOT NULL`);
   } catch {
@@ -114,8 +114,8 @@ async function runMigrations(query) {
     `SELECT 1 AS ok FROM information_schema.columns WHERE table_name = 'app_settings' AND column_name = 'area'`
   );
   if (col.rows.length === 0) {
-    await query(`ALTER TABLE app_settings ADD COLUMN area VARCHAR(20) DEFAULT 'pam'`);
-    await query(`UPDATE app_settings SET area = 'pam' WHERE area IS NULL`);
+    await query(`ALTER TABLE app_settings ADD COLUMN area VARCHAR(20) DEFAULT 'ti'`);
+    await query(`UPDATE app_settings SET area = 'ti' WHERE area IS NULL`);
     await query(`ALTER TABLE app_settings ALTER COLUMN area SET NOT NULL`);
     await query(`ALTER TABLE app_settings DROP CONSTRAINT IF EXISTS app_settings_pkey`);
     await query(`ALTER TABLE app_settings ADD PRIMARY KEY (area, key)`);
@@ -124,7 +124,7 @@ async function runMigrations(query) {
   await query(`
     CREATE TABLE IF NOT EXISTS segment_definitions (
       id SERIAL PRIMARY KEY,
-      area VARCHAR(20) NOT NULL CHECK (area IN ('pam', 'educacion')),
+      area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion')),
       slug VARCHAR(50) NOT NULL,
       label VARCHAR(120) NOT NULL,
       sort_order INT NOT NULL DEFAULT 0,
@@ -141,6 +141,10 @@ async function runMigrations(query) {
   const segCount = await query(`SELECT COUNT(*)::int AS c FROM segment_definitions`);
   if (segCount.rows[0].c === 0) {
     const seedRows = [
+      ['ti', 'suscriptor_1', 'Suscriptor 1', 1],
+      ['ti', 'suscriptor_2', 'Suscriptor 2', 2],
+      ['ti', 'suscriptor_3', 'Suscriptor 3', 3],
+      ['ti', 'asociado', 'Asociado', 4],
       ['pam', 'suscriptor_1', 'Suscriptor 1', 1],
       ['pam', 'suscriptor_2', 'Suscriptor 2', 2],
       ['pam', 'suscriptor_3', 'Suscriptor 3', 3],
@@ -161,7 +165,7 @@ async function runMigrations(query) {
   await query(`
     CREATE TABLE IF NOT EXISTS conversations (
       id SERIAL PRIMARY KEY,
-      area VARCHAR(20) NOT NULL CHECK (area IN ('pam', 'educacion')),
+      area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion')),
       phone VARCHAR(20) NOT NULL,
       contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
       last_user_message_at TIMESTAMP WITH TIME ZONE,
@@ -210,7 +214,7 @@ async function runMigrations(query) {
   await query(`
     CREATE TABLE IF NOT EXISTS whatsapp_templates (
       id SERIAL PRIMARY KEY,
-      area VARCHAR(20) NOT NULL CHECK (area IN ('pam', 'educacion')),
+      area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion')),
       meta_id VARCHAR(64),
       name VARCHAR(200) NOT NULL,
       language VARCHAR(32) NOT NULL,
@@ -238,11 +242,112 @@ async function runMigrations(query) {
   }
   try {
     await query(
-      `ALTER TABLE app_settings ADD CONSTRAINT app_settings_area_check CHECK (area IN ('pam', 'educacion', 'global'))`
+      `ALTER TABLE app_settings ADD CONSTRAINT app_settings_area_check CHECK (area IN ('ti', 'pam', 'educacion', 'global'))`
     );
   } catch {
     /* ya aplicado o otro nombre de constraint */
   }
+
+  await migratePamSlugToTiThreeAreas(query);
+}
+
+/** Una sola vez: en BD antigua (solo pam+educacion) renombrar datos pam → ti; en BD nueva ya hay ti+pam+educacion sin tocar. */
+async function migratePamSlugToTiThreeAreas(query) {
+  const flag = `migration.pam_legacy_to_ti_v1`;
+  const done = await query(`SELECT 1 AS ok FROM app_settings WHERE area = 'global' AND key = $1`, [
+    flag,
+  ]);
+  if (done.rows.length > 0) {
+    await ensureAreaConstraintsThreeWay(query);
+    return;
+  }
+
+  const tiSeg = await query(`SELECT COUNT(*)::int AS c FROM segment_definitions WHERE area = 'ti'`);
+  const pamSeg = await query(`SELECT COUNT(*)::int AS c FROM segment_definitions WHERE area = 'pam'`);
+  const isFreshThreeArea =
+    Number(tiSeg.rows[0].c || 0) > 0 && Number(pamSeg.rows[0].c || 0) > 0;
+
+  if (isFreshThreeArea) {
+    await query(
+      `INSERT INTO app_settings (area, key, value, updated_at) VALUES ('global', $1, '1', NOW())
+       ON CONFLICT (area, key) DO UPDATE SET value = '1', updated_at = NOW()`,
+      [flag]
+    );
+    await ensureAreaConstraintsThreeWay(query);
+    return;
+  }
+
+  const tables = [
+    'users',
+    'contacts',
+    'campaigns',
+    'segment_definitions',
+    'conversations',
+    'whatsapp_templates',
+  ];
+  for (const t of tables) {
+    await query(`ALTER TABLE ${t} DROP CONSTRAINT IF EXISTS ${t}_area_check`);
+  }
+  await query(`ALTER TABLE app_settings DROP CONSTRAINT IF EXISTS app_settings_area_check`);
+  await query(`ALTER TABLE app_settings DROP CONSTRAINT IF EXISTS app_settings_check`);
+
+  await query(`UPDATE users SET area = 'ti' WHERE area = 'pam'`);
+  await query(`UPDATE contacts SET area = 'ti' WHERE area = 'pam'`);
+  await query(`UPDATE campaigns SET area = 'ti' WHERE area = 'pam'`);
+  await query(`UPDATE segment_definitions SET area = 'ti' WHERE area = 'pam'`);
+  await query(`UPDATE conversations SET area = 'ti' WHERE area = 'pam'`);
+  await query(`UPDATE whatsapp_templates SET area = 'ti' WHERE area = 'pam'`);
+  await query(`UPDATE app_settings SET area = 'ti' WHERE area = 'pam'`);
+
+  const pamSegAfter = await query(
+    `SELECT COUNT(*)::int AS c FROM segment_definitions WHERE area = 'pam'`
+  );
+  if (pamSegAfter.rows[0].c === 0) {
+    await query(`
+      INSERT INTO segment_definitions (area, slug, label, sort_order, color_key)
+      SELECT 'pam', slug, label, sort_order, color_key FROM segment_definitions WHERE area = 'ti'
+      ON CONFLICT (area, slug) DO NOTHING
+    `);
+  }
+
+  await query(
+    `INSERT INTO app_settings (area, key, value, updated_at) VALUES ('global', $1, '1', NOW())
+     ON CONFLICT (area, key) DO UPDATE SET value = '1', updated_at = NOW()`,
+    [flag]
+  );
+
+  await ensureAreaConstraintsThreeWay(query);
+}
+
+async function ensureAreaConstraintsThreeWay(query) {
+  const add = async (sql) => {
+    try {
+      await query(sql);
+    } catch {
+      /* ya existe o esquema nuevo sin necesidad */
+    }
+  };
+  await add(
+    `ALTER TABLE users ADD CONSTRAINT users_area_check CHECK (area IN ('ti', 'pam', 'educacion'))`
+  );
+  await add(
+    `ALTER TABLE contacts ADD CONSTRAINT contacts_area_check CHECK (area IN ('ti', 'pam', 'educacion'))`
+  );
+  await add(
+    `ALTER TABLE campaigns ADD CONSTRAINT campaigns_area_check CHECK (area IN ('ti', 'pam', 'educacion'))`
+  );
+  await add(
+    `ALTER TABLE segment_definitions ADD CONSTRAINT segment_definitions_area_check CHECK (area IN ('ti', 'pam', 'educacion'))`
+  );
+  await add(
+    `ALTER TABLE conversations ADD CONSTRAINT conversations_area_check CHECK (area IN ('ti', 'pam', 'educacion'))`
+  );
+  await add(
+    `ALTER TABLE whatsapp_templates ADD CONSTRAINT whatsapp_templates_area_check CHECK (area IN ('ti', 'pam', 'educacion'))`
+  );
+  await add(
+    `ALTER TABLE app_settings ADD CONSTRAINT app_settings_area_check CHECK (area IN ('ti', 'pam', 'educacion', 'global'))`
+  );
 }
 
 module.exports = { runMigrations };

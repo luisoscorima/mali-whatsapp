@@ -40,7 +40,7 @@ cp .env.example .env
 ```
 
 2. Completa en `.env`:
-- `WHATSAPP_TOKEN_PAM` / `PHONE_NUMBER_ID_PAM` y `WHATSAPP_TOKEN_EDUCACION` / `PHONE_NUMBER_ID_EDUCACION` (o `WHATSAPP_TOKEN` / `PHONE_NUMBER_ID` como respaldo)
+- `WHATSAPP_TOKEN_TI` / `PHONE_NUMBER_ID_TI`, `WHATSAPP_TOKEN_PAM` / `PHONE_NUMBER_ID_PAM` y `WHATSAPP_TOKEN_EDUCACION` / `PHONE_NUMBER_ID_EDUCACION` (o `WHATSAPP_TOKEN` / `PHONE_NUMBER_ID` como respaldo genérico)
 - `VERIFY_TOKEN`
 - `APP_SECRET` (obligatorio en produccion)
 - `REQUIRE_WEBHOOK_SIGNATURE=true` en produccion
@@ -56,11 +56,11 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-4. Usuarios del panel (correos **@mali.pe**; áreas **Comercial PAM** `pam` y **Educación** `educacion`):
+4. Usuarios del panel (correos **@mali.pe**; áreas **TI (dev)** `ti`, **PAM** `pam`, **Educación** `educacion`):
 
 Las dependencias Node se instalan **solo al construir la imagen Docker** (`Dockerfile` + `npm install` dentro del contenedor). No hace falta ejecutar `npm` en tu sistema operativo.
 
-- **Usuario master inicial:** si en `.env` defines `MASTER_INITIAL_PASSWORD` (y opcionalmente `MASTER_USER_EMAIL`, por defecto `loscorima@mali.pe`), al arrancar el contenedor se crea **una sola vez** ese usuario con área `pam` y rol master. Entra al panel, cambia la contraseña si quieres y **elimina `MASTER_INITIAL_PASSWORD`** del entorno.
+- **Usuario master inicial:** si en `.env` defines `MASTER_INITIAL_PASSWORD` (y opcionalmente `MASTER_USER_EMAIL`, por defecto `loscorima@mali.pe`), al arrancar el contenedor se crea **una sola vez** ese usuario con área `ti` y rol master. Entra al panel, cambia la contraseña si quieres y **elimina `MASTER_INITIAL_PASSWORD`** del entorno.
 
 - **Más usuarios** (desde el host, contra el contenedor `app`):
 
@@ -69,7 +69,7 @@ docker compose exec app sh -c 'cd /usr/src/app && node scripts/create-user.js "o
 docker compose exec app sh -c 'cd /usr/src/app && node scripts/create-user.js "otro@mali.pe" "tu_clave" pam master'
 ```
 
-El último argumento opcional `master` marca usuario master (insignia en el panel). Cada usuario normal solo ve datos de su área; los envíos usan `WHATSAPP_TOKEN_*` / `PHONE_NUMBER_ID_*` de esa área.
+Tercer argumento: `ti`, `pam` o `educacion`. El último argumento opcional `master` marca usuario master (insignia en el panel). Cada usuario normal solo ve datos de su área; los envíos usan `WHATSAPP_TOKEN_*` / `PHONE_NUMBER_ID_*` de esa área.
 
 5. Abre el panel:
 
@@ -117,7 +117,7 @@ En **Campañas** (`GET /campaigns`) se muestran la lista de campañas y el **res
 
 El panel **sincroniza** las plantillas aprobadas desde la Graph API (cuenta de WhatsApp / WABA) con el botón **Sincronizar plantillas**. No hace falta escribir nombres ni idioma a mano: al elegir una plantilla, el formulario se adapta a su estructura (cabecera imagen/video/documento, textos `{{1}}`…, botones URL dinámicos).
 
-El token de la app debe poder leer `message_templates` (permisos de negocio / WhatsApp). Si falla la resolución automática del WABA, define en `.env` opcionalmente `WABA_ID_PAM` y/o `WABA_ID_EDUCACION`.
+El token de la app debe poder leer `message_templates` (permisos de negocio / WhatsApp). Si falla la resolución automática del WABA, define en `.env` opcionalmente `WABA_ID_TI`, `WABA_ID_PAM` y/o `WABA_ID_EDUCACION`.
 
 Si la combinación nombre/idioma no existe en Meta, verás el error `132001`. Si los parámetros no coinciden con la plantilla, verás el error `132000`.
 
