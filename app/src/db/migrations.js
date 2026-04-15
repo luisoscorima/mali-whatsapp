@@ -27,6 +27,9 @@ async function runMigrations(query) {
     }
   }
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_master BOOLEAN NOT NULL DEFAULT FALSE`);
+  await query(
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE`
+  );
 
   await query(`
     CREATE TABLE IF NOT EXISTS app_settings (

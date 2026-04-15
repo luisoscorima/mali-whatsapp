@@ -6,9 +6,12 @@
     failed: Number(ct.failed_count || 0),
     totalLogs: Number(ct.total_logs || 0),
   };
-  const deliveryRate = totals.sent ? Math.round((totals.delivered / totals.sent) * 100) : 0;
-  const readRate = totals.sent ? Math.round((totals.read / totals.sent) * 100) : 0;
-  const errorRate = totals.totalLogs ? Math.round((totals.failed / totals.totalLogs) * 100) : 0;
+  const deliveryRate =
+    totals.sent > 0 ? Math.round((totals.delivered / totals.sent) * 100) : null;
+  const readRate =
+    totals.delivered > 0 ? Math.round((totals.read / totals.delivered) * 100) : null;
+  const errorRate =
+    totals.totalLogs > 0 ? Math.round((totals.failed / totals.totalLogs) * 100) : 0;
 %>
 <%- include('layouts/inbox-shell-start', {
   pageTitle,
@@ -34,15 +37,19 @@
   <div class="inbox-empty-pane inbox-empty-pane--history" role="status">
     <div class="metrics-row metrics-row--history" role="region" aria-label="Resumen de envíos">
       <div class="metric">
+        <span class="metric-num"><%= totals.totalLogs %></span>
+        <span class="metric-lbl">Total</span>
+      </div>
+      <div class="metric">
         <span class="metric-num"><%= totals.sent %></span>
-        <span class="metric-lbl">Enviados</span>
+        <span class="metric-lbl">Enviados (API)</span>
       </div>
       <div class="metric">
-        <span class="metric-num"><%= deliveryRate %>%</span>
-        <span class="metric-lbl">Entrega</span>
+        <span class="metric-num"><%= deliveryRate !== null ? deliveryRate + '%' : '—' %></span>
+        <span class="metric-lbl">Entregados</span>
       </div>
       <div class="metric">
-        <span class="metric-num"><%= readRate %>%</span>
+        <span class="metric-num"><%= readRate !== null ? readRate + '%' : '—' %></span>
         <span class="metric-lbl">Lectura</span>
       </div>
       <div class="metric">
@@ -51,7 +58,11 @@
       </div>
     </div>
     <p class="muted metrics-row-hint history-metrics-hint">
-      Resumen de <strong>todas</strong> las campañas de esta área. Error % = fallos sobre el total de intentos en el registro. Lectura: mensajes con estado «read» vía webhook de Meta (si el usuario tiene lecturas activadas).
+      Sobre <strong>todas</strong> las campañas de esta área. <strong>Total</strong> = filas en registro de envíos.
+      <strong>Enviados (API)</strong> = aceptados por Meta (estados sent / delivered / read).
+      <strong>Entregados</strong> = % de esos que llegaron al dispositivo (delivered + read) sobre aceptados.
+      <strong>Lectura</strong> = % leídos sobre entregados al dispositivo (read sobre delivered+read); requiere webhooks y lecturas activas en WhatsApp del usuario.
+      <strong>Error</strong> = % de filas con fallo sobre el total de registros.
     </p>
     <div class="inbox-empty-hint">
       <span class="inbox-empty-icon" aria-hidden="true">

@@ -5,7 +5,11 @@ const helmet = require('helmet');
 const config = require('./config');
 const { query } = require('./db/pool');
 const { pool } = require('./db/pool');
-const { createResolveSessionUser, createRequireSessionLogin } = require('./middleware/auth');
+const {
+  createResolveSessionUser,
+  createRequireSessionLogin,
+  createRequirePasswordChange,
+} = require('./middleware/auth');
 const { globalLimiter } = require('./middleware/limiters');
 const { createRegisterRoutes } = require('./routes/registerRoutes');
 
@@ -70,11 +74,13 @@ function createApp() {
   const appPath = config.appPath;
   const resolveSessionUser = createResolveSessionUser(appPath, query);
   const requireSessionLogin = createRequireSessionLogin(appPath);
+  const requirePasswordChange = createRequirePasswordChange(appPath);
 
   app.use((req, res, next) => {
     Promise.resolve(resolveSessionUser(req, res, next)).catch(next);
   });
   app.use(requireSessionLogin);
+  app.use(requirePasswordChange);
   app.use(globalLimiter);
 
   const { register, resumeQueuedCampaigns } = createRegisterRoutes({ query, pool, appPath });

@@ -768,3 +768,60 @@ html[data-theme='dark'] .inbox-compose-bar {
     border: 1px solid var(--line);
   }
 }
+
+/* Lista campañas: ratio enviados/total */
+.campaign-list-ratio {
+  font-weight: 600;
+  opacity: 0.9;
+  margin-left: 0.25rem;
+}
+
+/* Estado de entrega en mensajes salientes (webhook Meta → raw_payload.delivery_status) */
+.chat-delivery-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--muted, #6b7280);
+}
+
+.chat-delivery-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.chat-delivery-icon--dbl {
+  gap: 1px;
+}
+
+.chat-delivery-label {
+  line-height: 1.2;
+}
+
+.chat-delivery--read .chat-delivery-icon {
+  color: #53bdeb;
+}
+
+.chat-delivery--read .chat-delivery-label {
+  color: #53bdeb;
+}
+
+.chat-delivery--failed .chat-delivery-icon,
+.chat-delivery--failed .chat-delivery-label {
+  color: var(--danger, #dc2626);
+}
+
+.metrics-row--compact {
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+}
+
+.metrics-row--compact .metric {
+  min-width: 4.5rem;
+}
+
+.campaign-detail-metrics {
+  margin-bottom: 0.75rem;
+}

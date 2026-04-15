@@ -62,7 +62,7 @@ function registerAdmin(app, ctx) {
 
   app.get('/admin/users', requireMaster, async (req, res) => {
     const r = await query(
-      `SELECT id, email, area, is_master, created_at FROM users ORDER BY email ASC`
+      `SELECT id, email, area, is_master, must_change_password, created_at FROM users ORDER BY email ASC`
     );
     res.render('admin-users', {
       ...adminLocals(req, res, ctx, {
@@ -90,13 +90,15 @@ function registerAdmin(app, ctx) {
     const password = String(req.body.password || '');
     const area = normalizeArea(req.body.area);
     const isMaster = String(req.body.is_master || '') === '1' || req.body.is_master === 'on';
+    const mustChangePassword =
+      String(req.body.must_change_password || '') === '1' || req.body.must_change_password === 'on';
 
     if (!isValidMaliEmail(email)) {
       return res.status(400).render('admin-user-form', {
         ...adminLocals(req, res, ctx, {
           activeNav: 'admin-users',
           mode: 'create',
-          userRow: { email, area, is_master: isMaster },
+          userRow: { email, area, is_master: isMaster, must_change_password: mustChangePassword },
           formError: 'Correo invalido (debe ser @mali.pe)',
         }),
       });
@@ -106,7 +108,7 @@ function registerAdmin(app, ctx) {
         ...adminLocals(req, res, ctx, {
           activeNav: 'admin-users',
           mode: 'create',
-          userRow: { email, area, is_master: isMaster },
+          userRow: { email, area, is_master: isMaster, must_change_password: mustChangePassword },
           formError: 'La contraseña debe tener al menos 6 caracteres',
         }),
       });
@@ -118,8 +120,8 @@ function registerAdmin(app, ctx) {
     try {
       const hash = await bcrypt.hash(password, 10);
       await query(
-        `INSERT INTO users (email, password_hash, area, is_master) VALUES ($1, $2, $3, $4)`,
-        [email, hash, area, isMaster]
+        `INSERT INTO users (email, password_hash, area, is_master, must_change_password) VALUES ($1, $2, $3, $4, $5)`,
+        [email, hash, area, isMaster, mustChangePassword]
       );
       res.redirect(`${appPath('/admin/users')}?saved=1`);
     } catch (e) {
@@ -128,7 +130,7 @@ function registerAdmin(app, ctx) {
           ...adminLocals(req, res, ctx, {
             activeNav: 'admin-users',
             mode: 'create',
-            userRow: { email, area, is_master: isMaster },
+            userRow: { email, area, is_master: isMaster, must_change_password: mustChangePassword },
             formError: 'Ese correo ya existe',
           }),
         });
@@ -142,7 +144,7 @@ function registerAdmin(app, ctx) {
     if (!Number.isFinite(id) || id < 1) {
       return res.status(400).send('ID invalido');
     }
-    const r = await query(`SELECT id, email, area, is_master FROM users WHERE id = $1`, [id]);
+    const r = await query(`SELECT id, email, area, is_master, must_change_password FROM users WHERE id = $1`, [id]);
     if (r.rowCount === 0) {
       return res.status(404).send('Usuario no encontrado');
     }
@@ -164,6 +166,8 @@ function registerAdmin(app, ctx) {
     const area = normalizeArea(req.body.area);
     const isMaster = String(req.body.is_master || '') === '1' || req.body.is_master === 'on';
     const password = String(req.body.password || '').trim();
+    const mustChangePassword =
+      String(req.body.must_change_password || '') === '1' || req.body.must_change_password === 'on';
 
     if (area !== 'ti' && area !== 'pam' && area !== 'educacion') {
       return res.status(400).send('Area invalida');
@@ -175,12 +179,15 @@ function registerAdmin(app, ctx) {
     }
 
     if (password.length > 0 && password.length < 6) {
-      const r = await query(`SELECT id, email, area, is_master FROM users WHERE id = $1`, [id]);
+      const r = await query(
+        `SELECT id, email, area, is_master, must_change_password FROM users WHERE id = $1`,
+        [id]
+      );
       return res.status(400).render('admin-user-form', {
         ...adminLocals(req, res, ctx, {
           activeNav: 'admin-users',
           mode: 'edit',
-          userRow: { ...r.rows[0], area, is_master: isMaster },
+          userRow: { ...r.rows[0], area, is_master: isMaster, must_change_password: mustChangePassword },
           formError: 'La contraseña debe tener al menos 6 caracteres',
         }),
       });
@@ -189,16 +196,24 @@ function registerAdmin(app, ctx) {
     if (password.length > 0) {
       const hash = await bcrypt.hash(password, 10);
       await query(
-        `UPDATE users SET area = $1, is_master = $2, password_hash = $3 WHERE id = $4`,
+        `UPDATE users SET area = $1, is_master = $2, password_hash = $3, must_change_password = FALSE WHERE id = $4`,
         [area, isMaster, hash, id]
       );
     } else {
-      await query(`UPDATE users SET area = $1, is_master = $2 WHERE id = $3`, [area, isMaster, id]);
+      await query(
+        `UPDATE users SET area = $1, is_master = $2, must_change_password = $3 WHERE id = $4`,
+        [area, isMaster, mustChangePassword, id]
+      );
     }
 
     if (id === req.session.userId) {
       req.session.area = area;
       req.session.isMaster = isMaster;
+      if (password.length > 0) {
+        req.session.mustChangePassword = false;
+      } else {
+        req.session.mustChangePassword = mustChangePassword;
+      }
     }
 
     res.redirect(`${appPath('/admin/users')}?saved=1`);

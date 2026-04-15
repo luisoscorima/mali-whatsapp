@@ -32,6 +32,10 @@
           <span class="field-label">Contraseña</span>
           <input type="password" name="password" required minlength="6" autocomplete="new-password" />
         </label>
+        <label class="field field--checkbox">
+          <input type="checkbox" name="must_change_password" value="1" <%= u.must_change_password ? 'checked' : '' %> />
+          <span class="field-label">Forzar cambio de contraseña al iniciar sesión</span>
+        </label>
         <% } else { %>
         <label class="field">
           <span class="field-label">Correo</span>
@@ -41,6 +45,11 @@
           <span class="field-label">Nueva contraseña (opcional)</span>
           <input type="password" name="password" minlength="6" autocomplete="new-password" placeholder="Dejar vacío para no cambiar" />
         </label>
+        <label class="field field--checkbox">
+          <input type="checkbox" name="must_change_password" value="1" <%= u.must_change_password ? 'checked' : '' %> />
+          <span class="field-label">Exigir cambio de contraseña en el próximo inicio de sesión</span>
+        </label>
+        <p class="muted card-lead" style="margin:0">Si asignas una nueva contraseña arriba, no se exigirá cambio (queda desmarcado al guardar).</p>
         <% } %>
 
         <label class="field">

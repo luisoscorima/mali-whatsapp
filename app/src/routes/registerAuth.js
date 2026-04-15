@@ -32,7 +32,7 @@ function registerAuth(app, ctx) {
     }
     try {
       const result = await query(
-        'SELECT id, email, password_hash, area, is_master FROM users WHERE email = $1',
+        'SELECT id, email, password_hash, area, is_master, must_change_password FROM users WHERE email = $1',
         [email]
       );
       if (result.rowCount === 0) {
@@ -47,6 +47,10 @@ function registerAuth(app, ctx) {
       req.session.email = user.email;
       req.session.area = user.area;
       req.session.isMaster = Boolean(user.is_master);
+      req.session.mustChangePassword = Boolean(user.must_change_password);
+      if (req.session.mustChangePassword) {
+        return res.redirect(appPath('/account/change-password'));
+      }
       res.redirect(appPath('/campaigns'));
     } catch (err) {
       logError(req, 'Error en login', err);
@@ -58,6 +62,70 @@ function registerAuth(app, ctx) {
     req.session.destroy(() => {
       res.redirect(appPath('/login'));
     });
+  });
+
+  app.get('/account/change-password', (req, res) => {
+    if (!config.requireAuth || !req.user) {
+      return res.redirect(appPath('/login'));
+    }
+    if (!req.session.mustChangePassword) {
+      return res.redirect(appPath('/campaigns'));
+    }
+    res.render('account-change-password', {
+      basePath: config.basePath,
+      error: null,
+    });
+  });
+
+  app.post('/account/change-password', async (req, res) => {
+    if (!config.requireAuth || !req.user) {
+      return res.redirect(appPath('/login'));
+    }
+    if (!req.session.mustChangePassword) {
+      return res.redirect(appPath('/campaigns'));
+    }
+    const currentPassword = String(req.body.current_password || '');
+    const newPassword = String(req.body.new_password || '');
+    const confirm = String(req.body.confirm_password || '');
+    const renderErr = (msg) =>
+      res.status(400).render('account-change-password', { basePath: config.basePath, error: msg });
+
+    if (!currentPassword || !newPassword || !confirm) {
+      return renderErr('Completa todos los campos');
+    }
+    if (newPassword.length < 6) {
+      return renderErr('La nueva contraseña debe tener al menos 6 caracteres');
+    }
+    if (newPassword !== confirm) {
+      return renderErr('La nueva contraseña y la confirmación no coinciden');
+    }
+    if (newPassword === currentPassword) {
+      return renderErr('La nueva contraseña debe ser distinta a la actual');
+    }
+
+    try {
+      const r = await query(`SELECT password_hash FROM users WHERE id = $1`, [req.session.userId]);
+      if (r.rowCount === 0) {
+        return res.redirect(appPath('/login'));
+      }
+      const ok = await bcrypt.compare(currentPassword, r.rows[0].password_hash);
+      if (!ok) {
+        return renderErr('La contraseña actual no es correcta');
+      }
+      const hash = await bcrypt.hash(newPassword, 10);
+      await query(
+        `UPDATE users SET password_hash = $1, must_change_password = FALSE WHERE id = $2`,
+        [hash, req.session.userId]
+      );
+      req.session.mustChangePassword = false;
+      res.redirect(appPath('/campaigns'));
+    } catch (err) {
+      logError(req, 'Error cambiando contraseña', err);
+      res.status(500).render('account-change-password', {
+        basePath: config.basePath,
+        error: 'Error interno. Intenta de nuevo.',
+      });
+    }
   });
 }
 

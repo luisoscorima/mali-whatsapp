@@ -126,10 +126,43 @@ function createRequireSessionLogin(appPath) {
   };
 }
 
+/** Bloquea el panel hasta cambiar contraseña (sesión con mustChangePassword). */
+function createRequirePasswordChange(appPath) {
+  function routePath(req) {
+    let p = String(req.path || '/');
+    const base = String(config.basePath || '').trim();
+    if (base && p.startsWith(base)) {
+      p = p.slice(base.length) || '/';
+    }
+    if (!p.startsWith('/')) p = `/${p}`;
+    return p;
+  }
+
+  function isExempt(p) {
+    if (p === '/account/change-password') return true;
+    if (p === '/logout') return true;
+    return false;
+  }
+
+  return function requirePasswordChange(req, res, next) {
+    if (!config.requireAuth || !req.user || !req.session.mustChangePassword) {
+      return next();
+    }
+    if (isExempt(routePath(req))) {
+      return next();
+    }
+    if (req.accepts('html')) {
+      return res.redirect(302, appPath('/account/change-password'));
+    }
+    return res.status(403).json({ ok: false, error: 'Debes cambiar tu contraseña' });
+  };
+}
+
 module.exports = {
   isProtectedPath,
   normalizeArea,
   createResolveSessionUser,
   createRequireSessionLogin,
+  createRequirePasswordChange,
   createRequireMaster,
 };
