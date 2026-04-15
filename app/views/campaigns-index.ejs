@@ -1,17 +1,14 @@
 <% const ct = typeof campaignTotals !== 'undefined' && campaignTotals ? campaignTotals : {};
   const totals = {
-    sent: Number(ct.sent_count || 0),
-    delivered: Number(ct.delivered_count || 0),
+    salidaOk: Number(ct.salida_ok || 0),
     read: Number(ct.read_count || 0),
     failed: Number(ct.failed_count || 0),
     totalLogs: Number(ct.total_logs || 0),
   };
-  const deliveryRate =
-    totals.sent > 0 ? Math.round((totals.delivered / totals.sent) * 100) : null;
-  const readRate =
-    totals.delivered > 0 ? Math.round((totals.read / totals.delivered) * 100) : null;
   const errorRate =
     totals.totalLogs > 0 ? Math.round((totals.failed / totals.totalLogs) * 100) : 0;
+  const readRate =
+    totals.salidaOk > 0 ? Math.round((totals.read / totals.salidaOk) * 100) : null;
 %>
 <%- include('layouts/inbox-shell-start', {
   pageTitle,
@@ -35,34 +32,29 @@
 }) %>
 <section class="inbox-main" aria-label="Campañas">
   <div class="inbox-empty-pane inbox-empty-pane--history" role="status">
-    <div class="metrics-row metrics-row--history" role="region" aria-label="Resumen de envíos">
+    <div class="metrics-row metrics-row--history metrics-row--compact" role="region" aria-label="Resumen de envíos">
       <div class="metric">
         <span class="metric-num"><%= totals.totalLogs %></span>
         <span class="metric-lbl">Total</span>
       </div>
       <div class="metric">
-        <span class="metric-num"><%= totals.sent %></span>
-        <span class="metric-lbl">Enviados (API)</span>
-      </div>
-      <div class="metric">
-        <span class="metric-num"><%= deliveryRate !== null ? deliveryRate + '%' : '—' %></span>
-        <span class="metric-lbl">Entregados</span>
-      </div>
-      <div class="metric">
-        <span class="metric-num"><%= readRate !== null ? readRate + '%' : '—' %></span>
-        <span class="metric-lbl">Lectura</span>
+        <span class="metric-num"><%= totals.salidaOk %></span>
+        <span class="metric-lbl">Salida OK</span>
       </div>
       <div class="metric">
         <span class="metric-num"><%= errorRate %>%</span>
         <span class="metric-lbl">Error</span>
       </div>
+      <div class="metric">
+        <span class="metric-num"><%= readRate !== null ? readRate + '%' : '—' %></span>
+        <span class="metric-lbl">Lectura</span>
+      </div>
     </div>
     <p class="muted metrics-row-hint history-metrics-hint">
-      Sobre <strong>todas</strong> las campañas de esta área. <strong>Total</strong> = filas en registro de envíos.
-      <strong>Enviados (API)</strong> = aceptados por Meta (estados sent / delivered / read).
-      <strong>Entregados</strong> = % de esos que llegaron al dispositivo (delivered + read) sobre aceptados.
-      <strong>Lectura</strong> = % leídos sobre entregados al dispositivo (read sobre delivered+read); requiere webhooks y lecturas activas en WhatsApp del usuario.
-      <strong>Error</strong> = % de filas con fallo sobre el total de registros.
+      Sobre <strong>todas</strong> las campañas de esta área. <strong>Total</strong> = filas en el registro de envíos (<code>campaign_logs</code>).
+      <strong>Salida OK</strong> = sin error de API (estados sent, delivered o read).
+      <strong>Error</strong> = porcentaje de filas con error, failed o undelivered sobre el total.
+      <strong>Lectura</strong> = mensajes leídos sobre Salida OK; si Salida OK es 0 se muestra —. Depende de webhooks Meta y de que el usuario abra el chat en WhatsApp.
     </p>
     <div class="inbox-empty-hint">
       <span class="inbox-empty-icon" aria-hidden="true">

@@ -18,7 +18,7 @@
   <ul class="inbox-chat-list">
     <% campaigns.forEach(function (c) { %>
     <% const _denom = Number(c.total_recipients) > 0 ? Number(c.total_recipients) : Number(c.log_count || 0); %>
-    <% const _sentOk = Number(c.sent_count || 0); %>
+    <% const _sentOk = Number(c.salida_ok || 0); %>
     <% const _ratio = _denom > 0 ? (_sentOk + '/' + _denom) : '—'; %>
     <li class="inbox-chat-item <%= _sel === c.id ? 'is-active' : '' %>">
       <a class="inbox-chat-link" href="<%= basePath %><%= _listBase %>/<%= c.id %>">
@@ -28,7 +28,7 @@
             <span class="inbox-chat-time"><span class="badge <%= c.status %>"><%= c.status %></span></span>
           </span>
           <span class="inbox-chat-row-mid">
-            <span class="inbox-chat-preview mono"><%= c.template_name || '—' %> <span class="campaign-list-ratio" title="Aceptados por API / destinatarios o registros"><%= _ratio %></span></span>
+            <span class="inbox-chat-preview mono"><%= c.template_name || '—' %> <span class="campaign-list-ratio" title="Salida OK / destinatarios o registros"><%= _ratio %></span></span>
           </span>
         </span>
       </a>

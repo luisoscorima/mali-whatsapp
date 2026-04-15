@@ -1,5 +1,13 @@
-/** Comparación de estado de campaign_logs (Meta puede enviar mezcla de mayúsculas). */
-const LOG_STATUS = `LOWER(TRIM(COALESCE(cl.status, '')))`;
+const {
+  CAMPAIGN_LOG_STATUS_SQL,
+  sqlInList,
+  SALIDA_OK_STATUSES,
+  ERROR_STATUSES,
+} = require('../utils/campaignLogStatuses');
+
+const LOG_STATUS = CAMPAIGN_LOG_STATUS_SQL;
+const SALIDA_OK_IN = sqlInList(SALIDA_OK_STATUSES);
+const ERROR_IN = sqlInList(ERROR_STATUSES);
 
 function registerInboxViews(app, ctx) {
   const { query, config, loadSegments, loadSyncedTemplates, resolveAppBaseUrl, appPath } = ctx;
@@ -16,10 +24,10 @@ function registerInboxViews(app, ctx) {
         c.total_recipients,
         c.created_at,
         COALESCE(COUNT(cl.id), 0)::int AS log_count,
-        COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ('sent', 'delivered', 'read') THEN 1 ELSE 0 END), 0)::int AS sent_count,
+        COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ${SALIDA_OK_IN} THEN 1 ELSE 0 END), 0)::int AS salida_ok,
         COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ('delivered', 'read') THEN 1 ELSE 0 END), 0)::int AS delivered_count,
         COALESCE(SUM(CASE WHEN ${LOG_STATUS} = 'read' THEN 1 ELSE 0 END), 0)::int AS read_count,
-        COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ('error', 'failed', 'undelivered') THEN 1 ELSE 0 END), 0)::int AS failed_count
+        COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ${ERROR_IN} THEN 1 ELSE 0 END), 0)::int AS failed_count
        FROM campaigns c
        LEFT JOIN campaign_logs cl ON cl.campaign_id = c.id
        WHERE c.area = $1
@@ -35,10 +43,10 @@ function registerInboxViews(app, ctx) {
     const r = await query(
       `SELECT
          COUNT(cl.id)::int AS total_logs,
-         COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ('sent', 'delivered', 'read') THEN 1 ELSE 0 END), 0)::int AS sent_count,
+         COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ${SALIDA_OK_IN} THEN 1 ELSE 0 END), 0)::int AS salida_ok,
          COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ('delivered', 'read') THEN 1 ELSE 0 END), 0)::int AS delivered_count,
          COALESCE(SUM(CASE WHEN ${LOG_STATUS} = 'read' THEN 1 ELSE 0 END), 0)::int AS read_count,
-         COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ('error', 'failed', 'undelivered') THEN 1 ELSE 0 END), 0)::int AS failed_count
+         COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ${ERROR_IN} THEN 1 ELSE 0 END), 0)::int AS failed_count
        FROM campaigns c
        LEFT JOIN campaign_logs cl ON cl.campaign_id = c.id
        WHERE c.area = $1`,
@@ -46,7 +54,7 @@ function registerInboxViews(app, ctx) {
     );
     return r.rows[0] || {
       total_logs: 0,
-      sent_count: 0,
+      salida_ok: 0,
       delivered_count: 0,
       read_count: 0,
       failed_count: 0,

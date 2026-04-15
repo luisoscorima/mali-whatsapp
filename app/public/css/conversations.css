@@ -825,3 +825,43 @@ html[data-theme='dark'] .inbox-compose-bar {
 .campaign-detail-metrics {
   margin-bottom: 0.75rem;
 }
+
+.campaign-meta-funnel-details {
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--line, #e5e7eb);
+  font-size: 0.85rem;
+}
+
+.campaign-meta-funnel-summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--accent, #2563eb);
+  list-style: none;
+}
+
+.campaign-meta-funnel-summary::-webkit-details-marker {
+  display: none;
+}
+
+.campaign-meta-funnel-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 0.5rem 0 0;
+}
+
+.campaign-meta-funnel-item strong {
+  font-weight: 600;
+  margin-right: 0.25rem;
+}
+
+.campaign-meta-funnel-ratios {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.campaign-meta-funnel-ratios-sep {
+  opacity: 0.7;
+}

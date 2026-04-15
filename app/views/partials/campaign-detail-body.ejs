@@ -1,29 +1,61 @@
 <div class="page page--detail campaign-detail-page">
   <% 
     var _logTotal = logs.length;
-    var _sent = 0, _del = 0, _read = 0, _fail = 0;
+    var _nSent = 0, _nDel = 0, _nRead = 0, _nErr = 0, _nOtro = 0;
+    var _otrosSeen = {};
+    var _otrosLabels = [];
     logs.forEach(function (log) {
       var s = String(log.status || '').trim().toLowerCase();
-      if (s === 'read') { _read++; _del++; _sent++; }
-      else if (s === 'delivered') { _del++; _sent++; }
-      else if (s === 'sent') { _sent++; }
-      else if (s === 'error' || s === 'failed' || s === 'undelivered') _fail++;
+      if (s === 'sent') _nSent++;
+      else if (s === 'delivered') _nDel++;
+      else if (s === 'read') _nRead++;
+      else if (s === 'error' || s === 'failed' || s === 'undelivered') _nErr++;
+      else {
+        _nOtro++;
+        var raw = String(log.status || '').trim();
+        if (raw && !_otrosSeen[raw]) {
+          _otrosSeen[raw] = true;
+          _otrosLabels.push(raw);
+        }
+      }
     });
-    var _den = Number(campaign.total_recipients) > 0 ? Number(campaign.total_recipients) : _logTotal;
-    var _ratio = _den > 0 ? (_sent + '/' + _den) : '—';
-    var _dPct = _sent > 0 ? Math.round((_del / _sent) * 100) : null;
-    var _rPct = _del > 0 ? Math.round((_read / _del) * 100) : null;
-    var _ePct = _logTotal > 0 ? Math.round((_fail / _logTotal) * 100) : 0;
+    var _salidaOk = _nSent + _nDel + _nRead;
+    var _readForPct = _nRead;
+    var _errorPct = _logTotal > 0 ? Math.round((_nErr / _logTotal) * 100) : 0;
+    var _readPct = _salidaOk > 0 ? Math.round((_readForPct / _salidaOk) * 100) : null;
+    var _onDevicePct = _salidaOk > 0 ? Math.round(((_nDel + _nRead) / _salidaOk) * 100) : null;
+    var _readOnDeliveredPct = (_nDel + _nRead) > 0 ? Math.round((_nRead / (_nDel + _nRead)) * 100) : null;
+    var _otrosTitle = _otrosLabels.length ? _otrosLabels.join(', ') : '';
   %>
   <div class="card campaign-detail-metrics">
     <h2 class="card-title">Indicadores de esta campaña</h2>
     <div class="metrics-row metrics-row--history metrics-row--compact" role="region" aria-label="Indicadores de campaña">
       <div class="metric"><span class="metric-num"><%= _logTotal %></span><span class="metric-lbl">Total</span></div>
-      <div class="metric"><span class="metric-num"><%= _ratio %></span><span class="metric-lbl">Aceptados / meta</span></div>
-      <div class="metric"><span class="metric-num"><%= _dPct !== null ? _dPct + '%' : '—' %></span><span class="metric-lbl">Entregados</span></div>
-      <div class="metric"><span class="metric-num"><%= _rPct !== null ? _rPct + '%' : '—' %></span><span class="metric-lbl">Lectura</span></div>
-      <div class="metric"><span class="metric-num"><%= _ePct %>%</span><span class="metric-lbl">Error</span></div>
+      <div class="metric"><span class="metric-num"><%= _salidaOk %></span><span class="metric-lbl">Salida OK</span></div>
+      <div class="metric"><span class="metric-num"><%= _errorPct %>%</span><span class="metric-lbl">Error</span></div>
+      <div class="metric"><span class="metric-num"><%= _readPct !== null ? _readPct + '%' : '—' %></span><span class="metric-lbl">Lectura</span></div>
     </div>
+    <details class="campaign-meta-funnel-details">
+      <summary class="campaign-meta-funnel-summary">Embudo Meta (detalle)</summary>
+      <div class="campaign-meta-funnel-grid" role="group" aria-label="Contadores por estado">
+        <span class="campaign-meta-funnel-item"><strong>sent</strong> <%= _nSent %></span>
+        <span class="campaign-meta-funnel-item"><strong>delivered</strong> <%= _nDel %></span>
+        <span class="campaign-meta-funnel-item"><strong>read</strong> <%= _nRead %></span>
+        <span class="campaign-meta-funnel-item"><strong>error</strong> <%= _nErr %></span>
+        <span class="campaign-meta-funnel-item"<% if (_otrosTitle) { %> title="<%= _otrosTitle %>"<% } %>><strong>otros</strong> <%= _nOtro %></span>
+      </div>
+      <% if (_onDevicePct !== null || _readOnDeliveredPct !== null) { %>
+      <p class="campaign-meta-funnel-ratios muted">
+        <% if (_onDevicePct !== null) { %>
+        <span>En dispositivo (Meta): <%= _onDevicePct %>%</span>
+        <% } %>
+        <% if (_onDevicePct !== null && _readOnDeliveredPct !== null) { %><span class="campaign-meta-funnel-ratios-sep"> · </span><% } %>
+        <% if (_readOnDeliveredPct !== null) { %>
+        <span>Lectura / entregado en dispositivo: <%= _readOnDeliveredPct %>%</span>
+        <% } %>
+      </p>
+      <% } %>
+    </details>
   </div>
   <div class="card">
     <% if (campaign.status === 'queued' || campaign.status === 'processing') { %>

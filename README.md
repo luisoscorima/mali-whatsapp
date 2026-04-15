@@ -106,6 +106,8 @@ Si aparece `Cannot find module` tras añadir dependencias en `package.json`, el 
 
 En **Campañas** (`GET /campaigns`) se muestran la lista de campañas y el **resumen global de envíos** (indicadores); el detalle de cada campaña es `GET /campaigns/:id`.
 
+**Indicadores:** los cuatro KPI operativos en lista y detalle son **Total** (filas en `campaign_logs`), **Salida OK** (estados `sent`, `delivered` o `read`), **Error %** sobre el total y **Lectura %** (lecturas sobre Salida OK; si Salida OK es 0 se muestra —). En el detalle, **Embudo Meta (detalle)** es un desglose por estado y ratios opcionales solo para diagnóstico; no reemplaza los informes de la cuenta Meta.
+
 ## Endpoints útiles (API / sistema)
 
 - `GET /health` salud de app + DB
