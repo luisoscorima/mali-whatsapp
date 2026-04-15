@@ -25,11 +25,15 @@
       <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav, showAdminNav, requireAuth, currentUser, areaLabel }) %>
 
       <div class="wa-main-column">
-        <main class="main-panel">
+        <%- include('partials/wa-column-head', {
+          columnTitle: 'Usuarios del panel',
+          showRefresh: true,
+          refreshTitle: 'Actualizar usuarios',
+          refreshAriaLabel: 'Actualizar usuarios' }) %>
+        <main class="main-panel wa-main-panel">
         <section class="content-section is-active">
           <div class="card">
-            <div class="card-head">
-              <h1 class="card-title">Usuarios del panel</h1>
+            <div class="card-head card-head--actions-only">
               <a class="small-btn primary" href="<%= basePath %>/admin/users/new">Nuevo usuario</a>
             </div>
             <% if (userSaved) { %>
@@ -75,6 +79,10 @@
       </div>
 
       <aside class="wa-tertiary" aria-label="Información">
+        <%- include('partials/wa-column-head', {
+          columnTitle: 'Vista',
+          columnHeadExtraClass: 'wa-column-head--tertiary',
+          showRefresh: false }) %>
         <div class="wa-tertiary-inner">
           <div class="wa-placeholder">
             <span class="wa-placeholder-icon" aria-hidden="true">

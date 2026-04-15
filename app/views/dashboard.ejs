@@ -26,9 +26,11 @@
       <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav: typeof activeNav !== 'undefined' ? activeNav : 'dashboard', showAdminNav: typeof showAdminNav !== 'undefined' ? showAdminNav : false, requireAuth, currentUser, areaLabel }) %>
 
       <div class="wa-main-column">
-        <div class="wa-page-toolbar">
-          <%- include('partials/wa-refresh-btn', { refreshLabel: 'Actualizar', refreshTitle: 'Actualizar panel y campañas', refreshAriaLabel: 'Actualizar panel y campañas' }) %>
-        </div>
+        <%- include('partials/wa-column-head', {
+          columnTitle: 'Panel',
+          showRefresh: true,
+          refreshTitle: 'Actualizar panel y campañas',
+          refreshAriaLabel: 'Actualizar panel y campañas' }) %>
         <main class="main-panel wa-main-panel">
         <% const ct = typeof campaignTotals !== 'undefined' && campaignTotals ? campaignTotals : {};
           const totals = {
@@ -289,6 +291,10 @@
       </div>
 
       <aside class="wa-tertiary" aria-label="Panel lateral">
+        <%- include('partials/wa-column-head', {
+          columnTitle: 'Vista',
+          columnHeadExtraClass: 'wa-column-head--tertiary',
+          showRefresh: false }) %>
         <div class="wa-tertiary-inner wa-tertiary-inner--dashboard-panels">
           <div class="wa-tertiary-panel wa-tertiary-panel--hint is-active" data-tertiary-panel="send-campaign">
             <div class="wa-placeholder wa-placeholder--tab-hint" role="status">

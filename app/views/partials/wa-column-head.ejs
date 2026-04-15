@@ -1,0 +1,15 @@
+<% const _h = typeof columnTitle !== 'undefined' ? columnTitle : ''; %>
+<% const _lvl = typeof headingLevel !== 'undefined' ? headingLevel : '2'; %>
+<% const _showR = typeof showRefresh !== 'undefined' ? showRefresh : false; %>
+<% const _rt = typeof refreshTitle !== 'undefined' ? refreshTitle : 'Actualizar'; %>
+<% const _ra = typeof refreshAriaLabel !== 'undefined' ? refreshAriaLabel : _rt; %>
+<div class="wa-column-head <%= typeof columnHeadExtraClass !== 'undefined' ? columnHeadExtraClass : '' %>">
+  <% if (_lvl === '1') { %>
+    <h1 class="wa-column-head__title"><%= _h %></h1>
+  <% } else { %>
+    <h2 class="wa-column-head__title"><%= _h %></h2>
+  <% } %>
+  <% if (_showR) { %>
+    <%- include('partials/wa-refresh-btn', { refreshTitle: _rt, refreshAriaLabel: _ra }) %>
+  <% } %>
+</div>

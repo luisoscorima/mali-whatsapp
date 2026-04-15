@@ -25,10 +25,14 @@
       <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav, showAdminNav, requireAuth, currentUser, areaLabel }) %>
 
       <div class="wa-main-column">
-        <main class="main-panel">
+        <%- include('partials/wa-column-head', {
+          columnTitle: 'Credenciales Meta',
+          showRefresh: true,
+          refreshTitle: 'Actualizar credenciales',
+          refreshAriaLabel: 'Actualizar credenciales' }) %>
+        <main class="main-panel wa-main-panel">
         <section class="content-section is-active">
           <div class="card">
-            <h1 class="card-title">Credenciales Meta</h1>
             <p class="card-lead">
               Los valores guardados aquí tienen prioridad sobre <code>.env</code>. Deja un campo vacío y guarda para volver a usar solo el entorno.
             </p>
@@ -87,6 +91,10 @@
       </div>
 
       <aside class="wa-tertiary" aria-label="Información">
+        <%- include('partials/wa-column-head', {
+          columnTitle: 'Vista',
+          columnHeadExtraClass: 'wa-column-head--tertiary',
+          showRefresh: false }) %>
         <div class="wa-tertiary-inner">
           <div class="wa-placeholder">
             <span class="wa-placeholder-icon" aria-hidden="true">

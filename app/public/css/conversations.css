@@ -45,19 +45,9 @@ html[data-theme='dark'] body.page-conversations .wa-layout--inbox.inbox-layout-w
 }
 
 .inbox-sidebar-header {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
   padding: 14px 16px 10px;
   border-bottom: none;
   background: var(--wa-list-bg);
-}
-
-.inbox-sidebar-header .inbox-sidebar-title {
-  flex: 1 1 auto;
-  min-width: 0;
 }
 
 .inbox-sidebar-title {
@@ -670,22 +660,5 @@ html[data-theme='dark'] .inbox-compose-bar {
     border-radius: 8px;
     background: var(--surface-strong);
     border: 1px solid var(--line);
-  }
-
-  /* Actualizar: lista móvil en sidebar; detalle en columna principal */
-  body.page-conversations .conversations-inbox:not(.conversations-inbox--detail) .wa-inbox-toolbar--main {
-    display: none !important;
-  }
-
-  body.page-conversations .conversations-inbox:not(.conversations-inbox--detail) .wa-inbox-toolbar--sidebar {
-    display: flex !important;
-  }
-
-  body.page-conversations .conversations-inbox--detail .wa-inbox-toolbar--main {
-    display: flex !important;
-  }
-
-  body.page-conversations .conversations-inbox--detail .wa-inbox-toolbar--sidebar {
-    display: none !important;
   }
 }

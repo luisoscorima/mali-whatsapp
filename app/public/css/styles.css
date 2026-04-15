@@ -852,6 +852,10 @@ button.secondary {
   align-items: center;
 }
 
+.card-head--actions-only {
+  justify-content: flex-end;
+}
+
 .table-wrap {
   overflow-x: auto;
   border: 1px solid var(--line);
