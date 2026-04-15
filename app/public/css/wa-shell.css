@@ -70,6 +70,11 @@ html[data-theme='dark'] body.page-conversations {
   scrollbar-color: var(--line) transparent;
 }
 
+/* Lista + cabecera: el scroll va al main (.wa-dashboard-sections), no a toda la columna */
+.wa-main-column.inbox-sidebar {
+  overflow: hidden;
+}
+
 .wa-main-column::-webkit-scrollbar {
   width: 6px;
 }
@@ -85,64 +90,19 @@ html[data-theme='dark'] body.page-conversations {
   min-height: 0;
 }
 
-.wa-main-column > .wa-column-head + .main-panel,
-.wa-main-column > .wa-column-head + .main-panel.wa-main-panel {
+.wa-main-column.inbox-sidebar > .inbox-sidebar-header + .main-panel,
+.wa-main-column.inbox-sidebar > .inbox-sidebar-header + .main-panel.wa-main-panel {
   flex: 1 1 auto;
   min-height: 0;
 }
 
-/* Cabecera de columna (estilo lista Chats): título + botón actualizar en una línea */
-.wa-column-head {
-  flex-shrink: 0;
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 14px 16px 10px;
-  border-bottom: 1px solid var(--line);
-  background: var(--wa-list-bg);
-}
-
-.wa-column-head__title {
-  margin: 0;
-  font-size: 1.15rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--ink);
+/* Contenido principal del dashboard/admin (scroll en el main, no en toda la columna) */
+.wa-dashboard-sections {
   flex: 1 1 auto;
-  min-width: 0;
-}
-
-.wa-column-head--tertiary {
-  background: var(--wa-chat-bg);
-  border-bottom-color: var(--line);
-}
-
-.wa-column-head--detail-page {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px 10px;
-}
-
-.wa-column-head--detail-page .wa-column-head__title {
-  font-size: 1.05rem;
-  text-align: center;
-  margin: 0;
-  min-width: 0;
-}
-
-.wa-column-head__back {
-  flex-shrink: 0;
-  text-decoration: none;
-  color: var(--accent);
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
-.wa-column-head__back:hover {
-  text-decoration: underline;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .wa-refresh-btn {
@@ -211,11 +171,7 @@ html[data-theme='dark'] body.page-conversations {
   min-height: min(70vh, 520px);
 }
 
-.wa-tertiary:has(> .wa-column-head) {
-  padding-top: 0;
-}
-
-.wa-tertiary:has(> .wa-column-head) > .wa-tertiary-inner {
+.wa-tertiary.inbox-main > .wa-tertiary-inner {
   min-height: 0;
 }
 

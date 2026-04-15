@@ -18,19 +18,19 @@
     />
     <link rel="stylesheet" href="<%= basePath %>/css/styles.css" />
     <link rel="stylesheet" href="<%= basePath %>/css/wa-shell.css" />
+    <link rel="stylesheet" href="<%= basePath %>/css/conversations.css" />
     <script src="<%= basePath %>/js/theme.js" defer></script>
   </head>
   <body class="wa-body-dashboard">
-    <div class="wa-layout wa-layout--dashboard">
+    <div class="wa-layout wa-layout--dashboard inbox-layout-wa">
       <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav, showAdminNav, requireAuth, currentUser, areaLabel }) %>
 
-      <div class="wa-main-column">
-        <%- include('partials/wa-column-head', {
-          columnTitle: 'Credenciales Meta',
-          showRefresh: true,
-          refreshTitle: 'Actualizar credenciales',
-          refreshAriaLabel: 'Actualizar credenciales' }) %>
-        <main class="main-panel wa-main-panel">
+      <div class="wa-main-column inbox-sidebar">
+        <div class="inbox-sidebar-header inbox-sidebar-header--with-actions">
+          <h2 class="inbox-sidebar-title">Credenciales Meta</h2>
+          <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar credenciales', refreshAriaLabel: 'Actualizar credenciales' }) %>
+        </div>
+        <main class="main-panel wa-main-panel wa-dashboard-sections">
         <section class="content-section is-active">
           <div class="card">
             <p class="card-lead">
@@ -90,11 +90,7 @@
         </main>
       </div>
 
-      <aside class="wa-tertiary" aria-label="Información">
-        <%- include('partials/wa-column-head', {
-          columnTitle: 'Vista',
-          columnHeadExtraClass: 'wa-column-head--tertiary',
-          showRefresh: false }) %>
+      <aside class="wa-tertiary inbox-main" aria-label="Información">
         <div class="wa-tertiary-inner">
           <div class="wa-placeholder">
             <span class="wa-placeholder-icon" aria-hidden="true">

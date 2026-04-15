@@ -18,20 +18,20 @@
     />
     <link rel="stylesheet" href="<%= basePath %>/css/styles.css" />
     <link rel="stylesheet" href="<%= basePath %>/css/wa-shell.css" />
+    <link rel="stylesheet" href="<%= basePath %>/css/conversations.css" />
     <script src="<%= basePath %>/js/theme.js" defer></script>
     <script src="<%= basePath %>/js/campaign-template.js" defer></script>
   </head>
   <body class="wa-body-dashboard">
-    <div class="wa-layout wa-layout--dashboard">
+    <div class="wa-layout wa-layout--dashboard inbox-layout-wa">
       <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav: typeof activeNav !== 'undefined' ? activeNav : 'dashboard', showAdminNav: typeof showAdminNav !== 'undefined' ? showAdminNav : false, requireAuth, currentUser, areaLabel }) %>
 
-      <div class="wa-main-column">
-        <%- include('partials/wa-column-head', {
-          columnTitle: 'Panel',
-          showRefresh: true,
-          refreshTitle: 'Actualizar panel y campañas',
-          refreshAriaLabel: 'Actualizar panel y campañas' }) %>
-        <main class="main-panel wa-main-panel">
+      <div class="wa-main-column inbox-sidebar" aria-label="Contenido principal">
+        <div class="inbox-sidebar-header inbox-sidebar-header--with-actions">
+          <h2 class="inbox-sidebar-title" id="wa-dashboard-section-title">Envío masivo</h2>
+          <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar página', refreshAriaLabel: 'Actualizar página' }) %>
+        </div>
+        <main class="main-panel wa-main-panel wa-dashboard-sections">
         <% const ct = typeof campaignTotals !== 'undefined' && campaignTotals ? campaignTotals : {};
           const totals = {
             sent: Number(ct.sent_count || 0),
@@ -290,11 +290,7 @@
         </main>
       </div>
 
-      <aside class="wa-tertiary" aria-label="Panel lateral">
-        <%- include('partials/wa-column-head', {
-          columnTitle: 'Vista',
-          columnHeadExtraClass: 'wa-column-head--tertiary',
-          showRefresh: false }) %>
+      <aside class="wa-tertiary inbox-main" aria-label="Área lateral">
         <div class="wa-tertiary-inner wa-tertiary-inner--dashboard-panels">
           <div class="wa-tertiary-panel wa-tertiary-panel--hint is-active" data-tertiary-panel="send-campaign">
             <div class="wa-placeholder wa-placeholder--tab-hint" role="status">
@@ -500,8 +496,27 @@
         const campaignDetailRoot = document.getElementById('campaign-detail-root');
         const apiBase = '<%= basePath %>';
 
+        const SECTION_TITLES = {
+          'send-campaign': 'Envío masivo',
+          contacts: 'Contactos',
+          segments: 'Segmentos',
+          history: 'Historial',
+          configuration: 'Ajustes',
+        };
+
         let currentSection = 'send-campaign';
         let campaignDetailOpen = false;
+
+        function updateDashboardSectionTitle() {
+          const el = document.getElementById('wa-dashboard-section-title');
+          if (!el) return;
+          var key = sectionFromHash();
+          if (campaignDetailOpen && key === 'history') {
+            el.textContent = 'Detalle de campaña';
+            return;
+          }
+          el.textContent = SECTION_TITLES[key] || SECTION_TITLES['send-campaign'];
+        }
 
         function tertiaryKeyForSection(sectionId) {
           if (sectionId === 'contacts') return 'contacts';
@@ -553,6 +568,7 @@
           }
           syncTertiaryPanels();
           updateSplitLayout();
+          updateDashboardSectionTitle();
         }
 
         function renderCampaignDetail(data) {
@@ -688,6 +704,7 @@
           }
           syncTertiaryPanels();
           updateSplitLayout();
+          updateDashboardSectionTitle();
 
           fetch(apiBase + '/api/campaigns/' + id, { credentials: 'same-origin' })
             .then(function (r) {
@@ -713,6 +730,7 @@
           clearCampaignDetailRoot();
           syncTertiaryPanels();
           updateSplitLayout();
+          updateDashboardSectionTitle();
         }
 
         document.querySelectorAll('.js-campaign-detail-btn').forEach(function (btn) {
@@ -756,6 +774,7 @@
         });
 
         applyFromQueryOrHash();
+        updateDashboardSectionTitle();
       })();
     </script>
     <script>

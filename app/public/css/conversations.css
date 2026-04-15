@@ -57,6 +57,47 @@ html[data-theme='dark'] body.page-conversations .wa-layout--inbox.inbox-layout-w
   letter-spacing: -0.02em;
 }
 
+.inbox-sidebar-header--with-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.inbox-sidebar-header--with-actions .inbox-sidebar-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.inbox-sidebar-header--detail {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.inbox-sidebar-header--detail .inbox-sidebar-title {
+  font-size: 1.05rem;
+  text-align: center;
+  margin: 0;
+  min-width: 0;
+}
+
+.inbox-sidebar-back {
+  flex-shrink: 0;
+  text-decoration: none;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.inbox-sidebar-back:hover {
+  text-decoration: underline;
+}
+
 .inbox-layout-wa .inbox-filters {
   padding: 0 14px 12px;
   gap: 10px;

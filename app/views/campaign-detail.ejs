@@ -18,19 +18,20 @@
     />
     <link rel="stylesheet" href="<%= basePath %>/css/styles.css" />
     <link rel="stylesheet" href="<%= basePath %>/css/wa-shell.css" />
+    <link rel="stylesheet" href="<%= basePath %>/css/conversations.css" />
     <script src="<%= basePath %>/js/theme.js" defer></script>
   </head>
   <body class="wa-body-dashboard">
-    <div class="wa-layout wa-layout--dashboard">
+    <div class="wa-layout wa-layout--dashboard inbox-layout-wa">
       <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav: typeof activeNav !== 'undefined' ? activeNav : 'dashboard', showAdminNav: typeof showAdminNav !== 'undefined' ? showAdminNav : false, requireAuth: typeof requireAuth !== 'undefined' ? requireAuth : true, currentUser, areaLabel }) %>
 
-      <div class="wa-main-column">
-        <div class="wa-column-head wa-column-head--detail-page">
-          <a class="wa-column-head__back" href="<%= basePath %>/">← Panel</a>
-          <h1 class="wa-column-head__title">Campaña #<%= campaign.id %></h1>
+      <div class="wa-main-column inbox-sidebar">
+        <div class="inbox-sidebar-header inbox-sidebar-header--detail">
+          <a class="inbox-sidebar-back" href="<%= basePath %>/">← Inicio</a>
+          <h1 class="inbox-sidebar-title">Campaña #<%= campaign.id %></h1>
           <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar campaña', refreshAriaLabel: 'Actualizar campaña' }) %>
         </div>
-        <main class="main-panel wa-main-panel">
+        <main class="main-panel wa-main-panel wa-dashboard-sections">
           <div class="page page--detail">
             <div class="card">
               <% if (campaign.status === 'queued' || campaign.status === 'processing') { %>
@@ -77,18 +78,14 @@
         </main>
       </div>
 
-      <aside class="wa-tertiary" aria-label="Información">
-        <%- include('partials/wa-column-head', {
-          columnTitle: 'Vista',
-          columnHeadExtraClass: 'wa-column-head--tertiary',
-          showRefresh: false }) %>
+      <aside class="wa-tertiary inbox-main" aria-label="Información">
         <div class="wa-tertiary-inner">
           <div class="wa-placeholder">
             <span class="wa-placeholder-icon" aria-hidden="true">
               <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
             </span>
             <h2 class="wa-placeholder-title">Detalle de campaña</h2>
-            <p class="wa-placeholder-text">Vista de una campaña enviada. El hilo de chat con clientes está en <strong>Conversaciones</strong>.</p>
+            <p class="wa-placeholder-text">Resumen de una campaña enviada. El hilo de chat con clientes está en <strong>Conversaciones</strong>.</p>
             <p class="wa-placeholder-text"><a class="text-link" href="<%= basePath %>/conversations">Ir a conversaciones</a></p>
           </div>
         </div>
