@@ -757,45 +757,74 @@ html[data-theme='dark'] .inbox-compose-bar {
     grid-column: 1;
     width: 100%;
     height: auto;
-    min-height: 56px;
-    flex-direction: row;
-    flex-wrap: wrap;
+    min-height: 52px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    justify-content: center;
-    align-content: center;
-    padding: 6px 8px;
-    padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+    column-gap: 6px;
+    padding: 6px max(8px, env(safe-area-inset-right, 0px))
+      max(10px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
     border-right: none;
     border-top: 1px solid var(--line);
-    gap: 4px 8px;
   }
 
   body.page-conversations .wa-layout--inbox .wa-rail__brand {
     margin: 0;
+    justify-self: start;
+    flex-shrink: 0;
+  }
+
+  body.page-conversations .wa-layout--inbox .wa-rail__logo-wrap {
+    width: 34px;
+    height: 34px;
   }
 
   body.page-conversations .wa-layout--inbox .wa-rail__nav {
-    flex: 1 1 auto;
+    flex: unset;
     flex-direction: row;
     flex-wrap: nowrap;
     justify-content: space-evenly;
     align-items: center;
     min-width: 0;
-    padding: 4px 0;
-    gap: 2px;
+    width: 100%;
+    max-width: 100%;
+    padding: 0;
+    gap: 0;
   }
 
   body.page-conversations .wa-layout--inbox .wa-rail__item {
-    width: 44px;
-    min-height: 44px;
-    padding: 6px 4px;
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+    max-width: 44px;
+    min-height: 40px;
+    padding: 4px 2px;
+  }
+
+  body.page-conversations .wa-layout--inbox .wa-rail__icon svg {
+    width: 22px;
+    height: 22px;
   }
 
   body.page-conversations .wa-layout--inbox .wa-rail__footer {
     flex-direction: row;
-    gap: 10px;
+    flex-shrink: 0;
+    gap: 6px;
     padding-top: 0;
     width: auto;
+    justify-self: end;
+  }
+
+  body.page-conversations .wa-layout--inbox .wa-rail__theme {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+  }
+
+  body.page-conversations .wa-layout--inbox .wa-rail__profile-trigger {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
   }
 
   body.page-conversations .wa-layout--inbox .inbox-sidebar,
