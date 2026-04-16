@@ -1,4 +1,6 @@
 require('dotenv').config();
+const { installGlobalConsoleTimestamping } = require('./src/utils/logger');
+installGlobalConsoleTimestamping();
 
 const config = require('./src/config');
 const { query } = require('./src/db/pool');
