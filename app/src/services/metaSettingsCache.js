@@ -22,6 +22,9 @@ const KEYS = {
 
 const VALID_META_AREAS = ['ti', 'pam', 'educacion'];
 
+/** Evita spam en logs al corregir Phone Number ID duplicado con TI. */
+const warnedPhoneIdDupWithTi = new Set();
+
 /** Quita BOM, espacios y comillas envolventes típicas de .env mal copiado. */
 function normalizeSecretValue(s) {
   let v = String(s ?? '')
@@ -60,6 +63,7 @@ async function refreshMetaSettingsCache(queryFn) {
     /* sin tabla o error: seguir con env */
   }
   cache = empty;
+  warnedPhoneIdDupWithTi.clear();
 }
 
 function getVerifyToken() {
@@ -70,9 +74,11 @@ function getAppSecret() {
   return normalizeSecretValue(cache.global[KEYS.appSecret] || process.env.APP_SECRET || '');
 }
 
-function getWhatsAppCredentialsForArea(area) {
-  const norm = normalizeCredentialArea(area);
-  const row = cache[norm];
+/**
+ * Resuelve token + phone_number_id desde app_settings y .env (sin corrección de duplicados).
+ */
+function buildWhatsAppCredentialsRaw(norm) {
+  const row = cache[norm] || {};
   let token = normalizeSecretValue(row[KEYS.whatsappToken] || '');
   let phoneNumberId = String(row[KEYS.phoneNumberId] || '').trim();
 
@@ -96,6 +102,45 @@ function getWhatsAppCredentialsForArea(area) {
       phoneNumberId = String(process.env.PHONE_NUMBER_ID_PAM || fallbackPhone).trim();
     } else {
       phoneNumberId = String(process.env.PHONE_NUMBER_ID_EDUCACION || fallbackPhone).trim();
+    }
+  }
+
+  return { token, phoneNumberId };
+}
+
+function getWhatsAppCredentialsForArea(area) {
+  const norm = normalizeCredentialArea(area);
+  let { token, phoneNumberId } = buildWhatsAppCredentialsRaw(norm);
+
+  /**
+   * Si en app_settings el área pam/educacion tiene el mismo Phone Number ID que TI
+   * (error típico al copiar credenciales en Admin), la API de Meta envía con la línea TI
+   * y el webhook trae metadata.phone_number_id de TI. Si .env tiene un ID distinto para
+   * ese área, preferimos el entorno.
+   */
+  if (norm !== 'ti') {
+    const tiPid = String(buildWhatsAppCredentialsRaw('ti').phoneNumberId || '').trim();
+    const pid = String(phoneNumberId || '').trim();
+    if (tiPid && pid && pid === tiPid) {
+      const fallbackPhone = String(process.env.PHONE_NUMBER_ID || '').trim();
+      const preferred =
+        norm === 'pam'
+          ? String(process.env.PHONE_NUMBER_ID_PAM || fallbackPhone).trim()
+          : String(process.env.PHONE_NUMBER_ID_EDUCACION || fallbackPhone).trim();
+      if (preferred && preferred !== pid) {
+        if (!warnedPhoneIdDupWithTi.has(norm)) {
+          warnedPhoneIdDupWithTi.add(norm);
+          console.warn(
+            JSON.stringify({
+              level: 'warn',
+              message:
+                'Credenciales Meta: Phone Number ID en app_settings para este area coincide con TI; se usa PHONE_NUMBER_ID_PAM o PHONE_NUMBER_ID_EDUCACION del entorno',
+              area: norm,
+            })
+          );
+        }
+        phoneNumberId = preferred;
+      }
     }
   }
 

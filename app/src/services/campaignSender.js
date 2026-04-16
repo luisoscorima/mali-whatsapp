@@ -2,6 +2,7 @@ const { logInfo, logError } = require('../utils/logger');
 const { sanitizeApiResponse, sanitizeApiErrorPayload } = require('../utils/apiSanitize');
 const { normalizePhone } = require('../utils/phone');
 const { sendTemplateWithComponents } = require('./metaWhatsApp');
+const { getWhatsAppCredentialsForArea } = require('./metaSettingsCache');
 const {
   buildTemplateDefinition,
   buildWhatsappGraphComponents,
@@ -50,6 +51,13 @@ async function runCampaignSendJob(query, ctx) {
     if (lock.rowCount === 0) {
       return;
     }
+
+    const creds = getWhatsAppCredentialsForArea(area);
+    logInfo(fakeReqLog, 'Campana: envio con Phone Number ID', {
+      campaignId,
+      area,
+      phoneNumberId: creds.phoneNumberId || null,
+    });
 
     const recipientsResult = await query(
       `SELECT id, name, phone
