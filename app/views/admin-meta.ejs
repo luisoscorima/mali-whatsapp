@@ -41,7 +41,8 @@
           <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">Meta for Developers</a>
           → tu app → WhatsApp → Configuración, vincula <strong>cada cuenta de WhatsApp Business (WABA)</strong> a la app y suscribe el webhook al campo <code>messages</code>.
           Tras añadir un WABA nuevo, a veces hay que volver a guardar la URL del webhook o esperar unos minutos.
-          En los logs del servidor debe aparecer <code>Webhook: mensajes entrantes (Meta)</code> con <code>metadataPhoneNumberId</code> igual al Phone number ID de esa área.
+          En los logs del servidor debe aparecer <code>Webhook POST recibido</code> al menos (y con respuestas del cliente, <code>Webhook: mensajes entrantes (Meta)</code> con <code>metadataPhoneNumberId</code> de esa línea).
+          Si al contestar en WhatsApp <strong>no aparece ningún</strong> <code>Webhook POST recibido</code> en <code>docker logs</code>, Meta no está llegando a tu URL: revisa la URL del webhook en Developers (debe coincidir con tu dominio y ruta <code>/webhook</code>), que el proxy (Nginx) reenvíe POST al contenedor, y que la app de Meta tenga vinculada la cuenta WhatsApp Business del número de Educación.
         </p>
 
         <h2 class="card-subtitle">Credenciales por área</h2>

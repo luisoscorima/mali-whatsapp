@@ -8,6 +8,14 @@ const globalLimiter = rateLimit({
   max: Number(process.env.RATE_LIMIT_MAX || 300),
   standardHeaders: true,
   legacyHeaders: false,
+  /** Meta envía muchos POST a /webhook; no deben competir con el cupo del panel ni quedar 429. */
+  skip: (req) => {
+    const p = String(req.path || '');
+    if (p === '/webhook') return true;
+    const base = String(config.basePath || '').trim();
+    if (base && p === `${base}/webhook`) return true;
+    return false;
+  },
 });
 
 const campaignLimiter = rateLimit({
