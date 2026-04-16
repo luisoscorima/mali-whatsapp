@@ -36,6 +36,13 @@
           <span class="field-label">App Secret</span>
           <input type="password" name="app_secret" class="js-meta-secret" autocomplete="off" value="<%= metaRows.global[keys.appSecret] || '' %>" placeholder="Si vacío: APP_SECRET en .env" />
         </label>
+        <p class="muted card-lead" style="margin-top:0">
+          Si las campañas salen bien pero <strong>no entran respuestas</strong> para una línea nueva: en
+          <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">Meta for Developers</a>
+          → tu app → WhatsApp → Configuración, vincula <strong>cada cuenta de WhatsApp Business (WABA)</strong> a la app y suscribe el webhook al campo <code>messages</code>.
+          Tras añadir un WABA nuevo, a veces hay que volver a guardar la URL del webhook o esperar unos minutos.
+          En los logs del servidor debe aparecer <code>Webhook: mensajes entrantes (Meta)</code> con <code>metadataPhoneNumberId</code> igual al Phone number ID de esa área.
+        </p>
 
         <h2 class="card-subtitle">Credenciales por área</h2>
         <div class="field-row">

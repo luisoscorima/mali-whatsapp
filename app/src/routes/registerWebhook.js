@@ -73,6 +73,15 @@ function registerWebhook(app, ctx) {
 
         for (const change of changes) {
           const value = change.value || {};
+          const inboundCount = Array.isArray(value.messages) ? value.messages.length : 0;
+          if (inboundCount > 0) {
+            logInfo(req, 'Webhook: mensajes entrantes (Meta)', {
+              entryId: wabaEntryId || null,
+              field: change.field || null,
+              metadataPhoneNumberId: value.metadata?.phone_number_id ?? null,
+              messagesCount: inboundCount,
+            });
+          }
           await persistInboundMessagesFromWebhookValue(query, value, {
             wabaEntryId,
             field: change.field,
