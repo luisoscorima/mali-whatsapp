@@ -1,3 +1,4 @@
+const { escapeForLikePattern } = require('../utils/searchEscape');
 const {
   CAMPAIGN_LOG_STATUS_SQL,
   sqlInList,
@@ -11,6 +12,42 @@ const ERROR_IN = sqlInList(ERROR_STATUSES);
 
 function registerInboxViews(app, ctx) {
   const { query, config, loadSegments, loadSyncedTemplates, resolveAppBaseUrl, appPath } = ctx;
+
+  async function loadContactsList(area, segmentsList, segmentFilterRaw, searchQRaw) {
+    const slugSet = new Set(segmentsList.map((s) => s.value));
+    const rawSeg = String(segmentFilterRaw || '').trim();
+    const seg = rawSeg && slugSet.has(rawSeg) ? rawSeg : '';
+    const params = [area];
+    let wh = 'WHERE area = $1';
+    let p = 2;
+    if (seg) {
+      wh += ` AND segment = $${p}`;
+      params.push(seg);
+      p += 1;
+    }
+    const qDigits = String(searchQRaw || '').replace(/\D/g, '');
+    if (qDigits.length >= 1) {
+      wh += ` AND phone LIKE $${p} ESCAPE '!'`;
+      params.push(`%${escapeForLikePattern(qDigits)}%`);
+    }
+    const r = await query(
+      `SELECT id, name, phone, segment, opt_in, active, created_at
+       FROM contacts
+       ${wh}
+       ORDER BY id DESC
+       LIMIT 400`,
+      params
+    );
+    return r.rows;
+  }
+
+  function contactListQueryString(segmentFilter, searchQ) {
+    const sp = new URLSearchParams();
+    if (segmentFilter) sp.set('segment', segmentFilter);
+    if (searchQ) sp.set('q', searchQ);
+    const s = sp.toString();
+    return s ? `?${s}` : '';
+  }
 
   async function loadCampaignsRecent(area, limit = 200) {
     const r = await query(
@@ -164,24 +201,20 @@ function registerInboxViews(app, ctx) {
   /* --- Contactos --- */
   app.get('/contacts/new', async (req, res) => {
     const area = req.user.area;
-    const [segmentsList, contactsResult] = await Promise.all([
-      loadSegments(area),
-      query(
-        `SELECT id, name, phone, segment, opt_in, active, created_at
-         FROM contacts
-         WHERE area = $1
-         ORDER BY id DESC
-         LIMIT 400`,
-        [area]
-      ),
-    ]);
+    const contactSegmentFilter = String(req.query.segment || '').trim();
+    const contactSearchQ = String(req.query.q || '').trim();
+    const segmentsList = await loadSegments(area);
+    const contactsRows = await loadContactsList(area, segmentsList, contactSegmentFilter, contactSearchQ);
     res.render('contacts-page', {
       ...commonLocals(req, res),
       activeNav: 'contacts',
       pageTitle: 'Nuevo contacto · MALI WhatsApp',
       layoutModifier: '',
       segments: segmentsList,
-      contacts: contactsResult.rows,
+      contacts: contactsRows,
+      contactSegmentFilter,
+      contactSearchQ,
+      contactListQuery: contactListQueryString(contactSegmentFilter, contactSearchQ),
       view: 'new',
       selectedContactId: null,
       contact: null,
@@ -205,16 +238,11 @@ function registerInboxViews(app, ctx) {
       return res.status(400).send('Id de contacto invalido');
     }
     const area = req.user.area;
-    const [segmentsList, contactsResult, one] = await Promise.all([
-      loadSegments(area),
-      query(
-        `SELECT id, name, phone, segment, opt_in, active, created_at
-         FROM contacts
-         WHERE area = $1
-         ORDER BY id DESC
-         LIMIT 400`,
-        [area]
-      ),
+    const contactSegmentFilter = String(req.query.segment || '').trim();
+    const contactSearchQ = String(req.query.q || '').trim();
+    const segmentsList = await loadSegments(area);
+    const [contactsRows, one] = await Promise.all([
+      loadContactsList(area, segmentsList, contactSegmentFilter, contactSearchQ),
       query(`SELECT id, name, phone, segment, opt_in, active, created_at FROM contacts WHERE id = $1 AND area = $2`, [
         contactId,
         area,
@@ -229,7 +257,10 @@ function registerInboxViews(app, ctx) {
       pageTitle: `${one.rows[0].name || one.rows[0].phone} · Contactos · MALI WhatsApp`,
       layoutModifier: 'conversations-inbox--detail',
       segments: segmentsList,
-      contacts: contactsResult.rows,
+      contacts: contactsRows,
+      contactSegmentFilter,
+      contactSearchQ,
+      contactListQuery: contactListQueryString(contactSegmentFilter, contactSearchQ),
       view: 'edit',
       selectedContactId: contactId,
       contact: one.rows[0],
@@ -242,24 +273,20 @@ function registerInboxViews(app, ctx) {
 
   app.get('/contacts', async (req, res) => {
     const area = req.user.area;
-    const [segmentsList, contactsResult] = await Promise.all([
-      loadSegments(area),
-      query(
-        `SELECT id, name, phone, segment, opt_in, active, created_at
-         FROM contacts
-         WHERE area = $1
-         ORDER BY id DESC
-         LIMIT 400`,
-        [area]
-      ),
-    ]);
+    const contactSegmentFilter = String(req.query.segment || '').trim();
+    const contactSearchQ = String(req.query.q || '').trim();
+    const segmentsList = await loadSegments(area);
+    const contactsRows = await loadContactsList(area, segmentsList, contactSegmentFilter, contactSearchQ);
     res.render('contacts-page', {
       ...commonLocals(req, res),
       activeNav: 'contacts',
       pageTitle: 'Contactos · MALI WhatsApp',
       layoutModifier: '',
       segments: segmentsList,
-      contacts: contactsResult.rows,
+      contacts: contactsRows,
+      contactSegmentFilter,
+      contactSearchQ,
+      contactListQuery: contactListQueryString(contactSegmentFilter, contactSearchQ),
       view: 'list',
       selectedContactId: null,
       contact: null,

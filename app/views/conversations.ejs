@@ -23,7 +23,7 @@
     <link rel="stylesheet" href="<%= basePath %>/css/conversations.css" />
     <script src="<%= basePath %>/js/theme.js" defer></script>
   </head>
-  <body class="page-conversations">
+  <body class="page-conversations" data-base-path="<%= basePath %>">
     <% const segmentLabel = function (slug) {
       if (!slug) return '';
       const s = segments.find(function (x) { return x.value === slug; });

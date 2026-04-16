@@ -1,4 +1,12 @@
 <% const _contactSel = typeof selectedContactId !== 'undefined' ? selectedContactId : null; %>
+<% const _cq = typeof contactListQuery !== 'undefined' ? contactListQuery : ''; %>
+<% const _segF = typeof contactSegmentFilter !== 'undefined' ? contactSegmentFilter : ''; %>
+<% const _qF = typeof contactSearchQ !== 'undefined' ? contactSearchQ : ''; %>
+<% function contactSegmentColorKey(slug) {
+  if (!slug) return 'slate';
+  const s = segments.find(function (x) { return x.value === slug; });
+  return s && s.colorKey ? s.colorKey : 'slate';
+} %>
 <%- include('layouts/inbox-shell-start', {
   pageTitle,
   basePath,
@@ -17,15 +25,41 @@
     <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar contactos', refreshAriaLabel: 'Actualizar contactos' }) %>
   </div>
   <div class="inbox-filters inbox-filters--campaign-new">
-    <a href="<%= basePath %>/contacts/new" class="small-btn">Añadir contacto</a>
+    <a href="<%= basePath %>/contacts/new<%= _cq %>" class="small-btn primary">Añadir contacto</a>
   </div>
+  <form class="inbox-filters" method="get" action="<%= basePath %>/contacts">
+    <label class="field field--inbox">
+      <span class="field-label">Segmento</span>
+      <select name="segment" class="inbox-select" data-inbox-filter>
+        <option value="" <%= _segF === '' ? 'selected' : '' %>>Todos</option>
+        <% segments.forEach(function (seg) { %>
+        <option value="<%= seg.value %>" <%= _segF === seg.value ? 'selected' : '' %>><%= seg.label %></option>
+        <% }); %>
+      </select>
+    </label>
+    <label class="field field--inbox">
+      <span class="field-label">Buscar número</span>
+      <div class="inbox-search-row">
+        <input
+          type="search"
+          name="q"
+          value="<%= _qF %>"
+          placeholder="Ej. 982160981"
+          autocomplete="off"
+          class="inbox-search-input"
+          inputmode="numeric"
+        />
+        <button type="submit" class="small-btn primary">Buscar</button>
+      </div>
+    </label>
+  </form>
   <% if (!contacts || contacts.length === 0) { %>
-  <p class="empty-state inbox-empty-list">No hay contactos en esta área.</p>
+  <p class="empty-state inbox-empty-list"><%= _segF || _qF ? 'No hay contactos con estos filtros.' : 'No hay contactos en esta área.' %></p>
   <% } else { %>
   <ul class="inbox-chat-list">
     <% contacts.forEach(function (c) { %>
     <li class="inbox-chat-item <%= _contactSel === c.id ? 'is-active' : '' %>">
-      <a class="inbox-chat-link" href="<%= basePath %>/contacts/<%= c.id %>">
+      <a class="inbox-chat-link" href="<%= basePath %>/contacts/<%= c.id %><%= _cq %>">
         <span class="inbox-chat-link-main">
           <span class="inbox-chat-row-top">
             <span class="inbox-chat-title"><%= c.name || c.phone %></span>
@@ -34,7 +68,9 @@
           <span class="inbox-chat-phone mono"><%= c.phone %></span>
           <% } %>
           <span class="inbox-chat-row-mid">
-            <span class="inbox-chat-preview"><span class="badge neutral"><%= c.segment %></span></span>
+            <span class="inbox-chat-preview">
+              <span class="inbox-chat-segment" data-seg-tone="<%= contactSegmentColorKey(c.segment) %>"><%= c.segment %></span>
+            </span>
           </span>
         </span>
       </a>
@@ -62,7 +98,7 @@
   </div>
   <% } else if (view === 'new') { %>
   <div class="inbox-chat-header">
-    <a class="inbox-back-mobile" href="<%= basePath %>/contacts">← Contactos</a>
+    <a class="inbox-back-mobile" href="<%= basePath %>/contacts<%= _cq %>">← Contactos</a>
     <div class="inbox-chat-header-main">
       <h1 class="inbox-chat-heading">Añadir contacto</h1>
     </div>
@@ -76,8 +112,8 @@
     <% } %>
     <% if (csvImport) { %>
     <div class="toast <%= csvImport.err ? 'toast--err' : 'toast--ok' %>">
-      <% if (csvImport.err) { %>
-        <% if (csvImport.err === 'no_file') { %>Selecciona un archivo CSV.<% } else if (csvImport.err === 'type') { %>Solo archivos .csv.<% } else if (csvImport.err === 'too_big') { %>Archivo demasiado grande.<% } else if (csvImport.err === 'too_many') { %>Demasiadas filas (máx. <%= maxCsvRows %>).<% } else if (csvImport.err === 'empty') { %>CSV sin datos.<% } else { %>No se pudo leer el CSV.<% } %>
+        <% if (csvImport.err) { %>
+        <% if (csvImport.err === 'no_file') { %>Selecciona un archivo CSV o Excel.<% } else if (csvImport.err === 'type') { %>Solo archivos .csv o .xlsx.<% } else if (csvImport.err === 'too_big') { %>Archivo demasiado grande.<% } else if (csvImport.err === 'too_many') { %>Demasiadas filas (máx. <%= maxCsvRows %>).<% } else if (csvImport.err === 'empty') { %>Archivo sin datos.<% } else { %>No se pudo leer el archivo.<% } %>
       <% } else { %>
         OK: <%= csvImport.ok %> fila(s).<% if (csvImport.bad > 0) { %> Omitidas: <%= csvImport.bad %>.<% } %>
       <% } %>
@@ -90,10 +126,16 @@
           <span class="field-label">Nombre</span>
           <input name="name" required <%= segments.length === 0 ? 'disabled' : '' %> />
         </label>
-        <label class="field">
-          <span class="field-label">Teléfono (E.164 sin +)</span>
-          <input name="phone" required placeholder="51999999999" inputmode="numeric" <%= segments.length === 0 ? 'disabled' : '' %> />
-        </label>
+        <div class="inline-fields contact-phone-split">
+          <label class="field">
+            <span class="field-label">Prefijo país</span>
+            <input name="phone_prefix" value="51" maxlength="4" inputmode="numeric" autocomplete="tel-country-code" <%= segments.length === 0 ? 'disabled' : '' %> />
+          </label>
+          <label class="field contact-phone-local-field">
+            <span class="field-label">Número (sin +51)</span>
+            <input name="phone_local" required placeholder="982160981" inputmode="numeric" autocomplete="tel-national" <%= segments.length === 0 ? 'disabled' : '' %> />
+          </label>
+        </div>
         <label class="field">
           <span class="field-label">Segmento</span>
           <% if (segments.length === 0) { %>
@@ -113,11 +155,11 @@
       </form>
     </div>
     <div class="card">
-      <h2 class="card-title">Importar CSV</h2>
+      <h2 class="card-title">Importar CSV o Excel</h2>
       <form method="POST" action="<%= basePath %>/contacts/import" enctype="multipart/form-data" class="form-grid tight">
         <label class="field">
           <span class="field-label">Archivo</span>
-          <input type="file" name="csvfile" accept=".csv,text/csv" required />
+          <input type="file" name="csvfile" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
         </label>
         <div class="row-actions">
           <button type="submit" class="secondary">Importar</button>
@@ -125,14 +167,18 @@
         </div>
       </form>
       <details class="inline-help">
-        <summary>Formato del CSV</summary>
-        <p>Columnas: <code>name</code>, <code>phone</code>, <code>segment</code>. Si el teléfono ya existe, se actualiza.</p>
+        <summary>Formato CSV / Excel</summary>
+        <p>
+          Columnas: <code>name</code>, <code>phone</code>, <code>segment</code>. Opcional: <code>prefix</code> (código de país sin +) para números internacionales.
+          Sin <code>prefix</code>, se aceptan móviles Perú de 9 dígitos (ej. <code>982160981</code>, se guarda como 51…) o un número E.164 completo sin +.
+          Si el teléfono ya existe, se actualiza el nombre y segmento.
+        </p>
       </details>
     </div>
   </div>
   <% } else if (view === 'edit' && contact) { %>
   <div class="inbox-chat-header">
-    <a class="inbox-back-mobile" href="<%= basePath %>/contacts">← Contactos</a>
+    <a class="inbox-back-mobile" href="<%= basePath %>/contacts<%= _cq %>">← Contactos</a>
     <div class="inbox-chat-header-main">
       <h1 class="inbox-chat-heading"><%= contact.name || contact.phone %></h1>
       <p class="inbox-chat-sub mono"><%= contact.phone %></p>
@@ -175,4 +221,13 @@
   </div>
   <% } %>
 </section>
+<script>
+  (function () {
+    document.querySelectorAll('[data-inbox-filter]').forEach(function (el) {
+      el.addEventListener('change', function () {
+        if (el.form) el.form.submit();
+      });
+    });
+  })();
+</script>
 <%- include('layouts/inbox-shell-end') %>

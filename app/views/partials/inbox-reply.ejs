@@ -13,7 +13,7 @@
     <% if (typeof searchQ !== 'undefined' && searchQ) { %>
       <input type="hidden" name="inbox_q" value="<%= searchQ %>" />
     <% } %>
-    <div class="inbox-compose-stack">
+    <div class="inbox-compose-stack inbox-compose-stack--with-emoji">
       <div class="reply-attachment-preview" id="reply-attachment-preview" hidden>
         <div class="reply-attachment-preview__head">
           <span class="reply-attachment-preview__title">Vista previa del adjunto</span>
@@ -38,6 +38,10 @@
           />
           <span aria-hidden="true">📎</span>
         </label>
+        <button type="button" class="inbox-compose-emoji-btn" id="inbox-emoji-toggle" aria-label="Insertar emoji" title="Emoji">
+          <span aria-hidden="true">😊</span>
+        </button>
+        <div class="inbox-emoji-popover" id="inbox-emoji-popover" hidden></div>
         <div class="inbox-compose-grow">
           <label for="inbox-reply-message" class="sr-only">Mensaje o pie de foto/video/documento (opcional si adjuntas archivo; máx. 4096 caracteres en solo texto)</label>
           <textarea

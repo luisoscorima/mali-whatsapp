@@ -169,4 +169,46 @@
     textarea.addEventListener('change', updateLinkPreview);
     updateLinkPreview();
   }
+
+  var body = document.body;
+  var basePath = body && body.getAttribute('data-base-path');
+  if (basePath === null) basePath = '';
+  var emojiToggle = document.getElementById('inbox-emoji-toggle');
+  var emojiPopover = document.getElementById('inbox-emoji-popover');
+  var replyTa = document.querySelector('.inbox-reply-form textarea[name="message"]');
+  if (emojiToggle && emojiPopover && replyTa) {
+    var pickerUrl = basePath + '/vendor/emoji-picker-element/picker.js';
+    import(pickerUrl)
+      .then(function () {
+        var picker = document.createElement('emoji-picker');
+        picker.setAttribute('locale', 'es');
+        if (document.documentElement.getAttribute('data-theme') === 'dark') {
+          picker.classList.add('dark');
+        }
+        emojiPopover.appendChild(picker);
+        picker.addEventListener('emoji-click', function (ev) {
+          var unicode = ev.detail && ev.detail.unicode ? ev.detail.unicode : '';
+          if (!unicode) return;
+          var start = replyTa.selectionStart;
+          var end = replyTa.selectionEnd;
+          var v = replyTa.value;
+          replyTa.value = v.slice(0, start) + unicode + v.slice(end);
+          var pos = start + unicode.length;
+          replyTa.selectionStart = replyTa.selectionEnd = pos;
+          replyTa.focus();
+          replyTa.dispatchEvent(new Event('input', { bubbles: true }));
+          emojiPopover.hidden = true;
+        });
+        emojiToggle.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          emojiPopover.hidden = !emojiPopover.hidden;
+        });
+        document.addEventListener('click', function (ev) {
+          if (emojiPopover.hidden) return;
+          if (emojiPopover.contains(ev.target) || emojiToggle.contains(ev.target)) return;
+          emojiPopover.hidden = true;
+        });
+      })
+      .catch(function () {});
+  }
 })();

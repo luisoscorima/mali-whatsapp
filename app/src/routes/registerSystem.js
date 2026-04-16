@@ -12,9 +12,10 @@ function registerSystem(app, ctx) {
 
   app.get('/contacts/sample.csv', (req, res) => {
     const sample = [
-      'name,phone,segment',
-      'Ejemplo Usuario,51999999999,suscriptor_1',
-      'Maria Ejemplo,51988888888,suscriptor_2',
+      'name,phone,segment,prefix',
+      'Ejemplo Usuario,982160981,suscriptor_1,',
+      'Maria Ejemplo,51988888888,suscriptor_2,',
+      'Internacional,5551234567,suscriptor_1,1',
     ].join('\n');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="contactos_ejemplo.csv"');

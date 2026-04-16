@@ -38,15 +38,15 @@ const templateSyncLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-const csvUpload = multer({
+const contactsImportUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: config.MAX_CSV_BYTES },
   fileFilter: (req, file, cb) => {
     const name = String(file.originalname || '').toLowerCase();
-    if (name.endsWith('.csv')) {
+    if (name.endsWith('.csv') || name.endsWith('.xlsx')) {
       return cb(null, true);
     }
-    cb(new Error('Solo archivos .csv'));
+    cb(new Error('Solo archivos .csv o .xlsx'));
   },
 });
 
@@ -72,6 +72,6 @@ module.exports = {
   conversationReplyLimiter,
   contactsImportLimiter,
   templateSyncLimiter,
-  csvUpload,
+  contactsImportUpload,
   conversationMediaUpload,
 };

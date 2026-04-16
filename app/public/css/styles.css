@@ -825,6 +825,15 @@ button.secondary {
   gap: 10px;
 }
 
+.contact-phone-split {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(88px, 120px) 1fr;
+}
+
+.contact-phone-local-field {
+  min-width: 0;
+}
+
 .segment-tags {
   margin-top: 12px;
   display: flex;
@@ -1127,6 +1136,91 @@ pre {
   max-width: none;
 }
 
+.segment-color-rings-field {
+  border: none;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.segment-color-rings-field legend {
+  padding: 0;
+  margin-bottom: 8px;
+}
+
+.segment-color-rings-field--compact legend {
+  margin-bottom: 4px;
+}
+
+.segment-color-rings-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.segment-color-ring-label {
+  position: relative;
+  cursor: pointer;
+}
+
+.segment-color-ring-label input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+}
+
+.segment-color-ring {
+  display: block;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  box-sizing: border-box;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+html[data-theme='dark'] .segment-color-ring {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.segment-color-ring-label:hover .segment-color-ring {
+  transform: scale(1.08);
+}
+
+.segment-color-ring-label input:focus-visible + .segment-color-ring {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.segment-color-ring-label input:checked + .segment-color-ring {
+  box-shadow: 0 0 0 2px var(--surface-strong), 0 0 0 4px var(--accent);
+}
+
+.segment-color-ring[data-seg-tone='teal'] {
+  background: rgb(13, 148, 136);
+}
+.segment-color-ring[data-seg-tone='emerald'] {
+  background: rgb(5, 150, 105);
+}
+.segment-color-ring[data-seg-tone='blue'] {
+  background: rgb(37, 99, 235);
+}
+.segment-color-ring[data-seg-tone='violet'] {
+  background: rgb(124, 58, 237);
+}
+.segment-color-ring[data-seg-tone='amber'] {
+  background: rgb(217, 119, 6);
+}
+.segment-color-ring[data-seg-tone='rose'] {
+  background: rgb(225, 29, 72);
+}
+.segment-color-ring[data-seg-tone='slate'] {
+  background: rgb(71, 85, 105);
+}
+
 .segment-slug-input {
   width: 100%;
   font-size: 0.88rem;
@@ -1269,6 +1363,49 @@ html[data-theme='dark'] .small-btn.danger-outline:hover {
 .small-btn {
   padding: 6px 12px;
   font-size: 0.85rem;
+}
+
+/* Enlaces con apariencia de botón (sidebar inbox, admin, etc.) */
+a.small-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  text-decoration: none;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+  color: #fff;
+  line-height: 1.2;
+}
+
+a.small-btn:hover {
+  filter: brightness(1.05);
+  text-decoration: none;
+}
+
+a.small-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+a.small-btn.secondary {
+  background: var(--surface-strong);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+a.small-btn.secondary:hover {
+  filter: none;
+  background: var(--surface);
+}
+
+a.small-btn.primary {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+  color: #fff;
+  border-color: transparent;
 }
 
 .login-page {

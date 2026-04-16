@@ -17,7 +17,7 @@
     <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar segmentos', refreshAriaLabel: 'Actualizar segmentos' }) %>
   </div>
   <div class="inbox-filters inbox-filters--campaign-new">
-    <a href="<%= basePath %>/segments/new" class="small-btn">Añadir segmento</a>
+    <a href="<%= basePath %>/segments/new" class="small-btn primary">Añadir segmento</a>
   </div>
   <% if (!segments || segments.length === 0) { %>
   <p class="empty-state inbox-empty-list">No hay segmentos definidos.</p>
@@ -31,7 +31,9 @@
             <span class="inbox-chat-title"><%= seg.label %></span>
           </span>
           <span class="inbox-chat-row-mid">
-            <span class="inbox-chat-preview mono"><%= seg.value %></span>
+            <span class="inbox-chat-preview">
+              <span class="inbox-chat-segment inbox-chat-segment--slug-tag mono" data-seg-tone="<%= seg.colorKey || 'teal' %>"><%= seg.value %></span>
+            </span>
           </span>
         </span>
       </a>

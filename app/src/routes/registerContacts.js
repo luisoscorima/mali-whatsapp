@@ -1,7 +1,7 @@
 const multer = require('multer');
 const { logInfo, logError } = require('../utils/logger');
-const { validateContactInput, parseContactCsvBuffer } = require('../utils/contactsCsv');
-const { contactsImportLimiter, csvUpload } = require('../middleware/limiters');
+const { validateContactInput, parseContactCsvBuffer, parseContactXlsxBuffer } = require('../utils/contactsCsv');
+const { contactsImportLimiter, contactsImportUpload } = require('../middleware/limiters');
 
 function registerContacts(app, ctx) {
   const { query, pool, config, getSegmentSlugSet, appPath } = ctx;
@@ -35,7 +35,7 @@ function registerContacts(app, ctx) {
     '/contacts/import',
     contactsImportLimiter,
     (req, res, next) => {
-      csvUpload.single('csvfile')(req, res, (err) => {
+      contactsImportUpload.single('csvfile')(req, res, (err) => {
         if (err) {
           if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
             return res.redirect(`${appPath('/contacts')}?contacts_import=1&err=too_big`);
@@ -52,7 +52,10 @@ function registerContacts(app, ctx) {
 
       try {
         const segmentSet = await getSegmentSlugSet(req.user.area);
-        const { rows, errors } = parseContactCsvBuffer(req.file.buffer, segmentSet);
+        const nameLower = String(req.file.originalname || '').toLowerCase();
+        const { rows, errors } = nameLower.endsWith('.xlsx')
+          ? parseContactXlsxBuffer(req.file.buffer, segmentSet)
+          : parseContactCsvBuffer(req.file.buffer, segmentSet);
 
         if (rows.length > config.MAX_CSV_ROWS) {
           return res.redirect(`${appPath('/contacts')}?contacts_import=1&err=too_many`);

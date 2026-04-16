@@ -234,6 +234,9 @@ html[data-theme='dark'] body.page-conversations .wa-layout--inbox.inbox-layout-w
 
 .inbox-layout-wa .inbox-chat-segment {
   display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  align-self: flex-start;
   margin-top: 2px;
   font-size: 0.68rem;
   padding: 2px 6px;
@@ -247,6 +250,14 @@ html[data-theme='dark'] body.page-conversations .wa-layout--inbox.inbox-layout-w
 .inbox-layout-wa .inbox-chat-segment--header {
   margin-top: 6px;
   font-size: 0.72rem;
+}
+
+.inbox-layout-wa .inbox-chat-segment--slug-tag {
+  margin-top: 0;
+  font-size: 0.75rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .inbox-layout-wa .inbox-chat-segment[data-seg-tone='teal'] {
@@ -496,6 +507,7 @@ html[data-theme='dark'] .inbox-layout-wa .chat-bubble--out {
 }
 
 .inbox-compose-bar {
+  position: relative;
   display: flex;
   align-items: flex-end;
   gap: 8px;
@@ -550,6 +562,47 @@ html[data-theme='dark'] .inbox-compose-bar {
   opacity: 0;
   cursor: pointer;
   font-size: 0;
+}
+
+.inbox-compose-emoji-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.inbox-compose-emoji-btn:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.inbox-emoji-popover {
+  position: absolute;
+  z-index: 50;
+  left: 0;
+  bottom: calc(100% + 10px);
+  max-width: min(calc(100vw - 24px), 352px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.inbox-emoji-popover emoji-picker {
+  --emoji-size: 1.25rem;
+  height: min(55vh, 420px);
+  width: min(100vw - 24px, 352px);
 }
 
 .inbox-layout-wa .inbox-compose-bar textarea.inbox-compose-textarea {
@@ -659,6 +712,9 @@ html[data-theme='dark'] .inbox-compose-bar {
 .inbox-layout-wa .inbox-chat-header .inbox-chat-header-main {
   flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .inbox-detail-footer-link {

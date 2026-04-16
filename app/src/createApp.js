@@ -1,3 +1,4 @@
+const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const session = require('express-session');
@@ -69,6 +70,14 @@ function createApp() {
   // el navegador pide /{basePath}/uploads/...; hay que servir public también bajo ese prefijo.
   if (config.basePath) {
     app.use(config.basePath, express.static(publicPath));
+  }
+
+  const emojiPickerPath = path.join(__dirname, '..', 'node_modules', 'emoji-picker-element');
+  if (fs.existsSync(emojiPickerPath)) {
+    app.use('/vendor/emoji-picker-element', express.static(emojiPickerPath));
+    if (config.basePath) {
+      app.use(`${config.basePath}/vendor/emoji-picker-element`, express.static(emojiPickerPath));
+    }
   }
 
   const appPath = config.appPath;
