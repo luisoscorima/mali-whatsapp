@@ -631,6 +631,22 @@ html[data-theme='dark'] .wa-rail__logo--dark {
 
 /* Móvil: rail abajo, columna central ocupa el resto; terciaria oculta salvo Contactos/Segmentos */
 @media (max-width: 768px) {
+  /* Barra inferior: el perfil va a la derecha; el menú debe abrirse encima y dentro del viewport */
+  .wa-rail__dropdown {
+    left: auto;
+    right: 0;
+    top: auto;
+    bottom: calc(100% + 8px);
+    width: min(280px, calc(100vw - 24px));
+    max-height: min(70vh, 420px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .wa-rail__profile[open] {
+    z-index: 300;
+  }
+
   .wa-layout--dashboard {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr auto;
