@@ -4,7 +4,7 @@
     <%- include('../partials/app-head', { pageTitle, basePath, extraHeadScripts: typeof extraHeadScripts !== 'undefined' ? extraHeadScripts : null }) %>
   </head>
   <body class="page-conversations">
-    <div class="wa-layout wa-layout--inbox inbox-layout-wa conversations-inbox <%= typeof layoutModifier !== 'undefined' ? layoutModifier : '' %>">
+    <div class="wa-layout wa-layout--inbox inbox-layout-wa conversations-inbox<%= typeof shellPageClass !== 'undefined' && shellPageClass ? ' ' + shellPageClass : '' %><%= typeof layoutModifier !== 'undefined' && layoutModifier ? ' ' + layoutModifier : '' %>">
       <%- include('../partials/wa-rail', {
         basePath,
         appBaseUrl,

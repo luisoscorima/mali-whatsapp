@@ -7,11 +7,13 @@
   areaLabel,
   activeNav: typeof activeNav !== 'undefined' ? activeNav : 'admin-areas',
   showAdminNav,
-  layoutModifier: '',
+  shellPageClass: 'conversations-page',
+  layoutModifier: 'conversations-inbox--detail',
   extraHeadScripts: null
 }) %>
 <%- include('partials/admin-sidebar', { basePath, adminSection: 'areas' }) %>
 <section class="inbox-main" aria-label="Áreas">
+  <%- include('partials/admin-mobile-nav', { basePath, adminSection: 'areas' }) %>
   <div class="inbox-chat-header inbox-chat-header--static">
     <h1 class="inbox-chat-heading">Áreas</h1>
   </div>

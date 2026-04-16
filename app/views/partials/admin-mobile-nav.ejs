@@ -1,0 +1,6 @@
+<% const _as = typeof adminSection !== 'undefined' ? adminSection : 'users'; %>
+<nav class="admin-mobile-nav" aria-label="Secciones de administración">
+  <a href="<%= basePath %>/admin/users" class="admin-mobile-nav__link <%= _as === 'users' ? 'is-active' : '' %>">Usuarios</a>
+  <a href="<%= basePath %>/admin/meta" class="admin-mobile-nav__link <%= _as === 'meta' ? 'is-active' : '' %>">Meta</a>
+  <a href="<%= basePath %>/admin/areas" class="admin-mobile-nav__link <%= _as === 'areas' ? 'is-active' : '' %>">Áreas</a>
+</nav>

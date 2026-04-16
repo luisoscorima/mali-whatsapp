@@ -8,7 +8,8 @@
   areaLabel,
   activeNav,
   showAdminNav,
-  layoutModifier: typeof layoutModifier !== 'undefined' ? layoutModifier : 'conversations-inbox--detail',
+  shellPageClass: 'conversations-page',
+  layoutModifier: typeof layoutModifier !== 'undefined' && layoutModifier ? layoutModifier : 'conversations-inbox--detail',
   extraHeadScripts: null
 }) %>
 <%- include('partials/campaign-list-sidebar', {

@@ -7,11 +7,13 @@
   areaLabel,
   activeNav: typeof activeNav !== 'undefined' ? activeNav : 'admin-meta',
   showAdminNav,
-  layoutModifier: '',
+  shellPageClass: 'conversations-page',
+  layoutModifier: 'conversations-inbox--detail',
   extraHeadScripts: null
 }) %>
 <%- include('partials/admin-sidebar', { basePath, adminSection: 'meta' }) %>
 <section class="inbox-main" aria-label="Credenciales Meta">
+  <%- include('partials/admin-mobile-nav', { basePath, adminSection: 'meta' }) %>
   <div class="inbox-chat-header inbox-chat-header--static">
     <h1 class="inbox-chat-heading">Credenciales Meta</h1>
   </div>

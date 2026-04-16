@@ -6,7 +6,12 @@
   if (!slug) return 'slate';
   const s = segments.find(function (x) { return x.value === slug; });
   return s && s.colorKey ? s.colorKey : 'slate';
-} %>
+}
+  var _contactsMobileDetail =
+    view === 'edit' ||
+    view === 'new' ||
+    (view === 'list' && (!contacts || contacts.length === 0));
+%>
 <%- include('layouts/inbox-shell-start', {
   pageTitle,
   basePath,
@@ -16,7 +21,8 @@
   areaLabel,
   activeNav,
   showAdminNav,
-  layoutModifier: view === 'edit' ? 'conversations-inbox--detail' : '',
+  shellPageClass: 'conversations-page',
+  layoutModifier: _contactsMobileDetail ? 'conversations-inbox--detail' : '',
   extraHeadScripts: null
 }) %>
 <aside class="inbox-sidebar" aria-label="Contactos">

@@ -1,4 +1,9 @@
 <% const _segSel = typeof selectedSegmentId !== 'undefined' ? selectedSegmentId : null; %>
+<% var _segmentsMobileDetail =
+  view === 'detail' ||
+  view === 'new' ||
+  (view === 'list' && (!segments || segments.length === 0));
+%>
 <%- include('layouts/inbox-shell-start', {
   pageTitle,
   basePath,
@@ -8,7 +13,8 @@
   areaLabel,
   activeNav,
   showAdminNav,
-  layoutModifier: view === 'detail' ? 'conversations-inbox--detail' : '',
+  shellPageClass: 'conversations-page',
+  layoutModifier: _segmentsMobileDetail ? 'conversations-inbox--detail' : '',
   extraHeadScripts: null
 }) %>
 <aside class="inbox-sidebar" aria-label="Segmentos">

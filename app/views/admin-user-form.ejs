@@ -7,11 +7,13 @@
   areaLabel,
   activeNav: typeof activeNav !== 'undefined' ? activeNav : 'admin-users',
   showAdminNav,
-  layoutModifier: '',
+  shellPageClass: 'conversations-page',
+  layoutModifier: 'conversations-inbox--detail',
   extraHeadScripts: null
 }) %>
 <%- include('partials/admin-sidebar', { basePath, adminSection: 'users' }) %>
 <section class="inbox-main" aria-label="Usuario">
+  <%- include('partials/admin-mobile-nav', { basePath, adminSection: 'users' }) %>
   <div class="inbox-chat-header inbox-chat-header--static">
     <h1 class="inbox-chat-heading"><%= mode === 'create' ? 'Nuevo usuario' : 'Editar usuario' %></h1>
   </div>

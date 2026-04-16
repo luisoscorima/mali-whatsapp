@@ -746,7 +746,9 @@ html[data-theme='dark'] .inbox-compose-bar {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr auto;
     height: 100vh;
+    height: 100dvh;
     max-height: 100vh;
+    max-height: 100dvh;
     overflow: hidden;
   }
 
@@ -761,7 +763,8 @@ html[data-theme='dark'] .inbox-compose-bar {
     align-items: center;
     justify-content: center;
     align-content: center;
-    padding: 6px 8px 10px;
+    padding: 6px 8px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
     border-right: none;
     border-top: 1px solid var(--line);
     gap: 4px 8px;
@@ -823,6 +826,49 @@ html[data-theme='dark'] .inbox-compose-bar {
     background: var(--surface-strong);
     border: 1px solid var(--line);
   }
+}
+
+/* Admin: subnavegación móvil cuando el sidebar está oculto */
+.admin-mobile-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .admin-mobile-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+  }
+}
+
+.admin-mobile-nav__link {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--muted);
+  border: 1px solid transparent;
+}
+
+.admin-mobile-nav__link:hover {
+  color: var(--ink);
+  background: var(--surface-strong);
+}
+
+.admin-mobile-nav__link.is-active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+html[data-theme='dark'] .admin-mobile-nav__link.is-active {
+  border-color: rgba(45, 212, 191, 0.35);
 }
 
 /* Lista campañas: ratio enviados/total */
