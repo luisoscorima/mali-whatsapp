@@ -127,9 +127,9 @@ Si estás en sandbox y sale `131030`, agrega el número destino en la lista de d
 
 ## Guía de producción y operación
 
-Documento único (requisitos, despliegue Docker/NPM, plantillas Meta, uso del panel, errores, checklist):
-
-- [`PRODUCCION_WHATSAPP_META.md`](PRODUCCION_WHATSAPP_META.md)
+- **[`PRODUCCION_WHATSAPP_META.md`](PRODUCCION_WHATSAPP_META.md)** — índice
+- **[`DESPLIEGUE_PRODUCCION_APP.md`](DESPLIEGUE_PRODUCCION_APP.md)** — arquitectura, Docker, Nginx, `.env`, roles, uso del panel, go-live
+- **[`CONFIGURACION_META.md`](CONFIGURACION_META.md)** — Developers, Business Manager, webhooks, `subscribed_apps`, `curl` (números nuevos, SMS, register)
 
 ### Publicación (resumen)
 
