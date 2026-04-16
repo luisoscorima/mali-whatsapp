@@ -14,11 +14,20 @@ function registerContacts(app, ctx) {
     }
 
     try {
-      await query(
+      const ins = await query(
         `INSERT INTO contacts (name, phone, segment, area, opt_in, active)
-         VALUES ($1, $2, $3, $4, TRUE, TRUE)`,
+         VALUES ($1, $2, $3, $4, TRUE, TRUE)
+         RETURNING id`,
         [validation.value.name, validation.value.phone, validation.value.segment, req.user.area]
       );
+      const contactId = ins.rows[0]?.id;
+      if (contactId) {
+        await query(
+          `UPDATE conversations SET contact_id = $1, updated_at = NOW()
+           WHERE area = $2 AND phone = $3`,
+          [contactId, req.user.area, validation.value.phone]
+        );
+      }
       logInfo(req, 'Contacto creado', {
         phone: validation.value.phone,
         segment: validation.value.segment,
@@ -78,15 +87,24 @@ function registerContacts(app, ctx) {
         try {
           await client.query('BEGIN');
           for (const row of rows) {
-            await client.query(
+            const up = await client.query(
               `INSERT INTO contacts (name, phone, segment, area, opt_in, active)
                VALUES ($1, $2, $3, $4, TRUE, TRUE)
                ON CONFLICT (area, phone) DO UPDATE SET
                  name = EXCLUDED.name,
                  segment = EXCLUDED.segment,
-                 updated_at = NOW()`,
+                 updated_at = NOW()
+               RETURNING id`,
               [row.name, row.phone, row.segment, req.user.area]
             );
+            const contactId = up.rows[0]?.id;
+            if (contactId) {
+              await client.query(
+                `UPDATE conversations SET contact_id = $1, updated_at = NOW()
+                 WHERE area = $2 AND phone = $3`,
+                [contactId, req.user.area, row.phone]
+              );
+            }
           }
           await client.query('COMMIT');
         } catch (dbErr) {

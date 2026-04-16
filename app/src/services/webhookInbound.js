@@ -178,11 +178,24 @@ async function persistInboundMessagesFromWebhookValue(query, value, context = {}
   const metaPid = value?.metadata?.phone_number_id ?? null;
   const senderPhones = messages.map((m) => normalizePhone(m.from));
 
-  if (!area) {
-    const areaByPhone = await resolveAreaFromSenderPhones(query, senderPhones);
-    if (areaByPhone) {
+  const areaByPhone = await resolveAreaFromSenderPhones(query, senderPhones);
+  if (areaByPhone) {
+    if (!area) {
       area = areaByPhone;
       source = 'sender_phone_db';
+    } else if (area !== areaByPhone) {
+      console.log(
+        JSON.stringify({
+          level: 'warn',
+          message:
+            'Webhook inbound: metadata.phone_number_id apunta a un área distinta a contactos/conversaciones/campañas; se usa el área de la BD',
+          resolvedByPhoneNumberId: area,
+          resolvedByPhoneDb: areaByPhone,
+          phoneNumberId: metaPid,
+        })
+      );
+      area = areaByPhone;
+      source = 'sender_phone_db_override';
     }
   }
 
@@ -201,11 +214,11 @@ async function persistInboundMessagesFromWebhookValue(query, value, context = {}
     return;
   }
 
-  if (source !== 'phone_number_id') {
+  if (source !== 'phone_number_id' && source !== 'sender_phone_db_override') {
     console.log(
       JSON.stringify({
         level: 'info',
-        message: 'Webhook inbound: area resuelta sin metadata.phone_number_id',
+        message: 'Webhook inbound: area resuelta por fuente alternativa a metadata.phone_number_id',
         area,
         source,
         wabaEntryId: wabaEntryId || null,
