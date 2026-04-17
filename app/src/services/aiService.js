@@ -52,17 +52,9 @@ async function getAiResponse(text, history, config) {
     String(config?.prompt || '').trim() || 'Eres un asistente útil. Responde en español.';
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  // Gemini 2.5: razonamiento interno vía generationConfig.thinkingConfig (no existe `thinking: true` en el tipo del SDK).
-  const generationConfig = {
-    thinkingConfig: {
-      thinkingBudget: -1,
-    },
-  };
-
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.0-flash',
     systemInstruction,
-    generationConfig,
   });
 
   const contents = buildGeminiChatContents(history);
