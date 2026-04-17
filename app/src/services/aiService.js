@@ -17,11 +17,11 @@ function areaDisplayName(areaSlug) {
 }
 
 /**
- * Primer mensaje de contexto (rol user) sin usar systemInstruction — compatible con gemini-1.5-flash + API v1.
+ * Instrucciones de sistema (área MALI + prompt de app_settings).
  * @param {string} [areaSlug]
  * @param {string} [prompt]
  */
-function buildMaliAssistantUserInstruction(areaSlug, prompt) {
+function buildSystemInstruction(areaSlug, prompt) {
   const areaName = areaDisplayName(areaSlug);
   const p =
     String(prompt || '').trim() || 'Eres un asistente útil. Responde en español.';
@@ -66,33 +66,10 @@ function buildGeminiChatContents(history) {
 }
 
 /**
- * Inserta las instrucciones de área como primer mensaje `user` (sin systemInstruction).
- * Si el hilo ya empieza por `user`, se antepone al texto del primer turno para no duplicar rol.
- *
- * @param {string} instructionFull
- * @param {{ role: string, parts: { text: string }[] }[]} contents
- */
-function prependInstructionAsFirstUser(instructionFull, contents) {
-  const list = Array.isArray(contents) ? contents.slice() : [];
-  if (list.length === 0) {
-    return [{ role: 'user', parts: [{ text: instructionFull }] }];
-  }
-  if (list[0].role === 'user') {
-    const prev = String(list[0].parts?.[0]?.text || '');
-    list[0] = {
-      role: 'user',
-      parts: [{ text: `${instructionFull}\n\n${prev}`.slice(0, 16000) }],
-    };
-    return list;
-  }
-  return [{ role: 'user', parts: [{ text: instructionFull }] }, ...list];
-}
-
-/**
  * @param {string} text - Mensaje actual del usuario
  * @param {{ role: 'user'|'model', text: string }[]} history - Turnos previos (sin el mensaje actual)
  * @param {{ prompt?: string }} config - De app_settings.ai_config (campo prompt = instrucciones de área)
- * @param {string} [area] - Slug de área (ti, pam, educacion) para el texto "asistente de [ÁREA]"
+ * @param {string} [area] - Slug de área (ti, pam, educacion)
  * @returns {Promise<string>}
  */
 async function getAiResponse(text, history, config, area) {
@@ -100,23 +77,20 @@ async function getAiResponse(text, history, config, area) {
   if (!apiKey) {
     return GEMINI_UNAVAILABLE_MESSAGE;
   }
-  const instructionFull = buildMaliAssistantUserInstruction(area, config?.prompt);
+  const systemInstruction = buildSystemInstruction(area, config?.prompt);
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' }, { apiVersion: 'v1' });
+    const model = genAI.getGenerativeModel(
+      {
+        model: 'gemini-1.5-flash',
+        systemInstruction,
+      },
+      { apiVersion: 'v1beta' }
+    );
 
-    const built = buildGeminiChatContents(history);
-    if (built.length === 0) {
-      const chat = model.startChat({ history: [] });
-      const combined = `${instructionFull}\n\n${String(text || '')}`.trim();
-      const result = await chat.sendMessage(combined);
-      const out = String(result.response.text() || '').trim();
-      return out || GEMINI_UNAVAILABLE_MESSAGE;
-    }
-
-    const historyWithInstruction = prependInstructionAsFirstUser(instructionFull, built);
-    const chat = model.startChat({ history: historyWithInstruction });
+    const contents = buildGeminiChatContents(history);
+    const chat = model.startChat({ history: contents });
     const result = await chat.sendMessage(String(text || ''));
     const out = String(result.response.text() || '').trim();
     return out || GEMINI_UNAVAILABLE_MESSAGE;
