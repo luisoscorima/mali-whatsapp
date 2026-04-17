@@ -1,0 +1,15 @@
+# Reglas de Oro para Mali-WhatsApp
+
+## Contexto del Proyecto
+- Tech Stack: Node.js, Express, Docker, PostgreSQL, Groq (vía OpenAI SDK).
+- Objetivo: Bot de respuestas de whatsapp para el museo MALI.
+
+## Reglas de Codificación
+1. **No Alucinar Modelos:** El único modelo permitido es `llama-3.1-8b-instant`. No intentes usar Gemini o GPT-4 a menos que se pida explícitamente.
+2. **Manejo de Errores:** Siempre que una llamada a la IA falle, se DEBE ejecutar la función de transferencia a humano y actualizar el status en DB a 'human'.
+3. **Prohibido Duplicar:** Si vas a escribir lógica de envío de mensajes, usa la función centralizada `persistAndSendOutbound`. No repitas `axios.post` ni `db.query` de envío en varios archivos.
+4. **Logs:** Usa el formato JSON estructurado para logs que ya tiene el proyecto. No uses `console.log` simples en producción.
+
+## Restricciones
+- No cambies nombres de variables de entorno (.env) sin preguntar.
+- Mantén las instrucciones del sistema (System Prompts) en archivos de configuración o funciones dedicadas, no las metas "hardcoded" en el servicio.

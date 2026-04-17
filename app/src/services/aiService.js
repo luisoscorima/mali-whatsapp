@@ -1,7 +1,7 @@
 const { OpenAI } = require('openai');
 
 const UNAVAILABLE_REPLY_MESSAGE =
-  'Lo siento, estoy experimentando una alta carga de consultas. Por favor, intenta de nuevo en unos momentos.';
+  'Lo siento, estamos experimentando una carga alta de consultas. Por favor, intenta de nuevo en unos momentos.';
 
 /**
  * @param {string} [areaSlug] - ti | pam | educacion
@@ -29,14 +29,13 @@ function buildSystemInstruction(areaSlug, prompt) {
 }
 
 /**
- * Convierte el historial local a {@link Content} del SDK: roles `user` | `model`,
- * `parts: [{ text }]`, sin textos vacíos, empezando siempre por `user` y
- * fusionando turnos consecutivos del mismo rol (alternancia estable multi-turno).
+ * Historial local → turnos `user` | `model` con `parts: [{ text }]`, sin vacíos,
+ * primer turno `user`, fusionando consecutivos del mismo rol.
  *
  * @param {{ role: 'user'|'model', text: string }[]} history
  * @returns {{ role: string, parts: { text: string }[] }[]}
  */
-function buildGeminiChatContents(history) {
+function buildLlmChatTurns(history) {
   const normalized = (Array.isArray(history) ? history : [])
     .map((h) => ({
       role: h.role === 'model' ? 'model' : 'user',
@@ -66,12 +65,12 @@ function buildGeminiChatContents(history) {
 }
 
 /**
- * Pasa de turnos internos (user/model + parts) a mensajes OpenAI/Groq (user/assistant).
- * @param {{ role: string, parts: { text: string }[] }[]} contents
+ * Turnos internos → mensajes OpenAI/Groq (user/assistant).
+ * @param {{ role: string, parts: { text: string }[] }[]} turns
  * @returns {{ role: 'user'|'assistant', content: string }[]}
  */
-function contentsToOpenAiMessages(contents) {
-  return (Array.isArray(contents) ? contents : []).map((c) => {
+function llmTurnsToOpenAiMessages(turns) {
+  return (Array.isArray(turns) ? turns : []).map((c) => {
     const content = String(c.parts?.[0]?.text || '');
     const role = c.role === 'model' ? 'assistant' : 'user';
     return { role, content };
@@ -97,10 +96,10 @@ async function getAiResponse(text, history, config, area) {
       baseURL: 'https://api.groq.com/openai/v1',
     });
 
-    const contents = buildGeminiChatContents(history);
+    const turns = buildLlmChatTurns(history);
     const messages = [
       { role: 'system', content: systemInstruction },
-      ...contentsToOpenAiMessages(contents),
+      ...llmTurnsToOpenAiMessages(turns),
       { role: 'user', content: String(text || '') },
     ];
 

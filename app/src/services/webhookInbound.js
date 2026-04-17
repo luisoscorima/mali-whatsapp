@@ -10,6 +10,47 @@ const {
   getWabaIdOverrideForArea,
 } = require('./metaSettingsCache');
 
+const TRANSFER_TO_HUMAN_NOTICE =
+  'He derivado tu consulta a un asesor humano. En breve te atenderán.';
+
+/**
+ * Envía texto por WhatsApp, persiste outbound y actualiza last_message_at.
+ * @returns {Promise<boolean>} true si el envío y la persistencia tuvieron éxito
+ */
+async function persistAndSendOutbound(query, { area, conversationId, phone, text, isAi }) {
+  const toSend = String(text || '').slice(0, config.MAX_SESSION_TEXT_LEN);
+  if (!toSend) return false;
+  try {
+    const apiResponse = await sendSessionTextMessage({
+      to: phone,
+      text: toSend,
+      area,
+    });
+    const msgId = apiResponse.messages?.[0]?.id || null;
+    await query(
+      `INSERT INTO chat_messages (conversation_id, direction, wa_message_id, body_text, message_type, raw_payload, is_ai)
+       VALUES ($1, 'outbound', $2, $3, 'text', $4::jsonb, $5)`,
+      [conversationId, msgId, toSend, JSON.stringify(sanitizeApiResponse(apiResponse)), Boolean(isAi)]
+    );
+    await query(
+      `UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      [conversationId]
+    );
+    return true;
+  } catch (e) {
+    console.log(
+      JSON.stringify({
+        level: 'warn',
+        message: 'persistAndSendOutbound: fallo al enviar o guardar mensaje',
+        area,
+        conversationId,
+        error: e.message,
+      })
+    );
+    return false;
+  }
+}
+
 function resolveAreaFromPhoneNumberId(phoneNumberId) {
   const id = String(phoneNumberId || '').trim();
   const lines = [
@@ -102,7 +143,7 @@ function extractInboundMediaRef(msg) {
   return null;
 }
 
-async function maybeAutoReplyWithGemini(
+async function maybeAutoReplyWithAi(
   query,
   { area, conversationId, messageType, bodyText, phone, chatMessageId, userText: userTextExplicit }
 ) {
@@ -159,77 +200,39 @@ async function maybeAutoReplyWithGemini(
     await query(`UPDATE conversations SET status = 'human', updated_at = NOW() WHERE id = $1`, [
       conversationId,
     ]);
-    try {
-      const apiResponse = await sendSessionTextMessage({
-        to: phone,
-        text: UNAVAILABLE_REPLY_MESSAGE,
-        area,
-      });
-      const msgId = apiResponse.messages?.[0]?.id || null;
-      await query(
-        `INSERT INTO chat_messages (conversation_id, direction, wa_message_id, body_text, message_type, raw_payload, is_ai)
-         VALUES ($1, 'outbound', $2, $3, 'text', $4::jsonb, FALSE)`,
-        [
-          conversationId,
-          msgId,
-          UNAVAILABLE_REPLY_MESSAGE.slice(0, config.MAX_SESSION_TEXT_LEN),
-          JSON.stringify(sanitizeApiResponse(apiResponse)),
-        ]
-      );
-      await query(
-        `UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1`,
-        [conversationId]
-      );
-    } catch (e) {
-      console.log(
-        JSON.stringify({
-          level: 'warn',
-          message: 'Auto-reply IA (Groq): fallo al enviar mensaje de autotransferencia',
-          area,
-          conversationId,
-          error: e.message,
-        })
-      );
-    }
+    await persistAndSendOutbound(query, {
+      area,
+      conversationId,
+      phone,
+      text: UNAVAILABLE_REPLY_MESSAGE,
+      isAi: false,
+    });
+    console.log(`[Fallback] Error en IA. Conversación ${conversationId} movida a Humano.`);
     return;
   }
 
   const transferKw = String(aiCfg.transfer_keyword || '[TRANSFERIR]').trim();
   if (transferKw && replyText.includes(transferKw)) {
+    await persistAndSendOutbound(query, {
+      area,
+      conversationId,
+      phone,
+      text: TRANSFER_TO_HUMAN_NOTICE,
+      isAi: true,
+    });
     await query(`UPDATE conversations SET status = 'human', updated_at = NOW() WHERE id = $1`, [
       conversationId,
     ]);
     return;
   }
 
-  const toSend = replyText.slice(0, config.MAX_SESSION_TEXT_LEN);
-  try {
-    const apiResponse = await sendSessionTextMessage({
-      to: phone,
-      text: toSend,
-      area,
-    });
-    const msgId = apiResponse.messages?.[0]?.id || null;
-    await query(
-      `INSERT INTO chat_messages (conversation_id, direction, wa_message_id, body_text, message_type, raw_payload, is_ai)
-       VALUES ($1, 'outbound', $2, $3, 'text', $4::jsonb, TRUE)`,
-      [conversationId, msgId, toSend, JSON.stringify(sanitizeApiResponse(apiResponse))]
-    );
-    await query(
-      `UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1`,
-      [conversationId]
-    );
-  } catch (e) {
-    console.log(
-      JSON.stringify({
-        level: 'warn',
-        message: 'Auto-reply IA (Groq): fallo al enviar WhatsApp',
-        area,
-        conversationId,
-        error: e.message,
-      })
-    );
-  }
+  await persistAndSendOutbound(query, {
+    area,
+    conversationId,
+    phone,
+    text: replyText,
+    isAi: true,
+  });
 }
 
 async function tryStoreInboundMedia(query, { chatMessageId, msg, area, conversationId }) {
@@ -407,7 +410,7 @@ async function persistInboundMessagesFromWebhookValue(query, value, context = {}
         String(messageType || '').trim() === 'text'
           ? String(msg?.text?.body ?? '').trim()
           : String(bodyText || '').trim();
-      await maybeAutoReplyWithGemini(query, {
+      await maybeAutoReplyWithAi(query, {
         area,
         conversationId,
         messageType,
