@@ -74,16 +74,15 @@ function buildGeminiChatContents(history) {
  */
 async function getAiResponse(text, history, config, area) {
   const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
-  if (!apiKey) {
-    return GEMINI_UNAVAILABLE_MESSAGE;
-  }
+  if (!apiKey) return GEMINI_UNAVAILABLE_MESSAGE;
+
   const systemInstruction = buildSystemInstruction(area, config?.prompt);
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel(
       {
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash',
         systemInstruction,
       },
       { apiVersion: 'v1beta' }
@@ -95,13 +94,7 @@ async function getAiResponse(text, history, config, area) {
     const out = String(result.response.text() || '').trim();
     return out || GEMINI_UNAVAILABLE_MESSAGE;
   } catch (e) {
-    console.log(
-      JSON.stringify({
-        level: 'warn',
-        message: 'Gemini getAiResponse falló; respuesta genérica al cliente',
-        error: e && e.message ? e.message : String(e),
-      })
-    );
+    console.error('[Gemini Error]:', e.message);
     return GEMINI_UNAVAILABLE_MESSAGE;
   }
 }
