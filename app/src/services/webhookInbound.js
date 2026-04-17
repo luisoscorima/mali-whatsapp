@@ -143,7 +143,7 @@ async function maybeAutoReplyWithGemini(
 
   let replyText;
   try {
-    replyText = await getAiResponse(userText, history, aiCfg);
+    replyText = await getAiResponse(userText, history, aiCfg, area);
   } catch (e) {
     console.log(
       JSON.stringify({
