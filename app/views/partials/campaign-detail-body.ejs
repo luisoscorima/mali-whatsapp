@@ -60,11 +60,17 @@
   <div class="card">
     <% if (campaign.status === 'queued' || campaign.status === 'processing') { %>
     <p class="toast toast--ok">Envío en segundo plano. Actualiza la página para ver el progreso.</p>
+    <% } else if (campaign.status === 'scheduled') { %>
+    <p class="toast toast--ok">Campaña programada: se enviará a la hora indicada. Actualiza la página para ver el progreso.</p>
     <% } %>
     <dl class="detail-dl">
       <div><dt>Segmento</dt><dd><%= campaign.segment %></dd></div>
       <div><dt>Plantilla</dt><dd><%= campaign.template_name %></dd></div>
       <div><dt>Estado</dt><dd><span class="badge <%= campaign.status %>"><%= campaign.status %></span></dd></div>
+      <% if (campaign.scheduled_at) { %>
+      <% var _schedD = new Date(campaign.scheduled_at); %>
+      <div><dt>Programada para</dt><dd><%= isNaN(_schedD.getTime()) ? '—' : _schedD.toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' }) %></dd></div>
+      <% } %>
       <div><dt>Destinatarios</dt><dd><%= campaign.total_recipients %></dd></div>
       <div><dt>Parámetros</dt><dd><%= campaign.message_text %></dd></div>
       <% if (campaign.image_url) { %>

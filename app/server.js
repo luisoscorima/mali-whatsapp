@@ -14,7 +14,8 @@ async function boot() {
   await seedMasterUser(query);
   await refreshMetaSettingsCache(query);
 
-  const { app, resumeQueuedCampaigns } = createApp();
+  const { app, resumeQueuedCampaigns, promoteDueScheduledCampaigns } = createApp();
+  await promoteDueScheduledCampaigns();
   await resumeQueuedCampaigns();
 
   app.listen(config.port, '0.0.0.0', () => {

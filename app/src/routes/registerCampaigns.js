@@ -30,6 +30,8 @@ function registerCampaigns(app, ctx) {
       imageUrl,
       batchSize,
       batchDelayMs,
+      isScheduled,
+      scheduledAt,
     } = validation.value;
 
     try {
@@ -69,16 +71,29 @@ function registerCampaigns(app, ctx) {
         batchDelayMs,
       };
 
+      const campaignStatus = isScheduled ? 'scheduled' : 'queued';
       const campaignResult = await query(
-        `INSERT INTO campaigns (area, segment, template_name, message_text, image_url, status, total_recipients, campaign_payload)
-         VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7::jsonb)
+        `INSERT INTO campaigns (area, segment, template_name, message_text, image_url, status, total_recipients, campaign_payload, scheduled_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
          RETURNING id`,
-        [area, segment, tRow.name, messageText, imageUrl, recipients.length, JSON.stringify(campaignPayload)]
+        [
+          area,
+          segment,
+          tRow.name,
+          messageText,
+          imageUrl,
+          campaignStatus,
+          recipients.length,
+          JSON.stringify(campaignPayload),
+          isScheduled ? scheduledAt : null,
+        ]
       );
 
       const campaignId = campaignResult.rows[0].id;
 
-      setImmediate(() => runCampaignSendJob(query, { campaignId, ...campaignPayload }));
+      if (!isScheduled) {
+        setImmediate(() => runCampaignSendJob(query, { campaignId, ...campaignPayload }));
+      }
 
       res.redirect(appPath(`/campaigns/${campaignId}`));
     } catch (error) {

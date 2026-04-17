@@ -109,4 +109,46 @@
   if (select.value) {
     loadDefinition(select.value);
   }
+
+  const scheduleRadios = form.querySelectorAll('input[name="scheduleMode"]');
+  const scheduleWrap = document.getElementById('campaign-schedule-datetime-wrap');
+  const scheduledAtInput = document.getElementById('campaign-scheduled-at');
+  const submitBtn = document.getElementById('campaign-submit-btn');
+
+  function setMinScheduleTime() {
+    if (!scheduledAtInput) return;
+    const d = new Date(Date.now() + 120000);
+    const pad = function (n) {
+      return String(n).padStart(2, '0');
+    };
+    scheduledAtInput.min =
+      d.getFullYear() +
+      '-' +
+      pad(d.getMonth() + 1) +
+      '-' +
+      pad(d.getDate()) +
+      'T' +
+      pad(d.getHours()) +
+      ':' +
+      pad(d.getMinutes());
+  }
+
+  function updateScheduleUi() {
+    const checked = form.querySelector('input[name="scheduleMode"]:checked');
+    const mode = checked ? checked.value : 'now';
+    const isSched = mode === 'scheduled';
+    if (scheduleWrap) scheduleWrap.hidden = !isSched;
+    if (scheduledAtInput) {
+      scheduledAtInput.required = isSched;
+      if (isSched) setMinScheduleTime();
+    }
+    if (submitBtn) {
+      submitBtn.textContent = isSched ? 'Programar campaña' : 'Enviar campaña';
+    }
+  }
+
+  scheduleRadios.forEach(function (r) {
+    r.addEventListener('change', updateScheduleUi);
+  });
+  updateScheduleUi();
 })();

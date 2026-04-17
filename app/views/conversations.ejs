@@ -213,6 +213,16 @@
                 </form>
               <% } %>
             </div>
+            <div class="inbox-chat-export-wrap" role="group" aria-label="Exportar conversación">
+              <a
+                href="<%= basePath %>/conversations/<%= selectedConversation.id %>/export"
+                class="small-btn secondary inbox-export-btn"
+              >Excel</a>
+              <a
+                href="<%= basePath %>/conversations/<%= selectedConversation.id %>/export?format=csv"
+                class="small-btn secondary inbox-export-btn"
+              >CSV</a>
+            </div>
           </div>
           <div class="inbox-chat-body">
             <%- include('partials/inbox-thread', { messages, basePath }) %>

@@ -50,21 +50,48 @@
     <div id="dynamic-template-fields" class="form-section" hidden></div>
 
     <div class="form-section">
-      <span class="form-section-label">Envío</span>
-      <div class="field-row">
-        <label class="field">
-          <span class="field-label">Lote</span>
-          <input type="number" name="batchSize" value="40" min="1" max="100" />
-        </label>
-        <label class="field">
-          <span class="field-label">Pausa (ms)</span>
-          <input type="number" name="batchDelayMs" value="1500" min="0" step="500" />
-        </label>
-      </div>
+      <span class="form-section-label">Cuándo enviar</span>
+      <fieldset class="campaign-schedule-fieldset">
+        <legend class="visually-hidden">Modo de envío</legend>
+        <div class="campaign-schedule-options">
+          <label class="field field--row campaign-schedule-option">
+            <input type="radio" name="scheduleMode" value="now" checked />
+            <span>Enviar ahora</span>
+          </label>
+          <label class="field field--row campaign-schedule-option">
+            <input type="radio" name="scheduleMode" value="scheduled" />
+            <span>Programar</span>
+          </label>
+        </div>
+        <div id="campaign-schedule-datetime-wrap" class="campaign-schedule-datetime-wrap" hidden>
+          <label class="field">
+            <span class="field-label">Fecha y hora</span>
+            <input type="datetime-local" name="scheduledAt" id="campaign-scheduled-at" autocomplete="off" />
+          </label>
+          <p class="inline-help campaign-schedule-hint">Se usa la hora de este equipo; el servidor guarda el instante correctamente.</p>
+        </div>
+      </fieldset>
     </div>
 
+    <details class="form-section form-section--adv">
+      <summary class="form-section--adv-summary">Avanzado</summary>
+      <div class="form-section--adv-body">
+        <p class="inline-help form-section--adv-hint">Control opcional del ritmo de envío (lotes y pausa entre lotes).</p>
+        <div class="field-row">
+          <label class="field">
+            <span class="field-label">Lote</span>
+            <input type="number" name="batchSize" value="40" min="1" max="100" />
+          </label>
+          <label class="field">
+            <span class="field-label">Pausa (ms)</span>
+            <input type="number" name="batchDelayMs" value="1500" min="0" step="500" />
+          </label>
+        </div>
+      </div>
+    </details>
+
     <div class="form-actions">
-      <button type="submit" <%= segments.length === 0 || !syncedTemplates || syncedTemplates.length === 0 ? 'disabled' : '' %>>Enviar campaña</button>
+      <button type="submit" id="campaign-submit-btn" <%= segments.length === 0 || !syncedTemplates || syncedTemplates.length === 0 ? 'disabled' : '' %>>Enviar campaña</button>
     </div>
   </form>
 </div>

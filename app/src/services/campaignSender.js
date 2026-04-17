@@ -130,6 +130,32 @@ async function runCampaignSendJob(query, ctx) {
   }
 }
 
+const PROMOTE_SCHEDULED_LIMIT = 50;
+
+/**
+ * Pasa a cola las campañas programadas cuya hora ya venció y dispara el job (idempotente por fila).
+ */
+async function promoteDueScheduledCampaigns(query) {
+  const r = await query(
+    `SELECT id, campaign_payload FROM campaigns
+     WHERE status = 'scheduled' AND scheduled_at <= NOW()
+     ORDER BY scheduled_at ASC
+     LIMIT $1`,
+    [PROMOTE_SCHEDULED_LIMIT]
+  );
+  for (const row of r.rows) {
+    const lock = await query(
+      `UPDATE campaigns SET status = 'queued' WHERE id = $1 AND status = 'scheduled' RETURNING id`,
+      [row.id]
+    );
+    if (lock.rowCount === 0) continue;
+    const p = row.campaign_payload;
+    if (!p) continue;
+    const payload = typeof p === 'string' ? JSON.parse(p) : p;
+    setImmediate(() => runCampaignSendJob(query, { campaignId: row.id, ...payload }));
+  }
+}
+
 async function resumeQueuedCampaigns(query) {
   const r = await query(
     `SELECT id, campaign_payload FROM campaigns WHERE status = 'queued' ORDER BY id ASC`
@@ -142,4 +168,4 @@ async function resumeQueuedCampaigns(query) {
   }
 }
 
-module.exports = { runCampaignSendJob, resumeQueuedCampaigns, wait };
+module.exports = { runCampaignSendJob, resumeQueuedCampaigns, promoteDueScheduledCampaigns, wait };

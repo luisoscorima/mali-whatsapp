@@ -456,6 +456,78 @@ html[data-theme='dark'] .nav-link.is-active {
   gap: 10px;
 }
 
+.form-section--adv {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--surface-strong);
+}
+
+.form-section--adv-summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  user-select: none;
+}
+
+.form-section--adv-summary::-webkit-details-marker {
+  display: none;
+}
+
+.form-section--adv-body {
+  padding-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.form-section--adv-hint {
+  margin: 0;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.campaign-schedule-fieldset {
+  border: none;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.campaign-schedule-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+}
+
+.campaign-schedule-option {
+  margin: 0;
+  font-weight: 500;
+}
+
+.campaign-schedule-datetime-wrap {
+  margin-top: 12px;
+  width: 100%;
+  max-width: 22rem;
+}
+
+.campaign-schedule-hint {
+  margin-top: 6px;
+}
+
 .form-section-label {
   font-size: 0.72rem;
   font-weight: 700;
@@ -917,6 +989,10 @@ th {
 .badge.processing,
 .badge.queued {
   color: var(--warn);
+}
+
+.badge.scheduled {
+  color: color-mix(in srgb, var(--accent) 75%, var(--muted));
 }
 
 .badge.error,

@@ -1,4 +1,4 @@
-const { resumeQueuedCampaigns } = require('../services/campaignSender');
+const { resumeQueuedCampaigns, promoteDueScheduledCampaigns } = require('../services/campaignSender');
 const { createRouteContext } = require('./shared/routeContext');
 const { registerAuth } = require('./registerAuth');
 const { registerDashboard } = require('./registerDashboard');
@@ -29,7 +29,11 @@ function createRegisterRoutes({ query, pool, appPath }) {
     registerWebhook(app, ctx);
   }
 
-  return { register, resumeQueuedCampaigns: () => resumeQueuedCampaigns(query) };
+  return {
+    register,
+    resumeQueuedCampaigns: () => resumeQueuedCampaigns(query),
+    promoteDueScheduledCampaigns: () => promoteDueScheduledCampaigns(query),
+  };
 }
 
 module.exports = { createRegisterRoutes };

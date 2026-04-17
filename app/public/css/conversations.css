@@ -473,6 +473,8 @@ html[data-theme='dark'] body.page-conversations .inbox-layout-wa .inbox-chat-seg
 .inbox-layout-wa .inbox-chat-header {
   display: flex;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  row-gap: 8px;
   padding: 10px 16px;
   border-bottom: 1px solid var(--line);
   background: var(--wa-header-bg);
@@ -870,6 +872,30 @@ html[data-theme='dark'] .inbox-compose-bar {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+}
+
+.inbox-chat-export-wrap {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-left: auto;
+}
+
+.inbox-export-btn {
+  font-size: 0.78rem;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .inbox-chat-export-wrap {
+    width: 100%;
+    flex-basis: 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+  }
 }
 
 .inbox-detail-footer-link {

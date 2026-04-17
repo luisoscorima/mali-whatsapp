@@ -172,6 +172,36 @@ function createRouteContext({ query, pool, appPath }) {
       .filter(Boolean)
       .join(' | ');
 
+    const scheduleMode = String(reqBody.scheduleMode || 'now').trim().toLowerCase();
+    const isScheduled = scheduleMode === 'scheduled';
+    let scheduledAt = null;
+
+    if (isScheduled) {
+      const raw = String(reqBody.scheduledAt || '').trim();
+      if (!raw) {
+        return { ok: false, message: 'Indica fecha y hora para la campaña programada' };
+      }
+      const t = new Date(raw);
+      if (Number.isNaN(t.getTime())) {
+        return { ok: false, message: 'Fecha u hora de programación no válida' };
+      }
+      const minT = Date.now() + config.CAMPAIGN_SCHEDULE_MIN_MARGIN_MS;
+      if (t.getTime() < minT) {
+        return {
+          ok: false,
+          message: 'La programación debe ser al menos 1 minuto en el futuro',
+        };
+      }
+      const maxMs = config.CAMPAIGN_SCHEDULE_MAX_DAYS * 24 * 60 * 60 * 1000;
+      if (t.getTime() > Date.now() + maxMs) {
+        return {
+          ok: false,
+          message: `La programación no puede superar ${config.CAMPAIGN_SCHEDULE_MAX_DAYS} días`,
+        };
+      }
+      scheduledAt = t;
+    }
+
     return {
       ok: true,
       value: {
@@ -184,6 +214,8 @@ function createRouteContext({ query, pool, appPath }) {
         imageUrl: def.needsHeaderMedia ? values.headerMediaUrl : null,
         batchSize,
         batchDelayMs,
+        isScheduled,
+        scheduledAt,
       },
     };
   }

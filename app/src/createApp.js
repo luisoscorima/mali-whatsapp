@@ -92,10 +92,20 @@ function createApp() {
   app.use(requirePasswordChange);
   app.use(globalLimiter);
 
-  const { register, resumeQueuedCampaigns } = createRegisterRoutes({ query, pool, appPath });
+  const { register, resumeQueuedCampaigns, promoteDueScheduledCampaigns } = createRegisterRoutes({
+    query,
+    pool,
+    appPath,
+  });
   register(app);
 
-  return { app, resumeQueuedCampaigns };
+  setInterval(() => {
+    promoteDueScheduledCampaigns().catch((err) => {
+      console.error(JSON.stringify({ level: 'error', message: 'promoteDueScheduledCampaigns', error: String(err?.message || err) }));
+    });
+  }, config.CAMPAIGN_SCHEDULE_POLL_MS);
+
+  return { app, resumeQueuedCampaigns, promoteDueScheduledCampaigns };
 }
 
 module.exports = { createApp };

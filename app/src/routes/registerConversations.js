@@ -9,6 +9,12 @@ const {
   classifyConversationUpload,
 } = require('../services/metaWhatsApp');
 const { isWithinUserServiceWindow } = require('../utils/conversations');
+const {
+  buildExportRows,
+  buildCsvBuffer,
+  buildXlsxBuffer,
+  safeFilenamePart,
+} = require('../utils/conversationExport');
 
 const MEDIA_TYPE_LABEL = {
   image: 'Imagen',
@@ -122,6 +128,54 @@ function registerConversations(app, ctx) {
       activeNav: 'conversations',
       showAdminNav: res.locals.showAdminNav,
     });
+  });
+
+  app.get('/conversations/:id/export', async (req, res) => {
+    const conversationId = Number(req.params.id);
+    if (!Number.isInteger(conversationId) || conversationId <= 0) {
+      return res.status(400).send('Id de conversacion invalido');
+    }
+    const area = req.user.area;
+    const convResult = await query(`SELECT id, phone FROM conversations WHERE id = $1 AND area = $2`, [
+      conversationId,
+      area,
+    ]);
+    if (convResult.rowCount === 0) {
+      return res.status(404).send('Conversacion no encontrada');
+    }
+    const conv = convResult.rows[0];
+    const fmt = String(req.query.format || 'xlsx').trim().toLowerCase();
+    const isCsv = fmt === 'csv';
+
+    const messagesResult = await query(
+      `SELECT direction, body_text, message_type, created_at, raw_payload
+       FROM chat_messages
+       WHERE conversation_id = $1
+       ORDER BY created_at ASC`,
+      [conversationId]
+    );
+    const rows = buildExportRows(messagesResult.rows);
+    const stamp = new Date().toISOString().slice(0, 10);
+    const baseName = `conversacion-${safeFilenamePart(conv.phone)}-${conversationId}-${stamp}`;
+
+    try {
+      if (isCsv) {
+        const buf = buildCsvBuffer(rows);
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${baseName}.csv"`);
+        return res.send(buf);
+      }
+      const buf = buildXlsxBuffer(rows);
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.xlsx"`);
+      return res.send(buf);
+    } catch (error) {
+      logError(req, 'Error exportando conversacion', error, { conversationId });
+      return res.status(500).send(`No se pudo generar la exportacion: ${error.message}`);
+    }
   });
 
   app.post(

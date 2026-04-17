@@ -85,6 +85,11 @@ module.exports = {
   MAX_IMAGE_URL_LEN: 2048,
   MAX_BATCH_SIZE: 100,
   MAX_BATCH_DELAY_MS: 60000,
+  /** Programación de campaña: margen mínimo respecto a "ahora" y ventana máxima hacia el futuro. */
+  CAMPAIGN_SCHEDULE_MIN_MARGIN_MS: 60 * 1000,
+  CAMPAIGN_SCHEDULE_MAX_DAYS: 90,
+  /** Intervalo del poller que promueve campañas scheduled → queued (ms). */
+  CAMPAIGN_SCHEDULE_POLL_MS: 45 * 1000,
   MAX_SESSION_TEXT_LEN: 4096,
   /** Captions en mensajes con media (WhatsApp Cloud API). */
   MAX_MEDIA_CAPTION_LEN: 1024,

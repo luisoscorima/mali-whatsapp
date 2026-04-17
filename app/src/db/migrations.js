@@ -102,6 +102,11 @@ async function runMigrations(query) {
     /* ya NOT NULL */
   }
   await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS campaign_payload JSONB`);
+  /** NULL = envío inmediato; con status scheduled indica la hora UTC de inicio del envío. */
+  await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ NULL`);
+  await query(
+    `CREATE INDEX IF NOT EXISTS idx_campaigns_scheduled ON campaigns (status, scheduled_at) WHERE status = 'scheduled'`
+  );
   await query(`CREATE INDEX IF NOT EXISTS idx_campaigns_area ON campaigns(area)`);
 
   await query(`
