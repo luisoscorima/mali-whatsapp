@@ -80,7 +80,7 @@ function llmTurnsToOpenAiMessages(turns) {
 /**
  * @param {string} text - Mensaje actual del usuario
  * @param {{ role: 'user'|'model', text: string }[]} history - Turnos previos (sin el mensaje actual)
- * @param {{ prompt?: string }} config - De app_settings.ai_config (campo prompt = instrucciones de área)
+ * @param {{ prompt?: string, transfer_keyword?: string }} config - De app_settings.ai_config
  * @param {string} [area] - Slug de área (ti, pam, educacion)
  * @returns {Promise<string|null>} Texto del modelo, mensaje genérico si no hay salida, o `null` si la llamada a Groq falló (excepción).
  */
@@ -88,7 +88,17 @@ async function getAiResponse(text, history, config, area) {
   const apiKey = String(process.env.GROQ_API_KEY || '').trim();
   if (!apiKey) return UNAVAILABLE_REPLY_MESSAGE;
 
+  const transferKw = String(config?.transfer_keyword ?? '[TRANSFERIR]').trim() || '[TRANSFERIR]';
   const systemInstruction = buildSystemInstruction(area, config?.prompt);
+  const fechaParaIA = new Date().toLocaleString('es-PE', {
+    timeZone: 'America/Lima',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const systemPrompt = `\n\n[FECHA Y HORA ACTUAL DEL SISTEMA: ${fechaParaIA}].\n\n${systemInstruction}\n\nSi necesitas transferir, usa exactamente esta frase: ${transferKw}`;
 
   try {
     const client = new OpenAI({
@@ -98,7 +108,7 @@ async function getAiResponse(text, history, config, area) {
 
     const turns = buildLlmChatTurns(history);
     const messages = [
-      { role: 'system', content: systemInstruction },
+      { role: 'system', content: systemPrompt },
       ...llmTurnsToOpenAiMessages(turns),
       { role: 'user', content: String(text || '') },
     ];
