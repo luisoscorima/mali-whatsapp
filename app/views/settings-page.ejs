@@ -57,7 +57,7 @@
     <div class="card" id="settings-ai-area-card">
       <h2 class="card-title">Respuesta automática (IA) · <%= areaLabel %></h2>
       <p class="inbox-compose-hint-inline">
-        Solo administrador master. Al desactivar, todos los chats del área pasan a modo Humano y la IA deja de responder. Al activar, todos los chats vuelven a Bot (reset).
+        Solo administrador master. Al desactivar, todos los chats del área pasan a modo Asesor y la IA deja de responder. Al activar, todos los chats vuelven a Bot (reset).
       </p>
       <div class="settings-ai-toggle">
         <label class="settings-ai-switch">
@@ -84,7 +84,7 @@
           maxlength="32000"
           placeholder="Instrucciones en español para el modelo…"
         ><%= typeof aiPrompt !== 'undefined' ? aiPrompt : '' %></textarea>
-        <label class="settings-ai-prompt-label settings-ai-prompt-label--secondary" for="settings-ai-transfer">Palabra clave de transferencia a humano</label>
+        <label class="settings-ai-prompt-label settings-ai-prompt-label--secondary" for="settings-ai-transfer">Palabra clave de transferencia a asesor</label>
         <input
           type="text"
           id="settings-ai-transfer"
@@ -95,7 +95,7 @@
           autocomplete="off"
           placeholder="[TRANSFERIR]"
         />
-        <p class="inbox-compose-hint-inline">Si la respuesta del modelo contiene exactamente este texto, el chat pasa a modo Humano sin enviar mensaje al cliente.</p>
+        <p class="inbox-compose-hint-inline">Si la respuesta del modelo contiene exactamente este texto, el chat pasa a modo Asesor sin enviar mensaje al cliente.</p>
         <div class="settings-ai-prompt-actions">
           <button type="button" class="small-btn" id="settings-ai-save-prompt">Guardar instrucciones</button>
           <span class="settings-ai-prompt-status" id="settings-ai-prompt-status" aria-live="polite"></span>

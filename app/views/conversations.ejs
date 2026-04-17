@@ -57,7 +57,7 @@
           <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar chats', refreshAriaLabel: 'Actualizar chats' }) %>
         </div>
         <% const _chatF = typeof chatFilter !== 'undefined' ? chatFilter : 'all'; %>
-        <div class="inbox-chat-filter-pills" aria-label="Filtrar lista">
+        <div class="inbox-chat-filter-pills inbox-chat-filter-pills--row" aria-label="Filtrar lista">
           <a
             href="<%= basePath %>/conversations<%= typeof inboxQueryAll !== 'undefined' ? inboxQueryAll : '' %>"
             class="inbox-chat-pill <%= _chatF === 'all' ? 'is-active' : '' %>"
@@ -68,9 +68,7 @@
             class="inbox-chat-pill <%= _chatF === 'unread' ? 'is-active' : '' %>"
             title="Solo no leídos"
           ><span class="inbox-pill-icon" aria-hidden="true">●</span> No leídos</a>
-        </div>
-        <% if (typeof aiAreaEnabled !== 'undefined' && aiAreaEnabled) { %>
-        <div class="inbox-chat-filter-pills inbox-chat-filter-pills--mode" aria-label="Filtrar por modo">
+          <% if (typeof aiAreaEnabled !== 'undefined' && aiAreaEnabled) { %>
           <a
             href="<%= basePath %>/conversations<%= typeof inboxQueryBot !== 'undefined' ? inboxQueryBot : '' %>"
             class="inbox-chat-pill <%= _chatF === 'bot' ? 'is-active' : '' %>"
@@ -79,10 +77,10 @@
           <a
             href="<%= basePath %>/conversations<%= typeof inboxQueryHuman !== 'undefined' ? inboxQueryHuman : '' %>"
             class="inbox-chat-pill <%= _chatF === 'human' ? 'is-active' : '' %>"
-            title="Modo Humano"
-          ><span class="inbox-pill-icon" aria-hidden="true">👤</span> Humano</a>
+            title="Modo Asesor"
+          ><span class="inbox-pill-icon" aria-hidden="true">👤</span> Asesor</a>
+          <% } %>
         </div>
-        <% } %>
         <form class="inbox-filters" method="get" action="<%= basePath %>/conversations">
           <% if (_chatF === 'unread') { %>
             <input type="hidden" name="chat" value="unread" />
@@ -128,11 +126,20 @@
                   <span class="inbox-chat-link-main">
                     <span class="inbox-chat-row-top">
                       <span class="inbox-chat-title-group">
-                        <span class="inbox-chat-title"><%= c.contact_name || c.phone %></span>
+                        <span class="inbox-chat-title-line">
+                          <span class="inbox-chat-title"><%= c.contact_name || c.phone %></span>
+                          <% if (!c.contact_name && c.contact_lead_score) { %>
+                            <span class="inbox-chat-lead-stars" aria-label="Calificación <%= c.contact_lead_score %> de 5" title="Calificación del lead">
+                              <% for (var si = 1; si <= 5; si++) { %>
+                                <span class="inbox-chat-lead-star <%= si <= c.contact_lead_score ? 'is-on' : '' %>">★</span>
+                              <% } %>
+                            </span>
+                          <% } %>
+                        </span>
                         <% if (c.conversation_status && String(c.conversation_status).toLowerCase() === 'bot') { %>
                           <span class="inbox-chat-mode-badge" title="Modo Bot">Bot</span>
                         <% } else if (c.conversation_status && String(c.conversation_status).toLowerCase() === 'human') { %>
-                          <span class="inbox-chat-mode-badge inbox-chat-mode-badge--human" title="Modo Humano">Humano</span>
+                          <span class="inbox-chat-mode-badge inbox-chat-mode-badge--human" title="Modo Asesor">Asesor</span>
                         <% } %>
                       </span>
                       <span class="inbox-chat-time-wrap">
@@ -143,16 +150,18 @@
                       </span>
                     </span>
                     <% if (c.contact_name) { %>
-                      <span class="inbox-chat-phone mono"><%= c.phone %></span>
+                      <span class="inbox-chat-phone-row">
+                        <span class="inbox-chat-phone mono"><%= c.phone %></span>
+                        <% if (c.contact_lead_score) { %>
+                          <span class="inbox-chat-lead-stars" aria-label="Calificación <%= c.contact_lead_score %> de 5" title="Calificación del lead">
+                            <% for (var si2 = 1; si2 <= 5; si2++) { %>
+                              <span class="inbox-chat-lead-star <%= si2 <= c.contact_lead_score ? 'is-on' : '' %>">★</span>
+                            <% } %>
+                          </span>
+                        <% } %>
+                      </span>
                     <% } %>
                     <span class="inbox-chat-row-mid">
-                      <% if (c.contact_lead_score) { %>
-                        <span class="inbox-chat-lead-stars" aria-hidden="true">
-                          <% for (var si = 1; si <= 5; si++) { %>
-                            <span class="inbox-chat-lead-star <%= si <= c.contact_lead_score ? 'is-on' : '' %>">★</span>
-                          <% } %>
-                        </span>
-                      <% } %>
                       <span class="inbox-chat-preview"><%= (c.preview || '—').slice(0, 120) %></span>
                     </span>
                     <% if (c.contact_segment) { %>
@@ -178,87 +187,29 @@
             </div>
           </div>
         <% } else { %>
+          <% const _convSt = String(selectedConversation.status || 'bot').toLowerCase(); %>
+          <% const _aiOn = typeof aiAreaEnabled !== 'undefined' && aiAreaEnabled; %>
           <div class="inbox-chat-header">
             <a class="inbox-back-mobile" href="<%= basePath %>/conversations<%= inboxQuery %>">← Chats</a>
-            <span class="inbox-chat-avatar inbox-chat-avatar--header" aria-hidden="true"><%= inboxInitials(contact ? contact.name : '', selectedConversation.phone) %></span>
-            <div class="inbox-chat-header-main">
-              <h1 class="inbox-chat-heading"><%= contact ? contact.name : selectedConversation.phone %></h1>
-              <p class="inbox-chat-sub mono"><%= selectedConversation.phone %></p>
-              <% if (contact && contact.segment) { %>
-                <span class="inbox-chat-segment inbox-chat-segment--header" data-seg-tone="<%= segmentColorKey(contact.segment) %>"><%= segmentLabel(contact.segment) %></span>
-              <% } %>
-              <p class="inbox-window-meta">
-                Ventana 24 h:
-                <% if (typeof userServiceWindowOpen !== 'undefined' && userServiceWindowOpen) { %>
-                  <span class="badge sent">Abierta</span>
-                <% } else { %>
-                  <span class="badge neutral">Cerrada</span>
+            <div class="inbox-chat-header-profile">
+              <span class="inbox-chat-avatar inbox-chat-avatar--header" aria-hidden="true"><%= inboxInitials(contact ? contact.name : '', selectedConversation.phone) %></span>
+              <div class="inbox-chat-header-identity">
+                <h1 class="inbox-chat-heading"><%= contact ? contact.name : selectedConversation.phone %></h1>
+                <p class="inbox-chat-sub mono"><%= selectedConversation.phone %></p>
+                <% if (contact && contact.segment) { %>
+                  <span class="inbox-chat-segment inbox-chat-segment--header" data-seg-tone="<%= segmentColorKey(contact.segment) %>"><%= segmentLabel(contact.segment) %></span>
                 <% } %>
-              </p>
-              <% const _convSt = String(selectedConversation.status || 'bot').toLowerCase(); %>
-              <% const _aiOn = typeof aiAreaEnabled !== 'undefined' && aiAreaEnabled; %>
-              <div
-                class="inbox-mode-toggle<%= !_aiOn ? ' inbox-mode-toggle--disabled' : '' %>"
-                role="group"
-                aria-label="Modo del chat"
-                data-conversation-id="<%= selectedConversation.id %>"
-                data-base-path="<%= basePath %>"
-                <% if (!_aiOn) { %>title="IA desactivada para el área (solo administrador master puede reactivarla)"<% } %>
-              >
-                <span class="inbox-mode-toggle-label">Modo</span>
-                <button
-                  type="button"
-                  class="inbox-mode-btn <%= _convSt === 'bot' ? 'is-active' : '' %>"
-                  data-set-status="bot"
-                  <%= !_aiOn ? 'disabled' : '' %>
-                  title="Bot"
-                ><span aria-hidden="true">🤖</span> Bot</button>
-                <button
-                  type="button"
-                  class="inbox-mode-btn <%= _convSt === 'human' ? 'is-active' : '' %>"
-                  data-set-status="human"
-                  title="Humano"
-                ><span aria-hidden="true">👤</span> Humano</button>
+                <p class="inbox-window-meta">
+                  Ventana 24 h:
+                  <% if (typeof userServiceWindowOpen !== 'undefined' && userServiceWindowOpen) { %>
+                    <span class="badge sent">Abierta</span>
+                  <% } else { %>
+                    <span class="badge neutral">Cerrada</span>
+                  <% } %>
+                </p>
               </div>
-              <% if (contact) { %>
-                <form
-                  method="POST"
-                  action="<%= basePath %>/conversations/<%= selectedConversation.id %>/lead-score"
-                  class="inbox-lead-score-form"
-                >
-                  <% if (segmentFilter) { %>
-                    <input type="hidden" name="inbox_segment" value="<%= segmentFilter %>" />
-                  <% } %>
-                  <% if (searchQ) { %>
-                    <input type="hidden" name="inbox_q" value="<%= searchQ %>" />
-                  <% } %>
-                  <% if (_chatF === 'unread') { %>
-                    <input type="hidden" name="inbox_chat" value="unread" />
-                  <% } else if (_chatF === 'bot') { %>
-                    <input type="hidden" name="inbox_chat" value="bot" />
-                  <% } else if (_chatF === 'human') { %>
-                    <input type="hidden" name="inbox_chat" value="human" />
-                  <% } %>
-                  <div class="inbox-lead-score-row">
-                    <span class="inbox-lead-score-label" id="lead-score-label">Calificación del lead</span>
-                    <div class="inbox-lead-stars-input" role="group" aria-labelledby="lead-score-label">
-                      <% for (var st = 1; st <= 5; st++) { %>
-                        <button
-                          type="submit"
-                          name="lead_score"
-                          value="<%= st %>"
-                          class="inbox-lead-star-btn <%= contact.lead_score && contact.lead_score >= st ? 'is-on' : '' %>"
-                          title="<%= st %> de 5"
-                          aria-label="Calificar <%= st %> de 5"
-                        >★</button>
-                      <% } %>
-                      <button type="submit" name="lead_score_clear" value="1" class="inbox-lead-clear" title="Quitar calificación" aria-label="Quitar calificación">Borrar</button>
-                    </div>
-                  </div>
-                </form>
-              <% } %>
             </div>
-            <div class="inbox-chat-export-wrap">
+            <div class="inbox-chat-header-toolbar">
               <a
                 href="<%= basePath %>/conversations/<%= selectedConversation.id %>/export"
                 class="small-btn secondary inbox-export-btn inbox-export-btn--icon"
@@ -267,6 +218,78 @@
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
               </a>
+              <details class="inbox-header-more">
+                <summary class="inbox-header-more-trigger small-btn secondary" title="Más" aria-label="Más opciones">
+                  <span class="inbox-header-more-icon" aria-hidden="true">+</span>
+                  <span class="sr-only">Más opciones</span>
+                </summary>
+                <div class="inbox-header-more-panel">
+                  <div
+                    class="inbox-mode-toggle inbox-mode-toggle--in-more<%= !_aiOn ? ' inbox-mode-toggle--disabled' : '' %>"
+                    role="group"
+                    aria-label="Modo del chat"
+                    data-conversation-id="<%= selectedConversation.id %>"
+                    data-base-path="<%= basePath %>"
+                    <% if (!_aiOn) { %>title="IA desactivada para el área (solo administrador master puede reactivarla)"<% } %>
+                  >
+                    <span class="inbox-mode-toggle-label">Modo</span>
+                    <div class="inbox-mode-toggle-btns">
+                      <button
+                        type="button"
+                        class="inbox-mode-btn inbox-mode-btn--icon-only <%= _convSt === 'bot' ? 'is-active' : '' %>"
+                        data-set-status="bot"
+                        <%= !_aiOn ? 'disabled' : '' %>
+                        title="Bot"
+                        aria-label="Modo Bot"
+                      ><span aria-hidden="true">🤖</span></button>
+                      <button
+                        type="button"
+                        class="inbox-mode-btn inbox-mode-btn--icon-only <%= _convSt === 'human' ? 'is-active' : '' %>"
+                        data-set-status="human"
+                        title="Asesor"
+                        aria-label="Modo Asesor"
+                      ><span aria-hidden="true">👤</span></button>
+                    </div>
+                  </div>
+                  <% if (contact) { %>
+                    <form
+                      method="POST"
+                      action="<%= basePath %>/conversations/<%= selectedConversation.id %>/lead-score"
+                      class="inbox-lead-score-form inbox-lead-score-form--in-more"
+                    >
+                      <% if (segmentFilter) { %>
+                        <input type="hidden" name="inbox_segment" value="<%= segmentFilter %>" />
+                      <% } %>
+                      <% if (searchQ) { %>
+                        <input type="hidden" name="inbox_q" value="<%= searchQ %>" />
+                      <% } %>
+                      <% if (_chatF === 'unread') { %>
+                        <input type="hidden" name="inbox_chat" value="unread" />
+                      <% } else if (_chatF === 'bot') { %>
+                        <input type="hidden" name="inbox_chat" value="bot" />
+                      <% } else if (_chatF === 'human') { %>
+                        <input type="hidden" name="inbox_chat" value="human" />
+                      <% } %>
+                      <div class="inbox-lead-score-row">
+                        <span class="inbox-lead-score-label" id="lead-score-label">Calificación del lead</span>
+                        <div class="inbox-lead-stars-input" role="group" aria-labelledby="lead-score-label">
+                          <% for (var st = 1; st <= 5; st++) { %>
+                            <button
+                              type="submit"
+                              name="lead_score"
+                              value="<%= st %>"
+                              class="inbox-lead-star-btn <%= contact.lead_score && contact.lead_score >= st ? 'is-on' : '' %>"
+                              title="<%= st %> de 5"
+                              aria-label="Calificar <%= st %> de 5"
+                            >★</button>
+                          <% } %>
+                          <button type="submit" name="lead_score_clear" value="1" class="inbox-lead-clear" title="Quitar calificación" aria-label="Quitar calificación">Borrar</button>
+                        </div>
+                      </div>
+                    </form>
+                  <% } %>
+                </div>
+              </details>
             </div>
           </div>
           <div class="inbox-chat-body">

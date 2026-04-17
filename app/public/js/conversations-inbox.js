@@ -212,6 +212,13 @@
       .catch(function () {});
   }
 
+  document.addEventListener('click', function (ev) {
+    document.querySelectorAll('.inbox-header-more[open]').forEach(function (d) {
+      if (d.contains(ev.target)) return;
+      d.removeAttribute('open');
+    });
+  });
+
   document.querySelectorAll('.inbox-mode-toggle').forEach(function (wrap) {
     var id = wrap.getAttribute('data-conversation-id');
     var bp = wrap.getAttribute('data-base-path') || '';

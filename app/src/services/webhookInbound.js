@@ -11,7 +11,7 @@ const {
 } = require('./metaSettingsCache');
 
 const TRANSFER_TO_HUMAN_NOTICE =
-  'He derivado tu consulta a un asesor humano. En breve te atenderán.';
+  'He derivado tu consulta a un asesor. En breve te atenderán.';
 
 /**
  * Envía texto por WhatsApp, persiste outbound y actualiza last_message_at.
@@ -207,7 +207,7 @@ async function maybeAutoReplyWithAi(
       text: UNAVAILABLE_REPLY_MESSAGE,
       isAi: false,
     });
-    console.log(`[Fallback] Error en IA. Conversación ${conversationId} movida a Humano.`);
+    console.log(`[Fallback] Error en IA. Conversación ${conversationId} movida a Asesor (status human).`);
     return;
   }
 

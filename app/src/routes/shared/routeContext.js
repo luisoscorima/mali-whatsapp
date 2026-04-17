@@ -53,7 +53,7 @@ function createRouteContext({ query, pool, appPath }) {
     return String(reqQuery.q ?? '').trim();
   }
 
-  /** Filtro de lista: todos | no leídos | bot | humano. */
+  /** Filtro de lista: todos | no leídos | bot | human (UI: Asesor). */
   function parseInboxChatFilter(reqQuery) {
     const raw = String(reqQuery.chat ?? '').trim().toLowerCase();
     if (raw === 'unread') return 'unread';

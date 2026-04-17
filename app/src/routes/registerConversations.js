@@ -246,7 +246,7 @@ function registerConversations(app, ctx) {
       if (aiCfg && aiCfg.enabled && convStatus === 'bot') {
         return res
           .status(400)
-          .send('Este chat está en modo Bot; cambia a Humano para responder.');
+          .send('Este chat está en modo Bot; cambia a Asesor (Más, arriba a la derecha) para responder.');
       }
 
       if (!isWithinUserServiceWindow(conversation.last_user_message_at)) {
