@@ -1,5 +1,8 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
+const GEMINI_UNAVAILABLE_MESSAGE =
+  'Lo siento, estoy experimentando una alta carga de consultas. Por favor, intenta de nuevo en unos momentos.';
+
 /**
  * Convierte el historial local a {@link Content} del SDK: roles `user` | `model`,
  * `parts: [{ text }]`, sin textos vacíos, empezando siempre por `user` y
@@ -46,21 +49,33 @@ function buildGeminiChatContents(history) {
 async function getAiResponse(text, history, config) {
   const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
   if (!apiKey) {
-    throw new Error('GEMINI_API_KEY no configurada');
+    return GEMINI_UNAVAILABLE_MESSAGE;
   }
   const systemInstruction =
     String(config?.prompt || '').trim() || 'Eres un asistente útil. Responde en español.';
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
-    systemInstruction,
-  });
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-pro-latest',
+      systemInstruction,
+    });
 
-  const contents = buildGeminiChatContents(history);
-  const chat = model.startChat({ history: contents });
-  const result = await chat.sendMessage(String(text || ''));
-  return String(result.response.text() || '').trim();
+    const contents = buildGeminiChatContents(history);
+    const chat = model.startChat({ history: contents });
+    const result = await chat.sendMessage(String(text || ''));
+    const out = String(result.response.text() || '').trim();
+    return out || GEMINI_UNAVAILABLE_MESSAGE;
+  } catch (e) {
+    console.log(
+      JSON.stringify({
+        level: 'warn',
+        message: 'Gemini getAiResponse falló; respuesta genérica al cliente',
+        error: e && e.message ? e.message : String(e),
+      })
+    );
+    return GEMINI_UNAVAILABLE_MESSAGE;
+  }
 }
 
 module.exports = { getAiResponse };
