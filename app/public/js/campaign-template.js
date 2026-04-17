@@ -137,6 +137,10 @@
     const checked = form.querySelector('input[name="scheduleMode"]:checked');
     const mode = checked ? checked.value : 'now';
     const isSched = mode === 'scheduled';
+    if (!isSched) {
+      const stale = form.querySelector('input[name="scheduledAt"][data-utc-submit]');
+      if (stale) stale.remove();
+    }
     if (scheduleWrap) scheduleWrap.hidden = !isSched;
     if (scheduledAtInput) {
       scheduledAtInput.required = isSched;
@@ -153,16 +157,26 @@
   updateScheduleUi();
 
   /**
-   * datetime-local envía "YYYY-MM-DDTHH:mm" sin zona; en Node eso se interpreta como hora UTC
-   * y puede quedar en el pasado respecto al reloj del usuario. Convertimos aquí a ISO UTC.
+   * No podemos poner toISOString() en datetime-local (muchas UAs lo vacían: formato inválido).
+   * Enviamos el instante en un hidden con name scheduledAt (ISO UTC).
    */
   form.addEventListener('submit', function () {
-    const mode = form.querySelector('input[name="scheduleMode"]:checked');
+    var prev = form.querySelector('input[name="scheduledAt"][data-utc-submit]');
+    if (prev) prev.remove();
+
+    var mode = form.querySelector('input[name="scheduleMode"]:checked');
     if (!mode || mode.value !== 'scheduled' || !scheduledAtInput) return;
-    const localVal = String(scheduledAtInput.value || '').trim();
+
+    var localVal = String(scheduledAtInput.value || '').trim();
     if (!localVal) return;
-    const d = new Date(localVal);
+    var d = new Date(localVal);
     if (Number.isNaN(d.getTime())) return;
-    scheduledAtInput.value = d.toISOString();
+
+    var hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.name = 'scheduledAt';
+    hidden.value = d.toISOString();
+    hidden.setAttribute('data-utc-submit', '1');
+    form.appendChild(hidden);
   });
 })();
