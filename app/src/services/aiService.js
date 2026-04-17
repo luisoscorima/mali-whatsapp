@@ -56,10 +56,10 @@ async function getAiResponse(text, history, config) {
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-3.1-flash-lite',
-      systemInstruction,
-    });
+    const model = genAI.getGenerativeModel(
+      { model: 'gemini-1.5-flash', systemInstruction },
+      { apiVersion: 'v1' }
+    );
 
     const contents = buildGeminiChatContents(history);
     const chat = model.startChat({ history: contents });
