@@ -13,6 +13,7 @@ const TYPE_LABEL = {
   contacts: 'Contacto',
   button: 'Botón',
   interactive: 'Interactivo',
+  campaign: 'Campaña',
   unknown: 'Otro',
 };
 

@@ -7,6 +7,7 @@ const {
   buildTemplateDefinition,
   buildWhatsappGraphComponents,
 } = require('./templateParser');
+const { upsertCampaignChatMessage } = require('./campaignConversationLog');
 
 const fakeReqLog = {
   path: '/campaigns/async',
@@ -101,6 +102,22 @@ async function runCampaignSendJob(query, ctx) {
               JSON.stringify(sanitizeApiResponse(apiResponse)),
             ]
           );
+
+          try {
+            await upsertCampaignChatMessage(query, {
+              area,
+              campaignId,
+              templateName: templateSnapshot.name,
+              phone: contact.phone,
+              contactId: contact.id,
+              waMessageId: messageId,
+            });
+          } catch (chatErr) {
+            logError(fakeReqLog, 'No se pudo registrar campaña en conversación', chatErr, {
+              campaignId,
+              contactId: contact.id,
+            });
+          }
         } catch (error) {
           const payload = sanitizeApiErrorPayload(error.response?.data || { message: error.message });
 

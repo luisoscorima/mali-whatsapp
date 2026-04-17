@@ -17,6 +17,7 @@
        if (t === 'location') return '📍';
        if (t === 'contacts') return '👤';
        if (t === 'interactive' || t === 'button') return '🔘';
+       if (t === 'campaign') return '📢';
        return '';
      }
      function mediaLabel(t) {
@@ -29,6 +30,7 @@
        if (t === 'location') return 'Ubicación';
        if (t === 'contacts') return 'Contacto';
        if (t === 'interactive' || t === 'button') return 'Interactivo';
+       if (t === 'campaign') return 'Campaña';
        return '';
      }
      function isMediaType(t) {
@@ -91,10 +93,10 @@
           <div class="chat-bubble__text"><%= m.body_text %></div>
         <% } %>
         <div class="chat-meta">
-          <%= m.direction === 'outbound' ? 'Tú' : 'Usuario' %> · <%= mt %> ·
+          <%= m.direction === 'outbound' ? 'Tú' : 'Usuario' %> · <%= mediaLabel(mt) || mt %> ·
           <%= formatMessageDateTime(m.created_at) %>
         </div>
-        <% if (m.direction === 'outbound') { %>
+        <% if (m.direction === 'outbound' && mt !== 'campaign') { %>
           <% 
             var _ds = raw && raw.delivery_status;
             var _dso = _ds && (typeof _ds === 'string' ? (function(){ try { return JSON.parse(_ds); } catch (e) { return null; } })() : _ds);
