@@ -107,7 +107,7 @@ async function maybeAutoReplyWithGemini(
   { area, conversationId, messageType, bodyText, phone }
 ) {
   if (String(messageType || '').trim() !== 'text') return;
-  if (!String(process.env.GEMINI_API_KEY || '').trim()) return;
+  if (!String(process.env.GROQ_API_KEY || '').trim()) return;
 
   const convRow = await query(`SELECT phone, status FROM conversations WHERE id = $1`, [conversationId]);
   if (convRow.rows.length === 0) return;
@@ -148,7 +148,7 @@ async function maybeAutoReplyWithGemini(
     console.log(
       JSON.stringify({
         level: 'warn',
-        message: 'Auto-reply Gemini: error',
+        message: 'Auto-reply IA (Groq): error',
         area,
         conversationId,
         error: e.message,
@@ -187,7 +187,7 @@ async function maybeAutoReplyWithGemini(
     console.log(
       JSON.stringify({
         level: 'warn',
-        message: 'Auto-reply Gemini: fallo al enviar WhatsApp',
+        message: 'Auto-reply IA (Groq): fallo al enviar WhatsApp',
         area,
         conversationId,
         error: e.message,

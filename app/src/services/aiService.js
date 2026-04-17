@@ -1,6 +1,6 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { OpenAI } = require('openai');
 
-const GEMINI_UNAVAILABLE_MESSAGE =
+const UNAVAILABLE_REPLY_MESSAGE =
   'Lo siento, estoy experimentando una alta carga de consultas. Por favor, intenta de nuevo en unos momentos.';
 
 /**
@@ -66,6 +66,19 @@ function buildGeminiChatContents(history) {
 }
 
 /**
+ * Pasa de turnos internos (user/model + parts) a mensajes OpenAI/Groq (user/assistant).
+ * @param {{ role: string, parts: { text: string }[] }[]} contents
+ * @returns {{ role: 'user'|'assistant', content: string }[]}
+ */
+function contentsToOpenAiMessages(contents) {
+  return (Array.isArray(contents) ? contents : []).map((c) => {
+    const content = String(c.parts?.[0]?.text || '');
+    const role = c.role === 'model' ? 'assistant' : 'user';
+    return { role, content };
+  });
+}
+
+/**
  * @param {string} text - Mensaje actual del usuario
  * @param {{ role: 'user'|'model', text: string }[]} history - Turnos previos (sin el mensaje actual)
  * @param {{ prompt?: string }} config - De app_settings.ai_config (campo prompt = instrucciones de área)
@@ -73,29 +86,34 @@ function buildGeminiChatContents(history) {
  * @returns {Promise<string>}
  */
 async function getAiResponse(text, history, config, area) {
-  const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
-  if (!apiKey) return GEMINI_UNAVAILABLE_MESSAGE;
+  const apiKey = String(process.env.GROQ_API_KEY || '').trim();
+  if (!apiKey) return UNAVAILABLE_REPLY_MESSAGE;
 
   const systemInstruction = buildSystemInstruction(area, config?.prompt);
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel(
-      {
-        model: 'gemini-1.5-flash',
-        systemInstruction,
-      },
-      { apiVersion: 'v1beta' }
-    );
+    const client = new OpenAI({
+      apiKey,
+      baseURL: 'https://api.groq.com/openai/v1',
+    });
 
     const contents = buildGeminiChatContents(history);
-    const chat = model.startChat({ history: contents });
-    const result = await chat.sendMessage(String(text || ''));
-    const out = String(result.response.text() || '').trim();
-    return out || GEMINI_UNAVAILABLE_MESSAGE;
+    const messages = [
+      { role: 'system', content: systemInstruction },
+      ...contentsToOpenAiMessages(contents),
+      { role: 'user', content: String(text || '') },
+    ];
+
+    const completion = await client.chat.completions.create({
+      model: 'llama-3.1-8b-instant',
+      messages,
+    });
+
+    const out = String(completion.choices[0]?.message?.content || '').trim();
+    return out || UNAVAILABLE_REPLY_MESSAGE;
   } catch (e) {
-    console.error('[Gemini Error]:', e.message);
-    return GEMINI_UNAVAILABLE_MESSAGE;
+    console.error('[Groq Error]:', e.message);
+    return UNAVAILABLE_REPLY_MESSAGE;
   }
 }
 
