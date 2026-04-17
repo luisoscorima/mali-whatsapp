@@ -73,6 +73,11 @@ async function runMigrations(query) {
   }
   await query(`CREATE INDEX IF NOT EXISTS idx_contacts_segment ON contacts(segment)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_contacts_area ON contacts(area)`);
+  await query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS lead_score SMALLINT`);
+  await query(`ALTER TABLE contacts DROP CONSTRAINT IF EXISTS contacts_lead_score_check`);
+  await query(
+    `ALTER TABLE contacts ADD CONSTRAINT contacts_lead_score_check CHECK (lead_score IS NULL OR (lead_score >= 1 AND lead_score <= 5))`
+  );
 
   await query(`
     CREATE TABLE IF NOT EXISTS campaigns (
@@ -172,6 +177,9 @@ async function runMigrations(query) {
   `);
   await query(
     `CREATE INDEX IF NOT EXISTS idx_conversations_area_last_msg ON conversations(area, last_message_at DESC)`
+  );
+  await query(
+    `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS inbox_unread BOOLEAN NOT NULL DEFAULT FALSE`
   );
 
   await query(`

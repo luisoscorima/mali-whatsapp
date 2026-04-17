@@ -9,7 +9,6 @@
     totals.totalLogs > 0 ? Math.round((totals.failed / totals.totalLogs) * 100) : 0;
   const readRate =
     totals.salidaOk > 0 ? Math.round((totals.read / totals.salidaOk) * 100) : null;
-  var _campaignListEmpty = !campaigns || campaigns.length === 0;
 %>
 <%- include('layouts/inbox-shell-start', {
   pageTitle,
@@ -21,7 +20,7 @@
   activeNav,
   showAdminNav,
   shellPageClass: 'conversations-page',
-  layoutModifier: _campaignListEmpty ? 'conversations-inbox--detail' : '',
+  layoutModifier: '',
   extraHeadScripts: null
 }) %>
 <%- include('partials/campaign-list-sidebar', {

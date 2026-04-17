@@ -7,10 +7,7 @@
   const s = segments.find(function (x) { return x.value === slug; });
   return s && s.colorKey ? s.colorKey : 'slate';
 }
-  var _contactsMobileDetail =
-    view === 'edit' ||
-    view === 'new' ||
-    (view === 'list' && (!contacts || contacts.length === 0));
+  var _contactsMobileDetail = view === 'edit' || view === 'new';
 %>
 <%- include('layouts/inbox-shell-start', {
   pageTitle,

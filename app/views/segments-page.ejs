@@ -1,9 +1,5 @@
 <% const _segSel = typeof selectedSegmentId !== 'undefined' ? selectedSegmentId : null; %>
-<% var _segmentsMobileDetail =
-  view === 'detail' ||
-  view === 'new' ||
-  (view === 'list' && (!segments || segments.length === 0));
-%>
+<% var _segmentsMobileDetail = view === 'detail' || view === 'new'; %>
 <%- include('layouts/inbox-shell-start', {
   pageTitle,
   basePath,

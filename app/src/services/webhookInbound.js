@@ -247,12 +247,13 @@ async function persistInboundMessagesFromWebhookValue(query, value, context = {}
     const { messageType, bodyText } = extractInboundMessagePreview(msg);
 
     const convResult = await query(
-      `INSERT INTO conversations (area, phone, contact_id, last_user_message_at, last_message_at, updated_at)
-       VALUES ($1, $2, $3, NOW(), NOW(), NOW())
+      `INSERT INTO conversations (area, phone, contact_id, last_user_message_at, last_message_at, inbox_unread, updated_at)
+       VALUES ($1, $2, $3, NOW(), NOW(), TRUE, NOW())
        ON CONFLICT (area, phone) DO UPDATE SET
          contact_id = COALESCE(EXCLUDED.contact_id, conversations.contact_id),
          last_user_message_at = NOW(),
          last_message_at = NOW(),
+         inbox_unread = TRUE,
          updated_at = NOW()
        RETURNING id`,
       [area, from, contactId]

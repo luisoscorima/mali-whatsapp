@@ -68,7 +68,20 @@
           <h2 class="inbox-sidebar-title">Chats</h2>
           <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar chats', refreshAriaLabel: 'Actualizar chats' }) %>
         </div>
+        <div class="inbox-chat-filter-pills" aria-label="Filtrar por lectura">
+          <a
+            href="<%= basePath %>/conversations<%= typeof inboxQueryAll !== 'undefined' ? inboxQueryAll : '' %>"
+            class="inbox-chat-pill <%= typeof chatFilter !== 'undefined' && chatFilter === 'unread' ? '' : 'is-active' %>"
+          >Todos</a>
+          <a
+            href="<%= basePath %>/conversations<%= typeof inboxQueryUnread !== 'undefined' ? inboxQueryUnread : '' %>"
+            class="inbox-chat-pill <%= typeof chatFilter !== 'undefined' && chatFilter === 'unread' ? 'is-active' : '' %>"
+          >No leídos</a>
+        </div>
         <form class="inbox-filters" method="get" action="<%= basePath %>/conversations">
+          <% if (typeof chatFilter !== 'undefined' && chatFilter === 'unread') { %>
+            <input type="hidden" name="chat" value="unread" />
+          <% } %>
           <label class="field field--inbox">
             <span class="field-label">Segmento</span>
             <select name="segment" class="inbox-select" data-inbox-filter>
@@ -100,18 +113,30 @@
         <% } else { %>
           <ul class="inbox-chat-list">
             <% conversations.forEach(function (c) { %>
-              <li class="inbox-chat-item <%= typeof selectedConversation !== 'undefined' && selectedConversation && selectedConversation.id === c.id ? 'is-active' : '' %>">
+              <li class="inbox-chat-item <%= c.inbox_unread ? 'inbox-chat-item--unread' : '' %> <%= typeof selectedConversation !== 'undefined' && selectedConversation && selectedConversation.id === c.id ? 'is-active' : '' %>">
                 <a class="inbox-chat-link" href="<%= basePath %>/conversations/<%= c.id %><%= inboxQuery %>">
                   <span class="inbox-chat-avatar" aria-hidden="true"><%= inboxInitials(c.contact_name, c.phone) %></span>
                   <span class="inbox-chat-link-main">
                     <span class="inbox-chat-row-top">
                       <span class="inbox-chat-title"><%= c.contact_name || c.phone %></span>
-                      <span class="inbox-chat-time"><%= formatChatTime(c.last_message_at) %></span>
+                      <span class="inbox-chat-time-wrap">
+                        <% if (c.inbox_unread) { %>
+                          <span class="inbox-unread-dot" title="No leído"></span>
+                        <% } %>
+                        <span class="inbox-chat-time"><%= formatChatTime(c.last_message_at) %></span>
+                      </span>
                     </span>
                     <% if (c.contact_name) { %>
                       <span class="inbox-chat-phone mono"><%= c.phone %></span>
                     <% } %>
                     <span class="inbox-chat-row-mid">
+                      <% if (c.contact_lead_score) { %>
+                        <span class="inbox-chat-lead-stars" aria-hidden="true">
+                          <% for (var si = 1; si <= 5; si++) { %>
+                            <span class="inbox-chat-lead-star <%= si <= c.contact_lead_score ? 'is-on' : '' %>">★</span>
+                          <% } %>
+                        </span>
+                      <% } %>
                       <span class="inbox-chat-preview"><%= (c.preview || '—').slice(0, 120) %></span>
                     </span>
                     <% if (c.contact_segment) { %>
@@ -154,6 +179,39 @@
                   <span class="badge neutral">Cerrada</span>
                 <% } %>
               </p>
+              <% if (contact) { %>
+                <form
+                  method="POST"
+                  action="<%= basePath %>/conversations/<%= selectedConversation.id %>/lead-score"
+                  class="inbox-lead-score-form"
+                >
+                  <% if (segmentFilter) { %>
+                    <input type="hidden" name="inbox_segment" value="<%= segmentFilter %>" />
+                  <% } %>
+                  <% if (searchQ) { %>
+                    <input type="hidden" name="inbox_q" value="<%= searchQ %>" />
+                  <% } %>
+                  <% if (typeof chatFilter !== 'undefined' && chatFilter === 'unread') { %>
+                    <input type="hidden" name="inbox_chat" value="unread" />
+                  <% } %>
+                  <div class="inbox-lead-score-row">
+                    <span class="inbox-lead-score-label" id="lead-score-label">Calificación del lead</span>
+                    <div class="inbox-lead-stars-input" role="group" aria-labelledby="lead-score-label">
+                      <% for (var st = 1; st <= 5; st++) { %>
+                        <button
+                          type="submit"
+                          name="lead_score"
+                          value="<%= st %>"
+                          class="inbox-lead-star-btn <%= contact.lead_score && contact.lead_score >= st ? 'is-on' : '' %>"
+                          title="<%= st %> de 5"
+                          aria-label="Calificar <%= st %> de 5"
+                        >★</button>
+                      <% } %>
+                      <button type="submit" name="lead_score_clear" value="1" class="inbox-lead-clear" title="Quitar calificación" aria-label="Quitar calificación">Borrar</button>
+                    </div>
+                  </div>
+                </form>
+              <% } %>
             </div>
           </div>
           <div class="inbox-chat-body">
@@ -161,7 +219,7 @@
           </div>
           <div class="inbox-compose">
             <h2 class="inbox-compose-title">Responder</h2>
-            <%- include('partials/inbox-reply', { conversation: selectedConversation, canReply, basePath, segmentFilter, searchQ }) %>
+            <%- include('partials/inbox-reply', { conversation: selectedConversation, canReply, basePath, segmentFilter, searchQ, chatFilter }) %>
           </div>
         <% } %>
       </section>

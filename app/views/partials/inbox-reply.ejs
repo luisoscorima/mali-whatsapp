@@ -13,6 +13,9 @@
     <% if (typeof searchQ !== 'undefined' && searchQ) { %>
       <input type="hidden" name="inbox_q" value="<%= searchQ %>" />
     <% } %>
+    <% if (typeof chatFilter !== 'undefined' && chatFilter === 'unread') { %>
+      <input type="hidden" name="inbox_chat" value="unread" />
+    <% } %>
     <div class="inbox-compose-stack inbox-compose-stack--with-emoji">
       <div class="reply-attachment-preview" id="reply-attachment-preview" hidden>
         <div class="reply-attachment-preview__head">

@@ -52,15 +52,22 @@ function createRouteContext({ query, pool, appPath }) {
     return String(reqQuery.q ?? '').trim();
   }
 
-  function inboxQueryString(segmentFilter, searchQ) {
+  /** Filtro de lista tipo WhatsApp: todos los chats o solo no leídos (panel). */
+  function parseInboxChatFilter(reqQuery) {
+    const raw = String(reqQuery.chat ?? '').trim();
+    return raw === 'unread' ? 'unread' : 'all';
+  }
+
+  function inboxQueryString(segmentFilter, searchQ, chatFilter) {
     const sp = new URLSearchParams();
     if (segmentFilter) sp.set('segment', segmentFilter);
     if (searchQ) sp.set('q', searchQ);
+    if (chatFilter === 'unread') sp.set('chat', 'unread');
     const s = sp.toString();
     return s ? `?${s}` : '';
   }
 
-  async function fetchInboxConversations(area, segmentFilter, searchQText) {
+  async function fetchInboxConversations(area, segmentFilter, searchQText, chatFilter) {
     const params = [area];
     let p = 2;
     let extra = '';
@@ -81,12 +88,17 @@ function createRouteContext({ query, pool, appPath }) {
       params.push(pat);
       p += 1;
     }
+    if (chatFilter === 'unread') {
+      extra += ` AND c.inbox_unread = TRUE`;
+    }
     const listResult = await query(
       `SELECT
           c.id,
           c.phone,
           c.last_message_at,
           c.last_user_message_at,
+          c.inbox_unread,
+          ct.lead_score AS contact_lead_score,
           ct.name AS contact_name,
           ct.segment AS contact_segment,
           (SELECT m.body_text FROM chat_messages m
@@ -181,11 +193,14 @@ function createRouteContext({ query, pool, appPath }) {
     const slugSet = await getSegmentSlugSet(area);
     const segmentFilter = parseInboxSegmentFilter(req.query, slugSet);
     const searchQ = parseInboxSearchQ(req.query);
+    const chatFilter = parseInboxChatFilter(req.query);
     const [segments, listRows] = await Promise.all([
       loadSegments(area),
-      fetchInboxConversations(area, segmentFilter, searchQ),
+      fetchInboxConversations(area, segmentFilter, searchQ, chatFilter),
     ]);
-    const inboxQuery = inboxQueryString(segmentFilter, searchQ);
+    const inboxQuery = inboxQueryString(segmentFilter, searchQ, chatFilter);
+    const inboxQueryAll = inboxQueryString(segmentFilter, searchQ, 'all');
+    const inboxQueryUnread = inboxQueryString(segmentFilter, searchQ, 'unread');
     let selectedConversation = null;
     let contact = null;
     let messages = [];
@@ -199,8 +214,13 @@ function createRouteContext({ query, pool, appPath }) {
         return { notFound: true };
       }
       selectedConversation = convResult.rows[0];
+      await query(
+        `UPDATE conversations SET inbox_unread = FALSE, updated_at = NOW() WHERE id = $1 AND area = $2`,
+        [selectedId, area]
+      );
+      selectedConversation.inbox_unread = false;
       const contactRow = selectedConversation.contact_id
-        ? await query(`SELECT name, phone, segment FROM contacts WHERE id = $1`, [
+        ? await query(`SELECT name, phone, segment, lead_score FROM contacts WHERE id = $1`, [
             selectedConversation.contact_id,
           ])
         : { rows: [] };
@@ -215,12 +235,21 @@ function createRouteContext({ query, pool, appPath }) {
       messages = messagesResult.rows;
       canReply = isWithinUserServiceWindow(selectedConversation.last_user_message_at);
     }
+    let conversationsOut = listRows;
+    if (selectedId != null) {
+      conversationsOut = listRows.map((row) =>
+        Number(row.id) === Number(selectedId) ? { ...row, inbox_unread: false } : row
+      );
+    }
     return {
       segments,
       segmentFilter,
       searchQ,
+      chatFilter,
       inboxQuery,
-      conversations: listRows,
+      inboxQueryAll,
+      inboxQueryUnread,
+      conversations: conversationsOut,
       selectedConversation,
       contact,
       messages,

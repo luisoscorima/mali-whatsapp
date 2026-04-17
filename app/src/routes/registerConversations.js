@@ -50,6 +50,59 @@ function registerConversations(app, ctx) {
     });
   });
 
+  app.post('/conversations/:id/lead-score', async (req, res) => {
+    const conversationId = Number(req.params.id);
+    if (!Number.isInteger(conversationId) || conversationId <= 0) {
+      return res.status(400).send('Id de conversacion invalido');
+    }
+    const area = req.user.area;
+    const clear = String(req.body.lead_score_clear || '').trim() === '1';
+    const raw = String(req.body.lead_score ?? '').trim();
+    let score = null;
+    if (!clear) {
+      const n = parseInt(raw, 10);
+      if (!Number.isInteger(n) || n < 1 || n > 5) {
+        return res.status(400).send('Calificacion invalida (1 a 5)');
+      }
+      score = n;
+    }
+
+    const convResult = await query(`SELECT contact_id FROM conversations WHERE id = $1 AND area = $2`, [
+      conversationId,
+      area,
+    ]);
+    if (convResult.rowCount === 0) {
+      return res.status(404).send('Conversacion no encontrada');
+    }
+    const contactId = convResult.rows[0].contact_id;
+    if (!contactId) {
+      return res
+        .status(400)
+        .send('No hay contacto vinculado; crea o vincula el contacto para poder calificar el lead.');
+    }
+
+    try {
+      await query(`UPDATE contacts SET lead_score = $1, updated_at = NOW() WHERE id = $2 AND area = $3`, [
+        clear ? null : score,
+        contactId,
+        area,
+      ]);
+    } catch (error) {
+      logError(req, 'Error guardando lead score', error, { conversationId });
+      return res.status(500).send(`No se pudo guardar: ${error.message}`);
+    }
+
+    const seg = String(req.body.inbox_segment || '').trim();
+    const qText = String(req.body.inbox_q || '').trim();
+    const inboxChat = String(req.body.inbox_chat || '').trim();
+    const sp = new URLSearchParams();
+    if (seg) sp.set('segment', seg);
+    if (qText) sp.set('q', qText);
+    if (inboxChat === 'unread') sp.set('chat', 'unread');
+    const suffix = sp.toString() ? `?${sp.toString()}` : '';
+    res.redirect(appPath(`/conversations/${conversationId}${suffix}`));
+  });
+
   app.get('/conversations/:id', async (req, res) => {
     const conversationId = Number(req.params.id);
     if (!Number.isInteger(conversationId) || conversationId <= 0) {
@@ -113,9 +166,11 @@ function registerConversations(app, ctx) {
 
       const seg = String(req.body.inbox_segment || '').trim();
       const qText = String(req.body.inbox_q || '').trim();
+      const inboxChat = String(req.body.inbox_chat || '').trim();
       const sp = new URLSearchParams();
       if (seg) sp.set('segment', seg);
       if (qText) sp.set('q', qText);
+      if (inboxChat === 'unread') sp.set('chat', 'unread');
       const suffix = sp.toString() ? `?${sp.toString()}` : '';
       const redirectUrl = appPath(`/conversations/${conversationId}${suffix}`);
 
