@@ -3,7 +3,7 @@ const { normalizePhone } = require('../utils/phone');
 const { downloadWhatsAppMediaBuffer, sendSessionTextMessage } = require('./metaWhatsApp');
 const { saveInboundChatMediaFromBuffer } = require('../utils/chatMediaStorage');
 const { sanitizeApiResponse } = require('../utils/apiSanitize');
-const { getAiResponse } = require('./aiService');
+const { getAiResponse, UNAVAILABLE_REPLY_MESSAGE } = require('./aiService');
 const { parseAiConfigValue } = require('../utils/aiConfig');
 const {
   getWhatsAppCredentialsForArea,
@@ -151,9 +151,48 @@ async function maybeAutoReplyWithGemini(
         error: e.message,
       })
     );
+    replyText = null;
+  }
+
+  const iaFallo = replyText == null || replyText === UNAVAILABLE_REPLY_MESSAGE;
+  if (iaFallo) {
+    await query(`UPDATE conversations SET status = 'human', updated_at = NOW() WHERE id = $1`, [
+      conversationId,
+    ]);
+    try {
+      const apiResponse = await sendSessionTextMessage({
+        to: phone,
+        text: UNAVAILABLE_REPLY_MESSAGE,
+        area,
+      });
+      const msgId = apiResponse.messages?.[0]?.id || null;
+      await query(
+        `INSERT INTO chat_messages (conversation_id, direction, wa_message_id, body_text, message_type, raw_payload, is_ai)
+         VALUES ($1, 'outbound', $2, $3, 'text', $4::jsonb, FALSE)`,
+        [
+          conversationId,
+          msgId,
+          UNAVAILABLE_REPLY_MESSAGE.slice(0, config.MAX_SESSION_TEXT_LEN),
+          JSON.stringify(sanitizeApiResponse(apiResponse)),
+        ]
+      );
+      await query(
+        `UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1`,
+        [conversationId]
+      );
+    } catch (e) {
+      console.log(
+        JSON.stringify({
+          level: 'warn',
+          message: 'Auto-reply IA (Groq): fallo al enviar mensaje de autotransferencia',
+          area,
+          conversationId,
+          error: e.message,
+        })
+      );
+    }
     return;
   }
-  if (!replyText) return;
 
   const transferKw = String(aiCfg.transfer_keyword || '[TRANSFERIR]').trim();
   if (transferKw && replyText.includes(transferKw)) {

@@ -83,7 +83,7 @@ function contentsToOpenAiMessages(contents) {
  * @param {{ role: 'user'|'model', text: string }[]} history - Turnos previos (sin el mensaje actual)
  * @param {{ prompt?: string }} config - De app_settings.ai_config (campo prompt = instrucciones de área)
  * @param {string} [area] - Slug de área (ti, pam, educacion)
- * @returns {Promise<string>}
+ * @returns {Promise<string|null>} Texto del modelo, mensaje genérico si no hay salida, o `null` si la llamada a Groq falló (excepción).
  */
 async function getAiResponse(text, history, config, area) {
   const apiKey = String(process.env.GROQ_API_KEY || '').trim();
@@ -113,8 +113,8 @@ async function getAiResponse(text, history, config, area) {
     return out || UNAVAILABLE_REPLY_MESSAGE;
   } catch (e) {
     console.error('[Groq Error]:', e.message);
-    return UNAVAILABLE_REPLY_MESSAGE;
+    return null;
   }
 }
 
-module.exports = { getAiResponse };
+module.exports = { getAiResponse, UNAVAILABLE_REPLY_MESSAGE };
