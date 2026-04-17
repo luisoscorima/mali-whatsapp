@@ -151,4 +151,18 @@
     r.addEventListener('change', updateScheduleUi);
   });
   updateScheduleUi();
+
+  /**
+   * datetime-local envía "YYYY-MM-DDTHH:mm" sin zona; en Node eso se interpreta como hora UTC
+   * y puede quedar en el pasado respecto al reloj del usuario. Convertimos aquí a ISO UTC.
+   */
+  form.addEventListener('submit', function () {
+    const mode = form.querySelector('input[name="scheduleMode"]:checked');
+    if (!mode || mode.value !== 'scheduled' || !scheduledAtInput) return;
+    const localVal = String(scheduledAtInput.value || '').trim();
+    if (!localVal) return;
+    const d = new Date(localVal);
+    if (Number.isNaN(d.getTime())) return;
+    scheduledAtInput.value = d.toISOString();
+  });
 })();

@@ -99,6 +99,8 @@ module.exports = {
   MAX_MEDIA_AUDIO_BYTES: 16 * 1024 * 1024,
   MAX_MEDIA_DOCUMENT_BYTES: 100 * 1024 * 1024,
   SESSION_WINDOW_MS: 24 * 60 * 60 * 1000,
+  /** Zona horaria IANA para mostrar fechas/horas en el panel (BD sigue en UTC/timestamptz). */
+  DISPLAY_TIMEZONE: String(process.env.DISPLAY_TIMEZONE || 'America/Lima').trim() || 'America/Lima',
   MAX_CSV_ROWS: 10000,
   MAX_CSV_BYTES: 5 * 1024 * 1024,
   s3ChatMedia,

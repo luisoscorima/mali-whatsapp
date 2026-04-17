@@ -92,7 +92,7 @@
         <% } %>
         <div class="chat-meta">
           <%= m.direction === 'outbound' ? 'Tú' : 'Usuario' %> · <%= mt %> ·
-          <%= new Date(m.created_at).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' }) %>
+          <%= formatMessageDateTime(m.created_at) %>
         </div>
         <% if (m.direction === 'outbound') { %>
           <% 

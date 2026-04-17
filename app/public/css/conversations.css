@@ -889,6 +889,18 @@ html[data-theme='dark'] .inbox-compose-bar {
   white-space: nowrap;
 }
 
+.inbox-export-btn--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  line-height: 0;
+}
+
+.inbox-export-btn--icon svg {
+  flex-shrink: 0;
+}
+
 @media (max-width: 768px) {
   .inbox-chat-export-wrap {
     width: 100%;

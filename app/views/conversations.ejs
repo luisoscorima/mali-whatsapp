@@ -46,18 +46,6 @@
       var p = String(phone || '').replace(/\D/g, '');
       return p.slice(-2) || '?';
     } %>
-    <% function formatChatTime(d) {
-      if (!d) return '—';
-      var date = new Date(d);
-      if (isNaN(date.getTime())) return '—';
-      var now = new Date();
-      var sameDay = date.toDateString() === now.toDateString();
-      if (sameDay) return date.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
-      var y1 = date.getFullYear();
-      var y2 = now.getFullYear();
-      if (y1 === y2) return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
-      return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: '2-digit' });
-    } %>
     <div
       class="wa-layout wa-layout--inbox inbox-layout-wa conversations-inbox conversations-page <%= typeof selectedConversation !== 'undefined' && selectedConversation ? 'conversations-inbox--detail' : '' %>"
     >
@@ -123,7 +111,7 @@
                         <% if (c.inbox_unread) { %>
                           <span class="inbox-unread-dot" title="No leído"></span>
                         <% } %>
-                        <span class="inbox-chat-time"><%= formatChatTime(c.last_message_at) %></span>
+                        <span class="inbox-chat-time"><%= formatChatListTime(c.last_message_at) %></span>
                       </span>
                     </span>
                     <% if (c.contact_name) { %>
@@ -213,15 +201,15 @@
                 </form>
               <% } %>
             </div>
-            <div class="inbox-chat-export-wrap" role="group" aria-label="Exportar conversación">
+            <div class="inbox-chat-export-wrap">
               <a
                 href="<%= basePath %>/conversations/<%= selectedConversation.id %>/export"
-                class="small-btn secondary inbox-export-btn"
-              >Excel</a>
-              <a
-                href="<%= basePath %>/conversations/<%= selectedConversation.id %>/export?format=csv"
-                class="small-btn secondary inbox-export-btn"
-              >CSV</a>
+                class="small-btn secondary inbox-export-btn inbox-export-btn--icon"
+                aria-label="Descargar conversación en Excel"
+                title="Descargar Excel"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+              </a>
             </div>
           </div>
           <div class="inbox-chat-body">

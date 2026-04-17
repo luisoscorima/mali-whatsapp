@@ -68,8 +68,7 @@
       <div><dt>Plantilla</dt><dd><%= campaign.template_name %></dd></div>
       <div><dt>Estado</dt><dd><span class="badge <%= campaign.status %>"><%= campaign.status %></span></dd></div>
       <% if (campaign.scheduled_at) { %>
-      <% var _schedD = new Date(campaign.scheduled_at); %>
-      <div><dt>Programada para</dt><dd><%= isNaN(_schedD.getTime()) ? '—' : _schedD.toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' }) %></dd></div>
+      <div><dt>Programada para</dt><dd><%= formatMessageDateTime(campaign.scheduled_at) %></dd></div>
       <% } %>
       <div><dt>Destinatarios</dt><dd><%= campaign.total_recipients %></dd></div>
       <div><dt>Parámetros</dt><dd><%= campaign.message_text %></dd></div>

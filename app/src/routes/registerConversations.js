@@ -9,12 +9,8 @@ const {
   classifyConversationUpload,
 } = require('../services/metaWhatsApp');
 const { isWithinUserServiceWindow } = require('../utils/conversations');
-const {
-  buildExportRows,
-  buildCsvBuffer,
-  buildXlsxBuffer,
-  safeFilenamePart,
-} = require('../utils/conversationExport');
+const { buildExportRows, buildXlsxBuffer, safeFilenamePart } = require('../utils/conversationExport');
+const { exportFilenameDateStamp } = require('../utils/datetimeDisplay');
 
 const MEDIA_TYPE_LABEL = {
   image: 'Imagen',
@@ -144,8 +140,6 @@ function registerConversations(app, ctx) {
       return res.status(404).send('Conversacion no encontrada');
     }
     const conv = convResult.rows[0];
-    const fmt = String(req.query.format || 'xlsx').trim().toLowerCase();
-    const isCsv = fmt === 'csv';
 
     const messagesResult = await query(
       `SELECT direction, body_text, message_type, created_at, raw_payload
@@ -155,16 +149,10 @@ function registerConversations(app, ctx) {
       [conversationId]
     );
     const rows = buildExportRows(messagesResult.rows);
-    const stamp = new Date().toISOString().slice(0, 10);
+    const stamp = exportFilenameDateStamp();
     const baseName = `conversacion-${safeFilenamePart(conv.phone)}-${conversationId}-${stamp}`;
 
     try {
-      if (isCsv) {
-        const buf = buildCsvBuffer(rows);
-        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-        res.setHeader('Content-Disposition', `attachment; filename="${baseName}.csv"`);
-        return res.send(buf);
-      }
       const buf = buildXlsxBuffer(rows);
       res.setHeader(
         'Content-Type',

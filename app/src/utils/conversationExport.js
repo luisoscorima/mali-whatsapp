@@ -1,4 +1,5 @@
 const XLSX = require('xlsx');
+const { formatExportDate, exportFilenameDateStamp } = require('./datetimeDisplay');
 
 const TYPE_LABEL = {
   text: 'Texto',
@@ -40,13 +41,6 @@ function extractMediaFileName(rawPayload, messageType) {
   return '';
 }
 
-function formatExportDate(isoOrDate) {
-  if (!isoOrDate) return '';
-  const d = isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'medium' });
-}
-
 function labelMessageType(messageType) {
   const t = String(messageType || 'text').trim();
   return TYPE_LABEL[t] || t;
@@ -64,32 +58,6 @@ function buildExportRows(messages) {
       nombreMultimedia: mediaName,
     };
   });
-}
-
-function escapeCsvCell(val) {
-  const s = String(val ?? '');
-  if (/[",\n\r]/.test(s)) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
-}
-
-function buildCsvBuffer(rows) {
-  const header = ['Fecha y hora', 'Remitente', 'Tipo', 'Texto', 'Nombre multimedia'];
-  const lines = [header.join(',')];
-  for (const r of rows) {
-    lines.push(
-      [
-        escapeCsvCell(r.fecha),
-        escapeCsvCell(r.remitente),
-        escapeCsvCell(r.tipo),
-        escapeCsvCell(r.texto),
-        escapeCsvCell(r.nombreMultimedia),
-      ].join(',')
-    );
-  }
-  const body = lines.join('\r\n');
-  return Buffer.from(`\ufeff${body}`, 'utf8');
 }
 
 function buildXlsxBuffer(rows) {
@@ -113,7 +81,6 @@ function safeFilenamePart(s) {
 
 module.exports = {
   buildExportRows,
-  buildCsvBuffer,
   buildXlsxBuffer,
   safeFilenamePart,
 };

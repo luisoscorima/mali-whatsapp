@@ -4,6 +4,7 @@ const express = require('express');
 const session = require('express-session');
 const helmet = require('helmet');
 const config = require('./config');
+const datetimeDisplay = require('./utils/datetimeDisplay');
 const { query } = require('./db/pool');
 const { pool } = require('./db/pool');
 const {
@@ -40,6 +41,9 @@ function createApp() {
 
   app.use((req, res, next) => {
     res.locals.basePath = config.basePath;
+    res.locals.displayTimezone = datetimeDisplay.DISPLAY_TIMEZONE;
+    res.locals.formatChatListTime = datetimeDisplay.formatChatListTime;
+    res.locals.formatMessageDateTime = datetimeDisplay.formatMessageDateTime;
     next();
   });
 
