@@ -6,7 +6,7 @@ const GEMINI_UNAVAILABLE_MESSAGE =
 /**
  * Convierte el historial local a {@link Content} del SDK: roles `user` | `model`,
  * `parts: [{ text }]`, sin textos vacíos, empezando siempre por `user` y
- * fusionando turnos consecutivos del mismo rol (alternancia estable para Gemini 2.x).
+ * fusionando turnos consecutivos del mismo rol (alternancia estable multi-turno).
  *
  * @param {{ role: 'user'|'model', text: string }[]} history
  * @returns {{ role: string, parts: { text: string }[] }[]}
@@ -57,7 +57,7 @@ async function getAiResponse(text, history, config) {
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: 'gemini-pro-latest',
+      model: 'gemini-3.1-flash-lite',
       systemInstruction,
     });
 
