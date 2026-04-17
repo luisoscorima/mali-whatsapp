@@ -1,4 +1,6 @@
-<% if (!canReply) { %>
+<% if (!canReply && typeof replyBlockedReason !== 'undefined' && replyBlockedReason === 'bot_mode') { %>
+  <p class="inline-warn">Este chat está en modo <strong>Bot</strong>. Cambia a <strong>Humano</strong> arriba para escribir al cliente.</p>
+<% } else if (!canReply) { %>
   <p class="inline-warn">No puedes enviar texto libre hasta que el usuario te escriba de nuevo (ventana de 24 h).</p>
 <% } else { %>
   <form
@@ -13,8 +15,13 @@
     <% if (typeof searchQ !== 'undefined' && searchQ) { %>
       <input type="hidden" name="inbox_q" value="<%= searchQ %>" />
     <% } %>
-    <% if (typeof chatFilter !== 'undefined' && chatFilter === 'unread') { %>
+    <% const _replyChat = typeof chatFilter !== 'undefined' ? chatFilter : 'all'; %>
+    <% if (_replyChat === 'unread') { %>
       <input type="hidden" name="inbox_chat" value="unread" />
+    <% } else if (_replyChat === 'bot') { %>
+      <input type="hidden" name="inbox_chat" value="bot" />
+    <% } else if (_replyChat === 'human') { %>
+      <input type="hidden" name="inbox_chat" value="human" />
     <% } %>
     <div class="inbox-compose-stack inbox-compose-stack--with-emoji">
       <div class="reply-attachment-preview" id="reply-attachment-preview" hidden>

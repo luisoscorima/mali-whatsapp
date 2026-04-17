@@ -9,6 +9,7 @@ const {
   classifyConversationUpload,
 } = require('../services/metaWhatsApp');
 const { isWithinUserServiceWindow } = require('../utils/conversations');
+const { parseAiConfigValue } = require('../utils/aiConfig');
 const { buildExportRows, buildXlsxBuffer, safeFilenamePart } = require('../utils/conversationExport');
 const { exportFilenameDateStamp } = require('../utils/datetimeDisplay');
 
@@ -18,6 +19,20 @@ const MEDIA_TYPE_LABEL = {
   audio: 'Audio',
   document: 'Documento',
 };
+
+function inboxRedirectSuffixFromBody(body) {
+  const seg = String(body.inbox_segment || '').trim();
+  const qText = String(body.inbox_q || '').trim();
+  const inboxChat = String(body.inbox_chat || '').trim();
+  const sp = new URLSearchParams();
+  if (seg) sp.set('segment', seg);
+  if (qText) sp.set('q', qText);
+  if (inboxChat === 'unread') sp.set('chat', 'unread');
+  else if (inboxChat === 'bot') sp.set('chat', 'bot');
+  else if (inboxChat === 'human') sp.set('chat', 'human');
+  const s = sp.toString();
+  return s ? `?${s}` : '';
+}
 
 function registerConversations(app, ctx) {
   const { query, config, buildInboxRenderData, appPath, resolveAppBaseUrl } = ctx;
@@ -94,15 +109,40 @@ function registerConversations(app, ctx) {
       return res.status(500).send(`No se pudo guardar: ${error.message}`);
     }
 
-    const seg = String(req.body.inbox_segment || '').trim();
-    const qText = String(req.body.inbox_q || '').trim();
-    const inboxChat = String(req.body.inbox_chat || '').trim();
-    const sp = new URLSearchParams();
-    if (seg) sp.set('segment', seg);
-    if (qText) sp.set('q', qText);
-    if (inboxChat === 'unread') sp.set('chat', 'unread');
-    const suffix = sp.toString() ? `?${sp.toString()}` : '';
+    const suffix = inboxRedirectSuffixFromBody(req.body);
     res.redirect(appPath(`/conversations/${conversationId}${suffix}`));
+  });
+
+  app.patch('/api/conversations/:id/mode', async (req, res) => {
+    const conversationId = Number(req.params.id);
+    if (!Number.isInteger(conversationId) || conversationId <= 0) {
+      return res.status(400).json({ ok: false, error: 'Id invalido' });
+    }
+    if (!req.user) {
+      return res.status(401).json({ ok: false, error: 'No autenticado' });
+    }
+    const area = req.user.area;
+    const status = String(req.body?.status || '').trim().toLowerCase();
+    if (status !== 'bot' && status !== 'human') {
+      return res.status(400).json({ ok: false, error: 'status debe ser bot o human' });
+    }
+    if (status === 'bot') {
+      const cfgRow = await query(`SELECT value FROM app_settings WHERE area = $1 AND key = 'ai_config'`, [
+        area,
+      ]);
+      const cfg = parseAiConfigValue(cfgRow.rows[0]?.value);
+      if (!cfg || !cfg.enabled) {
+        return res.status(400).json({ ok: false, error: 'IA desactivada para el área' });
+      }
+    }
+    const r = await query(
+      `UPDATE conversations SET status = $1, updated_at = NOW() WHERE id = $2 AND area = $3 RETURNING id`,
+      [status, conversationId, area]
+    );
+    if (r.rowCount === 0) {
+      return res.status(404).json({ ok: false, error: 'No encontrada' });
+    }
+    return res.json({ ok: true, status });
   });
 
   app.get('/conversations/:id', async (req, res) => {
@@ -198,6 +238,17 @@ function registerConversations(app, ctx) {
       }
       const conversation = convResult.rows[0];
 
+      const aiCfgRow = await query(`SELECT value FROM app_settings WHERE area = $1 AND key = 'ai_config'`, [
+        area,
+      ]);
+      const aiCfg = parseAiConfigValue(aiCfgRow.rows[0]?.value);
+      const convStatus = String(conversation.status || '').trim().toLowerCase();
+      if (aiCfg && aiCfg.enabled && convStatus === 'bot') {
+        return res
+          .status(400)
+          .send('Este chat está en modo Bot; cambia a Humano para responder.');
+      }
+
       if (!isWithinUserServiceWindow(conversation.last_user_message_at)) {
         return res
           .status(400)
@@ -206,14 +257,7 @@ function registerConversations(app, ctx) {
           );
       }
 
-      const seg = String(req.body.inbox_segment || '').trim();
-      const qText = String(req.body.inbox_q || '').trim();
-      const inboxChat = String(req.body.inbox_chat || '').trim();
-      const sp = new URLSearchParams();
-      if (seg) sp.set('segment', seg);
-      if (qText) sp.set('q', qText);
-      if (inboxChat === 'unread') sp.set('chat', 'unread');
-      const suffix = sp.toString() ? `?${sp.toString()}` : '';
+      const suffix = inboxRedirectSuffixFromBody(req.body);
       const redirectUrl = appPath(`/conversations/${conversationId}${suffix}`);
 
       try {
@@ -226,8 +270,8 @@ function registerConversations(app, ctx) {
           const msgId = apiResponse.messages?.[0]?.id || null;
 
           await query(
-            `INSERT INTO chat_messages (conversation_id, direction, wa_message_id, body_text, message_type, raw_payload)
-             VALUES ($1, 'outbound', $2, $3, 'text', $4::jsonb)`,
+            `INSERT INTO chat_messages (conversation_id, direction, wa_message_id, body_text, message_type, raw_payload, is_ai)
+             VALUES ($1, 'outbound', $2, $3, 'text', $4::jsonb, FALSE)`,
             [
               conversationId,
               msgId,
@@ -274,8 +318,8 @@ function registerConversations(app, ctx) {
           });
           const textMsgId = textResp.messages?.[0]?.id || null;
           await query(
-            `INSERT INTO chat_messages (conversation_id, direction, wa_message_id, body_text, message_type, raw_payload)
-             VALUES ($1, 'outbound', $2, $3, 'text', $4::jsonb)`,
+            `INSERT INTO chat_messages (conversation_id, direction, wa_message_id, body_text, message_type, raw_payload, is_ai)
+             VALUES ($1, 'outbound', $2, $3, 'text', $4::jsonb, FALSE)`,
             [
               conversationId,
               textMsgId,
@@ -326,8 +370,8 @@ function registerConversations(app, ctx) {
         }
 
         await query(
-          `INSERT INTO chat_messages (conversation_id, direction, wa_message_id, body_text, message_type, raw_payload)
-           VALUES ($1, 'outbound', $2, $3, $4, $5::jsonb)`,
+          `INSERT INTO chat_messages (conversation_id, direction, wa_message_id, body_text, message_type, raw_payload, is_ai)
+           VALUES ($1, 'outbound', $2, $3, $4, $5::jsonb, FALSE)`,
           [
             conversationId,
             msgId,

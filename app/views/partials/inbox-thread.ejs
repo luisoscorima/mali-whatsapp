@@ -53,7 +53,10 @@
       <% const mediaUrl = lp && lp.url ? resolvePreviewMediaUrl(bp, lp.url) : ''; %>
       <% const mt = String(m.message_type || 'text'); %>
       <% const showTypeRow = isMediaType(mt) || (mt !== 'text' && mediaIcon(mt)); %>
-      <div class="chat-bubble <%= m.direction === 'outbound' ? 'chat-bubble--out' : 'chat-bubble--in' %>">
+      <div class="chat-bubble <%= m.direction === 'outbound' ? 'chat-bubble--out' : 'chat-bubble--in' %><%= m.direction === 'outbound' && m.is_ai ? ' chat-bubble--ai' : '' %>">
+        <% if (m.direction === 'outbound' && m.is_ai) { %>
+          <span class="chat-bubble__ai-tag" title="Respuesta automática (IA)"><span aria-hidden="true">✨</span> IA</span>
+        <% } %>
         <% if (showTypeRow) { %>
           <div class="chat-bubble__type" title="<%= mediaLabel(mt) || mt %>">
             <span class="chat-msg-type-icon" aria-hidden="true"><%= mediaIcon(mt) || '📎' %></span>

@@ -38,19 +38,16 @@ function createResolveSessionUser(appPath, query) {
       return;
     }
 
-    if (
-      config.requireAuth &&
-      req.session &&
-      req.session.userId != null &&
-      !['ti', 'pam', 'educacion'].includes(String(req.session.area || '').trim().toLowerCase())
-    ) {
+    if (config.requireAuth && req.session && req.session.userId != null) {
       try {
-        const r = await query(`SELECT area, is_master FROM users WHERE id = $1`, [
-          req.session.userId,
-        ]);
+        const r = await query(
+          `SELECT area, is_master, can_edit_ai_prompt FROM users WHERE id = $1`,
+          [req.session.userId]
+        );
         if (r.rows.length > 0) {
           req.session.area = normalizeArea(r.rows[0].area);
           req.session.isMaster = Boolean(r.rows[0].is_master);
+          req.session.canEditAiPrompt = Boolean(r.rows[0].can_edit_ai_prompt);
         }
       } catch {
         /* */
@@ -64,6 +61,7 @@ function createResolveSessionUser(appPath, query) {
         email: 'dev@mali.pe',
         area: devArea,
         isMaster: false,
+        canEditAiPrompt: false,
       };
       res.locals.currentUser = req.user;
       res.locals.areaLabel = config.AREA_LABELS[req.user.area] || req.user.area;
@@ -76,6 +74,7 @@ function createResolveSessionUser(appPath, query) {
         email: req.session.email || '',
         area: normalizeArea(req.session.area),
         isMaster: Boolean(req.session.isMaster),
+        canEditAiPrompt: Boolean(req.session.canEditAiPrompt),
       };
       res.locals.currentUser = req.user;
       res.locals.areaLabel = config.AREA_LABELS[req.user.area] || req.user.area;

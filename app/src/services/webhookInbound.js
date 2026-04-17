@@ -1,7 +1,10 @@
 const config = require('../config');
 const { normalizePhone } = require('../utils/phone');
-const { downloadWhatsAppMediaBuffer } = require('./metaWhatsApp');
+const { downloadWhatsAppMediaBuffer, sendSessionTextMessage } = require('./metaWhatsApp');
 const { saveInboundChatMediaFromBuffer } = require('../utils/chatMediaStorage');
+const { sanitizeApiResponse } = require('../utils/apiSanitize');
+const { getAiResponse } = require('./aiService');
+const { parseAiConfigValue } = require('../utils/aiConfig');
 const {
   getWhatsAppCredentialsForArea,
   getWabaIdOverrideForArea,
@@ -97,6 +100,100 @@ function extractInboundMediaRef(msg) {
   if (t === 'document' && msg.document?.id) return { mediaId: String(msg.document.id) };
   if (t === 'sticker' && msg.sticker?.id) return { mediaId: String(msg.sticker.id) };
   return null;
+}
+
+async function maybeAutoReplyWithGemini(
+  query,
+  { area, conversationId, messageType, bodyText, phone }
+) {
+  if (String(messageType || '').trim() !== 'text') return;
+  if (!String(process.env.GEMINI_API_KEY || '').trim()) return;
+
+  const convRow = await query(`SELECT phone, status FROM conversations WHERE id = $1`, [conversationId]);
+  if (convRow.rows.length === 0) return;
+  const conv = convRow.rows[0];
+  if (String(conv.status || '').trim() !== 'bot') return;
+
+  const settingsRow = await query(
+    `SELECT value FROM app_settings WHERE area = $1 AND key = 'ai_config'`,
+    [area]
+  );
+  const aiCfg = parseAiConfigValue(settingsRow.rows[0]?.value);
+  if (!aiCfg || !aiCfg.enabled) return;
+
+  const recent = await query(
+    `SELECT direction, body_text FROM chat_messages
+     WHERE conversation_id = $1
+     ORDER BY created_at DESC
+     LIMIT 5`,
+    [conversationId]
+  );
+  const rows = recent.rows.slice().reverse();
+  if (rows.length === 0) return;
+  const last = rows[rows.length - 1];
+  if (String(last.direction) !== 'inbound') return;
+
+  const historyRows = rows.slice(0, -1);
+  const history = historyRows.map((r) => ({
+    role: String(r.direction) === 'inbound' ? 'user' : 'model',
+    text: String(r.body_text || '').slice(0, 8000),
+  }));
+  const userText = String(last.body_text || '').trim();
+  if (!userText) return;
+
+  let replyText;
+  try {
+    replyText = await getAiResponse(userText, history, aiCfg);
+  } catch (e) {
+    console.log(
+      JSON.stringify({
+        level: 'warn',
+        message: 'Auto-reply Gemini: error',
+        area,
+        conversationId,
+        error: e.message,
+      })
+    );
+    return;
+  }
+  if (!replyText) return;
+
+  const transferKw = String(aiCfg.transfer_keyword || '[TRANSFERIR]').trim();
+  if (transferKw && replyText.includes(transferKw)) {
+    await query(`UPDATE conversations SET status = 'human', updated_at = NOW() WHERE id = $1`, [
+      conversationId,
+    ]);
+    return;
+  }
+
+  const toSend = replyText.slice(0, config.MAX_SESSION_TEXT_LEN);
+  try {
+    const apiResponse = await sendSessionTextMessage({
+      to: phone,
+      text: toSend,
+      area,
+    });
+    const msgId = apiResponse.messages?.[0]?.id || null;
+    await query(
+      `INSERT INTO chat_messages (conversation_id, direction, wa_message_id, body_text, message_type, raw_payload, is_ai)
+       VALUES ($1, 'outbound', $2, $3, 'text', $4::jsonb, TRUE)`,
+      [conversationId, msgId, toSend, JSON.stringify(sanitizeApiResponse(apiResponse))]
+    );
+    await query(
+      `UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      [conversationId]
+    );
+  } catch (e) {
+    console.log(
+      JSON.stringify({
+        level: 'warn',
+        message: 'Auto-reply Gemini: fallo al enviar WhatsApp',
+        area,
+        conversationId,
+        error: e.message,
+      })
+    );
+  }
 }
 
 async function tryStoreInboundMedia(query, { chatMessageId, msg, area, conversationId }) {
@@ -270,6 +367,13 @@ async function persistInboundMessagesFromWebhookValue(query, value, context = {}
       const chatMessageId = insertResult.rows[0].id;
       saved += 1;
       await tryStoreInboundMedia(query, { chatMessageId, msg, area, conversationId });
+      await maybeAutoReplyWithGemini(query, {
+        area,
+        conversationId,
+        messageType,
+        bodyText,
+        phone: from,
+      });
     } catch (e) {
       if (e.code === '23505') {
         skippedDuplicate += 1;

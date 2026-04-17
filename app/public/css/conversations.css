@@ -146,6 +146,33 @@ html[data-theme='dark'] body.page-conversations .wa-layout--inbox.inbox-layout-w
   border-color: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
+.inbox-chat-filter-pills--mode {
+  padding-top: 4px;
+}
+
+.inbox-pill-icon {
+  margin-right: 3px;
+  opacity: 0.88;
+  font-size: 0.85em;
+}
+
+.inbox-chat-mode-badge {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
+.inbox-chat-mode-badge--human {
+  background: color-mix(in srgb, var(--muted) 25%, transparent);
+  color: var(--muted);
+}
+
 .inbox-layout-wa .inbox-chat-list {
   flex: 1;
   min-height: 0;
@@ -227,6 +254,14 @@ html[data-theme='dark'] body.page-conversations .wa-layout--inbox.inbox-layout-w
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
+}
+
+.inbox-chat-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
 }
 
 .inbox-layout-wa .inbox-chat-title {
@@ -614,6 +649,167 @@ html[data-theme='dark'] .inbox-lead-star-btn:hover {
 
 html[data-theme='dark'] .inbox-layout-wa .chat-bubble--out {
   color: #e9edef;
+}
+
+.inbox-layout-wa .chat-bubble--ai {
+  border-style: dashed;
+}
+
+.inbox-layout-wa .chat-bubble__ai-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-end;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent-ink);
+}
+
+html[data-theme='dark'] .inbox-layout-wa .chat-bubble__ai-tag {
+  color: #e9edef;
+}
+
+.inbox-mode-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.inbox-mode-toggle--disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.inbox-mode-toggle-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  width: 100%;
+}
+
+.inbox-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.inbox-mode-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.inbox-mode-btn.is-active {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+.inbox-mode-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.settings-ai-toggle {
+  margin-top: 8px;
+}
+
+.settings-ai-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settings-ai-switch input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--accent);
+}
+
+.settings-ai-prompt-block {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.settings-ai-prompt-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.settings-ai-prompt-label--secondary {
+  margin-top: 14px;
+}
+
+.settings-ai-prompt-hint {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+.settings-ai-prompt-textarea {
+  width: 100%;
+  min-height: 160px;
+  padding: 10px 12px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  font-family: inherit;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--ink);
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+html[data-theme='dark'] .settings-ai-prompt-textarea {
+  background: #2a3942;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.settings-ai-transfer-input {
+  width: 100%;
+  max-width: 420px;
+  padding: 8px 12px;
+  font-size: 0.88rem;
+  font-family: ui-monospace, 'IBM Plex Mono', monospace;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--ink);
+  box-sizing: border-box;
+}
+
+.settings-ai-prompt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.settings-ai-prompt-status {
+  font-size: 0.82rem;
+  color: var(--muted);
 }
 
 .inbox-layout-wa .chat-bubble__type {

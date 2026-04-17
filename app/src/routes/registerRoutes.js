@@ -11,6 +11,7 @@ const { registerCampaigns } = require('./registerCampaigns');
 const { registerConversations } = require('./registerConversations');
 const { registerWebhook } = require('./registerWebhook');
 const { registerAdmin } = require('./registerAdmin');
+const { registerSettingsApi } = require('./registerSettingsApi');
 
 function createRegisterRoutes({ query, pool, appPath }) {
   const ctx = createRouteContext({ query, pool, appPath });
@@ -26,6 +27,7 @@ function createRegisterRoutes({ query, pool, appPath }) {
     registerSegments(app, ctx);
     registerCampaigns(app, ctx);
     registerConversations(app, ctx);
+    registerSettingsApi(app, ctx);
     registerWebhook(app, ctx);
   }
 

@@ -1,4 +1,5 @@
 const { escapeForLikePattern } = require('../utils/searchEscape');
+const { parseAiConfigValue } = require('../utils/aiConfig');
 const {
   CAMPAIGN_LOG_STATUS_SQL,
   sqlInList,
@@ -363,11 +364,36 @@ function registerInboxViews(app, ctx) {
 
   /* --- Ajustes --- */
   app.get('/settings', async (req, res) => {
+    let aiAreaEnabled = false;
+    let aiPrompt = '';
+    let aiTransferKeyword = '[TRANSFERIR]';
+    const u = req.user;
+    const settingsShowAiMaster = Boolean(u && u.isMaster);
+    const settingsShowAiPromptEditor = Boolean(
+      u && (u.isMaster || u.canEditAiPrompt)
+    );
+    if (u && settingsShowAiPromptEditor) {
+      const r = await query(`SELECT value FROM app_settings WHERE area = $1 AND key = 'ai_config'`, [
+        u.area,
+      ]);
+      const cfg = parseAiConfigValue(r.rows[0]?.value);
+      aiAreaEnabled = Boolean(cfg && cfg.enabled);
+      if (cfg) {
+        aiPrompt = cfg.prompt || '';
+        aiTransferKeyword = cfg.transfer_keyword || '[TRANSFERIR]';
+      }
+    }
     res.render('settings-page', {
       ...commonLocals(req, res),
       activeNav: 'settings',
       pageTitle: 'Ajustes · MALI WhatsApp',
       layoutModifier: '',
+      aiAreaEnabled,
+      masterArea: u && u.area ? u.area : '',
+      aiPrompt,
+      aiTransferKeyword,
+      settingsShowAiMaster,
+      settingsShowAiPromptEditor,
     });
   });
 }

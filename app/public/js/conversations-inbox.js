@@ -211,4 +211,34 @@
       })
       .catch(function () {});
   }
+
+  document.querySelectorAll('.inbox-mode-toggle').forEach(function (wrap) {
+    var id = wrap.getAttribute('data-conversation-id');
+    var bp = wrap.getAttribute('data-base-path') || '';
+    if (!id) return;
+    wrap.querySelectorAll('[data-set-status]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var st = btn.getAttribute('data-set-status');
+        if (btn.disabled) return;
+        fetch(bp + '/api/conversations/' + encodeURIComponent(id) + '/mode', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ status: st }),
+        })
+          .then(function (r) {
+            if (r.ok) {
+              window.location.reload();
+              return;
+            }
+            return r.json().then(function (j) {
+              throw new Error(j.error || 'Error');
+            });
+          })
+          .catch(function (e) {
+            alert(e.message || 'Error');
+          });
+      });
+    });
+  });
 })();

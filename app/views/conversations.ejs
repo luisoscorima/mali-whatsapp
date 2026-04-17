@@ -56,19 +56,40 @@
           <h2 class="inbox-sidebar-title">Chats</h2>
           <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar chats', refreshAriaLabel: 'Actualizar chats' }) %>
         </div>
-        <div class="inbox-chat-filter-pills" aria-label="Filtrar por lectura">
+        <% const _chatF = typeof chatFilter !== 'undefined' ? chatFilter : 'all'; %>
+        <div class="inbox-chat-filter-pills" aria-label="Filtrar lista">
           <a
             href="<%= basePath %>/conversations<%= typeof inboxQueryAll !== 'undefined' ? inboxQueryAll : '' %>"
-            class="inbox-chat-pill <%= typeof chatFilter !== 'undefined' && chatFilter === 'unread' ? '' : 'is-active' %>"
-          >Todos</a>
+            class="inbox-chat-pill <%= _chatF === 'all' ? 'is-active' : '' %>"
+            title="Todos los chats"
+          ><span class="inbox-pill-icon" aria-hidden="true">💬</span> Todos</a>
           <a
             href="<%= basePath %>/conversations<%= typeof inboxQueryUnread !== 'undefined' ? inboxQueryUnread : '' %>"
-            class="inbox-chat-pill <%= typeof chatFilter !== 'undefined' && chatFilter === 'unread' ? 'is-active' : '' %>"
-          >No leídos</a>
+            class="inbox-chat-pill <%= _chatF === 'unread' ? 'is-active' : '' %>"
+            title="Solo no leídos"
+          ><span class="inbox-pill-icon" aria-hidden="true">●</span> No leídos</a>
         </div>
+        <% if (typeof aiAreaEnabled !== 'undefined' && aiAreaEnabled) { %>
+        <div class="inbox-chat-filter-pills inbox-chat-filter-pills--mode" aria-label="Filtrar por modo">
+          <a
+            href="<%= basePath %>/conversations<%= typeof inboxQueryBot !== 'undefined' ? inboxQueryBot : '' %>"
+            class="inbox-chat-pill <%= _chatF === 'bot' ? 'is-active' : '' %>"
+            title="Modo Bot"
+          ><span class="inbox-pill-icon" aria-hidden="true">🤖</span> Bot</a>
+          <a
+            href="<%= basePath %>/conversations<%= typeof inboxQueryHuman !== 'undefined' ? inboxQueryHuman : '' %>"
+            class="inbox-chat-pill <%= _chatF === 'human' ? 'is-active' : '' %>"
+            title="Modo Humano"
+          ><span class="inbox-pill-icon" aria-hidden="true">👤</span> Humano</a>
+        </div>
+        <% } %>
         <form class="inbox-filters" method="get" action="<%= basePath %>/conversations">
-          <% if (typeof chatFilter !== 'undefined' && chatFilter === 'unread') { %>
+          <% if (_chatF === 'unread') { %>
             <input type="hidden" name="chat" value="unread" />
+          <% } else if (_chatF === 'bot') { %>
+            <input type="hidden" name="chat" value="bot" />
+          <% } else if (_chatF === 'human') { %>
+            <input type="hidden" name="chat" value="human" />
           <% } %>
           <label class="field field--inbox">
             <span class="field-label">Segmento</span>
@@ -106,7 +127,14 @@
                   <span class="inbox-chat-avatar" aria-hidden="true"><%= inboxInitials(c.contact_name, c.phone) %></span>
                   <span class="inbox-chat-link-main">
                     <span class="inbox-chat-row-top">
-                      <span class="inbox-chat-title"><%= c.contact_name || c.phone %></span>
+                      <span class="inbox-chat-title-group">
+                        <span class="inbox-chat-title"><%= c.contact_name || c.phone %></span>
+                        <% if (c.conversation_status && String(c.conversation_status).toLowerCase() === 'bot') { %>
+                          <span class="inbox-chat-mode-badge" title="Modo Bot">Bot</span>
+                        <% } else if (c.conversation_status && String(c.conversation_status).toLowerCase() === 'human') { %>
+                          <span class="inbox-chat-mode-badge inbox-chat-mode-badge--human" title="Modo Humano">Humano</span>
+                        <% } %>
+                      </span>
                       <span class="inbox-chat-time-wrap">
                         <% if (c.inbox_unread) { %>
                           <span class="inbox-unread-dot" title="No leído"></span>
@@ -161,12 +189,37 @@
               <% } %>
               <p class="inbox-window-meta">
                 Ventana 24 h:
-                <% if (canReply) { %>
+                <% if (typeof userServiceWindowOpen !== 'undefined' && userServiceWindowOpen) { %>
                   <span class="badge sent">Abierta</span>
                 <% } else { %>
                   <span class="badge neutral">Cerrada</span>
                 <% } %>
               </p>
+              <% const _convSt = String(selectedConversation.status || 'bot').toLowerCase(); %>
+              <% const _aiOn = typeof aiAreaEnabled !== 'undefined' && aiAreaEnabled; %>
+              <div
+                class="inbox-mode-toggle<%= !_aiOn ? ' inbox-mode-toggle--disabled' : '' %>"
+                role="group"
+                aria-label="Modo del chat"
+                data-conversation-id="<%= selectedConversation.id %>"
+                data-base-path="<%= basePath %>"
+                <% if (!_aiOn) { %>title="IA desactivada para el área (solo administrador master puede reactivarla)"<% } %>
+              >
+                <span class="inbox-mode-toggle-label">Modo</span>
+                <button
+                  type="button"
+                  class="inbox-mode-btn <%= _convSt === 'bot' ? 'is-active' : '' %>"
+                  data-set-status="bot"
+                  <%= !_aiOn ? 'disabled' : '' %>
+                  title="Bot"
+                ><span aria-hidden="true">🤖</span> Bot</button>
+                <button
+                  type="button"
+                  class="inbox-mode-btn <%= _convSt === 'human' ? 'is-active' : '' %>"
+                  data-set-status="human"
+                  title="Humano"
+                ><span aria-hidden="true">👤</span> Humano</button>
+              </div>
               <% if (contact) { %>
                 <form
                   method="POST"
@@ -179,8 +232,12 @@
                   <% if (searchQ) { %>
                     <input type="hidden" name="inbox_q" value="<%= searchQ %>" />
                   <% } %>
-                  <% if (typeof chatFilter !== 'undefined' && chatFilter === 'unread') { %>
+                  <% if (_chatF === 'unread') { %>
                     <input type="hidden" name="inbox_chat" value="unread" />
+                  <% } else if (_chatF === 'bot') { %>
+                    <input type="hidden" name="inbox_chat" value="bot" />
+                  <% } else if (_chatF === 'human') { %>
+                    <input type="hidden" name="inbox_chat" value="human" />
                   <% } %>
                   <div class="inbox-lead-score-row">
                     <span class="inbox-lead-score-label" id="lead-score-label">Calificación del lead</span>
@@ -217,7 +274,7 @@
           </div>
           <div class="inbox-compose">
             <h2 class="inbox-compose-title">Responder</h2>
-            <%- include('partials/inbox-reply', { conversation: selectedConversation, canReply, basePath, segmentFilter, searchQ, chatFilter }) %>
+            <%- include('partials/inbox-reply', { conversation: selectedConversation, canReply, basePath, segmentFilter, searchQ, chatFilter, replyBlockedReason }) %>
           </div>
         <% } %>
       </section>

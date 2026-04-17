@@ -53,6 +53,132 @@
         <p>En el repo: <code>PRODUCCION_WHATSAPP_META.md</code> (índice), <code>DESPLIEGUE_PRODUCCION_APP.md</code> (app/Docker) y <code>CONFIGURACION_META.md</code> (Meta, webhooks, <code>subscribed_apps</code>). Token de sistema con permisos para gestionar plantillas de WhatsApp.</p>
       </details>
     </div>
+    <% if (typeof currentUser !== 'undefined' && currentUser && currentUser.isMaster) { %>
+    <div class="card" id="settings-ai-area-card">
+      <h2 class="card-title">Respuesta automática (IA) · <%= areaLabel %></h2>
+      <p class="inbox-compose-hint-inline">
+        Solo administrador master. Al desactivar, todos los chats del área pasan a modo Humano y la IA deja de responder. Al activar, todos los chats vuelven a Bot (reset).
+      </p>
+      <div class="settings-ai-toggle">
+        <label class="settings-ai-switch">
+          <input
+            type="checkbox"
+            id="settings-ai-area-enabled"
+            <%= typeof aiAreaEnabled !== 'undefined' && aiAreaEnabled ? 'checked' : '' %>
+            data-area="<%= typeof masterArea !== 'undefined' ? masterArea : '' %>"
+          />
+          <span>IA habilitada para el área</span>
+        </label>
+        <p class="inline-warn" id="settings-ai-feedback" hidden></p>
+      </div>
+      <div class="settings-ai-prompt-block">
+        <label class="settings-ai-prompt-label" for="settings-ai-prompt">Instrucciones del modelo (system prompt)</label>
+        <p class="inbox-compose-hint-inline settings-ai-prompt-hint">
+          Define el comportamiento del asistente en esta área. Se aplica a las respuestas automáticas de Gemini.
+        </p>
+        <textarea
+          id="settings-ai-prompt"
+          class="settings-ai-prompt-textarea"
+          name="ai_prompt"
+          rows="10"
+          maxlength="32000"
+          placeholder="Instrucciones en español para el modelo…"
+        ><%= typeof aiPrompt !== 'undefined' ? aiPrompt : '' %></textarea>
+        <label class="settings-ai-prompt-label settings-ai-prompt-label--secondary" for="settings-ai-transfer">Palabra clave de transferencia a humano</label>
+        <input
+          type="text"
+          id="settings-ai-transfer"
+          class="settings-ai-transfer-input"
+          name="ai_transfer_keyword"
+          value="<%= typeof aiTransferKeyword !== 'undefined' ? aiTransferKeyword : '[TRANSFERIR]' %>"
+          maxlength="200"
+          autocomplete="off"
+          placeholder="[TRANSFERIR]"
+        />
+        <p class="inbox-compose-hint-inline">Si la respuesta del modelo contiene exactamente este texto, el chat pasa a modo Humano sin enviar mensaje al cliente.</p>
+        <div class="settings-ai-prompt-actions">
+          <button type="button" class="small-btn" id="settings-ai-save-prompt">Guardar instrucciones</button>
+          <span class="settings-ai-prompt-status" id="settings-ai-prompt-status" aria-live="polite"></span>
+        </div>
+      </div>
+    </div>
+    <% } %>
   </div>
 </section>
+<% if (typeof currentUser !== 'undefined' && currentUser && currentUser.isMaster) { %>
+<script>
+  (function () {
+    var cb = document.getElementById('settings-ai-area-enabled');
+    var fb = document.getElementById('settings-ai-feedback');
+    var bp = '<%= basePath %>';
+    if (cb) {
+      cb.addEventListener('change', function () {
+        var area = String(cb.getAttribute('data-area') || '').trim();
+        if (!area) return;
+        fetch(bp + '/api/settings/ai/' + encodeURIComponent(area) + '/enable', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ enabled: cb.checked }),
+        })
+          .then(function (r) {
+            if (!r.ok) return r.json().then(function (j) { throw new Error(j.error || 'Error'); });
+            if (fb) {
+              fb.hidden = true;
+              fb.textContent = '';
+            }
+          })
+          .catch(function (e) {
+            cb.checked = !cb.checked;
+            if (fb) {
+              fb.hidden = false;
+              fb.textContent = e.message || 'Error';
+            }
+          });
+      });
+    }
+    var saveBtn = document.getElementById('settings-ai-save-prompt');
+    var ta = document.getElementById('settings-ai-prompt');
+    var tk = document.getElementById('settings-ai-transfer');
+    var st = document.getElementById('settings-ai-prompt-status');
+    if (saveBtn && ta && tk && cb) {
+      saveBtn.addEventListener('click', function () {
+        var area = String(cb.getAttribute('data-area') || '').trim();
+        if (!area) return;
+        var prompt = String(ta.value || '').trim();
+        if (!prompt) {
+          if (st) st.textContent = 'El prompt no puede estar vacío.';
+          return;
+        }
+        var transferKw = String(tk.value || '').trim() || '[TRANSFERIR]';
+        saveBtn.disabled = true;
+        if (st) st.textContent = 'Guardando…';
+        fetch(bp + '/api/settings/ai/' + encodeURIComponent(area), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({
+            enabled: cb.checked,
+            prompt: prompt,
+            transfer_keyword: transferKw,
+          }),
+        })
+          .then(function (r) {
+            if (!r.ok) return r.json().then(function (j) { throw new Error(j.error || 'Error'); });
+            if (st) st.textContent = 'Guardado.';
+            setTimeout(function () {
+              if (st) st.textContent = '';
+            }, 4000);
+          })
+          .catch(function (e) {
+            if (st) st.textContent = e.message || 'Error';
+          })
+          .finally(function () {
+            saveBtn.disabled = false;
+          });
+      });
+    }
+  })();
+</script>
+<% } %>
 <%- include('layouts/inbox-shell-end') %>

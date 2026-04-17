@@ -30,6 +30,9 @@ async function runMigrations(query) {
   await query(
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE`
   );
+  await query(
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS can_edit_ai_prompt BOOLEAN NOT NULL DEFAULT FALSE`
+  );
 
   await query(`
     CREATE TABLE IF NOT EXISTS app_settings (
@@ -186,6 +189,36 @@ async function runMigrations(query) {
   await query(
     `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS inbox_unread BOOLEAN NOT NULL DEFAULT FALSE`
   );
+  await query(
+    `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'bot'`
+  );
+
+  const defaultPrompt =
+    'Eres un asistente virtual del MALI. Responde en español de forma breve y profesional. Si el usuario necesita hablar con un humano, responde únicamente con la palabra clave de transferencia que se te indica.';
+  const defaultTransfer = '[TRANSFERIR]';
+  const tiAiConfig = JSON.stringify({
+    enabled: true,
+    prompt: defaultPrompt,
+    transfer_keyword: defaultTransfer,
+  });
+  const pamEduAiConfig = JSON.stringify({
+    enabled: false,
+    prompt: defaultPrompt,
+    transfer_keyword: defaultTransfer,
+  });
+  await query(
+    `INSERT INTO app_settings (area, key, value, updated_at) VALUES ('ti', 'ai_config', $1, NOW())
+     ON CONFLICT (area, key) DO NOTHING`,
+    [tiAiConfig]
+  );
+  for (const area of ['pam', 'educacion']) {
+    await query(
+      `INSERT INTO app_settings (area, key, value, updated_at) VALUES ($1, 'ai_config', $2, NOW())
+       ON CONFLICT (area, key) DO NOTHING`,
+      [area, pamEduAiConfig]
+    );
+  }
+  await migrateAiTiOnlyEnabled(query);
 
   await query(`
     CREATE TABLE IF NOT EXISTS chat_messages (
@@ -217,6 +250,15 @@ async function runMigrations(query) {
     );
   } catch {
     /* índice requiere pg_trgm */
+  }
+
+  await query(
+    `ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS is_ai BOOLEAN NOT NULL DEFAULT FALSE`
+  );
+  try {
+    await query(`ALTER TABLE conversations DROP COLUMN IF EXISTS ai_enabled`);
+  } catch {
+    /* */
   }
 
   await query(`
@@ -381,6 +423,32 @@ async function cleanUpCrossAreaSeededSegments(query) {
     await query(`DELETE FROM segment_definitions WHERE area = $1`, [area]);
   }
 
+  await query(
+    `INSERT INTO app_settings (area, key, value, updated_at) VALUES ('global', $1, '1', NOW())
+     ON CONFLICT (area, key) DO UPDATE SET value = '1', updated_at = NOW()`,
+    [flag]
+  );
+}
+
+/** Una sola vez: PAM y Educación con IA desactivada por defecto (solo TI dev con enabled true en semilla antigua). */
+async function migrateAiTiOnlyEnabled(query) {
+  const flag = 'migration.ai_ti_only_enabled_v1';
+  const done = await query(`SELECT 1 AS ok FROM app_settings WHERE area = 'global' AND key = $1`, [flag]);
+  if (done.rows.length > 0) {
+    return;
+  }
+  const { parseAiConfigValue } = require('../utils/aiConfig');
+  for (const area of ['pam', 'educacion']) {
+    const r = await query(`SELECT value FROM app_settings WHERE area = $1 AND key = 'ai_config'`, [area]);
+    const cfg = parseAiConfigValue(r.rows[0]?.value);
+    if (cfg) {
+      cfg.enabled = false;
+      await query(
+        `UPDATE app_settings SET value = $2, updated_at = NOW() WHERE area = $1 AND key = 'ai_config'`,
+        [area, JSON.stringify(cfg)]
+      );
+    }
+  }
   await query(
     `INSERT INTO app_settings (area, key, value, updated_at) VALUES ('global', $1, '1', NOW())
      ON CONFLICT (area, key) DO UPDATE SET value = '1', updated_at = NOW()`,

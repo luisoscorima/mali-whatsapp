@@ -13,6 +13,7 @@ const {
 const { isWithinUserServiceWindow } = require('../../utils/conversations');
 const { escapeForLikePattern } = require('../../utils/searchEscape');
 const { normalizeSegmentColorKey } = require('../../utils/segmentColors');
+const { parseAiConfigValue } = require('../../utils/aiConfig');
 
 function resolveAppBaseUrl() {
   const u = String(process.env.APP_BASE_URL || '').trim().replace(/\/$/, '');
@@ -52,10 +53,13 @@ function createRouteContext({ query, pool, appPath }) {
     return String(reqQuery.q ?? '').trim();
   }
 
-  /** Filtro de lista tipo WhatsApp: todos los chats o solo no leídos (panel). */
+  /** Filtro de lista: todos | no leídos | bot | humano. */
   function parseInboxChatFilter(reqQuery) {
-    const raw = String(reqQuery.chat ?? '').trim();
-    return raw === 'unread' ? 'unread' : 'all';
+    const raw = String(reqQuery.chat ?? '').trim().toLowerCase();
+    if (raw === 'unread') return 'unread';
+    if (raw === 'bot') return 'bot';
+    if (raw === 'human') return 'human';
+    return 'all';
   }
 
   function inboxQueryString(segmentFilter, searchQ, chatFilter) {
@@ -63,8 +67,18 @@ function createRouteContext({ query, pool, appPath }) {
     if (segmentFilter) sp.set('segment', segmentFilter);
     if (searchQ) sp.set('q', searchQ);
     if (chatFilter === 'unread') sp.set('chat', 'unread');
+    else if (chatFilter === 'bot') sp.set('chat', 'bot');
+    else if (chatFilter === 'human') sp.set('chat', 'human');
     const s = sp.toString();
     return s ? `?${s}` : '';
+  }
+
+  async function loadAiAreaEnabled(area) {
+    const r = await query(`SELECT value FROM app_settings WHERE area = $1 AND key = 'ai_config'`, [
+      normalizeArea(area),
+    ]);
+    const cfg = parseAiConfigValue(r.rows[0]?.value);
+    return Boolean(cfg && cfg.enabled);
   }
 
   async function fetchInboxConversations(area, segmentFilter, searchQText, chatFilter) {
@@ -91,6 +105,12 @@ function createRouteContext({ query, pool, appPath }) {
     if (chatFilter === 'unread') {
       extra += ` AND c.inbox_unread = TRUE`;
     }
+    if (chatFilter === 'bot') {
+      extra += ` AND LOWER(TRIM(COALESCE(c.status, ''))) = 'bot'`;
+    }
+    if (chatFilter === 'human') {
+      extra += ` AND LOWER(TRIM(COALESCE(c.status, ''))) = 'human'`;
+    }
     const listResult = await query(
       `SELECT
           c.id,
@@ -98,6 +118,7 @@ function createRouteContext({ query, pool, appPath }) {
           c.last_message_at,
           c.last_user_message_at,
           c.inbox_unread,
+          c.status AS conversation_status,
           ct.lead_score AS contact_lead_score,
           ct.name AS contact_name,
           ct.segment AS contact_segment,
@@ -226,17 +247,22 @@ function createRouteContext({ query, pool, appPath }) {
     const segmentFilter = parseInboxSegmentFilter(req.query, slugSet);
     const searchQ = parseInboxSearchQ(req.query);
     const chatFilter = parseInboxChatFilter(req.query);
-    const [segments, listRows] = await Promise.all([
+    const [segments, listRows, aiAreaEnabled] = await Promise.all([
       loadSegments(area),
       fetchInboxConversations(area, segmentFilter, searchQ, chatFilter),
+      loadAiAreaEnabled(area),
     ]);
     const inboxQuery = inboxQueryString(segmentFilter, searchQ, chatFilter);
     const inboxQueryAll = inboxQueryString(segmentFilter, searchQ, 'all');
     const inboxQueryUnread = inboxQueryString(segmentFilter, searchQ, 'unread');
+    const inboxQueryBot = inboxQueryString(segmentFilter, searchQ, 'bot');
+    const inboxQueryHuman = inboxQueryString(segmentFilter, searchQ, 'human');
     let selectedConversation = null;
     let contact = null;
     let messages = [];
     let canReply = false;
+    let replyBlockedReason = null;
+    let userServiceWindowOpen = false;
     if (selectedId != null) {
       const convResult = await query(`SELECT * FROM conversations WHERE id = $1 AND area = $2`, [
         selectedId,
@@ -258,14 +284,23 @@ function createRouteContext({ query, pool, appPath }) {
         : { rows: [] };
       contact = contactRow.rows[0] || null;
       const messagesResult = await query(
-        `SELECT id, direction, body_text, message_type, created_at, wa_message_id, raw_payload
+        `SELECT id, direction, body_text, message_type, created_at, wa_message_id, raw_payload, is_ai
          FROM chat_messages
          WHERE conversation_id = $1
          ORDER BY created_at ASC`,
         [selectedId]
       );
       messages = messagesResult.rows;
-      canReply = isWithinUserServiceWindow(selectedConversation.last_user_message_at);
+      const windowOpen = isWithinUserServiceWindow(selectedConversation.last_user_message_at);
+      userServiceWindowOpen = windowOpen;
+      const st = String(selectedConversation.status || '').trim().toLowerCase();
+      const botModeBlock = aiAreaEnabled && st === 'bot';
+      if (!windowOpen) {
+        replyBlockedReason = '24h';
+      } else if (botModeBlock) {
+        replyBlockedReason = 'bot_mode';
+      }
+      canReply = windowOpen && !botModeBlock;
     }
     let conversationsOut = listRows;
     if (selectedId != null) {
@@ -281,11 +316,16 @@ function createRouteContext({ query, pool, appPath }) {
       inboxQuery,
       inboxQueryAll,
       inboxQueryUnread,
+      inboxQueryBot,
+      inboxQueryHuman,
+      aiAreaEnabled,
       conversations: conversationsOut,
       selectedConversation,
       contact,
       messages,
       canReply,
+      replyBlockedReason,
+      userServiceWindowOpen,
     };
   }
 
