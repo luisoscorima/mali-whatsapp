@@ -13,6 +13,7 @@ async function getAiResponse(text, history, config) {
   }
   const systemInstruction =
     String(config?.prompt || '').trim() || 'Eres un asistente útil. Responde en español.';
+  // Inicialización estándar: la librería resuelve host y versión de API; no se fuerza v1beta ni URL manual.
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
     model: 'gemini-1.5-flash',
