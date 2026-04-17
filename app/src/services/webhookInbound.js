@@ -104,7 +104,7 @@ function extractInboundMediaRef(msg) {
 
 async function maybeAutoReplyWithGemini(
   query,
-  { area, conversationId, messageType, bodyText, phone }
+  { area, conversationId, messageType, bodyText, phone, chatMessageId, userText: userTextExplicit }
 ) {
   if (String(messageType || '').trim() !== 'text') return;
   if (!String(process.env.GROQ_API_KEY || '').trim()) return;
@@ -121,28 +121,25 @@ async function maybeAutoReplyWithGemini(
   const aiCfg = parseAiConfigValue(settingsRow.rows[0]?.value);
   if (!aiCfg || !aiCfg.enabled) return;
 
-  const recent = await query(
-    `SELECT direction, body_text FROM chat_messages
-     WHERE conversation_id = $1
-     ORDER BY created_at DESC
-     LIMIT 5`,
-    [conversationId]
-  );
-  const rows = recent.rows.slice().reverse();
-  if (rows.length === 0) return;
-  const last = rows[rows.length - 1];
-  if (String(last.direction) !== 'inbound') return;
+  const userText = String(userTextExplicit ?? '').trim();
+  if (!userText) return;
 
-  const historyRows = rows.slice(0, -1);
+  const histResult = await query(
+    `SELECT direction, body_text FROM chat_messages
+     WHERE conversation_id = $1 AND id <> $2
+     ORDER BY created_at DESC
+     LIMIT 4`,
+    [conversationId, chatMessageId]
+  );
+  const historyRows = histResult.rows.slice().reverse();
   const history = historyRows.map((r) => ({
     role: String(r.direction) === 'inbound' ? 'user' : 'model',
     text: String(r.body_text || '').slice(0, 8000),
   }));
-  const userText = String(last.body_text || '').trim();
-  if (!userText) return;
 
   let replyText;
   try {
+    console.log('Iniciando generación de respuesta con IA...');
     replyText = await getAiResponse(userText, history, aiCfg, area);
   } catch (e) {
     console.log(
@@ -367,12 +364,18 @@ async function persistInboundMessagesFromWebhookValue(query, value, context = {}
       const chatMessageId = insertResult.rows[0].id;
       saved += 1;
       await tryStoreInboundMedia(query, { chatMessageId, msg, area, conversationId });
+      const userTextForAi =
+        String(messageType || '').trim() === 'text'
+          ? String(msg?.text?.body ?? '').trim()
+          : String(bodyText || '').trim();
       await maybeAutoReplyWithGemini(query, {
         area,
         conversationId,
         messageType,
         bodyText,
         phone: from,
+        chatMessageId,
+        userText: userTextForAi,
       });
     } catch (e) {
       if (e.code === '23505') {
