@@ -1,6 +1,9 @@
+const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const { normalizeArea, createRequireMaster } = require('../middleware/auth');
 const { isValidMaliEmail, normalizeEmail } = require('../utils/contactsCsv');
+const { parseUsersBulkCsvBuffer, parseUsersBulkXlsxBuffer } = require('../utils/usersBulkCsv');
+const { usersBulkImportLimiter, usersBulkImportUpload } = require('../middleware/limiters');
 const { refreshMetaSettingsCache, KEYS } = require('../services/metaSettingsCache');
 
 function adminLocals(req, res, ctx, extra) {
@@ -14,6 +17,12 @@ function adminLocals(req, res, ctx, extra) {
     showAdminNav: res.locals.showAdminNav,
     ...extra,
   };
+}
+
+function parseQueryInt(v) {
+  if (v == null || String(v).trim() === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 
 async function upsertMetaSetting(query, area, key, rawValue) {
@@ -30,7 +39,7 @@ async function upsertMetaSetting(query, area, key, rawValue) {
 }
 
 function registerAdmin(app, ctx) {
-  const { query, resolveAppBaseUrl, appPath } = ctx;
+  const { query, pool, resolveAppBaseUrl, appPath } = ctx;
   const requireMaster = createRequireMaster();
   const AREA_DEFS = [
     { slug: 'ti', label: 'TI (dev)' },
@@ -64,14 +73,33 @@ function registerAdmin(app, ctx) {
     const r = await query(
       `SELECT id, email, area, is_master, must_change_password, can_edit_ai_prompt, created_at FROM users ORDER BY email ASC`
     );
+    const q = req.query;
+    const bulkImport =
+      String(q.bulk_import || '') === '1'
+        ? {
+            err: q.err ? String(q.err) : null,
+            ok: parseQueryInt(q.ok),
+            bad: parseQueryInt(q.bad),
+            dup: parseQueryInt(q.dup),
+          }
+        : null;
     res.render('admin-users', {
       ...adminLocals(req, res, ctx, {
         users: r.rows,
         activeNav: 'admin-users',
-        userErr: req.query.err || null,
-        userSaved: String(req.query.saved || '') === '1',
+        userErr: q.err || null,
+        userSaved: String(q.saved || '') === '1',
+        bulkImport,
+        maxBulkRows: ctx.config.MAX_CSV_ROWS,
       }),
     });
+  });
+
+  app.get('/admin/users/sample.csv', requireMaster, (req, res) => {
+    const csv = 'email\nusuario.ejemplo@mali.pe\n';
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="usuarios_ejemplo.csv"');
+    res.send(csv);
   });
 
   app.get('/admin/users/new', requireMaster, (req, res) => {
@@ -84,6 +112,112 @@ function registerAdmin(app, ctx) {
       }),
     });
   });
+
+  app.post(
+    '/admin/users/bulk-import',
+    requireMaster,
+    usersBulkImportLimiter,
+    (req, res, next) => {
+      usersBulkImportUpload.single('bulkfile')(req, res, (err) => {
+        if (err) {
+          if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+            return res.redirect(`${appPath('/admin/users')}?bulk_import=1&err=too_big`);
+          }
+          return res.redirect(`${appPath('/admin/users')}?bulk_import=1&err=type`);
+        }
+        next();
+      });
+    },
+    async (req, res) => {
+      if (!req.file || !req.file.buffer.length) {
+        return res.redirect(`${appPath('/admin/users')}?bulk_import=1&err=no_file`);
+      }
+
+      const password = String(req.body.password || '');
+      const area = normalizeArea(req.body.area);
+      if (area !== 'ti' && area !== 'pam' && area !== 'educacion') {
+        return res.redirect(`${appPath('/admin/users')}?bulk_import=1&err=bad_area`);
+      }
+      if (password.length < 6) {
+        return res.redirect(`${appPath('/admin/users')}?bulk_import=1&err=weak_password`);
+      }
+
+      const nameLower = String(req.file.originalname || '').toLowerCase();
+      let parsed;
+      try {
+        parsed = nameLower.endsWith('.xlsx')
+          ? parseUsersBulkXlsxBuffer(req.file.buffer)
+          : parseUsersBulkCsvBuffer(req.file.buffer);
+      } catch {
+        return res.redirect(`${appPath('/admin/users')}?bulk_import=1&err=parse`);
+      }
+
+      if (parsed.tooMany) {
+        return res.redirect(`${appPath('/admin/users')}?bulk_import=1&err=too_many`);
+      }
+      if (parsed.noSheet) {
+        return res.redirect(`${appPath('/admin/users')}?bulk_import=1&err=empty`);
+      }
+      if (parsed.emails.length === 0 && parsed.bad === 0) {
+        return res.redirect(`${appPath('/admin/users')}?bulk_import=1&err=empty`);
+      }
+      if (parsed.emails.length === 0) {
+        const qp = new URLSearchParams({
+          bulk_import: '1',
+          ok: '0',
+          bad: String(parsed.bad),
+          dup: '0',
+        });
+        return res.redirect(`${appPath('/admin/users')}?${qp.toString()}`);
+      }
+
+      let ok = 0;
+      let dup = 0;
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        for (let i = 0; i < parsed.emails.length; i += 1) {
+          const email = parsed.emails[i];
+          const sp = `sp_bulk_${i}`;
+          await client.query(`SAVEPOINT ${sp}`);
+          try {
+            const hash = await bcrypt.hash(password, 10);
+            await client.query(
+              `INSERT INTO users (email, password_hash, area, is_master, must_change_password, can_edit_ai_prompt) VALUES ($1, $2, $3, FALSE, TRUE, FALSE)`,
+              [email, hash, area]
+            );
+            ok += 1;
+            await client.query(`RELEASE SAVEPOINT ${sp}`);
+          } catch (e) {
+            await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
+            if (String(e.code) === '23505') {
+              dup += 1;
+            } else {
+              throw e;
+            }
+          }
+        }
+        await client.query('COMMIT');
+      } catch (e) {
+        try {
+          await client.query('ROLLBACK');
+        } catch {
+          /* ignore */
+        }
+        throw e;
+      } finally {
+        client.release();
+      }
+
+      const qp = new URLSearchParams({
+        bulk_import: '1',
+        ok: String(ok),
+        bad: String(parsed.bad),
+        dup: String(dup),
+      });
+      res.redirect(`${appPath('/admin/users')}?${qp.toString()}`);
+    }
+  );
 
   app.post('/admin/users', requireMaster, async (req, res) => {
     const email = normalizeEmail(req.body.email);

@@ -28,6 +28,40 @@
       <% if (userErr === 'self') { %>
       <p class="inline-warn">No puedes eliminar tu propia cuenta mientras tienes la sesión iniciada.</p>
       <% } %>
+      <% if (typeof bulkImport !== 'undefined' && bulkImport) { %>
+      <div class="toast <%= bulkImport.err ? 'toast--err' : 'toast--ok' %>">
+        <% if (bulkImport.err) { %>
+          <% if (bulkImport.err === 'no_file') { %>Selecciona un archivo CSV o Excel.<% } else if (bulkImport.err === 'type') { %>Solo archivos .csv o .xlsx.<% } else if (bulkImport.err === 'too_big') { %>Archivo demasiado grande.<% } else if (bulkImport.err === 'too_many') { %>Demasiadas filas (máx. <%= typeof maxBulkRows !== 'undefined' ? maxBulkRows : 10000 %>).<% } else if (bulkImport.err === 'empty') { %>Archivo sin correos válidos.<% } else if (bulkImport.err === 'weak_password') { %>La contraseña inicial debe tener al menos 6 caracteres.<% } else if (bulkImport.err === 'bad_area') { %>Área inválida.<% } else if (bulkImport.err === 'parse') { %>No se pudo leer el archivo.<% } else { %>Error en la importación.<% } %>
+        <% } else { %>
+          Creados: <%= bulkImport.ok %>.<% if (bulkImport.bad > 0) { %> Correos inválidos u omitidos en archivo: <%= bulkImport.bad %>.<% } %><% if (bulkImport.dup > 0) { %> Ya existían (omitidos): <%= bulkImport.dup %>.<% } %>
+        <% } %>
+      </div>
+      <% } %>
+
+      <h2 class="card-title" style="margin-top: 0.5rem">Carga masiva</h2>
+      <p class="card-lead muted">Sube un CSV o Excel con correos <code>@mali.pe</code> (columna <code>email</code> o primera columna). Todos reciben la misma contraseña inicial y deberán cambiarla al primer inicio de sesión.</p>
+      <form method="post" action="<%= basePath %>/admin/users/bulk-import" enctype="multipart/form-data" class="form-grid tight" style="margin-bottom: 1.5rem">
+        <label class="field">
+          <span class="field-label">Archivo (.csv o .xlsx)</span>
+          <input type="file" name="bulkfile" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
+        </label>
+        <label class="field">
+          <span class="field-label">Contraseña inicial (todos)</span>
+          <input type="password" name="password" required minlength="6" autocomplete="new-password" />
+        </label>
+        <label class="field">
+          <span class="field-label">Área</span>
+          <select name="area" required>
+            <option value="ti">TI (dev)</option>
+            <option value="pam">PAM</option>
+            <option value="educacion">Educación</option>
+          </select>
+        </label>
+        <div class="field-row">
+          <button type="submit" class="primary">Importar usuarios</button>
+          <a class="text-link sample-csv-link" href="<%= basePath %>/admin/users/sample.csv">Plantilla CSV</a>
+        </div>
+      </form>
 
       <div class="table-wrap table-wrap--compact">
         <table>

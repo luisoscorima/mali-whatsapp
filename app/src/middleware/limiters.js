@@ -39,6 +39,13 @@ const contactsImportLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const usersBulkImportLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: Number(process.env.USERS_BULK_IMPORT_RATE_MAX || 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const templateSyncLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: Number(process.env.TEMPLATE_SYNC_RATE_MAX || 10),
@@ -47,6 +54,18 @@ const templateSyncLimiter = rateLimit({
 });
 
 const contactsImportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: config.MAX_CSV_BYTES },
+  fileFilter: (req, file, cb) => {
+    const name = String(file.originalname || '').toLowerCase();
+    if (name.endsWith('.csv') || name.endsWith('.xlsx')) {
+      return cb(null, true);
+    }
+    cb(new Error('Solo archivos .csv o .xlsx'));
+  },
+});
+
+const usersBulkImportUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: config.MAX_CSV_BYTES },
   fileFilter: (req, file, cb) => {
@@ -79,7 +98,9 @@ module.exports = {
   campaignLimiter,
   conversationReplyLimiter,
   contactsImportLimiter,
+  usersBulkImportLimiter,
   templateSyncLimiter,
   contactsImportUpload,
+  usersBulkImportUpload,
   conversationMediaUpload,
 };
