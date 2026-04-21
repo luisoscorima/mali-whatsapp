@@ -13,7 +13,7 @@
   const s = segments.find(function (x) { return x.value === slug; });
   return s ? s.label : slug;
 }
-  var _contactsMobileDetail = view === 'edit' || view === 'new';
+  var _contactsMobileDetail = view === 'edit' || view === 'new' || view === 'import';
 %>
 <%- include('layouts/inbox-shell-start', {
   pageTitle,
@@ -33,8 +33,41 @@
     <h2 class="inbox-sidebar-title">Contactos</h2>
     <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar contactos', refreshAriaLabel: 'Actualizar contactos' }) %>
   </div>
-  <div class="inbox-filters inbox-filters--campaign-new">
-    <a href="<%= basePath %>/contacts/new<%= _cq %>" class="small-btn primary">Añadir contacto</a>
+  <div class="inbox-filters inbox-filters--campaign-new contact-actions-row-wrap">
+    <div class="contact-actions-row" role="group" aria-label="Añadir o importar contactos">
+      <a
+        href="<%= basePath %>/contacts/new<%= _cq %>"
+        class="contact-action-tile <%= view === 'new' ? 'is-active' : '' %>"
+        aria-label="Añadir un contacto"
+        <% if (view === 'new') { %>aria-current="page"<% } %>
+      >
+        <span class="contact-action-tile__icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <line x1="19" y1="8" x2="19" y2="14" />
+            <line x1="22" y1="11" x2="16" y2="11" />
+          </svg>
+        </span>
+        <span class="contact-action-tile__label">Añadir</span>
+      </a>
+      <a
+        href="<%= basePath %>/contacts/import<%= _cq %>"
+        class="contact-action-tile <%= view === 'import' ? 'is-active' : '' %>"
+        aria-label="Importar desde Excel o CSV"
+        <% if (view === 'import') { %>aria-current="page"<% } %>
+      >
+        <span class="contact-action-tile__icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <path d="M12 18V9" />
+            <polyline points="9 12 12 9 15 12" />
+          </svg>
+        </span>
+        <span class="contact-action-tile__label">Excel</span>
+      </a>
+    </div>
   </div>
   <form class="inbox-filters" method="get" action="<%= basePath %>/contacts">
     <label class="field field--inbox">
@@ -63,32 +96,45 @@
     </label>
   </form>
   <% if (view === 'list' && contacts && contacts.length && segments.length) { %>
-  <div class="contact-bulk-toolbar" aria-label="Asignación masiva a segmento">
-    <div class="contact-bulk-toolbar__head">
-      <span class="contact-bulk-toolbar__title">Asignación masiva</span>
-      <span class="contact-bulk-count" id="contact-bulk-count" aria-live="polite">0 seleccionados</span>
+  <span id="contact-bulk-live" class="sr-only" aria-live="polite"></span>
+  <div id="contact-bulk-root" class="contact-bulk-compact" hidden>
+    <div class="contact-bulk-compact__row">
+      <button type="button" class="small-btn ghost contact-bulk-mini" id="contact-bulk-select-all">
+        Seleccionar todos
+      </button>
+      <button type="button" class="small-btn ghost contact-bulk-mini" id="contact-bulk-select-none">
+        Quitar selección
+      </button>
+      <button
+        type="button"
+        class="contact-bulk-plus-btn"
+        id="contact-bulk-toggle"
+        aria-expanded="false"
+        aria-controls="contact-bulk-panel"
+        title="Elegir segmento y aplicar"
+      >
+        <span aria-hidden="true">+</span>
+      </button>
     </div>
-    <div class="contact-bulk-toolbar__controls">
-      <button type="button" class="small-btn ghost" id="contact-bulk-select-all">Seleccionar todos</button>
-      <button type="button" class="small-btn ghost" id="contact-bulk-select-none">Quitar selección</button>
+    <div id="contact-bulk-panel" class="contact-bulk-panel" hidden>
+      <form
+        id="contacts-bulk-segment-form"
+        method="POST"
+        action="<%= basePath %>/contacts/bulk-add-segment"
+        class="contact-bulk-panel__form"
+      >
+        <label class="contact-bulk-panel__field">
+          <span class="sr-only">Segmento</span>
+          <select name="segment_slug" class="inbox-select contact-bulk-panel__select" required>
+            <option value="">— Segmento —</option>
+            <% segments.forEach(function (seg) { %>
+            <option value="<%= seg.value %>"><%= seg.label %></option>
+            <% }); %>
+          </select>
+        </label>
+        <button type="submit" class="small-btn primary contact-bulk-panel__submit">Aplicar</button>
+      </form>
     </div>
-    <form
-      id="contacts-bulk-segment-form"
-      method="POST"
-      action="<%= basePath %>/contacts/bulk-add-segment"
-      class="contact-bulk-toolbar__apply"
-    >
-      <label class="field field--inbox field--grow contact-bulk-field">
-        <span class="field-label">Añadir seleccionados a</span>
-        <select name="segment_slug" class="inbox-select" required>
-          <option value="">— Elegir segmento —</option>
-          <% segments.forEach(function (seg) { %>
-          <option value="<%= seg.value %>"><%= seg.label %></option>
-          <% }); %>
-        </select>
-      </label>
-      <button type="submit" class="small-btn primary contact-bulk-submit">Aplicar</button>
-    </form>
   </div>
   <% } %>
   <% if (!contacts || contacts.length === 0) { %>
@@ -144,7 +190,7 @@
         <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       </span>
       <h2 class="inbox-empty-heading">Contactos</h2>
-      <p class="inbox-empty-text">Selecciona un contacto en la lista o añade uno nuevo. Puedes importar un CSV desde «Añadir contacto».</p>
+      <p class="inbox-empty-text">Selecciona un contacto en la lista, usa <strong>Añadir</strong> para uno solo o <strong>Excel</strong> para importar CSV / Excel.</p>
       <% if (typeof contactUpdated !== 'undefined' && contactUpdated) { %>
       <p class="toast toast--ok">Contacto actualizado.</p>
       <% } %>
@@ -166,15 +212,6 @@
     <% } %>
     <% if (typeof contactDeleted !== 'undefined' && contactDeleted) { %>
     <p class="toast toast--ok">Contacto eliminado.</p>
-    <% } %>
-    <% if (csvImport) { %>
-    <div class="toast <%= csvImport.err ? 'toast--err' : 'toast--ok' %>">
-        <% if (csvImport.err) { %>
-        <% if (csvImport.err === 'no_file') { %>Selecciona un archivo CSV o Excel.<% } else if (csvImport.err === 'type') { %>Solo archivos .csv o .xlsx.<% } else if (csvImport.err === 'too_big') { %>Archivo demasiado grande.<% } else if (csvImport.err === 'too_many') { %>Demasiadas filas (máx. <%= maxCsvRows %>).<% } else if (csvImport.err === 'empty') { %>Archivo sin datos.<% } else { %>No se pudo leer el archivo.<% } %>
-      <% } else { %>
-        OK: <%= csvImport.ok %> fila(s).<% if (csvImport.bad > 0) { %> Omitidas: <%= csvImport.bad %>.<% } %>
-      <% } %>
-    </div>
     <% } %>
     <div class="card">
       <h2 class="card-title">Datos</h2>
@@ -212,11 +249,30 @@
         <button type="submit" <%= segments.length === 0 ? 'disabled' : '' %>>Guardar</button>
       </form>
     </div>
+  </div>
+  <% } else if (view === 'import') { %>
+  <div class="inbox-chat-header">
+    <a class="inbox-back-mobile" href="<%= basePath %>/contacts<%= _cq %>">← Contactos</a>
+    <div class="inbox-chat-header-main">
+      <h1 class="inbox-chat-heading">Importar Excel</h1>
+      <p class="inbox-chat-sub">CSV o .xlsx masivo</p>
+    </div>
+  </div>
+  <div class="inbox-chat-body inbox-chat-body--form">
+    <% if (csvImport) { %>
+    <div class="toast <%= csvImport.err ? 'toast--err' : 'toast--ok' %>">
+        <% if (csvImport.err) { %>
+        <% if (csvImport.err === 'no_file') { %>Selecciona un archivo CSV o Excel.<% } else if (csvImport.err === 'type') { %>Solo archivos .csv o .xlsx.<% } else if (csvImport.err === 'too_big') { %>Archivo demasiado grande.<% } else if (csvImport.err === 'too_many') { %>Demasiadas filas (máx. <%= maxCsvRows %>).<% } else if (csvImport.err === 'empty') { %>Archivo sin datos.<% } else { %>No se pudo leer el archivo.<% } %>
+      <% } else { %>
+        OK: <%= csvImport.ok %> fila(s).<% if (csvImport.bad > 0) { %> Omitidas: <%= csvImport.bad %>.<% } %>
+      <% } %>
+    </div>
+    <% } %>
     <div class="card">
-      <h2 class="card-title">Importar CSV o Excel</h2>
+      <h2 class="card-title">Archivo</h2>
       <form method="POST" action="<%= basePath %>/contacts/import" enctype="multipart/form-data" class="form-grid tight">
         <label class="field">
-          <span class="field-label">Archivo</span>
+          <span class="field-label">CSV o Excel</span>
           <input type="file" name="csvfile" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
         </label>
         <div class="row-actions">
@@ -298,19 +354,44 @@
       });
     });
 
-    var countEl = document.getElementById('contact-bulk-count');
+    var liveEl = document.getElementById('contact-bulk-live');
+    var rootEl = document.getElementById('contact-bulk-root');
+    var panelEl = document.getElementById('contact-bulk-panel');
+    var toggleEl = document.getElementById('contact-bulk-toggle');
     var cbs = document.querySelectorAll('.contact-bulk-cb');
-    if (countEl && cbs.length) {
-      function updateBulkCount() {
+
+    function closeBulkPanel() {
+      if (panelEl) panelEl.hidden = true;
+      if (toggleEl) toggleEl.setAttribute('aria-expanded', 'false');
+    }
+
+    function openBulkPanel() {
+      if (panelEl) panelEl.hidden = false;
+      if (toggleEl) toggleEl.setAttribute('aria-expanded', 'true');
+      var sel = panelEl && panelEl.querySelector('select[name="segment_slug"]');
+      if (sel) setTimeout(function () { sel.focus(); }, 0);
+    }
+
+    if (rootEl && cbs.length) {
+      function updateBulkSelection() {
         var n = 0;
         cbs.forEach(function (cb) {
           if (cb.checked) n += 1;
         });
-        countEl.textContent = n === 1 ? '1 seleccionado' : n + ' seleccionados';
+        if (liveEl) {
+          liveEl.textContent =
+            n === 0 ? '' : n === 1 ? '1 contacto seleccionado' : n + ' contactos seleccionados';
+        }
+        rootEl.hidden = n === 0;
+        if (n === 0) {
+          closeBulkPanel();
+        }
       }
+
       cbs.forEach(function (cb) {
-        cb.addEventListener('change', updateBulkCount);
+        cb.addEventListener('change', updateBulkSelection);
       });
+
       var allBtn = document.getElementById('contact-bulk-select-all');
       var noneBtn = document.getElementById('contact-bulk-select-none');
       if (allBtn) {
@@ -318,7 +399,7 @@
           cbs.forEach(function (cb) {
             cb.checked = true;
           });
-          updateBulkCount();
+          updateBulkSelection();
         });
       }
       if (noneBtn) {
@@ -326,10 +407,31 @@
           cbs.forEach(function (cb) {
             cb.checked = false;
           });
-          updateBulkCount();
+          updateBulkSelection();
         });
       }
-      updateBulkCount();
+
+      if (toggleEl && panelEl) {
+        toggleEl.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          if (rootEl.hidden) return;
+          if (panelEl.hidden) {
+            openBulkPanel();
+          } else {
+            closeBulkPanel();
+          }
+        });
+        panelEl.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+        });
+        document.addEventListener('click', function () {
+          if (!panelEl.hidden) {
+            closeBulkPanel();
+          }
+        });
+      }
+
+      updateBulkSelection();
     }
   })();
 </script>

@@ -44,6 +44,9 @@ async function runMigrations(query) {
   `);
   await query(`CREATE INDEX IF NOT EXISTS idx_login_logs_logged_at ON login_logs(logged_at DESC)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_login_logs_user_id ON login_logs(user_id)`);
+  await query(`ALTER TABLE login_logs ADD COLUMN IF NOT EXISTS logged_out_at TIMESTAMPTZ NULL`);
+  await query(`ALTER TABLE login_logs ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ`);
+  await query(`UPDATE login_logs SET last_seen_at = logged_at WHERE last_seen_at IS NULL`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS app_settings (

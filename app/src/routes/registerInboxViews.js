@@ -232,6 +232,32 @@ function registerInboxViews(app, ctx) {
       view: 'new',
       selectedContactId: null,
       contact: null,
+      csvImport: null,
+      maxCsvRows: config.MAX_CSV_ROWS,
+      contactUpdated: String(req.query.contact_updated || '') === '1',
+      contactDeleted: String(req.query.contact_deleted || '') === '1',
+    });
+  });
+
+  app.get('/contacts/import', async (req, res) => {
+    const area = req.user.area;
+    const contactSegmentFilter = String(req.query.segment || '').trim();
+    const contactSearchQ = String(req.query.q || '').trim();
+    const segmentsList = await loadSegments(area);
+    const contactsRows = await loadContactsList(area, segmentsList, contactSegmentFilter, contactSearchQ);
+    res.render('contacts-page', {
+      ...commonLocals(req, res),
+      activeNav: 'contacts',
+      pageTitle: 'Importar Excel · MALI WhatsApp',
+      layoutModifier: '',
+      segments: segmentsList,
+      contacts: contactsRows,
+      contactSegmentFilter,
+      contactSearchQ,
+      contactListQuery: contactListQueryString(contactSegmentFilter, contactSearchQ),
+      view: 'import',
+      selectedContactId: null,
+      contact: null,
       csvImport:
         String(req.query.contacts_import || '') === '1'
           ? {
@@ -241,8 +267,8 @@ function registerInboxViews(app, ctx) {
             }
           : null,
       maxCsvRows: config.MAX_CSV_ROWS,
-      contactUpdated: String(req.query.contact_updated || '') === '1',
-      contactDeleted: String(req.query.contact_deleted || '') === '1',
+      contactUpdated: false,
+      contactDeleted: false,
     });
   });
 

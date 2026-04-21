@@ -22,14 +22,12 @@
         <fieldset class="campaign-segments-fieldset campaign-segments-panel">
           <legend class="visually-hidden">Elegir segmentos para la campaña</legend>
           <div class="campaign-segments-head">
-            <span class="campaign-step-badge" aria-hidden="true">1</span>
-            <div>
-              <span class="campaign-destinatarios-title">Segmentos</span>
-              <p class="campaign-panel-lead campaign-panel-lead--tight">
-                Elige uno o más listados. Los contactos en <strong>cualquiera</strong> de ellos forman el conjunto base (unión).
-              </p>
-            </div>
+            <span class="campaign-step-badge campaign-step-badge--compact" aria-hidden="true">1</span>
+            <span class="campaign-segments-titleline">Segmentos</span>
           </div>
+          <p class="inline-help campaign-segments-hint">
+            Marca uno o más segmentos; se incluyen los contactos que pertenezcan a <strong>cualquiera</strong> de ellos (unión).
+          </p>
           <div class="campaign-segments-grid" role="group" aria-label="Segmentos disponibles">
             <% segments.forEach(function (segment) { %>
             <label class="campaign-segment-tile">
@@ -45,11 +43,11 @@
             <span class="campaign-step-badge" aria-hidden="true">2</span>
             <div>
               <span class="campaign-destinatarios-title">Destinatarios</span>
-              <p class="campaign-destinatarios-sub">Carga la lista y, si hace falta, excluye contactos uno a uno.</p>
+              <p class="campaign-destinatarios-sub">Pulsa <strong>Mostrar destinatarios</strong> para ver la lista y marca o desmarca contactos uno a uno.</p>
             </div>
           </div>
           <div class="campaign-recipients-actions">
-            <button type="button" class="campaign-load-btn" id="campaign-load-recipients">Cargar lista de contactos</button>
+            <button type="button" class="campaign-load-btn" id="campaign-load-recipients">Mostrar destinatarios</button>
             <span id="campaign-recipients-status" class="campaign-recipients-status" aria-live="polite"></span>
           </div>
           <div class="campaign-recipients-shell">
@@ -71,7 +69,10 @@
     </div>
 
     <div class="form-section">
-      <span class="form-section-label">Plantilla (Meta)</span>
+      <div class="campaign-step-head">
+        <span class="campaign-step-badge campaign-step-badge--compact" aria-hidden="true">3</span>
+        <span class="campaign-segments-titleline">Plantilla (Meta)</span>
+      </div>
       <label class="field">
         <span class="field-label">Seleccionar plantilla</span>
         <select name="templateSyncId" id="template-sync-select" required <%= (!syncedTemplates || syncedTemplates.length === 0) ? 'disabled' : '' %>>
@@ -90,7 +91,10 @@
     <p id="campaign-send-error" class="inline-warn" hidden></p>
 
     <div class="form-section">
-      <span class="form-section-label">Cuándo enviar</span>
+      <div class="campaign-step-head">
+        <span class="campaign-step-badge campaign-step-badge--compact" aria-hidden="true">4</span>
+        <span class="campaign-segments-titleline">Cuándo enviar</span>
+      </div>
       <fieldset class="campaign-schedule-fieldset">
         <legend class="visually-hidden">Modo de envío</legend>
         <div class="campaign-schedule-options">

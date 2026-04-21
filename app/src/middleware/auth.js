@@ -28,6 +28,8 @@ function normalizeArea(area) {
   return 'ti';
 }
 
+const LOGIN_LOG_SEEN_BUMP_MS = 60 * 1000;
+
 function createResolveSessionUser(appPath, query) {
   return async function resolveSessionUser(req, res, next) {
     if (
@@ -81,6 +83,19 @@ function createResolveSessionUser(appPath, query) {
       res.locals.currentUser = req.user;
       res.locals.areaLabel = config.AREA_LABELS[req.user.area] || req.user.area;
       res.locals.showAdminNav = Boolean(req.user.isMaster);
+      if (
+        config.requireAuth &&
+        req.session.loginLogId != null &&
+        Date.now() - (req.session._loginLogBumpAt || 0) >= LOGIN_LOG_SEEN_BUMP_MS
+      ) {
+        req.session._loginLogBumpAt = Date.now();
+        query(
+          `UPDATE login_logs SET last_seen_at = NOW() WHERE id = $1 AND logged_out_at IS NULL`,
+          [req.session.loginLogId]
+        ).catch(() => {
+          /* no bloquear request */
+        });
+      }
       return next();
     }
     req.user = null;

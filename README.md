@@ -131,7 +131,8 @@ Si aparece `Cannot find module` tras añadir dependencias en `package.json`, el 
 - `GET /campaigns/new` nueva campaña
 - `GET /campaigns/:id` detalle de campaña
 - `GET /contacts` contactos (lista)
-- `GET /contacts/new` nuevo contacto / importación CSV
+- `GET /contacts/new` añadir un contacto
+- `GET /contacts/import` importación CSV / Excel
 - `GET /contacts/:id` editar contacto
 - `GET /segments` segmentos (lista)
 - `GET /segments/new` añadir segmento

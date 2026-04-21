@@ -20,28 +20,38 @@
   <div class="inbox-chat-body inbox-chat-body--form">
     <div class="card">
       <p class="card-lead muted" style="margin-top: 0">
-        Últimos 500 accesos al panel (hora en Perú). Solo visible para el usuario master.
+        Últimos 500 accesos al panel (zona <%= typeof displayTimezone !== 'undefined' ? displayTimezone : 'America/Lima' %>).
+        <strong>En línea</strong> si hubo actividad en los últimos 5 minutos; <strong>Inactivo</strong> si no hubo peticiones (p. ej. cerró el navegador sin “Cerrar sesión”).
+        Solo visible para el usuario master.
       </p>
       <div class="table-wrap table-wrap--compact">
         <table>
           <thead>
             <tr>
               <th>Usuario (correo)</th>
-              <th>Fecha y hora</th>
+              <th>Inicio de sesión</th>
+              <th>Cierre de sesión</th>
+              <th>Estado</th>
             </tr>
           </thead>
           <tbody>
             <% if (!loginLogs || loginLogs.length === 0) { %>
             <tr>
-              <td colspan="2" class="muted">Aún no hay registros.</td>
+              <td colspan="4" class="muted">Aún no hay registros.</td>
             </tr>
             <% } else { %>
             <% loginLogs.forEach(function (row) { %>
             <tr>
               <td><%= row.email %></td>
+              <td><%= typeof formatExportDate === 'function' ? formatExportDate(row.logged_at) : '—' %></td>
               <td>
-                <%= new Date(row.logged_at).toLocaleString('es-PE', { timeZone: 'America/Lima', dateStyle: 'short', timeStyle: 'medium' }) %>
+                <% if (row.logged_out_at) { %>
+                <%= typeof formatExportDate === 'function' ? formatExportDate(row.logged_out_at) : '—' %>
+                <% } else { %>
+                <span class="muted">—</span>
+                <% } %>
               </td>
+              <td><%= row.sessionStatusLabel %></td>
             </tr>
             <% }); %>
             <% } %>

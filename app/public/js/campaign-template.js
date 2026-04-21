@@ -184,15 +184,15 @@
       const name = c.name != null ? String(c.name) : '';
       const phone = c.phone != null ? String(c.phone) : '';
       return (
-        '<label class="campaign-recipient-row">' +
+        '<label class="field field--row campaign-recipient-row">' +
         '<input type="checkbox" name="recipientContact" value="' +
         id +
         '" checked />' +
-        '<span class="campaign-recipient-body">' +
+        '<span class="campaign-recipient-meta">' +
         '<span class="campaign-recipient-name">' +
         esc(name || '—') +
-        '</span>' +
-        '<span class="campaign-recipient-phone mono">' +
+        '</span> ' +
+        '<span class="mono campaign-recipient-phone">' +
         esc(phone) +
         '</span></span>' +
         '</label>'

@@ -25,6 +25,24 @@ function parseQueryInt(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Actividad reciente para marcar "En línea" en el registro de sesiones (master). */
+const LOGIN_LOG_ONLINE_IDLE_MS = 5 * 60 * 1000;
+
+function enrichLoginLogRows(rows) {
+  const now = Date.now();
+  return rows.map((row) => {
+    if (row.logged_out_at) {
+      return { ...row, sessionStatusLabel: 'Desconectado (cierre de sesión)' };
+    }
+    const seen = row.last_seen_at || row.logged_at;
+    const ts = new Date(seen).getTime();
+    if (Number.isFinite(ts) && now - ts <= LOGIN_LOG_ONLINE_IDLE_MS) {
+      return { ...row, sessionStatusLabel: 'En línea' };
+    }
+    return { ...row, sessionStatusLabel: 'Inactivo (sin actividad en los últimos 5 min)' };
+  });
+}
+
 async function upsertMetaSetting(query, area, key, rawValue) {
   const v = String(rawValue || '').trim();
   if (!v) {
@@ -71,14 +89,14 @@ function registerAdmin(app, ctx) {
 
   app.get('/admin/login-logs', requireMaster, async (req, res) => {
     const r = await query(
-      `SELECT id, user_id, email, logged_at
+      `SELECT id, user_id, email, logged_at, logged_out_at, last_seen_at
        FROM login_logs
        ORDER BY logged_at DESC
        LIMIT 500`
     );
     res.render('admin-login-logs', {
       ...adminLocals(req, res, ctx, {
-        loginLogs: r.rows,
+        loginLogs: enrichLoginLogRows(r.rows),
         activeNav: 'admin-login-logs',
         adminSection: 'login-logs',
       }),

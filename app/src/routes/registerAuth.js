@@ -43,8 +43,13 @@ function registerAuth(app, ctx) {
       if (!ok) {
         return res.status(401).render('login', { error: 'Credenciales incorrectas', basePath: config.basePath });
       }
+      let loginLogId = null;
       try {
-        await query(`INSERT INTO login_logs (user_id, email) VALUES ($1, $2)`, [user.id, user.email]);
+        const ins = await query(
+          `INSERT INTO login_logs (user_id, email, last_seen_at) VALUES ($1, $2, NOW()) RETURNING id`,
+          [user.id, user.email]
+        );
+        loginLogId = ins.rows[0]?.id ?? null;
       } catch (logErr) {
         logError(req, 'Error registrando inicio de sesion', logErr);
       }
@@ -53,6 +58,9 @@ function registerAuth(app, ctx) {
       req.session.area = user.area;
       req.session.isMaster = Boolean(user.is_master);
       req.session.mustChangePassword = Boolean(user.must_change_password);
+      if (loginLogId != null) {
+        req.session.loginLogId = loginLogId;
+      }
       if (req.session.mustChangePassword) {
         return res.redirect(appPath('/account/change-password'));
       }
@@ -64,9 +72,24 @@ function registerAuth(app, ctx) {
   });
 
   app.post('/logout', (req, res) => {
-    req.session.destroy(() => {
-      res.redirect(appPath('/login'));
-    });
+    const logId = req.session && req.session.loginLogId != null ? req.session.loginLogId : null;
+    const finish = () => {
+      req.session.destroy((destroyErr) => {
+        if (destroyErr) {
+          logError(req, 'Error destruyendo sesion', destroyErr);
+        }
+        res.redirect(appPath('/login'));
+      });
+    };
+    if (logId == null) {
+      return finish();
+    }
+    query(
+      `UPDATE login_logs SET logged_out_at = NOW() WHERE id = $1 AND logged_out_at IS NULL`,
+      [logId]
+    )
+      .catch((e) => logError(req, 'Error registrando cierre de sesion', e))
+      .finally(() => finish());
   });
 
   app.get('/account/change-password', (req, res) => {
