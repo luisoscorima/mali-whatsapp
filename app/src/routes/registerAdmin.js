@@ -5,6 +5,7 @@ const { isValidMaliEmail, normalizeEmail } = require('../utils/contactsCsv');
 const { parseUsersBulkCsvBuffer, parseUsersBulkXlsxBuffer } = require('../utils/usersBulkCsv');
 const { usersBulkImportLimiter, usersBulkImportUpload } = require('../middleware/limiters');
 const { refreshMetaSettingsCache, KEYS } = require('../services/metaSettingsCache');
+const { formatExportDate } = require('../utils/datetimeDisplay');
 
 function adminLocals(req, res, ctx, extra) {
   const { config, resolveAppBaseUrl, appPath } = ctx;
@@ -25,21 +26,26 @@ function parseQueryInt(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Actividad reciente para marcar "En línea" en el registro de sesiones (master). */
+/** Actividad reciente para mostrar "En línea" en la columna de cierre (master). */
 const LOGIN_LOG_ONLINE_IDLE_MS = 5 * 60 * 1000;
 
 function enrichLoginLogRows(rows) {
   const now = Date.now();
   return rows.map((row) => {
+    const inicioDisplay = formatExportDate(row.logged_at) || '—';
+    let cierreDisplay;
     if (row.logged_out_at) {
-      return { ...row, sessionStatusLabel: 'Desconectado (cierre de sesión)' };
+      cierreDisplay = formatExportDate(row.logged_out_at) || '—';
+    } else {
+      const seen = row.last_seen_at || row.logged_at;
+      const ts = new Date(seen).getTime();
+      if (Number.isFinite(ts) && now - ts <= LOGIN_LOG_ONLINE_IDLE_MS) {
+        cierreDisplay = 'En línea';
+      } else {
+        cierreDisplay = 'Inactivo';
+      }
     }
-    const seen = row.last_seen_at || row.logged_at;
-    const ts = new Date(seen).getTime();
-    if (Number.isFinite(ts) && now - ts <= LOGIN_LOG_ONLINE_IDLE_MS) {
-      return { ...row, sessionStatusLabel: 'En línea' };
-    }
-    return { ...row, sessionStatusLabel: 'Inactivo (sin actividad en los últimos 5 min)' };
+    return { ...row, inicioDisplay, cierreDisplay };
   });
 }
 

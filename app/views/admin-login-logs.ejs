@@ -21,7 +21,9 @@
     <div class="card">
       <p class="card-lead muted" style="margin-top: 0">
         Últimos 500 accesos al panel (zona <%= typeof displayTimezone !== 'undefined' ? displayTimezone : 'America/Lima' %>).
-        <strong>En línea</strong> si hubo actividad en los últimos 5 minutos; <strong>Inactivo</strong> si no hubo peticiones (p. ej. cerró el navegador sin “Cerrar sesión”).
+        Una fila por inicio de sesión. En <strong>Cierre de sesión</strong>: fecha y hora si usó “Cerrar sesión”;
+        <strong>En línea</strong> si hubo actividad en los últimos 5 minutos sin cerrar sesión;
+        <strong>Inactivo</strong> si no hubo peticiones recientes (p. ej. cerró el navegador sin cerrar sesión).
         Solo visible para el usuario master.
       </p>
       <div class="table-wrap table-wrap--compact">
@@ -31,27 +33,27 @@
               <th>Usuario (correo)</th>
               <th>Inicio de sesión</th>
               <th>Cierre de sesión</th>
-              <th>Estado</th>
             </tr>
           </thead>
           <tbody>
             <% if (!loginLogs || loginLogs.length === 0) { %>
             <tr>
-              <td colspan="4" class="muted">Aún no hay registros.</td>
+              <td colspan="3" class="muted">Aún no hay registros.</td>
             </tr>
             <% } else { %>
             <% loginLogs.forEach(function (row) { %>
             <tr>
               <td><%= row.email %></td>
-              <td><%= typeof formatExportDate === 'function' ? formatExportDate(row.logged_at) : '—' %></td>
+              <td><%= row.inicioDisplay %></td>
               <td>
-                <% if (row.logged_out_at) { %>
-                <%= typeof formatExportDate === 'function' ? formatExportDate(row.logged_out_at) : '—' %>
+                <% if (row.cierreDisplay === 'En línea') { %>
+                <strong class="login-log-status--online">En línea</strong>
+                <% } else if (row.cierreDisplay === 'Inactivo') { %>
+                <span class="muted">Inactivo</span>
                 <% } else { %>
-                <span class="muted">—</span>
+                <%= row.cierreDisplay %>
                 <% } %>
               </td>
-              <td><%= row.sessionStatusLabel %></td>
             </tr>
             <% }); %>
             <% } %>

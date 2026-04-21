@@ -44,6 +44,7 @@ function createApp() {
     res.locals.displayTimezone = datetimeDisplay.DISPLAY_TIMEZONE;
     res.locals.formatChatListTime = datetimeDisplay.formatChatListTime;
     res.locals.formatMessageDateTime = datetimeDisplay.formatMessageDateTime;
+    res.locals.formatExportDate = datetimeDisplay.formatExportDate;
     res.locals.campaignSegmentDisplay = function campaignSegmentDisplay(campaign) {
       if (!campaign) return '';
       let p = campaign.campaign_payload;

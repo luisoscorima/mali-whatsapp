@@ -1749,6 +1749,10 @@ html[data-theme='dark'] .small-btn.danger-outline:hover {
   color: var(--ok);
 }
 
+.login-log-status--online {
+  color: var(--ok);
+}
+
 .user-name {
   font-weight: 600;
 }
