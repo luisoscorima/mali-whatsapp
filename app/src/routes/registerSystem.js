@@ -1,5 +1,11 @@
+const config = require('../config');
+
 function registerSystem(app, ctx) {
   const { query } = ctx;
+
+  app.get('/landing', (req, res) => {
+    res.render('landing', { basePath: config.basePath });
+  });
 
   app.get('/health', async (req, res) => {
     try {

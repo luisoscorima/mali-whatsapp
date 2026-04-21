@@ -13,7 +13,9 @@ function isProtectedPath(pathname) {
     p === '/login' ||
     p === withBase('/login') ||
     p === '/logout' ||
-    p === withBase('/logout')
+    p === withBase('/logout') ||
+    p === '/landing' ||
+    p === withBase('/landing')
   ) {
     return false;
   }

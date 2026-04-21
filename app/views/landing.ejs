@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MALI WhatsApp — Panel de campañas y conversaciones</title>
+    <meta
+      name="description"
+      content="Campañas segmentadas por WhatsApp, inbox unificado y métricas operativas para el Museo de Arte de Lima."
+    />
+    <script>
+      try {
+        var _t = localStorage.getItem('mali-theme');
+        if (_t === 'dark' || _t === 'light') document.documentElement.setAttribute('data-theme', _t);
+      } catch (e) {}
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="<%= basePath %>/css/styles.css" />
+    <script src="<%= basePath %>/js/theme.js" defer></script>
+  </head>
+  <body class="has-wave-bg">
+    <%- include('partials/wave-background') %>
+    <div class="landing-page">
+      <button
+        type="button"
+        class="theme-toggle landing-theme-toggle"
+        data-theme-toggle
+        title="Modo claro / oscuro"
+        aria-label="Cambiar tema"
+      >
+        ◐
+      </button>
+
+      <header class="landing-header">
+        <div class="landing-brand" aria-hidden="true">
+          <img
+            class="brand-logo-img brand-logo-img--light"
+            src="https://mali-assets.s3.us-east-1.amazonaws.com/assets-web-mali/Logo_MALI_Negro.png"
+            alt=""
+            width="160"
+            height="48"
+            decoding="async"
+          />
+          <img
+            class="brand-logo-img brand-logo-img--dark"
+            src="https://mali-assets.s3.us-east-1.amazonaws.com/assets-web-mali/Logo_MALI_Blanco.png"
+            alt=""
+            width="160"
+            height="48"
+            decoding="async"
+          />
+        </div>
+        <span class="brand-mark">WhatsApp</span>
+      </header>
+
+      <main class="landing-main">
+        <section class="landing-hero card" aria-labelledby="landing-title">
+          <h1 id="landing-title" class="landing-title">Campañas y atención por WhatsApp, en un solo lugar</h1>
+          <p class="landing-lead">
+            Herramienta interna para equipos del MALI: envíos con plantillas aprobadas por Meta, segmentación de audiencias,
+            métricas de entrega y un inbox tipo WhatsApp para seguir cada conversación.
+          </p>
+          <nav class="landing-cta" aria-label="Acciones principales">
+            <a class="small-btn primary" href="<%= basePath %>/login">Ingresar al panel</a>
+          </nav>
+        </section>
+
+        <section class="landing-section" aria-labelledby="sec-campaigns">
+          <h2 id="sec-campaigns" class="landing-section-title">Campañas</h2>
+          <ul class="landing-feature-list">
+            <li>
+              <strong>Plantillas de Meta:</strong> sincronización con la cuenta de WhatsApp; el formulario se adapta a cabecera
+              (imagen, video o documento), textos con variables y botones con URL dinámica.
+            </li>
+            <li>
+              <strong>Envío por segmento:</strong> eliges el público según los segmentos definidos en tu área.
+            </li>
+            <li>
+              <strong>Lotes y ritmo:</strong> control de tamaño de lote y pausa entre lotes para respetar límites operativos.
+            </li>
+            <li>
+              <strong>Programación:</strong> puedes lanzar en el momento o programar la campaña con antelación.
+            </li>
+          </ul>
+        </section>
+
+        <section class="landing-section" aria-labelledby="sec-metrics">
+          <h2 id="sec-metrics" class="landing-section-title">Métricas</h2>
+          <p class="landing-section-lead">
+            En listado y detalle verás indicadores claros: total de registros de envío, salida correcta, porcentaje de error
+            y lectura sobre mensajes entregados. En el detalle, un desglose por estado ayuda al diagnóstico sin sustituir los
+            informes oficiales de Meta.
+          </p>
+        </section>
+
+        <section class="landing-section" aria-labelledby="sec-contacts">
+          <h2 id="sec-contacts" class="landing-section-title">Contactos y segmentos</h2>
+          <p class="landing-section-lead">
+            Gestión de contactos por área, definición de segmentos y colores para organizar audiencias. Importación masiva
+            desde CSV; hay un archivo de ejemplo en
+            <a href="<%= basePath %>/contacts/sample.csv">/contacts/sample.csv</a>.
+          </p>
+        </section>
+
+        <section class="landing-section" aria-labelledby="sec-inbox">
+          <h2 id="sec-inbox" class="landing-section-title">Conversaciones (inbox)</h2>
+          <ul class="landing-feature-list">
+            <li>
+              <strong>Vista unificada:</strong> lista de chats e hilo de mensajes con el mismo patrón visual del panel.
+            </li>
+            <li>
+              <strong>Filtros:</strong> por segmento, búsqueda en el contenido de los mensajes, no leídos, modo bot o atención
+              humana (asesor).
+            </li>
+            <li>
+              <strong>Ventana de 24 h:</strong> las respuestas libres respetan la ventana de servicio de WhatsApp respecto al
+              último mensaje del usuario.
+            </li>
+            <li>
+              <strong>IA por área:</strong> cuando está habilitada en configuración, el modo bot puede bloquear respuestas
+              manuales hasta pasar a atención humana.
+            </li>
+          </ul>
+        </section>
+
+        <section class="landing-section" aria-labelledby="sec-areas">
+          <h2 id="sec-areas" class="landing-section-title">Áreas, acceso y administración</h2>
+          <ul class="landing-feature-list">
+            <li>
+              <strong>Tres áreas de negocio:</strong> TI (desarrollo), PAM y Educación; cada una usa sus credenciales de Meta
+              para envíos.
+            </li>
+            <li>
+              <strong>Acceso institucional:</strong> inicio de sesión con correo <strong>@mali.pe</strong>; los datos del panel
+              quedan acotados al área del usuario.
+            </li>
+            <li>
+              <strong>Usuario master:</strong> puede administrar usuarios y credenciales Meta desde el panel cuando la
+              autenticación está activa.
+            </li>
+          </ul>
+        </section>
+
+        <section class="landing-section" aria-labelledby="sec-ops">
+          <h2 id="sec-ops" class="landing-section-title">Operación e infraestructura</h2>
+          <ul class="landing-feature-list">
+            <li>
+              <strong>Webhook:</strong> recepción de estados <code>sent</code>, <code>delivered</code>, <code>read</code> y
+              <code>failed</code> desde Meta (<code>/webhook</code>).
+            </li>
+            <li>
+              <strong>Salud del servicio:</strong> <code>/health</code> comprueba aplicación y base de datos.
+            </li>
+            <li>
+              <strong>Datos:</strong> PostgreSQL con migraciones al arranque; despliegue habitual con Docker Compose.
+            </li>
+          </ul>
+        </section>
+
+        <footer class="landing-footer card">
+          <p class="landing-footer-note">Herramienta de uso interno del Museo de Arte de Lima (MALI).</p>
+          <nav aria-label="Pie de página">
+            <a class="landing-footer-link" href="<%= basePath %>/login">Ingresar</a>
+          </nav>
+        </footer>
+      </main>
+    </div>
+  </body>
+</html>
