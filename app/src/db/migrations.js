@@ -35,6 +35,17 @@ async function runMigrations(query) {
   );
 
   await query(`
+    CREATE TABLE IF NOT EXISTS login_logs (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      email VARCHAR(120) NOT NULL,
+      logged_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_login_logs_logged_at ON login_logs(logged_at DESC)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_login_logs_user_id ON login_logs(user_id)`);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS app_settings (
       area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion', 'global')),
       key TEXT NOT NULL,

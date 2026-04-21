@@ -43,6 +43,11 @@ function registerAuth(app, ctx) {
       if (!ok) {
         return res.status(401).render('login', { error: 'Credenciales incorrectas', basePath: config.basePath });
       }
+      try {
+        await query(`INSERT INTO login_logs (user_id, email) VALUES ($1, $2)`, [user.id, user.email]);
+      } catch (logErr) {
+        logError(req, 'Error registrando inicio de sesion', logErr);
+      }
       req.session.userId = user.id;
       req.session.email = user.email;
       req.session.area = user.area;

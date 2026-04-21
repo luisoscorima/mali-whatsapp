@@ -1,0 +1,54 @@
+<%- include('layouts/inbox-shell-start', {
+  pageTitle: 'Inicios de sesión · MALI WhatsApp',
+  basePath,
+  appBaseUrl,
+  requireAuth,
+  currentUser,
+  areaLabel,
+  activeNav: typeof activeNav !== 'undefined' ? activeNav : 'admin-login-logs',
+  showAdminNav,
+  shellPageClass: 'conversations-page',
+  layoutModifier: 'conversations-inbox--detail',
+  extraHeadScripts: null
+}) %>
+<%- include('partials/admin-sidebar', { basePath, adminSection: 'login-logs' }) %>
+<section class="inbox-main" aria-label="Registro de inicios de sesión">
+  <%- include('partials/admin-mobile-nav', { basePath, adminSection: 'login-logs' }) %>
+  <div class="inbox-chat-header inbox-chat-header--static">
+    <h1 class="inbox-chat-heading">Inicios de sesión</h1>
+  </div>
+  <div class="inbox-chat-body inbox-chat-body--form">
+    <div class="card">
+      <p class="card-lead muted" style="margin-top: 0">
+        Últimos 500 accesos al panel (hora en Perú). Solo visible para el usuario master.
+      </p>
+      <div class="table-wrap table-wrap--compact">
+        <table>
+          <thead>
+            <tr>
+              <th>Usuario (correo)</th>
+              <th>Fecha y hora</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!loginLogs || loginLogs.length === 0) { %>
+            <tr>
+              <td colspan="2" class="muted">Aún no hay registros.</td>
+            </tr>
+            <% } else { %>
+            <% loginLogs.forEach(function (row) { %>
+            <tr>
+              <td><%= row.email %></td>
+              <td>
+                <%= new Date(row.logged_at).toLocaleString('es-PE', { timeZone: 'America/Lima', dateStyle: 'short', timeStyle: 'medium' }) %>
+              </td>
+            </tr>
+            <% }); %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+<%- include('layouts/inbox-shell-end') %>

@@ -16,6 +16,18 @@
         </span>
       </a>
     </li>
+    <li class="inbox-chat-item <%= typeof adminSection !== 'undefined' && adminSection === 'login-logs' ? 'is-active' : '' %>">
+      <a class="inbox-chat-link" href="<%= basePath %>/admin/login-logs">
+        <span class="inbox-chat-link-main">
+          <span class="inbox-chat-row-top">
+            <span class="inbox-chat-title">Inicios de sesión</span>
+          </span>
+          <span class="inbox-chat-row-mid">
+            <span class="inbox-chat-preview">Registro por usuario</span>
+          </span>
+        </span>
+      </a>
+    </li>
     <li class="inbox-chat-item <%= typeof adminSection !== 'undefined' && adminSection === 'meta' ? 'is-active' : '' %>">
       <a class="inbox-chat-link" href="<%= basePath %>/admin/meta">
         <span class="inbox-chat-link-main">

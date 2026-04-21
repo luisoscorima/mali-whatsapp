@@ -69,6 +69,22 @@ function registerAdmin(app, ctx) {
     res.redirect(appPath('/campaigns'));
   });
 
+  app.get('/admin/login-logs', requireMaster, async (req, res) => {
+    const r = await query(
+      `SELECT id, user_id, email, logged_at
+       FROM login_logs
+       ORDER BY logged_at DESC
+       LIMIT 500`
+    );
+    res.render('admin-login-logs', {
+      ...adminLocals(req, res, ctx, {
+        loginLogs: r.rows,
+        activeNav: 'admin-login-logs',
+        adminSection: 'login-logs',
+      }),
+    });
+  });
+
   app.get('/admin/users', requireMaster, async (req, res) => {
     const r = await query(
       `SELECT id, email, area, is_master, must_change_password, can_edit_ai_prompt, created_at FROM users ORDER BY email ASC`
