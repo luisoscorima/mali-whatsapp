@@ -549,7 +549,7 @@ body.landing-marketing {
   left: 0;
   right: 0;
   z-index: 100;
-  padding: 1.2rem 2rem;
+  padding: 0.2rem 2rem;
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
