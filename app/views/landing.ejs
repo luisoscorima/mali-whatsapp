@@ -6,15 +6,15 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes"
     />
-    <title>MALI · WhatsApp: presentación para equipos y jefaturas</title>
+    <title>MALI · WhatsApp</title>
     <meta
       name="description"
-      content="Cómo el panel apoya a TI, PAM y Educación a ordenar campañas, atención y seguimiento, reduciendo trabajo manual y disperso en el MALI."
+      content="Panel para TI, PAM y Educación: campañas, inbox y métricas. En navegador, interfaz tipo WhatsApp Web; en móvil, vista cercana a la app."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
       rel="stylesheet"
     />
     <link
@@ -27,12 +27,25 @@
   </head>
   <body class="landing-marketing">
     <nav class="navbar">
-      <a href="#inicio" class="logo" style="text-decoration: none">MALI<span>.</span>whatsapp</a>
+      <a href="#inicio" class="landing-nav-brand" aria-label="Inicio · MALI WhatsApp">
+        <div class="landing-nav-logo-wrap">
+          <img
+            class="landing-nav-logo-img"
+            src="https://mali-assets.s3.us-east-1.amazonaws.com/assets-web-mali/Logo_MALI_Negro.png"
+            alt="MALI"
+            width="160"
+            height="48"
+            decoding="async"
+          />
+        </div>
+        <span class="landing-nav-wa">WhatsApp</span>
+      </a>
       <div class="nav-links">
         <a href="#beneficios">Beneficios</a>
         <a href="#ia">IA</a>
         <a href="#campanas">Campañas</a>
         <a href="#inbox">Inbox</a>
+        <a href="#vista-responsive">Web y móvil</a>
         <a href="#seguridad">Seguridad</a>
       </div>
       <a href="<%= basePath %>/login" class="btn" style="padding: 0.6rem 1.5rem">Entrar al panel</a>
@@ -43,29 +56,34 @@
         <div class="container">
           <div class="grid-2">
             <div class="reveal-left">
-              <span class="badge badge-light"><i class="fas fa-building"></i> Uso interno · Museo de Arte de Lima</span>
-              <h1>Orden y trazabilidad en WhatsApp<br />para cada área del MALI</h1>
-              <p style="font-size: 1.2rem">
-                Esta presentación resume cómo el panel sustituye flujos manuales (listas sueltas, envíos desde celulares
-                personales, respuestas sin registro común) por un solo entorno: campañas con criterio, conversaciones
-                visibles para el equipo y métricas que jefaturas y gerencia pueden revisar sin pedir reportes armados a
-                mano.
+              <span class="badge badge-light"><i class="fas fa-layer-group"></i> MALI</span>
+              <h1 class="landing-hero-title">WhatsApp por áreas, en un solo panel</h1>
+              <p class="landing-hero-lead">
+                Un entorno para campañas, conversaciones del equipo y métricas — sin depender solo de celulares personales
+                ni listas sueltas.
               </p>
 
-              <ul class="feature-list">
+              <ul class="feature-list feature-list--hero">
                 <li>
-                  <i class="fas fa-check-circle"></i>
-                  <strong>Un número institucional por área</strong> — TI, PAM y Educación no mezclan datos ni audiencias
+                  <span class="feature-list-icon" aria-hidden="true"><i class="fas fa-check-circle"></i></span>
+                  <div class="feature-list-text">
+                    <strong>Un número por área</strong>
+                    <span class="feature-list-sub">TI, PAM y Educación: datos y audiencias separados.</span>
+                  </div>
                 </li>
                 <li>
-                  <i class="fas fa-check-circle"></i>
-                  <strong>Menos carga repetitiva</strong> — opción de primeras respuestas automáticas (IA) con paso claro a
-                  asesor humano cuando haga falta
+                  <span class="feature-list-icon" aria-hidden="true"><i class="fas fa-check-circle"></i></span>
+                  <div class="feature-list-text">
+                    <strong>Primera respuesta y asesor</strong>
+                    <span class="feature-list-sub">IA opcional donde el área la active; paso claro a atención humana.</span>
+                  </div>
                 </li>
                 <li>
-                  <i class="fas fa-check-circle"></i>
-                  <strong>Envíos y seguimiento medibles</strong> — plantillas alineadas a Meta; estados de entrega y lectura
-                  en un mismo lugar
+                  <span class="feature-list-icon" aria-hidden="true"><i class="fas fa-check-circle"></i></span>
+                  <div class="feature-list-text">
+                    <strong>Envíos con seguimiento</strong>
+                    <span class="feature-list-sub">Plantillas Meta; entregas y lecturas en el mismo panel.</span>
+                  </div>
                 </li>
               </ul>
 
@@ -92,7 +110,7 @@
 
             <div class="reveal-right relative" style="display: flex; justify-content: center">
               <div class="laptop-device float-animation" style="z-index: 5">
-                <div class="laptop-screen shine-effect">
+                <div class="laptop-screen">
                   <img
                     src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?crop=entropy&fit=crop&fm=jpg&h=400&ixlib=rb-4.0.3&q=80&w=800"
                     alt="Vista de panel y métricas"
@@ -107,7 +125,7 @@
               </div>
 
               <div style="position: absolute; bottom: -30px; left: -20px; z-index: 10; transform: rotate(-8deg)">
-                <div class="iphone-6 iphone-6--on pca-hold shine-effect">
+                <div class="iphone-6 iphone-6--on pca-hold">
                   <div class="pca-main">
                     <div
                       class="pca-inner"
@@ -143,12 +161,11 @@
       <section class="section-light" id="beneficios">
         <div class="container">
           <div class="reveal text-center" style="max-width: 720px; margin: 0 auto 3rem">
-            <span class="badge"><i class="fas fa-users"></i> Para equipos, jefaturas y gerencia</span>
-            <h2>De procesos manuales dispersos a trabajo coordinado</h2>
+            <span class="badge"><i class="fas fa-users"></i> En síntesis</span>
+            <h2>Menos trabajo disperso, más coordinación</h2>
             <p>
-              Hoy muchas gestiones en WhatsApp dependen de quien tenga el celular a mano, de copiar listas entre planillas
-              o de contar “a oído” cuánta gente leyó un aviso. El panel concentra esas tareas en flujos repetibles, con
-              responsables claros y datos agregados para decisiones.
+              Menos dependencia de un solo celular o de planillas que se repiten por correo: el panel concentra envíos,
+              respuestas y cifras en flujos que el equipo puede repetir.
             </p>
           </div>
 
@@ -182,7 +199,8 @@
               <h4>Bandeja compartida para el equipo</h4>
               <p>
                 Las conversaciones dejan de vivir solo en un dispositivo: el equipo ve el hilo, puede filtrar por urgencia
-                o por modo (bot / asesor) y adjuntar material con contexto común.
+                o por modo (bot / asesor) y adjuntar material con contexto común. En web la disposición recuerda a WhatsApp
+                Web; en móvil, a la app.
               </p>
             </div>
             <div class="benefit-card reveal" style="transition-delay: 0.25s">
@@ -197,16 +215,13 @@
               <div class="benefit-icon"><i class="fas fa-chart-line"></i></div>
               <h4>Indicadores para informar hacia arriba</h4>
               <p>
-                Total de envíos, salida correcta, errores y lecturas por campaña: útiles para reportes a jefatura o
-                dirección sin reconstruir números desde capturas de pantalla.
+                Total de envíos, salida correcta, errores y lecturas por campaña: base para informes sin armar cifras a
+                mano desde capturas.
               </p>
             </div>
           </div>
 
           <div class="reveal text-center mt-4">
-            <p style="font-size: 1.05rem; font-weight: 500; color: var(--lp-gray); max-width: 32rem; margin: 0 auto 1.25rem">
-              El acceso es para personas autorizadas del MALI. Si tu área ya usa el panel, entra con tu correo institucional.
-            </p>
             <a href="<%= basePath %>/login" class="btn">Entrar al panel <i class="fas fa-arrow-right"></i></a>
           </div>
         </div>
@@ -280,8 +295,8 @@
 
               <p>
                 <i class="fas fa-toggle-on" style="color: var(--lp-primary); margin-right: 8px"></i>
-                <strong>Decisión de cada área:</strong> la jefatura define si se usa bot, con qué mensaje de sistema y cuándo
-                priorizar al equipo humano (Ajustes).
+                <strong>Decisión de cada área:</strong> quién administra el área define si se usa bot, el mensaje de sistema
+                y cuándo priorizar al equipo humano (Ajustes).
               </p>
             </div>
 
@@ -404,7 +419,7 @@
           <div class="grid-2">
             <div class="reveal-left" style="display: flex; justify-content: center">
               <div class="relative" style="width: 100%; max-width: 450px">
-                <div class="iphone-6 iphone-6--on pca-hold shine-effect float-animation" style="margin: 0 auto">
+                <div class="iphone-6 iphone-6--on pca-hold float-animation" style="margin: 0 auto">
                   <div class="pca-main">
                     <div
                       class="pca-inner"
@@ -435,7 +450,7 @@
                         <div style="display: flex; gap: 8px; margin-top: 8px">
                           <span
                             style="
-                              background: #dbeafe;
+                              background: var(--lp-soft);
                               color: var(--lp-primary);
                               padding: 2px 8px;
                               border-radius: 20px;
@@ -445,7 +460,7 @@
                           >
                           <span
                             style="
-                              background: #dbeafe;
+                              background: var(--lp-soft);
                               color: var(--lp-primary);
                               padding: 2px 8px;
                               border-radius: 20px;
@@ -488,7 +503,7 @@
               <span class="badge"><i class="fas fa-bullseye"></i> Comunicaciones masivas con criterio</span>
               <h2>Contactos y envíos: de planillas sueltas a registro único</h2>
               <p>
-                En lugar de repartir archivos por correo o chat interno, el área carga y mantiene contactos en un solo
+                En lugar de repartir archivos por correo o mensajes sueltos, el área carga y mantiene contactos en un solo
                 lugar; hay una
                 <a href="<%= basePath %>/contacts/sample.csv" style="color: var(--lp-primary); font-weight: 600"
                   >plantilla CSV de referencia</a
@@ -529,8 +544,31 @@
             <p>
               Cuando varias personas atienden el mismo WhatsApp, sin herramienta compartida cuesta saber quién respondió
               qué. El inbox concentra los hilos del número del área: prioriza no leídos, filtra por modo bot o asesor y
-              respeta la ventana de 24 h de Meta — con el historial visible para relevos y supervisión interna.
+              respeta la ventana de 24 h de Meta, con historial visible para relevos.
             </p>
+          </div>
+
+          <div id="vista-responsive" class="landing-responsive-strip reveal">
+            <div class="landing-responsive-card">
+              <i class="fas fa-desktop" aria-hidden="true"></i>
+              <div>
+                <strong>Navegador (escritorio)</strong>
+                <span
+                  >Vista cercana a <strong>WhatsApp Web</strong>: columna de chats y panel del hilo a la vez, pensada para
+                  mouse y pantalla ancha.</span
+                >
+              </div>
+            </div>
+            <div class="landing-responsive-card">
+              <i class="fas fa-mobile-screen-button" aria-hidden="true"></i>
+              <div>
+                <strong>Celular</strong>
+                <span
+                  >El mismo panel se adapta a pantallas pequeñas con un esquema parecido a la <strong>app de WhatsApp</strong>:
+                  prioridad al hilo, gestos y uso táctil.</span
+                >
+              </div>
+            </div>
           </div>
 
           <div class="grid-2" style="align-items: stretch">
@@ -641,12 +679,21 @@
     <footer class="footer">
       <div class="footer-content">
         <div>
-          <div class="logo" style="color: white; margin-bottom: 1rem">
-            MALI<span style="color: var(--lp-primary-light)">.</span>whatsapp
+          <div class="landing-footer-brand">
+            <div class="landing-footer-logo-wrap">
+              <img
+                class="landing-footer-logo-img"
+                src="https://mali-assets.s3.us-east-1.amazonaws.com/assets-web-mali/Logo_MALI_Blanco.png"
+                alt="MALI"
+                width="180"
+                height="54"
+                decoding="async"
+              />
+            </div>
+            <span class="landing-nav-wa">WhatsApp</span>
           </div>
           <p style="color: #94a3b8; font-size: 0.95rem">
-            Material de apoyo para alinear equipos y jefaturas: qué deja de hacerse “a mano” y cómo se concentra la
-            operación de WhatsApp Cloud API del MALI por área.
+            Resumen del panel WhatsApp Cloud API del MALI: una herramienta por área para campañas, inbox y operación.
           </p>
           <p style="margin-top: 1rem">
             <a href="https://mali.pe" target="_blank" rel="noopener noreferrer" style="color: var(--lp-primary-light); font-weight: 600; text-decoration: none"
@@ -659,6 +706,7 @@
           <ul style="list-style: none; color: #94a3b8">
             <li style="margin-bottom: 0.5rem"><a href="#campanas" style="color: inherit; text-decoration: none">Campañas</a></li>
             <li style="margin-bottom: 0.5rem"><a href="#inbox" style="color: inherit; text-decoration: none">Inbox</a></li>
+            <li style="margin-bottom: 0.5rem"><a href="#vista-responsive" style="color: inherit; text-decoration: none">Web y móvil</a></li>
             <li style="margin-bottom: 0.5rem"><a href="#beneficios" style="color: inherit; text-decoration: none">Contactos y segmentos</a></li>
             <li style="margin-bottom: 0.5rem"><a href="<%= basePath %>/contacts/sample.csv" style="color: inherit; text-decoration: none">CSV de ejemplo</a></li>
           </ul>
@@ -686,8 +734,7 @@
       </div>
       <div class="footer-bottom">
         <p>
-          © <%= new Date().getFullYear() %> Museo de Arte de Lima · Presentación para personal autorizado. WhatsApp es marca
-          de Meta.
+          © <%= new Date().getFullYear() %> Museo de Arte de Lima · WhatsApp es marca de Meta.
         </p>
       </div>
     </footer>
