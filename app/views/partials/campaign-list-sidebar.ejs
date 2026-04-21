@@ -24,7 +24,7 @@
       <a class="inbox-chat-link" href="<%= basePath %><%= _listBase %>/<%= c.id %>">
         <span class="inbox-chat-link-main">
           <span class="inbox-chat-row-top">
-            <span class="inbox-chat-title">#<%= c.id %> · <%= c.segment %></span>
+            <span class="inbox-chat-title">#<%= c.id %> · <%= campaignSegmentDisplay(c) %></span>
             <span class="inbox-chat-time"><span class="badge <%= c.status %>"><%= c.status %></span></span>
           </span>
           <span class="inbox-chat-row-mid">

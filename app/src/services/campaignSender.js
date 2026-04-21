@@ -1,3 +1,4 @@
+const config = require('../config');
 const { logInfo, logError } = require('../utils/logger');
 const { sanitizeApiResponse, sanitizeApiErrorPayload } = require('../utils/apiSanitize');
 const { normalizePhone } = require('../utils/phone');
@@ -8,6 +9,8 @@ const {
   buildWhatsappGraphComponents,
 } = require('./templateParser');
 const { upsertCampaignChatMessage } = require('./campaignConversationLog');
+const { normalizeArea } = require('../middleware/auth');
+const { fetchRecipientsUnion, validateRecipientsMatchRequest } = require('./campaignRecipients');
 
 const fakeReqLog = {
   path: '/campaigns/async',
@@ -25,13 +28,13 @@ function wait(ms) {
 async function runCampaignSendJob(query, ctx) {
   const {
     campaignId,
-    area,
-    segment,
+    area: areaRaw,
     templateSnapshot,
     staticParams,
     batchSize,
     batchDelayMs,
   } = ctx;
+  const area = normalizeArea(areaRaw);
 
   const row = {
     id: templateSnapshot.id || 0,
@@ -60,17 +63,24 @@ async function runCampaignSendJob(query, ctx) {
       phoneNumberId: creds.phoneNumberId || null,
     });
 
-    const recipientsResult = await query(
-      `SELECT id, name, phone
-       FROM contacts
-       WHERE segment = $1
-         AND area = $2
-         AND opt_in = TRUE
-         AND active = TRUE
-       ORDER BY id ASC`,
-      [segment, area]
-    );
-    const recipients = recipientsResult.rows;
+    let recipients;
+    if (
+      Array.isArray(ctx.recipientContactIds) &&
+      ctx.recipientContactIds.length > 0 &&
+      Array.isArray(ctx.segments) &&
+      ctx.segments.length > 0
+    ) {
+      recipients = await fetchRecipientsUnion(query, area, ctx.segments, {
+        contactIds: ctx.recipientContactIds,
+      });
+      if (!validateRecipientsMatchRequest(recipients, ctx.recipientContactIds)) {
+        throw new Error('Destinatarios de campaña inválidos o fuera de segmentos');
+      }
+    } else if (ctx.segment) {
+      recipients = await fetchRecipientsUnion(query, area, [ctx.segment]);
+    } else {
+      throw new Error('Payload de campaña inválido: falta segmento o lista de destinatarios');
+    }
 
     await query(`UPDATE campaigns SET total_recipients = $1 WHERE id = $2`, [recipients.length, campaignId]);
 
@@ -79,6 +89,22 @@ async function runCampaignSendJob(query, ctx) {
 
       for (const contact of batch) {
         try {
+          const phoneNorm = normalizePhone(contact.phone);
+          const gapMs = Number(config.CAMPAIGN_PHONE_MIN_GAP_MS) || 0;
+          if (gapMs > 0) {
+            const lastR = await query(
+              `SELECT MAX(created_at) AS t FROM campaign_logs WHERE phone = $1`,
+              [phoneNorm]
+            );
+            const lastT = lastR.rows[0]?.t;
+            if (lastT) {
+              const elapsed = Date.now() - new Date(lastT).getTime();
+              if (elapsed < gapMs) {
+                await wait(gapMs - elapsed);
+              }
+            }
+          }
+
           const apiResponse = await sendTemplateWithComponents({
             to: normalizePhone(contact.phone),
             templateName: templateSnapshot.name,
@@ -96,7 +122,7 @@ async function runCampaignSendJob(query, ctx) {
             [
               campaignId,
               contact.id,
-              normalizePhone(contact.phone),
+              phoneNorm,
               messageId,
               'sent',
               JSON.stringify(sanitizeApiResponse(apiResponse)),

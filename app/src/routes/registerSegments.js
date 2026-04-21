@@ -81,6 +81,10 @@ function registerSegments(app, ctx) {
         `UPDATE segment_definitions SET slug = $1, label = $2, sort_order = $3, color_key = $4 WHERE id = $5 AND area = $6`,
         [newSlug, label, sortOrder, colorKey, id, area]
       );
+      await client.query(
+        `UPDATE contact_segments SET segment_slug = $1 WHERE area = $2 AND segment_slug = $3`,
+        [newSlug, area, oldSlug]
+      );
       await client.query(`UPDATE contacts SET segment = $1, updated_at = NOW() WHERE area = $2 AND segment = $3`, [
         newSlug,
         area,
@@ -124,14 +128,9 @@ function registerSegments(app, ctx) {
         return res.status(404).send('Segmento no encontrado');
       }
       const slug = sel.rows[0].slug;
-      const cnt = await query(
-        `SELECT COUNT(*)::int AS n FROM contacts WHERE area = $1 AND segment = $2`,
-        [normalizeArea(area), slug]
-      );
-      if (cnt.rows[0].n > 0) {
-        return res.status(400).send('No se puede borrar: hay contactos con este segmento');
-      }
-      await query(`DELETE FROM segment_definitions WHERE id = $1 AND area = $2`, [id, normalizeArea(area)]);
+      const areaN = normalizeArea(area);
+      await query(`DELETE FROM contact_segments WHERE area = $1 AND segment_slug = $2`, [areaN, slug]);
+      await query(`DELETE FROM segment_definitions WHERE id = $1 AND area = $2`, [id, areaN]);
       res.redirect(`${appPath('/segments')}?segments_saved=1`);
     } catch (error) {
       logError(req, 'Error borrando segmento', error);

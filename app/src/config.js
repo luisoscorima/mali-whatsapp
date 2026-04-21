@@ -85,11 +85,18 @@ module.exports = {
   MAX_IMAGE_URL_LEN: 2048,
   MAX_BATCH_SIZE: 100,
   MAX_BATCH_DELAY_MS: 60000,
+  /** Tiempo mínimo entre envíos de campaña al mismo número (anti-spam, ms). 0 = desactivado. */
+  CAMPAIGN_PHONE_MIN_GAP_MS: Number(process.env.CAMPAIGN_PHONE_MIN_GAP_MS || 5000),
   /** Programación de campaña: margen mínimo respecto a "ahora" y ventana máxima hacia el futuro. */
   CAMPAIGN_SCHEDULE_MIN_MARGIN_MS: 60 * 1000,
   CAMPAIGN_SCHEDULE_MAX_DAYS: 90,
   /** Intervalo del poller que promueve campañas scheduled → queued (ms). */
   CAMPAIGN_SCHEDULE_POLL_MS: 45 * 1000,
+  /** Vista previa y envío: máximo de contactos por campaña (unión de segmentos o lista explícita). */
+  CAMPAIGN_RECIPIENTS_PREVIEW_MAX: Number(process.env.CAMPAIGN_RECIPIENTS_PREVIEW_MAX || 5000),
+  CAMPAIGN_MAX_RECIPIENT_IDS: Number(process.env.CAMPAIGN_MAX_RECIPIENT_IDS || 5000),
+  /** Body JSON para POST /campaigns/send con miles de IDs. */
+  CAMPAIGN_JSON_BODY_LIMIT: String(process.env.CAMPAIGN_JSON_BODY_LIMIT || '2mb').trim() || '2mb',
   MAX_SESSION_TEXT_LEN: 4096,
   /** Captions en mensajes con media (WhatsApp Cloud API). */
   MAX_MEDIA_CAPTION_LEN: 1024,

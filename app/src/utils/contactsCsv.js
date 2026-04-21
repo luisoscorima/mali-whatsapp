@@ -2,6 +2,7 @@ const { parse: parseCsv } = require('csv-parse/sync');
 const XLSX = require('xlsx');
 const config = require('../config');
 const { normalizePhone } = require('./phone');
+const { parseSegmentListFromImportCell } = require('./contactSegments');
 
 const DEFAULT_PE_PREFIX = '51';
 /** Móvil Perú sin código de país (9 dígitos, empieza por 9). */
@@ -19,10 +20,23 @@ function normalizeDigits(s) {
   return String(s || '').replace(/\D/g, '');
 }
 
-function validateContactCore(name, phone, segment, segmentSet) {
+function normalizeSegmentInput(segmentInput) {
+  if (Array.isArray(segmentInput)) {
+    return [...new Set(segmentInput.map((s) => String(s || '').trim()).filter(Boolean))];
+  }
+  const s = String(segmentInput || '').trim();
+  if (!s) return [];
+  if (s.includes(';') || s.includes(',')) {
+    return parseSegmentListFromImportCell(s);
+  }
+  return [s];
+}
+
+function validateContactCore(name, phone, segmentInput, segmentSet, segmentOpts = {}) {
   const normalizedName = String(name || '').trim();
   const normalizedPhone = normalizePhone(phone);
-  const normalizedSegment = String(segment || '').trim();
+  const segs = normalizeSegmentInput(segmentInput);
+  const minSeg = segmentOpts.minSegments != null ? segmentOpts.minSegments : 1;
 
   if (!normalizedName || normalizedName.length > config.MAX_NAME_LEN) {
     return { ok: false, message: `Nombre invalido (1-${config.MAX_NAME_LEN} caracteres)` };
@@ -30,8 +44,13 @@ function validateContactCore(name, phone, segment, segmentSet) {
   if (!config.e164NoPlusRegex.test(normalizedPhone)) {
     return { ok: false, message: 'Telefono invalido. Usa formato E.164 sin +' };
   }
-  if (!segmentSet.has(normalizedSegment)) {
-    return { ok: false, message: 'Segmento invalido' };
+  if (segs.length < minSeg) {
+    return { ok: false, message: minSeg === 0 ? 'Segmentos invalidos' : 'Indica al menos un segmento' };
+  }
+  for (const slug of segs) {
+    if (!segmentSet.has(slug)) {
+      return { ok: false, message: `Segmento invalido: ${slug}` };
+    }
   }
 
   return {
@@ -39,7 +58,7 @@ function validateContactCore(name, phone, segment, segmentSet) {
     value: {
       name: normalizedName,
       phone: normalizedPhone,
-      segment: normalizedSegment,
+      segments: segs,
     },
   };
 }
@@ -47,7 +66,19 @@ function validateContactCore(name, phone, segment, segmentSet) {
 /**
  * Formulario: prefijo + número local (Perú por defecto) o un solo campo legacy `phone`.
  */
-function validateContactInput(body, segmentSet) {
+function segmentInputFromBody(body) {
+  const raw = body?.segments;
+  if (Array.isArray(raw)) {
+    return raw.map((s) => String(s || '').trim()).filter(Boolean);
+  }
+  if (raw != null && String(raw).trim() !== '') {
+    return normalizeSegmentInput(String(raw));
+  }
+  return normalizeSegmentInput(body?.segment);
+}
+
+function validateContactInput(body, segmentSet, opts = {}) {
+  const segmentField = segmentInputFromBody(body);
   const hasLocal = body.phone_local !== undefined && String(body.phone_local).trim() !== '';
   if (hasLocal) {
     const prefix = normalizeDigits(body.phone_prefix) || DEFAULT_PE_PREFIX;
@@ -63,10 +94,10 @@ function validateContactInput(body, segmentSet) {
     } else if (!config.e164NoPlusRegex.test(full)) {
       return { ok: false, message: 'Telefono invalido para el prefijo indicado' };
     }
-    return validateContactCore(body.name, full, body.segment, segmentSet);
+    return validateContactCore(body.name, full, segmentField, segmentSet, opts);
   }
 
-  return validateContactCore(body.name, body.phone, body.segment, segmentSet);
+  return validateContactCore(body.name, body.phone, segmentField, segmentSet, opts);
 }
 
 function pickContactFieldsFromRecord(record) {
@@ -85,13 +116,17 @@ function pickContactFieldsFromRecord(record) {
   return { name, phone, segment, prefix };
 }
 
+function segmentsFromImportPick(picked) {
+  return parseSegmentListFromImportCell(picked.segment);
+}
+
 /**
  * Importación CSV/Excel: sin columna `prefix`, solo números móviles Perú de 9 dígitos o E.164 completo.
  * Con `prefix` no vacío: se concatena prefijo + dígitos del teléfono (nacional o sin +).
  */
 function normalizeImportRecord(picked, segmentSet) {
   const name = picked.name;
-  const segment = picked.segment;
+  const segmentList = segmentsFromImportPick(picked);
   const prefixRaw = picked.prefix;
   const hasPrefixCol = prefixRaw !== undefined && prefixRaw !== null && String(prefixRaw).trim() !== '';
   const prefixDigits = hasPrefixCol ? normalizeDigits(prefixRaw) : '';
@@ -112,7 +147,7 @@ function normalizeImportRecord(picked, segmentSet) {
     };
   }
 
-  return validateContactCore(name, fullPhone, segment, segmentSet);
+  return validateContactCore(name, fullPhone, segmentList, segmentSet, { minSegments: 1 });
 }
 
 function dedupeRowsByPhone(rows) {
@@ -179,6 +214,7 @@ module.exports = {
   normalizeEmail,
   validateContactInput,
   validateContactCore,
+  segmentInputFromBody,
   parseContactCsvBuffer,
   parseContactXlsxBuffer,
   pickContactFieldsFromRecord,

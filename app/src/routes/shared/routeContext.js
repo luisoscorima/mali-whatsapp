@@ -88,7 +88,10 @@ function createRouteContext({ query, pool, appPath }) {
     if (segmentFilter === '__none__') {
       extra += ` AND c.contact_id IS NULL`;
     } else if (segmentFilter) {
-      extra += ` AND ct.segment = $${p}`;
+      extra += ` AND EXISTS (
+        SELECT 1 FROM contact_segments cseg
+        WHERE cseg.contact_id = ct.id AND cseg.segment_slug = $${p}
+      )`;
       params.push(segmentFilter);
       p += 1;
     }
@@ -121,7 +124,12 @@ function createRouteContext({ query, pool, appPath }) {
           c.status AS conversation_status,
           ct.lead_score AS contact_lead_score,
           ct.name AS contact_name,
-          ct.segment AS contact_segment,
+          COALESCE((
+            SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
+            FROM contact_segments cs
+            JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+            WHERE cs.contact_id = ct.id
+          ), ARRAY[]::varchar[]) AS contact_segment_slugs,
           (SELECT m.body_text FROM chat_messages m
            WHERE m.conversation_id = c.id
            ORDER BY m.created_at DESC
@@ -148,19 +156,75 @@ function createRouteContext({ query, pool, appPath }) {
     return r.rows;
   }
 
-  function validateCampaignWithSync(reqBody, segmentSet, templateRow) {
-    const segment = String(reqBody.segment || '').trim();
-    const batchSize = Number(reqBody.batchSize || process.env.DEFAULT_BATCH_SIZE || 40);
-    const batchDelayMs = Number(reqBody.batchDelayMs || process.env.DEFAULT_BATCH_DELAY_MS || 1500);
+  /**
+   * Audiencia: varios segmentos + IDs explícitos (nuevo) o un solo segmento (legacy).
+   */
+  function parseCampaignAudience(reqBody, segmentSet) {
+    const maxIds = config.CAMPAIGN_MAX_RECIPIENT_IDS;
+    const hasRecipientIdsKey = Object.prototype.hasOwnProperty.call(reqBody, 'recipientContactIds');
 
+    if (hasRecipientIdsKey) {
+      const raw = reqBody.recipientContactIds;
+      if (!Array.isArray(raw)) {
+        return { ok: false, message: 'Lista de destinatarios inválida' };
+      }
+      const ids = raw.map((x) => Number(x)).filter((n) => Number.isInteger(n) && n > 0);
+      const uniqueIds = [...new Set(ids)].sort((a, b) => a - b);
+      if (uniqueIds.length === 0) {
+        return { ok: false, message: 'Selecciona al menos un destinatario' };
+      }
+      if (uniqueIds.length > maxIds) {
+        return { ok: false, message: `Demasiados destinatarios (máximo ${maxIds})` };
+      }
+
+      let segments = [];
+      if (Array.isArray(reqBody.segments)) {
+        segments = [...new Set(reqBody.segments.map((s) => String(s).trim()).filter(Boolean))];
+      }
+      if (segments.length === 0) {
+        return { ok: false, message: 'Selecciona al menos un segmento' };
+      }
+      for (const s of segments) {
+        if (!segmentSet.has(s)) {
+          return { ok: false, message: 'Segmento invalido' };
+        }
+      }
+      return {
+        ok: true,
+        mode: 'multi',
+        segments,
+        recipientContactIds: uniqueIds,
+        segmentLabelForDb: segments.join(', '),
+      };
+    }
+
+    const segment = String(reqBody.segment || '').trim();
     if (!segmentSet.has(segment)) {
       return { ok: false, message: 'Segmento invalido' };
     }
+    return {
+      ok: true,
+      mode: 'legacy',
+      segments: [segment],
+      recipientContactIds: undefined,
+      segmentLabelForDb: segment,
+    };
+  }
+
+  function validateCampaignWithSync(reqBody, segmentSet, templateRow) {
+    const batchSize = Number(reqBody.batchSize || process.env.DEFAULT_BATCH_SIZE || 40);
+    const batchDelayMs = Number(reqBody.batchDelayMs || process.env.DEFAULT_BATCH_DELAY_MS || 1500);
+
     if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > config.MAX_BATCH_SIZE) {
       return { ok: false, message: `Batch size invalido (1-${config.MAX_BATCH_SIZE})` };
     }
     if (!Number.isInteger(batchDelayMs) || batchDelayMs < 0 || batchDelayMs > config.MAX_BATCH_DELAY_MS) {
       return { ok: false, message: `Batch delay invalido (0-${config.MAX_BATCH_DELAY_MS})` };
+    }
+
+    const audience = parseCampaignAudience(reqBody, segmentSet);
+    if (!audience.ok) {
+      return audience;
     }
 
     const templateSyncId = parseInt(String(reqBody.templateSyncId || '').trim(), 10);
@@ -226,7 +290,10 @@ function createRouteContext({ query, pool, appPath }) {
     return {
       ok: true,
       value: {
-        segment,
+        audienceMode: audience.mode,
+        segments: audience.segments,
+        recipientContactIds: audience.recipientContactIds,
+        segment: audience.segmentLabelForDb,
         templateSyncId,
         templateRow,
         def,
@@ -278,9 +345,21 @@ function createRouteContext({ query, pool, appPath }) {
       );
       selectedConversation.inbox_unread = false;
       const contactRow = selectedConversation.contact_id
-        ? await query(`SELECT name, phone, segment, lead_score FROM contacts WHERE id = $1`, [
-            selectedConversation.contact_id,
-          ])
+        ? await query(
+            `SELECT
+               c.name,
+               c.phone,
+               c.lead_score,
+               COALESCE((
+                 SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
+                 FROM contact_segments cs
+                 JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+                 WHERE cs.contact_id = c.id
+               ), ARRAY[]::varchar[]) AS segment_slugs
+             FROM contacts c
+             WHERE c.id = $1`,
+            [selectedConversation.contact_id]
+          )
         : { rows: [] };
       contact = contactRow.rows[0] || null;
       const messagesResult = await query(

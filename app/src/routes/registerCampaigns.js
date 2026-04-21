@@ -1,12 +1,65 @@
 const { logError } = require('../utils/logger');
+const config = require('../config');
+const { normalizeArea } = require('../middleware/auth');
 const { campaignLimiter } = require('../middleware/limiters');
 const { runCampaignSendJob } = require('../services/campaignSender');
+const {
+  fetchRecipientsUnion,
+  countRecipientsUnion,
+  validateRecipientsMatchRequest,
+} = require('../services/campaignRecipients');
 
 function registerCampaigns(app, ctx) {
   const { query, getSegmentSlugSet, validateCampaignWithSync, appPath } = ctx;
 
+  /**
+   * Vista previa: unión de contactos por segmentos (sin filtrar por IDs).
+   */
+  app.post('/api/campaigns/recipients-preview', campaignLimiter, async (req, res) => {
+    const area = normalizeArea(req.user.area);
+    try {
+      const raw = req.body?.segments;
+      if (!Array.isArray(raw) || raw.length === 0) {
+        return res.status(400).json({ ok: false, error: 'Indica al menos un segmento' });
+      }
+      const segmentSet = await getSegmentSlugSet(area);
+      const segments = [...new Set(raw.map((s) => String(s).trim()).filter(Boolean))];
+      if (segments.length === 0) {
+        return res.status(400).json({ ok: false, error: 'Indica al menos un segmento' });
+      }
+      for (const s of segments) {
+        if (!segmentSet.has(s)) {
+          return res.status(400).json({ ok: false, error: 'Segmento inválido' });
+        }
+      }
+
+      const maxN = config.CAMPAIGN_RECIPIENTS_PREVIEW_MAX;
+      const total = await countRecipientsUnion(query, area, segments);
+      if (total > maxN) {
+        return res.status(400).json({
+          ok: false,
+          error: `Hay demasiados contactos (${total}). Máximo ${maxN}; reduce los segmentos.`,
+          total,
+          max: maxN,
+        });
+      }
+
+      const contacts = await fetchRecipientsUnion(query, area, segments);
+      return res.json({ ok: true, contacts, total: contacts.length });
+    } catch (error) {
+      logError(req, 'Error vista previa campaña', error);
+      return res.status(500).json({ ok: false, error: 'No se pudo cargar la lista' });
+    }
+  });
+
   app.post('/campaigns/send', campaignLimiter, async (req, res) => {
-    const area = req.user.area;
+    const wantsJson = String(req.headers.accept || '').includes('application/json');
+    const jsonErr = (msg) => {
+      if (wantsJson) return res.status(400).json({ ok: false, error: msg });
+      return res.status(400).send(msg);
+    };
+
+    const area = normalizeArea(req.user.area);
     const segmentSet = await getSegmentSlugSet(area);
     const templateSyncId = parseInt(String(req.body.templateSyncId || '').trim(), 10);
     let templateRow = null;
@@ -19,11 +72,14 @@ function registerCampaigns(app, ctx) {
     }
     const validation = validateCampaignWithSync(req.body, segmentSet, templateRow);
     if (!validation.ok) {
-      return res.status(400).send(validation.message);
+      return jsonErr(validation.message);
     }
 
     const {
       segment,
+      segments,
+      recipientContactIds,
+      audienceMode,
       templateRow: tRow,
       values,
       messageText,
@@ -35,17 +91,17 @@ function registerCampaigns(app, ctx) {
     } = validation.value;
 
     try {
-      const recipientsResult = await query(
-        `SELECT id, name, phone
-         FROM contacts
-         WHERE segment = $1
-           AND area = $2
-           AND opt_in = TRUE
-           AND active = TRUE
-         ORDER BY id ASC`,
-        [segment, area]
-      );
-      const recipients = recipientsResult.rows;
+      let recipients;
+      if (audienceMode === 'multi' && recipientContactIds && recipientContactIds.length > 0) {
+        recipients = await fetchRecipientsUnion(query, area, segments, {
+          contactIds: recipientContactIds,
+        });
+        if (!validateRecipientsMatchRequest(recipients, recipientContactIds)) {
+          return jsonErr('Destinatarios inválidos o no pertenecen a los segmentos seleccionados');
+        }
+      } else {
+        recipients = await fetchRecipientsUnion(query, area, segments);
+      }
 
       const templateSnapshot = {
         id: tRow.id,
@@ -64,12 +120,17 @@ function registerCampaigns(app, ctx) {
 
       const campaignPayload = {
         area,
-        segment,
+        segments,
         templateSnapshot,
         staticParams,
         batchSize,
         batchDelayMs,
       };
+      if (audienceMode === 'multi' && recipientContactIds && recipientContactIds.length > 0) {
+        campaignPayload.recipientContactIds = recipientContactIds;
+      } else {
+        campaignPayload.segment = segments[0];
+      }
 
       const campaignStatus = isScheduled ? 'scheduled' : 'queued';
       const campaignResult = await query(
@@ -95,9 +156,16 @@ function registerCampaigns(app, ctx) {
         setImmediate(() => runCampaignSendJob(query, { campaignId, ...campaignPayload }));
       }
 
-      res.redirect(appPath(`/campaigns/${campaignId}`));
+      const dest = appPath(`/campaigns/${campaignId}`);
+      if (wantsJson) {
+        return res.json({ ok: true, redirect: dest, campaignId });
+      }
+      res.redirect(dest);
     } catch (error) {
       logError(req, 'Error en envio de campana', error);
+      if (wantsJson) {
+        return res.status(500).json({ ok: false, error: error.message || 'Error al enviar' });
+      }
       res.status(500).send(`No se pudo enviar la campaña: ${error.message}`);
     }
   });

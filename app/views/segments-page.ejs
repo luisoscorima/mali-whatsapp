@@ -115,7 +115,7 @@
           <button type="submit" class="small-btn segment-save-btn">Guardar</button>
         </div>
       </form>
-      <form method="POST" action="<%= basePath %>/settings/segment-delete" class="inline-delete-form" onsubmit="return confirm('¿Borrar este segmento? Solo si no hay contactos.');">
+      <form method="POST" action="<%= basePath %>/settings/segment-delete" class="inline-delete-form" onsubmit="return confirm('¿Borrar este segmento? Se quitará de los contactos (vínculos), no se borran las personas.');">
         <input type="hidden" name="id" value="<%= selectedSegment.id %>" />
         <button type="submit" class="small-btn danger-outline">Borrar</button>
       </form>

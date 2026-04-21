@@ -64,7 +64,7 @@
     <p class="toast toast--ok">Campaña programada: se enviará a la hora indicada. Actualiza la página para ver el progreso.</p>
     <% } %>
     <dl class="detail-dl">
-      <div><dt>Segmento</dt><dd><%= campaign.segment %></dd></div>
+      <div><dt>Segmento(s)</dt><dd><%= campaignSegmentDisplay(campaign) %></dd></div>
       <div><dt>Plantilla</dt><dd><%= campaign.template_name %></dd></div>
       <div><dt>Estado</dt><dd><span class="badge <%= campaign.status %>"><%= campaign.status %></span></dd></div>
       <% if (campaign.scheduled_at) { %>

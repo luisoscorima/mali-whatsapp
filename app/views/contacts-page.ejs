@@ -7,6 +7,12 @@
   const s = segments.find(function (x) { return x.value === slug; });
   return s && s.colorKey ? s.colorKey : 'slate';
 }
+%>
+<% function contactSegmentLabel(slug) {
+  if (!slug) return '';
+  const s = segments.find(function (x) { return x.value === slug; });
+  return s ? s.label : slug;
+}
   var _contactsMobileDetail = view === 'edit' || view === 'new';
 %>
 <%- include('layouts/inbox-shell-start', {
@@ -56,12 +62,42 @@
       </div>
     </label>
   </form>
+  <% if (view === 'list' && contacts && contacts.length && segments.length) { %>
+  <form
+    id="contacts-bulk-segment-form"
+    method="POST"
+    action="<%= basePath %>/contacts/bulk-add-segment"
+    class="inbox-filters contact-bulk-bar"
+  >
+    <label class="field field--inbox field--grow">
+      <span class="field-label">Asignar seleccionados a</span>
+      <select name="segment_slug" class="inbox-select" required>
+        <option value="">— Segmento —</option>
+        <% segments.forEach(function (seg) { %>
+        <option value="<%= seg.value %>"><%= seg.label %></option>
+        <% }); %>
+      </select>
+    </label>
+    <button type="submit" class="small-btn secondary">Añadir a segmento</button>
+  </form>
+  <% } %>
   <% if (!contacts || contacts.length === 0) { %>
   <p class="empty-state inbox-empty-list"><%= _segF || _qF ? 'No hay contactos con estos filtros.' : 'No hay contactos en esta área.' %></p>
   <% } else { %>
   <ul class="inbox-chat-list">
     <% contacts.forEach(function (c) { %>
-    <li class="inbox-chat-item <%= _contactSel === c.id ? 'is-active' : '' %>">
+    <li class="inbox-chat-item inbox-chat-item--with-bulk <%= _contactSel === c.id ? 'is-active' : '' %>">
+      <% if (view === 'list' && segments.length) { %>
+      <input
+        type="checkbox"
+        class="contact-bulk-cb"
+        name="contact_ids"
+        value="<%= c.id %>"
+        form="contacts-bulk-segment-form"
+        aria-label="Seleccionar para asignar a segmento"
+        onclick="event.stopPropagation();"
+      />
+      <% } %>
       <a class="inbox-chat-link" href="<%= basePath %>/contacts/<%= c.id %><%= _cq %>">
         <span class="inbox-chat-link-main">
           <span class="inbox-chat-row-top">
@@ -71,8 +107,15 @@
           <span class="inbox-chat-phone mono"><%= c.phone %></span>
           <% } %>
           <span class="inbox-chat-row-mid">
-            <span class="inbox-chat-preview">
-              <span class="inbox-chat-segment" data-seg-tone="<%= contactSegmentColorKey(c.segment) %>"><%= c.segment %></span>
+            <span class="inbox-chat-preview contact-segment-chips">
+              <% const _slugs = c.segment_slugs || []; %>
+              <% if (_slugs.length === 0) { %>
+              <span class="inbox-meta-muted">Sin segmento</span>
+              <% } else { %>
+              <% _slugs.forEach(function (slug) { %>
+              <span class="inbox-chat-segment" data-seg-tone="<%= contactSegmentColorKey(slug) %>"><%= contactSegmentLabel(slug) %></span>
+              <% }); %>
+              <% } %>
             </span>
           </span>
         </span>
@@ -139,21 +182,22 @@
             <input name="phone_local" required placeholder="982160981" inputmode="numeric" autocomplete="tel-national" <%= segments.length === 0 ? 'disabled' : '' %> />
           </label>
         </div>
-        <label class="field">
-          <span class="field-label">Segmento</span>
+        <fieldset class="field segment-chips-fieldset">
+          <legend class="field-label">Segmentos</legend>
           <% if (segments.length === 0) { %>
           <p class="inline-warn">Define segmentos en <strong>Segmentos</strong>.</p>
-          <select name="segment" disabled>
-            <option value="">—</option>
-          </select>
           <% } else { %>
-          <select name="segment" required>
+          <div class="segment-checkbox-grid">
             <% segments.forEach(function (segment) { %>
-            <option value="<%= segment.value %>"><%= segment.label %></option>
+            <label class="segment-checkbox-label">
+              <input type="checkbox" name="segments" value="<%= segment.value %>" />
+              <span><%= segment.label %></span>
+            </label>
             <% }) %>
-          </select>
+          </div>
+          <p class="inline-help muted">Marca uno o varios.</p>
           <% } %>
-        </label>
+        </fieldset>
         <button type="submit" <%= segments.length === 0 ? 'disabled' : '' %>>Guardar</button>
       </form>
     </div>
@@ -173,8 +217,9 @@
         <summary>Formato CSV / Excel</summary>
         <p>
           Columnas: <code>name</code>, <code>phone</code>, <code>segment</code>. Opcional: <code>prefix</code> (código de país sin +) para números internacionales.
+          En <code>segment</code> puedes indicar varios slugs separados por <code>;</code> o <code>,</code>.
           Sin <code>prefix</code>, se aceptan móviles Perú de 9 dígitos (ej. <code>982160981</code>, se guarda como 51…) o un número E.164 completo sin +.
-          Si el teléfono ya existe, se actualiza el nombre y segmento.
+          Si el teléfono ya existe, se actualizan nombre y segmentos (se reemplazan por los de la fila).
         </p>
       </details>
     </div>
@@ -205,14 +250,24 @@
           <span class="field-label">Teléfono (E.164 sin +)</span>
           <input type="text" name="phone" value="<%= contact.phone %>" required inputmode="numeric" />
         </label>
-        <label class="field">
-          <span class="field-label">Segmento</span>
-          <select name="segment" required>
+        <fieldset class="field segment-chips-fieldset">
+          <legend class="field-label">Segmentos</legend>
+          <div class="segment-checkbox-grid">
+            <% const _editSlugs = contact.segment_slugs || []; %>
             <% segments.forEach(function (segment) { %>
-            <option value="<%= segment.value %>" <%= contact.segment === segment.value ? 'selected' : '' %>><%= segment.label %></option>
+            <label class="segment-checkbox-label">
+              <input
+                type="checkbox"
+                name="segments"
+                value="<%= segment.value %>"
+                <%= _editSlugs.indexOf(segment.value) !== -1 ? 'checked' : '' %>
+              />
+              <span><%= segment.label %></span>
+            </label>
             <% }) %>
-          </select>
-        </label>
+          </div>
+          <p class="inline-help muted">Marca uno o varios.</p>
+        </fieldset>
         <div class="form-actions">
           <button type="submit">Guardar cambios</button>
         </div>

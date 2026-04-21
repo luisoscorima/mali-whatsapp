@@ -19,23 +19,35 @@ function registerInboxViews(app, ctx) {
     const rawSeg = String(segmentFilterRaw || '').trim();
     const seg = rawSeg && slugSet.has(rawSeg) ? rawSeg : '';
     const params = [area];
-    let wh = 'WHERE area = $1';
+    let wh = 'WHERE c.area = $1';
     let p = 2;
     if (seg) {
-      wh += ` AND segment = $${p}`;
+      wh += ` AND EXISTS (SELECT 1 FROM contact_segments csf WHERE csf.contact_id = c.id AND csf.segment_slug = $${p})`;
       params.push(seg);
       p += 1;
     }
     const qDigits = String(searchQRaw || '').replace(/\D/g, '');
     if (qDigits.length >= 1) {
-      wh += ` AND phone LIKE $${p} ESCAPE '!'`;
+      wh += ` AND c.phone LIKE $${p} ESCAPE '!'`;
       params.push(`%${escapeForLikePattern(qDigits)}%`);
     }
     const r = await query(
-      `SELECT id, name, phone, segment, opt_in, active, created_at
-       FROM contacts
+      `SELECT
+         c.id,
+         c.name,
+         c.phone,
+         c.opt_in,
+         c.active,
+         c.created_at,
+         COALESCE((
+           SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
+           FROM contact_segments cs
+           JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+           WHERE cs.contact_id = c.id
+         ), ARRAY[]::varchar[]) AS segment_slugs
+       FROM contacts c
        ${wh}
-       ORDER BY id DESC
+       ORDER BY c.id DESC
        LIMIT 400`,
       params
     );
@@ -55,6 +67,7 @@ function registerInboxViews(app, ctx) {
       `SELECT
         c.id,
         c.segment,
+        c.campaign_payload,
         c.template_name,
         c.message_text,
         c.image_url,
@@ -244,10 +257,24 @@ function registerInboxViews(app, ctx) {
     const segmentsList = await loadSegments(area);
     const [contactsRows, one] = await Promise.all([
       loadContactsList(area, segmentsList, contactSegmentFilter, contactSearchQ),
-      query(`SELECT id, name, phone, segment, opt_in, active, created_at FROM contacts WHERE id = $1 AND area = $2`, [
-        contactId,
-        area,
-      ]),
+      query(
+        `SELECT
+           c.id,
+           c.name,
+           c.phone,
+           c.opt_in,
+           c.active,
+           c.created_at,
+           COALESCE((
+             SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
+             FROM contact_segments cs
+             JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+             WHERE cs.contact_id = c.id
+           ), ARRAY[]::varchar[]) AS segment_slugs
+         FROM contacts c
+         WHERE c.id = $1 AND c.area = $2`,
+        [contactId, area]
+      ),
     ]);
     if (one.rowCount === 0) {
       return res.status(404).send('Contacto no encontrado');

@@ -20,6 +20,7 @@ function registerSystem(app, ctx) {
     const sample = [
       'name,phone,segment,prefix',
       'Ejemplo Usuario,982160981,suscriptor_1,',
+      'Dos Segmentos,51977777777,"suscriptor_1;suscriptor_2",',
       'Maria Ejemplo,51988888888,suscriptor_2,',
       'Internacional,5551234567,suscriptor_1,1',
     ].join('\n');

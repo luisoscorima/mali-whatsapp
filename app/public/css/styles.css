@@ -528,6 +528,78 @@ html[data-theme='dark'] .nav-link.is-active {
   margin-top: 6px;
 }
 
+.campaign-segments-fieldset {
+  border: none;
+  padding: 0;
+  margin: 0 0 12px;
+  min-width: 0;
+}
+
+.campaign-segments-hint {
+  margin: 0 0 10px;
+}
+
+.campaign-segments-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.campaign-segment-label {
+  margin: 0;
+  font-weight: 500;
+}
+
+.campaign-recipients-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-top: 12px;
+}
+
+.campaign-recipients-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 10px;
+}
+
+.campaign-recipients-count {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.campaign-recipients-list {
+  margin-top: 12px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-elevated, var(--bg));
+}
+
+.campaign-recipient-row {
+  margin: 0 0 8px;
+  align-items: flex-start;
+}
+
+.campaign-recipient-meta {
+  display: block;
+  line-height: 1.35;
+}
+
+.campaign-recipient-name {
+  font-weight: 500;
+}
+
+.campaign-recipient-phone {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 .form-section-label {
   font-size: 0.72rem;
   font-weight: 700;

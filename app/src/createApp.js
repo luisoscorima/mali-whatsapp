@@ -32,7 +32,7 @@ function createApp() {
   // Meta firma el cuerpo RAW del POST; guardamos el buffer para X-Hub-Signature-256 (ver webhookVerify.js).
   app.use(
     express.json({
-      limit: '100kb',
+      limit: config.CAMPAIGN_JSON_BODY_LIMIT || '2mb',
       verify: (req, res, buf) => {
         req.rawBody = buf;
       },
@@ -44,6 +44,21 @@ function createApp() {
     res.locals.displayTimezone = datetimeDisplay.DISPLAY_TIMEZONE;
     res.locals.formatChatListTime = datetimeDisplay.formatChatListTime;
     res.locals.formatMessageDateTime = datetimeDisplay.formatMessageDateTime;
+    res.locals.campaignSegmentDisplay = function campaignSegmentDisplay(campaign) {
+      if (!campaign) return '';
+      let p = campaign.campaign_payload;
+      if (typeof p === 'string') {
+        try {
+          p = JSON.parse(p);
+        } catch {
+          p = null;
+        }
+      }
+      if (p && Array.isArray(p.segments) && p.segments.length) {
+        return p.segments.join(', ');
+      }
+      return String(campaign.segment || '');
+    };
     next();
   });
 

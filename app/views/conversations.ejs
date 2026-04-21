@@ -164,8 +164,12 @@
                     <span class="inbox-chat-row-mid">
                       <span class="inbox-chat-preview"><%= (c.preview || '—').slice(0, 120) %></span>
                     </span>
-                    <% if (c.contact_segment) { %>
-                      <span class="inbox-chat-segment" data-seg-tone="<%= segmentColorKey(c.contact_segment) %>"><%= segmentLabel(c.contact_segment) %></span>
+                    <% if (c.contact_segment_slugs && c.contact_segment_slugs.length) { %>
+                      <span class="contact-segment-chips" role="group" aria-label="Segmentos">
+                        <% c.contact_segment_slugs.forEach(function (slug) { %>
+                          <span class="inbox-chat-segment" data-seg-tone="<%= segmentColorKey(slug) %>"><%= segmentLabel(slug) %></span>
+                        <% }); %>
+                      </span>
                     <% } %>
                   </span>
                 </a>
@@ -196,8 +200,12 @@
               <div class="inbox-chat-header-identity">
                 <h1 class="inbox-chat-heading"><%= contact ? contact.name : selectedConversation.phone %></h1>
                 <p class="inbox-chat-sub mono"><%= selectedConversation.phone %></p>
-                <% if (contact && contact.segment) { %>
-                  <span class="inbox-chat-segment inbox-chat-segment--header" data-seg-tone="<%= segmentColorKey(contact.segment) %>"><%= segmentLabel(contact.segment) %></span>
+                <% if (contact && contact.segment_slugs && contact.segment_slugs.length) { %>
+                  <span class="contact-segment-chips contact-segment-chips--header" role="group" aria-label="Segmentos">
+                    <% contact.segment_slugs.forEach(function (slug) { %>
+                      <span class="inbox-chat-segment inbox-chat-segment--header" data-seg-tone="<%= segmentColorKey(slug) %>"><%= segmentLabel(slug) %></span>
+                    <% }); %>
+                  </span>
                 <% } %>
                 <p class="inbox-window-meta">
                   Ventana 24 h:

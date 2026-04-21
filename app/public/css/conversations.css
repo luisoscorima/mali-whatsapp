@@ -1541,3 +1541,72 @@ html[data-theme='dark'] .admin-mobile-nav__link.is-active {
 .campaign-meta-funnel-ratios-sep {
   opacity: 0.7;
 }
+
+/* Contactos: varios segmentos y asignación masiva */
+.inbox-layout-wa .inbox-chat-item--with-bulk {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.contact-bulk-cb {
+  align-self: center;
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  margin: 0 0 0 10px;
+  cursor: pointer;
+}
+.inbox-layout-wa .inbox-chat-item--with-bulk .inbox-chat-link {
+  flex: 1;
+  min-width: 0;
+}
+.contact-bulk-bar {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-end;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--line, rgba(0, 0, 0, 0.08));
+  margin-bottom: 0.35rem;
+}
+.field--grow .inbox-select {
+  min-width: 10rem;
+}
+.contact-segment-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: center;
+}
+.contact-segment-chips--header {
+  margin-top: 0.35rem;
+}
+.inbox-meta-muted {
+  font-size: 0.8rem;
+  opacity: 0.65;
+}
+.segment-checkbox-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.segment-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.segment-checkbox-label input {
+  width: 1rem;
+  height: 1rem;
+}
+.segment-chips-fieldset {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+.inline-help.muted {
+  font-size: 0.85rem;
+  opacity: 0.8;
+  margin-top: 0.35rem;
+}

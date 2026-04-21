@@ -25,7 +25,7 @@
     <a class="inbox-back-mobile" href="<%= basePath %><%= _backList %>">← Lista</a>
     <div class="inbox-chat-header-main">
       <h1 class="inbox-chat-heading">Campaña #<%= campaign.id %></h1>
-      <p class="inbox-chat-sub mono"><%= campaign.template_name %> · <%= campaign.segment %></p>
+      <p class="inbox-chat-sub mono"><%= campaign.template_name %> · <%= campaignSegmentDisplay(campaign) %></p>
     </div>
   </div>
   <div class="inbox-chat-body inbox-chat-body--scroll">

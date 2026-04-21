@@ -15,21 +15,32 @@
   <form method="POST" action="<%= basePath %>/campaigns/send" class="form-grid" id="campaign-form" data-base-path="<%= basePath %>">
     <div class="form-section">
       <span class="form-section-label">Quién recibe</span>
-      <label class="field">
-        <span class="field-label">Segmento</span>
-        <% if (segments.length === 0) { %>
-        <p class="inline-warn">Añade segmentos en la sección <strong>Segmentos</strong>.</p>
-        <select name="segment" disabled>
-          <option value="">—</option>
-        </select>
-        <% } else { %>
-        <select name="segment" required>
+      <% if (segments.length === 0) { %>
+      <p class="inline-warn">Añade segmentos en la sección <strong>Segmentos</strong>.</p>
+      <% } else { %>
+      <fieldset class="campaign-segments-fieldset">
+        <legend class="field-label">Segmentos (unión)</legend>
+        <p class="inline-help campaign-segments-hint">Marca uno o más segmentos; se incluyen contactos que pertenezcan a <strong>cualquiera</strong> de ellos.</p>
+        <div class="campaign-segments-grid">
           <% segments.forEach(function (segment) { %>
-          <option value="<%= segment.value %>"><%= segment.label %></option>
+          <label class="field field--row campaign-segment-label">
+            <input type="checkbox" name="campaignSegment" value="<%= segment.value %>" />
+            <span><%= segment.label %></span>
+          </label>
           <% }) %>
-        </select>
-        <% } %>
-      </label>
+        </div>
+      </fieldset>
+      <div class="campaign-recipients-actions">
+        <button type="button" class="secondary" id="campaign-load-recipients">Cargar destinatarios</button>
+        <span id="campaign-recipients-status" class="inline-help" aria-live="polite"></span>
+      </div>
+      <div id="campaign-recipients-toolbar" class="campaign-recipients-toolbar" hidden>
+        <button type="button" class="small-btn" id="campaign-select-all">Marcar todos</button>
+        <button type="button" class="small-btn" id="campaign-select-none">Desmarcar todos</button>
+        <span id="campaign-recipients-count" class="campaign-recipients-count"></span>
+      </div>
+      <div id="campaign-recipients-list" class="campaign-recipients-list" hidden role="group" aria-label="Destinatarios"></div>
+      <% } %>
     </div>
 
     <div class="form-section">
@@ -48,6 +59,8 @@
     </div>
 
     <div id="dynamic-template-fields" class="form-section" hidden></div>
+
+    <p id="campaign-send-error" class="inline-warn" hidden></p>
 
     <div class="form-section">
       <span class="form-section-label">Cuándo enviar</span>
@@ -91,7 +104,7 @@
     </details>
 
     <div class="form-actions">
-      <button type="submit" id="campaign-submit-btn" <%= segments.length === 0 || !syncedTemplates || syncedTemplates.length === 0 ? 'disabled' : '' %>>Enviar campaña</button>
+      <button type="submit" id="campaign-submit-btn" <%= segments.length === 0 || !syncedTemplates || syncedTemplates.length === 0 ? 'disabled data-disabled-by-server="1"' : '' %>>Enviar campaña</button>
     </div>
   </form>
 </div>

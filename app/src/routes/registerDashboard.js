@@ -21,10 +21,22 @@ function registerDashboard(app, ctx) {
       const area = req.user.area;
       const [contactsResult, campaignsResult, statsResult, campaignTotalsResult] = await Promise.all([
         query(
-          `SELECT id, name, phone, segment, opt_in, active, created_at
-           FROM contacts
-           WHERE area = $1
-           ORDER BY id DESC
+          `SELECT
+             c.id,
+             c.name,
+             c.phone,
+             c.opt_in,
+             c.active,
+             c.created_at,
+             COALESCE((
+               SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
+               FROM contact_segments cs
+               JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+               WHERE cs.contact_id = c.id
+             ), ARRAY[]::varchar[]) AS segment_slugs
+           FROM contacts c
+           WHERE c.area = $1
+           ORDER BY c.id DESC
            LIMIT 25`,
           [area]
         ),
@@ -49,11 +61,12 @@ function registerDashboard(app, ctx) {
           [area]
         ),
         query(
-          `SELECT segment, COUNT(*)::int AS total
-           FROM contacts
-           WHERE active = TRUE AND area = $1
-           GROUP BY segment
-           ORDER BY segment`,
+          `SELECT cs.segment_slug AS segment, COUNT(DISTINCT cs.contact_id)::int AS total
+           FROM contact_segments cs
+           INNER JOIN contacts c ON c.id = cs.contact_id AND c.area = cs.area
+           WHERE c.area = $1 AND c.active = TRUE
+           GROUP BY cs.segment_slug
+           ORDER BY cs.segment_slug`,
           [area]
         ),
         query(

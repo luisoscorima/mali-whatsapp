@@ -111,6 +111,11 @@ async function runMigrations(query) {
     `CREATE INDEX IF NOT EXISTS idx_campaigns_scheduled ON campaigns (status, scheduled_at) WHERE status = 'scheduled'`
   );
   await query(`CREATE INDEX IF NOT EXISTS idx_campaigns_area ON campaigns(area)`);
+  try {
+    await query(`ALTER TABLE campaigns ALTER COLUMN segment TYPE TEXT`);
+  } catch {
+    /* ya TEXT o sin columna */
+  }
 
   await query(`
     CREATE TABLE IF NOT EXISTS campaign_logs (
@@ -153,6 +158,29 @@ async function runMigrations(query) {
   await query(
     `ALTER TABLE segment_definitions ADD COLUMN IF NOT EXISTS color_key VARCHAR(16) NOT NULL DEFAULT 'teal'`
   );
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS contact_segments (
+      id SERIAL PRIMARY KEY,
+      contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+      area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion')),
+      segment_slug VARCHAR(50) NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      UNIQUE (contact_id, segment_slug)
+    )
+  `);
+  await query(
+    `CREATE INDEX IF NOT EXISTS idx_contact_segments_area_slug ON contact_segments(area, segment_slug)`
+  );
+  await query(`CREATE INDEX IF NOT EXISTS idx_contact_segments_contact ON contact_segments(contact_id)`);
+
+  await migrateContactSegmentsBridge(query);
+
+  try {
+    await query(`ALTER TABLE contacts ALTER COLUMN segment DROP NOT NULL`);
+  } catch {
+    /* ya nullable */
+  }
 
   const segCount = await query(`SELECT COUNT(*)::int AS c FROM segment_definitions`);
   if (segCount.rows[0].c === 0) {
@@ -303,6 +331,29 @@ async function runMigrations(query) {
 }
 
 /** Una sola vez: en BD antigua (solo pam+educacion) renombrar datos pam → ti; en BD nueva ya hay ti+pam+educacion sin tocar. */
+/** Puebla contact_segments desde contacts.segment (una vez) y marca flag global. */
+async function migrateContactSegmentsBridge(query) {
+  const flag = 'migration.contact_segments_bridge_v1';
+  const done = await query(`SELECT 1 AS ok FROM app_settings WHERE area = 'global' AND key = $1`, [flag]);
+  if (done.rows.length > 0) {
+    return;
+  }
+
+  await query(`
+    INSERT INTO contact_segments (contact_id, area, segment_slug)
+    SELECT id, area, TRIM(segment)
+    FROM contacts
+    WHERE segment IS NOT NULL AND TRIM(segment) <> ''
+    ON CONFLICT (contact_id, segment_slug) DO NOTHING
+  `);
+
+  await query(
+    `INSERT INTO app_settings (area, key, value, updated_at) VALUES ('global', $1, '1', NOW())
+     ON CONFLICT (area, key) DO UPDATE SET value = '1', updated_at = NOW()`,
+    [flag]
+  );
+}
+
 async function migratePamSlugToTiThreeAreas(query) {
   const flag = `migration.pam_legacy_to_ti_v1`;
   const done = await query(`SELECT 1 AS ok FROM app_settings WHERE area = 'global' AND key = $1`, [

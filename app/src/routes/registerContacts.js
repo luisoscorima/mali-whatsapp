@@ -1,27 +1,39 @@
 const multer = require('multer');
 const { logInfo, logError } = require('../utils/logger');
-const { validateContactInput, parseContactCsvBuffer, parseContactXlsxBuffer } = require('../utils/contactsCsv');
+const {
+  validateContactInput,
+  parseContactCsvBuffer,
+  parseContactXlsxBuffer,
+} = require('../utils/contactsCsv');
 const { contactsImportLimiter, contactsImportUpload } = require('../middleware/limiters');
+const { replaceContactSegments, appendContactSegments } = require('../utils/contactSegments');
+
+function firstSegmentForLegacyColumn(segments) {
+  if (!segments || segments.length === 0) return null;
+  return [...segments].sort()[0];
+}
 
 function registerContacts(app, ctx) {
   const { query, pool, config, getSegmentSlugSet, appPath } = ctx;
 
   app.post('/contacts', async (req, res) => {
     const segmentSet = await getSegmentSlugSet(req.user.area);
-    const validation = validateContactInput(req.body, segmentSet);
+    const validation = validateContactInput(req.body, segmentSet, { minSegments: 1 });
     if (!validation.ok) {
       return res.status(400).send(validation.message);
     }
 
+    const segs = validation.value.segments;
     try {
       const ins = await query(
         `INSERT INTO contacts (name, phone, segment, area, opt_in, active)
          VALUES ($1, $2, $3, $4, TRUE, TRUE)
          RETURNING id`,
-        [validation.value.name, validation.value.phone, validation.value.segment, req.user.area]
+        [validation.value.name, validation.value.phone, firstSegmentForLegacyColumn(segs), req.user.area]
       );
       const contactId = ins.rows[0]?.id;
       if (contactId) {
+        await replaceContactSegments(query, contactId, req.user.area, segs);
         await query(
           `UPDATE conversations SET contact_id = $1, updated_at = NOW()
            WHERE area = $2 AND phone = $3`,
@@ -30,7 +42,7 @@ function registerContacts(app, ctx) {
       }
       logInfo(req, 'Contacto creado', {
         phone: validation.value.phone,
-        segment: validation.value.segment,
+        segments: segs,
         area: req.user.area,
       });
       res.redirect(appPath('/contacts'));
@@ -87,6 +99,7 @@ function registerContacts(app, ctx) {
         try {
           await client.query('BEGIN');
           for (const row of rows) {
+            const segs = row.segments;
             const up = await client.query(
               `INSERT INTO contacts (name, phone, segment, area, opt_in, active)
                VALUES ($1, $2, $3, $4, TRUE, TRUE)
@@ -95,10 +108,11 @@ function registerContacts(app, ctx) {
                  segment = EXCLUDED.segment,
                  updated_at = NOW()
                RETURNING id`,
-              [row.name, row.phone, row.segment, req.user.area]
+              [row.name, row.phone, firstSegmentForLegacyColumn(segs), req.user.area]
             );
             const contactId = up.rows[0]?.id;
             if (contactId) {
+              await replaceContactSegments(client.query.bind(client), contactId, req.user.area, segs);
               await client.query(
                 `UPDATE conversations SET contact_id = $1, updated_at = NOW()
                  WHERE area = $2 AND phone = $3`,
@@ -131,6 +145,49 @@ function registerContacts(app, ctx) {
     }
   );
 
+  app.post('/contacts/bulk-add-segment', async (req, res) => {
+    const area = req.user.area;
+    const segmentSet = await getSegmentSlugSet(area);
+    const segmentSlug = String(req.body.segment_slug || '').trim();
+    if (!segmentSet.has(segmentSlug)) {
+      return res.status(400).send('Segmento invalido');
+    }
+    const rawIds = req.body.contact_ids;
+    const idList = Array.isArray(rawIds)
+      ? rawIds
+      : rawIds != null && rawIds !== ''
+        ? [rawIds]
+        : [];
+    const contactIds = idList
+      .map((x) => Number(String(x).trim()))
+      .filter((n) => Number.isInteger(n) && n > 0);
+    if (contactIds.length === 0) {
+      return res.status(400).send('Selecciona al menos un contacto');
+    }
+    try {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        for (const cid of contactIds) {
+          const own = await client.query(`SELECT id FROM contacts WHERE id = $1 AND area = $2`, [cid, area]);
+          if (own.rowCount === 0) continue;
+          await appendContactSegments(client.query.bind(client), cid, area, [segmentSlug]);
+        }
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+      } finally {
+        client.release();
+      }
+      res.redirect(`${appPath('/contacts')}?contact_updated=1`);
+      logInfo(req, 'Asignacion masiva a segmento', { segmentSlug, count: contactIds.length, area });
+    } catch (error) {
+      logError(req, 'Error asignacion masiva segmento', error);
+      res.status(500).send(`No se pudo asignar: ${error.message}`);
+    }
+  });
+
   app.post('/contacts/:id/update', async (req, res) => {
     const contactId = Number(req.params.id);
     if (!Number.isInteger(contactId) || contactId <= 0) {
@@ -138,7 +195,7 @@ function registerContacts(app, ctx) {
     }
     const area = req.user.area;
     const segmentSet = await getSegmentSlugSet(area);
-    const validation = validateContactInput(req.body, segmentSet);
+    const validation = validateContactInput(req.body, segmentSet, { minSegments: 1 });
     if (!validation.ok) {
       return res.status(400).send(validation.message);
     }
@@ -156,12 +213,15 @@ function registerContacts(app, ctx) {
       return res.status(400).send('Ya existe otro contacto con ese telefono en esta area');
     }
 
+    const segs = validation.value.segments;
+
     try {
       await query(
         `UPDATE contacts SET name = $1, phone = $2, segment = $3, updated_at = NOW()
          WHERE id = $4 AND area = $5`,
-        [validation.value.name, validation.value.phone, validation.value.segment, contactId, area]
+        [validation.value.name, validation.value.phone, firstSegmentForLegacyColumn(segs), contactId, area]
       );
+      await replaceContactSegments(query, contactId, area, segs);
       logInfo(req, 'Contacto actualizado', { contactId, area });
       res.redirect(`${appPath(`/contacts/${contactId}?contact_updated=1`)}`);
     } catch (error) {
