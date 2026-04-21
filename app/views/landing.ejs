@@ -2,173 +2,743 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MALI WhatsApp — Panel de campañas y conversaciones</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes"
+    />
+    <title>MALI · WhatsApp: presentación para equipos y jefaturas</title>
     <meta
       name="description"
-      content="Campañas segmentadas por WhatsApp, inbox unificado y métricas operativas para el Museo de Arte de Lima."
+      content="Cómo el panel apoya a TI, PAM y Educación a ordenar campañas, atención y seguimiento, reduciendo trabajo manual y disperso en el MALI."
     />
-    <script>
-      try {
-        var _t = localStorage.getItem('mali-theme');
-        if (_t === 'dark' || _t === 'light') document.documentElement.setAttribute('data-theme', _t);
-      } catch (e) {}
-    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="<%= basePath %>/css/styles.css" />
-    <script src="<%= basePath %>/js/theme.js" defer></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+    <link rel="stylesheet" href="<%= basePath %>/css/landing.css" />
   </head>
-  <body class="has-wave-bg">
-    <%- include('partials/wave-background') %>
-    <div class="landing-page">
-      <button
-        type="button"
-        class="theme-toggle landing-theme-toggle"
-        data-theme-toggle
-        title="Modo claro / oscuro"
-        aria-label="Cambiar tema"
-      >
-        ◐
-      </button>
+  <body class="landing-marketing">
+    <nav class="navbar">
+      <a href="#inicio" class="logo" style="text-decoration: none">MALI<span>.</span>whatsapp</a>
+      <div class="nav-links">
+        <a href="#beneficios">Beneficios</a>
+        <a href="#ia">IA</a>
+        <a href="#campanas">Campañas</a>
+        <a href="#inbox">Inbox</a>
+        <a href="#seguridad">Seguridad</a>
+      </div>
+      <a href="<%= basePath %>/login" class="btn" style="padding: 0.6rem 1.5rem">Entrar al panel</a>
+    </nav>
 
-      <header class="landing-header">
-        <div class="landing-brand" aria-hidden="true">
-          <img
-            class="brand-logo-img brand-logo-img--light"
-            src="https://mali-assets.s3.us-east-1.amazonaws.com/assets-web-mali/Logo_MALI_Negro.png"
-            alt=""
-            width="160"
-            height="48"
-            decoding="async"
-          />
-          <img
-            class="brand-logo-img brand-logo-img--dark"
-            src="https://mali-assets.s3.us-east-1.amazonaws.com/assets-web-mali/Logo_MALI_Blanco.png"
-            alt=""
-            width="160"
-            height="48"
-            decoding="async"
-          />
+    <main>
+      <section class="section-dark" style="padding-top: 7rem" id="inicio">
+        <div class="container">
+          <div class="grid-2">
+            <div class="reveal-left">
+              <span class="badge badge-light"><i class="fas fa-building"></i> Uso interno · Museo de Arte de Lima</span>
+              <h1>Orden y trazabilidad en WhatsApp<br />para cada área del MALI</h1>
+              <p style="font-size: 1.2rem">
+                Esta presentación resume cómo el panel sustituye flujos manuales (listas sueltas, envíos desde celulares
+                personales, respuestas sin registro común) por un solo entorno: campañas con criterio, conversaciones
+                visibles para el equipo y métricas que jefaturas y gerencia pueden revisar sin pedir reportes armados a
+                mano.
+              </p>
+
+              <ul class="feature-list">
+                <li>
+                  <i class="fas fa-check-circle"></i>
+                  <strong>Un número institucional por área</strong> — TI, PAM y Educación no mezclan datos ni audiencias
+                </li>
+                <li>
+                  <i class="fas fa-check-circle"></i>
+                  <strong>Menos carga repetitiva</strong> — opción de primeras respuestas automáticas (IA) con paso claro a
+                  asesor humano cuando haga falta
+                </li>
+                <li>
+                  <i class="fas fa-check-circle"></i>
+                  <strong>Envíos y seguimiento medibles</strong> — plantillas alineadas a Meta; estados de entrega y lectura
+                  en un mismo lugar
+                </li>
+              </ul>
+
+              <div class="stats-container">
+                <div class="stat-item">
+                  <div class="stat-number stat-number--text" style="color: white">3</div>
+                  <div class="stat-label" style="color: #cbd5e1">Áreas con espacio propio</div>
+                </div>
+                <div class="stat-item">
+                  <div class="stat-number stat-number--text" style="color: white">1</div>
+                  <div class="stat-label" style="color: #cbd5e1">Panel por área</div>
+                </div>
+                <div class="stat-item">
+                  <div class="stat-number stat-number--text" style="color: white">KPI</div>
+                  <div class="stat-label" style="color: #cbd5e1">Visibilidad por campaña</div>
+                </div>
+              </div>
+
+              <div class="hero-buttons" style="margin-top: 2.5rem">
+                <a href="<%= basePath %>/login" class="btn">Entrar al panel <i class="fas fa-arrow-right"></i></a>
+                <a href="#beneficios" class="btn btn-outline-light">Ver alcance por proceso <i class="fas fa-chevron-down"></i></a>
+              </div>
+            </div>
+
+            <div class="reveal-right relative" style="display: flex; justify-content: center">
+              <div class="laptop-device float-animation" style="z-index: 5">
+                <div class="laptop-screen shine-effect">
+                  <img
+                    src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?crop=entropy&fit=crop&fm=jpg&h=400&ixlib=rb-4.0.3&q=80&w=800"
+                    alt="Vista de panel y métricas"
+                    width="800"
+                    height="400"
+                    loading="lazy"
+                    style="width: 100%"
+                  />
+                </div>
+                <div class="laptop-base"></div>
+                <div class="laptop-notch"></div>
+              </div>
+
+              <div style="position: absolute; bottom: -30px; left: -20px; z-index: 10; transform: rotate(-8deg)">
+                <div class="iphone-6 iphone-6--on pca-hold shine-effect">
+                  <div class="pca-main">
+                    <div
+                      class="pca-inner"
+                      style="
+                        background-image: url('https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?crop=entropy&fit=crop&fm=jpg&h=600&ixlib=rb-4.0.3&q=80&w=300');
+                        background-size: cover;
+                      "
+                    ></div>
+                  </div>
+                  <div class="pca-sub"><span class="pca-bot"></span></div>
+                </div>
+              </div>
+
+              <div style="position: absolute; top: 0; right: -20px; z-index: 15; transform: rotate(5deg)">
+                <div class="iphone-6 pca-hold float-delay">
+                  <div class="pca-main">
+                    <div
+                      class="pca-inner"
+                      style="
+                        background-image: url('https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?crop=entropy&fit=crop&fm=jpg&h=600&ixlib=rb-4.0.3&q=80&w=300');
+                        background-size: cover;
+                      "
+                    ></div>
+                  </div>
+                  <div class="pca-sub"><span class="pca-bot"></span></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <span class="brand-mark">WhatsApp</span>
-      </header>
+      </section>
 
-      <main class="landing-main">
-        <section class="landing-hero card" aria-labelledby="landing-title">
-          <h1 id="landing-title" class="landing-title">Campañas y atención por WhatsApp, en un solo lugar</h1>
-          <p class="landing-lead">
-            Herramienta interna para equipos del MALI: envíos con plantillas aprobadas por Meta, segmentación de audiencias,
-            métricas de entrega y un inbox tipo WhatsApp para seguir cada conversación.
+      <section class="section-light" id="beneficios">
+        <div class="container">
+          <div class="reveal text-center" style="max-width: 720px; margin: 0 auto 3rem">
+            <span class="badge"><i class="fas fa-users"></i> Para equipos, jefaturas y gerencia</span>
+            <h2>De procesos manuales dispersos a trabajo coordinado</h2>
+            <p>
+              Hoy muchas gestiones en WhatsApp dependen de quien tenga el celular a mano, de copiar listas entre planillas
+              o de contar “a oído” cuánta gente leyó un aviso. El panel concentra esas tareas en flujos repetibles, con
+              responsables claros y datos agregados para decisiones.
+            </p>
+          </div>
+
+          <div class="grid-3">
+            <div class="benefit-card reveal" style="transition-delay: 0.1s">
+              <div class="benefit-icon"><i class="fas fa-layer-group"></i></div>
+              <h4>Delimitación por área</h4>
+              <p>
+                Cada dirección trabaja sobre su propio público y su propio historial. Eso facilita rendir cuentas sin
+                cruzar información entre TI, PAM y Educación.
+              </p>
+            </div>
+            <div class="benefit-card reveal" style="transition-delay: 0.2s">
+              <div class="benefit-icon"><i class="fas fa-robot"></i></div>
+              <h4>Primera línea automatizable</h4>
+              <p>
+                Donde el área lo decida, la IA (Groq / Llama 3.1) puede responder consultas frecuentes y dejar constancia;
+                si el caso lo requiere, el hilo pasa a asesor con reglas explícitas — menos carga en horas pico.
+              </p>
+            </div>
+            <div class="benefit-card reveal" style="transition-delay: 0.3s">
+              <div class="benefit-icon"><i class="fas fa-bullhorn"></i></div>
+              <h4>Campañas con criterio institucional</h4>
+              <p>
+                Las plantillas vienen de Meta; el equipo elige segmento, ritmo de envío y puede programar. Deja de depender
+                de cortar y pegar destinatarios sin registro central de qué salió y cuándo.
+              </p>
+            </div>
+            <div class="benefit-card reveal" style="transition-delay: 0.15s">
+              <div class="benefit-icon"><i class="fas fa-inbox"></i></div>
+              <h4>Bandeja compartida para el equipo</h4>
+              <p>
+                Las conversaciones dejan de vivir solo en un dispositivo: el equipo ve el hilo, puede filtrar por urgencia
+                o por modo (bot / asesor) y adjuntar material con contexto común.
+              </p>
+            </div>
+            <div class="benefit-card reveal" style="transition-delay: 0.25s">
+              <div class="benefit-icon"><i class="fas fa-shield-alt"></i></div>
+              <h4>Gobernanza y continuidad</h4>
+              <p>
+                Acceso con correo @mali.pe, sesiones controladas y webhooks verificables cuando la política del servidor lo
+                exige. Apoyo para que TI mantenga el servicio sin improvisaciones.
+              </p>
+            </div>
+            <div class="benefit-card reveal" style="transition-delay: 0.35s">
+              <div class="benefit-icon"><i class="fas fa-chart-line"></i></div>
+              <h4>Indicadores para informar hacia arriba</h4>
+              <p>
+                Total de envíos, salida correcta, errores y lecturas por campaña: útiles para reportes a jefatura o
+                dirección sin reconstruir números desde capturas de pantalla.
+              </p>
+            </div>
+          </div>
+
+          <div class="reveal text-center mt-4">
+            <p style="font-size: 1.05rem; font-weight: 500; color: var(--lp-gray); max-width: 32rem; margin: 0 auto 1.25rem">
+              El acceso es para personas autorizadas del MALI. Si tu área ya usa el panel, entra con tu correo institucional.
+            </p>
+            <a href="<%= basePath %>/login" class="btn">Entrar al panel <i class="fas fa-arrow-right"></i></a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-accent-gradient" id="ia">
+        <div class="container">
+          <div class="grid-2">
+            <div class="reveal-left">
+              <span class="badge"><i class="fas fa-brain"></i> Automatización con supervisión humana</span>
+              <h2>Menos tiempo en preguntas repetidas,<br />más claridad al derivar</h2>
+              <p>
+                En muchos equipos las mismas consultas se contestan una y otra vez desde el celular. El modo bot — cuando el
+                área lo active y exista configuración de IA — usa el hilo reciente y un prompt propio (Groq, Llama 3.1) para
+                dar una primera respuesta alineada al tono del MALI. Si hace falta atención personal, el pase a asesor queda
+                explícito y registrado.
+              </p>
+
+              <div
+                style="
+                  background: white;
+                  padding: 1.5rem;
+                  border-radius: var(--lp-radius-sm);
+                  margin: 2rem 0;
+                  box-shadow: var(--lp-shadow-sm);
+                "
+              >
+                <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem">
+                  <div
+                    style="
+                      width: 40px;
+                      height: 40px;
+                      background: var(--lp-primary);
+                      border-radius: 12px;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      color: white;
+                    "
+                  >
+                    <i class="fas fa-robot"></i>
+                  </div>
+                  <div>
+                    <h4 style="margin-bottom: 0.25rem">Modo bot activo</h4>
+                    <p style="font-size: 0.95rem; margin: 0; color: var(--lp-gray)">Primera respuesta automática (requiere API y política del área)</p>
+                  </div>
+                </div>
+                <div style="display: flex; gap: 1rem">
+                  <div
+                    style="
+                      width: 40px;
+                      height: 40px;
+                      background: var(--lp-accent);
+                      border-radius: 12px;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      color: white;
+                    "
+                  >
+                    <i class="fas fa-headset"></i>
+                  </div>
+                  <div>
+                    <h4 style="margin-bottom: 0.25rem">Pasar a asesor</h4>
+                    <p style="font-size: 0.95rem; margin: 0; color: var(--lp-gray)">
+                      Palabra clave configurable (por defecto <code>[TRANSFERIR]</code>) para cerrar el ciclo con una persona
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <p>
+                <i class="fas fa-toggle-on" style="color: var(--lp-primary); margin-right: 8px"></i>
+                <strong>Decisión de cada área:</strong> la jefatura define si se usa bot, con qué mensaje de sistema y cuándo
+                priorizar al equipo humano (Ajustes).
+              </p>
+            </div>
+
+            <div class="reveal-right" style="display: flex; justify-content: center">
+              <div class="relative">
+                <div
+                  style="
+                    width: 340px;
+                    max-width: 100%;
+                    background: white;
+                    border-radius: 36px;
+                    padding: 20px 12px;
+                    box-shadow: var(--lp-shadow-lg);
+                    border: 1px solid #e2e8f0;
+                  "
+                >
+                  <div
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 10px;
+                      margin-bottom: 20px;
+                      padding-bottom: 12px;
+                      border-bottom: 1px solid #e2e8f0;
+                    "
+                  >
+                    <div
+                      style="
+                        width: 40px;
+                        height: 40px;
+                        background: var(--lp-primary);
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: white;
+                      "
+                    >
+                      <i class="fas fa-user-graduate"></i>
+                    </div>
+                    <div>
+                      <strong>Consultas Educación</strong><br /><small style="color: var(--lp-gray)"
+                        >En línea · Modo bot</small
+                      >
+                    </div>
+                  </div>
+                  <div
+                    style="height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px"
+                  >
+                    <div
+                      style="
+                        align-self: flex-start;
+                        background: #f1f5f9;
+                        padding: 10px 14px;
+                        border-radius: 18px 18px 18px 4px;
+                        max-width: 85%;
+                      "
+                    >
+                      <small style="color: var(--lp-gray)">¿Hay talleres disponibles este mes?</small>
+                    </div>
+                    <div
+                      style="
+                        align-self: flex-end;
+                        background: var(--lp-primary);
+                        color: white;
+                        padding: 10px 14px;
+                        border-radius: 18px 18px 4px 18px;
+                        max-width: 85%;
+                      "
+                    >
+                      <small>Sí, tenemos fechas en la web. ¿Te resumo los horarios?</small>
+                    </div>
+                    <div
+                      style="
+                        align-self: flex-start;
+                        background: #f1f5f9;
+                        padding: 10px 14px;
+                        border-radius: 18px 18px 18px 4px;
+                        max-width: 85%;
+                      "
+                    >
+                      <small style="color: var(--lp-gray)">Prefiero hablar con un asesor [TRANSFERIR]</small>
+                    </div>
+                    <div
+                      style="
+                        align-self: center;
+                        background: #e2e8f0;
+                        padding: 6px 12px;
+                        border-radius: 20px;
+                        font-size: 0.8rem;
+                        color: var(--lp-gray);
+                      "
+                    >
+                      <i class="fas fa-exchange-alt"></i> Derivando a un asesor…
+                    </div>
+                  </div>
+                  <div
+                    style="
+                      margin-top: 16px;
+                      background: #f8fafc;
+                      border-radius: 30px;
+                      padding: 10px 16px;
+                      border: 1px solid #e2e8f0;
+                    "
+                  >
+                    <span style="color: var(--lp-gray-light)"><i class="far fa-smile"></i> Escribe un mensaje…</span>
+                  </div>
+                </div>
+                <div class="float-animation" style="position: absolute; bottom: -20px; right: -20px; z-index: -1">
+                  <i class="fas fa-circle" style="color: var(--lp-primary-light); opacity: 0.2; font-size: 8rem"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-light" id="campanas">
+        <div class="container">
+          <div class="grid-2">
+            <div class="reveal-left" style="display: flex; justify-content: center">
+              <div class="relative" style="width: 100%; max-width: 450px">
+                <div class="iphone-6 iphone-6--on pca-hold shine-effect float-animation" style="margin: 0 auto">
+                  <div class="pca-main">
+                    <div
+                      class="pca-inner"
+                      style="
+                        background: #f8fafc;
+                        display: flex;
+                        flex-direction: column;
+                        padding: 20px 12px;
+                      "
+                    >
+                      <div style="margin-bottom: 16px">
+                        <div style="font-weight: 700; font-size: 1.1rem">Nueva campaña</div>
+                        <div style="height: 6px; background: #e2e8f0; border-radius: 3px; margin: 8px 0">
+                          <div style="width: 60%; height: 6px; background: var(--lp-primary); border-radius: 3px"></div>
+                        </div>
+                      </div>
+                      <div
+                        style="
+                          background: white;
+                          padding: 12px;
+                          border-radius: 12px;
+                          margin-bottom: 12px;
+                          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+                        "
+                      >
+                        <small style="color: var(--lp-gray)">Plantilla sincronizada</small>
+                        <div style="font-weight: 600">ofertas_educacion</div>
+                        <div style="display: flex; gap: 8px; margin-top: 8px">
+                          <span
+                            style="
+                              background: #dbeafe;
+                              color: var(--lp-primary);
+                              padding: 2px 8px;
+                              border-radius: 20px;
+                              font-size: 0.7rem;
+                            "
+                            >cabecera</span
+                          >
+                          <span
+                            style="
+                              background: #dbeafe;
+                              color: var(--lp-primary);
+                              padding: 2px 8px;
+                              border-radius: 20px;
+                              font-size: 0.7rem;
+                            "
+                            >cuerpo</span
+                          >
+                        </div>
+                      </div>
+                      <div style="background: white; padding: 12px; border-radius: 12px; margin-bottom: 12px">
+                        <small style="color: var(--lp-gray)">Segmento</small>
+                        <div style="font-weight: 600">Educación</div>
+                        <div style="font-size: 0.8rem; color: var(--lp-primary); margin-top: 4px">
+                          <i class="fas fa-tag"></i> contactos del segmento elegido
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        style="
+                          background: var(--lp-primary);
+                          color: white;
+                          border: none;
+                          padding: 12px;
+                          border-radius: 30px;
+                          font-weight: 600;
+                          margin-top: auto;
+                          cursor: default;
+                        "
+                      >
+                        Programar envío
+                      </button>
+                    </div>
+                  </div>
+                  <div class="pca-sub"><span class="pca-bot"></span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="reveal-right">
+              <span class="badge"><i class="fas fa-bullseye"></i> Comunicaciones masivas con criterio</span>
+              <h2>Contactos y envíos: de planillas sueltas a registro único</h2>
+              <p>
+                En lugar de repartir archivos por correo o chat interno, el área carga y mantiene contactos en un solo
+                lugar; hay una
+                <a href="<%= basePath %>/contacts/sample.csv" style="color: var(--lp-primary); font-weight: 600"
+                  >plantilla CSV de referencia</a
+                >
+                para estandarizar columnas. Las campañas usan plantillas ya aprobadas en Meta y validan parámetros para
+                evitar errores que antes se detectaban tarde.
+              </p>
+
+              <div class="grid-2" style="gap: 1.5rem; margin: 2rem 0">
+                <div style="background: #f8fafc; padding: 1.2rem; border-radius: 12px">
+                  <i class="fas fa-file-import" style="color: var(--lp-primary); font-size: 1.5rem; margin-bottom: 0.5rem"></i>
+                  <h4 style="margin-bottom: 0.25rem">Carga ordenada</h4>
+                  <p style="font-size: 0.95rem; margin: 0">
+                    Importación masiva (name, phone, segment, prefix) para alinear comunicaciones con los segmentos que cada
+                    área define.
+                  </p>
+                </div>
+                <div style="background: #f8fafc; padding: 1.2rem; border-radius: 12px">
+                  <i class="fas fa-chart-pie" style="color: var(--lp-primary); font-size: 1.5rem; margin-bottom: 0.5rem"></i>
+                  <h4 style="margin-bottom: 0.25rem">Seguimiento para reportar</h4>
+                  <p style="font-size: 0.95rem; margin: 0">
+                    Totales, salida correcta, errores y lecturas por campaña: base objetiva para reuniones y priorización.
+                  </p>
+                </div>
+              </div>
+
+              <a href="<%= basePath %>/login" class="btn">Ir a campañas en el panel <i class="fas fa-arrow-right"></i></a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-gray" id="inbox">
+        <div class="container">
+          <div class="reveal text-center" style="max-width: 720px; margin: 0 auto 3rem">
+            <span class="badge"><i class="fas fa-comments"></i> Atención al público institucional</span>
+            <h2>Una cola de conversaciones para todo el equipo</h2>
+            <p>
+              Cuando varias personas atienden el mismo WhatsApp, sin herramienta compartida cuesta saber quién respondió
+              qué. El inbox concentra los hilos del número del área: prioriza no leídos, filtra por modo bot o asesor y
+              respeta la ventana de 24 h de Meta — con el historial visible para relevos y supervisión interna.
+            </p>
+          </div>
+
+          <div class="grid-2" style="align-items: stretch">
+            <div
+              class="reveal-left"
+              style="background: white; border-radius: var(--lp-radius); padding: 2rem; box-shadow: var(--lp-shadow-md)"
+            >
+              <div style="display: flex; border-bottom: 1px solid #e2e8f0; padding-bottom: 1rem; margin-bottom: 1rem">
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap">
+                  <span style="background: var(--lp-primary); color: white; padding: 0.2rem 0.8rem; border-radius: 20px; font-size: 0.8rem"
+                    >Todos</span
+                  >
+                  <span style="background: #f1f5f9; padding: 0.2rem 0.8rem; border-radius: 20px; font-size: 0.8rem"
+                    >No leídos</span
+                  >
+                  <span style="background: #f1f5f9; padding: 0.2rem 0.8rem; border-radius: 20px; font-size: 0.8rem"
+                    >Bot</span
+                  >
+                  <span style="background: #f1f5f9; padding: 0.2rem 0.8rem; border-radius: 20px; font-size: 0.8rem"
+                    >Asesor</span
+                  >
+                </div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 8px">
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 12px;
+                    background: #f8fafc;
+                    border-radius: 12px;
+                    border-left: 4px solid var(--lp-primary);
+                  "
+                >
+                  <div style="width: 40px; height: 40px; background: #e2e8f0; border-radius: 50%"></div>
+                  <div style="flex: 1">
+                    <strong>María López</strong><br /><small style="color: var(--lp-gray)">¿Tienen horarios de visita?</small>
+                  </div>
+                  <span style="background: var(--lp-primary-light); color: white; padding: 2px 6px; border-radius: 12px; font-size: 0.7rem">2</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px">
+                  <div style="width: 40px; height: 40px; background: #e2e8f0; border-radius: 50%"></div>
+                  <div style="flex: 1">
+                    <strong>Carlos Ruiz</strong><br /><small style="color: var(--lp-gray)"
+                      ><i class="fas fa-robot" style="font-size: 0.7rem"></i> Hola, ¿en qué puedo ayudarte?</small
+                    >
+                  </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px">
+                  <div style="width: 40px; height: 40px; background: #e2e8f0; border-radius: 50%"></div>
+                  <div style="flex: 1">
+                    <strong>Ana Torres</strong><br /><small style="color: var(--lp-gray)">Gracias por la información</small>
+                  </div>
+                  <i class="fas fa-check-double" style="color: var(--lp-primary)"></i>
+                </div>
+              </div>
+            </div>
+
+            <div
+              id="seguridad"
+              class="reveal-right"
+              style="
+                background: var(--lp-dark-light);
+                border-radius: var(--lp-radius);
+                padding: 2rem;
+                color: white;
+              "
+            >
+              <h3 style="color: white"><i class="fas fa-lock" style="margin-right: 10px"></i>Lo que espera TI y dirección</h3>
+              <ul style="list-style: none; color: #cbd5e1">
+                <li style="margin-bottom: 1.2rem; display: flex; gap: 12px">
+                  <i class="fas fa-check-circle" style="color: var(--lp-accent)"></i>
+                  <span
+                    >Integridad de eventos entrantes: verificación de firma <code>X-Hub-Signature-256</code> cuando la política
+                    del servidor lo exige (<code>REQUIRE_WEBHOOK_SIGNATURE</code>)</span
+                  >
+                </li>
+                <li style="margin-bottom: 1.2rem; display: flex; gap: 12px">
+                  <i class="fas fa-check-circle" style="color: var(--lp-accent)"></i>
+                  <span>Acceso acotado al personal del MALI (correo @mali.pe) y sesiones con secreto configurable</span>
+                </li>
+                <li style="margin-bottom: 1.2rem; display: flex; gap: 12px">
+                  <i class="fas fa-check-circle" style="color: var(--lp-accent)"></i>
+                  <span>Credenciales Meta por área gestionadas desde administración — menos dependencia de hojas o chats para guardar tokens</span>
+                </li>
+                <li style="margin-bottom: 1.2rem; display: flex; gap: 12px">
+                  <i class="fas fa-check-circle" style="color: var(--lp-accent)"></i>
+                  <span>Base PostgreSQL con esquema aplicado al arranque; entorno reproducible con Docker Compose</span>
+                </li>
+              </ul>
+              <div style="margin-top: 2rem; background: rgba(255, 255, 255, 0.05); padding: 1.5rem; border-radius: 16px">
+                <i class="fas fa-database" style="margin-bottom: 0.5rem"></i>
+                <p style="color: #e2e8f0; margin: 0">
+                  Control operativo: <a href="<%= basePath %>/health" style="color: var(--lp-primary-light)">comprobación /health</a> de aplicación y base de datos (uso técnico).
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="reveal text-center mt-4">
+            <a href="<%= basePath %>/login" class="btn">Entrar al panel <i class="fas fa-arrow-right"></i></a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-content">
+        <div>
+          <div class="logo" style="color: white; margin-bottom: 1rem">
+            MALI<span style="color: var(--lp-primary-light)">.</span>whatsapp
+          </div>
+          <p style="color: #94a3b8; font-size: 0.95rem">
+            Material de apoyo para alinear equipos y jefaturas: qué deja de hacerse “a mano” y cómo se concentra la
+            operación de WhatsApp Cloud API del MALI por área.
           </p>
-          <nav class="landing-cta" aria-label="Acciones principales">
-            <a class="small-btn primary" href="<%= basePath %>/login">Ingresar al panel</a>
-          </nav>
-        </section>
-
-        <section class="landing-section" aria-labelledby="sec-campaigns">
-          <h2 id="sec-campaigns" class="landing-section-title">Campañas</h2>
-          <ul class="landing-feature-list">
-            <li>
-              <strong>Plantillas de Meta:</strong> sincronización con la cuenta de WhatsApp; el formulario se adapta a cabecera
-              (imagen, video o documento), textos con variables y botones con URL dinámica.
-            </li>
-            <li>
-              <strong>Envío por segmento:</strong> eliges el público según los segmentos definidos en tu área.
-            </li>
-            <li>
-              <strong>Lotes y ritmo:</strong> control de tamaño de lote y pausa entre lotes para respetar límites operativos.
-            </li>
-            <li>
-              <strong>Programación:</strong> puedes lanzar en el momento o programar la campaña con antelación.
-            </li>
-          </ul>
-        </section>
-
-        <section class="landing-section" aria-labelledby="sec-metrics">
-          <h2 id="sec-metrics" class="landing-section-title">Métricas</h2>
-          <p class="landing-section-lead">
-            En listado y detalle verás indicadores claros: total de registros de envío, salida correcta, porcentaje de error
-            y lectura sobre mensajes entregados. En el detalle, un desglose por estado ayuda al diagnóstico sin sustituir los
-            informes oficiales de Meta.
+          <p style="margin-top: 1rem">
+            <a href="https://mali.pe" target="_blank" rel="noopener noreferrer" style="color: var(--lp-primary-light); font-weight: 600; text-decoration: none"
+              >mali.pe</a
+            >
           </p>
-        </section>
-
-        <section class="landing-section" aria-labelledby="sec-contacts">
-          <h2 id="sec-contacts" class="landing-section-title">Contactos y segmentos</h2>
-          <p class="landing-section-lead">
-            Gestión de contactos por área, definición de segmentos y colores para organizar audiencias. Importación masiva
-            desde CSV; hay un archivo de ejemplo en
-            <a href="<%= basePath %>/contacts/sample.csv">/contacts/sample.csv</a>.
-          </p>
-        </section>
-
-        <section class="landing-section" aria-labelledby="sec-inbox">
-          <h2 id="sec-inbox" class="landing-section-title">Conversaciones (inbox)</h2>
-          <ul class="landing-feature-list">
-            <li>
-              <strong>Vista unificada:</strong> lista de chats e hilo de mensajes con el mismo patrón visual del panel.
+        </div>
+        <div>
+          <h4 style="color: white; margin-bottom: 1rem">En esta página</h4>
+          <ul style="list-style: none; color: #94a3b8">
+            <li style="margin-bottom: 0.5rem"><a href="#campanas" style="color: inherit; text-decoration: none">Campañas</a></li>
+            <li style="margin-bottom: 0.5rem"><a href="#inbox" style="color: inherit; text-decoration: none">Inbox</a></li>
+            <li style="margin-bottom: 0.5rem"><a href="#beneficios" style="color: inherit; text-decoration: none">Contactos y segmentos</a></li>
+            <li style="margin-bottom: 0.5rem"><a href="<%= basePath %>/contacts/sample.csv" style="color: inherit; text-decoration: none">CSV de ejemplo</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 style="color: white; margin-bottom: 1rem">Técnico</h4>
+          <ul style="list-style: none; color: #94a3b8">
+            <li style="margin-bottom: 0.5rem">
+              <a href="<%= basePath %>/health" target="_blank" rel="noopener" style="color: inherit; text-decoration: none">Estado (/health)</a>
             </li>
-            <li>
-              <strong>Filtros:</strong> por segmento, búsqueda en el contenido de los mensajes, no leídos, modo bot o atención
-              humana (asesor).
+            <li style="margin-bottom: 0.5rem">
+              <a href="#seguridad" style="color: inherit; text-decoration: none">Webhook y seguridad</a>
             </li>
-            <li>
-              <strong>Ventana de 24 h:</strong> las respuestas libres respetan la ventana de servicio de WhatsApp respecto al
-              último mensaje del usuario.
-            </li>
-            <li>
-              <strong>IA por área:</strong> cuando está habilitada en configuración, el modo bot puede bloquear respuestas
-              manuales hasta pasar a atención humana.
+            <li style="margin-bottom: 0.5rem"><a href="#ia" style="color: inherit; text-decoration: none">IA (Groq)</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 style="color: white; margin-bottom: 1rem">Acceso</h4>
+          <ul style="list-style: none; color: #94a3b8">
+            <li style="margin-bottom: 0.5rem">
+              <a href="<%= basePath %>/login" style="color: inherit; text-decoration: none">Ingresar al panel</a>
             </li>
           </ul>
-        </section>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>
+          © <%= new Date().getFullYear() %> Museo de Arte de Lima · Presentación para personal autorizado. WhatsApp es marca
+          de Meta.
+        </p>
+      </div>
+    </footer>
 
-        <section class="landing-section" aria-labelledby="sec-areas">
-          <h2 id="sec-areas" class="landing-section-title">Áreas, acceso y administración</h2>
-          <ul class="landing-feature-list">
-            <li>
-              <strong>Tres áreas de negocio:</strong> TI (desarrollo), PAM y Educación; cada una usa sus credenciales de Meta
-              para envíos.
-            </li>
-            <li>
-              <strong>Acceso institucional:</strong> inicio de sesión con correo <strong>@mali.pe</strong>; los datos del panel
-              quedan acotados al área del usuario.
-            </li>
-            <li>
-              <strong>Usuario master:</strong> puede administrar usuarios y credenciales Meta desde el panel cuando la
-              autenticación está activa.
-            </li>
-          </ul>
-        </section>
+    <script>
+      (function () {
+        var reveals = document.querySelectorAll('.landing-marketing .reveal, .landing-marketing .reveal-left, .landing-marketing .reveal-right');
+        var observer = new IntersectionObserver(
+          function (entries) {
+            entries.forEach(function (entry) {
+              if (entry.isIntersecting) entry.target.classList.add('active');
+            });
+          },
+          { threshold: 0.15, rootMargin: '0px 0px -50px 0px' }
+        );
+        reveals.forEach(function (el) {
+          observer.observe(el);
+        });
 
-        <section class="landing-section" aria-labelledby="sec-ops">
-          <h2 id="sec-ops" class="landing-section-title">Operación e infraestructura</h2>
-          <ul class="landing-feature-list">
-            <li>
-              <strong>Webhook:</strong> recepción de estados <code>sent</code>, <code>delivered</code>, <code>read</code> y
-              <code>failed</code> desde Meta (<code>/webhook</code>).
-            </li>
-            <li>
-              <strong>Salud del servicio:</strong> <code>/health</code> comprueba aplicación y base de datos.
-            </li>
-            <li>
-              <strong>Datos:</strong> PostgreSQL con migraciones al arranque; despliegue habitual con Docker Compose.
-            </li>
-          </ul>
-        </section>
+        document.querySelectorAll('.landing-marketing a[href^="#"]').forEach(function (anchor) {
+          anchor.addEventListener('click', function (e) {
+            var href = anchor.getAttribute('href');
+            if (!href || href === '#' || href.length < 2) return;
+            var target = document.querySelector(href);
+            if (target) {
+              e.preventDefault();
+              target.scrollIntoView({ behavior: 'smooth' });
+            }
+          });
+        });
 
-        <footer class="landing-footer card">
-          <p class="landing-footer-note">Herramienta de uso interno del Museo de Arte de Lima (MALI).</p>
-          <nav aria-label="Pie de página">
-            <a class="landing-footer-link" href="<%= basePath %>/login">Ingresar</a>
-          </nav>
-        </footer>
-      </main>
-    </div>
+        var navbar = document.querySelector('.landing-marketing .navbar');
+        if (navbar) {
+          window.addEventListener('scroll', function () {
+            if (window.scrollY > 100) {
+              navbar.style.background = 'rgba(255,255,255,0.95)';
+              navbar.style.boxShadow = '0 4px 20px rgba(0,0,0,0.05)';
+            } else {
+              navbar.style.background = 'rgba(255,255,255,0.8)';
+              navbar.style.boxShadow = 'none';
+            }
+          });
+        }
+
+        setTimeout(function () {
+          reveals.forEach(function (el) {
+            var rect = el.getBoundingClientRect();
+            if (rect.top < window.innerHeight * 0.85) el.classList.add('active');
+          });
+        }, 200);
+      })();
+    </script>
   </body>
 </html>

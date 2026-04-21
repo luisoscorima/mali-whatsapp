@@ -1,0 +1,675 @@
+/* Landing pública /landing — estilos aislados (no depender de styles.css del panel) */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --lp-primary: #2563eb;
+  --lp-primary-dark: #1d4ed8;
+  --lp-primary-light: #60a5fa;
+  --lp-accent: #10b981;
+  --lp-dark: #0f172a;
+  --lp-dark-light: #1e293b;
+  --lp-gray: #475569;
+  --lp-gray-light: #94a3b8;
+  --lp-bg-light: #f8fafc;
+  --lp-bg-white: #ffffff;
+  --lp-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --lp-shadow-md: 0 8px 20px rgba(0, 0, 0, 0.08);
+  --lp-shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.12);
+  --lp-radius: 24px;
+  --lp-radius-sm: 16px;
+}
+
+body.landing-marketing {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--lp-dark-light);
+  background-color: var(--lp-bg-light);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.landing-marketing h1 {
+  font-weight: 800;
+  font-size: clamp(2.2rem, 8vw, 3.8rem);
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  margin-bottom: 1.5rem;
+}
+
+.landing-marketing h2 {
+  font-weight: 700;
+  font-size: clamp(1.8rem, 6vw, 2.8rem);
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  margin-bottom: 1.25rem;
+}
+
+.landing-marketing h3 {
+  font-weight: 600;
+  font-size: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.landing-marketing p {
+  font-size: 1.125rem;
+  color: var(--lp-gray);
+  margin-bottom: 1.5rem;
+}
+
+.landing-marketing .container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  width: 100%;
+}
+
+.landing-marketing .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--lp-primary);
+  color: white;
+  font-weight: 600;
+  padding: 1rem 2.2rem;
+  border-radius: 60px;
+  text-decoration: none;
+  transition: all 0.25s ease;
+  border: none;
+  cursor: pointer;
+  font-size: 1.05rem;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+}
+
+.landing-marketing .btn i {
+  font-size: 0.9rem;
+  transition: transform 0.2s ease;
+}
+
+.landing-marketing .btn:hover {
+  background: var(--lp-primary-dark);
+  transform: translateY(-4px);
+  box-shadow: 0 15px 30px rgba(37, 99, 235, 0.35);
+}
+
+.landing-marketing .btn:hover i {
+  transform: translateX(4px);
+}
+
+.landing-marketing .btn-outline {
+  background: transparent;
+  color: var(--lp-dark-light);
+  box-shadow: none;
+  border: 1.5px solid var(--lp-gray-light);
+}
+
+.landing-marketing .btn-outline:hover {
+  background: rgba(37, 99, 235, 0.05);
+  color: var(--lp-primary-dark);
+  border-color: var(--lp-primary);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+}
+
+.landing-marketing .btn-outline-light {
+  background: transparent;
+  color: white;
+  box-shadow: none;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+}
+
+.landing-marketing .btn-outline-light:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: white;
+  transform: translateY(-4px);
+}
+
+.landing-marketing section {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  padding: 5rem 0;
+  overflow: hidden;
+}
+
+.landing-marketing .section-dark {
+  background: linear-gradient(145deg, #0b1120 0%, #1a2538 100%);
+  color: white;
+}
+
+.landing-marketing .section-dark p {
+  color: #cbd5e1;
+}
+
+.landing-marketing .section-dark .text-muted {
+  color: #94a3b8;
+}
+
+.landing-marketing .section-light {
+  background-color: var(--lp-bg-white);
+}
+
+.landing-marketing .section-gray {
+  background-color: var(--lp-bg-light);
+}
+
+.landing-marketing .section-accent-gradient {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+}
+
+/* iPhone mock */
+.landing-marketing .pca-hold.iphone-6 {
+  width: 154px;
+  padding: 3px;
+  border-radius: 16.95px;
+  overflow: visible;
+  filter: drop-shadow(0 20px 25px rgba(0, 0, 0, 0.25));
+  transition: filter 0.3s ease;
+}
+
+.landing-marketing .pca-hold.iphone-6 .pca-main {
+  display: block;
+  position: relative;
+  background-color: #1d1f20;
+  border: 4.5px solid #1d2d2d;
+  border-top: 34.5px solid #1d2d2d;
+  border-bottom: 35.4px solid #1d2d2d;
+  border-radius: 16.95px;
+  height: 307.8px;
+  box-shadow: 0 0 0 1.5px #c6c7ca;
+  overflow: hidden;
+}
+
+.landing-marketing .pca-hold.iphone-6.iphone-6--on .pca-main {
+  background-color: #efefef;
+}
+
+.landing-marketing .pca-hold.iphone-6 .pca-main::after {
+  content: '';
+  position: absolute;
+  top: -19.5px;
+  left: 55%;
+  transform: translate(-27px, 0);
+  width: 4.5px;
+  height: 4.5px;
+  background-color: #959595;
+  border-radius: 100%;
+}
+
+.landing-marketing .pca-hold.iphone-6 .pca-main::before {
+  content: '';
+  position: absolute;
+  top: -7.5px;
+  left: 55%;
+  opacity: 1;
+  width: 30px;
+  height: 1.5px;
+  transform: translate(-13.5px, -11.25px);
+  border-radius: 1.5px;
+  background-color: #959595;
+}
+
+.landing-marketing .pca-hold.iphone-6 .pca-inner {
+  display: block;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+}
+
+.landing-marketing .pca-hold.iphone-6.iphone-6--on .pca-inner {
+  box-shadow: inset 0 0 30px rgba(255, 255, 255, 0.4);
+}
+
+.landing-marketing .pca-hold.iphone-6 .pca-sub {
+  display: block;
+  text-align: center;
+  position: relative;
+  height: 0;
+}
+
+.landing-marketing .pca-hold.iphone-6 .pca-sub .pca-bot {
+  border-radius: 100%;
+  width: 21px;
+  height: 21px;
+  display: block;
+  margin: 0 auto;
+  background-color: transparent;
+  z-index: 2;
+  box-shadow: 0 0 0 1.65px #636670;
+  transform: translate(0, -28.2px);
+}
+
+.landing-marketing .shine-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.landing-marketing .shine-effect::before {
+  content: '';
+  display: block;
+  position: absolute;
+  top: 0;
+  left: -100%;
+  z-index: 3;
+  width: 50%;
+  height: 100%;
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.4) 100%);
+  transform: skewX(-25deg);
+  pointer-events: none;
+}
+
+.landing-marketing .shine-effect:hover::before {
+  animation: lp-shine 1.2s forwards;
+}
+
+@keyframes lp-shine {
+  100% {
+    left: 150%;
+  }
+}
+
+@keyframes lp-float {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-15px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.landing-marketing .float-animation {
+  animation: lp-float 7s ease-in-out infinite;
+}
+
+.landing-marketing .float-delay {
+  animation: lp-float 7s ease-in-out 1s infinite;
+}
+
+.landing-marketing .laptop-device {
+  position: relative;
+  width: 100%;
+  max-width: 650px;
+  filter: drop-shadow(0 30px 30px rgba(0, 0, 0, 0.3));
+  transition: transform 0.8s ease;
+}
+
+.landing-marketing .laptop-screen {
+  background: #1a1a1a;
+  border-radius: 12px 12px 8px 8px;
+  padding: 12px 10px 6px 10px;
+  border: 1px solid #444;
+  box-shadow: inset 0 0 0 1px #2a2a2a;
+}
+
+.landing-marketing .laptop-screen img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 4px;
+  background: #f1f5f9;
+}
+
+.landing-marketing .laptop-base {
+  background: #cbd5e1;
+  height: 14px;
+  border-radius: 0 0 20px 20px;
+  margin-top: -2px;
+  box-shadow: 0 6px 0 #94a3b8;
+}
+
+.landing-marketing .laptop-notch {
+  width: 70px;
+  height: 5px;
+  background: #64748b;
+  margin: 8px auto 0;
+  border-radius: 5px;
+}
+
+.landing-marketing .grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4rem;
+  align-items: center;
+}
+
+.landing-marketing .grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+  margin-top: 3rem;
+}
+
+.landing-marketing .grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2rem;
+  margin-top: 2rem;
+}
+
+.landing-marketing .benefit-card {
+  background: white;
+  padding: 2rem 1.8rem;
+  border-radius: var(--lp-radius-sm);
+  box-shadow: var(--lp-shadow-sm);
+  transition: all 0.3s ease;
+  border: 1px solid #e2e8f0;
+  height: 100%;
+}
+
+.landing-marketing .benefit-card:hover {
+  transform: translateY(-8px);
+  box-shadow: var(--lp-shadow-lg);
+  border-color: var(--lp-primary-light);
+}
+
+.landing-marketing .benefit-icon {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, var(--lp-primary) 0%, var(--lp-primary-light) 100%);
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+  color: white;
+  font-size: 1.8rem;
+}
+
+.landing-marketing .benefit-card h4 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.landing-marketing .benefit-card p {
+  font-size: 1rem;
+  color: var(--lp-gray);
+  margin-bottom: 0;
+}
+
+.landing-marketing .stats-container {
+  display: flex;
+  gap: 3rem;
+  margin-top: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.landing-marketing .stat-item {
+  text-align: left;
+}
+
+.landing-marketing .stat-number {
+  font-size: clamp(1.5rem, 3vw, 2.5rem);
+  font-weight: 800;
+  color: var(--lp-primary);
+  line-height: 1.2;
+}
+
+.landing-marketing .stat-number--text {
+  font-size: clamp(1.1rem, 2.5vw, 1.85rem);
+}
+
+.landing-marketing .stat-label {
+  font-size: 1rem;
+  color: var(--lp-gray);
+  font-weight: 500;
+}
+
+.landing-marketing .section-dark .stat-label {
+  color: #cbd5e1;
+}
+
+.landing-marketing .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--lp-primary);
+  padding: 0.4rem 1.2rem;
+  border-radius: 60px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  backdrop-filter: blur(4px);
+}
+
+.landing-marketing .badge-light {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.landing-marketing .feature-list {
+  list-style: none;
+  margin: 2rem 0;
+}
+
+.landing-marketing .feature-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.2rem;
+  font-size: 1.1rem;
+}
+
+.landing-marketing .feature-list i {
+  color: var(--lp-accent);
+  font-size: 1.3rem;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.landing-marketing .navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 1.2rem 2rem;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.landing-marketing .logo {
+  font-weight: 800;
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+  color: var(--lp-dark);
+}
+
+.landing-marketing .logo span {
+  color: var(--lp-primary);
+}
+
+.landing-marketing .nav-links {
+  display: flex;
+  gap: 2.5rem;
+  align-items: center;
+}
+
+.landing-marketing .nav-links a {
+  text-decoration: none;
+  color: var(--lp-dark-light);
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.landing-marketing .nav-links a:hover {
+  color: var(--lp-primary);
+}
+
+.landing-marketing .footer {
+  background: var(--lp-dark);
+  color: white;
+  padding: 4rem 2rem 2rem;
+}
+
+.landing-marketing .footer-content {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 3rem;
+}
+
+.landing-marketing .footer-bottom {
+  max-width: 1280px;
+  margin: 3rem auto 0;
+  padding-top: 2rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+  color: var(--lp-gray-light);
+  font-size: 0.9rem;
+}
+
+.landing-marketing .reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.landing-marketing .reveal.active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.landing-marketing .reveal-left {
+  opacity: 0;
+  transform: translateX(-30px);
+  transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.landing-marketing .reveal-left.active {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.landing-marketing .reveal-right {
+  opacity: 0;
+  transform: translateX(30px);
+  transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.landing-marketing .reveal-right.active {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.landing-marketing .text-center {
+  text-align: center;
+}
+
+.landing-marketing .mt-4 {
+  margin-top: 2rem;
+}
+
+.landing-marketing .relative {
+  position: relative;
+}
+
+.landing-marketing code {
+  font-family: ui-monospace, 'IBM Plex Mono', monospace;
+  font-size: 0.85em;
+  padding: 0.1em 0.35em;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 1024px) {
+  .landing-marketing .grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .landing-marketing .grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .landing-marketing .footer-content {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .landing-marketing section {
+    padding: 4rem 0;
+    min-height: auto;
+  }
+  .landing-marketing .container {
+    padding: 0 1.5rem;
+  }
+  .landing-marketing .grid-2 {
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+  }
+  .landing-marketing .grid-3,
+  .landing-marketing .grid-4 {
+    grid-template-columns: 1fr;
+  }
+  .landing-marketing .navbar {
+    padding: 1rem 1.5rem;
+  }
+  .landing-marketing .nav-links {
+    display: none;
+  }
+  .landing-marketing .stats-container {
+    flex-wrap: wrap;
+    gap: 2rem;
+  }
+  .landing-marketing h1 br,
+  .landing-marketing h2 br {
+    display: none;
+  }
+  .landing-marketing .btn {
+    padding: 0.9rem 1.8rem;
+    white-space: normal;
+  }
+  .landing-marketing .btn-outline {
+    margin-left: 0;
+    margin-top: 1rem;
+  }
+  .landing-marketing .hero-buttons {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .landing-marketing .hero-buttons .btn-outline-light {
+    margin-left: 0;
+  }
+  .landing-marketing .laptop-device {
+    max-width: 100%;
+  }
+  .landing-marketing .footer-content {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .landing-marketing h1 {
+    font-size: 2rem;
+  }
+  .landing-marketing h2 {
+    font-size: 1.8rem;
+  }
+  .landing-marketing .container {
+    padding: 0 1.2rem;
+  }
+}
