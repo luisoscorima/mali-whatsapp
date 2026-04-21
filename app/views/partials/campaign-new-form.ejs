@@ -18,28 +18,55 @@
       <% if (segments.length === 0) { %>
       <p class="inline-warn">Añade segmentos en la sección <strong>Segmentos</strong>.</p>
       <% } else { %>
-      <fieldset class="campaign-segments-fieldset">
-        <legend class="field-label">Segmentos (unión)</legend>
-        <p class="inline-help campaign-segments-hint">Marca uno o más segmentos; se incluyen contactos que pertenezcan a <strong>cualquiera</strong> de ellos.</p>
-        <div class="campaign-segments-grid">
-          <% segments.forEach(function (segment) { %>
-          <label class="field field--row campaign-segment-label">
-            <input type="checkbox" name="campaignSegment" value="<%= segment.value %>" />
-            <span><%= segment.label %></span>
-          </label>
-          <% }) %>
+      <div class="campaign-audience-stack">
+        <fieldset class="campaign-segments-fieldset campaign-segments-panel">
+          <legend class="visually-hidden">Elegir segmentos para la campaña</legend>
+          <div class="campaign-segments-head">
+            <span class="campaign-step-badge" aria-hidden="true">1</span>
+            <div>
+              <span class="campaign-destinatarios-title">Segmentos</span>
+              <p class="campaign-panel-lead campaign-panel-lead--tight">
+                Elige uno o más listados. Los contactos en <strong>cualquiera</strong> de ellos forman el conjunto base (unión).
+              </p>
+            </div>
+          </div>
+          <div class="campaign-segments-grid" role="group" aria-label="Segmentos disponibles">
+            <% segments.forEach(function (segment) { %>
+            <label class="campaign-segment-tile">
+              <input type="checkbox" name="campaignSegment" value="<%= segment.value %>" class="campaign-segment-input" />
+              <span class="campaign-segment-text"><%= segment.label %></span>
+            </label>
+            <% }) %>
+          </div>
+        </fieldset>
+
+        <div class="campaign-destinatarios-block">
+          <div class="campaign-destinatarios-head">
+            <span class="campaign-step-badge" aria-hidden="true">2</span>
+            <div>
+              <span class="campaign-destinatarios-title">Destinatarios</span>
+              <p class="campaign-destinatarios-sub">Carga la lista y, si hace falta, excluye contactos uno a uno.</p>
+            </div>
+          </div>
+          <div class="campaign-recipients-actions">
+            <button type="button" class="campaign-load-btn" id="campaign-load-recipients">Cargar lista de contactos</button>
+            <span id="campaign-recipients-status" class="campaign-recipients-status" aria-live="polite"></span>
+          </div>
+          <div class="campaign-recipients-shell">
+            <div id="campaign-recipients-toolbar" class="campaign-recipients-toolbar" hidden>
+              <div class="campaign-recipients-toolbar-start">
+                <span class="campaign-recipients-toolbar-label">Lista</span>
+                <span id="campaign-recipients-count" class="campaign-recipients-count"></span>
+              </div>
+              <div class="campaign-recipients-toolbar-actions">
+                <button type="button" class="small-btn secondary" id="campaign-select-all">Marcar todos</button>
+                <button type="button" class="small-btn secondary" id="campaign-select-none">Ninguno</button>
+              </div>
+            </div>
+            <div id="campaign-recipients-list" class="campaign-recipients-list" hidden role="group" aria-label="Lista de destinatarios"></div>
+          </div>
         </div>
-      </fieldset>
-      <div class="campaign-recipients-actions">
-        <button type="button" class="secondary" id="campaign-load-recipients">Cargar destinatarios</button>
-        <span id="campaign-recipients-status" class="inline-help" aria-live="polite"></span>
       </div>
-      <div id="campaign-recipients-toolbar" class="campaign-recipients-toolbar" hidden>
-        <button type="button" class="small-btn" id="campaign-select-all">Marcar todos</button>
-        <button type="button" class="small-btn" id="campaign-select-none">Desmarcar todos</button>
-        <span id="campaign-recipients-count" class="campaign-recipients-count"></span>
-      </div>
-      <div id="campaign-recipients-list" class="campaign-recipients-list" hidden role="group" aria-label="Destinatarios"></div>
       <% } %>
     </div>
 

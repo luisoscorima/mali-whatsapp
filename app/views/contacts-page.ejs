@@ -63,23 +63,33 @@
     </label>
   </form>
   <% if (view === 'list' && contacts && contacts.length && segments.length) { %>
-  <form
-    id="contacts-bulk-segment-form"
-    method="POST"
-    action="<%= basePath %>/contacts/bulk-add-segment"
-    class="inbox-filters contact-bulk-bar"
-  >
-    <label class="field field--inbox field--grow">
-      <span class="field-label">Asignar seleccionados a</span>
-      <select name="segment_slug" class="inbox-select" required>
-        <option value="">— Segmento —</option>
-        <% segments.forEach(function (seg) { %>
-        <option value="<%= seg.value %>"><%= seg.label %></option>
-        <% }); %>
-      </select>
-    </label>
-    <button type="submit" class="small-btn secondary">Añadir a segmento</button>
-  </form>
+  <div class="contact-bulk-toolbar" aria-label="Asignación masiva a segmento">
+    <div class="contact-bulk-toolbar__head">
+      <span class="contact-bulk-toolbar__title">Asignación masiva</span>
+      <span class="contact-bulk-count" id="contact-bulk-count" aria-live="polite">0 seleccionados</span>
+    </div>
+    <div class="contact-bulk-toolbar__controls">
+      <button type="button" class="small-btn ghost" id="contact-bulk-select-all">Seleccionar todos</button>
+      <button type="button" class="small-btn ghost" id="contact-bulk-select-none">Quitar selección</button>
+    </div>
+    <form
+      id="contacts-bulk-segment-form"
+      method="POST"
+      action="<%= basePath %>/contacts/bulk-add-segment"
+      class="contact-bulk-toolbar__apply"
+    >
+      <label class="field field--inbox field--grow contact-bulk-field">
+        <span class="field-label">Añadir seleccionados a</span>
+        <select name="segment_slug" class="inbox-select" required>
+          <option value="">— Elegir segmento —</option>
+          <% segments.forEach(function (seg) { %>
+          <option value="<%= seg.value %>"><%= seg.label %></option>
+          <% }); %>
+        </select>
+      </label>
+      <button type="submit" class="small-btn primary contact-bulk-submit">Aplicar</button>
+    </form>
+  </div>
   <% } %>
   <% if (!contacts || contacts.length === 0) { %>
   <p class="empty-state inbox-empty-list"><%= _segF || _qF ? 'No hay contactos con estos filtros.' : 'No hay contactos en esta área.' %></p>
@@ -88,15 +98,16 @@
     <% contacts.forEach(function (c) { %>
     <li class="inbox-chat-item inbox-chat-item--with-bulk <%= _contactSel === c.id ? 'is-active' : '' %>">
       <% if (view === 'list' && segments.length) { %>
-      <input
-        type="checkbox"
-        class="contact-bulk-cb"
-        name="contact_ids"
-        value="<%= c.id %>"
-        form="contacts-bulk-segment-form"
-        aria-label="Seleccionar para asignar a segmento"
-        onclick="event.stopPropagation();"
-      />
+      <label class="contact-bulk-hit">
+        <input
+          type="checkbox"
+          class="contact-bulk-cb"
+          name="contact_ids"
+          value="<%= c.id %>"
+          form="contacts-bulk-segment-form"
+        />
+        <span class="sr-only">Seleccionar contacto</span>
+      </label>
       <% } %>
       <a class="inbox-chat-link" href="<%= basePath %>/contacts/<%= c.id %><%= _cq %>">
         <span class="inbox-chat-link-main">
@@ -113,7 +124,7 @@
               <span class="inbox-meta-muted">Sin segmento</span>
               <% } else { %>
               <% _slugs.forEach(function (slug) { %>
-              <span class="inbox-chat-segment" data-seg-tone="<%= contactSegmentColorKey(slug) %>"><%= contactSegmentLabel(slug) %></span>
+              <span class="inbox-chat-segment inbox-chat-segment--contact-pill" data-seg-tone="<%= contactSegmentColorKey(slug) %>"><%= contactSegmentLabel(slug) %></span>
               <% }); %>
               <% } %>
             </span>
@@ -187,7 +198,7 @@
           <% if (segments.length === 0) { %>
           <p class="inline-warn">Define segmentos en <strong>Segmentos</strong>.</p>
           <% } else { %>
-          <div class="segment-checkbox-grid">
+          <div class="segment-checkbox-grid segment-checkbox-grid--responsive">
             <% segments.forEach(function (segment) { %>
             <label class="segment-checkbox-label">
               <input type="checkbox" name="segments" value="<%= segment.value %>" />
@@ -252,7 +263,7 @@
         </label>
         <fieldset class="field segment-chips-fieldset">
           <legend class="field-label">Segmentos</legend>
-          <div class="segment-checkbox-grid">
+          <div class="segment-checkbox-grid segment-checkbox-grid--responsive">
             <% const _editSlugs = contact.segment_slugs || []; %>
             <% segments.forEach(function (segment) { %>
             <label class="segment-checkbox-label">
@@ -286,6 +297,40 @@
         if (el.form) el.form.submit();
       });
     });
+
+    var countEl = document.getElementById('contact-bulk-count');
+    var cbs = document.querySelectorAll('.contact-bulk-cb');
+    if (countEl && cbs.length) {
+      function updateBulkCount() {
+        var n = 0;
+        cbs.forEach(function (cb) {
+          if (cb.checked) n += 1;
+        });
+        countEl.textContent = n === 1 ? '1 seleccionado' : n + ' seleccionados';
+      }
+      cbs.forEach(function (cb) {
+        cb.addEventListener('change', updateBulkCount);
+      });
+      var allBtn = document.getElementById('contact-bulk-select-all');
+      var noneBtn = document.getElementById('contact-bulk-select-none');
+      if (allBtn) {
+        allBtn.addEventListener('click', function () {
+          cbs.forEach(function (cb) {
+            cb.checked = true;
+          });
+          updateBulkCount();
+        });
+      }
+      if (noneBtn) {
+        noneBtn.addEventListener('click', function () {
+          cbs.forEach(function (cb) {
+            cb.checked = false;
+          });
+          updateBulkCount();
+        });
+      }
+      updateBulkCount();
+    }
   })();
 </script>
 <%- include('layouts/inbox-shell-end') %>

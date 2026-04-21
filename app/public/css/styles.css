@@ -528,75 +528,296 @@ html[data-theme='dark'] .nav-link.is-active {
   margin-top: 6px;
 }
 
+.campaign-audience-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 .campaign-segments-fieldset {
   border: none;
   padding: 0;
-  margin: 0 0 12px;
+  margin: 0;
   min-width: 0;
 }
 
-.campaign-segments-hint {
-  margin: 0 0 10px;
+.campaign-segments-panel {
+  padding: 16px 16px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.campaign-segments-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.campaign-panel-lead {
+  margin: 0 0 14px;
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.campaign-panel-lead--tight {
+  margin: 4px 0 0;
 }
 
 .campaign-segments-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
 }
 
-.campaign-segment-label {
+.campaign-segment-tile {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   margin: 0;
-  font-weight: 500;
+  padding: 12px 12px 12px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-strong);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.campaign-segment-tile:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-soft);
+}
+
+.campaign-segment-tile:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.campaign-segment-tile:has(.campaign-segment-input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: none;
+}
+
+.campaign-segment-input {
+  width: auto;
+  margin-top: 3px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+
+.campaign-segment-text {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.35;
+}
+
+.campaign-destinatarios-block {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+  box-shadow: var(--shadow);
+}
+
+.campaign-destinatarios-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.campaign-step-badge {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  border: 1px solid rgba(13, 110, 92, 0.25);
+}
+
+html[data-theme='dark'] .campaign-step-badge {
+  border-color: rgba(45, 212, 191, 0.35);
+}
+
+.campaign-destinatarios-title {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+}
+
+.campaign-destinatarios-sub {
+  margin: 4px 0 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+  line-height: 1.4;
 }
 
 .campaign-recipients-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px 14px;
-  margin-top: 12px;
+  gap: 12px 16px;
+}
+
+.campaign-load-btn {
+  padding: 11px 20px;
+}
+
+.campaign-recipients-status {
+  font-size: 0.86rem;
+  color: var(--muted);
+  min-height: 1.2em;
+}
+
+.campaign-recipients-status:not(:empty) {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.campaign-recipients-shell {
+  margin-top: 14px;
 }
 
 .campaign-recipients-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  margin-top: 10px;
+  justify-content: space-between;
+  gap: 10px 14px;
+  padding: 10px 12px;
+  margin-bottom: 0;
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+  background: var(--surface);
 }
 
-.campaign-recipients-count {
-  font-size: 0.85rem;
+.campaign-recipients-toolbar:not([hidden]) + .campaign-recipients-list {
+  margin-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-top: none;
+}
+
+.campaign-recipients-toolbar-start {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+}
+
+.campaign-recipients-toolbar-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
   color: var(--muted);
 }
 
+.campaign-recipients-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.campaign-recipients-toolbar .small-btn.secondary {
+  padding: 7px 14px;
+  font-weight: 600;
+}
+
+.campaign-recipients-count {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
 .campaign-recipients-list {
-  margin-top: 12px;
-  max-height: 320px;
+  max-height: min(52vh, 380px);
   overflow: auto;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-elevated, var(--bg));
+  padding: 6px 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  scrollbar-gutter: stable;
+}
+
+.campaign-recipients-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.campaign-recipients-list::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
 }
 
 .campaign-recipient-row {
-  margin: 0 0 8px;
+  display: flex;
   align-items: flex-start;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s ease;
 }
 
-.campaign-recipient-meta {
-  display: block;
-  line-height: 1.35;
+.campaign-recipient-row:hover {
+  background: rgba(13, 110, 92, 0.06);
+}
+
+html[data-theme='dark'] .campaign-recipient-row:hover {
+  background: rgba(45, 212, 191, 0.08);
+}
+
+.campaign-recipient-row input[type='checkbox'] {
+  width: auto;
+  margin-top: 3px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+
+.campaign-recipient-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
 }
 
 .campaign-recipient-name {
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 0.92rem;
+  line-height: 1.3;
 }
 
 .campaign-recipient-phone {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.campaign-recipients-empty {
+  margin: 0;
+  padding: 20px 14px;
+  text-align: center;
+  font-size: 0.9rem;
   color: var(--muted);
 }
 

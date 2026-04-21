@@ -171,8 +171,12 @@
   function renderRecipients(contacts) {
     if (!recipientsListEl) return;
     if (!contacts.length) {
-      recipientsListEl.innerHTML = '<p class="muted">No hay contactos elegibles (opt-in y activos) en la unión de segmentos.</p>';
+      recipientsListEl.innerHTML =
+        '<p class="campaign-recipients-empty">No hay contactos elegibles (opt-in y activos) en la unión de los segmentos elegidos.</p>';
       recipientsListEl.hidden = false;
+      if (recipientsToolbar) recipientsToolbar.hidden = true;
+      recipientsLoaded = false;
+      updateRecipientCount();
       return;
     }
     const rows = contacts.map(function (c) {
@@ -180,13 +184,15 @@
       const name = c.name != null ? String(c.name) : '';
       const phone = c.phone != null ? String(c.phone) : '';
       return (
-        '<label class="field field--row campaign-recipient-row">' +
+        '<label class="campaign-recipient-row">' +
         '<input type="checkbox" name="recipientContact" value="' +
         id +
         '" checked />' +
-        '<span class="campaign-recipient-meta"><span class="campaign-recipient-name">' +
+        '<span class="campaign-recipient-body">' +
+        '<span class="campaign-recipient-name">' +
         esc(name || '—') +
-        '</span> <span class="mono campaign-recipient-phone">' +
+        '</span>' +
+        '<span class="campaign-recipient-phone mono">' +
         esc(phone) +
         '</span></span>' +
         '</label>'
