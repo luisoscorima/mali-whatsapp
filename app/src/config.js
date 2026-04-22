@@ -110,6 +110,12 @@ module.exports = {
   DISPLAY_TIMEZONE: String(process.env.DISPLAY_TIMEZONE || 'America/Lima').trim() || 'America/Lima',
   MAX_CSV_ROWS: 10000,
   MAX_CSV_BYTES: 5 * 1024 * 1024,
+  /** Retención de filas en audit_logs (borrado automático de eventos más antiguos). Máx. 365. */
+  AUDIT_LOG_RETENTION_DAYS: (() => {
+    const n = Number(process.env.AUDIT_LOG_RETENTION_DAYS || 30);
+    if (!Number.isFinite(n) || n < 1) return 30;
+    return Math.min(365, Math.floor(n));
+  })(),
   s3ChatMedia,
   isS3ChatMediaConfigured,
 };

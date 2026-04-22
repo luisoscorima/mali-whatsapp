@@ -1,4 +1,5 @@
 const { parseAiConfigValue } = require('../utils/aiConfig');
+const { auditLog, AuditEvent } = require('../services/auditLog');
 
 const AREA_SLUGS = new Set(['ti', 'pam', 'educacion']);
 
@@ -61,6 +62,16 @@ function registerSettingsApi(app, ctx) {
     } catch (e) {
       return res.status(500).json({ ok: false, error: e.message || 'Error al guardar' });
     }
+    auditLog(query, {
+      req,
+      event_type: AuditEvent.SETTINGS_AI_CONFIG,
+      message: `Ajustes de IA guardados (área ${area})`,
+      meta: {
+        area,
+        scope: isMaster ? 'full_master' : 'prompt_only',
+        json_keys: isMaster ? Object.keys(body).slice(0, 40) : ['prompt', 'transfer_keyword'],
+      },
+    });
     return res.json({ ok: true });
   });
 
@@ -119,6 +130,12 @@ function registerSettingsApi(app, ctx) {
     } finally {
       client.release();
     }
+    auditLog(query, {
+      req,
+      event_type: AuditEvent.SETTINGS_AI_ENABLE,
+      message: `IA del área ${area} ${enabled ? 'activada' : 'desactivada'} (conversaciones actualizadas)`,
+      meta: { area, enabled, conversations_status: enabled ? 'bot' : 'human' },
+    });
     return res.json({ ok: true });
   });
 }

@@ -49,6 +49,28 @@ async function runMigrations(query) {
   await query(`UPDATE login_logs SET last_seen_at = logged_at WHERE last_seen_at IS NULL`);
 
   await query(`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id BIGSERIAL PRIMARY KEY,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      level VARCHAR(16) NOT NULL DEFAULT 'info',
+      event_type VARCHAR(100) NOT NULL,
+      message TEXT NOT NULL,
+      actor_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      actor_email VARCHAR(160),
+      area VARCHAR(32),
+      client_ip VARCHAR(128),
+      request_id VARCHAR(64),
+      meta JSONB NOT NULL DEFAULT '{}'::jsonb
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_event_type ON audit_logs(event_type)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_level ON audit_logs(level)`);
+  await query(
+    `CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_user ON audit_logs(actor_user_id, created_at DESC) WHERE actor_user_id IS NOT NULL`
+  );
+
+  await query(`
     CREATE TABLE IF NOT EXISTS app_settings (
       area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion', 'global')),
       key TEXT NOT NULL,

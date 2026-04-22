@@ -1,0 +1,77 @@
+<%- include('layouts/inbox-shell-start', {
+  pageTitle: 'En línea ahora · MALI WhatsApp',
+  basePath,
+  appBaseUrl,
+  requireAuth,
+  currentUser,
+  areaLabel,
+  activeNav: typeof activeNav !== 'undefined' ? activeNav : 'admin-users-online',
+  showAdminNav,
+  shellPageClass: 'conversations-page',
+  layoutModifier: 'conversations-inbox--detail',
+  extraHeadScripts: null
+}) %>
+<%- include('partials/admin-sidebar', { basePath, adminSection: 'users-online' }) %>
+<section class="inbox-main" aria-label="Usuarios en línea">
+  <%- include('partials/admin-mobile-nav', { basePath, adminSection: 'users-online' }) %>
+  <div class="inbox-chat-header inbox-chat-header--static">
+    <h1 class="inbox-chat-heading">En línea ahora</h1>
+  </div>
+  <div class="inbox-chat-body inbox-chat-body--form">
+    <div class="card">
+      <p class="card-lead muted" style="margin-top: 0">
+        Solo se listan usuarios con actividad en los últimos <strong><%= typeof onlineIdleMinutes !== 'undefined' ? onlineIdleMinutes : 5 %> minutos</strong>
+        y sesión abierta (sin “Cerrar sesión”). La lista se actualiza sola cada pocos segundos.
+      </p>
+      <p id="admin-online-status" class="muted admin-online-status" aria-live="polite"></p>
+      <ul id="admin-online-list" class="admin-online-list" aria-label="Correos en línea"></ul>
+    </div>
+  </div>
+</section>
+<script>
+(function () {
+  var url = <%- JSON.stringify(typeof onlineApiUrl !== 'undefined' ? onlineApiUrl : '') %>;
+  var pollMs = <%= typeof onlinePollMs !== 'undefined' ? Number(onlinePollMs) || 20000 : 20000 %>;
+  var listEl = document.getElementById('admin-online-list');
+  var statusEl = document.getElementById('admin-online-status');
+  if (!url || !listEl) return;
+
+  function render(users) {
+    listEl.innerHTML = '';
+    if (!users || users.length === 0) {
+      statusEl.textContent = 'Nadie en línea en este momento.';
+      return;
+    }
+    statusEl.textContent = users.length === 1 ? '1 usuario en línea.' : users.length + ' usuarios en línea.';
+    users.forEach(function (u) {
+      var li = document.createElement('li');
+      li.className = 'admin-online-list__item';
+      var dot = document.createElement('span');
+      dot.className = 'admin-online-dot';
+      dot.setAttribute('aria-hidden', 'true');
+      var email = document.createElement('span');
+      email.className = 'admin-online-list__email';
+      email.textContent = u.email || '';
+      li.appendChild(dot);
+      li.appendChild(email);
+      listEl.appendChild(li);
+    });
+  }
+
+  function tick() {
+    fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (j && j.ok && Array.isArray(j.users)) render(j.users);
+        else render([]);
+      })
+      .catch(function () {
+        if (statusEl) statusEl.textContent = 'No se pudo actualizar la lista.';
+      });
+  }
+
+  tick();
+  setInterval(tick, pollMs);
+})();
+</script>
+<%- include('layouts/inbox-shell-end') %>

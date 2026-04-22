@@ -14,6 +14,7 @@ const {
 } = require('./middleware/auth');
 const { globalLimiter } = require('./middleware/limiters');
 const { createRegisterRoutes } = require('./routes/registerRoutes');
+const { purgeOldAuditLogs } = require('./services/auditLog');
 
 function createApp() {
   const app = express();
@@ -124,6 +125,15 @@ function createApp() {
       console.error(JSON.stringify({ level: 'error', message: 'promoteDueScheduledCampaigns', error: String(err?.message || err) }));
     });
   }, config.CAMPAIGN_SCHEDULE_POLL_MS);
+
+  const auditPurgeMs = 24 * 60 * 60 * 1000;
+  setInterval(() => {
+    purgeOldAuditLogs(query).catch((err) => {
+      console.error(
+        JSON.stringify({ level: 'error', message: 'purgeOldAuditLogs', error: String(err?.message || err) })
+      );
+    });
+  }, auditPurgeMs);
 
   return { app, resumeQueuedCampaigns, promoteDueScheduledCampaigns };
 }

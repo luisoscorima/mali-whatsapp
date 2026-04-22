@@ -1,4 +1,5 @@
 const { logError, logWarn } = require('../utils/logger');
+const { auditLog, AuditEvent, phoneMetaTail } = require('../services/auditLog');
 const { sanitizeApiResponse, sanitizeMediaOutboundPayload } = require('../utils/apiSanitize');
 const { saveOutboundChatMediaFile } = require('../utils/chatMediaStorage');
 const { conversationReplyLimiter, conversationMediaUpload } = require('../middleware/limiters');
@@ -104,6 +105,20 @@ function registerConversations(app, ctx) {
         contactId,
         area,
       ]);
+      auditLog(query, {
+        req,
+        event_type: AuditEvent.CONTACT_LEAD_SCORE,
+        message: clear
+          ? `Lead score borrado (conversación ${conversationId})`
+          : `Lead score ${score}/5 (conversación ${conversationId})`,
+        meta: {
+          conversation_id: conversationId,
+          contact_id: contactId,
+          area,
+          cleared: clear,
+          score: clear ? null : score,
+        },
+      });
     } catch (error) {
       logError(req, 'Error guardando lead score', error, { conversationId });
       return res.status(500).send(`No se pudo guardar: ${error.message}`);
@@ -142,6 +157,12 @@ function registerConversations(app, ctx) {
     if (r.rowCount === 0) {
       return res.status(404).json({ ok: false, error: 'No encontrada' });
     }
+    auditLog(query, {
+      req,
+      event_type: AuditEvent.CONVERSATION_MODE,
+      message: `Modo de conversación ${conversationId} → ${status}`,
+      meta: { conversation_id: conversationId, area, new_status: status },
+    });
     return res.json({ ok: true, status });
   });
 
@@ -199,6 +220,17 @@ function registerConversations(app, ctx) {
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       );
       res.setHeader('Content-Disposition', `attachment; filename="${baseName}.xlsx"`);
+      auditLog(query, {
+        req,
+        event_type: AuditEvent.CONVERSATION_EXPORT,
+        message: `Exportación de conversación ${conversationId}`,
+        meta: {
+          conversation_id: conversationId,
+          area,
+          phone_tail: phoneMetaTail(conv.phone),
+          message_count: messagesResult.rows.length,
+        },
+      });
       return res.send(buf);
     } catch (error) {
       logError(req, 'Error exportando conversacion', error, { conversationId });
@@ -283,6 +315,17 @@ function registerConversations(app, ctx) {
             `UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1`,
             [conversationId]
           );
+          auditLog(query, {
+            req,
+            event_type: AuditEvent.CONVERSATION_REPLY,
+            message: `Respuesta WhatsApp (texto) en conversación ${conversationId}`,
+            meta: {
+              conversation_id: conversationId,
+              area,
+              phone_tail: phoneMetaTail(conversation.phone),
+              text_preview: text.slice(0, 120),
+            },
+          });
           return res.redirect(redirectUrl);
         }
 
@@ -386,6 +429,20 @@ function registerConversations(app, ctx) {
           `UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1`,
           [conversationId]
         );
+
+        auditLog(query, {
+          req,
+          event_type: AuditEvent.CONVERSATION_REPLY,
+          message: `Respuesta WhatsApp (${uploadResult.waType}) en conversación ${conversationId}`,
+          meta: {
+            conversation_id: conversationId,
+            area,
+            phone_tail: phoneMetaTail(conversation.phone),
+            media_type: uploadResult.waType,
+            filename: String(file.originalname || '').slice(0, 200),
+            has_caption: Boolean(captionForMedia),
+          },
+        });
 
         return res.redirect(redirectUrl);
       } catch (error) {

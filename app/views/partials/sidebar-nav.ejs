@@ -31,6 +31,8 @@
     <% if (typeof showAdminNav !== 'undefined' && showAdminNav) { %>
     <span class="nav-admin-label" role="presentation">Admin</span>
     <a class="nav-link <%= nav === 'admin-users' ? 'is-active' : '' %>" href="<%= basePath %>/admin/users">Usuarios</a>
+    <a class="nav-link <%= nav === 'admin-users-online' ? 'is-active' : '' %>" href="<%= basePath %>/admin/users-online">En línea</a>
+    <a class="nav-link <%= nav === 'admin-audit-logs' ? 'is-active' : '' %>" href="<%= basePath %>/admin/audit-logs">Bitácora</a>
     <a class="nav-link <%= nav === 'admin-meta' ? 'is-active' : '' %>" href="<%= basePath %>/admin/meta">Credenciales Meta</a>
     <% } %>
   </nav>

@@ -6,6 +6,8 @@ const { parseUsersBulkCsvBuffer, parseUsersBulkXlsxBuffer } = require('../utils/
 const { usersBulkImportLimiter, usersBulkImportUpload } = require('../middleware/limiters');
 const { refreshMetaSettingsCache, KEYS } = require('../services/metaSettingsCache');
 const { formatExportDate } = require('../utils/datetimeDisplay');
+const { auditLog, AuditEvent } = require('../services/auditLog');
+const { auditCreatedDateSql } = require('../utils/auditSqlDate');
 
 function adminLocals(req, res, ctx, extra) {
   const { config, resolveAppBaseUrl, appPath } = ctx;
@@ -26,27 +28,81 @@ function parseQueryInt(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Actividad reciente para mostrar "En línea" en la columna de cierre (master). */
-const LOGIN_LOG_ONLINE_IDLE_MS = 5 * 60 * 1000;
+/** Misma ventana que “en línea” en login_logs (coherente con middleware de last_seen). */
+const ONLINE_USER_IDLE_MINUTES = 5;
 
-function enrichLoginLogRows(rows) {
-  const now = Date.now();
-  return rows.map((row) => {
-    const inicioDisplay = formatExportDate(row.logged_at) || '—';
-    let cierreDisplay;
-    if (row.logged_out_at) {
-      cierreDisplay = formatExportDate(row.logged_out_at) || '—';
+/** Filtros de bitácora reutilizables (lista, export TXT). */
+function buildAuditLogWhere(q) {
+  const level = String(q.level || '').trim().toLowerCase();
+  const event = String(q.event || '').trim();
+  const from = String(q.from || '').trim();
+  const to = String(q.to || '').trim();
+  const where = [];
+  const params = [];
+  let n = 1;
+
+  if (['info', 'warn', 'error'].includes(level)) {
+    where.push(`level = $${n}`);
+    params.push(level);
+    n += 1;
+  }
+  if (event) {
+    if (event.includes('.')) {
+      where.push(`event_type = $${n}`);
+      params.push(event);
+      n += 1;
     } else {
-      const seen = row.last_seen_at || row.logged_at;
-      const ts = new Date(seen).getTime();
-      if (Number.isFinite(ts) && now - ts <= LOGIN_LOG_ONLINE_IDLE_MS) {
-        cierreDisplay = 'En línea';
-      } else {
-        cierreDisplay = 'Inactivo';
-      }
+      where.push(`event_type LIKE $${n}`);
+      params.push(`${event}.%`);
+      n += 1;
     }
-    return { ...row, inicioDisplay, cierreDisplay };
-  });
+  }
+  const dateExpr = auditCreatedDateSql();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(from)) {
+    where.push(`${dateExpr} >= $${n}::date`);
+    params.push(from);
+    n += 1;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+    where.push(`${dateExpr} <= $${n}::date`);
+    params.push(to);
+    n += 1;
+  }
+
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  return {
+    whereSql,
+    params,
+    filters: { level, event, from, to },
+  };
+}
+
+function summarizeMetaForAuditRow(meta) {
+  if (!meta || typeof meta !== 'object') return '—';
+  try {
+    const s = JSON.stringify(meta);
+    if (s.length <= 200) return s;
+    return `${s.slice(0, 197)}…`;
+  } catch {
+    return '—';
+  }
+}
+
+function metaAuditNonEmptyKeys(body) {
+  const b = body || {};
+  const keys = [];
+  if (String(b.verify_token || '').trim()) keys.push('verify_token');
+  if (String(b.app_secret || '').trim()) keys.push('app_secret');
+  if (String(b.ti_whatsapp_token || '').trim()) keys.push('ti_whatsapp_token');
+  if (String(b.ti_phone_number_id || '').trim()) keys.push('ti_phone_number_id');
+  if (String(b.ti_waba_id || '').trim()) keys.push('ti_waba_id');
+  if (String(b.pam_whatsapp_token || '').trim()) keys.push('pam_whatsapp_token');
+  if (String(b.pam_phone_number_id || '').trim()) keys.push('pam_phone_number_id');
+  if (String(b.pam_waba_id || '').trim()) keys.push('pam_waba_id');
+  if (String(b.edu_whatsapp_token || '').trim()) keys.push('edu_whatsapp_token');
+  if (String(b.edu_phone_number_id || '').trim()) keys.push('edu_phone_number_id');
+  if (String(b.edu_waba_id || '').trim()) keys.push('edu_waba_id');
+  return keys;
 }
 
 async function upsertMetaSetting(query, area, key, rawValue) {
@@ -90,21 +146,200 @@ function registerAdmin(app, ctx) {
         })
       );
     }
+    auditLog(query, {
+      req,
+      event_type: AuditEvent.ADMIN_SWITCH_AREA,
+      message: `Master cambió el área de trabajo a ${area}`,
+      actor: { userId: req.user.id, email: req.user.email, area: req.user.area },
+      meta: { new_area: area },
+    });
     res.redirect(appPath('/campaigns'));
   });
 
-  app.get('/admin/login-logs', requireMaster, async (req, res) => {
-    const r = await query(
-      `SELECT id, user_id, email, logged_at, logged_out_at, last_seen_at
-       FROM login_logs
-       ORDER BY logged_at DESC
-       LIMIT 500`
-    );
-    res.render('admin-login-logs', {
+  app.get('/admin/login-logs', requireMaster, (req, res) => {
+    res.redirect(302, appPath('/admin/users-online'));
+  });
+
+  app.get('/api/admin/online-users', requireMaster, async (req, res) => {
+    try {
+      const r = await query(
+        `SELECT email
+         FROM login_logs
+         WHERE logged_out_at IS NULL
+           AND COALESCE(last_seen_at, logged_at) >= NOW() - ($1::int * INTERVAL '1 minute')
+         GROUP BY email
+         ORDER BY email ASC`,
+        [ONLINE_USER_IDLE_MINUTES]
+      );
+      return res.json({ ok: true, users: r.rows.map((row) => ({ email: row.email })) });
+    } catch (e) {
+      return res.status(500).json({ ok: false, error: e?.message || 'Error' });
+    }
+  });
+
+  app.get('/admin/users-online', requireMaster, (req, res) => {
+    res.render('admin-users-online', {
       ...adminLocals(req, res, ctx, {
-        loginLogs: enrichLoginLogRows(r.rows),
-        activeNav: 'admin-login-logs',
-        adminSection: 'login-logs',
+        activeNav: 'admin-users-online',
+        adminSection: 'users-online',
+        onlinePollMs: 20000,
+        onlineApiUrl: appPath('/api/admin/online-users'),
+        onlineIdleMinutes: ONLINE_USER_IDLE_MINUTES,
+      }),
+    });
+  });
+
+  const AUDIT_LEVEL_OPTIONS = [
+    { value: '', label: 'Todos los niveles' },
+    { value: 'info', label: 'info' },
+    { value: 'warn', label: 'warn' },
+    { value: 'error', label: 'error' },
+  ];
+  const AUDIT_EVENT_GROUP_OPTIONS = [
+    { value: '', label: 'Todos los tipos' },
+    { value: 'auth', label: 'Autenticación' },
+    { value: 'admin', label: 'Administración' },
+    { value: 'segment', label: 'Segmentos' },
+    { value: 'contact', label: 'Contactos' },
+    { value: 'campaign', label: 'Campañas' },
+    { value: 'template', label: 'Plantillas' },
+    { value: 'conversation', label: 'Conversaciones' },
+    { value: 'settings', label: 'Ajustes IA' },
+  ];
+
+  app.get('/admin/audit-logs/export.txt', requireMaster, async (req, res) => {
+    const { whereSql, params, filters } = buildAuditLogWhere(req.query);
+    const maxRows = 25000;
+    const exportParams = [...params, maxRows];
+    const limIdx = params.length + 1;
+    const r = await query(
+      `SELECT created_at, level, event_type, message, actor_user_id, actor_email, area, client_ip, request_id, meta
+       FROM audit_logs ${whereSql}
+       ORDER BY created_at DESC, id DESC
+       LIMIT $${limIdx}`,
+      exportParams
+    );
+
+    const lines = [];
+    lines.push('# MALI WhatsApp — bitácora de auditoría (TXT, columnas separadas por TAB)');
+    lines.push(
+      `# Filtros: level=${filters.level || '—'} event=${filters.event || '—'} from=${filters.from || '—'} to=${filters.to || '—'}`
+    );
+    lines.push(`# Zona de fechas en panel: ${ctx.config.DISPLAY_TIMEZONE}`);
+    lines.push(`# Filas exportadas (máx. ${maxRows}): ${r.rows.length}`);
+    lines.push(
+      '# fecha_hora\tnivel\ttipo\tmensaje\tactor_id\tactor_email\tarea\tip\trequest_id\tmeta_json'
+    );
+    lines.push('');
+
+    for (const row of r.rows) {
+      const ts = formatExportDate(row.created_at) || String(row.created_at || '');
+      let metaStr = '{}';
+      try {
+        metaStr = JSON.stringify(row.meta != null ? row.meta : {});
+      } catch {
+        metaStr = '{}';
+      }
+      const cells = [
+        ts,
+        row.level,
+        row.event_type,
+        String(row.message || '')
+          .replace(/\t/g, ' ')
+          .replace(/\r\n/g, ' ')
+          .replace(/\n/g, ' ')
+          .replace(/\r/g, ' '),
+        row.actor_user_id != null ? String(row.actor_user_id) : '',
+        row.actor_email != null ? String(row.actor_email) : '',
+        row.area != null ? String(row.area) : '',
+        row.client_ip != null ? String(row.client_ip) : '',
+        row.request_id != null ? String(row.request_id) : '',
+        metaStr.replace(/\t/g, ' '),
+      ];
+      lines.push(cells.join('\t'));
+    }
+
+    const stamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+    const body = `${lines.join('\n')}\n`;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="bitacora-audit-${stamp}.txt"`);
+    res.send(body);
+  });
+
+  app.get('/admin/audit-logs', requireMaster, async (req, res) => {
+    const { whereSql, params, filters } = buildAuditLogWhere(req.query);
+    const { level, event, from, to } = filters;
+    const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
+    const pageSize = 50;
+
+    const exportSp = new URLSearchParams();
+    if (level) exportSp.set('level', level);
+    if (event) exportSp.set('event', event);
+    if (from) exportSp.set('from', from);
+    if (to) exportSp.set('to', to);
+    const exportQs = exportSp.toString();
+    const auditExportHref = `${appPath('/admin/audit-logs/export.txt')}${exportQs ? `?${exportQs}` : ''}`;
+
+    const countR = await query(`SELECT COUNT(*)::int AS c FROM audit_logs ${whereSql}`, params);
+    const total = Number(countR.rows[0]?.c || 0);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const pageClamped = Math.min(page, totalPages);
+
+    const offsetUse = (pageClamped - 1) * pageSize;
+    const listParams = [...params, pageSize, offsetUse];
+    const limIdx = params.length + 1;
+    const offIdx = params.length + 2;
+    const r = await query(
+      `SELECT id, created_at, level, event_type, message, actor_user_id, actor_email, area, client_ip, request_id, meta
+       FROM audit_logs ${whereSql}
+       ORDER BY created_at DESC, id DESC
+       LIMIT $${limIdx} OFFSET $${offIdx}`,
+      listParams
+    );
+
+    const rows = r.rows.map((row) => ({
+      ...row,
+      createdDisplay: formatExportDate(row.created_at) || '—',
+      metaSummary: summarizeMetaForAuditRow(row.meta),
+    }));
+
+    function auditQueryString(overrides) {
+      const sp = new URLSearchParams();
+      const base = {
+        level: level || '',
+        event: event || '',
+        from: from || '',
+        to: to || '',
+        page: String(pageClamped),
+        ...overrides,
+      };
+      if (base.level) sp.set('level', base.level);
+      if (base.event) sp.set('event', base.event);
+      if (base.from) sp.set('from', base.from);
+      if (base.to) sp.set('to', base.to);
+      if (base.page && base.page !== '1') sp.set('page', base.page);
+      const s = sp.toString();
+      return s ? `?${s}` : '';
+    }
+
+    res.render('admin-audit-logs', {
+      ...adminLocals(req, res, ctx, {
+        auditRows: rows,
+        activeNav: 'admin-audit-logs',
+        adminSection: 'audit-logs',
+        auditFilters: { level, event, from, to },
+        auditLevelOptions: AUDIT_LEVEL_OPTIONS,
+        auditEventGroupOptions: AUDIT_EVENT_GROUP_OPTIONS,
+        auditPagination: {
+          page: pageClamped,
+          totalPages,
+          total,
+          prev: pageClamped > 1 ? auditQueryString({ page: String(pageClamped - 1) }) : null,
+          next: pageClamped < totalPages ? auditQueryString({ page: String(pageClamped + 1) }) : null,
+        },
+        displayTimezone: ctx.config.DISPLAY_TIMEZONE,
+        auditRetentionDays: ctx.config.AUDIT_LOG_RETENTION_DAYS,
+        auditExportHref,
       }),
     });
   });
@@ -255,6 +490,12 @@ function registerAdmin(app, ctx) {
         bad: String(parsed.bad),
         dup: String(dup),
       });
+      auditLog(query, {
+        req,
+        event_type: AuditEvent.ADMIN_USERS_BULK_IMPORT,
+        message: `Importación masiva de usuarios en área ${area}: ${ok} creados`,
+        meta: { area, created: ok, invalid_in_file: parsed.bad, duplicates_skipped: dup },
+      });
       res.redirect(`${appPath('/admin/users')}?${qp.toString()}`);
     }
   );
@@ -311,6 +552,18 @@ function registerAdmin(app, ctx) {
         `INSERT INTO users (email, password_hash, area, is_master, must_change_password, can_edit_ai_prompt) VALUES ($1, $2, $3, $4, $5, $6)`,
         [email, hash, area, isMaster, mustChangePassword, canEditAiPrompt]
       );
+      auditLog(query, {
+        req,
+        event_type: AuditEvent.ADMIN_USER_CREATED,
+        message: `Usuario creado: ${email}`,
+        meta: {
+          new_user_email: email,
+          area,
+          is_master: isMaster,
+          must_change_password: mustChangePassword,
+          can_edit_ai_prompt: canEditAiPrompt,
+        },
+      });
       res.redirect(`${appPath('/admin/users')}?saved=1`);
     } catch (e) {
       if (String(e.code) === '23505') {
@@ -421,6 +674,21 @@ function registerAdmin(app, ctx) {
       }
     }
 
+    auditLog(query, {
+      req,
+      event_type: AuditEvent.ADMIN_USER_UPDATED,
+      message: `Usuario actualizado: ${existing.rows[0].email} (id ${id})`,
+      meta: {
+        target_user_id: id,
+        target_email: existing.rows[0].email,
+        new_area: area,
+        is_master: isMaster,
+        password_changed: password.length > 0,
+        must_change_password: mustChangePassword,
+        can_edit_ai_prompt: canEditAiPrompt,
+      },
+    });
+
     res.redirect(`${appPath('/admin/users')}?saved=1`);
   });
 
@@ -432,7 +700,15 @@ function registerAdmin(app, ctx) {
     if (id === req.session.userId) {
       return res.redirect(`${appPath('/admin/users')}?err=self`);
     }
+    const victim = await query(`SELECT email FROM users WHERE id = $1`, [id]);
+    const victimEmail = victim.rows[0]?.email || `id ${id}`;
     await query(`DELETE FROM users WHERE id = $1`, [id]);
+    auditLog(query, {
+      req,
+      event_type: AuditEvent.ADMIN_USER_DELETED,
+      message: `Usuario eliminado: ${victimEmail}`,
+      meta: { target_user_id: id, target_email: victim.rows[0]?.email || null },
+    });
     res.redirect(`${appPath('/admin/users')}?saved=1`);
   });
 
@@ -502,6 +778,12 @@ function registerAdmin(app, ctx) {
     await upsertMetaSetting(query, 'educacion', KEYS.wabaId, b.edu_waba_id);
 
     await refreshMetaSettingsCache(query);
+    auditLog(query, {
+      req,
+      event_type: AuditEvent.ADMIN_META_UPDATED,
+      message: 'Credenciales Meta guardadas desde el panel',
+      meta: { fields_with_value: metaAuditNonEmptyKeys(b) },
+    });
     res.redirect(`${appPath('/admin/meta')}?saved=1`);
   });
 }

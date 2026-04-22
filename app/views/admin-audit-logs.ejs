@@ -1,0 +1,132 @@
+<%- include('layouts/inbox-shell-start', {
+  pageTitle: 'Bitácora de auditoría · MALI WhatsApp',
+  basePath,
+  appBaseUrl,
+  requireAuth,
+  currentUser,
+  areaLabel,
+  activeNav: typeof activeNav !== 'undefined' ? activeNav : 'admin-audit-logs',
+  showAdminNav,
+  shellPageClass: 'conversations-page',
+  layoutModifier: 'conversations-inbox--detail',
+  extraHeadScripts: null
+}) %>
+<%- include('partials/admin-sidebar', { basePath, adminSection: 'audit-logs' }) %>
+<section class="inbox-main" aria-label="Bitácora de auditoría">
+  <%- include('partials/admin-mobile-nav', { basePath, adminSection: 'audit-logs' }) %>
+  <div class="inbox-chat-header inbox-chat-header--static">
+    <h1 class="inbox-chat-heading">Bitácora de auditoría</h1>
+  </div>
+  <div class="inbox-chat-body inbox-chat-body--form">
+    <div class="card">
+      <p class="card-lead muted" style="margin-top: 0">
+        Eventos relevantes para trazabilidad (inicios y cierres de sesión, usuarios, Meta, segmentos, contactos, campañas, conversaciones y ajustes de IA).
+        Fechas filtradas en zona <strong><%= typeof displayTimezone !== 'undefined' ? displayTimezone : 'America/Lima' %></strong>.
+        Los registros se conservan como máximo <strong><%= typeof auditRetentionDays !== 'undefined' ? auditRetentionDays : 30 %> días</strong> (purgado automático en servidor).
+        <a href="<%= basePath %>/admin/users-online">Quién está en línea ahora</a> (vista aparte, se actualiza sola).
+      </p>
+
+      <form class="audit-log-filters" method="get" action="<%= basePath %>/admin/audit-logs">
+        <div class="audit-log-filters__row">
+          <label class="audit-log-filters__field">
+            <span class="audit-log-filters__label">Nivel</span>
+            <select name="level" class="audit-log-filters__select">
+              <% (auditLevelOptions || []).forEach(function (opt) { %>
+              <option value="<%= opt.value %>" <%= (auditFilters && auditFilters.level === opt.value) ? 'selected' : '' %>><%= opt.label %></option>
+              <% }); %>
+            </select>
+          </label>
+          <label class="audit-log-filters__field">
+            <span class="audit-log-filters__label">Tipo</span>
+            <select name="event" class="audit-log-filters__select">
+              <% (auditEventGroupOptions || []).forEach(function (opt) { %>
+              <option value="<%= opt.value %>" <%= (auditFilters && auditFilters.event === opt.value) ? 'selected' : '' %>><%= opt.label %></option>
+              <% }); %>
+            </select>
+          </label>
+          <label class="audit-log-filters__field">
+            <span class="audit-log-filters__label">Desde</span>
+            <input type="date" name="from" class="audit-log-filters__input" value="<%= auditFilters && auditFilters.from ? auditFilters.from : '' %>" />
+          </label>
+          <label class="audit-log-filters__field">
+            <span class="audit-log-filters__label">Hasta</span>
+            <input type="date" name="to" class="audit-log-filters__input" value="<%= auditFilters && auditFilters.to ? auditFilters.to : '' %>" />
+          </label>
+          <div class="audit-log-filters__actions">
+            <button type="submit" class="small-btn primary">Filtrar</button>
+            <a class="small-btn secondary" href="<%= basePath %>/admin/audit-logs">Limpiar</a>
+            <a class="small-btn secondary" href="<%= typeof auditExportHref !== 'undefined' ? auditExportHref : (basePath + '/admin/audit-logs/export.txt') %>">Descargar TXT</a>
+          </div>
+        </div>
+      </form>
+
+      <% const pag = typeof auditPagination !== 'undefined' && auditPagination ? auditPagination : { page: 1, totalPages: 1, total: 0, prev: null, next: null }; %>
+      <p class="muted audit-log-count" style="margin: 0.75rem 0 0.5rem">
+        <%= pag.total %> evento<% if (pag.total !== 1) { %>s<% } %> · página <%= pag.page %> de <%= pag.totalPages %>
+      </p>
+
+      <div class="table-wrap table-wrap--compact">
+        <table class="audit-log-table">
+          <thead>
+            <tr>
+              <th>Fecha y hora</th>
+              <th>Nivel</th>
+              <th>Tipo</th>
+              <th>Mensaje</th>
+              <th>Actor</th>
+              <th>Área</th>
+              <th>IP</th>
+              <th>Detalle</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!auditRows || auditRows.length === 0) { %>
+            <tr>
+              <td colspan="8" class="muted">No hay eventos con los filtros actuales.</td>
+            </tr>
+            <% } else { %>
+            <% auditRows.forEach(function (row) { %>
+            <tr>
+              <td class="audit-log-table__time"><%= row.createdDisplay %></td>
+              <td>
+                <% if (row.level === 'warn') { %>
+                <span class="audit-pill audit-pill--warn">warn</span>
+                <% } else if (row.level === 'error') { %>
+                <span class="audit-pill audit-pill--err">error</span>
+                <% } else { %>
+                <span class="audit-pill audit-pill--info">info</span>
+                <% } %>
+              </td>
+              <td><code class="audit-log-type"><%= row.event_type %></code></td>
+              <td><%= row.message %></td>
+              <td>
+                <% if (row.actor_email) { %>
+                <%= row.actor_email %><% if (row.actor_user_id) { %> <span class="muted">#<%= row.actor_user_id %></span><% } %>
+                <% } else { %>
+                <span class="muted">—</span>
+                <% } %>
+              </td>
+              <td><%= row.area || '—' %></td>
+              <td><code class="audit-log-ip"><%= row.client_ip || '—' %></code></td>
+              <td class="audit-log-table__meta" title="<%= row.metaSummary %>"><%= row.metaSummary %></td>
+            </tr>
+            <% }); %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+
+      <% if (pag.prev != null || pag.next != null) { %>
+      <nav class="audit-log-pagination" aria-label="Paginación de bitácora">
+        <% if (pag.prev != null) { %>
+        <a class="small-btn secondary" href="<%= basePath %>/admin/audit-logs<%= pag.prev %>">Anterior</a>
+        <% } %>
+        <% if (pag.next != null) { %>
+        <a class="small-btn secondary" href="<%= basePath %>/admin/audit-logs<%= pag.next %>">Siguiente</a>
+        <% } %>
+      </nav>
+      <% } %>
+    </div>
+  </div>
+</section>
+<%- include('layouts/inbox-shell-end') %>

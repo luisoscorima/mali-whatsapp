@@ -1,5 +1,6 @@
 const multer = require('multer');
 const { logInfo, logError } = require('../utils/logger');
+const { auditLog, AuditEvent, phoneMetaTail } = require('../services/auditLog');
 const {
   validateContactInput,
   parseContactCsvBuffer,
@@ -44,6 +45,17 @@ function registerContacts(app, ctx) {
         phone: validation.value.phone,
         segments: segs,
         area: req.user.area,
+      });
+      auditLog(query, {
+        req,
+        event_type: AuditEvent.CONTACT_CREATED,
+        message: `Contacto creado (id ${contactId})`,
+        meta: {
+          contact_id: contactId,
+          area: req.user.area,
+          phone_tail: phoneMetaTail(validation.value.phone),
+          segments: segs,
+        },
       });
       res.redirect(appPath('/contacts'));
     } catch (error) {
@@ -133,6 +145,17 @@ function registerContacts(app, ctx) {
           ok: String(rows.length),
           bad: String(errors.length),
         });
+        auditLog(query, {
+          req,
+          event_type: AuditEvent.CONTACT_IMPORT,
+          message: `Importación de contactos: ${rows.length} filas guardadas`,
+          meta: {
+            area: req.user.area,
+            rows_saved: rows.length,
+            row_errors_in_file: errors.length,
+            filename: String(req.file?.originalname || '').slice(0, 200),
+          },
+        });
         res.redirect(`${appPath('/contacts/import')}?${qp.toString()}`);
         logInfo(req, 'Importacion CSV contactos', {
           imported: rows.length,
@@ -180,6 +203,12 @@ function registerContacts(app, ctx) {
       } finally {
         client.release();
       }
+      auditLog(query, {
+        req,
+        event_type: AuditEvent.CONTACT_BULK_SEGMENT,
+        message: `Asignación masiva al segmento «${segmentSlug}» (${contactIds.length} contactos)`,
+        meta: { area, segment_slug: segmentSlug, contact_count: contactIds.length },
+      });
       res.redirect(`${appPath('/contacts')}?contact_updated=1`);
       logInfo(req, 'Asignacion masiva a segmento', { segmentSlug, count: contactIds.length, area });
     } catch (error) {
@@ -223,6 +252,17 @@ function registerContacts(app, ctx) {
       );
       await replaceContactSegments(query, contactId, area, segs);
       logInfo(req, 'Contacto actualizado', { contactId, area });
+      auditLog(query, {
+        req,
+        event_type: AuditEvent.CONTACT_UPDATED,
+        message: `Contacto actualizado (id ${contactId})`,
+        meta: {
+          contact_id: contactId,
+          area,
+          phone_tail: phoneMetaTail(validation.value.phone),
+          segments: segs,
+        },
+      });
       res.redirect(`${appPath(`/contacts/${contactId}?contact_updated=1`)}`);
     } catch (error) {
       logError(req, 'Error al actualizar contacto', error);
@@ -241,6 +281,12 @@ function registerContacts(app, ctx) {
       return res.status(404).send('Contacto no encontrado');
     }
     logInfo(req, 'Contacto eliminado', { contactId, area });
+    auditLog(query, {
+      req,
+      event_type: AuditEvent.CONTACT_DELETED,
+      message: `Contacto eliminado (id ${contactId})`,
+      meta: { contact_id: contactId, area },
+    });
     res.redirect(`${appPath('/contacts?contact_deleted=1')}`);
   });
 }

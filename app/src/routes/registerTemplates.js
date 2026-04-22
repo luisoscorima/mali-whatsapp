@@ -1,4 +1,5 @@
 const { logError } = require('../utils/logger');
+const { auditLog, AuditEvent } = require('../services/auditLog');
 const { syncTemplatesForArea } = require('../services/templateSync');
 const { buildTemplateDefinition } = require('../services/templateParser');
 const { templateSyncLimiter } = require('../middleware/limiters');
@@ -9,6 +10,12 @@ function registerTemplates(app, ctx) {
   app.post('/templates/sync', templateSyncLimiter, async (req, res) => {
     try {
       await syncTemplatesForArea(req.user.area);
+      auditLog(query, {
+        req,
+        event_type: AuditEvent.TEMPLATE_SYNC,
+        message: `Sincronización de plantillas Meta (área ${req.user.area})`,
+        meta: { area: req.user.area },
+      });
       res.redirect(`${appPath('/campaigns/new')}?templates_synced=1`);
     } catch (error) {
       logError(req, 'Error sincronizando plantillas', error);

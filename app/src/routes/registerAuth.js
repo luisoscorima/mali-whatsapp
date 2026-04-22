@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { logError } = require('../utils/logger');
+const { auditLog, AuditEvent } = require('../services/auditLog');
 const { isValidMaliEmail, normalizeEmail } = require('../utils/contactsCsv');
 
 function registerAuth(app, ctx) {
@@ -36,11 +37,27 @@ function registerAuth(app, ctx) {
         [email]
       );
       if (result.rowCount === 0) {
+        auditLog(query, {
+          req,
+          level: 'warn',
+          event_type: AuditEvent.AUTH_LOGIN_FAILED,
+          message: 'Intento fallido de inicio de sesión (correo no registrado)',
+          actor: { userId: null, email, area: null },
+          meta: { reason: 'unknown_email' },
+        });
         return res.status(401).render('login', { error: 'Credenciales incorrectas', basePath: config.basePath });
       }
       const user = result.rows[0];
       const ok = await bcrypt.compare(password, user.password_hash);
       if (!ok) {
+        auditLog(query, {
+          req,
+          level: 'warn',
+          event_type: AuditEvent.AUTH_LOGIN_FAILED,
+          message: 'Intento fallido de inicio de sesión (contraseña incorrecta)',
+          actor: { userId: user.id, email: user.email, area: user.area },
+          meta: { reason: 'bad_password' },
+        });
         return res.status(401).render('login', { error: 'Credenciales incorrectas', basePath: config.basePath });
       }
       let loginLogId = null;
@@ -61,6 +78,13 @@ function registerAuth(app, ctx) {
       if (loginLogId != null) {
         req.session.loginLogId = loginLogId;
       }
+      auditLog(query, {
+        req,
+        event_type: AuditEvent.AUTH_LOGIN,
+        message: `Inicio de sesión: ${user.email}`,
+        actor: { userId: user.id, email: user.email, area: user.area },
+        meta: { login_log_id: loginLogId, is_master: Boolean(user.is_master) },
+      });
       if (req.session.mustChangePassword) {
         return res.redirect(appPath('/account/change-password'));
       }
@@ -73,6 +97,19 @@ function registerAuth(app, ctx) {
 
   app.post('/logout', (req, res) => {
     const logId = req.session && req.session.loginLogId != null ? req.session.loginLogId : null;
+    if (config.requireAuth && req.session && req.session.userId != null) {
+      auditLog(query, {
+        req,
+        event_type: AuditEvent.AUTH_LOGOUT,
+        message: `Cierre de sesión: ${req.session.email || ''}`,
+        actor: {
+          userId: req.session.userId,
+          email: req.session.email || '',
+          area: req.session.area || null,
+        },
+        meta: { login_log_id: logId },
+      });
+    }
     const finish = () => {
       req.session.destroy((destroyErr) => {
         if (destroyErr) {
@@ -146,6 +183,13 @@ function registerAuth(app, ctx) {
         [hash, req.session.userId]
       );
       req.session.mustChangePassword = false;
+      auditLog(query, {
+        req,
+        event_type: AuditEvent.AUTH_PASSWORD_CHANGE,
+        message: `Contraseña cambiada: ${req.user.email}`,
+        actor: { userId: req.user.id, email: req.user.email, area: req.user.area },
+        meta: {},
+      });
       res.redirect(appPath('/campaigns'));
     } catch (err) {
       logError(req, 'Error cambiando contraseña', err);

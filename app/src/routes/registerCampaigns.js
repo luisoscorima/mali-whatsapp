@@ -1,4 +1,5 @@
 const { logError } = require('../utils/logger');
+const { auditLog, AuditEvent } = require('../services/auditLog');
 const config = require('../config');
 const { normalizeArea } = require('../middleware/auth');
 const { campaignLimiter } = require('../middleware/limiters');
@@ -155,6 +156,25 @@ function registerCampaigns(app, ctx) {
       if (!isScheduled) {
         setImmediate(() => runCampaignSendJob(query, { campaignId, ...campaignPayload }));
       }
+
+      auditLog(query, {
+        req,
+        event_type: AuditEvent.CAMPAIGN_CREATED,
+        message: isScheduled
+          ? `Campaña programada #${campaignId} (${tRow.name}, ${recipients.length} destinatarios)`
+          : `Campaña en cola #${campaignId} (${tRow.name}, ${recipients.length} destinatarios)`,
+        meta: {
+          campaign_id: campaignId,
+          area,
+          status: campaignStatus,
+          template_name: tRow.name,
+          segments,
+          audience_mode: audienceMode,
+          total_recipients: recipients.length,
+          is_scheduled: isScheduled,
+          scheduled_at: isScheduled && scheduledAt ? scheduledAt.toISOString() : null,
+        },
+      });
 
       const dest = appPath(`/campaigns/${campaignId}`);
       if (wantsJson) {

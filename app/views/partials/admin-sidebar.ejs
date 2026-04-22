@@ -16,14 +16,26 @@
         </span>
       </a>
     </li>
-    <li class="inbox-chat-item <%= typeof adminSection !== 'undefined' && adminSection === 'login-logs' ? 'is-active' : '' %>">
-      <a class="inbox-chat-link" href="<%= basePath %>/admin/login-logs">
+    <li class="inbox-chat-item <%= typeof adminSection !== 'undefined' && adminSection === 'users-online' ? 'is-active' : '' %>">
+      <a class="inbox-chat-link" href="<%= basePath %>/admin/users-online">
         <span class="inbox-chat-link-main">
           <span class="inbox-chat-row-top">
-            <span class="inbox-chat-title">Inicios de sesión</span>
+            <span class="inbox-chat-title">En línea ahora</span>
           </span>
           <span class="inbox-chat-row-mid">
-            <span class="inbox-chat-preview">Registro por usuario</span>
+            <span class="inbox-chat-preview">Solo usuarios activos</span>
+          </span>
+        </span>
+      </a>
+    </li>
+    <li class="inbox-chat-item <%= typeof adminSection !== 'undefined' && adminSection === 'audit-logs' ? 'is-active' : '' %>">
+      <a class="inbox-chat-link" href="<%= basePath %>/admin/audit-logs">
+        <span class="inbox-chat-link-main">
+          <span class="inbox-chat-row-top">
+            <span class="inbox-chat-title">Bitácora</span>
+          </span>
+          <span class="inbox-chat-row-mid">
+            <span class="inbox-chat-preview">Auditoría y filtros</span>
           </span>
         </span>
       </a>

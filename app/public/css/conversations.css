@@ -1445,6 +1445,152 @@ html[data-theme='dark'] .admin-mobile-nav__link.is-active {
   border-color: rgba(45, 212, 191, 0.35);
 }
 
+/* Admin: bitácora de auditoría */
+.audit-log-filters {
+  margin-top: 0.5rem;
+}
+
+.audit-log-filters__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 12px;
+}
+
+.audit-log-filters__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.audit-log-filters__label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.audit-log-filters__select,
+.audit-log-filters__input {
+  font-size: 0.85rem;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  min-width: 0;
+}
+
+.audit-log-filters__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.audit-log-table__time {
+  white-space: nowrap;
+}
+
+.audit-log-table__meta {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.78rem;
+  vertical-align: top;
+}
+
+.audit-log-type {
+  font-size: 0.72rem;
+  word-break: break-word;
+}
+
+.audit-log-ip {
+  font-size: 0.72rem;
+}
+
+.audit-pill {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: lowercase;
+}
+
+.audit-pill--info {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
+.audit-pill--warn {
+  background: color-mix(in srgb, #f59e0b 22%, transparent);
+  color: #b45309;
+}
+
+html[data-theme='dark'] .audit-pill--warn {
+  color: #fbbf24;
+}
+
+.audit-pill--err {
+  background: color-mix(in srgb, #ef4444 22%, transparent);
+  color: #b91c1c;
+}
+
+html[data-theme='dark'] .audit-pill--err {
+  color: #fca5a5;
+}
+
+.audit-log-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Admin: usuarios en línea (solo lista activa) */
+.admin-online-status {
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.admin-online-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-online-list__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.95rem;
+}
+
+.admin-online-list__item:last-child {
+  border-bottom: none;
+}
+
+.admin-online-dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #22c55e 35%, transparent);
+}
+
+html[data-theme='dark'] .admin-online-dot {
+  background: #4ade80;
+  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.35);
+}
+
+.admin-online-list__email {
+  word-break: break-all;
+}
+
 /* Lista campañas: ratio enviados/total */
 .campaign-list-ratio {
   font-weight: 600;

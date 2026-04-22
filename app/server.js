@@ -7,12 +7,14 @@ const { query } = require('./src/db/pool');
 const { runMigrations } = require('./src/db/migrations');
 const { seedMasterUser } = require('./src/db/seed');
 const { refreshMetaSettingsCache } = require('./src/services/metaSettingsCache');
+const { purgeOldAuditLogs } = require('./src/services/auditLog');
 const { createApp } = require('./src/createApp');
 
 async function boot() {
   await runMigrations(query);
   await seedMasterUser(query);
   await refreshMetaSettingsCache(query);
+  await purgeOldAuditLogs(query);
 
   const { app, resumeQueuedCampaigns, promoteDueScheduledCampaigns } = createApp();
   await promoteDueScheduledCampaigns();

@@ -1,4 +1,5 @@
 const { logError } = require('../utils/logger');
+const { auditLog, AuditEvent } = require('../services/auditLog');
 const { normalizeArea } = require('../middleware/auth');
 const { normalizeSegmentColorKey } = require('../utils/segmentColors');
 
@@ -23,6 +24,12 @@ function registerSegments(app, ctx) {
         `INSERT INTO segment_definitions (area, slug, label, sort_order, color_key) VALUES ($1, $2, $3, $4, $5)`,
         [normalizeArea(area), slug, label, sortOrder, colorKey]
       );
+      auditLog(query, {
+        req,
+        event_type: AuditEvent.SEGMENT_CREATED,
+        message: `Segmento creado: ${slug} (${normalizeArea(area)})`,
+        meta: { area: normalizeArea(area), slug, label, sort_order: sortOrder, color_key: colorKey },
+      });
       res.redirect(`${appPath('/segments')}?segments_saved=1`);
     } catch (error) {
       if (error.code === '23505') {
@@ -67,6 +74,20 @@ function registerSegments(app, ctx) {
         if (r.rowCount === 0) {
           return res.status(404).send('Segmento no encontrado');
         }
+        auditLog(query, {
+          req,
+          event_type: AuditEvent.SEGMENT_UPDATED,
+          message: `Segmento actualizado: ${oldSlug} (id ${id})`,
+          meta: {
+            area,
+            segment_id: id,
+            slug: oldSlug,
+            label,
+            sort_order: sortOrder,
+            color_key: colorKey,
+            slug_changed: false,
+          },
+        });
         return res.redirect(`${appPath('/segments')}?segments_saved=1`);
       } catch (error) {
         logError(req, 'Error actualizando segmento', error);
@@ -96,6 +117,21 @@ function registerSegments(app, ctx) {
         oldSlug,
       ]);
       await client.query('COMMIT');
+      auditLog(query, {
+        req,
+        event_type: AuditEvent.SEGMENT_UPDATED,
+        message: `Segmento renombrado: ${oldSlug} → ${newSlug} (id ${id})`,
+        meta: {
+          area,
+          segment_id: id,
+          old_slug: oldSlug,
+          new_slug: newSlug,
+          label,
+          sort_order: sortOrder,
+          color_key: colorKey,
+          slug_changed: true,
+        },
+      });
       res.redirect(`${appPath('/segments')}?segments_saved=1`);
     } catch (error) {
       try {
@@ -131,6 +167,12 @@ function registerSegments(app, ctx) {
       const areaN = normalizeArea(area);
       await query(`DELETE FROM contact_segments WHERE area = $1 AND segment_slug = $2`, [areaN, slug]);
       await query(`DELETE FROM segment_definitions WHERE id = $1 AND area = $2`, [id, areaN]);
+      auditLog(query, {
+        req,
+        event_type: AuditEvent.SEGMENT_DELETED,
+        message: `Segmento eliminado: ${slug} (${areaN})`,
+        meta: { area: areaN, segment_id: id, slug },
+      });
       res.redirect(`${appPath('/segments')}?segments_saved=1`);
     } catch (error) {
       logError(req, 'Error borrando segmento', error);
