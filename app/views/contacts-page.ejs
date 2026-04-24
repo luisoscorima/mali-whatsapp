@@ -2,6 +2,7 @@
 <% const _cq = typeof contactListQuery !== 'undefined' ? contactListQuery : ''; %>
 <% const _segF = typeof contactSegmentFilter !== 'undefined' ? contactSegmentFilter : ''; %>
 <% const _qF = typeof contactSearchQ !== 'undefined' ? contactSearchQ : ''; %>
+<% const _showReplaced = typeof showReplaced !== 'undefined' ? Boolean(showReplaced) : false; %>
 <% function contactSegmentColorKey(slug) {
   if (!slug) return 'slate';
   const s = segments.find(function (x) { return x.value === slug; });
@@ -93,6 +94,13 @@
         />
         <button type="submit" class="small-btn primary">Buscar</button>
       </div>
+    </label>
+    <label class="field field--inbox">
+      <span class="field-label">Mostrar reemplazados</span>
+      <select name="show_replaced" class="inbox-select" data-inbox-filter>
+        <option value="0" <%= !_showReplaced ? 'selected' : '' %>>No</option>
+        <option value="1" <%= _showReplaced ? 'selected' : '' %>>Sí</option>
+      </select>
     </label>
   </form>
   <% if (view === 'list' && contacts && contacts.length && segments.length) { %>
@@ -265,6 +273,12 @@
         <% if (csvImport.err === 'no_file') { %>Selecciona un archivo CSV o Excel.<% } else if (csvImport.err === 'type') { %>Solo archivos .csv o .xlsx.<% } else if (csvImport.err === 'too_big') { %>Archivo demasiado grande.<% } else if (csvImport.err === 'too_many') { %>Demasiadas filas (máx. <%= maxCsvRows %>).<% } else if (csvImport.err === 'empty') { %>Archivo sin datos.<% } else { %>No se pudo leer el archivo.<% } %>
       <% } else { %>
         OK: <%= csvImport.ok %> fila(s).<% if (csvImport.bad > 0) { %> Omitidas: <%= csvImport.bad %>.<% } %>
+        <% if (csvImport.dup && csvImport.dup > 0) { %>
+        Aviso: <%= csvImport.dup %> teléfono(s) repetido(s) en archivo (<%= csvImport.dupRows %> fila(s) involucrada(s)); aplica "last row wins".
+        <% if (csvImport.dupExamples && csvImport.dupExamples.length) { %>
+        Ejemplos: <%= csvImport.dupExamples.join(', ') %>.
+        <% } %>
+        <% } %>
       <% } %>
     </div>
     <% } %>
@@ -286,7 +300,7 @@
           Columnas: <code>name</code>, <code>phone</code>, <code>segment</code>. Opcional: <code>prefix</code> (código de país sin +) para números internacionales.
           En <code>segment</code> puedes indicar varios slugs separados por <code>;</code> o <code>,</code>.
           Sin <code>prefix</code>, se aceptan móviles Perú de 9 dígitos (ej. <code>982160981</code>, se guarda como 51…) o un número E.164 completo sin +.
-          Si el teléfono ya existe, se actualizan nombre y segmentos (se reemplazan por los de la fila).
+          Si el teléfono ya existe, se actualizan nombre y segmentos (se reemplazan por los de la fila). Si el archivo trae teléfonos repetidos, gana la última fila.
         </p>
       </details>
     </div>
@@ -308,14 +322,20 @@
     <% } %>
     <div class="card">
       <h2 class="card-title">Editar contacto</h2>
+      <% const _isReplaced = Boolean(contact.replacement_reason) || contact.replaced_by_contact_id != null; %>
+      <% if (_isReplaced) { %>
+      <p class="toast toast--warn">
+        Este contacto está reemplazado (<%= contact.replacement_reason || 'replaced' %>) y no se puede editar.
+      </p>
+      <% } %>
       <form method="POST" action="<%= basePath %>/contacts/<%= contact.id %>/update" class="form-grid tight">
         <label class="field">
           <span class="field-label">Nombre</span>
-          <input type="text" name="name" value="<%= contact.name %>" required maxlength="150" />
+          <input type="text" name="name" value="<%= contact.name %>" required maxlength="150" <%= _isReplaced ? 'disabled' : '' %> />
         </label>
         <label class="field">
           <span class="field-label">Teléfono (E.164 sin +)</span>
-          <input type="text" name="phone" value="<%= contact.phone %>" required inputmode="numeric" />
+          <input type="text" name="phone" value="<%= contact.phone %>" required inputmode="numeric" <%= _isReplaced ? 'disabled' : '' %> />
         </label>
         <fieldset class="field segment-chips-fieldset">
           <legend class="field-label">Segmentos</legend>
@@ -328,6 +348,7 @@
                 name="segments"
                 value="<%= segment.value %>"
                 <%= _editSlugs.indexOf(segment.value) !== -1 ? 'checked' : '' %>
+                <%= _isReplaced ? 'disabled' : '' %>
               />
               <span><%= segment.label %></span>
             </label>
@@ -336,9 +357,14 @@
           <p class="inline-help muted">Marca uno o varios.</p>
         </fieldset>
         <div class="form-actions">
-          <button type="submit">Guardar cambios</button>
+          <button type="submit" <%= _isReplaced ? 'disabled' : '' %>>Guardar cambios</button>
         </div>
       </form>
+      <% if (_isReplaced) { %>
+      <form method="POST" action="<%= basePath %>/contacts/<%= contact.id %>/reactivate" class="inline-delete-form" onsubmit="return confirm('¿Reactivar este contacto?');">
+        <button type="submit" class="small-btn">Reactivar contacto</button>
+      </form>
+      <% } %>
       <form method="POST" action="<%= basePath %>/contacts/<%= contact.id %>/delete" class="inline-delete-form" onsubmit="return confirm('¿Eliminar este contacto?');">
         <button type="submit" class="small-btn danger-outline">Eliminar contacto</button>
       </form>

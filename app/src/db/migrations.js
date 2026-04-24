@@ -113,6 +113,22 @@ async function runMigrations(query) {
   await query(`CREATE INDEX IF NOT EXISTS idx_contacts_segment ON contacts(segment)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_contacts_area ON contacts(area)`);
   await query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS lead_score SMALLINT`);
+  await query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS replaced_by_contact_id INTEGER`);
+  await query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS replaced_at TIMESTAMPTZ NULL`);
+  await query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS replacement_reason VARCHAR(64) NULL`);
+  try {
+    await query(
+      `ALTER TABLE contacts
+       ADD CONSTRAINT contacts_replaced_by_contact_fkey
+       FOREIGN KEY (replaced_by_contact_id) REFERENCES contacts(id) ON DELETE SET NULL`
+    );
+  } catch {
+    /* FK ya existe */
+  }
+  await query(
+    `CREATE INDEX IF NOT EXISTS idx_contacts_replaced_by_contact ON contacts(replaced_by_contact_id)`
+  );
+  await query(`CREATE INDEX IF NOT EXISTS idx_contacts_replaced_at ON contacts(replaced_at DESC)`);
   await query(`ALTER TABLE contacts DROP CONSTRAINT IF EXISTS contacts_lead_score_check`);
   await query(
     `ALTER TABLE contacts ADD CONSTRAINT contacts_lead_score_check CHECK (lead_score IS NULL OR (lead_score >= 1 AND lead_score <= 5))`

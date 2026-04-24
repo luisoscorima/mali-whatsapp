@@ -14,13 +14,17 @@ const ERROR_IN = sqlInList(ERROR_STATUSES);
 function registerInboxViews(app, ctx) {
   const { query, config, loadSegments, loadSyncedTemplates, resolveAppBaseUrl, appPath } = ctx;
 
-  async function loadContactsList(area, segmentsList, segmentFilterRaw, searchQRaw) {
+  async function loadContactsList(area, segmentsList, segmentFilterRaw, searchQRaw, showReplacedRaw) {
     const slugSet = new Set(segmentsList.map((s) => s.value));
     const rawSeg = String(segmentFilterRaw || '').trim();
     const seg = rawSeg && slugSet.has(rawSeg) ? rawSeg : '';
+    const showReplaced = String(showReplacedRaw || '').trim() === '1';
     const params = [area];
     let wh = 'WHERE c.area = $1';
     let p = 2;
+    if (!showReplaced) {
+      wh += ' AND c.replacement_reason IS NULL AND c.replaced_by_contact_id IS NULL';
+    }
     if (seg) {
       wh += ` AND EXISTS (SELECT 1 FROM contact_segments csf WHERE csf.contact_id = c.id AND csf.segment_slug = $${p})`;
       params.push(seg);
@@ -38,6 +42,9 @@ function registerInboxViews(app, ctx) {
          c.phone,
          c.opt_in,
          c.active,
+         c.replaced_by_contact_id,
+         c.replaced_at,
+         c.replacement_reason,
          c.created_at,
          COALESCE((
            SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
@@ -54,10 +61,11 @@ function registerInboxViews(app, ctx) {
     return r.rows;
   }
 
-  function contactListQueryString(segmentFilter, searchQ) {
+  function contactListQueryString(segmentFilter, searchQ, showReplaced) {
     const sp = new URLSearchParams();
     if (segmentFilter) sp.set('segment', segmentFilter);
     if (searchQ) sp.set('q', searchQ);
+    if (showReplaced) sp.set('show_replaced', '1');
     const s = sp.toString();
     return s ? `?${s}` : '';
   }
@@ -217,8 +225,15 @@ function registerInboxViews(app, ctx) {
     const area = req.user.area;
     const contactSegmentFilter = String(req.query.segment || '').trim();
     const contactSearchQ = String(req.query.q || '').trim();
+    const showReplaced = String(req.query.show_replaced || '').trim() === '1';
     const segmentsList = await loadSegments(area);
-    const contactsRows = await loadContactsList(area, segmentsList, contactSegmentFilter, contactSearchQ);
+    const contactsRows = await loadContactsList(
+      area,
+      segmentsList,
+      contactSegmentFilter,
+      contactSearchQ,
+      showReplaced
+    );
     res.render('contacts-page', {
       ...commonLocals(req, res),
       activeNav: 'contacts',
@@ -228,7 +243,8 @@ function registerInboxViews(app, ctx) {
       contacts: contactsRows,
       contactSegmentFilter,
       contactSearchQ,
-      contactListQuery: contactListQueryString(contactSegmentFilter, contactSearchQ),
+      showReplaced,
+      contactListQuery: contactListQueryString(contactSegmentFilter, contactSearchQ, showReplaced),
       view: 'new',
       selectedContactId: null,
       contact: null,
@@ -243,8 +259,15 @@ function registerInboxViews(app, ctx) {
     const area = req.user.area;
     const contactSegmentFilter = String(req.query.segment || '').trim();
     const contactSearchQ = String(req.query.q || '').trim();
+    const showReplaced = String(req.query.show_replaced || '').trim() === '1';
     const segmentsList = await loadSegments(area);
-    const contactsRows = await loadContactsList(area, segmentsList, contactSegmentFilter, contactSearchQ);
+    const contactsRows = await loadContactsList(
+      area,
+      segmentsList,
+      contactSegmentFilter,
+      contactSearchQ,
+      showReplaced
+    );
     res.render('contacts-page', {
       ...commonLocals(req, res),
       activeNav: 'contacts',
@@ -254,7 +277,8 @@ function registerInboxViews(app, ctx) {
       contacts: contactsRows,
       contactSegmentFilter,
       contactSearchQ,
-      contactListQuery: contactListQueryString(contactSegmentFilter, contactSearchQ),
+      showReplaced,
+      contactListQuery: contactListQueryString(contactSegmentFilter, contactSearchQ, showReplaced),
       view: 'import',
       selectedContactId: null,
       contact: null,
@@ -263,6 +287,13 @@ function registerInboxViews(app, ctx) {
           ? {
               ok: req.query.ok !== undefined ? Number(req.query.ok) : null,
               bad: req.query.bad !== undefined ? Number(req.query.bad) : null,
+              dup: req.query.dup !== undefined ? Number(req.query.dup) : 0,
+              dupRows: req.query.dup_rows !== undefined ? Number(req.query.dup_rows) : 0,
+              dupExamples: String(req.query.dup_examples || '')
+                .split(',')
+                .map((x) => x.trim())
+                .filter(Boolean)
+                .slice(0, 3),
               err: req.query.err || null,
             }
           : null,
@@ -280,9 +311,10 @@ function registerInboxViews(app, ctx) {
     const area = req.user.area;
     const contactSegmentFilter = String(req.query.segment || '').trim();
     const contactSearchQ = String(req.query.q || '').trim();
+    const showReplaced = String(req.query.show_replaced || '').trim() === '1';
     const segmentsList = await loadSegments(area);
     const [contactsRows, one] = await Promise.all([
-      loadContactsList(area, segmentsList, contactSegmentFilter, contactSearchQ),
+      loadContactsList(area, segmentsList, contactSegmentFilter, contactSearchQ, showReplaced),
       query(
         `SELECT
            c.id,
@@ -290,6 +322,9 @@ function registerInboxViews(app, ctx) {
            c.phone,
            c.opt_in,
            c.active,
+           c.replaced_by_contact_id,
+           c.replaced_at,
+           c.replacement_reason,
            c.created_at,
            COALESCE((
              SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
@@ -314,7 +349,8 @@ function registerInboxViews(app, ctx) {
       contacts: contactsRows,
       contactSegmentFilter,
       contactSearchQ,
-      contactListQuery: contactListQueryString(contactSegmentFilter, contactSearchQ),
+      showReplaced,
+      contactListQuery: contactListQueryString(contactSegmentFilter, contactSearchQ, showReplaced),
       view: 'edit',
       selectedContactId: contactId,
       contact: one.rows[0],
@@ -329,8 +365,15 @@ function registerInboxViews(app, ctx) {
     const area = req.user.area;
     const contactSegmentFilter = String(req.query.segment || '').trim();
     const contactSearchQ = String(req.query.q || '').trim();
+    const showReplaced = String(req.query.show_replaced || '').trim() === '1';
     const segmentsList = await loadSegments(area);
-    const contactsRows = await loadContactsList(area, segmentsList, contactSegmentFilter, contactSearchQ);
+    const contactsRows = await loadContactsList(
+      area,
+      segmentsList,
+      contactSegmentFilter,
+      contactSearchQ,
+      showReplaced
+    );
     res.render('contacts-page', {
       ...commonLocals(req, res),
       activeNav: 'contacts',
@@ -340,7 +383,8 @@ function registerInboxViews(app, ctx) {
       contacts: contactsRows,
       contactSegmentFilter,
       contactSearchQ,
-      contactListQuery: contactListQueryString(contactSegmentFilter, contactSearchQ),
+      showReplaced,
+      contactListQuery: contactListQueryString(contactSegmentFilter, contactSearchQ, showReplaced),
       view: 'list',
       selectedContactId: null,
       contact: null,
@@ -349,6 +393,13 @@ function registerInboxViews(app, ctx) {
           ? {
               ok: req.query.ok !== undefined ? Number(req.query.ok) : null,
               bad: req.query.bad !== undefined ? Number(req.query.bad) : null,
+              dup: req.query.dup !== undefined ? Number(req.query.dup) : 0,
+              dupRows: req.query.dup_rows !== undefined ? Number(req.query.dup_rows) : 0,
+              dupExamples: String(req.query.dup_examples || '')
+                .split(',')
+                .map((x) => x.trim())
+                .filter(Boolean)
+                .slice(0, 3),
               err: req.query.err || null,
             }
           : null,

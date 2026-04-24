@@ -18,6 +18,8 @@ async function fetchRecipientsUnion(query, area, segmentSlugs, options = {}) {
     WHERE c.area = $1
       AND c.opt_in = TRUE
       AND c.active = TRUE
+      AND c.replacement_reason IS NULL
+      AND c.replaced_by_contact_id IS NULL
       AND cs.segment_slug = ANY($2::varchar[])
   `;
   if (contactIds != null && contactIds.length > 0) {
@@ -42,6 +44,8 @@ async function countRecipientsUnion(query, area, segmentSlugs) {
      WHERE c.area = $1
        AND c.opt_in = TRUE
        AND c.active = TRUE
+       AND c.replacement_reason IS NULL
+       AND c.replaced_by_contact_id IS NULL
        AND cs.segment_slug = ANY($2::varchar[])`,
     [area, segmentSlugs]
   );
