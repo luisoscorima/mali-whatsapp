@@ -256,8 +256,6 @@
                     <% const _prefPhoneDigits = String(selectedConversation.phone || '').replace(/\D/g, ''); %>
                     <% const _prefSp = new URLSearchParams(); %>
                     <% _prefSp.set('prefill_phone', _prefPhoneDigits); %>
-                    <% _prefSp.set('prefill_local', _prefPhoneDigits); %>
-                    <% _prefSp.set('prefill_prefix', '51'); %>
                     <a
                       class="small-btn secondary"
                       href="<%= basePath %>/contacts/new?<%= _prefSp.toString() %>"
