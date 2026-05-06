@@ -3,6 +3,9 @@
 <% const _segF = typeof contactSegmentFilter !== 'undefined' ? contactSegmentFilter : ''; %>
 <% const _qF = typeof contactSearchQ !== 'undefined' ? contactSearchQ : ''; %>
 <% const _showReplaced = typeof showReplaced !== 'undefined' ? Boolean(showReplaced) : false; %>
+<% const _prefillName = typeof prefillName !== 'undefined' ? prefillName : ''; %>
+<% const _prefillPhonePrefix = typeof prefillPhonePrefix !== 'undefined' ? prefillPhonePrefix : '51'; %>
+<% const _prefillPhoneLocal = typeof prefillPhoneLocal !== 'undefined' ? prefillPhoneLocal : ''; %>
 <% function contactSegmentColorKey(slug) {
   if (!slug) return 'slate';
   const s = segments.find(function (x) { return x.value === slug; });
@@ -81,16 +84,15 @@
       </select>
     </label>
     <label class="field field--inbox">
-      <span class="field-label">Buscar número</span>
+      <span class="field-label">Buscar número o nombre</span>
       <div class="inbox-search-row">
         <input
           type="search"
           name="q"
           value="<%= _qF %>"
-          placeholder="Ej. 982160981"
+          placeholder="Ej. 982160981 o Juan Pérez"
           autocomplete="off"
           class="inbox-search-input"
-          inputmode="numeric"
         />
         <button type="submit" class="small-btn primary">Buscar</button>
       </div>
@@ -226,16 +228,16 @@
       <form method="POST" action="<%= basePath %>/contacts" class="form-grid tight">
         <label class="field">
           <span class="field-label">Nombre</span>
-          <input name="name" required <%= segments.length === 0 ? 'disabled' : '' %> />
+          <input name="name" value="<%= _prefillName %>" required autofocus <%= segments.length === 0 ? 'disabled' : '' %> />
         </label>
         <div class="inline-fields contact-phone-split">
           <label class="field">
             <span class="field-label">Prefijo país</span>
-            <input name="phone_prefix" value="51" maxlength="4" inputmode="numeric" autocomplete="tel-country-code" <%= segments.length === 0 ? 'disabled' : '' %> />
+            <input name="phone_prefix" value="<%= _prefillPhonePrefix %>" maxlength="4" inputmode="numeric" autocomplete="tel-country-code" <%= segments.length === 0 ? 'disabled' : '' %> />
           </label>
           <label class="field contact-phone-local-field">
             <span class="field-label">Número (sin +51)</span>
-            <input name="phone_local" required placeholder="982160981" inputmode="numeric" autocomplete="tel-national" <%= segments.length === 0 ? 'disabled' : '' %> />
+            <input name="phone_local" value="<%= _prefillPhoneLocal %>" required placeholder="982160981" inputmode="numeric" autocomplete="tel-national" <%= segments.length === 0 ? 'disabled' : '' %> />
           </label>
         </div>
         <fieldset class="field segment-chips-fieldset">

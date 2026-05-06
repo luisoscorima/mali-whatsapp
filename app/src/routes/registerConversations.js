@@ -35,6 +35,20 @@ function inboxRedirectSuffixFromBody(body) {
   return s ? `?${s}` : '';
 }
 
+function inboxRedirectSuffixFromQuery(reqQuery) {
+  const seg = String(reqQuery.segment || '').trim();
+  const qText = String(reqQuery.q || '').trim();
+  const inboxChat = String(reqQuery.chat || '').trim();
+  const sp = new URLSearchParams();
+  if (seg) sp.set('segment', seg);
+  if (qText) sp.set('q', qText);
+  if (inboxChat === 'unread') sp.set('chat', 'unread');
+  else if (inboxChat === 'bot') sp.set('chat', 'bot');
+  else if (inboxChat === 'human') sp.set('chat', 'human');
+  const s = sp.toString();
+  return s ? `?${s}` : '';
+}
+
 function registerConversations(app, ctx) {
   const { query, config, buildInboxRenderData, appPath, resolveAppBaseUrl } = ctx;
 
@@ -128,6 +142,26 @@ function registerConversations(app, ctx) {
     res.redirect(appPath(`/conversations/${conversationId}${suffix}`));
   });
 
+  app.post('/conversations/:id/mark-unread', async (req, res) => {
+    const conversationId = Number(req.params.id);
+    if (!Number.isInteger(conversationId) || conversationId <= 0) {
+      return res.status(400).send('Id de conversacion invalido');
+    }
+    const area = req.user.area;
+    const upd = await query(
+      `UPDATE conversations
+       SET inbox_unread = TRUE, updated_at = NOW()
+       WHERE id = $1 AND area = $2
+       RETURNING id`,
+      [conversationId, area]
+    );
+    if (upd.rowCount === 0) {
+      return res.status(404).send('Conversacion no encontrada');
+    }
+    const suffix = inboxRedirectSuffixFromBody(req.body);
+    return res.redirect(appPath(`/conversations${suffix}`));
+  });
+
   app.patch('/api/conversations/:id/mode', async (req, res) => {
     const conversationId = Number(req.params.id);
     if (!Number.isInteger(conversationId) || conversationId <= 0) {
@@ -168,8 +202,53 @@ function registerConversations(app, ctx) {
 
   app.get('/conversations/:id', async (req, res) => {
     const conversationId = Number(req.params.id);
-    if (!Number.isInteger(conversationId) || conversationId <= 0) {
+    if (!Number.isInteger(conversationId) || conversationId === 0) {
       return res.status(400).send('Id de conversacion invalido');
+    }
+    if (conversationId < 0) {
+      const contactId = Math.abs(conversationId);
+      const area = req.user.area;
+      const contactResult = await query(
+        `SELECT id, phone
+         FROM contacts
+         WHERE id = $1 AND area = $2`,
+        [contactId, area]
+      );
+      if (contactResult.rowCount === 0) {
+        return res.status(404).send('Contacto no encontrado');
+      }
+      const contact = contactResult.rows[0];
+      const convResult = await query(
+        `SELECT id, contact_id
+         FROM conversations
+         WHERE area = $1 AND (contact_id = $2 OR phone = $3)
+         ORDER BY id ASC
+         LIMIT 1`,
+        [area, contactId, contact.phone]
+      );
+      let resolvedConversationId = null;
+      if (convResult.rowCount > 0) {
+        resolvedConversationId = convResult.rows[0].id;
+        if (!convResult.rows[0].contact_id) {
+          await query(
+            `UPDATE conversations
+             SET contact_id = $1, updated_at = NOW()
+             WHERE id = $2 AND area = $3`,
+            [contactId, resolvedConversationId, area]
+          );
+        }
+      } else {
+        const ins = await query(
+          `INSERT INTO conversations (area, phone, contact_id, status)
+           VALUES ($1, $2, $3, 'human')
+           RETURNING id`,
+          [area, contact.phone, contactId]
+        );
+        resolvedConversationId = ins.rows[0].id;
+      }
+      return res.redirect(
+        appPath(`/conversations/${resolvedConversationId}${inboxRedirectSuffixFromQuery(req.query)}`)
+      );
     }
     const data = await buildInboxRenderData(req, { selectedId: conversationId });
     if (data.notFound) {

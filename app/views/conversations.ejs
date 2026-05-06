@@ -232,6 +232,37 @@
                   <span class="sr-only">Más opciones</span>
                 </summary>
                 <div class="inbox-header-more-panel">
+                  <form
+                    method="POST"
+                    action="<%= basePath %>/conversations/<%= selectedConversation.id %>/mark-unread"
+                    class="inbox-lead-score-form inbox-lead-score-form--in-more"
+                  >
+                    <% if (segmentFilter) { %>
+                      <input type="hidden" name="inbox_segment" value="<%= segmentFilter %>" />
+                    <% } %>
+                    <% if (searchQ) { %>
+                      <input type="hidden" name="inbox_q" value="<%= searchQ %>" />
+                    <% } %>
+                    <% if (_chatF === 'unread') { %>
+                      <input type="hidden" name="inbox_chat" value="unread" />
+                    <% } else if (_chatF === 'bot') { %>
+                      <input type="hidden" name="inbox_chat" value="bot" />
+                    <% } else if (_chatF === 'human') { %>
+                      <input type="hidden" name="inbox_chat" value="human" />
+                    <% } %>
+                    <button type="submit" class="small-btn secondary">Marcar como no leído</button>
+                  </form>
+                  <% if (!contact) { %>
+                    <% const _prefPhoneDigits = String(selectedConversation.phone || '').replace(/\D/g, ''); %>
+                    <% const _prefSp = new URLSearchParams(); %>
+                    <% _prefSp.set('prefill_phone', _prefPhoneDigits); %>
+                    <% _prefSp.set('prefill_local', _prefPhoneDigits); %>
+                    <% _prefSp.set('prefill_prefix', '51'); %>
+                    <a
+                      class="small-btn secondary"
+                      href="<%= basePath %>/contacts/new?<%= _prefSp.toString() %>"
+                    >Guardar contacto</a>
+                  <% } %>
                   <div
                     class="inbox-mode-toggle inbox-mode-toggle--in-more<%= !_aiOn ? ' inbox-mode-toggle--disabled' : '' %>"
                     role="group"

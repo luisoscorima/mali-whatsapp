@@ -97,13 +97,30 @@ function createRouteContext({ query, pool, appPath }) {
     }
     if (searchQText) {
       const pat = `%${escapeForLikePattern(searchQText)}%`;
-      extra += ` AND EXISTS (
-        SELECT 1 FROM chat_messages m
-        WHERE m.conversation_id = c.id
-        AND m.body_text ILIKE $${p} ESCAPE '!'
+      const digitsOnly = String(searchQText).replace(/\D/g, '');
+      const digitsPat = digitsOnly ? `%${digitsOnly}%` : '';
+      extra += ` AND (
+        EXISTS (
+          SELECT 1 FROM chat_messages m
+          WHERE m.conversation_id = c.id
+          AND m.body_text ILIKE $${p} ESCAPE '!'
+        )
+        OR COALESCE(ct.name, '') ILIKE $${p} ESCAPE '!'
+        OR COALESCE(ct.phone, '') ILIKE $${p} ESCAPE '!'
+        OR COALESCE(c.phone, '') ILIKE $${p} ESCAPE '!'
+        ${
+          digitsOnly
+            ? `OR regexp_replace(COALESCE(ct.phone, ''), '\\D', '', 'g') LIKE $${p + 1}
+        OR regexp_replace(COALESCE(c.phone, ''), '\\D', '', 'g') LIKE $${p + 1}`
+            : ''
+        }
       )`;
       params.push(pat);
       p += 1;
+      if (digitsOnly) {
+        params.push(digitsPat);
+        p += 1;
+      }
     }
     if (chatFilter === 'unread') {
       extra += ` AND c.inbox_unread = TRUE`;
@@ -142,7 +159,72 @@ function createRouteContext({ query, pool, appPath }) {
         LIMIT 200`,
       params
     );
-    return listResult.rows;
+    const rows = listResult.rows;
+
+    if (!searchQText || chatFilter !== 'all') {
+      return rows;
+    }
+
+    const contactParams = [area];
+    let cp = 2;
+    let contactWhere = `WHERE ct.area = $1`;
+    if (segmentFilter === '__none__') {
+      contactWhere += ` AND NOT EXISTS (
+        SELECT 1 FROM contact_segments csn
+        WHERE csn.contact_id = ct.id
+      )`;
+    } else if (segmentFilter) {
+      contactWhere += ` AND EXISTS (
+        SELECT 1 FROM contact_segments cseg
+        WHERE cseg.contact_id = ct.id AND cseg.segment_slug = $${cp}
+      )`;
+      contactParams.push(segmentFilter);
+      cp += 1;
+    }
+    const contactPat = `%${escapeForLikePattern(searchQText)}%`;
+    const contactDigits = String(searchQText).replace(/\D/g, '');
+    contactWhere += ` AND (
+      COALESCE(ct.name, '') ILIKE $${cp} ESCAPE '!'
+      OR COALESCE(ct.phone, '') ILIKE $${cp} ESCAPE '!'`;
+    contactParams.push(contactPat);
+    cp += 1;
+    if (contactDigits) {
+      contactWhere += ` OR regexp_replace(COALESCE(ct.phone, ''), '\\D', '', 'g') LIKE $${cp}`;
+      contactParams.push(`%${contactDigits}%`);
+      cp += 1;
+    }
+    contactWhere += `)`;
+
+    const contactsWithoutConversation = await query(
+      `SELECT
+         (-ct.id) AS id,
+         ct.phone,
+         NULL::timestamptz AS last_message_at,
+         NULL::timestamptz AS last_user_message_at,
+         FALSE AS inbox_unread,
+         NULL::text AS conversation_status,
+         ct.lead_score AS contact_lead_score,
+         ct.name AS contact_name,
+         COALESCE((
+           SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
+           FROM contact_segments cs
+           JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+           WHERE cs.contact_id = ct.id
+         ), ARRAY[]::varchar[]) AS contact_segment_slugs,
+         ''::text AS preview
+       FROM contacts ct
+       ${contactWhere}
+       AND NOT EXISTS (
+         SELECT 1
+         FROM conversations c
+         WHERE c.area = $1 AND (c.contact_id = ct.id OR c.phone = ct.phone)
+       )
+       ORDER BY ct.updated_at DESC, ct.id DESC
+       LIMIT 50`,
+      contactParams
+    );
+
+    return rows.concat(contactsWithoutConversation.rows);
   }
 
   async function loadSyncedTemplates(area) {

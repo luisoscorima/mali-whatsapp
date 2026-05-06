@@ -30,10 +30,19 @@ function registerInboxViews(app, ctx) {
       params.push(seg);
       p += 1;
     }
-    const qDigits = String(searchQRaw || '').replace(/\D/g, '');
-    if (qDigits.length >= 1) {
-      wh += ` AND c.phone LIKE $${p} ESCAPE '!'`;
-      params.push(`%${escapeForLikePattern(qDigits)}%`);
+    const searchQ = String(searchQRaw || '').trim();
+    const qDigits = searchQ.replace(/\D/g, '');
+    if (searchQ) {
+      const searchPat = `%${escapeForLikePattern(searchQ)}%`;
+      wh += ` AND (COALESCE(c.name, '') ILIKE $${p} ESCAPE '!' OR COALESCE(c.phone, '') ILIKE $${p} ESCAPE '!'`;
+      params.push(searchPat);
+      p += 1;
+      if (qDigits) {
+        wh += ` OR regexp_replace(COALESCE(c.phone, ''), '\\D', '', 'g') LIKE $${p}`;
+        params.push(`%${qDigits}%`);
+        p += 1;
+      }
+      wh += ')';
     }
     const r = await query(
       `SELECT
@@ -226,6 +235,12 @@ function registerInboxViews(app, ctx) {
     const contactSegmentFilter = String(req.query.segment || '').trim();
     const contactSearchQ = String(req.query.q || '').trim();
     const showReplaced = String(req.query.show_replaced || '').trim() === '1';
+    const prefillName = String(req.query.prefill_name || '').trim().slice(0, 150);
+    const prefillPhone = String(req.query.prefill_phone || '').replace(/\D/g, '');
+    const prefillPrefixRaw = String(req.query.prefill_prefix || '').replace(/\D/g, '');
+    const prefillLocalRaw = String(req.query.prefill_local || '').replace(/\D/g, '');
+    const prefillPhonePrefix = (prefillPrefixRaw || '51').slice(0, 4);
+    const prefillPhoneLocal = (prefillLocalRaw || prefillPhone).slice(0, 20);
     const segmentsList = await loadSegments(area);
     const contactsRows = await loadContactsList(
       area,
@@ -248,6 +263,9 @@ function registerInboxViews(app, ctx) {
       view: 'new',
       selectedContactId: null,
       contact: null,
+      prefillName,
+      prefillPhonePrefix,
+      prefillPhoneLocal,
       csvImport: null,
       maxCsvRows: config.MAX_CSV_ROWS,
       contactUpdated: String(req.query.contact_updated || '') === '1',

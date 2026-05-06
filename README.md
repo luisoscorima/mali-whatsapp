@@ -17,9 +17,9 @@ Plataforma web para **operar WhatsApp Business (Cloud API)** en MALI: **varios n
 | Ámbito              | Qué incluye                                                                                                                                                                                                     |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Campañas**        | Creación con plantillas sincronizadas desde Meta; parámetros dinámicos según la plantilla; seguimiento de envíos y embudo de estados.                                                                           |
-| **Contactos**       | Alta manual, edición, filtros; **importación masiva CSV** con ejemplo descargable.                                                                                                                              |
+| **Contactos**       | Alta manual, edición, filtros por **número o nombre**; **importación masiva CSV/Excel** con ejemplo descargable.                                                                                                 |
 | **Segmentos**       | Definición y mantenimiento de segmentos para filtrar audiencias.                                                                                                                                                |
-| **Conversaciones**  | Lista e hilo por contacto; respuesta del asesor en ventana de 24 h; adjuntos según soporte del flujo; exportación de historial donde aplique.                                                                   |
+| **Conversaciones**  | Lista e hilo por contacto; búsqueda por texto, nombre o número; resultados de contactos sin hilo previo (abre chat vacío); marcado manual como no leído; respuesta del asesor en ventana de 24 h; adjuntos y exportación. |
 | **Plantillas**      | Sincronización desde Graph API; formulario adaptado a cabeceras (imagen/video/documento) y textos con `{{1}}`, etc.                                                                                             |
 | **Ajustes / Admin** | Credenciales Meta **por número/área** (token + Phone Number ID; alternativa o complemento a `.env`); configuración de **IA por área** (`prompt`, palabra clave de transferencia, activación global por master). |
 | **API / sistema**   | `GET /health`, `GET /api/dashboard`, webhook `GET/POST /webhook` para Meta.                                                                                                                                     |
@@ -63,6 +63,9 @@ mali-whatsapp-mvp/
 - `app/` es la aplicación principal.
 - Al **arrancar** el servidor se ejecutan las migraciones PostgreSQL (`app/src/db/migrations.js`): en una BD vacía se crean tablas e índices; no hace falta importar `db/init.sql` en Docker.
 - Importación masiva de contactos por **CSV** desde el panel (sección Contactos); ejemplo descargable en `/contacts/sample.csv`.
+- En Conversaciones, el buscador encuentra por texto del hilo, nombre o número; además permite abrir chats vacíos para contactos guardados sin historial.
+- Desde el menú **Más** de un chat se puede marcar la conversación como **No leída**.
+- Si un chat no tiene contacto vinculado, el flujo **Guardar contacto** redirige a `/contacts/new` con teléfono prellenado.
 - La capa de vistas usa un único patrón basado en `conversations.ejs`: `wa-rail` + `inbox-sidebar` + `inbox-main`.
 - Se eliminó el dashboard multipestaña (`hash tabs`) y ahora la navegación es por rutas reales.
 
@@ -127,6 +130,7 @@ Si aparece `Cannot find module` tras añadir dependencias en `package.json`, el 
 
 - `GET /` redirección a `GET /campaigns`
 - `GET /conversations` conversaciones (lista + hilo)
+- `GET /conversations/:id` detalle de conversación (también resuelve chats vacíos desde resultados de búsqueda de contactos)
 - `GET /campaigns` campañas (lista)
 - `GET /campaigns/new` nueva campaña
 - `GET /campaigns/:id` detalle de campaña
@@ -151,6 +155,7 @@ En **Campañas** (`GET /campaigns`) se muestran la lista de campañas y el **res
 - `GET /api/dashboard` datos agregados (compatibilidad para integraciones internas)
 - `GET /webhook` verificación de webhook en Meta
 - `POST /webhook` recepción de estados `sent/delivered/read/failed` y mensajes entrantes (incl. disparo de IA en modo bot si aplica)
+- `POST /conversations/:id/mark-unread` marcar conversación como no leída
 - `PATCH /api/settings/ai/:area` configuración de IA por área (master o permiso de edición de prompt)
 - `POST /api/settings/ai/:area/enable` activar/desactivar bot para todo el área (solo master)
 
