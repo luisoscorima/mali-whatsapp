@@ -1598,6 +1598,13 @@ html[data-theme='dark'] .admin-online-dot {
   margin-left: 0.25rem;
 }
 
+.campaign-list-send-when {
+  display: block;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  margin-top: 2px;
+}
+
 /* Estado de entrega en mensajes salientes (webhook Meta → raw_payload.delivery_status) */
 .chat-delivery-row {
   display: flex;

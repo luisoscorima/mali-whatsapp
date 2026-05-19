@@ -157,6 +157,8 @@ function registerInboxViews(app, ctx) {
         c.status,
         c.total_recipients,
         c.created_at,
+        c.scheduled_at,
+        MIN(cl.created_at) AS first_send_at,
         COALESCE(COUNT(cl.id), 0)::int AS log_count,
         COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ${SALIDA_OK_IN} THEN 1 ELSE 0 END), 0)::int AS salida_ok,
         COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ('delivered', 'read') THEN 1 ELSE 0 END), 0)::int AS delivered_count,
