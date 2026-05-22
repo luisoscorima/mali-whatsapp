@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <%- include('partials/app-head', { pageTitle, basePath }) %>
+</head>
+<body class="page-conversations">
+  <div class="wa-layout wa-layout--inbox" style="display:flex;min-height:100vh">
+  <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav: 'anuncios', showAdminNav, requireAuth, currentUser, areaLabel }) %>
+  <main class="main-panel" style="flex:1;padding:1.5rem">
+    <header class="page-header">
+      <h1>Anuncios Meta</h1>
+      <p class="muted">Leads que llegaron por Click-to-WhatsApp desde anuncios de Facebook o Instagram. Los anuncios se registran automáticamente al recibir el primer mensaje con <code>referral</code>.</p>
+    </header>
+    <% if (flash === 'saved') { %><p class="toast toast--ok">Nombre actualizado.</p><% } %>
+    <div class="card">
+      <% if (!ads || !ads.length) { %>
+        <p class="muted">Aún no hay anuncios registrados. Cuando un usuario escriba desde una pauta CTWA, aparecerá aquí con su ID de Meta.</p>
+      <% } else { %>
+      <table>
+        <thead>
+          <tr>
+            <th>Anuncio</th>
+            <th>Plataforma</th>
+            <th>Headline</th>
+            <th>Leads</th>
+            <th>Último contacto</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% ads.forEach(function (a) { %>
+          <tr>
+            <td>
+              <strong><%= adDisplayLabel(a) %></strong>
+              <% if (a.display_name) { %><br><span class="mono muted"><%= a.meta_source_id %></span><% } %>
+            </td>
+            <td><%= formatAdPlatformLabel(a.ad_platform) %></td>
+            <td><%= (a.headline || '—').slice(0, 80) %></td>
+            <td><%= a.lead_count %></td>
+            <td><%= a.last_seen_at ? new Date(a.last_seen_at).toLocaleString('es-PE') : '—' %></td>
+            <td><a href="<%= basePath %>/anuncios/<%= a.id %>">Ver</a></td>
+          </tr>
+          <% }); %>
+        </tbody>
+      </table>
+      <% } %>
+    </div>
+    <p><a href="<%= basePath %>/conversations">Ir al inbox</a></p>
+  </main>
+  </div>
+</body>
+</html>

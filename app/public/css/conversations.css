@@ -997,6 +997,39 @@ html[data-theme='dark'] .settings-ai-prompt-textarea {
   border-color: color-mix(in srgb, var(--line) 70%, transparent);
 }
 
+.inbox-layout-wa .chat-referral-bubble {
+  margin-bottom: 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  font-size: 0.72rem;
+  line-height: 1.35;
+  max-width: 100%;
+}
+
+.inbox-layout-wa .chat-referral-bubble__platform {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 2px;
+  color: var(--accent);
+}
+
+.inbox-layout-wa .chat-referral-bubble__headline {
+  margin: 0 0 2px;
+  font-weight: 600;
+}
+
+.inbox-layout-wa .chat-referral-bubble__body {
+  margin: 0;
+  opacity: 0.88;
+}
+
+.inbox-chat-segment--ad {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+
 /* --- Compositor --- */
 .inbox-layout-wa .inbox-compose {
   flex-shrink: 0;

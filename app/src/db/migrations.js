@@ -455,21 +455,52 @@ async function runMigrations(query) {
      ON conversation_tags(conversation_id, label)`
   );
 
+  await query(`DROP TABLE IF EXISTS ctwa_tag_rules`);
+
   await query(`
-    CREATE TABLE IF NOT EXISTS ctwa_tag_rules (
+    CREATE TABLE IF NOT EXISTS meta_ctwa_ads (
       id SERIAL PRIMARY KEY,
-      area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion')),
-      meta_source_id VARCHAR(64) NULL,
-      headline_pattern VARCHAR(200) NULL,
-      segment_slug VARCHAR(50) NOT NULL,
-      tag_label VARCHAR(120) NOT NULL,
-      active BOOLEAN NOT NULL DEFAULT TRUE,
+      area VARCHAR(32) NOT NULL,
+      meta_source_id VARCHAR(128) NOT NULL,
+      display_name VARCHAR(200) NULL,
+      ad_platform VARCHAR(16) NOT NULL DEFAULT 'other',
+      source_url TEXT NULL,
+      source_type VARCHAR(32) NULL,
+      headline TEXT NULL,
+      body TEXT NULL,
+      media_type VARCHAR(32) NULL,
+      image_url TEXT NULL,
+      ctwa_clid TEXT NULL,
+      referral_snapshot JSONB NULL,
+      lead_count INTEGER NOT NULL DEFAULT 0,
+      first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      CHECK (meta_source_id IS NOT NULL OR headline_pattern IS NOT NULL)
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (area, meta_source_id)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_meta_ctwa_ads_area ON meta_ctwa_ads(area)`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS meta_ctwa_ad_leads (
+      id SERIAL PRIMARY KEY,
+      area VARCHAR(32) NOT NULL,
+      meta_ctwa_ad_id INTEGER NOT NULL REFERENCES meta_ctwa_ads(id) ON DELETE CASCADE,
+      conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      contact_id INTEGER NULL REFERENCES contacts(id) ON DELETE SET NULL,
+      phone VARCHAR(32) NOT NULL,
+      first_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (area, meta_ctwa_ad_id, conversation_id)
     )
   `);
   await query(
-    `CREATE INDEX IF NOT EXISTS idx_ctwa_tag_rules_area_active ON ctwa_tag_rules(area) WHERE active = TRUE`
+    `CREATE INDEX IF NOT EXISTS idx_meta_ctwa_ad_leads_ad ON meta_ctwa_ad_leads(meta_ctwa_ad_id)`
+  );
+
+  await query(
+    `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS meta_ctwa_ad_id INTEGER NULL REFERENCES meta_ctwa_ads(id) ON DELETE SET NULL`
   );
 
   await query(`ALTER TABLE whatsapp_templates ADD COLUMN IF NOT EXISTS rejection_reason TEXT NULL`);

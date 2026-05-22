@@ -153,6 +153,10 @@ function createRouteContext({ query, pool, appPath }) {
            ORDER BY m.created_at DESC
            LIMIT 1) AS preview,
           c.attribution,
+          c.meta_ctwa_ad_id,
+          ma.display_name AS meta_ad_display_name,
+          ma.meta_source_id AS meta_ad_source_id,
+          ma.ad_platform AS meta_ad_platform,
           COALESCE((
             SELECT array_agg(tg.label ORDER BY tg.label)
             FROM conversation_tags tg
@@ -160,6 +164,7 @@ function createRouteContext({ query, pool, appPath }) {
           ), ARRAY[]::varchar[]) AS conversation_tags
         FROM conversations c
         LEFT JOIN contacts ct ON ct.id = c.contact_id
+        LEFT JOIN meta_ctwa_ads ma ON ma.id = c.meta_ctwa_ad_id AND ma.area = c.area
         WHERE c.area = $1
         ${extra}
         ORDER BY c.last_message_at DESC
@@ -474,6 +479,7 @@ function createRouteContext({ query, pool, appPath }) {
     const inboxQueryBot = inboxQueryString(segmentFilter, searchQ, 'bot');
     const inboxQueryHuman = inboxQueryString(segmentFilter, searchQ, 'human');
     let selectedConversation = null;
+    let metaAd = null;
     let contact = null;
     let messages = [];
     let canReply = false;
@@ -493,6 +499,14 @@ function createRouteContext({ query, pool, appPath }) {
         [selectedId]
       );
       selectedConversation.conversation_tags = tagsR.rows.map((r) => r.label);
+      if (selectedConversation.meta_ctwa_ad_id) {
+        const adR = await query(
+          `SELECT id, meta_source_id, display_name, ad_platform, headline, body, source_url
+           FROM meta_ctwa_ads WHERE id = $1 AND area = $2`,
+          [selectedConversation.meta_ctwa_ad_id, area]
+        );
+        metaAd = adR.rows[0] || null;
+      }
       await query(
         `UPDATE conversations SET inbox_unread = FALSE, updated_at = NOW() WHERE id = $1 AND area = $2`,
         [selectedId, area]
@@ -554,6 +568,7 @@ function createRouteContext({ query, pool, appPath }) {
       aiAreaEnabled,
       conversations: conversationsOut,
       selectedConversation,
+      metaAd,
       contact,
       messages,
       canReply,

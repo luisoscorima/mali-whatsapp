@@ -49,11 +49,29 @@
        if (!convId || !msgId) return '';
        return resolvePreviewMediaUrl(base, '/conversations/' + convId + '/messages/' + msgId + '/download');
      }
+     function extractReferralBubble(raw) {
+       if (!raw || typeof raw !== 'object') return null;
+       var ref = raw.referral;
+       if (!ref && raw.context && raw.context.referral) ref = raw.context.referral;
+       if (!ref || typeof ref !== 'object') return null;
+       var url = String(ref.source_url || '');
+       var lu = url.toLowerCase();
+       var platform = 'Meta';
+       if (lu.indexOf('instagram') !== -1 || lu.indexOf('ig.me') !== -1) platform = 'Instagram';
+       else if (lu.indexOf('facebook') !== -1 || lu.indexOf('fb.me') !== -1 || lu.indexOf('fb.com') !== -1) platform = 'Facebook';
+       return {
+         platform: platform,
+         headline: ref.headline ? String(ref.headline) : '',
+         body: ref.body ? String(ref.body) : '',
+         source_id: ref.source_id ? String(ref.source_id) : ''
+       };
+     }
   %>
   <% const _convId = typeof conversationId !== 'undefined' ? conversationId : null; %>
   <div class="chat-thread chat-thread--inbox" id="chat-thread">
     <% messages.forEach((m) => { %>
       <% const raw = parsePayload(m.raw_payload); %>
+      <% const refBubble = m.direction !== 'outbound' ? extractReferralBubble(raw) : null; %>
       <% const lp = raw && raw.local_preview; %>
       <% const mediaUrl = lp && lp.url ? resolvePreviewMediaUrl(bp, lp.url) : ''; %>
       <% const mt = String(m.message_type || 'text'); %>
@@ -61,6 +79,13 @@
       <div class="chat-bubble <%= m.direction === 'outbound' ? 'chat-bubble--out' : 'chat-bubble--in' %><%= m.direction === 'outbound' && m.is_ai ? ' chat-bubble--ai' : '' %>">
         <% if (m.direction === 'outbound' && m.is_ai) { %>
           <span class="chat-bubble__ai-tag" title="Respuesta automática (IA)"><span aria-hidden="true">✨</span> IA</span>
+        <% } %>
+        <% if (refBubble) { %>
+          <div class="chat-referral-bubble" role="note" aria-label="Origen anuncio <%= refBubble.platform %>">
+            <span class="chat-referral-bubble__platform">📣 <%= refBubble.platform %></span>
+            <% if (refBubble.headline) { %><p class="chat-referral-bubble__headline"><%= refBubble.headline %></p><% } %>
+            <% if (refBubble.body) { %><p class="chat-referral-bubble__body"><%= refBubble.body %></p><% } %>
+          </div>
         <% } %>
         <% if (showTypeRow) { %>
           <div class="chat-bubble__type" title="<%= mediaLabel(mt) || mt %>">

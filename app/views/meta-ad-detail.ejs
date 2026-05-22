@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <%- include('partials/app-head', { pageTitle, basePath }) %>
+</head>
+<body class="page-conversations">
+  <div class="wa-layout wa-layout--inbox" style="display:flex;min-height:100vh">
+  <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav: 'anuncios', showAdminNav, requireAuth, currentUser, areaLabel }) %>
+  <main class="main-panel" style="flex:1;padding:1.5rem">
+    <header class="page-header">
+      <p><a href="<%= basePath %>/anuncios">← Anuncios</a></p>
+      <h1><%= adDisplayLabel(ad) %></h1>
+      <p class="muted mono">ID Meta: <%= ad.meta_source_id %> · <%= formatAdPlatformLabel(ad.ad_platform) %></p>
+    </header>
+    <% if (flash === 'saved') { %><p class="toast toast--ok">Nombre guardado.</p><% } %>
+    <% if (error === 'save') { %><p class="toast toast--err">No se pudo guardar el nombre.</p><% } %>
+
+    <div class="card" style="margin-bottom:1rem">
+      <h2>Nombre del anuncio</h2>
+      <p class="muted">Opcional. Más adelante se podrá sincronizar desde la API de Meta Ads.</p>
+      <form method="post" action="<%= basePath %>/anuncios/<%= ad.id %>/nombre" class="form-stack" style="max-width:28rem">
+        <label class="field-label" for="display_name">Nombre visible</label>
+        <input type="text" id="display_name" name="display_name" maxlength="200" value="<%= ad.display_name || '' %>" placeholder="Ej. Promoción marzo 2026" />
+        <button type="submit" class="small-btn primary">Guardar nombre</button>
+      </form>
+    </div>
+
+    <div class="card" style="margin-bottom:1rem">
+      <h2>Datos del anuncio</h2>
+      <dl class="detail-dl">
+        <div><dt>Plataforma</dt><dd><%= formatAdPlatformLabel(ad.ad_platform) %></dd></div>
+        <div><dt>Tipo origen</dt><dd><%= ad.source_type || '—' %></dd></div>
+        <div><dt>URL</dt><dd><% if (ad.source_url) { %><a href="<%= ad.source_url %>" target="_blank" rel="noopener noreferrer"><%= ad.source_url %></a><% } else { %>—<% } %></dd></div>
+        <div><dt>Headline</dt><dd><%= ad.headline || '—' %></dd></div>
+        <div><dt>Body</dt><dd><%= ad.body || '—' %></dd></div>
+        <div><dt>Media</dt><dd><%= ad.media_type || '—' %><% if (ad.image_url) { %> · <a href="<%= ad.image_url %>" target="_blank" rel="noopener noreferrer">imagen</a><% } %></dd></div>
+        <div><dt>Leads</dt><dd><%= ad.lead_count %></dd></div>
+        <div><dt>Primer / último contacto</dt>
+        <dd><%= ad.first_seen_at ? new Date(ad.first_seen_at).toLocaleString('es-PE') : '—' %> · <%= ad.last_seen_at ? new Date(ad.last_seen_at).toLocaleString('es-PE') : '—' %></dd></div>
+      </dl>
+    </div>
+
+    <div class="card">
+      <h2>Personas desde este anuncio (<%= leads.length %>)</h2>
+      <% if (!leads.length) { %>
+        <p class="muted">Sin leads vinculados aún.</p>
+      <% } else { %>
+      <table>
+        <thead>
+          <tr><th>Nombre</th><th>Teléfono</th><th>Primer mensaje</th><th></th></tr>
+        </thead>
+        <tbody>
+          <% leads.forEach(function (l) { %>
+          <tr>
+            <td><%= l.contact_name || '—' %></td>
+            <td class="mono"><%= l.phone %></td>
+            <td><%= l.first_message_at ? new Date(l.first_message_at).toLocaleString('es-PE') : '—' %></td>
+            <td><% if (l.conversation_id) { %><a href="<%= basePath %>/conversations/<%= l.conversation_id %>">Chat</a><% } %></td>
+          </tr>
+          <% }); %>
+        </tbody>
+      </table>
+      <% } %>
+    </div>
+  </main>
+  </div>
+</body>
+</html>

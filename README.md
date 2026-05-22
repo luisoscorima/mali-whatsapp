@@ -10,7 +10,7 @@ Plataforma web para **operar WhatsApp Business (Cloud API)** en MALI: **varios n
 - **Panel unificado:** rutas reales (sin “tabs” por hash), vista tipo inbox para conversaciones y KPIs de campañas ampliados (fallidos, respondieron, costo, reintentos).
 - **Seguridad operativa:** sesiones para el panel, verificación opcional de firma del webhook (`X-Hub-Signature-256`), usuarios por dominio `@mali.pe`.
 - **IA asistida (Groq):** respuestas en sesión de 24 h cuando la conversación está en modo **Bot**; el master puede activar o desactivar el bot por área desde Ajustes.
-- **Leads CTWA:** reglas para anuncios Click-to-WhatsApp (`referral` en el primer mensaje) → segmento + etiqueta visible en inbox.
+- **Leads CTWA:** detección automática de anuncios Click-to-WhatsApp (`referral` en el mensaje, también en `context.referral`) → plataforma Facebook/Instagram, globo en el chat y listado en `/anuncios`.
 
 ## Funcionalidades
 
@@ -20,9 +20,9 @@ Plataforma web para **operar WhatsApp Business (Cloud API)** en MALI: **varios n
 | **Contactos** | Alta manual, edición, filtros por **número, nombre y atributos**; **importación masiva CSV/Excel** (columnas extra → atributos); ejemplo en `/contacts/sample.csv`. |
 | **Segmentos** | Definición y mantenimiento de segmentos para filtrar audiencias. |
 | **Exclusiones en campaña** | Segmentos a excluir en nueva campaña; destinatarios puntuales desmarcando en el paso 2. |
-| **Conversaciones** | Lista e hilo; búsqueda por texto, nombre o número; chips de **segmento y etiquetas CTWA**; origen `attribution` en cabecera; **descarga** de imágenes/documentos del hilo; marcado no leído; respuesta del asesor en ventana de 24 h; adjuntos y exportación. |
+| **Conversaciones** | Lista e hilo; búsqueda por texto, nombre o número; chips de **segmento y anuncio Meta**; globo con origen FB/IG y texto del anuncio; **descarga** de imágenes/documentos del hilo; marcado no leído; respuesta del asesor en ventana de 24 h; adjuntos y exportación. |
 | **Plantillas** | Sync desde Graph; **alta vía API** (`/templates/new`); listado de estados PENDING/APPROVED/REJECTED; formulario de campaña adaptado a cabeceras y `{{n}}`. |
-| **CTWA** | Reglas admin (`/ctwa-rules`): `meta_source_id` o patrón en headline → segmento + etiqueta de conversación. |
+| **Anuncios Meta** | Listado automático en `/anuncios` por `source_id`; headline, body, URL; leads por anuncio; nombre editable (API de Ads más adelante). |
 | **Ajustes / Admin** | Credenciales Meta por área; configuración de **IA por área** (master). |
 | **API / sistema** | `GET /health`, `GET /api/dashboard`, webhook `GET/POST /webhook`, APIs de campaña (fallidos, reintento, costo). |
 
@@ -49,8 +49,8 @@ Plataforma web para **operar WhatsApp Business (Cloud API)** en MALI: **varios n
 mali-whatsapp-mvp/
   app/
     src/
-      routes/          # auth, inbox, campañas, contactos, exclusiones, CTWA, plantillas, webhook…
-      services/        # envío campaña, reintento, costo, respondientes, CTWA, atributos…
+      routes/          # auth, inbox, campañas, contactos, anuncios Meta, plantillas, webhook…
+      services/        # envío campaña, reintento, costo, respondientes, metaCtwaAds, atributos…
       db/migrations.js # Esquema PostgreSQL idempotente (fuente de verdad al arrancar)
     public/
     views/
@@ -67,7 +67,7 @@ mali-whatsapp-mvp/
 - `app/` es la aplicación principal.
 - Al **arrancar** el servidor se ejecutan las migraciones PostgreSQL (`app/src/db/migrations.js`): en una BD vacía se crean tablas e índices; no hace falta importar `db/init.sql` en Docker.
 - Importación masiva de contactos por **CSV/Excel**; columnas adicionales (p. ej. `sede`, `monto`, `fecha_pago`) se guardan como **atributos** para campañas personalizadas.
-- En **Conversaciones**, búsqueda por hilo, nombre o número; descarga de imágenes del hilo; etiquetas CTWA y segmentos en lista y cabecera.
+- En **Conversaciones**, búsqueda por hilo, nombre o número; descarga de imágenes del hilo; globo de anuncio FB/IG en mensajes con `referral`; segmentos y enlace al anuncio en cabecera.
 - En **Campañas**, detalle con fallidos, respondieron (7d), costo WABA, reintento y exclusiones (segmentos, IDs, listas).
 - La capa de vistas usa `wa-rail` + `inbox-sidebar` + `inbox-main`.
 - Navegación por rutas reales (sin dashboard multipestaña por hash).
@@ -147,7 +147,8 @@ Si aparece `Cannot find module` tras añadir dependencias en `package.json`, el 
 - `GET /segments` segmentos (lista)
 - `GET /segments/new` añadir segmento
 - `GET /segments/:id` editar segmento
-- `GET /ctwa-rules` reglas Click-to-WhatsApp (anuncios Meta)
+- `GET /anuncios` anuncios Click-to-WhatsApp (leads desde Meta Ads)
+- `GET /anuncios/:id` detalle de anuncio, leads y nombre editable
 - `GET /templates` plantillas (estados de revisión)
 - `GET /templates/new` crear plantilla y enviar a Meta
 - `GET /history` → redirección a `GET /campaigns` (compatibilidad)
@@ -189,8 +190,8 @@ En Meta Developers, suscribe el webhook al campo **`message_template_status_upda
 ## CTWA (anuncios Click-to-WhatsApp)
 
 1. Crea la pauta en Meta Ads Manager (CTWA).
-2. En la app, **CTWA** (`/ctwa-rules`): registra `meta_source_id` del anuncio (o patrón en headline), segmento destino y texto de etiqueta (ej. «pauta GC mayo 2026»).
-3. Cuando el usuario escribe por primera vez con `referral` en el webhook, se asigna segmento al contacto y la etiqueta en la conversación (visible en inbox).
+2. Cuando el usuario escribe con `referral` (o `context.referral`) en el webhook, la app registra el anuncio por `source_id`, infiere **Facebook** o **Instagram** desde `source_url`, y muestra **headline** y **body** en un globo pequeño en el hilo.
+3. En **Anuncios** (`/anuncios`) ves la lista de IDs de anuncio, datos del creativo y los teléfonos/nombres que llegaron desde cada uno. Puedes editar un **nombre visible** (más adelante se sincronizará con la API de Meta Ads).
 
 La **inversión de la pauta** (spend en Ads Manager) **no** se muestra en v1; el costo en detalle de campaña es el del **envío masivo de plantillas** en la app.
 

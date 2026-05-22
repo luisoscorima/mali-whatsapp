@@ -11,7 +11,7 @@ Seguimiento del plan **«Plan revisado — observaciones de usuarios y viabilida
 
 2. **Respondieron** — *Necesidad:* cuántos respondieron y lista de números. · *Implementado:* KPI en detalle (ventana 7 días) + lista al hacer clic.
 
-3. **Etiqueta pauta Meta (CTWA)** — *Necesidad:* etiquetar leads de anuncios FB/IG. · *Implementado:* reglas en `/ctwa-rules`, segmento + etiqueta en inbox al llegar `referral`.
+3. **Leads desde anuncios Meta (CTWA)** — *Necesidad:* saber si el mensaje viene de Facebook o Instagram y ver datos del anuncio. · *Implementado:* detección automática de `referral` (incl. `context.referral`), globo en el chat, listado en `/anuncios` con leads y nombre editable.
 
 4. **Descargar imágenes en web** — *Necesidad:* guardar vouchers desde el PC. · *Implementado:* botón descargar en el hilo (endpoint autenticado).
 
@@ -40,7 +40,7 @@ Seguimiento del plan **«Plan revisado — observaciones de usuarios y viabilida
 ## Decisiones de producto
 
 - **Costo campaña** = solo envío masivo en la app (WABA), no spend de pauta Meta.
-- **CTWA** = segmento + etiqueta visible en inbox.
+- **CTWA** = registro automático por `source_id`; plataforma desde `source_url`; sin reglas manuales.
 - **Respondió** = ventana de **7 días** post-envío.
 - **Reintento** = automático ~10 min + manual; errores permanentes no se reintentan.
 
@@ -53,5 +53,5 @@ Seguimiento del plan **«Plan revisado — observaciones de usuarios y viabilida
 | Fallidos / respondieron / costo / reintento | Detalle campaña `/campaigns/:id` |
 | Nueva campaña (exclusiones, vars) | `/campaigns/new` |
 | Plantillas | `/templates`, `/templates/new` |
-| Reglas CTWA | `/ctwa-rules` |
+| Anuncios Meta (CTWA) | `/anuncios` |
 | Atributos y filtros | `/contacts` |
