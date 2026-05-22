@@ -16,8 +16,10 @@ async function boot() {
   await refreshMetaSettingsCache(query);
   await purgeOldAuditLogs(query);
 
-  const { app, resumeQueuedCampaigns, promoteDueScheduledCampaigns } = createApp();
+  const { app, resumeQueuedCampaigns, promoteDueScheduledCampaigns, promoteDueCampaignRetries } =
+    createApp();
   await promoteDueScheduledCampaigns();
+  await promoteDueCampaignRetries();
   await resumeQueuedCampaigns();
 
   app.listen(config.port, '0.0.0.0', () => {

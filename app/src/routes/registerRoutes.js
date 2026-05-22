@@ -1,4 +1,8 @@
-const { resumeQueuedCampaigns, promoteDueScheduledCampaigns } = require('../services/campaignSender');
+const {
+  resumeQueuedCampaigns,
+  promoteDueScheduledCampaigns,
+  promoteDueCampaignRetries,
+} = require('../services/campaignSender');
 const { createRouteContext } = require('./shared/routeContext');
 const { registerAuth } = require('./registerAuth');
 const { registerDashboard } = require('./registerDashboard');
@@ -12,6 +16,8 @@ const { registerConversations } = require('./registerConversations');
 const { registerWebhook } = require('./registerWebhook');
 const { registerAdmin } = require('./registerAdmin');
 const { registerSettingsApi } = require('./registerSettingsApi');
+const { registerExclusionLists } = require('./registerExclusionLists');
+const { registerCtwaRules } = require('./registerCtwaRules');
 
 function createRegisterRoutes({ query, pool, appPath }) {
   const ctx = createRouteContext({ query, pool, appPath });
@@ -28,6 +34,8 @@ function createRegisterRoutes({ query, pool, appPath }) {
     registerCampaigns(app, ctx);
     registerConversations(app, ctx);
     registerSettingsApi(app, ctx);
+    registerExclusionLists(app, ctx);
+    registerCtwaRules(app, ctx);
     registerWebhook(app, ctx);
   }
 
@@ -35,6 +43,7 @@ function createRegisterRoutes({ query, pool, appPath }) {
     register,
     resumeQueuedCampaigns: () => resumeQueuedCampaigns(query),
     promoteDueScheduledCampaigns: () => promoteDueScheduledCampaigns(query),
+    promoteDueCampaignRetries: () => promoteDueCampaignRetries(query),
   };
 }
 

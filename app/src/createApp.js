@@ -113,7 +113,12 @@ function createApp() {
   app.use(requirePasswordChange);
   app.use(globalLimiter);
 
-  const { register, resumeQueuedCampaigns, promoteDueScheduledCampaigns } = createRegisterRoutes({
+  const {
+    register,
+    resumeQueuedCampaigns,
+    promoteDueScheduledCampaigns,
+    promoteDueCampaignRetries,
+  } = createRegisterRoutes({
     query,
     pool,
     appPath,
@@ -123,6 +128,9 @@ function createApp() {
   setInterval(() => {
     promoteDueScheduledCampaigns().catch((err) => {
       console.error(JSON.stringify({ level: 'error', message: 'promoteDueScheduledCampaigns', error: String(err?.message || err) }));
+    });
+    promoteDueCampaignRetries().catch((err) => {
+      console.error(JSON.stringify({ level: 'error', message: 'promoteDueCampaignRetries', error: String(err?.message || err) }));
     });
   }, config.CAMPAIGN_SCHEDULE_POLL_MS);
 
@@ -135,7 +143,7 @@ function createApp() {
     });
   }, auditPurgeMs);
 
-  return { app, resumeQueuedCampaigns, promoteDueScheduledCampaigns };
+  return { app, resumeQueuedCampaigns, promoteDueScheduledCampaigns, promoteDueCampaignRetries };
 }
 
 module.exports = { createApp };

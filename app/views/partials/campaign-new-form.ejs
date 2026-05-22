@@ -38,6 +38,52 @@
           </div>
         </fieldset>
 
+        <fieldset class="campaign-segments-fieldset campaign-exclude-panel">
+          <legend class="visually-hidden">Excluir segmentos de la campaña</legend>
+          <div class="campaign-segments-head">
+            <span class="campaign-step-badge campaign-step-badge--compact" aria-hidden="true">—</span>
+            <span class="campaign-segments-titleline">Exclusiones (opcional)</span>
+          </div>
+          <p class="inline-help campaign-segments-hint">
+            Los contactos en estos segmentos <strong>no recibirán</strong> el mensaje, aunque también estén en un segmento incluido arriba.
+          </p>
+          <div class="campaign-segments-grid" role="group" aria-label="Segmentos a excluir">
+            <% segments.forEach(function (segment) { %>
+            <label class="campaign-segment-tile campaign-segment-tile--exclude">
+              <input type="checkbox" name="campaignExcludeSegment" value="<%= segment.value %>" class="campaign-exclude-segment-input" />
+              <span class="campaign-segment-text"><%= segment.label %></span>
+            </label>
+            <% }) %>
+          </div>
+          <% if (typeof exclusionLists !== 'undefined' && exclusionLists && exclusionLists.length) { %>
+          <div class="campaign-exclude-lists-field">
+            <span class="field-label">Listas de exclusión guardadas</span>
+            <p class="inline-help muted">
+              <a href="<%= basePath %>/exclusion-lists" target="_blank" rel="noopener">Gestionar listas</a>
+            </p>
+            <div class="campaign-segments-grid" role="group" aria-label="Listas de exclusión">
+              <% exclusionLists.forEach(function (list) { %>
+              <label class="campaign-segment-tile campaign-segment-tile--exclude">
+                <input type="checkbox" name="campaignExcludeList" value="<%= list.id %>" class="campaign-exclude-list-input" />
+                <span class="campaign-segment-text"><%= list.name %> <span class="muted">(<%= list.member_count %>)</span></span>
+              </label>
+              <% }) %>
+            </div>
+          </div>
+          <% } %>
+          <label class="field campaign-exclude-ids-field">
+            <span class="field-label">IDs de contacto a excluir (opcional)</span>
+            <textarea
+              id="campaign-exclude-contact-ids"
+              rows="2"
+              placeholder="Un ID por línea, p. ej. 42&#10;108"
+              autocomplete="off"
+              class="campaign-exclude-ids-input"
+            ></textarea>
+            <span class="inline-help">Si un contacto está incluido por segmento pero aparece aquí, no se enviará.</span>
+          </label>
+        </fieldset>
+
         <div class="campaign-destinatarios-block">
           <div class="campaign-destinatarios-head">
             <span class="campaign-step-badge" aria-hidden="true">2</span>

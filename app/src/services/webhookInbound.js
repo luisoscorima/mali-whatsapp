@@ -9,6 +9,11 @@ const {
   getWhatsAppCredentialsForArea,
   getWabaIdOverrideForArea,
 } = require('./metaSettingsCache');
+const {
+  loadActiveCtwaRules,
+  matchCtwaRule,
+  applyCtwaRuleToConversation,
+} = require('./ctwaTagging');
 
 const TRANSFER_TO_HUMAN_NOTICE =
   'He derivado tu consulta a un asesor. En breve te atenderán.';
@@ -395,6 +400,43 @@ async function persistInboundMessagesFromWebhookValue(query, value, context = {}
       [area, from, contactId]
     );
     const conversationId = convResult.rows[0].id;
+
+    if (msg.referral && typeof msg.referral === 'object') {
+      try {
+        const rules = await loadActiveCtwaRules(query, area);
+        const rule = matchCtwaRule(rules, msg.referral);
+        if (rule) {
+          await applyCtwaRuleToConversation(query, {
+            area,
+            conversationId,
+            contactId,
+            rule,
+            referral: msg.referral,
+          });
+        } else {
+          await query(
+            `UPDATE conversations SET attribution = $1::jsonb, updated_at = NOW() WHERE id = $2 AND area = $3`,
+            [
+              JSON.stringify({
+                referral: msg.referral,
+                applied_at: new Date().toISOString(),
+              }),
+              conversationId,
+              area,
+            ]
+          );
+        }
+      } catch (ctwaErr) {
+        console.log(
+          JSON.stringify({
+            level: 'warn',
+            message: 'CTWA tagging failed',
+            error: ctwaErr.message,
+            conversationId,
+          })
+        );
+      }
+    }
 
     try {
       const insertResult = await query(

@@ -92,9 +92,38 @@ module.exports = {
   CAMPAIGN_SCHEDULE_MAX_DAYS: 90,
   /** Intervalo del poller que promueve campañas scheduled → queued (ms). */
   CAMPAIGN_SCHEDULE_POLL_MS: 45 * 1000,
+  /** Minutos tras completar una campaña antes del reintento automático de fallidos. */
+  CAMPAIGN_AUTO_RETRY_DELAY_MINUTES: (() => {
+    const n = Number(process.env.CAMPAIGN_AUTO_RETRY_DELAY_MINUTES || 10);
+    if (!Number.isFinite(n) || n < 1) return 10;
+    return Math.min(1440, Math.floor(n));
+  })(),
+  /** Intentos máximos por teléfono (incluye el envío inicial). */
+  CAMPAIGN_MAX_RETRY_ATTEMPTS: (() => {
+    const n = Number(process.env.CAMPAIGN_MAX_RETRY_ATTEMPTS || 2);
+    if (!Number.isFinite(n) || n < 1) return 2;
+    return Math.min(10, Math.floor(n));
+  })(),
+  /** Acciones manuales "Reintentar fallidos" permitidas por campaña. */
+  CAMPAIGN_MAX_MANUAL_RETRIES: (() => {
+    const n = Number(process.env.CAMPAIGN_MAX_MANUAL_RETRIES || 3);
+    if (!Number.isFinite(n) || n < 0) return 3;
+    return Math.min(20, Math.floor(n));
+  })(),
   /** Vista previa y envío: máximo de contactos por campaña (unión de segmentos o lista explícita). */
   CAMPAIGN_RECIPIENTS_PREVIEW_MAX: Number(process.env.CAMPAIGN_RECIPIENTS_PREVIEW_MAX || 5000),
   CAMPAIGN_MAX_RECIPIENT_IDS: Number(process.env.CAMPAIGN_MAX_RECIPIENT_IDS || 5000),
+  /** Costo estimado por mensaje entregado (USD) si Meta no devuelve analytics. */
+  CAMPAIGN_COST_PER_MESSAGE_USD_DEFAULT: (() => {
+    const n = Number(process.env.CAMPAIGN_COST_PER_MESSAGE_USD || 0.05);
+    return Number.isFinite(n) && n >= 0 ? n : 0.05;
+  })(),
+  /** Días tras el envío para contar una respuesta a campaña. */
+  CAMPAIGN_RESPONSE_WINDOW_DAYS: (() => {
+    const n = Number(process.env.CAMPAIGN_RESPONSE_WINDOW_DAYS || 7);
+    if (!Number.isFinite(n) || n < 1) return 7;
+    return Math.min(90, Math.floor(n));
+  })(),
   /** Body JSON para POST /campaigns/send con miles de IDs. */
   CAMPAIGN_JSON_BODY_LIMIT: String(process.env.CAMPAIGN_JSON_BODY_LIMIT || '2mb').trim() || '2mb',
   MAX_SESSION_TEXT_LEN: 4096,

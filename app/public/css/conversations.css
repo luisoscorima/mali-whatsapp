@@ -427,6 +427,12 @@ html[data-theme='dark'] .inbox-chat-lead-star.is-on {
   text-overflow: ellipsis;
 }
 
+.inbox-layout-wa .inbox-chat-segment--tag {
+  background: rgba(124, 58, 237, 0.12);
+  border-color: rgba(124, 58, 237, 0.35);
+  color: rgb(91 33 182);
+}
+
 .inbox-layout-wa .inbox-chat-segment[data-seg-tone='teal'] {
   background: rgba(13, 148, 136, 0.14);
   border-color: rgba(13, 148, 136, 0.32);
@@ -1651,8 +1657,87 @@ html[data-theme='dark'] .admin-online-dot {
   min-width: 4.5rem;
 }
 
+.campaign-failed-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.campaign-failed-card__head .card-title {
+  margin: 0;
+}
+
+.campaign-failed-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.campaign-retry-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+}
+
+.campaign-failed-empty {
+  margin: 0;
+}
+
 .campaign-detail-metrics {
   margin-bottom: 0.75rem;
+}
+
+.campaign-detail-metrics .metrics-row {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+@media (max-width: 720px) {
+  .campaign-detail-metrics .metrics-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+button.metric.metric--action {
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  width: 100%;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+button.metric.metric--action:hover,
+button.metric.metric--action:focus-visible {
+  border-color: var(--accent, #2563eb);
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.12);
+  outline: none;
+}
+
+.campaign-responders-hint {
+  margin: 0.65rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.campaign-responders-dialog {
+  max-width: 640px;
+}
+
+.campaign-responders-dialog__hint {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.campaign-responders-dialog__table-wrap {
+  max-height: min(50vh, 360px);
+  overflow: auto;
+}
+
+.campaign-responders-dialog__actions {
+  white-space: nowrap;
 }
 
 .campaign-meta-funnel-details {

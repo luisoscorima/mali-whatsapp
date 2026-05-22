@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <%- include('partials/app-head', { pageTitle, basePath }) %>
+</head>
+<body class="page-conversations">
+  <div class="wa-layout wa-layout--inbox" style="display:flex;min-height:100vh">
+  <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav: 'templates', showAdminNav, requireAuth, currentUser, areaLabel }) %>
+  <main class="main-panel" style="flex:1;padding:1.5rem">
+    <header class="page-header">
+      <h1>Plantillas WhatsApp</h1>
+      <p class="muted">Crear en la app (revisión Meta) o sincronizar aprobadas desde Business Manager.</p>
+    </header>
+    <% if (flash === 'created') { %><p class="toast toast--ok">Plantilla enviada a revisión. Actualiza tras aprobación (sync).</p><% } %>
+    <p>
+      <a class="small-btn primary" href="<%= basePath %>/templates/new">Nueva plantilla</a>
+      <form method="post" action="<%= basePath %>/templates/sync" style="display:inline;margin-left:0.5rem">
+        <button type="submit" class="small-btn secondary">Sincronizar aprobadas</button>
+      </form>
+    </p>
+    <div class="card">
+      <table>
+        <thead>
+          <tr><th>Nombre</th><th>Idioma</th><th>Categoría</th><th>Estado</th><th>Rechazo</th></tr>
+        </thead>
+        <tbody>
+          <% templates.forEach(function (t) { %>
+          <tr>
+            <td class="mono"><%= t.name %></td>
+            <td><%= t.language %></td>
+            <td><%= t.category || '—' %></td>
+            <td><span class="badge <%= t.status %>"><%= t.status %></span></td>
+            <td><%= t.rejection_reason || '—' %></td>
+          </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+    <p><a href="<%= basePath %>/campaigns/new">Ir a nueva campaña</a></p>
+  </main>
+  </div>
+</body>
+</html>

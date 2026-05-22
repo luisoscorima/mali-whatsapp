@@ -182,6 +182,18 @@ async function runMigrations(query) {
     )
   `);
   await query(`CREATE INDEX IF NOT EXISTS idx_campaign_logs_campaign_id ON campaign_logs(campaign_id)`);
+  await query(`ALTER TABLE campaign_logs ADD COLUMN IF NOT EXISTS attempt SMALLINT NOT NULL DEFAULT 1`);
+  await query(`ALTER TABLE campaign_logs ADD COLUMN IF NOT EXISTS retryable BOOLEAN NOT NULL DEFAULT TRUE`);
+  await query(`ALTER TABLE campaign_logs ADD COLUMN IF NOT EXISTS last_retry_at TIMESTAMPTZ NULL`);
+
+  await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS auto_retry_at TIMESTAMPTZ NULL`);
+  await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS auto_retry_done BOOLEAN NOT NULL DEFAULT FALSE`);
+  await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS last_manual_retry_at TIMESTAMPTZ NULL`);
+  await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS manual_retry_count INT NOT NULL DEFAULT 0`);
+  await query(
+    `CREATE INDEX IF NOT EXISTS idx_campaigns_auto_retry ON campaigns (auto_retry_at)
+     WHERE status = 'completed' AND auto_retry_done = FALSE AND auto_retry_at IS NOT NULL`
+  );
 
   const col = await query(
     `SELECT 1 AS ok FROM information_schema.columns WHERE table_name = 'app_settings' AND column_name = 'area'`
@@ -377,6 +389,92 @@ async function runMigrations(query) {
   } catch {
     /* ya aplicado o otro nombre de constraint */
   }
+
+  await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS cost_amount NUMERIC(14, 4) NULL`);
+  await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS cost_currency VARCHAR(8) NULL`);
+  await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS cost_synced_at TIMESTAMPTZ NULL`);
+  await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS cost_source VARCHAR(40) NULL`);
+  await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS cost_is_estimated BOOLEAN NOT NULL DEFAULT FALSE`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS exclusion_lists (
+      id SERIAL PRIMARY KEY,
+      area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion')),
+      name VARCHAR(120) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (area, name)
+    )
+  `);
+  await query(
+    `CREATE INDEX IF NOT EXISTS idx_exclusion_lists_area ON exclusion_lists(area)`
+  );
+  await query(`
+    CREATE TABLE IF NOT EXISTS exclusion_list_members (
+      list_id INTEGER NOT NULL REFERENCES exclusion_lists(id) ON DELETE CASCADE,
+      contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (list_id, contact_id)
+    )
+  `);
+  await query(
+    `CREATE INDEX IF NOT EXISTS idx_exclusion_list_members_contact ON exclusion_list_members(contact_id)`
+  );
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS contact_attributes (
+      id SERIAL PRIMARY KEY,
+      contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+      attr_key VARCHAR(64) NOT NULL,
+      attr_value TEXT NOT NULL DEFAULT '',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (contact_id, attr_key)
+    )
+  `);
+  await query(
+    `CREATE INDEX IF NOT EXISTS idx_contact_attributes_key_value ON contact_attributes(attr_key, attr_value)`
+  );
+  await query(
+    `CREATE INDEX IF NOT EXISTS idx_contact_attributes_contact ON contact_attributes(contact_id)`
+  );
+
+  await query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS attribution JSONB NULL`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS conversation_tags (
+      id SERIAL PRIMARY KEY,
+      conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      label VARCHAR(120) NOT NULL,
+      source VARCHAR(32) NOT NULL DEFAULT 'manual',
+      meta_source_id VARCHAR(64) NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS conversation_tags_conv_label_uq
+     ON conversation_tags(conversation_id, label)`
+  );
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS ctwa_tag_rules (
+      id SERIAL PRIMARY KEY,
+      area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion')),
+      meta_source_id VARCHAR(64) NULL,
+      headline_pattern VARCHAR(200) NULL,
+      segment_slug VARCHAR(50) NOT NULL,
+      tag_label VARCHAR(120) NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CHECK (meta_source_id IS NOT NULL OR headline_pattern IS NOT NULL)
+    )
+  `);
+  await query(
+    `CREATE INDEX IF NOT EXISTS idx_ctwa_tag_rules_area_active ON ctwa_tag_rules(area) WHERE active = TRUE`
+  );
+
+  await query(`ALTER TABLE whatsapp_templates ADD COLUMN IF NOT EXISTS rejection_reason TEXT NULL`);
+  await query(`ALTER TABLE whatsapp_templates ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ NULL`);
+  await query(`ALTER TABLE whatsapp_templates ADD COLUMN IF NOT EXISTS submitted_by INTEGER NULL`);
 
   await migratePamSlugToTiThreeAreas(query);
   await cleanUpCrossAreaSeededSegments(query);

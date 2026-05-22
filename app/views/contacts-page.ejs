@@ -3,6 +3,9 @@
 <% const _segF = typeof contactSegmentFilter !== 'undefined' ? contactSegmentFilter : ''; %>
 <% const _qF = typeof contactSearchQ !== 'undefined' ? contactSearchQ : ''; %>
 <% const _showReplaced = typeof showReplaced !== 'undefined' ? Boolean(showReplaced) : false; %>
+<% const _attrKey = typeof contactAttrKey !== 'undefined' ? contactAttrKey : ''; %>
+<% const _attrVal = typeof contactAttrValue !== 'undefined' ? contactAttrValue : ''; %>
+<% const _contactAttrs = typeof contactAttributes !== 'undefined' && contactAttributes ? contactAttributes : {}; %>
 <% const _prefillName = typeof prefillName !== 'undefined' ? prefillName : ''; %>
 <% const _prefillPhonePrefix = typeof prefillPhonePrefix !== 'undefined' ? prefillPhonePrefix : '51'; %>
 <% const _prefillPhoneLocal = typeof prefillPhoneLocal !== 'undefined' ? prefillPhoneLocal : ''; %>
@@ -104,6 +107,19 @@
         <option value="1" <%= _showReplaced ? 'selected' : '' %>>Sí</option>
       </select>
     </label>
+    <label class="field field--inbox">
+      <span class="field-label">Atributo (filtro)</span>
+      <select name="attr_key" class="inbox-select">
+        <option value="" <%= _attrKey === '' ? 'selected' : '' %>>—</option>
+        <option value="sede" <%= _attrKey === 'sede' ? 'selected' : '' %>>sede</option>
+        <option value="monto" <%= _attrKey === 'monto' ? 'selected' : '' %>>monto</option>
+        <option value="fecha_pago" <%= _attrKey === 'fecha_pago' ? 'selected' : '' %>>fecha_pago</option>
+      </select>
+    </label>
+    <label class="field field--inbox">
+      <span class="field-label">Valor atributo</span>
+      <input type="search" name="attr_value" value="<%= _attrVal %>" placeholder="Contiene…" class="inbox-search-input" />
+    </label>
   </form>
   <% if (view === 'list' && contacts && contacts.length && segments.length) { %>
   <span id="contact-bulk-live" class="sr-only" aria-live="polite"></span>
@@ -148,7 +164,7 @@
   </div>
   <% } %>
   <% if (!contacts || contacts.length === 0) { %>
-  <p class="empty-state inbox-empty-list"><%= _segF || _qF ? 'No hay contactos con estos filtros.' : 'No hay contactos en esta área.' %></p>
+  <p class="empty-state inbox-empty-list"><%= _segF || _qF || _attrKey ? 'No hay contactos con estos filtros.' : 'No hay contactos en esta área.' %></p>
   <% } else { %>
   <ul class="inbox-chat-list">
     <% contacts.forEach(function (c) { %>
@@ -256,6 +272,21 @@
           <p class="inline-help muted">Marca uno o varios.</p>
           <% } %>
         </fieldset>
+        <fieldset class="field">
+          <legend class="field-label">Atributos (opcional)</legend>
+          <label class="field">
+            <span class="field-label">Sede</span>
+            <input type="text" name="attr_sede" maxlength="500" <%= segments.length === 0 ? 'disabled' : '' %> />
+          </label>
+          <label class="field">
+            <span class="field-label">Monto</span>
+            <input type="text" name="attr_monto" maxlength="500" <%= segments.length === 0 ? 'disabled' : '' %> />
+          </label>
+          <label class="field">
+            <span class="field-label">Fecha de pago</span>
+            <input type="text" name="attr_fecha_pago" maxlength="500" <%= segments.length === 0 ? 'disabled' : '' %> />
+          </label>
+        </fieldset>
         <button type="submit" <%= segments.length === 0 ? 'disabled' : '' %>>Guardar</button>
       </form>
     </div>
@@ -300,6 +331,7 @@
         <summary>Formato CSV / Excel</summary>
         <p>
           Columnas: <code>name</code>, <code>phone</code>, <code>segment</code>. Opcional: <code>prefix</code> (código de país sin +) para números internacionales.
+          Columnas extra (p. ej. <code>sede</code>, <code>monto</code>, <code>fecha_pago</code>) se guardan como atributos del contacto para personalizar campañas.
           En <code>segment</code> puedes indicar varios slugs separados por <code>;</code> o <code>,</code>.
           Sin <code>prefix</code>, se aceptan móviles Perú de 9 dígitos (ej. <code>982160981</code>, se guarda como 51…) o un número E.164 completo sin +.
           Si el teléfono ya existe, se actualizan nombre y segmentos (se reemplazan por los de la fila). Si el archivo trae teléfonos repetidos, gana la última fila.
@@ -357,6 +389,21 @@
             <% }) %>
           </div>
           <p class="inline-help muted">Marca uno o varios.</p>
+        </fieldset>
+        <fieldset class="field">
+          <legend class="field-label">Atributos (campañas / import)</legend>
+          <label class="field">
+            <span class="field-label">Sede</span>
+            <input type="text" name="attr_sede" value="<%= _contactAttrs.sede || '' %>" maxlength="500" <%= _isReplaced ? 'disabled' : '' %> />
+          </label>
+          <label class="field">
+            <span class="field-label">Monto</span>
+            <input type="text" name="attr_monto" value="<%= _contactAttrs.monto || '' %>" maxlength="500" <%= _isReplaced ? 'disabled' : '' %> />
+          </label>
+          <label class="field">
+            <span class="field-label">Fecha de pago</span>
+            <input type="text" name="attr_fecha_pago" value="<%= _contactAttrs.fecha_pago || '' %>" maxlength="500" <%= _isReplaced ? 'disabled' : '' %> />
+          </label>
         </fieldset>
         <div class="form-actions">
           <button type="submit" <%= _isReplaced ? 'disabled' : '' %>>Guardar cambios</button>

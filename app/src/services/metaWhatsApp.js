@@ -394,11 +394,42 @@ async function sendSessionTextMessage({ to, text, area }) {
   return response.data;
 }
 
+/**
+ * Crea plantilla en WABA (queda PENDING hasta revisión Meta).
+ */
+async function createMessageTemplateOnWaba({
+  area,
+  name,
+  language,
+  category,
+  components,
+}) {
+  const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
+  if (!token || !phoneNumberId) {
+    throw new Error('Faltan credenciales WhatsApp para crear plantilla');
+  }
+  const wabaId = await resolveWabaId(area, token, phoneNumberId);
+  const payload = {
+    name: String(name || '').trim(),
+    language: String(language || 'es').trim(),
+    category: String(category || 'MARKETING').trim().toUpperCase(),
+    components: Array.isArray(components) ? components : [],
+  };
+  const { data } = await axios.post(`${config.GRAPH_BASE}/${wabaId}/message_templates`, payload, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  return data;
+}
+
 module.exports = {
   getWhatsAppCredentialsForArea,
   getWabaIdOverrideForArea,
   resolveWabaId,
   fetchAllApprovedTemplates,
+  createMessageTemplateOnWaba,
   sendTemplateWithComponents,
   sendSessionTextMessage,
   fetchWabaIdFromPhoneNumberId,

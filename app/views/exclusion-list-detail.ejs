@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <%- include('partials/app-head', { pageTitle, basePath }) %>
+</head>
+<body class="page-conversations">
+  <div class="wa-layout wa-layout--inbox" style="display:flex;min-height:100vh">
+  <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav, showAdminNav, requireAuth, currentUser, areaLabel }) %>
+  <main class="main-panel" style="flex:1;padding:1.5rem">
+    <header class="page-header">
+      <h1><%= list.name %></h1>
+      <p class="muted"><a href="<%= basePath %>/exclusion-lists">← Listas de exclusión</a></p>
+    </header>
+    <% if (flash === 'member') { %><p class="toast toast--ok">Contacto añadido.</p><% } %>
+    <% if (flash === 'removed') { %><p class="toast toast--ok">Contacto quitado.</p><% } %>
+    <% if (error === 'contact') { %><p class="inline-warn">No hay contacto con ese teléfono en el área.</p><% } %>
+    <div class="card">
+      <h2 class="card-title">Añadir por teléfono</h2>
+      <form method="post" action="<%= basePath %>/exclusion-lists/<%= list.id %>/members" class="form-row">
+        <label class="field">
+          <span class="field-label">Teléfono (E.164 sin +)</span>
+          <input type="text" name="phone" required placeholder="51999999999" />
+        </label>
+        <button type="submit" class="small-btn primary">Añadir</button>
+      </form>
+    </div>
+    <div class="card">
+      <h2 class="card-title">Miembros (<%= members.length %>)</h2>
+      <% if (members.length === 0) { %>
+      <p class="muted">Lista vacía.</p>
+      <% } else { %>
+      <table>
+        <thead><tr><th>Nombre</th><th>Teléfono</th><th></th></tr></thead>
+        <tbody>
+          <% members.forEach(function (m) { %>
+          <tr>
+            <td><%= m.name %></td>
+            <td class="mono"><%= m.phone %></td>
+            <td>
+              <form method="post" action="<%= basePath %>/exclusion-lists/<%= list.id %>/members/<%= m.id %>/remove" style="display:inline">
+                <button type="submit" class="small-btn secondary">Quitar</button>
+              </form>
+            </td>
+          </tr>
+          <% }); %>
+        </tbody>
+      </table>
+      <% } %>
+    </div>
+  </main>
+  </div>
+</body>
+</html>

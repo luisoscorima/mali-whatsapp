@@ -113,7 +113,31 @@ function pickContactFieldsFromRecord(record) {
   const phone = r.phone ?? r.telefono ?? r.tel ?? r['teléfono'] ?? r.telefono_movil ?? r.movil;
   const segment = r.segment ?? r.segmento;
   const prefix = r.prefix ?? r.prefijo ?? r.country_code ?? r.country ?? r.pais;
-  return { name, phone, segment, prefix };
+  const known = new Set([
+    'name',
+    'nombre',
+    'nombre completo',
+    'phone',
+    'telefono',
+    'tel',
+    'teléfono',
+    'telefono_movil',
+    'movil',
+    'segment',
+    'segmento',
+    'prefix',
+    'prefijo',
+    'country_code',
+    'country',
+    'pais',
+  ]);
+  const attributes = {};
+  for (const [k, v] of Object.entries(r)) {
+    if (!known.has(k) && v != null && String(v).trim() !== '') {
+      attributes[k] = String(v).trim();
+    }
+  }
+  return { name, phone, segment, prefix, attributes };
 }
 
 function segmentsFromImportPick(picked) {
@@ -182,7 +206,7 @@ function parseContactCsvBuffer(buffer, segmentSet) {
       errors.push({ line: i + 2, message: v.message });
       continue;
     }
-    rows.push(v.value);
+    rows.push({ ...v.value, attributes: picked.attributes || {} });
   }
   return { rows: dedupeRowsByPhone(rows), errors };
 }
@@ -204,7 +228,7 @@ function parseContactXlsxBuffer(buffer, segmentSet) {
       errors.push({ line: i + 2, message: v.message });
       continue;
     }
-    rows.push(v.value);
+    rows.push({ ...v.value, attributes: picked.attributes || {} });
   }
   return { rows: dedupeRowsByPhone(rows), errors };
 }

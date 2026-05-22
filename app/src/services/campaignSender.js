@@ -11,6 +11,13 @@ const {
 const { upsertCampaignChatMessage } = require('./campaignConversationLog');
 const { normalizeArea } = require('../middleware/auth');
 const { fetchRecipientsUnion, validateRecipientsMatchRequest } = require('./campaignRecipients');
+const { mergeCampaignExcludeContactIds } = require('./exclusionLists');
+const { classifyCampaignSendError } = require('../utils/campaignSendErrorClassify');
+const {
+  fetchContactAttributesMap,
+  buildParamsForContact,
+} = require('./contactTemplateParams');
+const { runCampaignRetryJob, promoteDueCampaignRetries } = require('./campaignRetry');
 
 const fakeReqLog = {
   path: '/campaigns/async',
@@ -31,6 +38,7 @@ async function runCampaignSendJob(query, ctx) {
     area: areaRaw,
     templateSnapshot,
     staticParams,
+    paramMapping,
     batchSize,
     batchDelayMs,
   } = ctx;
@@ -45,7 +53,7 @@ async function runCampaignSendJob(query, ctx) {
     components_json: templateSnapshot.components_json,
   };
   const def = buildTemplateDefinition(row);
-  const components = buildWhatsappGraphComponents(def, staticParams);
+  const usePerContactParams = Boolean(paramMapping);
 
   try {
     const lock = await query(
@@ -63,6 +71,30 @@ async function runCampaignSendJob(query, ctx) {
       phoneNumberId: creds.phoneNumberId || null,
     });
 
+    const recipientOptions = {};
+    let mergedExclude =
+      Array.isArray(ctx.excludeContactIdsMerged) && ctx.excludeContactIdsMerged.length > 0
+        ? ctx.excludeContactIdsMerged
+        : null;
+    if (!mergedExclude) {
+      const excludeMerge = await mergeCampaignExcludeContactIds(
+        query,
+        area,
+        {
+          excludeContactIds: ctx.excludeContactIds || [],
+          excludeListIds: ctx.excludeListIds || [],
+        },
+        config.CAMPAIGN_MAX_RECIPIENT_IDS
+      );
+      mergedExclude = excludeMerge.ok ? excludeMerge.ids : [];
+    }
+    if (mergedExclude.length > 0) {
+      recipientOptions.excludeContactIds = mergedExclude;
+    }
+    if (Array.isArray(ctx.excludeSegmentSlugs) && ctx.excludeSegmentSlugs.length > 0) {
+      recipientOptions.excludeSegmentSlugs = ctx.excludeSegmentSlugs;
+    }
+
     let recipients;
     if (
       Array.isArray(ctx.recipientContactIds) &&
@@ -71,18 +103,29 @@ async function runCampaignSendJob(query, ctx) {
       ctx.segments.length > 0
     ) {
       recipients = await fetchRecipientsUnion(query, area, ctx.segments, {
+        ...recipientOptions,
         contactIds: ctx.recipientContactIds,
       });
       if (!validateRecipientsMatchRequest(recipients, ctx.recipientContactIds)) {
         throw new Error('Destinatarios de campaña inválidos o fuera de segmentos');
       }
     } else if (ctx.segment) {
-      recipients = await fetchRecipientsUnion(query, area, [ctx.segment]);
+      recipients = await fetchRecipientsUnion(query, area, [ctx.segment], recipientOptions);
+    } else if (Array.isArray(ctx.segments) && ctx.segments.length > 0) {
+      recipients = await fetchRecipientsUnion(query, area, ctx.segments, recipientOptions);
     } else {
       throw new Error('Payload de campaña inválido: falta segmento o lista de destinatarios');
     }
 
     await query(`UPDATE campaigns SET total_recipients = $1 WHERE id = $2`, [recipients.length, campaignId]);
+
+    let attrsMap = new Map();
+    if (usePerContactParams) {
+      attrsMap = await fetchContactAttributesMap(
+        query,
+        recipients.map((c) => c.id)
+      );
+    }
 
     for (let i = 0; i < recipients.length; i += batchSize) {
       const batch = recipients.slice(i, i + batchSize);
@@ -104,6 +147,16 @@ async function runCampaignSendJob(query, ctx) {
               }
             }
           }
+
+          const resolvedParams = usePerContactParams
+            ? buildParamsForContact(
+                staticParams,
+                paramMapping,
+                contact,
+                attrsMap.get(contact.id)
+              )
+            : staticParams;
+          const components = buildWhatsappGraphComponents(def, resolvedParams);
 
           const apiResponse = await sendTemplateWithComponents({
             to: normalizePhone(contact.phone),
@@ -146,11 +199,19 @@ async function runCampaignSendJob(query, ctx) {
           }
         } catch (error) {
           const payload = sanitizeApiErrorPayload(error.response?.data || { message: error.message });
+          const { retryable } = classifyCampaignSendError(payload);
 
           await query(
-            `INSERT INTO campaign_logs (campaign_id, contact_id, phone, status, response)
-             VALUES ($1, $2, $3, $4, $5::jsonb)`,
-            [campaignId, contact.id, normalizePhone(contact.phone), 'error', JSON.stringify(payload)]
+            `INSERT INTO campaign_logs (campaign_id, contact_id, phone, status, response, retryable, attempt)
+             VALUES ($1, $2, $3, $4, $5::jsonb, $6, 1)`,
+            [
+              campaignId,
+              contact.id,
+              normalizePhone(contact.phone),
+              'error',
+              JSON.stringify(payload),
+              retryable,
+            ]
           );
           logError(fakeReqLog, 'Error enviando mensaje (async)', error, { campaignId, contactId: contact.id });
         }
@@ -161,7 +222,14 @@ async function runCampaignSendJob(query, ctx) {
       }
     }
 
-    await query(`UPDATE campaigns SET status = 'completed' WHERE id = $1`, [campaignId]);
+    await query(
+      `UPDATE campaigns
+       SET status = 'completed',
+           auto_retry_at = NOW() + ($2::int * interval '1 minute'),
+           auto_retry_done = FALSE
+       WHERE id = $1`,
+      [campaignId, config.CAMPAIGN_AUTO_RETRY_DELAY_MINUTES]
+    );
     logInfo(fakeReqLog, 'Campana completada', { campaignId, recipients: recipients.length });
   } catch (error) {
     try {
@@ -211,4 +279,11 @@ async function resumeQueuedCampaigns(query) {
   }
 }
 
-module.exports = { runCampaignSendJob, resumeQueuedCampaigns, promoteDueScheduledCampaigns, wait };
+module.exports = {
+  runCampaignSendJob,
+  resumeQueuedCampaigns,
+  promoteDueScheduledCampaigns,
+  runCampaignRetryJob,
+  promoteDueCampaignRetries,
+  wait,
+};

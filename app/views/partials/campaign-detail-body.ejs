@@ -26,15 +26,41 @@
     var _onDevicePct = _salidaOk > 0 ? Math.round(((_nDel + _nRead) / _salidaOk) * 100) : null;
     var _readOnDeliveredPct = (_nDel + _nRead) > 0 ? Math.round((_nRead / (_nDel + _nRead)) * 100) : null;
     var _otrosTitle = _otrosLabels.length ? _otrosLabels.join(', ') : '';
+    var _respMetrics = typeof responderMetrics !== 'undefined' && responderMetrics ? responderMetrics : null;
+    var _respWindow = _respMetrics ? _respMetrics.windowDays : 7;
+    var _respCount = _respMetrics ? _respMetrics.respondedCount : 0;
+    var _respPct = _respMetrics ? _respMetrics.respondedPct : null;
+    var _respList = _respMetrics && Array.isArray(_respMetrics.responders) ? _respMetrics.responders : [];
+    var _retryStats = typeof retryStats !== 'undefined' && retryStats ? retryStats : null;
+    var _recoveredCount = _retryStats ? _retryStats.recoveredCount : 0;
+    var _retryDelayMin = _retryStats ? _retryStats.autoRetryDelayMinutes : 10;
+    var _canManualRetry = _retryStats ? _retryStats.canManualRetry : false;
+    var _autoRetryPending = _retryStats ? _retryStats.autoRetryPending : false;
+    var _manualRetryCount = _retryStats ? _retryStats.manualRetryCount : 0;
+    var _maxManualRetries = _retryStats ? _retryStats.maxManualRetries : 3;
   %>
   <div class="card campaign-detail-metrics">
     <h2 class="card-title">Indicadores de esta campaña</h2>
     <div class="metrics-row metrics-row--history metrics-row--compact" role="region" aria-label="Indicadores de campaña">
       <div class="metric"><span class="metric-num"><%= _logTotal %></span><span class="metric-lbl">Total</span></div>
       <div class="metric"><span class="metric-num"><%= _salidaOk %></span><span class="metric-lbl">Salida OK</span></div>
+      <button
+        type="button"
+        class="metric metric--action"
+        id="campaign-responders-open"
+        aria-haspopup="dialog"
+        aria-controls="campaign-responders-dialog"
+        title="Ver teléfonos que respondieron"
+      >
+        <span class="metric-num"><%= _respCount %><% if (_respPct !== null) { %> (<%= _respPct %>%<% } %>)</span>
+        <span class="metric-lbl">Respondieron (<%= _respWindow %>d)</span>
+      </button>
       <div class="metric"><span class="metric-num"><%= _errorPct %>%</span><span class="metric-lbl">Error</span></div>
       <div class="metric"><span class="metric-num"><%= _readPct !== null ? _readPct + '%' : '—' %></span><span class="metric-lbl">Lectura</span></div>
     </div>
+    <p class="campaign-responders-hint muted">
+      Cuenta como respuesta si el contacto escribió dentro de los <%= _respWindow %> días posteriores al envío (mensajes con salida OK).
+    </p>
     <details class="campaign-meta-funnel-details">
       <summary class="campaign-meta-funnel-summary">Embudo Meta (detalle)</summary>
       <div class="campaign-meta-funnel-grid" role="group" aria-label="Contadores por estado">
@@ -63,19 +89,113 @@
     <% } else if (campaign.status === 'scheduled') { %>
     <p class="toast toast--ok">Campaña programada: se enviará a la hora indicada. Actualiza la página para ver el progreso.</p>
     <% } %>
+    <%
+      var _payload = campaign.campaign_payload;
+      if (typeof _payload === 'string') {
+        try { _payload = JSON.parse(_payload); } catch (e) { _payload = null; }
+      }
+      var _excludeSegs = _payload && Array.isArray(_payload.excludeSegmentSlugs) ? _payload.excludeSegmentSlugs : [];
+      var _excludeIds = _payload && Array.isArray(_payload.excludeContactIds) ? _payload.excludeContactIds : [];
+    %>
     <dl class="detail-dl">
       <div><dt>Segmento(s)</dt><dd><%= campaignSegmentDisplay(campaign) %></dd></div>
+      <% if (_excludeSegs.length || _excludeIds.length) { %>
+      <div><dt>Exclusiones</dt><dd>
+        <% if (_excludeSegs.length) { %>
+        <span>Segmentos: <%= _excludeSegs.join(', ') %></span>
+        <% } %>
+        <% if (_excludeSegs.length && _excludeIds.length) { %><br /><% } %>
+        <% if (_excludeIds.length) { %>
+        <span>Contactos (IDs): <%= _excludeIds.join(', ') %></span>
+        <% } %>
+      </dd></div>
+      <% } %>
       <div><dt>Plantilla</dt><dd><%= campaign.template_name %></dd></div>
       <div><dt>Estado</dt><dd><span class="badge <%= campaign.status %>"><%= campaign.status %></span></dd></div>
       <% if (campaign.scheduled_at) { %>
       <div><dt>Programada para</dt><dd><%= formatMessageDateTime(campaign.scheduled_at) %></dd></div>
       <% } %>
       <div><dt>Destinatarios</dt><dd><%= campaign.total_recipients %></dd></div>
+      <% if (_recoveredCount > 0) { %>
+      <div><dt>Recuperados en reintento</dt><dd><%= _recoveredCount %></dd></div>
+      <% } %>
+      <div class="campaign-cost-row">
+        <dt>Inversión / costo</dt>
+        <dd>
+          <% if (campaign.cost_amount != null && campaign.cost_amount !== '') { %>
+          <span id="campaign-cost-display">
+            <%= Number(campaign.cost_amount).toFixed(4) %> <%= campaign.cost_currency || 'USD' %>
+            <% if (campaign.cost_is_estimated) { %><span class="muted"> (estimado)</span><% } else { %><span class="muted"> (Meta WABA)</span><% } %>
+          </span>
+          <% if (campaign.cost_synced_at) { %>
+          <span class="muted"> · sync <%= formatMessageDateTime(campaign.cost_synced_at) %></span>
+          <% } %>
+          <% } else { %>
+          <span id="campaign-cost-display" class="muted">Sin sincronizar</span>
+          <% } %>
+          <% if (campaign.status === 'completed' || campaign.status === 'failed') { %>
+          <button type="button" class="small-btn secondary" id="campaign-sync-cost-btn" data-campaign-id="<%= campaign.id %>">Sincronizar costo</button>
+          <% } %>
+          <p class="muted campaign-cost-hint">Dato Meta WABA o estimado por mensajes entregados; no incluye pauta Ads.</p>
+        </dd>
+      </div>
       <div><dt>Parámetros</dt><dd><%= campaign.message_text %></dd></div>
       <% if (campaign.image_url) { %>
       <div><dt>Imagen</dt><dd><a href="<%= campaign.image_url %>" target="_blank" rel="noopener">Abrir enlace</a></dd></div>
       <% } %>
     </dl>
+  </div>
+
+  <% var _failedLogs = typeof failedLogs !== 'undefined' && Array.isArray(failedLogs) ? failedLogs : []; %>
+  <% var _failedCount = _failedLogs.length; %>
+  <div class="card campaign-failed-card">
+    <div class="campaign-failed-card__head">
+      <h2 class="card-title">Envíos fallidos (<%= _failedCount %>)</h2>
+      <div class="campaign-failed-card__actions">
+        <% if (_canManualRetry) { %>
+        <button type="button" class="small-btn" id="campaign-retry-failed-btn" data-campaign-id="<%= campaign.id %>">
+          Reintentar envíos fallidos (<%= _failedCount %>)
+        </button>
+        <% } %>
+        <% if (_failedCount > 0) { %>
+        <a
+          class="small-btn secondary"
+          href="<%= basePath %>/api/campaigns/<%= campaign.id %>/failed-export"
+          download
+        >Exportar CSV</a>
+        <% } %>
+      </div>
+    </div>
+    <p class="muted campaign-retry-hint">
+      Reintento automático ~<%= _retryDelayMin %> min después del envío para errores temporales (rate limit, timeouts).
+      <% if (_autoRetryPending) { %> Pendiente de reintento automático.<% } %>
+      <% if (_manualRetryCount > 0) { %> Reintentos manuales: <%= _manualRetryCount %>/<%= _maxManualRetries %>.<% } %>
+    </p>
+    <p id="campaign-retry-feedback" class="inline-warn" hidden role="status"></p>
+    <% if (_failedCount === 0) { %>
+    <p class="muted campaign-failed-empty">No hay envíos con error, failed o undelivered en esta campaña.</p>
+    <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Teléfono</th>
+            <th>Estado</th>
+            <th>Motivo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% _failedLogs.forEach(function (log) { %>
+          <tr>
+            <td class="mono"><%= log.phone %></td>
+            <td><span class="badge <%= log.status %>"><%= log.status %></span></td>
+            <td><%= log.error_summary %></td>
+          </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+    <% } %>
   </div>
 
   <div class="card">
@@ -103,4 +223,156 @@
       </table>
     </div>
   </div>
+
+  <dialog id="campaign-responders-dialog" class="modal-dialog campaign-responders-dialog" aria-labelledby="campaign-responders-dialog-title">
+    <form method="dialog" class="modal-dialog-form campaign-responders-dialog__form">
+      <h2 id="campaign-responders-dialog-title" class="modal-dialog-title">
+        Respondieron (<%= _respWindow %> días) · <%= _respCount %>
+      </h2>
+      <p class="muted campaign-responders-dialog__hint">
+        Contactos que enviaron al menos un mensaje inbound dentro de los <%= _respWindow %> días posteriores al envío de la plantilla.
+      </p>
+      <% if (_respList.length === 0) { %>
+      <p class="muted">Nadie respondió en esta ventana para los envíos con salida OK.</p>
+      <% } else { %>
+      <div class="table-wrap campaign-responders-dialog__table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Teléfono</th>
+              <th>Nombre</th>
+              <th>Primera respuesta</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% _respList.forEach(function (row) {
+              var _chatHref = row.conversationId
+                ? basePath + '/conversations/' + row.conversationId
+                : (row.contactId ? basePath + '/conversations/' + (-row.contactId) : null);
+            %>
+            <tr>
+              <td class="mono"><%= row.phone %></td>
+              <td><%= row.contactName || '—' %></td>
+              <td><%= row.firstResponseAt ? formatMessageDateTime(row.firstResponseAt) : '—' %></td>
+              <td class="campaign-responders-dialog__actions">
+                <% if (_chatHref) { %>
+                <a class="text-link" href="<%= _chatHref %>">Abrir chat</a>
+                <% } else { %>
+                <span class="muted">—</span>
+                <% } %>
+              </td>
+            </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+      <% } %>
+      <div class="modal-dialog-actions">
+        <button type="submit" class="small-btn secondary">Cerrar</button>
+      </div>
+    </form>
+  </dialog>
+  <script>
+    (function () {
+      var openBtn = document.getElementById('campaign-responders-open');
+      var dialog = document.getElementById('campaign-responders-dialog');
+      if (openBtn && dialog) {
+        openBtn.addEventListener('click', function () {
+          if (typeof dialog.showModal === 'function') dialog.showModal();
+        });
+        dialog.addEventListener('click', function (ev) {
+          if (ev.target === dialog) dialog.close();
+        });
+      }
+
+      var basePath = '<%= basePath %>';
+
+      var costBtn = document.getElementById('campaign-sync-cost-btn');
+      if (costBtn) {
+        costBtn.addEventListener('click', function () {
+          var campaignId = costBtn.getAttribute('data-campaign-id');
+          costBtn.disabled = true;
+          fetch(basePath + '/api/campaigns/' + encodeURIComponent(campaignId) + '/sync-cost', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' },
+          })
+            .then(function (r) {
+              return r.json();
+            })
+            .then(function (data) {
+              if (data.ok) window.location.reload();
+              else {
+                costBtn.disabled = false;
+                alert(data.error || 'No se pudo sincronizar');
+              }
+            })
+            .catch(function () {
+              costBtn.disabled = false;
+              alert('Error de red');
+            });
+        });
+      }
+
+      var retryBtn = document.getElementById('campaign-retry-failed-btn');
+      var retryFeedback = document.getElementById('campaign-retry-feedback');
+      if (!retryBtn) return;
+      retryBtn.addEventListener('click', function () {
+        var campaignId = retryBtn.getAttribute('data-campaign-id');
+        if (!campaignId) return;
+        retryBtn.disabled = true;
+        if (retryFeedback) {
+          retryFeedback.hidden = true;
+          retryFeedback.textContent = '';
+        }
+        fetch(basePath + '/api/campaigns/' + encodeURIComponent(campaignId) + '/retry-failed', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+        })
+          .then(function (r) {
+            return r.json().then(function (data) {
+              return { ok: r.ok, data: data };
+            });
+          })
+          .then(function (result) {
+            if (!result.ok || !result.data.ok) {
+              var msg = (result.data && result.data.error) || 'No se pudo reintentar';
+              if (retryFeedback) {
+                retryFeedback.textContent = msg;
+                retryFeedback.hidden = false;
+              }
+              retryBtn.disabled = false;
+              return;
+            }
+            var d = result.data;
+            var summary =
+              'Reintento: ' +
+              d.retried +
+              ' teléfono(s), ' +
+              d.recovered +
+              ' recuperado(s), ' +
+              d.stillFailed +
+              ' aún con error.';
+            if (retryFeedback) {
+              retryFeedback.className = 'toast toast--ok';
+              retryFeedback.textContent = summary;
+              retryFeedback.hidden = false;
+            }
+            window.setTimeout(function () {
+              window.location.reload();
+            }, 1200);
+          })
+          .catch(function () {
+            if (retryFeedback) {
+              retryFeedback.className = 'inline-warn';
+              retryFeedback.textContent = 'Error de red al reintentar';
+              retryFeedback.hidden = false;
+            }
+            retryBtn.disabled = false;
+          });
+      });
+    })();
+  </script>
 </div>

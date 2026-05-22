@@ -626,6 +626,27 @@ html[data-theme='dark'] .nav-link.is-active {
   accent-color: var(--accent);
 }
 
+.campaign-exclude-panel {
+  margin-top: 0.75rem;
+  border-style: dashed;
+}
+
+.campaign-segment-tile--exclude:has(.campaign-exclude-segment-input:checked) {
+  border-color: var(--warn, #b45309);
+  background: color-mix(in srgb, var(--warn, #b45309) 8%, transparent);
+}
+
+.campaign-exclude-ids-field {
+  margin-top: 0.75rem;
+}
+
+.campaign-exclude-ids-input {
+  width: 100%;
+  min-height: 2.5rem;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.875rem;
+}
+
 .campaign-segment-text {
   font-size: 0.8rem;
   font-weight: 600;
@@ -833,6 +854,19 @@ html[data-theme='dark'] .campaign-recipients-list .campaign-recipient-row.field-
   font-weight: 500;
   color: var(--ink);
   opacity: 0.92;
+}
+
+.campaign-param-row {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .campaign-param-row {
+    grid-template-columns: 1fr minmax(12rem, 14rem);
+    align-items: end;
+  }
 }
 
 .campaign-recipients-empty {
@@ -1978,9 +2012,26 @@ a.small-btn.primary {
   background: var(--surface-strong);
 }
 
-.chat-msg-doc-link {
+.chat-msg-doc-link,
+.chat-msg-download-link {
   font-size: 0.82rem;
   color: var(--accent);
+}
+
+.chat-msg-download-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.chat-msg-download-link:hover,
+.chat-msg-doc-link:hover {
+  text-decoration: underline;
+}
+
+.chat-bubble__media--doc .chat-msg-download-link {
+  margin-top: 0;
 }
 
 .chat-msg-fallback {

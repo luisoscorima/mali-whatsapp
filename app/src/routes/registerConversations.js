@@ -13,6 +13,7 @@ const { isWithinUserServiceWindow } = require('../utils/conversations');
 const { parseAiConfigValue } = require('../utils/aiConfig');
 const { buildExportRows, buildXlsxBuffer, safeFilenamePart } = require('../utils/conversationExport');
 const { exportFilenameDateStamp } = require('../utils/datetimeDisplay');
+const { getLocalPreview, streamMessageMediaDownload } = require('../utils/chatMediaDownload');
 
 const MEDIA_TYPE_LABEL = {
   image: 'Imagen',
@@ -264,6 +265,63 @@ function registerConversations(app, ctx) {
       activeNav: 'conversations',
       showAdminNav: res.locals.showAdminNav,
     });
+  });
+
+  app.get('/conversations/:conversationId/messages/:messageId/download', async (req, res) => {
+    const conversationId = Number(req.params.conversationId);
+    const messageId = Number(req.params.messageId);
+    if (
+      !Number.isInteger(conversationId) ||
+      conversationId <= 0 ||
+      !Number.isInteger(messageId) ||
+      messageId <= 0
+    ) {
+      return res.status(400).send('Parámetros inválidos');
+    }
+    const area = req.user.area;
+
+    const msgResult = await query(
+      `SELECT m.id, m.message_type, m.raw_payload
+       FROM chat_messages m
+       INNER JOIN conversations c ON c.id = m.conversation_id
+       WHERE m.id = $1 AND m.conversation_id = $2 AND c.area = $3`,
+      [messageId, conversationId, area]
+    );
+    if (msgResult.rowCount === 0) {
+      return res.status(404).send('Mensaje no encontrado');
+    }
+    const row = msgResult.rows[0];
+    const localPreview = getLocalPreview(row.raw_payload);
+    if (!localPreview) {
+      return res.status(404).send('Este mensaje no tiene archivo descargable guardado');
+    }
+
+    try {
+      await streamMessageMediaDownload(res, {
+        localPreview,
+        rawPayload: row.raw_payload,
+        messageType: row.message_type,
+      });
+      auditLog(query, {
+        req,
+        event_type: AuditEvent.CONVERSATION_MEDIA_DOWNLOAD,
+        message: `Descarga de media en conversación ${conversationId}, mensaje ${messageId}`,
+        meta: {
+          conversation_id: conversationId,
+          message_id: messageId,
+          area,
+          message_type: row.message_type,
+        },
+      });
+    } catch (error) {
+      logError(req, 'Error descargando media de conversación', error, {
+        conversationId,
+        messageId,
+      });
+      if (!res.headersSent) {
+        return res.status(500).send('No se pudo descargar el archivo');
+      }
+    }
   });
 
   app.get('/conversations/:id/export', async (req, res) => {

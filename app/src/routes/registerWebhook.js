@@ -1,6 +1,9 @@
 const { logError, logWarn, logInfo } = require('../utils/logger');
 const { verifyWebhookSignature } = require('../middleware/webhookVerify');
-const { persistInboundMessagesFromWebhookValue } = require('../services/webhookInbound');
+const {
+  persistInboundMessagesFromWebhookValue,
+  resolveInboundArea,
+} = require('../services/webhookInbound');
 const { getVerifyToken } = require('../services/metaSettingsCache');
 
 function registerWebhook(app, ctx) {
@@ -72,6 +75,39 @@ function registerWebhook(app, ctx) {
         const wabaEntryId = entry.id;
 
         for (const change of changes) {
+          if (change.field === 'message_template_status_update') {
+            const v = change.value || {};
+            const templateName = String(v.message_template_name || v.name || '').trim();
+            const templateLanguage = String(v.message_template_language || v.language || '').trim();
+            const event = String(v.event || v.message_template_status || '').trim().toUpperCase();
+            const reason = v.reason || v.rejection_reason || null;
+            if (templateName && event) {
+              const { area } = resolveInboundArea({}, wabaEntryId);
+              if (!area) {
+                logWarn(req, 'Webhook plantilla: no se pudo resolver area', {
+                  templateName,
+                  wabaEntryId: wabaEntryId || null,
+                });
+              } else {
+                await query(
+                  `UPDATE whatsapp_templates
+                   SET status = $1,
+                       rejection_reason = $2,
+                       synced_at = NOW()
+                   WHERE area = $3 AND name = $4 AND ($5 = '' OR language = $5)`,
+                  [
+                    event,
+                    reason ? String(reason) : null,
+                    area,
+                    templateName,
+                    templateLanguage,
+                  ]
+                );
+              }
+            }
+            continue;
+          }
+
           const value = change.value || {};
           const inboundCount = Array.isArray(value.messages) ? value.messages.length : 0;
           if (inboundCount > 0) {

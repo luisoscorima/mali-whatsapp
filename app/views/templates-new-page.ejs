@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <%- include('partials/app-head', { pageTitle, basePath }) %>
+</head>
+<body class="page-conversations">
+  <div class="wa-layout wa-layout--inbox" style="display:flex;min-height:100vh">
+  <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav: 'templates', showAdminNav, requireAuth, currentUser, areaLabel }) %>
+  <main class="main-panel" style="flex:1;padding:1.5rem">
+    <header class="page-header">
+      <h1>Nueva plantilla</h1>
+      <p class="muted"><a href="<%= basePath %>/templates">← Plantillas</a></p>
+    </header>
+    <% if (error) { %><p class="inline-warn"><%= error %></p><% } %>
+    <div class="card">
+      <form method="post" action="<%= basePath %>/templates/create" class="form-stack">
+        <label class="field">
+          <span class="field-label">Nombre (snake_case)</span>
+          <input type="text" name="name" required pattern="[a-z0-9_]+" placeholder="recordatorio_pago_mayo" />
+        </label>
+        <label class="field">
+          <span class="field-label">Idioma</span>
+          <input type="text" name="language" value="es" required />
+        </label>
+        <label class="field">
+          <span class="field-label">Categoría</span>
+          <select name="category">
+            <option value="MARKETING">MARKETING</option>
+            <option value="UTILITY">UTILITY</option>
+            <option value="AUTHENTICATION">AUTHENTICATION</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Texto cuerpo (usa {{1}}, {{2}}…)</span>
+          <textarea name="bodyText" rows="4" required placeholder="Hola {{1}}, tu monto es {{2}}. Vence {{3}}."></textarea>
+        </label>
+        <label class="field">
+          <span class="field-label">Ejemplo {{1}} (revisión Meta)</span>
+          <input type="text" name="bodyExample_1" value="María" />
+        </label>
+        <label class="field">
+          <span class="field-label">Ejemplo {{2}}</span>
+          <input type="text" name="bodyExample_2" value="150.00" />
+        </label>
+        <label class="field">
+          <span class="field-label">Ejemplo {{3}}</span>
+          <input type="text" name="bodyExample_3" value="15/05/2026" />
+        </label>
+        <p class="inline-help muted">Indica un valor de muestra por cada <code>{{n}}</code> del cuerpo. Si solo usas {{1}}, basta el primero.</p>
+        <button type="submit" class="small-btn primary">Enviar a revisión Meta</button>
+      </form>
+    </div>
+  </main>
+  </div>
+</body>
+</html>

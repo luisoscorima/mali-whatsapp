@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <%- include('partials/app-head', { pageTitle, basePath }) %>
+</head>
+<body class="page-conversations">
+  <div class="wa-layout wa-layout--inbox" style="display:flex;min-height:100vh">
+  <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav, showAdminNav, requireAuth, currentUser, areaLabel }) %>
+  <main class="main-panel" style="flex:1;padding:1.5rem">
+    <header class="page-header">
+      <h1>Reglas Click-to-WhatsApp</h1>
+      <p class="muted">Al llegar un mensaje con <code>referral</code> de anuncio Meta, se asigna segmento y etiqueta en el inbox.</p>
+    </header>
+    <% if (flash === 'created') { %><p class="toast toast--ok">Regla creada.</p><% } %>
+    <div class="card">
+      <h2 class="card-title">Nueva regla</h2>
+      <form method="post" action="<%= basePath %>/ctwa-rules" class="form-stack">
+        <label class="field">
+          <span class="field-label">ID anuncio Meta (source_id)</span>
+          <input type="text" name="meta_source_id" placeholder="Opcional si usas patrón en titular" />
+        </label>
+        <label class="field">
+          <span class="field-label">Patrón en titular (headline)</span>
+          <input type="text" name="headline_pattern" placeholder="Ej. gestión cultural" />
+        </label>
+        <label class="field">
+          <span class="field-label">Segmento a asignar</span>
+          <select name="segment_slug" required>
+            <% segments.forEach(function (s) { %>
+            <option value="<%= s.slug %>"><%= s.label %> (<%= s.slug %>)</option>
+            <% }); %>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Etiqueta visible en inbox</span>
+          <input type="text" name="tag_label" required maxlength="120" placeholder="pauta GC mayo 2026" />
+        </label>
+        <button type="submit" class="small-btn primary">Guardar regla</button>
+      </form>
+    </div>
+    <div class="card">
+      <h2 class="card-title">Reglas activas</h2>
+      <% if (rules.length === 0) { %>
+      <p class="muted">Sin reglas. Crea una al publicar la pauta en Meta (necesitas el source_id del anuncio).</p>
+      <% } else { %>
+      <table>
+        <thead>
+          <tr><th>Etiqueta</th><th>Segmento</th><th>source_id</th><th>Patrón</th><th>Activa</th><th></th></tr>
+        </thead>
+        <tbody>
+          <% rules.forEach(function (r) { %>
+          <tr>
+            <td><%= r.tag_label %></td>
+            <td class="mono"><%= r.segment_slug %></td>
+            <td class="mono"><%= r.meta_source_id || '—' %></td>
+            <td><%= r.headline_pattern || '—' %></td>
+            <td><%= r.active ? 'Sí' : 'No' %></td>
+            <td>
+              <form method="post" action="<%= basePath %>/ctwa-rules/<%= r.id %>/toggle" style="display:inline">
+                <button type="submit" class="small-btn secondary">Toggle</button>
+              </form>
+              <form method="post" action="<%= basePath %>/ctwa-rules/<%= r.id %>/delete" style="display:inline">
+                <button type="submit" class="small-btn secondary">Eliminar</button>
+              </form>
+            </td>
+          </tr>
+          <% }); %>
+        </tbody>
+      </table>
+      <% } %>
+    </div>
+  </main>
+  </div>
+</body>
+</html>

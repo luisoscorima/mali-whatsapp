@@ -23,9 +23,71 @@
     return d.innerHTML;
   }
 
+  const excludeIdsInput = document.getElementById('campaign-exclude-contact-ids');
+
   function getCheckedSegments() {
     return Array.prototype.map.call(form.querySelectorAll('input[name="campaignSegment"]:checked'), function (el) {
       return el.value;
+    });
+  }
+
+  function getCheckedExcludeSegments() {
+    return Array.prototype.map.call(
+      form.querySelectorAll('input[name="campaignExcludeSegment"]:checked'),
+      function (el) {
+        return el.value;
+      }
+    );
+  }
+
+  function getCheckedExcludeListIds() {
+    return Array.prototype.map.call(
+      form.querySelectorAll('input[name="campaignExcludeList"]:checked'),
+      function (el) {
+        return Number(el.value);
+      }
+    ).filter(function (n) {
+      return Number.isInteger(n) && n > 0;
+    });
+  }
+
+  const PARAM_SOURCE_OPTIONS = [
+    { value: 'static', label: 'Valor fijo (campo de arriba)' },
+    { value: 'contact.name', label: 'Nombre del contacto' },
+    { value: 'contact.phone', label: 'Teléfono del contacto' },
+    { value: 'attr.sede', label: 'Atributo: sede' },
+    { value: 'attr.monto', label: 'Atributo: monto' },
+    { value: 'attr.fecha_pago', label: 'Atributo: fecha_pago' },
+  ];
+
+  function paramSourceSelectHtml(name) {
+    const opts = PARAM_SOURCE_OPTIONS.map(function (o) {
+      return '<option value="' + esc(o.value) + '">' + esc(o.label) + '</option>';
+    });
+    return (
+      '<label class="field field--compact">' +
+      '<span class="field-label">Por contacto</span>' +
+      '<select name="' +
+      esc(name) +
+      '" class="campaign-param-source">' +
+      opts.join('') +
+      '</select></label>'
+    );
+  }
+
+  function parseExcludeContactIds() {
+    if (!excludeIdsInput) return [];
+    const raw = String(excludeIdsInput.value || '');
+    const ids = raw
+      .split(/[\s,;]+/)
+      .map(function (x) {
+        return Number(String(x).trim());
+      })
+      .filter(function (n) {
+        return Number.isInteger(n) && n > 0;
+      });
+    return Array.from(new Set(ids)).sort(function (a, b) {
+      return a - b;
     });
   }
 
@@ -89,40 +151,49 @@
 
     for (let i = 0; i < def.headerTextSlotCount; i++) {
       parts.push(
-        '<label class="field">' +
+        '<div class="campaign-param-row">' +
+          '<label class="field">' +
           '<span class="field-label">Texto cabecera (' +
           (i + 1) +
           ')</span>' +
           '<input type="text" name="headerParam_' +
           i +
           '" required maxlength="1024" autocomplete="off" />' +
-          '</label>'
+          '</label>' +
+          paramSourceSelectHtml('headerParamSource_' + i) +
+          '</div>'
       );
     }
 
     for (let i = 0; i < def.bodySlotCount; i++) {
       parts.push(
-        '<label class="field">' +
+        '<div class="campaign-param-row">' +
+          '<label class="field">' +
           '<span class="field-label">Texto cuerpo (' +
           (i + 1) +
           ')</span>' +
           '<input type="text" name="bodyParam_' +
           i +
           '" required maxlength="1024" autocomplete="off" />' +
-          '</label>'
+          '</label>' +
+          paramSourceSelectHtml('bodyParamSource_' + i) +
+          '</div>'
       );
     }
 
     for (let i = 0; i < def.totalButtonParams; i++) {
       parts.push(
-        '<label class="field">' +
+        '<div class="campaign-param-row">' +
+          '<label class="field">' +
           '<span class="field-label">Botón URL (' +
           (i + 1) +
           ')</span>' +
           '<input type="text" name="buttonParam_' +
           i +
           '" required maxlength="1024" autocomplete="off" />' +
-          '</label>'
+          '</label>' +
+          paramSourceSelectHtml('buttonParamSource_' + i) +
+          '</div>'
       );
     }
 
@@ -216,11 +287,19 @@
     loadRecipientsBtn.disabled = true;
     showSendError('');
     try {
+      const previewBody = { segments: segments };
+      const excludeSegs = getCheckedExcludeSegments();
+      const excludeIds = parseExcludeContactIds();
+      if (excludeSegs.length) previewBody.excludeSegmentSlugs = excludeSegs;
+      if (excludeIds.length) previewBody.excludeContactIds = excludeIds;
+      const excludeLists = getCheckedExcludeListIds();
+      if (excludeLists.length) previewBody.excludeListIds = excludeLists;
+
       const r = await fetch(basePath + '/api/campaigns/recipients-preview', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ segments: segments }),
+        body: JSON.stringify(previewBody),
       });
       const data = await r.json().catch(function () {
         return {};
@@ -326,6 +405,10 @@
     const scheduleMode = form.querySelector('input[name="scheduleMode"]:checked');
     const mode = scheduleMode ? scheduleMode.value : 'now';
 
+    const excludeSegs = getCheckedExcludeSegments();
+    const excludeIds = parseExcludeContactIds();
+    const excludeLists = getCheckedExcludeListIds();
+
     const payload = {
       templateSyncId: templateSyncId,
       batchSize: batchSize,
@@ -333,6 +416,9 @@
       scheduleMode: mode,
       segments: getCheckedSegments(),
       recipientContactIds: getCheckedRecipientIds(),
+      excludeSegmentSlugs: excludeSegs,
+      excludeContactIds: excludeIds,
+      excludeListIds: excludeLists,
     };
 
     if (container) {
@@ -425,16 +511,30 @@
       });
   });
 
+  function invalidateRecipientsPreview() {
+    recipientsLoaded = false;
+    if (recipientsListEl) {
+      recipientsListEl.innerHTML = '';
+      recipientsListEl.hidden = true;
+    }
+    if (recipientsToolbar) recipientsToolbar.hidden = true;
+    if (recipientsStatus) recipientsStatus.textContent = '';
+    updateSubmitEnabled();
+  }
+
   form.querySelectorAll('input[name="campaignSegment"]').forEach(function (el) {
-    el.addEventListener('change', function () {
-      recipientsLoaded = false;
-      if (recipientsListEl) {
-        recipientsListEl.innerHTML = '';
-        recipientsListEl.hidden = true;
-      }
-      if (recipientsToolbar) recipientsToolbar.hidden = true;
-      if (recipientsStatus) recipientsStatus.textContent = '';
-      updateSubmitEnabled();
-    });
+    el.addEventListener('change', invalidateRecipientsPreview);
   });
+
+  form.querySelectorAll('input[name="campaignExcludeSegment"]').forEach(function (el) {
+    el.addEventListener('change', invalidateRecipientsPreview);
+  });
+
+  form.querySelectorAll('input[name="campaignExcludeList"]').forEach(function (el) {
+    el.addEventListener('change', invalidateRecipientsPreview);
+  });
+
+  if (excludeIdsInput) {
+    excludeIdsInput.addEventListener('input', invalidateRecipientsPreview);
+  }
 })();

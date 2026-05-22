@@ -14,6 +14,7 @@ const { isWithinUserServiceWindow } = require('../../utils/conversations');
 const { escapeForLikePattern } = require('../../utils/searchEscape');
 const { normalizeSegmentColorKey } = require('../../utils/segmentColors');
 const { parseAiConfigValue } = require('../../utils/aiConfig');
+const { parseParamMappingFromBody } = require('../../services/contactTemplateParams');
 
 function resolveAppBaseUrl() {
   const u = String(process.env.APP_BASE_URL || '').trim().replace(/\/$/, '');
@@ -150,7 +151,13 @@ function createRouteContext({ query, pool, appPath }) {
           (SELECT m.body_text FROM chat_messages m
            WHERE m.conversation_id = c.id
            ORDER BY m.created_at DESC
-           LIMIT 1) AS preview
+           LIMIT 1) AS preview,
+          c.attribution,
+          COALESCE((
+            SELECT array_agg(tg.label ORDER BY tg.label)
+            FROM conversation_tags tg
+            WHERE tg.conversation_id = c.id
+          ), ARRAY[]::varchar[]) AS conversation_tags
         FROM conversations c
         LEFT JOIN contacts ct ON ct.id = c.contact_id
         WHERE c.area = $1
@@ -239,6 +246,56 @@ function createRouteContext({ query, pool, appPath }) {
   }
 
   /**
+   * Exclusiones opcionales: IDs de contacto y/o segmentos negados (no enviar aunque estén incluidos).
+   */
+  function parseCampaignExclusions(reqBody, segmentSet) {
+    const maxIds = config.CAMPAIGN_MAX_RECIPIENT_IDS;
+
+    let excludeContactIds = [];
+    if (Object.prototype.hasOwnProperty.call(reqBody, 'excludeContactIds')) {
+      const raw = reqBody.excludeContactIds;
+      if (!Array.isArray(raw)) {
+        return { ok: false, message: 'Lista de exclusiones por contacto inválida' };
+      }
+      const ids = raw.map((x) => Number(x)).filter((n) => Number.isInteger(n) && n > 0);
+      excludeContactIds = [...new Set(ids)].sort((a, b) => a - b);
+      if (excludeContactIds.length > maxIds) {
+        return { ok: false, message: `Demasiados contactos a excluir (máximo ${maxIds})` };
+      }
+    }
+
+    let excludeListIds = [];
+    if (Object.prototype.hasOwnProperty.call(reqBody, 'excludeListIds')) {
+      const raw = reqBody.excludeListIds;
+      if (!Array.isArray(raw)) {
+        return { ok: false, message: 'Listas de exclusión inválidas' };
+      }
+      excludeListIds = [...new Set(raw.map((x) => Number(x)).filter((n) => Number.isInteger(n) && n > 0))];
+    }
+
+    let excludeSegmentSlugs = [];
+    if (Object.prototype.hasOwnProperty.call(reqBody, 'excludeSegmentSlugs')) {
+      const raw = reqBody.excludeSegmentSlugs;
+      if (!Array.isArray(raw)) {
+        return { ok: false, message: 'Segmentos de exclusión inválidos' };
+      }
+      excludeSegmentSlugs = [...new Set(raw.map((s) => String(s).trim()).filter(Boolean))];
+      for (const s of excludeSegmentSlugs) {
+        if (!segmentSet.has(s)) {
+          return { ok: false, message: 'Segmento de exclusión inválido' };
+        }
+      }
+    }
+
+    return {
+      ok: true,
+      excludeContactIds,
+      excludeSegmentSlugs,
+      excludeListIds,
+    };
+  }
+
+  /**
    * Audiencia: varios segmentos + IDs explícitos (nuevo) o un solo segmento (legacy).
    */
   function parseCampaignAudience(reqBody, segmentSet) {
@@ -309,6 +366,11 @@ function createRouteContext({ query, pool, appPath }) {
       return audience;
     }
 
+    const exclusions = parseCampaignExclusions(reqBody, segmentSet);
+    if (!exclusions.ok) {
+      return exclusions;
+    }
+
     const templateSyncId = parseInt(String(reqBody.templateSyncId || '').trim(), 10);
     if (!Number.isInteger(templateSyncId) || templateSyncId <= 0) {
       return { ok: false, message: 'Selecciona una plantilla sincronizada' };
@@ -319,6 +381,7 @@ function createRouteContext({ query, pool, appPath }) {
 
     const def = buildTemplateDefinition(templateRow);
     const values = extractFormValuesForTemplate(def, reqBody);
+    const paramMapping = parseParamMappingFromBody(def, reqBody);
 
     if (def.needsHeaderMedia && values.headerMediaUrl.length > config.MAX_IMAGE_URL_LEN) {
       return { ok: false, message: `URL demasiado larga (max ${config.MAX_IMAGE_URL_LEN})` };
@@ -375,6 +438,10 @@ function createRouteContext({ query, pool, appPath }) {
         audienceMode: audience.mode,
         segments: audience.segments,
         recipientContactIds: audience.recipientContactIds,
+        excludeContactIds: exclusions.excludeContactIds,
+        excludeSegmentSlugs: exclusions.excludeSegmentSlugs,
+        excludeListIds: exclusions.excludeListIds,
+        paramMapping,
         segment: audience.segmentLabelForDb,
         templateSyncId,
         templateRow,
@@ -421,6 +488,11 @@ function createRouteContext({ query, pool, appPath }) {
         return { notFound: true };
       }
       selectedConversation = convResult.rows[0];
+      const tagsR = await query(
+        `SELECT label FROM conversation_tags WHERE conversation_id = $1 ORDER BY label`,
+        [selectedId]
+      );
+      selectedConversation.conversation_tags = tagsR.rows.map((r) => r.label);
       await query(
         `UPDATE conversations SET inbox_unread = FALSE, updated_at = NOW() WHERE id = $1 AND area = $2`,
         [selectedId, area]

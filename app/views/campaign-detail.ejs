@@ -29,7 +29,13 @@
     </div>
   </div>
   <div class="inbox-chat-body inbox-chat-body--scroll">
-    <%- include('partials/campaign-detail-body', { campaign, logs }) %>
+    <%- include('partials/campaign-detail-body', {
+      campaign,
+      logs,
+      failedLogs: typeof failedLogs !== 'undefined' ? failedLogs : [],
+      responderMetrics: typeof responderMetrics !== 'undefined' ? responderMetrics : null,
+      retryStats: typeof retryStats !== 'undefined' ? retryStats : null
+    }) %>
     <p class="inbox-detail-footer-link"><a class="text-link" href="<%= basePath %>/conversations">Ir a conversaciones</a></p>
   </div>
 </section>

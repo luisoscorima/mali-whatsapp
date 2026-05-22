@@ -164,6 +164,13 @@
                     <span class="inbox-chat-row-mid">
                       <span class="inbox-chat-preview"><%= (c.preview || '—').slice(0, 120) %></span>
                     </span>
+                    <% if (c.conversation_tags && c.conversation_tags.length) { %>
+                      <span class="contact-segment-chips" role="group" aria-label="Etiquetas">
+                        <% c.conversation_tags.forEach(function (tag) { %>
+                          <span class="inbox-chat-segment inbox-chat-segment--tag" title="Etiqueta CTWA"><%= tag %></span>
+                        <% }); %>
+                      </span>
+                    <% } %>
                     <% if (c.contact_segment_slugs && c.contact_segment_slugs.length) { %>
                       <span class="contact-segment-chips" role="group" aria-label="Segmentos">
                         <% c.contact_segment_slugs.forEach(function (slug) { %>
@@ -200,6 +207,19 @@
               <div class="inbox-chat-header-identity">
                 <h1 class="inbox-chat-heading"><%= contact ? contact.name : selectedConversation.phone %></h1>
                 <p class="inbox-chat-sub mono"><%= selectedConversation.phone %></p>
+                <% if (selectedConversation.conversation_tags && selectedConversation.conversation_tags.length) { %>
+                  <span class="contact-segment-chips contact-segment-chips--header" role="group" aria-label="Etiquetas">
+                    <% selectedConversation.conversation_tags.forEach(function (tag) { %>
+                      <span class="inbox-chat-segment inbox-chat-segment--tag inbox-chat-segment--header"><%= tag %></span>
+                    <% }); %>
+                  </span>
+                <% } %>
+                <% var _attr = selectedConversation.attribution; %>
+                <% if (_attr && (_attr.source_type || _attr.source_id)) { %>
+                  <p class="inbox-chat-sub muted">
+                    Origen: <%= _attr.source_type || '—' %><% if (_attr.source_id) { %> · <%= _attr.source_id %><% } %>
+                  </p>
+                <% } %>
                 <% if (contact && contact.segment_slugs && contact.segment_slugs.length) { %>
                   <span class="contact-segment-chips contact-segment-chips--header" role="group" aria-label="Segmentos">
                     <% contact.segment_slugs.forEach(function (slug) { %>
@@ -330,7 +350,7 @@
             </div>
           </div>
           <div class="inbox-chat-body">
-            <%- include('partials/inbox-thread', { messages, basePath }) %>
+            <%- include('partials/inbox-thread', { messages, basePath, conversationId: selectedConversation.id }) %>
           </div>
           <div class="inbox-compose">
             <h2 class="inbox-compose-title">Responder</h2>

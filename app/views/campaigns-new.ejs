@@ -24,7 +24,7 @@
     <h1 class="inbox-chat-heading">Nueva campaña</h1>
   </div>
   <div class="inbox-chat-body inbox-chat-body--form">
-    <%- include('partials/campaign-new-form', { basePath, segments, syncedTemplates, templatesSynced }) %>
+    <%- include('partials/campaign-new-form', { basePath, segments, syncedTemplates, templatesSynced, exclusionLists: typeof exclusionLists !== 'undefined' ? exclusionLists : [] }) %>
   </div>
 </section>
 <%- include('layouts/inbox-shell-end', { footerScripts: null }) %>

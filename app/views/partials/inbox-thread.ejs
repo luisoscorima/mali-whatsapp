@@ -45,7 +45,12 @@
        var b = String(base || '').replace(/\/$/, '');
        return b + pathPart;
      }
+     function mediaDownloadHref(base, convId, msgId) {
+       if (!convId || !msgId) return '';
+       return resolvePreviewMediaUrl(base, '/conversations/' + convId + '/messages/' + msgId + '/download');
+     }
   %>
+  <% const _convId = typeof conversationId !== 'undefined' ? conversationId : null; %>
   <div class="chat-thread chat-thread--inbox" id="chat-thread">
     <% messages.forEach((m) => { %>
       <% const raw = parsePayload(m.raw_payload); %>
@@ -67,6 +72,8 @@
         <% if (mediaUrl && (mt === 'image' || mt === 'sticker')) { %>
           <div class="chat-bubble__media">
             <img class="chat-msg-media chat-msg-media--img" src="<%= mediaUrl %>" alt="" loading="lazy" decoding="async" />
+            <% const _dlImg = _convId && m.id ? mediaDownloadHref(bp, _convId, m.id) : mediaUrl; %>
+            <a class="chat-msg-download-link" href="<%= _dlImg %>"<%= _convId && m.id ? '' : ' download' %>>Descargar</a>
           </div>
         <% } else if (mediaUrl && mt === 'video') { %>
           <div class="chat-bubble__media">
@@ -78,11 +85,14 @@
           </div>
         <% } else if (mediaUrl && mt === 'document') { %>
           <div class="chat-bubble__media chat-bubble__media--doc">
+            <% const _dlDoc = _convId && m.id ? mediaDownloadHref(bp, _convId, m.id) : mediaUrl; %>
             <% if (lpMime.indexOf('pdf') !== -1) { %>
               <iframe class="chat-msg-media chat-msg-media--pdf" title="Vista PDF" src="<%= mediaUrl %>"></iframe>
+              <a class="chat-msg-download-link" href="<%= _dlDoc %>">Descargar</a>
               <a class="chat-msg-doc-link" href="<%= mediaUrl %>" target="_blank" rel="noopener noreferrer">Abrir PDF en pestaña nueva</a>
             <% } else { %>
-              <a class="chat-msg-doc-link" href="<%= mediaUrl %>" target="_blank" rel="noopener noreferrer">Abrir o descargar archivo</a>
+              <a class="chat-msg-download-link" href="<%= _dlDoc %>">Descargar</a>
+              <a class="chat-msg-doc-link" href="<%= mediaUrl %>" target="_blank" rel="noopener noreferrer">Abrir en pestaña nueva</a>
             <% } %>
           </div>
         <% } else if (isMediaType(mt) && !mediaUrl) { %>
