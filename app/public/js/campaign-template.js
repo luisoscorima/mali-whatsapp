@@ -23,8 +23,6 @@
     return d.innerHTML;
   }
 
-  const excludeIdsInput = document.getElementById('campaign-exclude-contact-ids');
-
   function getCheckedSegments() {
     return Array.prototype.map.call(form.querySelectorAll('input[name="campaignSegment"]:checked'), function (el) {
       return el.value;
@@ -38,17 +36,6 @@
         return el.value;
       }
     );
-  }
-
-  function getCheckedExcludeListIds() {
-    return Array.prototype.map.call(
-      form.querySelectorAll('input[name="campaignExcludeList"]:checked'),
-      function (el) {
-        return Number(el.value);
-      }
-    ).filter(function (n) {
-      return Number.isInteger(n) && n > 0;
-    });
   }
 
   const PARAM_SOURCE_OPTIONS = [
@@ -73,22 +60,6 @@
       opts.join('') +
       '</select></label>'
     );
-  }
-
-  function parseExcludeContactIds() {
-    if (!excludeIdsInput) return [];
-    const raw = String(excludeIdsInput.value || '');
-    const ids = raw
-      .split(/[\s,;]+/)
-      .map(function (x) {
-        return Number(String(x).trim());
-      })
-      .filter(function (n) {
-        return Number.isInteger(n) && n > 0;
-      });
-    return Array.from(new Set(ids)).sort(function (a, b) {
-      return a - b;
-    });
   }
 
   function getCheckedRecipientIds() {
@@ -289,11 +260,7 @@
     try {
       const previewBody = { segments: segments };
       const excludeSegs = getCheckedExcludeSegments();
-      const excludeIds = parseExcludeContactIds();
       if (excludeSegs.length) previewBody.excludeSegmentSlugs = excludeSegs;
-      if (excludeIds.length) previewBody.excludeContactIds = excludeIds;
-      const excludeLists = getCheckedExcludeListIds();
-      if (excludeLists.length) previewBody.excludeListIds = excludeLists;
 
       const r = await fetch(basePath + '/api/campaigns/recipients-preview', {
         method: 'POST',
@@ -406,8 +373,6 @@
     const mode = scheduleMode ? scheduleMode.value : 'now';
 
     const excludeSegs = getCheckedExcludeSegments();
-    const excludeIds = parseExcludeContactIds();
-    const excludeLists = getCheckedExcludeListIds();
 
     const payload = {
       templateSyncId: templateSyncId,
@@ -417,8 +382,6 @@
       segments: getCheckedSegments(),
       recipientContactIds: getCheckedRecipientIds(),
       excludeSegmentSlugs: excludeSegs,
-      excludeContactIds: excludeIds,
-      excludeListIds: excludeLists,
     };
 
     if (container) {
@@ -530,11 +493,4 @@
     el.addEventListener('change', invalidateRecipientsPreview);
   });
 
-  form.querySelectorAll('input[name="campaignExcludeList"]').forEach(function (el) {
-    el.addEventListener('change', invalidateRecipientsPreview);
-  });
-
-  if (excludeIdsInput) {
-    excludeIdsInput.addEventListener('input', invalidateRecipientsPreview);
-  }
 })();

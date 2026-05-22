@@ -82,7 +82,6 @@ function inferPrefillPhoneParts(fullDigits, forcedPrefix = '', forcedLocal = '')
 
 function registerInboxViews(app, ctx) {
   const { query, config, loadSegments, loadSyncedTemplates, resolveAppBaseUrl, appPath } = ctx;
-  const { loadExclusionLists } = require('../services/exclusionLists');
   const { loadContactAttributes } = require('../services/contactAttributes');
 
   function contactFiltersFromQuery(req) {
@@ -270,11 +269,10 @@ function registerInboxViews(app, ctx) {
   /* --- Campañas (envío) --- */
   app.get('/campaigns/new', async (req, res) => {
     const area = req.user.area;
-    const [segmentsList, campaigns, syncedTemplates, exclusionLists] = await Promise.all([
+    const [segmentsList, campaigns, syncedTemplates] = await Promise.all([
       loadSegments(area),
       loadCampaignsRecent(area, 200),
       loadSyncedTemplates(area),
-      loadExclusionLists(query, area),
     ]);
     res.render('campaigns-new', {
       ...commonLocals(req, res),
@@ -284,7 +282,6 @@ function registerInboxViews(app, ctx) {
       segments: segmentsList,
       campaigns,
       syncedTemplates,
-      exclusionLists,
       templatesSynced: String(req.query.templates_synced || '') === '1',
       templatesSyncError: req.query.templates_sync_err || null,
       extraHeadScripts: [`${config.basePath || ''}/js/campaign-template.js`],

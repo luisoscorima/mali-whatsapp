@@ -16,7 +16,6 @@ const { registerConversations } = require('./registerConversations');
 const { registerWebhook } = require('./registerWebhook');
 const { registerAdmin } = require('./registerAdmin');
 const { registerSettingsApi } = require('./registerSettingsApi');
-const { registerExclusionLists } = require('./registerExclusionLists');
 const { registerCtwaRules } = require('./registerCtwaRules');
 
 function createRegisterRoutes({ query, pool, appPath }) {
@@ -34,7 +33,6 @@ function createRegisterRoutes({ query, pool, appPath }) {
     registerCampaigns(app, ctx);
     registerConversations(app, ctx);
     registerSettingsApi(app, ctx);
-    registerExclusionLists(app, ctx);
     registerCtwaRules(app, ctx);
     registerWebhook(app, ctx);
   }

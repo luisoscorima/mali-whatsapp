@@ -626,25 +626,13 @@ html[data-theme='dark'] .nav-link.is-active {
   accent-color: var(--accent);
 }
 
-.campaign-exclude-panel {
+.campaign-audience-stack .campaign-segments-panel + .campaign-segments-panel {
   margin-top: 0.75rem;
-  border-style: dashed;
 }
 
 .campaign-segment-tile--exclude:has(.campaign-exclude-segment-input:checked) {
   border-color: var(--warn, #b45309);
   background: color-mix(in srgb, var(--warn, #b45309) 8%, transparent);
-}
-
-.campaign-exclude-ids-field {
-  margin-top: 0.75rem;
-}
-
-.campaign-exclude-ids-input {
-  width: 100%;
-  min-height: 2.5rem;
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.875rem;
 }
 
 .campaign-segment-text {

@@ -21,7 +21,7 @@ Seguimiento del plan **«Plan revisado — observaciones de usuarios y viabilida
 
 7. **Menos errores en masivos** — *Necesidad:* reintentar fallos transitorios. · *Implementado:* reintento auto ~10 min + botón manual, sin duplicar si ya se entregó.
 
-8. **Exclusión en campañas** — *Necesidad:* no enviar a ciertos contactos/listas. · *Implementado:* excluir segmentos/IDs en campaña + listas guardadas en `/exclusion-lists`.
+8. **Exclusión en campañas** — *Necesidad:* no enviar a ciertos contactos o segmentos. · *Implementado:* excluir segmentos en nueva campaña; exclusión puntual desmarcando en paso Destinatarios.
 
 9. **Crear plantillas en la app** — *Necesidad:* no depender solo de Business Manager. · *Implementado:* `/templates` y `/templates/new`, envío a revisión Meta + webhook de estado.
 
@@ -53,6 +53,5 @@ Seguimiento del plan **«Plan revisado — observaciones de usuarios y viabilida
 | Fallidos / respondieron / costo / reintento | Detalle campaña `/campaigns/:id` |
 | Nueva campaña (exclusiones, vars) | `/campaigns/new` |
 | Plantillas | `/templates`, `/templates/new` |
-| Listas de exclusión | `/exclusion-lists` |
 | Reglas CTWA | `/ctwa-rules` |
 | Atributos y filtros | `/contacts` |

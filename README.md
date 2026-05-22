@@ -19,7 +19,7 @@ Plataforma web para **operar WhatsApp Business (Cloud API)** en MALI: **varios n
 | **Campañas** | Plantillas sincronizadas o **creadas desde la app** (envío a revisión Meta); parámetros **por contacto** (nombre, atributos `sede`/`monto`/`fecha_pago`, etc.); preview de destinatarios con exclusiones; **lista de fallidos** + export CSV; KPI **respondieron (7 días)** con lista de teléfonos; **reintento** automático (~10 min) y manual; **costo/inversión** del envío (WABA o estimado). |
 | **Contactos** | Alta manual, edición, filtros por **número, nombre y atributos**; **importación masiva CSV/Excel** (columnas extra → atributos); ejemplo en `/contacts/sample.csv`. |
 | **Segmentos** | Definición y mantenimiento de segmentos para filtrar audiencias. |
-| **Exclusiones** | Listas reutilizables de contactos a no incluir en campañas (`/exclusion-lists`). |
+| **Exclusiones en campaña** | Segmentos a excluir en nueva campaña; destinatarios puntuales desmarcando en el paso 2. |
 | **Conversaciones** | Lista e hilo; búsqueda por texto, nombre o número; chips de **segmento y etiquetas CTWA**; origen `attribution` en cabecera; **descarga** de imágenes/documentos del hilo; marcado no leído; respuesta del asesor en ventana de 24 h; adjuntos y exportación. |
 | **Plantillas** | Sync desde Graph; **alta vía API** (`/templates/new`); listado de estados PENDING/APPROVED/REJECTED; formulario de campaña adaptado a cabeceras y `{{n}}`. |
 | **CTWA** | Reglas admin (`/ctwa-rules`): `meta_source_id` o patrón en headline → segmento + etiqueta de conversación. |
@@ -147,8 +147,6 @@ Si aparece `Cannot find module` tras añadir dependencias en `package.json`, el 
 - `GET /segments` segmentos (lista)
 - `GET /segments/new` añadir segmento
 - `GET /segments/:id` editar segmento
-- `GET /exclusion-lists` listas de exclusión para campañas
-- `GET /exclusion-lists/:id` miembros de una lista
 - `GET /ctwa-rules` reglas Click-to-WhatsApp (anuncios Meta)
 - `GET /templates` plantillas (estados de revisión)
 - `GET /templates/new` crear plantilla y enviar a Meta
