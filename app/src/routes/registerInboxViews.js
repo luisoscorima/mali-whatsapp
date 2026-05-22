@@ -9,6 +9,11 @@ const {
   SALIDA_OK_STATUSES,
   ERROR_STATUSES,
 } = require('../utils/campaignLogStatuses');
+const {
+  loadAttributeFilterOptions,
+  loadAttributeDefinitionsForArea,
+  getApplicableAttributeDefinitions,
+} = require('../services/contactAttributeDefinitions');
 
 const LOG_STATUS = CAMPAIGN_LOG_STATUS_SQL;
 const SALIDA_OK_IN = sqlInList(SALIDA_OK_STATUSES);
@@ -91,6 +96,31 @@ function registerInboxViews(app, ctx) {
       showReplaced: String(req.query.show_replaced || '').trim() === '1',
       contactAttrKey: String(req.query.attr_key || '').trim(),
       contactAttrValue: String(req.query.attr_value || '').trim(),
+    };
+  }
+
+  async function loadContactAttributeViewData(area, segmentSlugs = null) {
+    const normalizedArea = String(area || '').trim();
+    const [attributeFilterOptions, attributeDefinitionsAll] = await Promise.all([
+      loadAttributeFilterOptions(query, normalizedArea),
+      loadAttributeDefinitionsForArea(query, normalizedArea),
+    ]);
+    let attributeFieldDefinitions = attributeDefinitionsAll;
+    let attributeGateBySegment = false;
+    if (segmentSlugs && segmentSlugs.length > 0) {
+      attributeFieldDefinitions = await getApplicableAttributeDefinitions(
+        query,
+        normalizedArea,
+        segmentSlugs
+      );
+    } else if (segmentSlugs !== null) {
+      attributeGateBySegment = true;
+    }
+    return {
+      attributeFilterOptions,
+      attributeDefinitionsAll,
+      attributeFieldDefinitions,
+      attributeGateBySegment,
     };
   }
 
@@ -361,17 +391,21 @@ function registerInboxViews(app, ctx) {
     const prefillPhonePrefix = inferred.prefix;
     const prefillPhoneLocal = inferred.local;
     const segmentsList = await loadSegments(area);
-    const contactsRows = await loadContactsList(
-      area,
-      segmentsList,
-      contactSegmentFilter,
-      contactSearchQ,
-      showReplaced,
-      contactAttrKey,
-      contactAttrValue
-    );
+    const [contactsRows, attrView] = await Promise.all([
+      loadContactsList(
+        area,
+        segmentsList,
+        contactSegmentFilter,
+        contactSearchQ,
+        showReplaced,
+        contactAttrKey,
+        contactAttrValue
+      ),
+      loadContactAttributeViewData(area, []),
+    ]);
     res.render('contacts-page', {
       ...commonLocals(req, res),
+      ...attrView,
       activeNav: 'contacts',
       pageTitle: 'Nuevo contacto · MALI WhatsApp',
       layoutModifier: '',
@@ -412,17 +446,21 @@ function registerInboxViews(app, ctx) {
       contactAttrValue,
     } = contactFiltersFromQuery(req);
     const segmentsList = await loadSegments(area);
-    const contactsRows = await loadContactsList(
-      area,
-      segmentsList,
-      contactSegmentFilter,
-      contactSearchQ,
-      showReplaced,
-      contactAttrKey,
-      contactAttrValue
-    );
+    const [contactsRows, attrView] = await Promise.all([
+      loadContactsList(
+        area,
+        segmentsList,
+        contactSegmentFilter,
+        contactSearchQ,
+        showReplaced,
+        contactAttrKey,
+        contactAttrValue
+      ),
+      loadContactAttributeViewData(area, null),
+    ]);
     res.render('contacts-page', {
       ...commonLocals(req, res),
+      ...attrView,
       activeNav: 'contacts',
       pageTitle: 'Importar Excel · MALI WhatsApp',
       layoutModifier: '',
@@ -514,8 +552,13 @@ function registerInboxViews(app, ctx) {
     if (one.rowCount === 0) {
       return res.status(404).send('Contacto no encontrado');
     }
+    const attrView = await loadContactAttributeViewData(
+      area,
+      one.rows[0].segment_slugs || []
+    );
     res.render('contacts-page', {
       ...commonLocals(req, res),
+      ...attrView,
       activeNav: 'contacts',
       pageTitle: `${one.rows[0].name || one.rows[0].phone} · Contactos · MALI WhatsApp`,
       layoutModifier: 'conversations-inbox--detail',
@@ -554,17 +597,21 @@ function registerInboxViews(app, ctx) {
       contactAttrValue,
     } = contactFiltersFromQuery(req);
     const segmentsList = await loadSegments(area);
-    const contactsRows = await loadContactsList(
-      area,
-      segmentsList,
-      contactSegmentFilter,
-      contactSearchQ,
-      showReplaced,
-      contactAttrKey,
-      contactAttrValue
-    );
+    const [contactsRows, attrView] = await Promise.all([
+      loadContactsList(
+        area,
+        segmentsList,
+        contactSegmentFilter,
+        contactSearchQ,
+        showReplaced,
+        contactAttrKey,
+        contactAttrValue
+      ),
+      loadContactAttributeViewData(area, null),
+    ]);
     res.render('contacts-page', {
       ...commonLocals(req, res),
+      ...attrView,
       activeNav: 'contacts',
       pageTitle: 'Contactos · MALI WhatsApp',
       layoutModifier: '',

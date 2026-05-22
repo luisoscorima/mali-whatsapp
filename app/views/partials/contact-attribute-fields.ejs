@@ -1,0 +1,45 @@
+<% const _defs = typeof attributeFieldDefinitions !== 'undefined' && attributeFieldDefinitions ? attributeFieldDefinitions : []; %>
+<% const _vals = typeof contactAttributes !== 'undefined' && contactAttributes ? contactAttributes : {}; %>
+<% const _disabled = typeof attributeFieldsDisabled !== 'undefined' && attributeFieldsDisabled; %>
+<% const _gateSegments = typeof attributeGateBySegment !== 'undefined' && attributeGateBySegment; %>
+<% if (_defs.length === 0) { %>
+  <p class="inline-help muted">
+    No hay campos definidos.
+    <a href="<%= basePath %>/attributes">Configurar en Atributos</a>.
+  </p>
+<% } else { %>
+  <div class="contact-attrs-grid">
+  <% const _areaDefs = _defs.filter(function (d) { return !d.segment_slug; }); %>
+  <% const _segDefs = _defs.filter(function (d) { return d.segment_slug; }); %>
+  <% _areaDefs.forEach(function (def) { %>
+  <label class="field contact-attr-field" data-attr-scope="area">
+    <span class="field-label"><%= def.label %><% if (def.required) { %> <span class="required-mark">*</span><% } %></span>
+    <input
+      type="<%= def.field_type === 'date' ? 'date' : def.field_type === 'number' ? 'number' : 'text' %>"
+      name="attr_<%= def.slug %>"
+      value="<%= _vals[def.slug] || '' %>"
+      maxlength="500"
+      <%= _disabled ? 'disabled' : '' %>
+      <%= def.required && !_disabled ? 'required' : '' %>
+    />
+  </label>
+  <% }); %>
+  <% _segDefs.forEach(function (def) { %>
+  <label
+    class="field contact-attr-field contact-attr-field--segment<%= _gateSegments ? ' is-segment-gated' : '' %>"
+    data-attr-scope="segment"
+    data-segment-slug="<%= def.segment_slug %>"
+    <% if (_gateSegments) { %>hidden<% } %>
+  >
+    <span class="field-label"><%= def.label %><span class="muted"> · <%= def.segment_slug %></span><% if (def.required) { %> <span class="required-mark">*</span><% } %></span>
+    <input
+      type="<%= def.field_type === 'date' ? 'date' : def.field_type === 'number' ? 'number' : 'text' %>"
+      name="attr_<%= def.slug %>"
+      value="<%= _vals[def.slug] || '' %>"
+      maxlength="500"
+      <%= _disabled ? 'disabled' : '' %>
+    />
+  </label>
+  <% }); %>
+  </div>
+<% } %>

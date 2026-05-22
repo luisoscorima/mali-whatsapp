@@ -1079,6 +1079,45 @@ html[data-theme='dark'] .settings-ai-prompt-textarea {
   margin-top: 12px;
 }
 
+.inbox-chat-header-profile--link {
+  text-decoration: none;
+  color: inherit;
+  border-radius: 10px;
+  transition: background 0.15s ease;
+}
+
+.inbox-chat-header-profile--link:hover,
+.inbox-chat-header-profile--link:focus-visible {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  outline: none;
+}
+
+.inbox-chat-header-profile--link .inbox-chat-heading {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  text-underline-offset: 3px;
+}
+
+.contact-attrs-section {
+  margin: 1rem 0 0;
+  padding: 0;
+  border: none;
+}
+
+.contact-attrs-section__title {
+  margin: 0 0 0.65rem;
+}
+
+.contact-attrs-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.contact-attrs-grid .contact-attr-field {
+  margin: 0;
+}
+
 .templates-list-badge {
   flex-shrink: 0;
   font-size: 0.62rem;

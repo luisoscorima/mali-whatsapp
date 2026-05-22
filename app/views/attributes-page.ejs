@@ -1,0 +1,175 @@
+<% const _view = typeof view !== 'undefined' ? view : 'list'; %>
+<% const _selId = typeof selectedDefinitionId !== 'undefined' ? selectedDefinitionId : null; %>
+<% var _attrMobileDetail = _view === 'new' || _view === 'detail'; %>
+<% function attrScopeLabel(def, segments) {
+  if (!def.segment_slug) return 'Área · ' + (typeof areaLabel !== 'undefined' ? areaLabel : '');
+  const s = (segments || []).find(function (x) { return x.value === def.segment_slug; });
+  return 'Segmento · ' + (s ? s.label : def.segment_slug);
+} %>
+<%- include('layouts/inbox-shell-start', {
+  pageTitle,
+  basePath,
+  appBaseUrl,
+  requireAuth,
+  currentUser,
+  areaLabel,
+  activeNav: 'attributes',
+  showAdminNav,
+  shellPageClass: 'conversations-page',
+  layoutModifier: _attrMobileDetail ? 'conversations-inbox--detail' : '',
+  extraHeadScripts: null
+}) %>
+<aside class="inbox-sidebar" aria-label="Atributos de contacto">
+  <div class="inbox-sidebar-header inbox-sidebar-header--with-actions">
+    <h2 class="inbox-sidebar-title">Atributos</h2>
+    <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar', refreshAriaLabel: 'Actualizar atributos' }) %>
+  </div>
+  <div class="inbox-filters inbox-filters--campaign-new">
+    <a href="<%= basePath %>/attributes/new?scope=area" class="small-btn primary <%= _view === 'new' ? 'is-active' : '' %>">Nuevo atributo</a>
+  </div>
+  <% if (!definitions || !definitions.length) { %>
+  <p class="empty-state inbox-empty-list">Sin definiciones. Crea atributos del área o por segmento.</p>
+  <% } else { %>
+  <ul class="inbox-chat-list">
+    <% definitions.forEach(function (d) { %>
+    <li class="inbox-chat-item <%= _selId === d.id ? 'is-active' : '' %>">
+      <a class="inbox-chat-link" href="<%= basePath %>/attributes/<%= d.id %>">
+        <span class="inbox-chat-link-main">
+          <span class="inbox-chat-row-top">
+            <span class="inbox-chat-title"><%= d.label %></span>
+            <% if (!d.active) { %><span class="badge neutral">off</span><% } %>
+          </span>
+          <span class="inbox-chat-row-mid">
+            <span class="inbox-chat-preview mono"><%= d.slug %></span>
+          </span>
+          <span class="inbox-chat-row-mid">
+            <span class="inbox-chat-preview"><%= attrScopeLabel(d, segments) %> · <%= d.field_type %></span>
+          </span>
+        </span>
+      </a>
+    </li>
+    <% }); %>
+  </ul>
+  <% } %>
+</aside>
+<section class="inbox-main" aria-label="Detalle de atributos">
+  <% if (_view === 'list') { %>
+  <div class="inbox-empty-pane" role="status">
+    <div class="inbox-empty-hint">
+      <h2 class="inbox-empty-heading">Atributos de contacto</h2>
+      <p class="inbox-empty-text">Define campos <strong>para todo el área</strong> o <strong>solo para un segmento</strong>. Los formularios de contacto y las campañas usan estas definiciones.</p>
+      <% if (flash === 'created') { %><p class="toast toast--ok">Atributo creado.</p><% } %>
+      <% if (flash === 'updated') { %><p class="toast toast--ok">Atributo actualizado.</p><% } %>
+      <% if (flash === 'deleted') { %><p class="toast toast--ok">Atributo eliminado.</p><% } %>
+      <p><a href="<%= basePath %>/contacts">Ir a contactos</a></p>
+    </div>
+  </div>
+  <% } else if (_view === 'new') { %>
+  <div class="inbox-chat-header">
+    <a class="inbox-back-mobile" href="<%= basePath %>/attributes">← Atributos</a>
+    <h1 class="inbox-chat-heading">Nuevo atributo</h1>
+  </div>
+  <div class="inbox-chat-body inbox-chat-body--form">
+    <% if (error === 'duplicate') { %><p class="inline-warn">Ese identificador (slug) ya existe en este ámbito.</p><% } %>
+    <% if (error === 'slug' || error === 'label' || error === 'segment') { %><p class="inline-warn">Revisa slug, etiqueta y segmento.</p><% } %>
+    <div class="card">
+      <form method="post" action="<%= basePath %>/attributes" class="form-stack">
+        <fieldset class="field">
+          <legend class="field-label">Ámbito</legend>
+          <label><input type="radio" name="scope" value="area" <%= (typeof prefillScope === 'undefined' || prefillScope !== 'segment') ? 'checked' : '' %> /> Todo el área (<%= areaLabel %>)</label>
+          <label><input type="radio" name="scope" value="segment" <%= prefillScope === 'segment' ? 'checked' : '' %> /> Solo un segmento</label>
+        </fieldset>
+        <label class="field" id="attr-new-segment-wrap">
+          <span class="field-label">Segmento</span>
+          <select name="segment_slug">
+            <option value="">—</option>
+            <% (segments || []).forEach(function (s) { %>
+            <option value="<%= s.value %>" <%= (typeof prefillSegment !== 'undefined' && prefillSegment === s.value) ? 'selected' : '' %>><%= s.label %></option>
+            <% }); %>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Identificador (slug)</span>
+          <input type="text" name="slug" required pattern="[a-z0-9_]+" maxlength="64" placeholder="codigo_alumno" title="Minúsculas, números y guion bajo" />
+          <span class="inline-help muted">Clave en CSV/import y en campañas (<code>attr.slug</code>).</span>
+        </label>
+        <label class="field">
+          <span class="field-label">Etiqueta visible</span>
+          <input type="text" name="label" required maxlength="120" placeholder="Código de alumno" />
+        </label>
+        <label class="field">
+          <span class="field-label">Tipo</span>
+          <select name="field_type">
+            <option value="text">Texto</option>
+            <option value="number">Número</option>
+            <option value="date">Fecha</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Orden</span>
+          <input type="number" name="sort_order" value="0" step="1" />
+        </label>
+        <label class="field">
+          <input type="checkbox" name="required" value="1" /> Obligatorio al guardar contacto
+        </label>
+        <button type="submit" class="small-btn primary">Crear atributo</button>
+      </form>
+    </div>
+  </div>
+  <script>
+  (function () {
+    var radios = document.querySelectorAll('input[name="scope"]');
+    var wrap = document.getElementById('attr-new-segment-wrap');
+    function sync() {
+      var seg = document.querySelector('input[name="scope"][value="segment"]');
+      if (!wrap || !seg) return;
+      wrap.style.display = seg.checked ? '' : 'none';
+    }
+    radios.forEach(function (r) { r.addEventListener('change', sync); });
+    sync();
+  })();
+  </script>
+  <% } else if (_view === 'detail' && selectedDefinition) { %>
+  <% const _d = selectedDefinition; %>
+  <div class="inbox-chat-header">
+    <a class="inbox-back-mobile" href="<%= basePath %>/attributes">← Atributos</a>
+    <h1 class="inbox-chat-heading"><%= _d.label %></h1>
+    <p class="inbox-chat-sub mono"><%= _d.slug %> · <%= attrScopeLabel(_d, segments) %></p>
+  </div>
+  <div class="inbox-chat-body inbox-chat-body--form">
+    <% if (flash === 'updated') { %><p class="toast toast--ok">Guardado.</p><% } %>
+    <div class="card">
+      <form method="post" action="<%= basePath %>/attributes/<%= _d.id %>/update" class="form-stack">
+        <p class="muted">El slug <code><%= _d.slug %></code> y el ámbito no se pueden cambiar (evita romper datos importados).</p>
+        <label class="field">
+          <span class="field-label">Etiqueta visible</span>
+          <input type="text" name="label" value="<%= _d.label %>" required maxlength="120" />
+        </label>
+        <label class="field">
+          <span class="field-label">Tipo</span>
+          <select name="field_type">
+            <option value="text" <%= _d.field_type === 'text' ? 'selected' : '' %>>Texto</option>
+            <option value="number" <%= _d.field_type === 'number' ? 'selected' : '' %>>Número</option>
+            <option value="date" <%= _d.field_type === 'date' ? 'selected' : '' %>>Fecha</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Orden</span>
+          <input type="number" name="sort_order" value="<%= _d.sort_order %>" step="1" />
+        </label>
+        <label class="field">
+          <input type="checkbox" name="required" value="1" <%= _d.required ? 'checked' : '' %> /> Obligatorio
+        </label>
+        <label class="field">
+          <input type="checkbox" name="active" value="1" <%= _d.active !== false ? 'checked' : '' %> /> Activo (visible en formularios)
+        </label>
+        <button type="submit" class="small-btn primary">Guardar</button>
+      </form>
+      <form method="post" action="<%= basePath %>/attributes/<%= _d.id %>/delete" class="inline-delete-form" onsubmit="return confirm('¿Eliminar esta definición? Los valores guardados en contactos permanecen en la base de datos.');">
+        <button type="submit" class="small-btn danger-outline">Eliminar definición</button>
+      </form>
+    </div>
+  </div>
+  <% } %>
+</section>
+<%- include('layouts/inbox-shell-end') %>

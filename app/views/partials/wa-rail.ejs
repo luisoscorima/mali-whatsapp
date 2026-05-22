@@ -71,6 +71,17 @@
       <span class="wa-rail__label">Segmentos</span>
     </a>
     <a
+      class="wa-rail__item nav-item <%= nav === 'attributes' ? 'is-active' : '' %>"
+      href="<%= basePath %>/attributes"
+      aria-label="Atributos de contacto"
+      title="Atributos de contacto"
+    >
+      <span class="wa-rail__icon" aria-hidden="true"
+        ><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h6"/><circle cx="17" cy="17" r="3"/></svg
+      ></span>
+      <span class="wa-rail__label">Atributos</span>
+    </a>
+    <a
       class="wa-rail__item nav-item <%= nav === 'templates' ? 'is-active' : '' %>"
       href="<%= basePath %>/templates"
       aria-label="Plantillas"

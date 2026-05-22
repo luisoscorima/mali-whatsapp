@@ -17,7 +17,7 @@ Seguimiento del plan **«Plan revisado — observaciones de usuarios y viabilida
 
 5. **Inversión / costo por campaña** — *Necesidad:* monto gastado en el envío masivo. · *Implementado:* sync costo WABA + estimado si Meta no devuelve dato (no incluye spend de Ads).
 
-6. **Mensaje personalizado + filtros** — *Necesidad:* nombre, sede, monto, fecha por contacto. · *Implementado:* atributos en contacto/CSV, mapeo `{{n}}` por contacto en campaña, filtros en listado.
+6. **Mensaje personalizado + filtros** — *Necesidad:* nombre, sede, monto, fecha por contacto. · *Implementado:* definiciones de atributos por área y por segmento (`/attributes`), formularios dinámicos en contactos, CSV, mapeo `{{n}}` en campaña.
 
 7. **Menos errores en masivos** — *Necesidad:* reintentar fallos transitorios. · *Implementado:* reintento auto ~10 min + botón manual, sin duplicar si ya se entregó.
 
@@ -54,4 +54,5 @@ Seguimiento del plan **«Plan revisado — observaciones de usuarios y viabilida
 | Nueva campaña (exclusiones, vars) | `/campaigns/new` |
 | Plantillas | `/templates`, `/templates/new` |
 | Anuncios Meta (CTWA) | `/anuncios` |
-| Atributos y filtros | `/contacts` |
+| Atributos (definiciones) | `/attributes` |
+| Contactos y filtros | `/contacts` |

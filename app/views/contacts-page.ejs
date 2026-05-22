@@ -111,9 +111,10 @@
       <span class="field-label">Atributo (filtro)</span>
       <select name="attr_key" class="inbox-select">
         <option value="" <%= _attrKey === '' ? 'selected' : '' %>>—</option>
-        <option value="sede" <%= _attrKey === 'sede' ? 'selected' : '' %>>sede</option>
-        <option value="monto" <%= _attrKey === 'monto' ? 'selected' : '' %>>monto</option>
-        <option value="fecha_pago" <%= _attrKey === 'fecha_pago' ? 'selected' : '' %>>fecha_pago</option>
+        <% const _attrFilters = typeof attributeFilterOptions !== 'undefined' ? attributeFilterOptions : []; %>
+        <% _attrFilters.forEach(function (opt) { %>
+        <option value="<%= opt.slug %>" <%= _attrKey === opt.slug ? 'selected' : '' %>><%= opt.label %><% if (opt.segment_slug) { %> (<%= opt.segment_slug %>)<% } %></option>
+        <% }); %>
       </select>
     </label>
     <label class="field field--inbox">
@@ -272,21 +273,17 @@
           <p class="inline-help muted">Marca uno o varios.</p>
           <% } %>
         </fieldset>
-        <fieldset class="field">
-          <legend class="field-label">Atributos (opcional)</legend>
-          <label class="field">
-            <span class="field-label">Sede</span>
-            <input type="text" name="attr_sede" maxlength="500" <%= segments.length === 0 ? 'disabled' : '' %> />
-          </label>
-          <label class="field">
-            <span class="field-label">Monto</span>
-            <input type="text" name="attr_monto" maxlength="500" <%= segments.length === 0 ? 'disabled' : '' %> />
-          </label>
-          <label class="field">
-            <span class="field-label">Fecha de pago</span>
-            <input type="text" name="attr_fecha_pago" maxlength="500" <%= segments.length === 0 ? 'disabled' : '' %> />
-          </label>
-        </fieldset>
+        <div class="contact-attrs-section" data-contact-attrs-gated="<%= typeof attributeGateBySegment !== 'undefined' && attributeGateBySegment ? '1' : '0' %>">
+          <p class="field-label contact-attrs-section__title">Atributos (opcional) · <a href="<%= basePath %>/attributes">Configurar campos</a></p>
+          <%- include('partials/contact-attribute-fields', {
+            basePath,
+            areaLabel,
+            attributeFieldDefinitions: typeof attributeFieldDefinitions !== 'undefined' ? attributeFieldDefinitions : [],
+            contactAttributes: {},
+            attributeFieldsDisabled: segments.length === 0,
+            attributeGateBySegment: typeof attributeGateBySegment !== 'undefined' && attributeGateBySegment
+          }) %>
+        </div>
         <button type="submit" <%= segments.length === 0 ? 'disabled' : '' %>>Guardar</button>
       </form>
     </div>
@@ -331,7 +328,7 @@
         <summary>Formato CSV / Excel</summary>
         <p>
           Columnas: <code>name</code>, <code>phone</code>, <code>segment</code>. Opcional: <code>prefix</code> (código de país sin +) para números internacionales.
-          Columnas extra (p. ej. <code>sede</code>, <code>monto</code>, <code>fecha_pago</code>) se guardan como atributos del contacto para personalizar campañas.
+          Columnas extra (slugs definidos en <a href="<%= basePath %>/attributes">Atributos</a> o nuevas claves válidas) se guardan como atributos del contacto para personalizar campañas.
           En <code>segment</code> puedes indicar varios slugs separados por <code>;</code> o <code>,</code>.
           Sin <code>prefix</code>, se aceptan móviles Perú de 9 dígitos (ej. <code>982160981</code>, se guarda como 51…) o un número E.164 completo sin +.
           Si el teléfono ya existe, se actualizan nombre y segmentos (se reemplazan por los de la fila). Si el archivo trae teléfonos repetidos, gana la última fila.
@@ -390,21 +387,17 @@
           </div>
           <p class="inline-help muted">Marca uno o varios.</p>
         </fieldset>
-        <fieldset class="field">
-          <legend class="field-label">Atributos (campañas / import)</legend>
-          <label class="field">
-            <span class="field-label">Sede</span>
-            <input type="text" name="attr_sede" value="<%= _contactAttrs.sede || '' %>" maxlength="500" <%= _isReplaced ? 'disabled' : '' %> />
-          </label>
-          <label class="field">
-            <span class="field-label">Monto</span>
-            <input type="text" name="attr_monto" value="<%= _contactAttrs.monto || '' %>" maxlength="500" <%= _isReplaced ? 'disabled' : '' %> />
-          </label>
-          <label class="field">
-            <span class="field-label">Fecha de pago</span>
-            <input type="text" name="attr_fecha_pago" value="<%= _contactAttrs.fecha_pago || '' %>" maxlength="500" <%= _isReplaced ? 'disabled' : '' %> />
-          </label>
-        </fieldset>
+        <div class="contact-attrs-section">
+          <p class="field-label contact-attrs-section__title">Atributos · <a href="<%= basePath %>/attributes">Configurar campos</a></p>
+          <%- include('partials/contact-attribute-fields', {
+            basePath,
+            areaLabel,
+            attributeFieldDefinitions: typeof attributeFieldDefinitions !== 'undefined' ? attributeFieldDefinitions : [],
+            contactAttributes: _contactAttrs,
+            attributeFieldsDisabled: _isReplaced,
+            attributeGateBySegment: false
+          }) %>
+        </div>
         <div class="form-actions">
           <button type="submit" <%= _isReplaced ? 'disabled' : '' %>>Guardar cambios</button>
         </div>
@@ -508,6 +501,31 @@
 
       updateBulkSelection();
     }
+
+    function syncContactAttrSegmentFields() {
+      document.querySelectorAll('.contact-attrs-section[data-contact-attrs-gated="1"]').forEach(function (fs) {
+        var checked = {};
+        fs.closest('form') &&
+          fs
+            .closest('form')
+            .querySelectorAll('input[name="segments"]:checked')
+            .forEach(function (cb) {
+              checked[cb.value] = true;
+            });
+        fs.querySelectorAll('.contact-attr-field--segment').forEach(function (el) {
+          var slug = el.getAttribute('data-segment-slug');
+          var show = slug && checked[slug];
+          el.hidden = !show;
+          el.querySelectorAll('input').forEach(function (inp) {
+            inp.disabled = !show;
+          });
+        });
+      });
+    }
+    syncContactAttrSegmentFields();
+    document.querySelectorAll('input[name="segments"]').forEach(function (cb) {
+      cb.addEventListener('change', syncContactAttrSegmentFields);
+    });
   })();
 </script>
 <%- include('layouts/inbox-shell-end') %>

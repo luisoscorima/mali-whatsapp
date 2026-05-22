@@ -202,11 +202,21 @@
           <% const _aiOn = typeof aiAreaEnabled !== 'undefined' && aiAreaEnabled; %>
           <div class="inbox-chat-header">
             <a class="inbox-back-mobile" href="<%= basePath %>/conversations<%= inboxQuery %>">← Chats</a>
+            <% const _contactProfileId = selectedConversation.contact_id; %>
+            <% if (_contactProfileId) { %>
+            <a
+              href="<%= basePath %>/contacts/<%= _contactProfileId %>"
+              class="inbox-chat-header-profile inbox-chat-header-profile--link"
+              title="Ver perfil del contacto"
+              aria-label="Ver perfil del contacto"
+            >
+            <% } else { %>
             <div class="inbox-chat-header-profile">
+            <% } %>
               <span class="inbox-chat-avatar inbox-chat-avatar--header" aria-hidden="true"><%= inboxInitials(contact ? contact.name : '', selectedConversation.phone) %></span>
               <div class="inbox-chat-header-identity">
                 <h1 class="inbox-chat-heading"><%= contact ? contact.name : selectedConversation.phone %></h1>
-                <p class="inbox-chat-sub mono"><%= selectedConversation.phone %></p>
+                <p class="inbox-chat-sub mono"><%= selectedConversation.phone %><% if (_contactProfileId) { %> · Perfil<% } %></p>
                 <% if (typeof metaAd !== 'undefined' && metaAd) { %>
                   <p class="inbox-chat-sub muted">
                     Anuncio:
@@ -231,7 +241,11 @@
                   <% } %>
                 </p>
               </div>
+            <% if (_contactProfileId) { %>
+            </a>
+            <% } else { %>
             </div>
+            <% } %>
             <div class="inbox-chat-header-toolbar">
               <a
                 href="<%= basePath %>/conversations/<%= selectedConversation.id %>/export"

@@ -438,6 +438,35 @@ async function runMigrations(query) {
     `CREATE INDEX IF NOT EXISTS idx_contact_attributes_contact ON contact_attributes(contact_id)`
   );
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS contact_attribute_definitions (
+      id SERIAL PRIMARY KEY,
+      area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion')),
+      segment_slug VARCHAR(50) NULL,
+      slug VARCHAR(64) NOT NULL,
+      label VARCHAR(120) NOT NULL,
+      field_type VARCHAR(16) NOT NULL DEFAULT 'text' CHECK (field_type IN ('text', 'number', 'date')),
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      required BOOLEAN NOT NULL DEFAULT FALSE,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query(
+    `CREATE INDEX IF NOT EXISTS idx_contact_attr_defs_area ON contact_attribute_definitions(area)`
+  );
+  await query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_contact_attr_defs_area_slug
+     ON contact_attribute_definitions(area, slug) WHERE segment_slug IS NULL`
+  );
+  await query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_contact_attr_defs_area_seg_slug
+     ON contact_attribute_definitions(area, segment_slug, slug) WHERE segment_slug IS NOT NULL`
+  );
+
+  await seedDefaultContactAttributeDefinitions(query);
+
   await query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS attribution JSONB NULL`);
 
   await query(`
@@ -509,6 +538,30 @@ async function runMigrations(query) {
 
   await migratePamSlugToTiThreeAreas(query);
   await cleanUpCrossAreaSeededSegments(query);
+}
+
+/** Atributos por defecto (área) si el área aún no tiene definiciones. */
+async function seedDefaultContactAttributeDefinitions(query) {
+  const areas = ['ti', 'pam', 'educacion'];
+  const defaults = [
+    { slug: 'sede', label: 'Sede', field_type: 'text', sort_order: 10 },
+    { slug: 'monto', label: 'Monto', field_type: 'text', sort_order: 20 },
+    { slug: 'fecha_pago', label: 'Fecha de pago', field_type: 'date', sort_order: 30 },
+  ];
+  for (const area of areas) {
+    const c = await query(
+      `SELECT COUNT(*)::int AS n FROM contact_attribute_definitions WHERE area = $1`,
+      [area]
+    );
+    if (c.rows[0].n > 0) continue;
+    for (const d of defaults) {
+      await query(
+        `INSERT INTO contact_attribute_definitions (area, segment_slug, slug, label, field_type, sort_order)
+         VALUES ($1, NULL, $2, $3, $4, $5)`,
+        [area, d.slug, d.label, d.field_type, d.sort_order]
+      );
+    }
+  }
 }
 
 /** Una sola vez: en BD antigua (solo pam+educacion) renombrar datos pam → ti; en BD nueva ya hay ti+pam+educacion sin tocar. */

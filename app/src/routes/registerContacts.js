@@ -9,6 +9,7 @@ const {
 const { contactsImportLimiter, contactsImportUpload } = require('../middleware/limiters');
 const { replaceContactSegments, appendContactSegments } = require('../utils/contactSegments');
 const { upsertContactAttributes } = require('../services/contactAttributes');
+const { saveContactAttributesFromRequest } = require('../services/contactAttributeDefinitions');
 
 function firstSegmentForLegacyColumn(segments) {
   if (!segments || segments.length === 0) return null;
@@ -55,11 +56,7 @@ function registerContacts(app, ctx) {
       const contactId = ins.rows[0]?.id;
       if (contactId) {
         await replaceContactSegments(query, contactId, req.user.area, segs);
-        await upsertContactAttributes(query, contactId, {
-          sede: req.body.attr_sede,
-          monto: req.body.attr_monto,
-          fecha_pago: req.body.attr_fecha_pago,
-        });
+        await saveContactAttributesFromRequest(query, req.user.area, contactId, segs, req.body);
         await query(
           `UPDATE conversations SET contact_id = $1, updated_at = NOW()
            WHERE area = $2 AND phone = $3`,
@@ -316,11 +313,7 @@ function registerContacts(app, ctx) {
           [validation.value.name, validation.value.phone, firstSegmentForLegacyColumn(segs), contactId, area]
         );
         await replaceContactSegments(query, contactId, area, segs);
-        await upsertContactAttributes(query, contactId, {
-          sede: req.body.attr_sede,
-          monto: req.body.attr_monto,
-          fecha_pago: req.body.attr_fecha_pago,
-        });
+        await saveContactAttributesFromRequest(query, req.user.area, contactId, segs, req.body);
         logInfo(req, 'Contacto actualizado', { contactId, area });
         auditLog(query, {
           req,

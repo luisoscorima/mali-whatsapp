@@ -38,17 +38,14 @@
     );
   }
 
-  const PARAM_SOURCE_OPTIONS = [
+  let paramSourceOptions = [
     { value: 'static', label: 'Valor fijo (campo de arriba)' },
     { value: 'contact.name', label: 'Nombre del contacto' },
     { value: 'contact.phone', label: 'Teléfono del contacto' },
-    { value: 'attr.sede', label: 'Atributo: sede' },
-    { value: 'attr.monto', label: 'Atributo: monto' },
-    { value: 'attr.fecha_pago', label: 'Atributo: fecha_pago' },
   ];
 
   function paramSourceSelectHtml(name) {
-    const opts = PARAM_SOURCE_OPTIONS.map(function (o) {
+    const opts = paramSourceOptions.map(function (o) {
       return '<option value="' + esc(o.value) + '">' + esc(o.label) + '</option>';
     });
     return (
@@ -492,5 +489,16 @@
   form.querySelectorAll('input[name="campaignExcludeSegment"]').forEach(function (el) {
     el.addEventListener('change', invalidateRecipientsPreview);
   });
+
+  fetch((basePath || '') + '/api/attribute-definitions/options', { credentials: 'same-origin' })
+    .then(function (r) {
+      return r.json();
+    })
+    .then(function (data) {
+      if (data && data.ok && Array.isArray(data.options)) {
+        paramSourceOptions = data.options;
+      }
+    })
+    .catch(function () {});
 
 })();
