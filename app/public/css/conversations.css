@@ -1030,6 +1030,45 @@ html[data-theme='dark'] .settings-ai-prompt-textarea {
   border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
 }
 
+.templates-sidebar-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.templates-sidebar-actions .small-btn {
+  width: 100%;
+  text-align: center;
+  justify-content: center;
+}
+
+.templates-sync-form {
+  margin: 0;
+}
+
+.templates-sync-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.templates-chat-list .inbox-chat-link--static {
+  cursor: default;
+  pointer-events: none;
+}
+
+.templates-list-badge {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  padding: 2px 6px;
+}
+
+.templates-reject-preview {
+  color: var(--danger, #c0392b);
+  font-size: 0.72rem;
+}
+
 /* --- Compositor --- */
 .inbox-layout-wa .inbox-compose {
   flex-shrink: 0;

@@ -3,8 +3,12 @@
   <% if (typeof templatesSynced !== 'undefined' && templatesSynced) { %>
   <p class="toast toast--ok">Plantillas sincronizadas desde Meta.</p>
   <% } %>
+  <% if (typeof templatesSyncError !== 'undefined' && templatesSyncError) { %>
+  <p class="inline-warn">No se pudieron sincronizar: <%= templatesSyncError %></p>
+  <% } %>
   <div class="template-sync-row">
     <form method="POST" action="<%= basePath %>/templates/sync" class="inline-form-sync">
+      <input type="hidden" name="returnTo" value="campaigns" />
       <button type="submit" class="secondary">Sincronizar plantillas</button>
     </form>
     <p class="card-lead template-sync-hint">Trae la lista actualizada de plantillas <strong>aprobadas</strong> de tu cuenta WhatsApp (Meta). Hazlo cuando cambien o aprueben nuevas.</p>

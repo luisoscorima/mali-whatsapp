@@ -11,14 +11,19 @@ const { resolveAppBaseUrl } = require('./shared/routeContext');
 function registerTemplates(app, ctx) {
   const { query, appPath } = ctx;
 
-  app.get('/templates', async (req, res) => {
-    const area = normalizeArea(req.user.area);
+  async function loadAllTemplates(area) {
     const r = await query(
       `SELECT id, name, language, category, status, rejection_reason, submitted_at, synced_at
        FROM whatsapp_templates WHERE area = $1
        ORDER BY status ASC, name ASC`,
-      [area]
+      [normalizeArea(area)]
     );
+    return r.rows;
+  }
+
+  function renderTemplatesPage(req, res, { view, templates, flash, error }) {
+    const templatesSynced = String(req.query.templates_synced || '') === '1';
+    const templatesSyncError = String(req.query.templates_sync_error || '').trim() || null;
     res.render('templates-page', {
       basePath: config.basePath,
       appBaseUrl: resolveAppBaseUrl(),
@@ -27,23 +32,35 @@ function registerTemplates(app, ctx) {
       areaLabel: res.locals.areaLabel,
       showAdminNav: res.locals.showAdminNav,
       activeNav: 'templates',
-      pageTitle: 'Plantillas WhatsApp · MALI',
-      templates: r.rows,
+      pageTitle:
+        view === 'new' ? 'Nueva plantilla · MALI WhatsApp' : 'Plantillas WhatsApp · MALI',
+      view,
+      templates,
+      flash: flash || null,
+      error: error || null,
+      templatesSynced,
+      templatesSyncError,
+    });
+  }
+
+  app.get('/templates', async (req, res) => {
+    const area = normalizeArea(req.user.area);
+    const templates = await loadAllTemplates(area);
+    renderTemplatesPage(req, res, {
+      view: 'list',
+      templates,
       flash: req.query.flash || null,
       error: req.query.error || null,
     });
   });
 
   app.get('/templates/new', async (req, res) => {
-    res.render('templates-new-page', {
-      basePath: config.basePath,
-      appBaseUrl: resolveAppBaseUrl(),
-      requireAuth: config.requireAuth,
-      currentUser: req.user,
-      areaLabel: res.locals.areaLabel,
-      showAdminNav: res.locals.showAdminNav,
-      activeNav: 'templates',
-      pageTitle: 'Nueva plantilla · MALI WhatsApp',
+    const area = normalizeArea(req.user.area);
+    const templates = await loadAllTemplates(area);
+    renderTemplatesPage(req, res, {
+      view: 'new',
+      templates,
+      flash: req.query.flash || null,
       error: req.query.error || null,
     });
   });
@@ -129,6 +146,11 @@ function registerTemplates(app, ctx) {
   });
 
   app.post('/templates/sync', templateSyncLimiter, async (req, res) => {
+    const returnTo = String(req.body.returnTo || 'templates').trim().toLowerCase();
+    const redirectPath =
+      returnTo === 'campaigns' || returnTo === 'campaigns/new'
+        ? '/campaigns/new?templates_synced=1'
+        : '/templates?templates_synced=1';
     try {
       await syncTemplatesForArea(req.user.area);
       auditLog(query, {
@@ -137,14 +159,14 @@ function registerTemplates(app, ctx) {
         message: `Sincronización de plantillas Meta (área ${req.user.area})`,
         meta: { area: req.user.area },
       });
-      res.redirect(`${appPath('/campaigns/new')}?templates_synced=1`);
+      res.redirect(appPath(redirectPath));
     } catch (error) {
       logError(req, 'Error sincronizando plantillas', error);
-      res
-        .status(500)
-        .send(
-          `No se pudieron sincronizar plantillas: ${error.message}. Comprueba token y permisos de la app en Meta.`
-        );
+      const errQ = encodeURIComponent(error.message);
+      if (returnTo === 'campaigns' || returnTo === 'campaigns/new') {
+        return res.redirect(appPath(`/campaigns/new?templates_sync_err=${errQ}`));
+      }
+      res.redirect(appPath(`/templates?templates_sync_error=${errQ}`));
     }
   });
 

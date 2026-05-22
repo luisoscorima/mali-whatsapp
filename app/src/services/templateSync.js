@@ -23,7 +23,7 @@ async function syncTemplatesForArea(area) {
   const c = await pool.connect();
   try {
     await c.query('BEGIN');
-    await c.query(`DELETE FROM whatsapp_templates WHERE area = $1`, [a]);
+    await c.query(`DELETE FROM whatsapp_templates WHERE area = $1 AND UPPER(status) = 'APPROVED'`, [a]);
     for (const t of templates) {
       const name = String(t.name || '').trim();
       const language = String(t.language || '').trim();

@@ -1,43 +1,113 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <%- include('partials/app-head', { pageTitle, basePath }) %>
-</head>
-<body class="page-conversations">
-  <div class="wa-layout wa-layout--inbox" style="display:flex;min-height:100vh">
-  <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav: 'templates', showAdminNav, requireAuth, currentUser, areaLabel }) %>
-  <main class="main-panel" style="flex:1;padding:1.5rem">
-    <header class="page-header">
-      <h1>Plantillas WhatsApp</h1>
-      <p class="muted">Crear en la app (revisión Meta) o sincronizar aprobadas desde Business Manager.</p>
-    </header>
-    <% if (flash === 'created') { %><p class="toast toast--ok">Plantilla enviada a revisión. Actualiza tras aprobación (sync).</p><% } %>
-    <p>
-      <a class="small-btn primary" href="<%= basePath %>/templates/new">Nueva plantilla</a>
-      <form method="post" action="<%= basePath %>/templates/sync" style="display:inline;margin-left:0.5rem">
-        <button type="submit" class="small-btn secondary">Sincronizar aprobadas</button>
-      </form>
-    </p>
-    <div class="card">
-      <table>
-        <thead>
-          <tr><th>Nombre</th><th>Idioma</th><th>Categoría</th><th>Estado</th><th>Rechazo</th></tr>
-        </thead>
-        <tbody>
-          <% templates.forEach(function (t) { %>
-          <tr>
-            <td class="mono"><%= t.name %></td>
-            <td><%= t.language %></td>
-            <td><%= t.category || '—' %></td>
-            <td><span class="badge <%= t.status %>"><%= t.status %></span></td>
-            <td><%= t.rejection_reason || '—' %></td>
-          </tr>
-          <% }); %>
-        </tbody>
-      </table>
-    </div>
-    <p><a href="<%= basePath %>/campaigns/new">Ir a nueva campaña</a></p>
-  </main>
+<% const _view = typeof view !== 'undefined' ? view : 'list'; %>
+<% var _templatesMobileDetail = _view === 'new'; %>
+<% function templateStatusBadgeClass(status) {
+  const s = String(status || '').toUpperCase();
+  if (s === 'APPROVED') return 'sent';
+  if (s === 'PENDING') return 'queued';
+  if (s === 'REJECTED' || s === 'DISABLED') return 'failed';
+  return 'neutral';
+} %>
+<%- include('layouts/inbox-shell-start', {
+  pageTitle,
+  basePath,
+  appBaseUrl,
+  requireAuth,
+  currentUser,
+  areaLabel,
+  activeNav: 'templates',
+  showAdminNav,
+  shellPageClass: 'conversations-page',
+  layoutModifier: _templatesMobileDetail ? 'conversations-inbox--detail' : '',
+  extraHeadScripts: null
+}) %>
+<aside class="inbox-sidebar" aria-label="Plantillas WhatsApp">
+  <div class="inbox-sidebar-header inbox-sidebar-header--with-actions">
+    <h2 class="inbox-sidebar-title">Plantillas</h2>
+    <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar listado', refreshAriaLabel: 'Actualizar listado de plantillas' }) %>
   </div>
-</body>
-</html>
+  <div class="inbox-filters inbox-filters--campaign-new templates-sidebar-actions">
+    <a
+      href="<%= basePath %>/templates/new"
+      class="small-btn primary <%= _view === 'new' ? 'is-active' : '' %>"
+      <% if (_view === 'new') { %>aria-current="page"<% } %>
+    >Nueva plantilla</a>
+    <form method="post" action="<%= basePath %>/templates/sync" class="templates-sync-form">
+      <input type="hidden" name="returnTo" value="templates" />
+      <button type="submit" class="small-btn secondary">Sincronizar aprobadas</button>
+    </form>
+    <p class="inline-help muted templates-sync-hint">Trae las <strong>aprobadas</strong> desde Meta. En campañas solo se usan esas; aquí ves también pendientes y rechazadas.</p>
+  </div>
+  <% if (!templates || templates.length === 0) { %>
+  <p class="empty-state inbox-empty-list">No hay plantillas en caché. Pulsa <strong>Sincronizar aprobadas</strong>.</p>
+  <% } else { %>
+  <ul class="inbox-chat-list templates-chat-list">
+    <% templates.forEach(function (t) { %>
+    <li class="inbox-chat-item">
+      <span class="inbox-chat-link inbox-chat-link--static" tabindex="-1">
+        <span class="inbox-chat-link-main">
+          <span class="inbox-chat-row-top">
+            <span class="inbox-chat-title mono"><%= t.name %></span>
+            <span class="badge <%= templateStatusBadgeClass(t.status) %> templates-list-badge"><%= t.status %></span>
+          </span>
+          <span class="inbox-chat-row-mid">
+            <span class="inbox-chat-preview"><%= t.language %> · <%= t.category || '—' %></span>
+          </span>
+          <% if (t.rejection_reason) { %>
+          <span class="inbox-chat-row-mid">
+            <span class="inbox-chat-preview templates-reject-preview"><%= t.rejection_reason.slice(0, 80) %></span>
+          </span>
+          <% } %>
+        </span>
+      </span>
+    </li>
+    <% }); %>
+  </ul>
+  <% } %>
+</aside>
+<section class="inbox-main" aria-label="Plantillas">
+  <% if (_view === 'list') { %>
+  <div class="inbox-empty-pane" role="status">
+    <div class="inbox-empty-hint">
+      <span class="inbox-empty-icon" aria-hidden="true">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="14" y2="12"/><line x1="7" y1="16" x2="12" y2="16"/></svg>
+      </span>
+      <h2 class="inbox-empty-heading">Plantillas WhatsApp</h2>
+      <p class="inbox-empty-text">Misma lista que en <strong>Nueva campaña</strong>: allí solo las <strong>aprobadas</strong>; aquí todas (pendientes, rechazadas, aprobadas). Usa <strong>Sincronizar aprobadas</strong> en la columna izquierda o crea una con <strong>Nueva plantilla</strong>.</p>
+      <% if (typeof templatesSynced !== 'undefined' && templatesSynced) { %>
+      <p class="toast toast--ok">Plantillas sincronizadas desde Meta.</p>
+      <% } %>
+      <% if (flash === 'created') { %>
+      <p class="toast toast--ok">Plantilla enviada a revisión. Cuando Meta la apruebe, sincroniza para usarla en campañas.</p>
+      <% } %>
+      <% if (error) { %>
+      <p class="inline-warn"><%= error %></p>
+      <% } %>
+      <% if (typeof templatesSyncError !== 'undefined' && templatesSyncError) { %>
+      <p class="inline-warn">Sync: <%= templatesSyncError %></p>
+      <% } %>
+      <p class="inbox-empty-text"><a href="<%= basePath %>/campaigns/new">Ir a nueva campaña</a></p>
+    </div>
+  </div>
+  <% } else if (_view === 'new') { %>
+  <div class="inbox-chat-header">
+    <a class="inbox-back-mobile" href="<%= basePath %>/templates">← Plantillas</a>
+    <div class="inbox-chat-header-main">
+      <h1 class="inbox-chat-heading">Nueva plantilla</h1>
+      <p class="inbox-chat-sub muted">Envío a revisión Meta · área <strong><%= areaLabel %></strong></p>
+    </div>
+  </div>
+  <div class="inbox-chat-body inbox-chat-body--form">
+    <% if (typeof templatesSynced !== 'undefined' && templatesSynced) { %>
+    <p class="toast toast--ok">Plantillas sincronizadas desde Meta.</p>
+    <% } %>
+    <% if (flash === 'created') { %>
+    <p class="toast toast--ok">Plantilla enviada a revisión.</p>
+    <% } %>
+    <% if (typeof templatesSyncError !== 'undefined' && templatesSyncError) { %>
+    <p class="inline-warn">Sync: <%= templatesSyncError %></p>
+    <% } %>
+    <%- include('partials/templates-new-form', { basePath, error }) %>
+  </div>
+  <% } %>
+</section>
+<%- include('layouts/inbox-shell-end') %>
