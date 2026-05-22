@@ -1,0 +1,74 @@
+<% const _t = selectedTemplate; %>
+<% const _d = templateDisplay; %>
+<% const _canEdit = typeof templateCanEdit !== 'undefined' && templateCanEdit; %>
+<div class="card template-detail-card">
+  <dl class="detail-dl detail-dl--compact">
+    <div><dt>Estado</dt><dd><span class="badge <%= typeof templateStatusBadgeClass === 'function' ? templateStatusBadgeClass(_t.status) : 'neutral' %>"><%= _t.status %></span></dd></div>
+    <div><dt>Nombre</dt><dd class="mono"><%= _t.name %></dd></div>
+    <div><dt>Idioma</dt><dd><%= _t.language %></dd></div>
+    <div><dt>Categoría</dt><dd><%= _t.category || '—' %></dd></div>
+    <% if (_t.meta_id) { %><div><dt>ID Meta</dt><dd class="mono"><%= _t.meta_id %></dd></div><% } %>
+    <% if (_t.submitted_at) { %><div><dt>Enviada</dt><dd><%= new Date(_t.submitted_at).toLocaleString('es-PE') %></dd></div><% } %>
+    <% if (_t.synced_at) { %><div><dt>Última sync</dt><dd><%= new Date(_t.synced_at).toLocaleString('es-PE') %></dd></div><% } %>
+    <% if (_t.rejection_reason) { %><div><dt>Motivo rechazo</dt><dd class="templates-reject-preview"><%= _t.rejection_reason %></dd></div><% } %>
+  </dl>
+</div>
+
+<div class="card template-preview-card">
+  <h2 class="card-title">Vista previa</h2>
+  <% if (_d.headerFormat && _d.headerFormat !== 'TEXT') { %>
+  <p class="muted">Cabecera: <%= _d.headerFormat %></p>
+  <% } else if (_d.headerText) { %>
+  <p class="template-preview-block"><strong>Cabecera:</strong> <%= _d.headerText %></p>
+  <% } %>
+  <% if (_d.bodyText) { %>
+  <p class="template-preview-block template-preview-block--body"><%= _d.bodyText %></p>
+  <% } else { %>
+  <p class="muted">Sin texto de cuerpo almacenado.</p>
+  <% } %>
+  <% if (_d.footerText) { %>
+  <p class="template-preview-block muted"><%= _d.footerText %></p>
+  <% } %>
+  <% if (_d.buttons && _d.buttons.length) { %>
+  <ul class="template-preview-buttons">
+    <% _d.buttons.forEach(function (btn) { %>
+    <li><span class="badge neutral"><%= btn.type %></span> <%= btn.text || btn.url || '—' %></li>
+    <% }); %>
+  </ul>
+  <% } %>
+</div>
+
+<% if (_canEdit) { %>
+<div class="card">
+  <h2 class="card-title">Editar y reenviar a Meta</h2>
+  <p class="card-lead">Solo disponible en estado <strong>PENDING</strong> o <strong>REJECTED</strong>. Se conservan cabecera, pie y botones; puedes cambiar el cuerpo y la categoría.</p>
+  <% if (error) { %><p class="inline-warn"><%= error %></p><% } %>
+  <form method="post" action="<%= basePath %>/templates/<%= _t.id %>/update" class="form-stack">
+    <label class="field">
+      <span class="field-label">Categoría</span>
+      <select name="category">
+        <option value="MARKETING" <%= (_t.category || '').toUpperCase() === 'MARKETING' ? 'selected' : '' %>>MARKETING</option>
+        <option value="UTILITY" <%= (_t.category || '').toUpperCase() === 'UTILITY' ? 'selected' : '' %>>UTILITY</option>
+        <option value="AUTHENTICATION" <%= (_t.category || '').toUpperCase() === 'AUTHENTICATION' ? 'selected' : '' %>>AUTHENTICATION</option>
+      </select>
+    </label>
+    <label class="field">
+      <span class="field-label">Texto cuerpo</span>
+      <textarea name="bodyText" rows="5" required><%= _d.bodyText %></textarea>
+    </label>
+    <% for (var ei = 0; ei < Math.max(3, (_d.bodyExamples || []).length); ei++) { %>
+    <label class="field">
+      <span class="field-label">Ejemplo {{<%= ei + 1 %>}}</span>
+      <input type="text" name="bodyExample_<%= ei + 1 %>" value="<%= (_d.bodyExamples && _d.bodyExamples[ei]) ? _d.bodyExamples[ei] : '' %>" />
+    </label>
+    <% } %>
+    <p class="inline-help muted">Un ejemplo por cada <code>{{n}}</code> del cuerpo.</p>
+    <button type="submit" class="small-btn primary">Guardar y reenviar a revisión</button>
+  </form>
+</div>
+<% } else { %>
+<div class="card">
+  <p class="muted">Las plantillas <strong>aprobadas</strong> no se pueden editar desde Meta sin crear una nueva versión con otro nombre. Usa esta vista como referencia o crea otra plantilla.</p>
+  <p><a class="small-btn secondary" href="<%= basePath %>/campaigns/new">Usar en nueva campaña</a></p>
+</div>
+<% } %>

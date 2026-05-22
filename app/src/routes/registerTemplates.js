@@ -2,11 +2,33 @@ const config = require('../config');
 const { logError } = require('../utils/logger');
 const { auditLog, AuditEvent } = require('../services/auditLog');
 const { syncTemplatesForArea } = require('../services/templateSync');
-const { buildTemplateDefinition } = require('../services/templateParser');
+const {
+  buildTemplateDefinition,
+  extractTemplateDisplayContent,
+  templateStatusAllowsEdit,
+  rebuildComponentsWithBody,
+} = require('../services/templateParser');
 const { createMessageTemplateOnWaba } = require('../services/metaWhatsApp');
 const { templateSyncLimiter } = require('../middleware/limiters');
 const { normalizeArea } = require('../middleware/auth');
 const { resolveAppBaseUrl } = require('./shared/routeContext');
+
+function buildBodyExampleRow(bodyText, reqBody) {
+  const varNums = [...new Set((bodyText.match(/\{\{(\d+)\}\}/g) || []).map((m) => parseInt(m.replace(/\D/g, ''), 10)))].sort(
+    (a, b) => a - b
+  );
+  const maxVar = varNums.length ? Math.max(...varNums) : 0;
+  const exampleRow = [];
+  for (let i = 1; i <= maxVar; i++) {
+    const fromField = String(reqBody[`bodyExample_${i}`] || '').trim();
+    const fallback = String(reqBody.bodyExample || 'ejemplo').trim() || 'ejemplo';
+    exampleRow.push(fromField || `${fallback}${i > 1 ? i : ''}`);
+  }
+  if (exampleRow.length === 0 && bodyText.includes('{{')) {
+    exampleRow.push(String(reqBody.bodyExample || 'ejemplo').trim() || 'ejemplo');
+  }
+  return exampleRow;
+}
 
 function registerTemplates(app, ctx) {
   const { query, appPath } = ctx;
@@ -21,9 +43,36 @@ function registerTemplates(app, ctx) {
     return r.rows;
   }
 
-  function renderTemplatesPage(req, res, { view, templates, flash, error }) {
+  async function loadTemplateById(area, id) {
+    const r = await query(
+      `SELECT id, meta_id, name, language, category, status, rejection_reason,
+              components_json, submitted_at, synced_at
+       FROM whatsapp_templates WHERE id = $1 AND area = $2`,
+      [id, normalizeArea(area)]
+    );
+    return r.rows[0] || null;
+  }
+
+  function renderTemplatesPage(req, res, opts) {
+    const {
+      view,
+      templates,
+      selectedTemplate = null,
+      templateDisplay = null,
+      templateCanEdit = false,
+      flash,
+      error,
+    } = opts;
     const templatesSynced = String(req.query.templates_synced || '') === '1';
     const templatesSyncError = String(req.query.templates_sync_error || '').trim() || null;
+    const selectedTemplateId = selectedTemplate ? selectedTemplate.id : null;
+
+    let pageTitle = 'Plantillas WhatsApp · MALI';
+    if (view === 'new') pageTitle = 'Nueva plantilla · MALI WhatsApp';
+    if (view === 'detail' && selectedTemplate) {
+      pageTitle = `${selectedTemplate.name} · Plantillas`;
+    }
+
     res.render('templates-page', {
       basePath: config.basePath,
       appBaseUrl: resolveAppBaseUrl(),
@@ -32,10 +81,13 @@ function registerTemplates(app, ctx) {
       areaLabel: res.locals.areaLabel,
       showAdminNav: res.locals.showAdminNav,
       activeNav: 'templates',
-      pageTitle:
-        view === 'new' ? 'Nueva plantilla · MALI WhatsApp' : 'Plantillas WhatsApp · MALI',
+      pageTitle,
       view,
       templates,
+      selectedTemplateId,
+      selectedTemplate,
+      templateDisplay,
+      templateCanEdit,
       flash: flash || null,
       error: error || null,
       templatesSynced,
@@ -65,6 +117,36 @@ function registerTemplates(app, ctx) {
     });
   });
 
+  app.get('/templates/:id', async (req, res) => {
+    const area = normalizeArea(req.user.area);
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(404).send('Plantilla no encontrada');
+    }
+    const [templates, selectedTemplate] = await Promise.all([
+      loadAllTemplates(area),
+      loadTemplateById(area, id),
+    ]);
+    if (!selectedTemplate) {
+      return res.status(404).send('Plantilla no encontrada');
+    }
+    const components = Array.isArray(selectedTemplate.components_json)
+      ? selectedTemplate.components_json
+      : typeof selectedTemplate.components_json === 'string'
+        ? JSON.parse(selectedTemplate.components_json)
+        : [];
+    const templateDisplay = extractTemplateDisplayContent(components);
+    renderTemplatesPage(req, res, {
+      view: 'detail',
+      templates,
+      selectedTemplate,
+      templateDisplay,
+      templateCanEdit: templateStatusAllowsEdit(selectedTemplate.status),
+      flash: req.query.flash || null,
+      error: req.query.error ? decodeURIComponent(String(req.query.error)) : null,
+    });
+  });
+
   app.post('/templates/create', templateSyncLimiter, async (req, res) => {
     const area = normalizeArea(req.user.area);
     const name = String(req.body.name || '')
@@ -83,20 +165,7 @@ function registerTemplates(app, ctx) {
       return res.redirect(appPath('/templates/new?error=body'));
     }
 
-    const varNums = [...new Set((bodyText.match(/\{\{(\d+)\}\}/g) || []).map((m) => parseInt(m.replace(/\D/g, ''), 10)))].sort(
-      (a, b) => a - b
-    );
-    const maxVar = varNums.length ? Math.max(...varNums) : 0;
-    const exampleRow = [];
-    for (let i = 1; i <= maxVar; i++) {
-      const fromField = String(req.body[`bodyExample_${i}`] || '').trim();
-      const fallback = String(req.body.bodyExample || 'ejemplo').trim() || 'ejemplo';
-      exampleRow.push(fromField || `${fallback}${i > 1 ? i : ''}`);
-    }
-    if (exampleRow.length === 0) {
-      exampleRow.push(String(req.body.bodyExample || 'ejemplo').trim() || 'ejemplo');
-    }
-
+    const exampleRow = buildBodyExampleRow(bodyText, req.body);
     const components = [
       {
         type: 'BODY',
@@ -115,42 +184,98 @@ function registerTemplates(app, ctx) {
       });
       const metaId = apiData?.id != null ? String(apiData.id) : null;
       const status = String(apiData?.status || 'PENDING').trim().toUpperCase();
-      await query(
+      const ins = await query(
         `INSERT INTO whatsapp_templates (area, meta_id, name, language, category, status, components_json, submitted_at, submitted_by, synced_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, NOW(), $8, NOW())
          ON CONFLICT (area, name, language)
          DO UPDATE SET meta_id = EXCLUDED.meta_id, status = EXCLUDED.status, category = EXCLUDED.category,
-           components_json = EXCLUDED.components_json, submitted_at = NOW(), synced_at = NOW()`,
-        [
-          area,
-          metaId,
-          name,
-          language,
-          category,
-          status,
-          JSON.stringify(components),
-          null,
-        ]
+           components_json = EXCLUDED.components_json, submitted_at = NOW(), rejection_reason = NULL, synced_at = NOW()
+         RETURNING id`,
+        [area, metaId, name, language, category, status, JSON.stringify(components), null]
       );
+      const newId = ins.rows[0]?.id;
       auditLog(query, {
         req,
         event_type: AuditEvent.TEMPLATE_SYNC,
         message: `Plantilla enviada a revisión Meta: ${name}`,
         meta: { area, name, language, status },
       });
-      res.redirect(appPath('/templates?flash=created'));
+      res.redirect(
+        appPath(newId ? `/templates/${newId}?flash=created` : '/templates?flash=created')
+      );
     } catch (error) {
       logError(req, 'Error creando plantilla en Meta', error);
       res.redirect(appPath(`/templates/new?error=${encodeURIComponent(error.message)}`));
     }
   });
 
+  app.post('/templates/:id/update', templateSyncLimiter, async (req, res) => {
+    const area = normalizeArea(req.user.area);
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).send('Id inválido');
+    }
+    const row = await loadTemplateById(area, id);
+    if (!row) {
+      return res.status(404).send('Plantilla no encontrada');
+    }
+    if (!templateStatusAllowsEdit(row.status)) {
+      return res.redirect(appPath(`/templates/${id}?error=${encodeURIComponent('Esta plantilla no se puede editar en su estado actual')}`));
+    }
+
+    const bodyText = String(req.body.bodyText || '').trim();
+    const category = String(req.body.category || row.category || 'MARKETING').trim().toUpperCase();
+    if (!bodyText) {
+      return res.redirect(appPath(`/templates/${id}?error=${encodeURIComponent('El cuerpo no puede estar vacío')}`));
+    }
+
+    const componentsRaw = Array.isArray(row.components_json)
+      ? row.components_json
+      : typeof row.components_json === 'string'
+        ? JSON.parse(row.components_json)
+        : [];
+    const exampleRow = buildBodyExampleRow(bodyText, req.body);
+    const components = rebuildComponentsWithBody(componentsRaw, bodyText, exampleRow);
+
+    try {
+      const apiData = await createMessageTemplateOnWaba({
+        area,
+        name: row.name,
+        language: row.language,
+        category,
+        components,
+      });
+      const metaId = apiData?.id != null ? String(apiData.id) : row.meta_id;
+      const status = String(apiData?.status || 'PENDING').trim().toUpperCase();
+      await query(
+        `UPDATE whatsapp_templates SET
+           meta_id = $1, category = $2, status = $3, components_json = $4::jsonb,
+           rejection_reason = NULL, submitted_at = NOW(), synced_at = NOW()
+         WHERE id = $5 AND area = $6`,
+        [metaId, category, status, JSON.stringify(components), id, area]
+      );
+      auditLog(query, {
+        req,
+        event_type: AuditEvent.TEMPLATE_SYNC,
+        message: `Plantilla reenviada a revisión Meta: ${row.name}`,
+        meta: { area, id, status },
+      });
+      res.redirect(appPath(`/templates/${id}?flash=updated`));
+    } catch (error) {
+      logError(req, 'Error actualizando plantilla en Meta', error);
+      res.redirect(appPath(`/templates/${id}?error=${encodeURIComponent(error.message)}`));
+    }
+  });
+
   app.post('/templates/sync', templateSyncLimiter, async (req, res) => {
     const returnTo = String(req.body.returnTo || 'templates').trim().toLowerCase();
+    const templateId = Number(req.body.templateId);
+    const detailSuffix =
+      Number.isInteger(templateId) && templateId > 0 ? `/${templateId}` : '';
     const redirectPath =
       returnTo === 'campaigns' || returnTo === 'campaigns/new'
         ? '/campaigns/new?templates_synced=1'
-        : '/templates?templates_synced=1';
+        : `/templates${detailSuffix}?templates_synced=1`;
     try {
       await syncTemplatesForArea(req.user.area);
       auditLog(query, {
@@ -166,7 +291,7 @@ function registerTemplates(app, ctx) {
       if (returnTo === 'campaigns' || returnTo === 'campaigns/new') {
         return res.redirect(appPath(`/campaigns/new?templates_sync_err=${errQ}`));
       }
-      res.redirect(appPath(`/templates?templates_sync_error=${errQ}`));
+      res.redirect(appPath(`/templates${detailSuffix}?templates_sync_error=${errQ}`));
     }
   });
 

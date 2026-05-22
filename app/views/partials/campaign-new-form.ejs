@@ -9,12 +9,12 @@
   <div class="template-sync-row">
     <form method="POST" action="<%= basePath %>/templates/sync" class="inline-form-sync">
       <input type="hidden" name="returnTo" value="campaigns" />
-      <button type="submit" class="secondary">Sincronizar plantillas</button>
+      <button type="submit" class="secondary">Sincronizar todo</button>
     </form>
     <p class="card-lead template-sync-hint">Trae la lista actualizada de plantillas <strong>aprobadas</strong> de tu cuenta WhatsApp (Meta). Hazlo cuando cambien o aprueben nuevas.</p>
   </div>
   <% if (!syncedTemplates || syncedTemplates.length === 0) { %>
-  <p class="inline-warn">No hay plantillas en caché. Pulsa <strong>Sincronizar plantillas</strong> (requiere token con permisos para la cuenta de WhatsApp).</p>
+  <p class="inline-warn">No hay plantillas en caché. Pulsa <strong>Sincronizar todo</strong> (requiere token con permisos para la cuenta de WhatsApp).</p>
   <% } %>
   <form method="POST" action="<%= basePath %>/campaigns/send" class="form-grid" id="campaign-form" data-base-path="<%= basePath %>">
     <div class="form-section">

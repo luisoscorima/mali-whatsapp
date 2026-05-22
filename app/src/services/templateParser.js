@@ -172,6 +172,78 @@ function buildWhatsappGraphComponents(def, values) {
   return components;
 }
 
+/**
+ * Texto y metadatos legibles para vista detalle de plantilla.
+ */
+function extractTemplateDisplayContent(components) {
+  const comps = Array.isArray(components) ? components : [];
+  let headerText = '';
+  let headerFormat = '';
+  let bodyText = '';
+  let footerText = '';
+  const buttons = [];
+  let bodyExamples = [];
+
+  for (const c of comps) {
+    const type = String(c.type || '').toUpperCase();
+    if (type === 'HEADER') {
+      headerFormat = String(c.format || 'TEXT').toUpperCase();
+      headerText = c.text || '';
+    }
+    if (type === 'BODY') {
+      bodyText = c.text || '';
+      if (c.example?.body_text?.[0]) {
+        bodyExamples = c.example.body_text[0];
+      }
+    }
+    if (type === 'FOOTER') {
+      footerText = c.text || '';
+    }
+    if (type === 'BUTTONS' && Array.isArray(c.buttons)) {
+      for (const btn of c.buttons) {
+        buttons.push({
+          type: btn.type || '',
+          text: btn.text || '',
+          url: btn.url || '',
+        });
+      }
+    }
+  }
+
+  return { headerText, headerFormat, bodyText, footerText, buttons, bodyExamples };
+}
+
+function templateStatusAllowsEdit(status) {
+  const s = String(status || '').trim().toUpperCase();
+  return s === 'PENDING' || s === 'REJECTED';
+}
+
+/**
+ * Reemplaza solo el BODY manteniendo cabecera, pie y botones.
+ */
+function rebuildComponentsWithBody(components, bodyText, exampleRow) {
+  const comps = Array.isArray(components) ? components : [];
+  let hasBody = false;
+  const out = comps.map((c) => {
+    const type = String(c.type || '').toUpperCase();
+    if (type !== 'BODY') return { ...c };
+    hasBody = true;
+    const next = { ...c, text: bodyText };
+    if (exampleRow?.length) {
+      next.example = { body_text: [exampleRow] };
+    }
+    return next;
+  });
+  if (!hasBody) {
+    const row = { type: 'BODY', text: bodyText };
+    if (exampleRow?.length) {
+      row.example = { body_text: [exampleRow] };
+    }
+    out.push(row);
+  }
+  return out;
+}
+
 function validateTemplateFormValues(def, values, { maxBodyLen, maxUrlLen }) {
   if (def.needsHeaderMedia) {
     if (!values.headerMediaUrl) {
@@ -206,6 +278,9 @@ module.exports = {
   extractPlaceholderOrderSequential,
   parseMetaTemplateComponents,
   buildTemplateDefinition,
+  extractTemplateDisplayContent,
+  templateStatusAllowsEdit,
+  rebuildComponentsWithBody,
   extractFormValuesForTemplate,
   buildWhatsappGraphComponents,
   validateTemplateFormValues,
