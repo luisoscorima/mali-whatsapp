@@ -6,6 +6,7 @@ const { normalizeArea } = require('../middleware/auth');
 const datetimeDisplay = require('../utils/datetimeDisplay');
 const { buildCampaignFailedLogsCsv } = require('../utils/campaignLogErrorSummary');
 const { fetchCampaignFailedLogs } = require('../services/campaignFailedLogs');
+const { fetchCampaignResponders } = require('../services/campaignResponders');
 const { campaignLimiter } = require('../middleware/limiters');
 const { runCampaignSendJob } = require('../services/campaignSender');
 const { runCampaignRetryJob } = require('../services/campaignRetry');
@@ -27,6 +28,47 @@ function stringifyExportDetail(response) {
   }
 }
 
+function normalizeCampaignLogStatus(status) {
+  return String(status || '').trim().toLowerCase();
+}
+
+function collectLatestCampaignLogsByPhone(logs) {
+  const latestLogs = [];
+  const seenPhones = new Set();
+  for (const log of Array.isArray(logs) ? logs : []) {
+    const phone = String(log?.phone || '').trim();
+    const key = phone || `log:${String(log?.id || '')}`;
+    if (seenPhones.has(key)) continue;
+    seenPhones.add(key);
+    latestLogs.push(log);
+  }
+  return latestLogs;
+}
+
+function filterCampaignCurrentLogs(logs, filter) {
+  const latestLogs = collectLatestCampaignLogsByPhone(logs);
+  const key = String(filter || 'all_current').trim().toLowerCase();
+  if (!key || key === 'all_current') return latestLogs;
+  return latestLogs.filter((log) => {
+    const status = normalizeCampaignLogStatus(log.status);
+    if (key === 'sent_all') return status === 'sent' || status === 'delivered' || status === 'read';
+    if (key === 'delivered_all') return status === 'delivered' || status === 'read';
+    if (key === 'read_only') return status === 'read';
+    if (key === 'sent_only') return status === 'sent';
+    if (key === 'delivered_only') return status === 'delivered';
+    return true;
+  });
+}
+
+function filterCampaignFailedLogs(logs, filter) {
+  const key = String(filter || 'all').trim().toLowerCase();
+  if (!key || key === 'all') return Array.isArray(logs) ? logs : [];
+  return (Array.isArray(logs) ? logs : []).filter((log) => {
+    const type = String(log?.incident_type || '').trim().toLowerCase();
+    return type === key;
+  });
+}
+
 function buildCampaignLogsExportBuffer(logs, formatDate) {
   const aoa = [
     ['Fecha y hora', 'Teléfono', 'Estado', 'ID mensaje', 'Detalle'],
@@ -42,6 +84,40 @@ function buildCampaignLogsExportBuffer(logs, formatDate) {
   ws['!cols'] = [{ wch: 24 }, { wch: 18 }, { wch: 14 }, { wch: 28 }, { wch: 90 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Registro de envíos');
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
+
+function buildCampaignFailedLogsExportBuffer(logs, formatDate) {
+  const aoa = [
+    ['Fecha y hora', 'Teléfono', 'Estado', 'Incidencia', 'Motivo'],
+    ...(Array.isArray(logs) ? logs : []).map((log) => [
+      formatDate(log.created_at),
+      String(log.phone || ''),
+      String(log.status || ''),
+      String(log.incident_label || ''),
+      String(log.error_summary || ''),
+    ]),
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 24 }, { wch: 18 }, { wch: 14 }, { wch: 24 }, { wch: 80 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Incidencias');
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
+
+function buildCampaignRespondersExportBuffer(rows, formatDate) {
+  const aoa = [
+    ['Teléfono', 'Nombre', 'Primera respuesta'],
+    ...(Array.isArray(rows) ? rows : []).map((row) => [
+      String(row.phone || ''),
+      String(row.contactName || ''),
+      formatDate(row.firstResponseAt),
+    ]),
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 24 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Respuestas');
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
@@ -398,6 +474,7 @@ function registerCampaigns(app, ctx) {
     }
 
     const area = normalizeArea(req.user.area);
+    const filter = String(req.query.filter || '').trim();
     try {
       const [campaignResult, logsResult] = await Promise.all([
         query(`SELECT id FROM campaigns WHERE id = $1 AND area = $2`, [campaignId, area]),
@@ -414,7 +491,8 @@ function registerCampaigns(app, ctx) {
       }
 
       const stamp = datetimeDisplay.exportFilenameDateStamp();
-      const buffer = buildCampaignLogsExportBuffer(logsResult.rows, datetimeDisplay.formatExportDate);
+      const exportRows = filter ? filterCampaignCurrentLogs(logsResult.rows, filter) : logsResult.rows;
+      const buffer = buildCampaignLogsExportBuffer(exportRows, datetimeDisplay.formatExportDate);
       res.setHeader(
         'Content-Type',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -426,6 +504,70 @@ function registerCampaigns(app, ctx) {
       return res.send(buffer);
     } catch (error) {
       logError(req, 'Error exportando registro de campana', error);
+      return res.status(500).send('No se pudo exportar');
+    }
+  });
+
+  app.get('/api/campaigns/:id/incidents-export', async (req, res) => {
+    const campaignId = Number(req.params.id);
+    if (!Number.isInteger(campaignId) || campaignId <= 0) {
+      return res.status(400).send('Id invalido');
+    }
+
+    const area = normalizeArea(req.user.area);
+    const filter = String(req.query.filter || '').trim();
+    try {
+      const campaignResult = await query(`SELECT id FROM campaigns WHERE id = $1 AND area = $2`, [campaignId, area]);
+      if (campaignResult.rowCount === 0) {
+        return res.status(404).send('Campaña no encontrada');
+      }
+
+      const failedLogs = await fetchCampaignFailedLogs(query, campaignId);
+      const exportRows = filter ? filterCampaignFailedLogs(failedLogs, filter) : failedLogs;
+      const stamp = datetimeDisplay.exportFilenameDateStamp();
+      const buffer = buildCampaignFailedLogsExportBuffer(exportRows, datetimeDisplay.formatExportDate);
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="campana-${campaignId}-incidencias-${stamp}.xlsx"`
+      );
+      return res.send(buffer);
+    } catch (error) {
+      logError(req, 'Error exportando incidencias de campana', error);
+      return res.status(500).send('No se pudo exportar');
+    }
+  });
+
+  app.get('/api/campaigns/:id/responders-export', async (req, res) => {
+    const campaignId = Number(req.params.id);
+    if (!Number.isInteger(campaignId) || campaignId <= 0) {
+      return res.status(400).send('Id invalido');
+    }
+
+    const area = normalizeArea(req.user.area);
+    try {
+      const campaignResult = await query(`SELECT id FROM campaigns WHERE id = $1 AND area = $2`, [campaignId, area]);
+      if (campaignResult.rowCount === 0) {
+        return res.status(404).send('Campaña no encontrada');
+      }
+
+      const responders = await fetchCampaignResponders(query, campaignId, area);
+      const stamp = datetimeDisplay.exportFilenameDateStamp();
+      const buffer = buildCampaignRespondersExportBuffer(responders, datetimeDisplay.formatExportDate);
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="campana-${campaignId}-respuestas-${stamp}.xlsx"`
+      );
+      return res.send(buffer);
+    } catch (error) {
+      logError(req, 'Error exportando respuestas de campana', error);
       return res.status(500).send('No se pudo exportar');
     }
   });

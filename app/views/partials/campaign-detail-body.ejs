@@ -30,6 +30,27 @@
     var _excludeIds = _payload && Array.isArray(_payload.excludeContactIds) ? _payload.excludeContactIds : [];
     var _costSourceLabel = _costInfo && _costInfo.sourceLabel ? _costInfo.sourceLabel : (campaign.cost_is_estimated ? 'Estimado' : 'Meta WABA');
     var _canSyncCost = campaign.status === 'completed' || campaign.status === 'failed';
+    var _modalLogsJson = JSON.stringify((Array.isArray(logs) ? logs : []).map(function (log) {
+      return {
+        id: log.id,
+        phone: log.phone || '',
+        whatsappMessageId: log.whatsapp_message_id || '',
+        status: log.status || '',
+        detailText: JSON.stringify(log.response, null, 2),
+        createdAt: log.created_at || null
+      };
+    })).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
+    var _modalFailedLogsJson = JSON.stringify(_failedLogs.map(function (log) {
+      return {
+        id: log.id,
+        phone: log.phone || '',
+        status: log.status || '',
+        incidentType: log.incident_type || '',
+        incidentLabel: log.incident_label || 'Mensajes no entregables',
+        errorSummary: log.error_summary || '',
+        createdAt: log.created_at || null
+      };
+    })).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
   %>
 
   <div class="campaign-detail-stack">
@@ -49,10 +70,26 @@
         </div>
         <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--3" role="group" aria-label="Resultado global">
           <% _globalMetrics.forEach(function (metric) { %>
+          <% if (metric.action) { %>
+          <button
+            type="button"
+            class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %> metric--action"
+            data-metric-modal-type="<%= metric.action.type %>"
+            data-metric-filter="<%= metric.action.filter %>"
+            data-metric-title="<%= metric.action.title %>"
+            data-metric-note="<%= metric.action.note || '' %>"
+            title="<%= metric.tooltip || metric.action.title %>"
+          >
+          <% } else { %>
           <div class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %>"<% if (metric.tooltip) { %> title="<%= metric.tooltip %>"<% } %>>
+          <% } %>
             <span class="metric-num"><%= metric.display %></span>
             <span class="metric-lbl"><%= metric.label %></span>
+          <% if (metric.action) { %>
+          </button>
+          <% } else { %>
           </div>
+          <% } %>
           <% }); %>
         </div>
       </section>
@@ -104,6 +141,7 @@
         <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--4" role="group" aria-label="Rendimiento de envío">
           <% _performanceMetrics.forEach(function (metric) { %>
           <% if (metric.action) { %>
+          <% if (metric.action.dialogId) { %>
           <button
             type="button"
             class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %> metric--action"
@@ -115,6 +153,20 @@
             <span class="metric-num"><%= metric.display %></span>
             <span class="metric-lbl"><%= metric.label %></span>
           </button>
+          <% } else { %>
+          <button
+            type="button"
+            class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %> metric--action"
+            data-metric-modal-type="<%= metric.action.type %>"
+            data-metric-filter="<%= metric.action.filter %>"
+            data-metric-title="<%= metric.action.title %>"
+            data-metric-note="<%= metric.action.note || '' %>"
+            title="<%= metric.tooltip || metric.action.title %>"
+          >
+            <span class="metric-num"><%= metric.display %></span>
+            <span class="metric-lbl"><%= metric.label %></span>
+          </button>
+          <% } %>
           <% } else { %>
           <div class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %>"<% if (metric.tooltip) { %> title="<%= metric.tooltip %>"<% } %>>
             <span class="metric-num"><%= metric.display %></span>
@@ -130,9 +182,25 @@
           <summary class="campaign-meta-funnel-summary">Embudo Meta</summary>
           <div class="campaign-meta-funnel-grid" role="group" aria-label="Embudo Meta">
             <% _funnelMetrics.forEach(function (metric) { %>
+            <% if (metric.action) { %>
+            <button
+              type="button"
+              class="campaign-meta-funnel-item campaign-meta-funnel-item--button"
+              data-metric-modal-type="<%= metric.action.type %>"
+              data-metric-filter="<%= metric.action.filter %>"
+              data-metric-title="<%= metric.action.title %>"
+              data-metric-note="<%= metric.action.note || '' %>"
+              title="<%= metric.tooltip || metric.action.title %>"
+            >
+            <% } else { %>
             <span class="campaign-meta-funnel-item"<% if (metric.tooltip) { %> title="<%= metric.tooltip %>"<% } %>>
+            <% } %>
               <strong><%= metric.label %></strong> <%= metric.display %>
+            <% if (metric.action) { %>
+            </button>
+            <% } else { %>
             </span>
+            <% } %>
             <% }); %>
           </div>
           <p class="campaign-meta-funnel-ratios muted">
@@ -225,10 +293,26 @@
         </div>
         <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--3" role="group" aria-label="Incidencias de entrega">
           <% _incidentMetrics.forEach(function (metric) { %>
+          <% if (metric.action) { %>
+          <button
+            type="button"
+            class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %> metric--action"
+            data-metric-modal-type="<%= metric.action.type %>"
+            data-metric-filter="<%= metric.action.filter %>"
+            data-metric-title="<%= metric.action.title %>"
+            data-metric-note="<%= metric.action.note || '' %>"
+            title="<%= metric.tooltip || metric.action.title %>"
+          >
+          <% } else { %>
           <div class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %>"<% if (metric.tooltip) { %> title="<%= metric.tooltip %>"<% } %>>
+          <% } %>
             <span class="metric-num"><%= metric.display %></span>
             <span class="metric-lbl"><%= metric.label %></span>
+          <% if (metric.action) { %>
+          </button>
+          <% } else { %>
           </div>
+          <% } %>
           <% }); %>
         </div>
         <% if (_incidentsNote) { %>
@@ -244,13 +328,6 @@
             <button type="button" class="small-btn" id="campaign-retry-failed-btn" data-campaign-id="<%= campaign.id %>">
               Reintentar incidencias (<%= _failedCount %>)
             </button>
-            <% } %>
-            <% if (_failedCount > 0) { %>
-            <a
-              class="small-btn secondary"
-              href="<%= basePath %>/api/campaigns/<%= campaign.id %>/failed-export"
-              download
-            >Exportar CSV</a>
             <% } %>
           </div>
         </div>
@@ -290,14 +367,91 @@
     </div>
   </div>
 
+  <dialog id="campaign-logs-dialog" class="modal-dialog campaign-drilldown-dialog" aria-labelledby="campaign-logs-dialog-title">
+    <form method="dialog" class="modal-dialog-form campaign-drilldown-dialog__form">
+      <div class="campaign-drilldown-dialog__head">
+        <div>
+          <h2 id="campaign-logs-dialog-title" class="modal-dialog-title">Registro de envíos</h2>
+          <p class="muted campaign-drilldown-dialog__hint">Registro actual por destinatario. Si hubo reintentos, se muestra solo la traza más reciente.</p>
+        </div>
+        <div class="campaign-drilldown-dialog__actions campaign-drilldown-dialog__actions--top">
+          <a id="campaign-logs-export-link" class="small-btn secondary" href="#">Exportar Excel</a>
+        </div>
+      </div>
+      <p id="campaign-logs-dialog-note" class="muted campaign-drilldown-dialog__note" hidden></p>
+      <div class="table-wrap campaign-drilldown-dialog__table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Teléfono</th>
+              <th>Estado</th>
+              <th>ID mensaje</th>
+              <th>Detalle</th>
+            </tr>
+          </thead>
+          <tbody id="campaign-logs-dialog-body"></tbody>
+        </table>
+      </div>
+      <p id="campaign-logs-dialog-empty" class="muted" hidden>No hay registros para este filtro.</p>
+      <div class="modal-dialog-actions">
+        <button type="submit" class="small-btn secondary">Cerrar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="campaign-incidents-dialog" class="modal-dialog campaign-drilldown-dialog" aria-labelledby="campaign-incidents-dialog-title">
+    <form method="dialog" class="modal-dialog-form campaign-drilldown-dialog__form">
+      <div class="campaign-drilldown-dialog__head">
+        <div>
+          <h2 id="campaign-incidents-dialog-title" class="modal-dialog-title">Incidencias detalladas</h2>
+          <p class="muted campaign-drilldown-dialog__hint">Solo se listan las incidencias activas más recientes por destinatario.</p>
+        </div>
+        <div class="campaign-drilldown-dialog__actions campaign-drilldown-dialog__actions--top">
+          <a id="campaign-incidents-export-link" class="small-btn secondary" href="#">Exportar Excel</a>
+          <% if (_canManualRetry) { %>
+          <button type="button" class="small-btn" id="campaign-incidents-retry-btn" data-campaign-id="<%= campaign.id %>">Reintentar</button>
+          <% } %>
+        </div>
+      </div>
+      <p id="campaign-incidents-dialog-note" class="muted campaign-drilldown-dialog__note" hidden></p>
+      <div class="table-wrap campaign-drilldown-dialog__table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Teléfono</th>
+              <th>Estado</th>
+              <th>Incidencia</th>
+              <th>Motivo</th>
+            </tr>
+          </thead>
+          <tbody id="campaign-incidents-dialog-body"></tbody>
+        </table>
+      </div>
+      <p id="campaign-incidents-dialog-empty" class="muted" hidden>No hay incidencias para este filtro.</p>
+      <div class="modal-dialog-actions">
+        <button type="submit" class="small-btn secondary">Cerrar</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="campaign-responders-dialog" class="modal-dialog campaign-responders-dialog" aria-labelledby="campaign-responders-dialog-title">
     <form method="dialog" class="modal-dialog-form campaign-responders-dialog__form">
-      <h2 id="campaign-responders-dialog-title" class="modal-dialog-title">
-        Respuestas únicas (<%= _respWindow %> días) · <%= _respCount %>
-      </h2>
-      <p class="muted campaign-responders-dialog__hint">
-        Contactos que enviaron al menos un mensaje inbound dentro de los <%= _respWindow %> días posteriores al envío de la plantilla.
-      </p>
+      <div class="campaign-drilldown-dialog__head">
+        <div>
+          <h2 id="campaign-responders-dialog-title" class="modal-dialog-title">
+            Respuestas únicas (<%= _respWindow %> días) · <%= _respCount %>
+          </h2>
+          <p class="muted campaign-responders-dialog__hint">
+            Contactos que enviaron al menos un mensaje inbound dentro de los <%= _respWindow %> días posteriores al envío de la plantilla.
+          </p>
+        </div>
+        <div class="campaign-drilldown-dialog__actions campaign-drilldown-dialog__actions--top">
+          <a
+            class="small-btn secondary"
+            href="<%= basePath %>/api/campaigns/<%= campaign.id %>/responders-export"
+          >Exportar Excel</a>
+        </div>
+      </div>
       <% if (_respList.length === 0) { %>
       <p class="muted">Aún sin datos de respuestas en esta ventana.</p>
       <% } else { %>
@@ -341,18 +495,212 @@
   </dialog>
   <script>
     (function () {
-      var openBtn = document.getElementById('campaign-responders-open');
-      var dialog = document.getElementById('campaign-responders-dialog');
-      if (openBtn && dialog) {
-        openBtn.addEventListener('click', function () {
-          if (typeof dialog.showModal === 'function') dialog.showModal();
-        });
+      var basePath = '<%= basePath %>';
+      var campaignId = '<%= campaign.id %>';
+      var allLogs = <%- _modalLogsJson %>;
+      var allFailedLogs = <%- _modalFailedLogsJson %>;
+      var respondersBtn = document.getElementById('campaign-responders-open');
+      var respondersDialog = document.getElementById('campaign-responders-dialog');
+      var logsDialog = document.getElementById('campaign-logs-dialog');
+      var incidentsDialog = document.getElementById('campaign-incidents-dialog');
+      var logsDialogTitle = document.getElementById('campaign-logs-dialog-title');
+      var logsDialogNote = document.getElementById('campaign-logs-dialog-note');
+      var logsDialogBody = document.getElementById('campaign-logs-dialog-body');
+      var logsDialogEmpty = document.getElementById('campaign-logs-dialog-empty');
+      var logsExportLink = document.getElementById('campaign-logs-export-link');
+      var incidentsDialogTitle = document.getElementById('campaign-incidents-dialog-title');
+      var incidentsDialogNote = document.getElementById('campaign-incidents-dialog-note');
+      var incidentsDialogBody = document.getElementById('campaign-incidents-dialog-body');
+      var incidentsDialogEmpty = document.getElementById('campaign-incidents-dialog-empty');
+      var incidentsExportLink = document.getElementById('campaign-incidents-export-link');
+      var incidentsRetryBtn = document.getElementById('campaign-incidents-retry-btn');
+      var retryBtn = document.getElementById('campaign-retry-failed-btn');
+      var retryFeedback = document.getElementById('campaign-retry-feedback');
+
+      function normalizeStatus(status) {
+        return String(status || '').trim().toLowerCase();
+      }
+
+      function wireDialogDismiss(dialog) {
+        if (!dialog) return;
         dialog.addEventListener('click', function (ev) {
           if (ev.target === dialog) dialog.close();
         });
       }
 
-      var basePath = '<%= basePath %>';
+      function latestLogsByPhone(rows) {
+        var latest = [];
+        var seen = Object.create(null);
+        (Array.isArray(rows) ? rows : []).forEach(function (row) {
+          var phone = String((row && row.phone) || '').trim();
+          var key = phone || ('log:' + String((row && row.id) || ''));
+          if (seen[key]) return;
+          seen[key] = true;
+          latest.push(row);
+        });
+        return latest;
+      }
+
+      function filterCurrentLogs(filter) {
+        var rows = latestLogsByPhone(allLogs);
+        var key = String(filter || 'all_current').trim().toLowerCase();
+        if (!key || key === 'all_current') return rows;
+        return rows.filter(function (row) {
+          var status = normalizeStatus(row.status);
+          if (key === 'sent_all') return status === 'sent' || status === 'delivered' || status === 'read';
+          if (key === 'delivered_all') return status === 'delivered' || status === 'read';
+          if (key === 'read_only') return status === 'read';
+          if (key === 'sent_only') return status === 'sent';
+          if (key === 'delivered_only') return status === 'delivered';
+          return true;
+        });
+      }
+
+      function filterIncidents(filter) {
+        var key = String(filter || 'all').trim().toLowerCase();
+        if (!key || key === 'all') return Array.isArray(allFailedLogs) ? allFailedLogs : [];
+        return (Array.isArray(allFailedLogs) ? allFailedLogs : []).filter(function (row) {
+          return String((row && row.incidentType) || '').trim().toLowerCase() === key;
+        });
+      }
+
+      function clearRows(tbody) {
+        if (!tbody) return;
+        while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+      }
+
+      function createCell(tag, text, className) {
+        var cell = document.createElement(tag || 'td');
+        if (className) cell.className = className;
+        cell.textContent = text == null || text === '' ? '—' : String(text);
+        return cell;
+      }
+
+      function renderLogsRows(rows) {
+        clearRows(logsDialogBody);
+        (rows || []).forEach(function (row) {
+          var tr = document.createElement('tr');
+          tr.appendChild(createCell('td', row.phone, 'mono'));
+
+          var statusTd = document.createElement('td');
+          var badge = document.createElement('span');
+          badge.className = 'badge ' + String(row.status || '');
+          badge.textContent = String(row.status || '—');
+          statusTd.appendChild(badge);
+          tr.appendChild(statusTd);
+
+          tr.appendChild(createCell('td', row.whatsappMessageId, 'mono'));
+
+          var detailTd = document.createElement('td');
+          var pre = document.createElement('pre');
+          pre.className = 'log-pre';
+          pre.textContent = row.detailText || '—';
+          detailTd.appendChild(pre);
+          tr.appendChild(detailTd);
+
+          logsDialogBody.appendChild(tr);
+        });
+        logsDialogEmpty.hidden = rows.length > 0;
+      }
+
+      function renderIncidentRows(rows) {
+        clearRows(incidentsDialogBody);
+        (rows || []).forEach(function (row) {
+          var tr = document.createElement('tr');
+          tr.appendChild(createCell('td', row.phone, 'mono'));
+
+          var statusTd = document.createElement('td');
+          var badge = document.createElement('span');
+          badge.className = 'badge ' + String(row.status || '');
+          badge.textContent = String(row.status || '—');
+          statusTd.appendChild(badge);
+          tr.appendChild(statusTd);
+
+          tr.appendChild(createCell('td', row.incidentLabel || 'Mensajes no entregables'));
+          tr.appendChild(createCell('td', row.errorSummary || '—'));
+          incidentsDialogBody.appendChild(tr);
+        });
+        incidentsDialogEmpty.hidden = rows.length > 0;
+      }
+
+      function buildLogsExportHref(filter) {
+        return (
+          basePath +
+          '/api/campaigns/' +
+          encodeURIComponent(campaignId) +
+          '/logs-export?filter=' +
+          encodeURIComponent(String(filter || 'all_current'))
+        );
+      }
+
+      function buildIncidentsExportHref(filter) {
+        return (
+          basePath +
+          '/api/campaigns/' +
+          encodeURIComponent(campaignId) +
+          '/incidents-export?filter=' +
+          encodeURIComponent(String(filter || 'all'))
+        );
+      }
+
+      function setOptionalNote(node, text) {
+        if (!node) return;
+        var value = String(text || '').trim();
+        node.textContent = value;
+        node.hidden = !value;
+      }
+
+      function openDialog(dialog) {
+        if (dialog && typeof dialog.showModal === 'function') dialog.showModal();
+      }
+
+      function handleMetricTrigger(btn) {
+        if (!btn) return;
+        var type = String(btn.getAttribute('data-metric-modal-type') || '').trim();
+        var filter = String(btn.getAttribute('data-metric-filter') || '').trim();
+        var title = String(btn.getAttribute('data-metric-title') || '').trim();
+        var note = String(btn.getAttribute('data-metric-note') || '').trim();
+
+        if (type === 'logs') {
+          var rows = filterCurrentLogs(filter);
+          logsDialogTitle.textContent = (title || 'Registro de envíos') + ' · ' + rows.length;
+          setOptionalNote(logsDialogNote, note);
+          logsExportLink.setAttribute('href', buildLogsExportHref(filter));
+          renderLogsRows(rows);
+          openDialog(logsDialog);
+          return;
+        }
+
+        if (type === 'incidents') {
+          var incidentRows = filterIncidents(filter);
+          incidentsDialogTitle.textContent = (title || 'Incidencias detalladas') + ' · ' + incidentRows.length;
+          var retryNote = incidentsRetryBtn
+            ? 'El botón Reintentar aplica a todas las incidencias activas de la campaña.'
+            : '';
+          var baseIncidentsNote = [note, retryNote].filter(Boolean).join(' ');
+          incidentsDialog.setAttribute('data-base-note', baseIncidentsNote);
+          setOptionalNote(incidentsDialogNote, baseIncidentsNote);
+          incidentsExportLink.setAttribute('href', buildIncidentsExportHref(filter));
+          renderIncidentRows(incidentRows);
+          openDialog(incidentsDialog);
+        }
+      }
+
+      document.querySelectorAll('[data-metric-modal-type]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          handleMetricTrigger(btn);
+        });
+      });
+
+      if (respondersBtn && respondersDialog) {
+        respondersBtn.addEventListener('click', function () {
+          openDialog(respondersDialog);
+        });
+      }
+
+      wireDialogDismiss(respondersDialog);
+      wireDialogDismiss(logsDialog);
+      wireDialogDismiss(incidentsDialog);
 
       var costBtn = document.getElementById('campaign-sync-cost-btn');
       if (costBtn) {
@@ -381,16 +729,20 @@
         });
       }
 
-      var retryBtn = document.getElementById('campaign-retry-failed-btn');
-      var retryFeedback = document.getElementById('campaign-retry-feedback');
-      if (!retryBtn) return;
-      retryBtn.addEventListener('click', function () {
-        var campaignId = retryBtn.getAttribute('data-campaign-id');
-        if (!campaignId) return;
-        retryBtn.disabled = true;
+      function setRetryButtonsDisabled(disabled) {
+        if (retryBtn) retryBtn.disabled = disabled;
+        if (incidentsRetryBtn) incidentsRetryBtn.disabled = disabled;
+      }
+
+      function runRetryRequest() {
+        if (!retryBtn && !incidentsRetryBtn) return;
+        setRetryButtonsDisabled(true);
         if (retryFeedback) {
           retryFeedback.hidden = true;
           retryFeedback.textContent = '';
+        }
+        if (incidentsDialogNote) {
+          setOptionalNote(incidentsDialogNote, incidentsDialog.getAttribute('data-base-note') || '');
         }
         fetch(basePath + '/api/campaigns/' + encodeURIComponent(campaignId) + '/retry-failed', {
           method: 'POST',
@@ -410,7 +762,11 @@
                 retryFeedback.textContent = msg;
                 retryFeedback.hidden = false;
               }
-              retryBtn.disabled = false;
+              if (incidentsDialogNote && incidentsDialog.open) {
+                incidentsDialogNote.textContent = msg;
+                incidentsDialogNote.hidden = false;
+              }
+              setRetryButtonsDisabled(false);
               return;
             }
             var d = result.data;
@@ -427,6 +783,10 @@
               retryFeedback.textContent = summary;
               retryFeedback.hidden = false;
             }
+            if (incidentsDialogNote && incidentsDialog.open) {
+              incidentsDialogNote.textContent = summary;
+              incidentsDialogNote.hidden = false;
+            }
             window.setTimeout(function () {
               window.location.reload();
             }, 1200);
@@ -437,9 +797,24 @@
               retryFeedback.textContent = 'Error de red al reintentar';
               retryFeedback.hidden = false;
             }
-            retryBtn.disabled = false;
+            if (incidentsDialogNote && incidentsDialog.open) {
+              incidentsDialogNote.textContent = 'Error de red al reintentar';
+              incidentsDialogNote.hidden = false;
+            }
+            setRetryButtonsDisabled(false);
           });
-      });
+      }
+
+      if (retryBtn) {
+        retryBtn.addEventListener('click', function () {
+          runRetryRequest();
+        });
+      }
+      if (incidentsRetryBtn) {
+        incidentsRetryBtn.addEventListener('click', function () {
+          runRetryRequest();
+        });
+      }
     })();
   </script>
 </div>

@@ -215,6 +215,24 @@ function buildMetricCard({ label, display, displayLines = null, tone = '', toolt
   };
 }
 
+function buildLogsMetricAction(filter, title, note = '') {
+  return {
+    type: 'logs',
+    filter,
+    title,
+    note,
+  };
+}
+
+function buildIncidentsMetricAction(filter, title, note = '') {
+  return {
+    type: 'incidents',
+    filter,
+    title,
+    note,
+  };
+}
+
 function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetrics, config) {
   const campaignStatus = normalizeCampaignLogStatus(campaign?.status);
   const effectiveLogs = collectLatestCampaignLogsByPhone(logs);
@@ -303,6 +321,13 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         display: totalRecipients > 0 ? `${totalRecipients} (100%)` : EMPTY_METRIC_LABEL,
         tone: 'neutral',
         tooltip: 'Número único de destinatarios incluidos en la campaña.',
+        action: buildLogsMetricAction(
+          'all_current',
+          'Registro de envíos · Total destinatarios',
+          hasIncompleteSendAccounting
+            ? 'La campaña está programada o en proceso; pueden existir destinatarios aún sin traza en el registro actual.'
+            : ''
+        ),
       }),
       buildMetricCard({
         label: 'Enviados',
@@ -310,6 +335,7 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         tone: 'sent',
         tooltip:
           'Número de mensajes que tu negocio envió a los clientes y salieron correctamente hacia los destinatarios.',
+        action: buildLogsMetricAction('sent_all', 'Registro de envíos · Enviados'),
       }),
       buildMetricCard({
         label: 'Problemas de entrega',
@@ -317,6 +343,11 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         tone: 'problem',
         tooltip:
           'Mensajes que no pudieron enviarse o entregarse debido a errores técnicos, limitaciones de Meta o condiciones del usuario.',
+        action: buildIncidentsMetricAction(
+          'all',
+          'Incidencias detalladas · Problemas de entrega',
+          hasIncompleteSendAccounting ? 'La campaña aún está programada o en proceso; este detalle puede seguir creciendo.' : ''
+        ),
       }),
     ],
     performance: [
@@ -326,6 +357,7 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         tone: 'sent',
         tooltip:
           'Número de mensajes que tu negocio envió a los clientes y salieron correctamente hacia los destinatarios. Las métricas de rendimiento se registran en los 7 días posteriores al envío de un mensaje.',
+        action: buildLogsMetricAction('sent_all', 'Registro de envíos · Enviados'),
       }),
       buildMetricCard({
         label: 'Entregados',
@@ -333,6 +365,7 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         tone: 'delivered',
         tooltip:
           'Número de mensajes entregados en un plazo de 7 días desde el envío. Algunos mensajes pueden no entregarse si el dispositivo del cliente está fuera de servicio.',
+        action: buildLogsMetricAction('delivered_all', 'Registro de envíos · Entregados'),
       }),
       buildMetricCard({
         label: 'Leídos',
@@ -340,6 +373,7 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         tone: 'read',
         tooltip:
           'Número de mensajes enviados, entregados y leídos dentro de los 7 días posteriores al envío.',
+        action: buildLogsMetricAction('read_only', 'Registro de envíos · Leídos'),
       }),
       buildMetricCard({
         label: 'Respuestas únicas',
@@ -360,6 +394,7 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         display: formatCountPctDisplay(statusCounts.sentOnly, roundPct(statusCounts.sentOnly, sentCount), { allowZeroFallback: true }),
         tone: 'sent',
         tooltip: 'Mensajes enviados que aún no fueron confirmados como entregados o leídos.',
+        action: buildLogsMetricAction('sent_only', 'Registro de envíos · Pendientes de entrega'),
       }),
       buildMetricCard({
         label: 'Entregados no leídos',
@@ -370,12 +405,14 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         ),
         tone: 'delivered',
         tooltip: 'Mensajes entregados correctamente pero aún no leídos por el usuario.',
+        action: buildLogsMetricAction('delivered_only', 'Registro de envíos · Entregados no leídos'),
       }),
       buildMetricCard({
         label: 'Leídos',
         display: formatCountPctDisplay(readCount, roundPct(readCount, sentCount), { allowZeroFallback: true }),
         tone: 'read',
         tooltip: 'Mensajes leídos por el usuario dentro de la ventana de medición.',
+        action: buildLogsMetricAction('read_only', 'Registro de envíos · Leídos'),
       }),
     ],
     incidents: [
@@ -388,6 +425,7 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         ),
         tone: 'problem',
         tooltip: 'Mensajes no entregados por condiciones del usuario, del dispositivo o errores permanentes.',
+        action: buildIncidentsMetricAction('undeliverable', 'Incidencias detalladas · Mensajes no entregables'),
       }),
       buildMetricCard({
         label: 'Limitaciones Meta',
@@ -397,6 +435,7 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         tone: 'meta-limit',
         tooltip:
           'Meta decidió no enviar o limitar el mensaje por restricciones del ecosistema, rate limits o baja probabilidad de interacción.',
+        action: buildIncidentsMetricAction('meta_limit', 'Incidencias detalladas · Limitaciones Meta'),
       }),
       buildMetricCard({
         label: 'Experimentos',
@@ -405,6 +444,7 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         }),
         tone: 'response',
         tooltip: 'Mensajes no enviados porque el número participa en un experimento de Meta.',
+        action: buildIncidentsMetricAction('experiment', 'Incidencias detalladas · Experimentos'),
       }),
     ],
     incidentsNote:

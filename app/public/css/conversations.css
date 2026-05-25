@@ -1995,6 +1995,49 @@ button.metric.campaign-summary-metric.metric--action:focus-visible {
   white-space: nowrap;
 }
 
+.campaign-drilldown-dialog {
+  max-width: min(1100px, calc(100% - 32px));
+}
+
+.campaign-drilldown-dialog__form {
+  gap: 12px;
+}
+
+.campaign-drilldown-dialog__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  align-items: flex-start;
+}
+
+.campaign-drilldown-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.campaign-drilldown-dialog__actions--top {
+  justify-content: flex-end;
+}
+
+.campaign-drilldown-dialog__hint,
+.campaign-drilldown-dialog__note {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.campaign-drilldown-dialog__table-wrap {
+  max-height: min(62vh, 560px);
+  overflow: auto;
+}
+
+.campaign-drilldown-dialog__table-wrap table {
+  min-width: 760px;
+}
+
 .campaign-log-table-wrap {
   max-height: min(60vh, 560px);
   overflow: auto;
@@ -2002,6 +2045,27 @@ button.metric.campaign-summary-metric.metric--action:focus-visible {
 
 .campaign-log-table-wrap table {
   min-width: 760px;
+}
+
+.campaign-meta-funnel-item--button {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0.45rem 0.7rem;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.campaign-meta-funnel-item--button:hover,
+.campaign-meta-funnel-item--button:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 45%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
+  outline: none;
 }
 
 @media (max-width: 920px) {
