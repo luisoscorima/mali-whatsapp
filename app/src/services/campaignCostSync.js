@@ -5,11 +5,20 @@ const { resolveWabaId } = require('./metaWhatsApp');
 const { sqlCampaignLogIsSalidaOk } = require('../utils/campaignLogStatuses');
 
 /**
- * Cuenta envíos con salida OK en campaign_logs.
+ * Cuenta destinatarios con envio vigente aceptado por Meta.
  */
 async function countDeliveredOkLogs(query, campaignId) {
   const r = await query(
-    `SELECT COUNT(*)::int AS n FROM campaign_logs WHERE campaign_id = $1 AND ${sqlCampaignLogIsSalidaOk('status')}`,
+    `SELECT COUNT(*)::int AS n
+     FROM (
+       SELECT DISTINCT ON (phone)
+         phone,
+         status
+       FROM campaign_logs
+       WHERE campaign_id = $1
+       ORDER BY phone, id DESC
+     ) latest_logs
+     WHERE ${sqlCampaignLogIsSalidaOk('latest_logs.status')}`,
     [campaignId]
   );
   return r.rows[0]?.n ?? 0;
@@ -70,7 +79,7 @@ async function fetchTemplateAnalyticsCost({ area, templateName, startUnix, endUn
 }
 
 /**
- * Sincroniza costo de campaña: API Meta si responde; si no, estimado por entregas OK.
+ * Sincroniza costo de campaña: API Meta si responde; si no, estimado por envios vigentes.
  */
 async function syncCampaignCost(query, { campaignId, area }) {
   const campR = await query(
@@ -107,7 +116,7 @@ async function syncCampaignCost(query, { campaignId, area }) {
   } else {
     const rate = await getCostPerMessageEstimate(query, area);
     amount = deliveredOk * rate;
-    source = 'estimated_delivered';
+    source = 'estimated_sent';
     isEstimated = true;
   }
 
