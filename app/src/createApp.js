@@ -16,6 +16,82 @@ const { globalLimiter } = require('./middleware/limiters');
 const { createRegisterRoutes } = require('./routes/registerRoutes');
 const { purgeOldAuditLogs } = require('./services/auditLog');
 
+function parseCampaignPayload(payload) {
+  if (!payload) return null;
+  if (typeof payload === 'string') {
+    try {
+      return JSON.parse(payload);
+    } catch {
+      return null;
+    }
+  }
+  return typeof payload === 'object' ? payload : null;
+}
+
+function formatCampaignParamSourceLabel(source) {
+  const s = String(source || '').trim();
+  if (!s || s === 'static') return '';
+  if (s === 'contact.name') return 'Nombre del contacto';
+  if (s === 'contact.phone') return 'Telefono del contacto';
+  if (s.startsWith('attr.')) {
+    const key = s.slice('attr.'.length).trim();
+    return key ? `Atributo: ${key}` : 'Atributo';
+  }
+  return s;
+}
+
+function buildCampaignParamSummary(campaign) {
+  const payload = parseCampaignPayload(campaign && campaign.campaign_payload);
+  if (!payload) return [];
+
+  const staticParams = payload.staticParams && typeof payload.staticParams === 'object'
+    ? payload.staticParams
+    : {};
+  const paramMapping = payload.paramMapping && typeof payload.paramMapping === 'object'
+    ? payload.paramMapping
+    : {};
+  const items = [];
+
+  const headerMediaUrl = String(staticParams.headerMediaUrl || '').trim();
+  if (headerMediaUrl) {
+    items.push({
+      label: 'Cabecera media',
+      value: `Valor fijo: ${headerMediaUrl}`,
+      kind: 'static',
+    });
+  }
+
+  function addList(listKey, labelPrefix) {
+    const staticList = Array.isArray(staticParams[listKey]) ? staticParams[listKey] : [];
+    const sourceList = Array.isArray(paramMapping[listKey]) ? paramMapping[listKey] : [];
+    const count = Math.max(staticList.length, sourceList.length);
+    for (let i = 0; i < count; i++) {
+      const sourceLabel = formatCampaignParamSourceLabel(sourceList[i]);
+      if (sourceLabel) {
+        items.push({
+          label: `${labelPrefix} ${i + 1}`,
+          value: sourceLabel,
+          kind: 'dynamic',
+        });
+        continue;
+      }
+      const fixedValue = String(staticList[i] ?? '').trim();
+      if (!fixedValue) continue;
+      items.push({
+        label: `${labelPrefix} ${i + 1}`,
+        value: `Valor fijo: ${fixedValue}`,
+        kind: 'static',
+      });
+    }
+  }
+
+  addList('headerParams', 'Cabecera');
+  addList('bodyParams', 'Cuerpo');
+  addList('buttonParams', 'Boton URL');
+
+  return items;
+}
+
 function createApp() {
   const app = express();
   app.set('trust proxy', 1);
@@ -48,19 +124,13 @@ function createApp() {
     res.locals.formatExportDate = datetimeDisplay.formatExportDate;
     res.locals.campaignSegmentDisplay = function campaignSegmentDisplay(campaign) {
       if (!campaign) return '';
-      let p = campaign.campaign_payload;
-      if (typeof p === 'string') {
-        try {
-          p = JSON.parse(p);
-        } catch {
-          p = null;
-        }
-      }
+      const p = parseCampaignPayload(campaign.campaign_payload);
       if (p && Array.isArray(p.segments) && p.segments.length) {
         return p.segments.join(', ');
       }
       return String(campaign.segment || '');
     };
+    res.locals.campaignParamSummary = buildCampaignParamSummary;
     next();
   });
 

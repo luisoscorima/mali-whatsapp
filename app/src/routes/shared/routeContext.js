@@ -395,6 +395,7 @@ function createRouteContext({ query, pool, appPath }) {
     const v = validateTemplateFormValues(def, values, {
       maxBodyLen: config.MAX_BODY_PARAM_LEN,
       maxUrlLen: config.MAX_IMAGE_URL_LEN,
+      paramMapping,
     });
     if (!v.ok) return v;
 

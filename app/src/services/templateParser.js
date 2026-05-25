@@ -244,7 +244,13 @@ function rebuildComponentsWithBody(components, bodyText, exampleRow) {
   return out;
 }
 
-function validateTemplateFormValues(def, values, { maxBodyLen, maxUrlLen }) {
+function validateTemplateFormValues(def, values, { maxBodyLen, maxUrlLen, paramMapping }) {
+  function isDynamicParam(listKey, index) {
+    if (!paramMapping || !Array.isArray(paramMapping[listKey])) return false;
+    const source = String(paramMapping[listKey][index] || '').trim();
+    return Boolean(source && source !== 'static');
+  }
+
   if (def.needsHeaderMedia) {
     if (!values.headerMediaUrl) {
       return { ok: false, message: 'La plantilla requiere URL de imagen/video/documento en la cabecera.' };
@@ -254,18 +260,21 @@ function validateTemplateFormValues(def, values, { maxBodyLen, maxUrlLen }) {
     }
   }
   for (let i = 0; i < def.headerTextSlotCount; i++) {
+    if (isDynamicParam('headerParams', i)) continue;
     const v = values.headerParams[i];
     if (!v || v.length > maxBodyLen) {
       return { ok: false, message: `Texto de cabecera ${i + 1} inválido (1-${maxBodyLen} caracteres)` };
     }
   }
   for (let i = 0; i < def.bodySlotCount; i++) {
+    if (isDynamicParam('bodyParams', i)) continue;
     const v = values.bodyParams[i];
     if (!v || v.length > maxBodyLen) {
       return { ok: false, message: `Texto del cuerpo ${i + 1} inválido (1-${maxBodyLen} caracteres)` };
     }
   }
   for (let i = 0; i < def.totalButtonParams; i++) {
+    if (isDynamicParam('buttonParams', i)) continue;
     const v = values.buttonParams[i];
     if (!v || v.length > maxBodyLen) {
       return { ok: false, message: `Parámetro de botón ${i + 1} inválido (1-${maxBodyLen} caracteres)` };

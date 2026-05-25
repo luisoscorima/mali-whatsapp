@@ -372,6 +372,10 @@ html[data-theme='dark'] .nav-link.is-active {
   gap: 12px;
 }
 
+.metrics-row--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .metric {
   background: var(--surface-strong);
   border: 1px solid var(--line);
@@ -389,6 +393,38 @@ html[data-theme='dark'] .nav-link.is-active {
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.1;
+}
+
+.metric-num--stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 1.3rem;
+}
+
+.money-stack {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.money-stack--compact {
+  margin-top: 10px;
+}
+
+.money-stack__line {
+  display: block;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.money-stack__line--secondary {
+  color: var(--muted);
+}
+
+.campaign-cost-meta {
+  display: block;
+  margin-top: 10px;
 }
 
 .metric-lbl {
@@ -848,6 +884,36 @@ html[data-theme='dark'] .campaign-recipients-list .campaign-recipient-row.field-
   display: grid;
   gap: 0.5rem;
   margin-bottom: 0.75rem;
+}
+
+.campaign-param-input:disabled {
+  cursor: not-allowed;
+  color: var(--muted);
+  background: var(--surface);
+}
+
+.campaign-param-help {
+  min-height: 1.2em;
+}
+
+.campaign-param-summary {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.campaign-param-summary__item {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.campaign-param-summary__label {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.campaign-param-summary__value {
+  color: var(--muted);
+  word-break: break-word;
 }
 
 @media (min-width: 640px) {

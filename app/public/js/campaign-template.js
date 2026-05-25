@@ -44,19 +44,82 @@
     { value: 'contact.phone', label: 'Teléfono del contacto' },
   ];
 
-  function paramSourceSelectHtml(name) {
-    const opts = paramSourceOptions.map(function (o) {
-      return '<option value="' + esc(o.value) + '">' + esc(o.label) + '</option>';
+  function hasParamSourceOption(value) {
+    return paramSourceOptions.some(function (opt) {
+      return opt.value === value;
     });
+  }
+
+  function paramSourceOptionsHtml(selectedValue) {
+    return paramSourceOptions
+      .map(function (o) {
+        const selected = o.value === selectedValue ? ' selected' : '';
+        return '<option value="' + esc(o.value) + '"' + selected + '>' + esc(o.label) + '</option>';
+      })
+      .join('');
+  }
+
+  function paramSourceSelectHtml(name) {
     return (
       '<label class="field field--compact">' +
-      '<span class="field-label">Por contacto</span>' +
+      '<span class="field-label">Origen del valor</span>' +
       '<select name="' +
       esc(name) +
       '" class="campaign-param-source">' +
-      opts.join('') +
+      paramSourceOptionsHtml('static') +
       '</select></label>'
     );
+  }
+
+  function syncParamRows(root) {
+    if (!root) return;
+    root.querySelectorAll('.campaign-param-row').forEach(function (row) {
+      const input = row.querySelector('.campaign-param-input');
+      const sourceSelect = row.querySelector('.campaign-param-source');
+      const help = row.querySelector('.campaign-param-help');
+      if (!input || !sourceSelect) return;
+
+      const source = String(sourceSelect.value || 'static').trim() || 'static';
+      const selectedOption = sourceSelect.options[sourceSelect.selectedIndex];
+      const label = selectedOption ? String(selectedOption.text || '').trim() : 'valor por contacto';
+      const isStatic = source === 'static';
+
+      if (isStatic) {
+        input.disabled = false;
+        input.readOnly = false;
+        input.required = true;
+        input.placeholder = input.getAttribute('data-static-placeholder') || '';
+        if (!input.value && input.dataset.staticValue) {
+          input.value = input.dataset.staticValue;
+        }
+        if (help) {
+          help.textContent = 'Escribe el dato fijo que se enviará igual para todos los destinatarios.';
+        }
+        return;
+      }
+
+      if (!input.disabled) {
+        input.dataset.staticValue = input.value;
+      }
+      input.value = '';
+      input.disabled = true;
+      input.readOnly = true;
+      input.required = false;
+      input.placeholder = 'Se completará automáticamente con ' + label.toLowerCase() + '.';
+      if (help) {
+        help.textContent = 'Cada destinatario usará su propio valor de ' + label.toLowerCase() + '.';
+      }
+    });
+  }
+
+  function refreshParamSourceSelects() {
+    if (!container) return;
+    container.querySelectorAll('.campaign-param-source').forEach(function (selectEl) {
+      const current = String(selectEl.value || 'static').trim() || 'static';
+      const nextValue = hasParamSourceOption(current) ? current : 'static';
+      selectEl.innerHTML = paramSourceOptionsHtml(nextValue);
+    });
+    syncParamRows(container);
   }
 
   function getCheckedRecipientIds() {
@@ -126,7 +189,8 @@
           ')</span>' +
           '<input type="text" name="headerParam_' +
           i +
-          '" required maxlength="1024" autocomplete="off" />' +
+          '" class="campaign-param-input" required maxlength="1024" autocomplete="off" data-static-placeholder="Dato fijo para todos los destinatarios" />' +
+          '<span class="inline-help campaign-param-help">Escribe el dato fijo que se enviará igual para todos los destinatarios.</span>' +
           '</label>' +
           paramSourceSelectHtml('headerParamSource_' + i) +
           '</div>'
@@ -142,7 +206,8 @@
           ')</span>' +
           '<input type="text" name="bodyParam_' +
           i +
-          '" required maxlength="1024" autocomplete="off" />' +
+          '" class="campaign-param-input" required maxlength="1024" autocomplete="off" data-static-placeholder="Dato fijo para todos los destinatarios" />' +
+          '<span class="inline-help campaign-param-help">Escribe el dato fijo que se enviará igual para todos los destinatarios.</span>' +
           '</label>' +
           paramSourceSelectHtml('bodyParamSource_' + i) +
           '</div>'
@@ -158,7 +223,8 @@
           ')</span>' +
           '<input type="text" name="buttonParam_' +
           i +
-          '" required maxlength="1024" autocomplete="off" />' +
+          '" class="campaign-param-input" required maxlength="1024" autocomplete="off" data-static-placeholder="Dato fijo para todos los destinatarios" />' +
+          '<span class="inline-help campaign-param-help">Escribe el dato fijo que se enviará igual para todos los destinatarios.</span>' +
           '</label>' +
           paramSourceSelectHtml('buttonParamSource_' + i) +
           '</div>'
@@ -170,6 +236,7 @@
     }
 
     container.innerHTML = '<div class="form-grid tight">' + parts.join('') + '</div>';
+    syncParamRows(container);
     container.hidden = false;
   }
 
@@ -205,6 +272,14 @@
     if (select.value) {
       loadDefinition(select.value);
     }
+  }
+
+  if (container) {
+    container.addEventListener('change', function (ev) {
+      if (ev.target && ev.target.classList.contains('campaign-param-source')) {
+        syncParamRows(container);
+      }
+    });
   }
 
   function renderRecipients(contacts) {
@@ -382,7 +457,7 @@
     };
 
     if (container) {
-      container.querySelectorAll('input, textarea').forEach(function (el) {
+      container.querySelectorAll('input, textarea, select').forEach(function (el) {
         if (!el.name) return;
         payload[el.name] = el.value;
       });
@@ -497,6 +572,7 @@
     .then(function (data) {
       if (data && data.ok && Array.isArray(data.options)) {
         paramSourceOptions = data.options;
+        refreshParamSourceSelects();
       }
     })
     .catch(function () {});
