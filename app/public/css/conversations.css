@@ -1818,21 +1818,135 @@ html[data-theme='dark'] .admin-online-dot {
   margin: 0;
 }
 
-.campaign-detail-metrics {
+.campaign-index-summary {
+  width: min(100%, 980px);
+  display: grid;
+  gap: 1rem;
+  margin: 0 auto 0.75rem;
+}
+
+.campaign-index-summary__section {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.campaign-dashboard-card {
+  display: grid;
+  gap: 0;
+}
+
+.campaign-dashboard-section {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--line, #e5e7eb);
+}
+
+.campaign-dashboard-section:first-child {
+  padding-top: 0;
+}
+
+.campaign-dashboard-section--last {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.campaign-dashboard-section__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
   margin-bottom: 0.75rem;
 }
 
-.campaign-detail-metrics .metrics-row {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+.campaign-dashboard-section__head .card-title {
+  margin: 0;
 }
 
-@media (max-width: 720px) {
-  .campaign-detail-metrics .metrics-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.campaign-dashboard-section__lead {
+  margin: 0.25rem 0 0;
+  font-size: 0.88rem;
 }
 
-button.metric.metric--action {
+.campaign-dashboard-grid {
+  gap: 0.75rem;
+}
+
+.campaign-dashboard-grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.campaign-dashboard-grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.campaign-dashboard-grid--4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.campaign-summary-metric {
+  min-height: 96px;
+}
+
+.campaign-summary-metric .metric-num {
+  font-size: 1.45rem;
+}
+
+.metric-tone--neutral {
+  border-left-color: var(--line);
+}
+
+.metric-tone--sent {
+  border-left-color: #2563eb;
+}
+
+.metric-tone--delivered {
+  border-left-color: #06b6d4;
+}
+
+.metric-tone--read {
+  border-left-color: var(--ok);
+}
+
+.metric-tone--response {
+  border-left-color: #7c3aed;
+}
+
+.metric-tone--problem {
+  border-left-color: var(--bad);
+}
+
+.metric-tone--meta-limit {
+  border-left-color: #f59e0b;
+}
+
+html[data-theme='dark'] .metric-tone--neutral {
+  border-left-color: rgba(232, 234, 239, 0.22);
+}
+
+html[data-theme='dark'] .metric-tone--sent {
+  border-left-color: #60a5fa;
+}
+
+html[data-theme='dark'] .metric-tone--delivered {
+  border-left-color: #22d3ee;
+}
+
+html[data-theme='dark'] .metric-tone--response {
+  border-left-color: #a78bfa;
+}
+
+html[data-theme='dark'] .metric-tone--meta-limit {
+  border-left-color: #fbbf24;
+}
+
+.campaign-business-hint,
+.campaign-dashboard-formula {
+  margin: 0.7rem 0 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+button.metric.campaign-summary-metric.metric--action {
   cursor: pointer;
   text-align: left;
   font: inherit;
@@ -1841,8 +1955,8 @@ button.metric.metric--action {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-button.metric.metric--action:hover,
-button.metric.metric--action:focus-visible {
+button.metric.campaign-summary-metric.metric--action:hover,
+button.metric.campaign-summary-metric.metric--action:focus-visible {
   border-color: var(--accent, #2563eb);
   box-shadow: 0 2px 10px rgba(37, 99, 235, 0.12);
   outline: none;
@@ -1872,44 +1986,18 @@ button.metric.metric--action:focus-visible {
   white-space: nowrap;
 }
 
-.campaign-meta-funnel-details {
-  margin-top: 0.75rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--line, #e5e7eb);
-  font-size: 0.85rem;
+@media (max-width: 920px) {
+  .campaign-dashboard-grid--4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
-.campaign-meta-funnel-summary {
-  cursor: pointer;
-  font-weight: 600;
-  color: var(--accent, #2563eb);
-  list-style: none;
-}
-
-.campaign-meta-funnel-summary::-webkit-details-marker {
-  display: none;
-}
-
-.campaign-meta-funnel-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  margin: 0.5rem 0 0;
-}
-
-.campaign-meta-funnel-item strong {
-  font-weight: 600;
-  margin-right: 0.25rem;
-}
-
-.campaign-meta-funnel-ratios {
-  margin: 0.5rem 0 0;
-  font-size: 0.8rem;
-  line-height: 1.4;
-}
-
-.campaign-meta-funnel-ratios-sep {
-  opacity: 0.7;
+@media (max-width: 720px) {
+  .campaign-dashboard-grid--2,
+  .campaign-dashboard-grid--3,
+  .campaign-dashboard-grid--4 {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Contactos: acciones Añadir / Excel (sidebar) */

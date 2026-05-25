@@ -19,6 +19,7 @@ const LOG_STATUS = CAMPAIGN_LOG_STATUS_SQL;
 const SALIDA_OK_IN = sqlInList(SALIDA_OK_STATUSES);
 const ERROR_IN = sqlInList(ERROR_STATUSES);
 const DEFAULT_PHONE_PREFIX = '51';
+const EMPTY_METRIC_LABEL = 'Aún sin datos';
 const COUNTRY_CALLING_CODES = new Set([
   '1', '7', '20', '27', '30', '31', '32', '33', '34', '39', '40', '41', '43', '44', '45', '46',
   '47', '48', '49', '51', '52', '53', '54', '55', '56', '57', '58', '60', '61', '62', '63', '64',
@@ -83,6 +84,337 @@ function inferPrefillPhoneParts(fullDigits, forcedPrefix = '', forcedLocal = '')
   }
 
   return { prefix: DEFAULT_PHONE_PREFIX, local: digits.slice(0, 20) };
+}
+
+function toInt(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.round(n) : fallback;
+}
+
+function toNumberOrNull(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function normalizeCampaignLogStatus(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function roundPct(value, total) {
+  const num = Number(value);
+  const den = Number(total);
+  if (!Number.isFinite(num) || !Number.isFinite(den) || den <= 0) return null;
+  return Math.round((num / den) * 100);
+}
+
+function formatNumberLocale(value, minimumFractionDigits = 2, maximumFractionDigits = 2) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return new Intl.NumberFormat('es-PE', {
+    minimumFractionDigits,
+    maximumFractionDigits,
+  }).format(n);
+}
+
+function formatMoneyDisplay(amount, currency = 'USD') {
+  const n = toNumberOrNull(amount);
+  if (n === null) return EMPTY_METRIC_LABEL;
+  const formatted = formatNumberLocale(n, 2, 2);
+  return `${formatted || n.toFixed(2)} ${String(currency || 'USD').trim().toUpperCase() || 'USD'}`;
+}
+
+function formatCountPctDisplay(count, pct, options = {}) {
+  const value = toInt(count, 0);
+  if (pct === null || pct === undefined) {
+    if (options.allowZeroFallback && value === 0) return '0 (0%)';
+    return EMPTY_METRIC_LABEL;
+  }
+  return `${value} (${toInt(pct, 0)}%)`;
+}
+
+function collectLatestCampaignLogsByPhone(logs) {
+  const latestLogs = [];
+  const seenPhones = new Set();
+  for (const log of Array.isArray(logs) ? logs : []) {
+    const phone = String(log?.phone || '').trim();
+    const key = phone || `log:${String(log?.id || '')}`;
+    if (seenPhones.has(key)) continue;
+    seenPhones.add(key);
+    latestLogs.push(log);
+  }
+  return latestLogs;
+}
+
+function collectCampaignStatusCounts(logs) {
+  const counts = {
+    sentOnly: 0,
+    deliveredOnly: 0,
+    read: 0,
+    errors: 0,
+    other: 0,
+  };
+  for (const log of Array.isArray(logs) ? logs : []) {
+    const status = normalizeCampaignLogStatus(log?.status);
+    if (status === 'sent') counts.sentOnly += 1;
+    else if (status === 'delivered') counts.deliveredOnly += 1;
+    else if (status === 'read') counts.read += 1;
+    else if (status === 'error' || status === 'failed' || status === 'undelivered') counts.errors += 1;
+    else counts.other += 1;
+  }
+  return counts;
+}
+
+function collectIncidentCounts(failedLogs) {
+  const counts = {
+    undeliverable: 0,
+    metaLimit: 0,
+    experiment: 0,
+  };
+  for (const log of Array.isArray(failedLogs) ? failedLogs : []) {
+    const type = String(log?.incident_type || '').trim().toLowerCase();
+    if (type === 'meta_limit') counts.metaLimit += 1;
+    else if (type === 'experiment') counts.experiment += 1;
+    else counts.undeliverable += 1;
+  }
+  return counts;
+}
+
+function buildMetricCard({ label, display, tone = '', tooltip = '', action = null }) {
+  return {
+    label,
+    display,
+    tone,
+    tooltip,
+    action,
+  };
+}
+
+function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetrics, config) {
+  const campaignStatus = normalizeCampaignLogStatus(campaign?.status);
+  const effectiveLogs = collectLatestCampaignLogsByPhone(logs);
+  const statusCounts = collectCampaignStatusCounts(effectiveLogs);
+  const sentCount = statusCounts.sentOnly + statusCounts.deliveredOnly + statusCounts.read;
+  const deliveredCount = statusCounts.deliveredOnly + statusCounts.read;
+  const readCount = statusCounts.read;
+  const failedCount = Array.isArray(failedLogs) ? failedLogs.length : 0;
+  const declaredRecipients = toInt(campaign?.total_recipients, 0);
+  const totalRecipients = Math.max(declaredRecipients, sentCount + failedCount, effectiveLogs.length);
+  const problemsCount = Math.max(totalRecipients - sentCount, 0);
+  const hasIncompleteSendAccounting =
+    (campaignStatus === 'queued' || campaignStatus === 'processing' || campaignStatus === 'scheduled') &&
+    declaredRecipients > sentCount + failedCount;
+  const respondedCount = toInt(responderMetrics?.respondedCount, 0);
+  const responseWindowDays = toInt(
+    responderMetrics?.windowDays,
+    toInt(config?.CAMPAIGN_RESPONSE_WINDOW_DAYS, 7)
+  );
+  const incidentCounts = collectIncidentCounts(failedLogs);
+  const classifiedProblemCount =
+    incidentCounts.undeliverable + incidentCounts.metaLimit + incidentCounts.experiment;
+  const pendingClassificationCount = Math.max(problemsCount - classifiedProblemCount, 0);
+  const costAmount = toNumberOrNull(campaign?.cost_amount);
+  const costCurrency = String(campaign?.cost_currency || 'USD').trim().toUpperCase() || 'USD';
+  const costPerSentAmount = costAmount !== null && sentCount > 0 ? costAmount / sentCount : null;
+
+  const problemsDisplay = hasIncompleteSendAccounting
+    ? EMPTY_METRIC_LABEL
+    : formatCountPctDisplay(problemsCount, roundPct(problemsCount, totalRecipients), { allowZeroFallback: true });
+
+  return {
+    effectiveRecipientCount: effectiveLogs.length,
+    responseWindowDays,
+    performanceNote: 'Las métricas pueden demorar hasta 7 días en consolidarse.',
+    business: [
+      buildMetricCard({
+        label: 'Importe gastado',
+        display: formatMoneyDisplay(costAmount, costCurrency),
+        tone: 'neutral',
+        tooltip: 'Monto total invertido en la campaña.',
+      }),
+      buildMetricCard({
+        label: 'Costo por mensaje enviado',
+        display:
+          costPerSentAmount !== null ? formatMoneyDisplay(costPerSentAmount, costCurrency) : EMPTY_METRIC_LABEL,
+        tone: 'sent',
+        tooltip: 'Importe gastado dividido entre mensajes enviados correctamente hacia Meta.',
+      }),
+    ],
+    cost: {
+      amountDisplay: formatMoneyDisplay(costAmount, costCurrency),
+      perSentDisplay:
+        costPerSentAmount !== null ? formatMoneyDisplay(costPerSentAmount, costCurrency) : EMPTY_METRIC_LABEL,
+      currency: costCurrency,
+      hint: 'Dato Meta WABA o estimado por mensajes enviados; no incluye pauta Ads.',
+    },
+    globalResult: [
+      buildMetricCard({
+        label: 'Total destinatarios',
+        display: totalRecipients > 0 ? `${totalRecipients} (100%)` : EMPTY_METRIC_LABEL,
+        tone: 'neutral',
+        tooltip: 'Número único de destinatarios incluidos en la campaña.',
+      }),
+      buildMetricCard({
+        label: 'Enviados',
+        display: formatCountPctDisplay(sentCount, roundPct(sentCount, totalRecipients), { allowZeroFallback: true }),
+        tone: 'sent',
+        tooltip:
+          'Número de mensajes que tu negocio envió a los clientes y salieron correctamente hacia los destinatarios.',
+      }),
+      buildMetricCard({
+        label: 'Problemas de entrega',
+        display: problemsDisplay,
+        tone: 'problem',
+        tooltip:
+          'Mensajes que no pudieron enviarse o entregarse debido a errores técnicos, limitaciones de Meta o condiciones del usuario.',
+      }),
+    ],
+    performance: [
+      buildMetricCard({
+        label: 'Enviados',
+        display: sentCount > 0 ? `${sentCount} (100%)` : '0 (0%)',
+        tone: 'sent',
+        tooltip:
+          'Número de mensajes que tu negocio envió a los clientes y salieron correctamente hacia los destinatarios. Las métricas de rendimiento se registran en los 7 días posteriores al envío de un mensaje.',
+      }),
+      buildMetricCard({
+        label: 'Entregados',
+        display: formatCountPctDisplay(deliveredCount, roundPct(deliveredCount, sentCount), { allowZeroFallback: true }),
+        tone: 'delivered',
+        tooltip:
+          'Número de mensajes entregados en un plazo de 7 días desde el envío. Algunos mensajes pueden no entregarse si el dispositivo del cliente está fuera de servicio.',
+      }),
+      buildMetricCard({
+        label: 'Leídos',
+        display: formatCountPctDisplay(readCount, roundPct(readCount, deliveredCount)),
+        tone: 'read',
+        tooltip:
+          'Número de mensajes enviados, entregados y leídos dentro de los 7 días posteriores al envío.',
+      }),
+      buildMetricCard({
+        label: 'Respuestas únicas',
+        display: formatCountPctDisplay(respondedCount, roundPct(respondedCount, readCount)),
+        tone: 'response',
+        tooltip:
+          'Número de cuentas que respondieron a cualquier mensaje de plantilla dentro de los 7 días posteriores al envío.',
+        action: {
+          id: 'campaign-responders-open',
+          dialogId: 'campaign-responders-dialog',
+          title: 'Ver teléfonos que respondieron',
+        },
+      }),
+    ],
+    funnel: [
+      buildMetricCard({
+        label: 'Pendientes de entrega',
+        display: formatCountPctDisplay(statusCounts.sentOnly, roundPct(statusCounts.sentOnly, sentCount), { allowZeroFallback: true }),
+        tone: 'sent',
+        tooltip: 'Mensajes enviados que aún no fueron confirmados como entregados o leídos.',
+      }),
+      buildMetricCard({
+        label: 'Entregados no leídos',
+        display: formatCountPctDisplay(
+          statusCounts.deliveredOnly,
+          roundPct(statusCounts.deliveredOnly, sentCount),
+          { allowZeroFallback: true }
+        ),
+        tone: 'delivered',
+        tooltip: 'Mensajes entregados correctamente pero aún no leídos por el usuario.',
+      }),
+      buildMetricCard({
+        label: 'Leídos',
+        display: formatCountPctDisplay(readCount, roundPct(readCount, sentCount), { allowZeroFallback: true }),
+        tone: 'read',
+        tooltip: 'Mensajes leídos por el usuario dentro de la ventana de medición.',
+      }),
+    ],
+    incidents: [
+      buildMetricCard({
+        label: 'Mensajes no entregables',
+        display: formatCountPctDisplay(
+          incidentCounts.undeliverable,
+          roundPct(incidentCounts.undeliverable, problemsCount),
+          { allowZeroFallback: true }
+        ),
+        tone: 'problem',
+        tooltip: 'Mensajes no entregados por condiciones del usuario, del dispositivo o errores permanentes.',
+      }),
+      buildMetricCard({
+        label: 'Limitaciones Meta',
+        display: formatCountPctDisplay(incidentCounts.metaLimit, roundPct(incidentCounts.metaLimit, problemsCount), {
+          allowZeroFallback: true,
+        }),
+        tone: 'meta-limit',
+        tooltip:
+          'Meta decidió no enviar o limitar el mensaje por restricciones del ecosistema, rate limits o baja probabilidad de interacción.',
+      }),
+      buildMetricCard({
+        label: 'Experimentos',
+        display: formatCountPctDisplay(incidentCounts.experiment, roundPct(incidentCounts.experiment, problemsCount), {
+          allowZeroFallback: true,
+        }),
+        tone: 'response',
+        tooltip: 'Mensajes no enviados porque el número participa en un experimento de Meta.',
+      }),
+    ],
+    incidentsNote:
+      hasIncompleteSendAccounting
+        ? 'La campaña aún está procesándose; las incidencias se muestran de forma parcial.'
+        : pendingClassificationCount > 0
+          ? `Quedan ${pendingClassificationCount} problema(s) sin clasificación detallada todavía.`
+          : '',
+  };
+}
+
+function buildCampaignIndexSummary(campaignTotals) {
+  const sentCount = toInt(campaignTotals?.salida_ok, 0);
+  const totalRecipients = Math.max(toInt(campaignTotals?.total_recipients, 0), sentCount + toInt(campaignTotals?.failed_count, 0));
+  const problemsCount = Math.max(totalRecipients - sentCount, 0);
+  const campaignsWithCost = toInt(campaignTotals?.campaigns_with_cost, 0);
+  const costCurrencyCount = toInt(campaignTotals?.cost_currency_count, 0);
+  const costCurrency = String(campaignTotals?.cost_currency || 'USD').trim().toUpperCase() || 'USD';
+  const totalCostAmount =
+    campaignsWithCost > 0 && costCurrencyCount <= 1 ? toNumberOrNull(campaignTotals?.total_cost_amount) : null;
+  const costPerSentAmount = totalCostAmount !== null && sentCount > 0 ? totalCostAmount / sentCount : null;
+
+  return {
+    business: [
+      buildMetricCard({
+        label: 'Importe gastado',
+        display: totalCostAmount !== null ? formatMoneyDisplay(totalCostAmount, costCurrency) : EMPTY_METRIC_LABEL,
+        tone: 'neutral',
+        tooltip: 'Suma de costos sincronizados o estimados en las campañas del área.',
+      }),
+      buildMetricCard({
+        label: 'Costo por mensaje enviado',
+        display: costPerSentAmount !== null ? formatMoneyDisplay(costPerSentAmount, costCurrency) : EMPTY_METRIC_LABEL,
+        tone: 'sent',
+        tooltip: 'Importe gastado dividido entre mensajes enviados en las campañas del área.',
+      }),
+    ],
+    results: [
+      buildMetricCard({
+        label: 'Total destinatarios',
+        display: totalRecipients > 0 ? `${totalRecipients} (100%)` : EMPTY_METRIC_LABEL,
+        tone: 'neutral',
+        tooltip: 'Suma de destinatarios declarados en las campañas del área.',
+      }),
+      buildMetricCard({
+        label: 'Enviados',
+        display: formatCountPctDisplay(sentCount, roundPct(sentCount, totalRecipients), { allowZeroFallback: true }),
+        tone: 'sent',
+        tooltip: 'Mensajes enviados correctamente hacia Meta, agregados sobre las campañas del área.',
+      }),
+      buildMetricCard({
+        label: 'Problemas de entrega',
+        display: formatCountPctDisplay(problemsCount, roundPct(problemsCount, totalRecipients), { allowZeroFallback: true }),
+        tone: 'problem',
+        tooltip: 'Destinatarios de campañas del área que no registran envío exitoso.',
+      }),
+    ],
+    hint:
+      'Resumen agregado del área. Para ver entregados, leídos, respuestas únicas, embudo Meta e incidencias por campaña, entra al detalle de una campaña.',
+    campaignsCount: toInt(campaignTotals?.campaign_count, 0),
+  };
 }
 
 function registerInboxViews(app, ctx) {
@@ -211,7 +543,18 @@ function registerInboxViews(app, ctx) {
 
   async function loadCampaignsRecent(area, limit = 200) {
     const r = await query(
-      `SELECT
+      `WITH latest_logs AS (
+         SELECT DISTINCT ON (cl.campaign_id, cl.phone)
+           cl.campaign_id,
+           cl.phone,
+           cl.status,
+           cl.created_at
+         FROM campaign_logs cl
+         JOIN campaigns cx ON cx.id = cl.campaign_id
+         WHERE cx.area = $1
+         ORDER BY cl.campaign_id, cl.phone, cl.id DESC
+       )
+       SELECT
         c.id,
         c.segment,
         c.campaign_payload,
@@ -223,13 +566,13 @@ function registerInboxViews(app, ctx) {
         c.created_at,
         c.scheduled_at,
         MIN(cl.created_at) AS first_send_at,
-        COALESCE(COUNT(cl.id), 0)::int AS log_count,
+        COALESCE(COUNT(cl.phone), 0)::int AS log_count,
         COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ${SALIDA_OK_IN} THEN 1 ELSE 0 END), 0)::int AS salida_ok,
         COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ('delivered', 'read') THEN 1 ELSE 0 END), 0)::int AS delivered_count,
         COALESCE(SUM(CASE WHEN ${LOG_STATUS} = 'read' THEN 1 ELSE 0 END), 0)::int AS read_count,
         COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ${ERROR_IN} THEN 1 ELSE 0 END), 0)::int AS failed_count
        FROM campaigns c
-       LEFT JOIN campaign_logs cl ON cl.campaign_id = c.id
+       LEFT JOIN latest_logs cl ON cl.campaign_id = c.id
        WHERE c.area = $1
        GROUP BY c.id
        ORDER BY c.id DESC
@@ -240,24 +583,58 @@ function registerInboxViews(app, ctx) {
   }
 
   async function loadCampaignTotals(area) {
-    const r = await query(
-      `SELECT
-         COUNT(cl.id)::int AS total_logs,
-         COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ${SALIDA_OK_IN} THEN 1 ELSE 0 END), 0)::int AS salida_ok,
-         COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ('delivered', 'read') THEN 1 ELSE 0 END), 0)::int AS delivered_count,
-         COALESCE(SUM(CASE WHEN ${LOG_STATUS} = 'read' THEN 1 ELSE 0 END), 0)::int AS read_count,
-         COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ${ERROR_IN} THEN 1 ELSE 0 END), 0)::int AS failed_count
-       FROM campaigns c
-       LEFT JOIN campaign_logs cl ON cl.campaign_id = c.id
-       WHERE c.area = $1`,
-      [area]
-    );
-    return r.rows[0] || {
+    const [logTotals, campaignTotals] = await Promise.all([
+      query(
+        `WITH latest_logs AS (
+           SELECT DISTINCT ON (cl.campaign_id, cl.phone)
+             cl.campaign_id,
+             cl.phone,
+             cl.status
+           FROM campaign_logs cl
+           JOIN campaigns cx ON cx.id = cl.campaign_id
+           WHERE cx.area = $1
+           ORDER BY cl.campaign_id, cl.phone, cl.id DESC
+         )
+         SELECT
+           COUNT(cl.phone)::int AS total_logs,
+           COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ${SALIDA_OK_IN} THEN 1 ELSE 0 END), 0)::int AS salida_ok,
+           COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ('delivered', 'read') THEN 1 ELSE 0 END), 0)::int AS delivered_count,
+           COALESCE(SUM(CASE WHEN ${LOG_STATUS} = 'read' THEN 1 ELSE 0 END), 0)::int AS read_count,
+           COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ${ERROR_IN} THEN 1 ELSE 0 END), 0)::int AS failed_count
+         FROM latest_logs cl`,
+        [area]
+      ),
+      query(
+        `SELECT
+           COUNT(*)::int AS campaign_count,
+           COALESCE(SUM(total_recipients), 0)::int AS total_recipients,
+           COUNT(*) FILTER (WHERE cost_amount IS NOT NULL)::int AS campaigns_with_cost,
+           COUNT(DISTINCT NULLIF(TRIM(COALESCE(cost_currency, '')), ''))::int AS cost_currency_count,
+           MAX(NULLIF(TRIM(COALESCE(cost_currency, '')), '')) AS cost_currency,
+           COALESCE(SUM(cost_amount), 0)::numeric AS total_cost_amount
+         FROM campaigns
+         WHERE area = $1`,
+        [area]
+      ),
+    ]);
+    const logRow = logTotals.rows[0] || {
       total_logs: 0,
       salida_ok: 0,
       delivered_count: 0,
       read_count: 0,
       failed_count: 0,
+    };
+    const campaignRow = campaignTotals.rows[0] || {
+      campaign_count: 0,
+      total_recipients: 0,
+      campaigns_with_cost: 0,
+      cost_currency_count: 0,
+      cost_currency: null,
+      total_cost_amount: null,
+    };
+    return {
+      ...logRow,
+      ...campaignRow,
     };
   }
 
@@ -276,12 +653,15 @@ function registerInboxViews(app, ctx) {
       fetchCampaignRetryStats(query, campaignId),
     ]);
     if (campaignResult.rowCount === 0) return null;
+    const campaign = campaignResult.rows[0];
+    const analytics = buildCampaignDetailAnalytics(campaign, logsResult.rows, failedLogs, responderMetrics, config);
     return {
-      campaign: campaignResult.rows[0],
+      campaign,
       logs: logsResult.rows,
       failedLogs,
       responderMetrics,
       retryStats,
+      analytics,
     };
   }
 
@@ -339,6 +719,7 @@ function registerInboxViews(app, ctx) {
       failedLogs: detail.failedLogs,
       responderMetrics: detail.responderMetrics,
       retryStats: detail.retryStats,
+      analytics: detail.analytics,
       campaigns,
       listBasePath: '/campaigns',
       sidebarTitle: 'Campañas',
@@ -350,6 +731,7 @@ function registerInboxViews(app, ctx) {
   app.get('/campaigns', async (req, res) => {
     const area = req.user.area;
     const [campaigns, campaignTotals] = await Promise.all([loadCampaignsRecent(area, 200), loadCampaignTotals(area)]);
+    const campaignSummary = buildCampaignIndexSummary(campaignTotals);
     res.render('campaigns-index', {
       ...commonLocals(req, res),
       activeNav: 'campaigns',
@@ -357,6 +739,7 @@ function registerInboxViews(app, ctx) {
       layoutModifier: '',
       campaigns,
       campaignTotals,
+      campaignSummary,
       templatesSynced: String(req.query.templates_synced || '') === '1',
     });
   });

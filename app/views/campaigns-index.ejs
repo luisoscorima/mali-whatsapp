@@ -1,15 +1,4 @@
-<% const ct = typeof campaignTotals !== 'undefined' && campaignTotals ? campaignTotals : {};
-  const totals = {
-    salidaOk: Number(ct.salida_ok || 0),
-    read: Number(ct.read_count || 0),
-    failed: Number(ct.failed_count || 0),
-    totalLogs: Number(ct.total_logs || 0),
-  };
-  const errorRate =
-    totals.totalLogs > 0 ? Math.round((totals.failed / totals.totalLogs) * 100) : 0;
-  const readRate =
-    totals.salidaOk > 0 ? Math.round((totals.read / totals.salidaOk) * 100) : null;
-%>
+<% const summary = typeof campaignSummary !== 'undefined' && campaignSummary ? campaignSummary : { business: [], results: [], hint: '', campaignsCount: 0 }; %>
 <%- include('layouts/inbox-shell-start', {
   pageTitle,
   basePath,
@@ -33,36 +22,39 @@
 }) %>
 <section class="inbox-main" aria-label="Campañas">
   <div class="inbox-empty-pane inbox-empty-pane--history" role="status">
-    <div class="metrics-row metrics-row--history metrics-row--compact" role="region" aria-label="Resumen de envíos">
-      <div class="metric">
-        <span class="metric-num"><%= totals.totalLogs %></span>
-        <span class="metric-lbl">Total</span>
+    <div class="campaign-index-summary">
+      <div class="campaign-index-summary__section">
+        <h2 class="card-title">Negocio</h2>
+        <div class="metrics-row metrics-row--history campaign-dashboard-grid campaign-dashboard-grid--2" role="region" aria-label="Resumen de negocio">
+          <% summary.business.forEach(function (metric) { %>
+          <div class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %>"<% if (metric.tooltip) { %> title="<%= metric.tooltip %>"<% } %>>
+            <span class="metric-num"><%= metric.display %></span>
+            <span class="metric-lbl"><%= metric.label %></span>
+          </div>
+          <% }); %>
+        </div>
       </div>
-      <div class="metric">
-        <span class="metric-num"><%= totals.salidaOk %></span>
-        <span class="metric-lbl">Salida OK</span>
-      </div>
-      <div class="metric">
-        <span class="metric-num"><%= errorRate %>%</span>
-        <span class="metric-lbl">Error</span>
-      </div>
-      <div class="metric">
-        <span class="metric-num"><%= readRate !== null ? readRate + '%' : '—' %></span>
-        <span class="metric-lbl">Lectura</span>
+      <div class="campaign-index-summary__section">
+        <h2 class="card-title">Resultado global</h2>
+        <div class="metrics-row metrics-row--history campaign-dashboard-grid campaign-dashboard-grid--3" role="region" aria-label="Resumen operativo">
+          <% summary.results.forEach(function (metric) { %>
+          <div class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %>"<% if (metric.tooltip) { %> title="<%= metric.tooltip %>"<% } %>>
+            <span class="metric-num"><%= metric.display %></span>
+            <span class="metric-lbl"><%= metric.label %></span>
+          </div>
+          <% }); %>
+        </div>
       </div>
     </div>
     <p class="muted metrics-row-hint history-metrics-hint">
-      Sobre <strong>todas</strong> las campañas de esta área. <strong>Total</strong> = filas en el registro de envíos (<code>campaign_logs</code>).
-      <strong>Salida OK</strong> = sin error de API (estados sent, delivered o read).
-      <strong>Error</strong> = porcentaje de filas con error, failed o undelivered sobre el total.
-      <strong>Lectura</strong> = mensajes leídos sobre Salida OK; si Salida OK es 0 se muestra —. Depende de webhooks Meta y de que el usuario abra el chat en WhatsApp.
+      <%= summary.hint %> Campañas visibles: <strong><%= summary.campaignsCount %></strong>.
     </p>
     <div class="inbox-empty-hint">
       <span class="inbox-empty-icon" aria-hidden="true">
         <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
       </span>
       <h2 class="inbox-empty-heading">Campañas</h2>
-      <p class="inbox-empty-text">Selecciona una campaña en la lista para ver el registro de envíos, o crea una nueva para lanzar una plantilla Meta a un segmento.</p>
+      <p class="inbox-empty-text">Selecciona una campaña en la lista para ver el dashboard completo con rendimiento, embudo Meta e incidencias de entrega, o crea una nueva para lanzar una plantilla Meta a un segmento.</p>
       <% if (typeof templatesSynced !== 'undefined' && templatesSynced) { %>
       <p class="toast toast--ok">Plantillas sincronizadas desde Meta.</p>
       <% } %>
