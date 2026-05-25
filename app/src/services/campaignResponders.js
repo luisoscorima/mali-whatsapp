@@ -1,7 +1,8 @@
+const config = require('../config');
 const { sqlCampaignLogIsSalidaOk } = require('../utils/campaignLogStatuses');
 
 /** Ventana fija v1: respuesta inbound dentro de N días posteriores al envío (campaign_log.created_at). */
-const RESPONSE_WINDOW_DAYS = 7;
+const RESPONSE_WINDOW_DAYS = config.CAMPAIGN_RESPONSE_WINDOW_DAYS;
 
 function mapResponderRow(row) {
   return {
@@ -13,19 +14,20 @@ function mapResponderRow(row) {
   };
 }
 
-function buildRespondedPct(respondedCount, salidaOkCount) {
-  if (!salidaOkCount || salidaOkCount <= 0) return null;
-  return Math.round((respondedCount / salidaOkCount) * 100);
-}
-
 async function fetchCampaignSalidaOkCount(query, campaignId, area) {
   const r = await query(
     `SELECT COUNT(*)::int AS n
-     FROM campaign_logs cl
-     JOIN campaigns c ON c.id = cl.campaign_id
-     WHERE cl.campaign_id = $1
-       AND c.area = $2
-       AND ${sqlCampaignLogIsSalidaOk('cl.status')}`,
+     FROM (
+       SELECT DISTINCT ON (cl.phone)
+         cl.phone,
+         cl.status
+       FROM campaign_logs cl
+       JOIN campaigns c ON c.id = cl.campaign_id
+       WHERE cl.campaign_id = $1
+         AND c.area = $2
+       ORDER BY cl.phone, cl.id DESC
+     ) latest_logs
+     WHERE ${sqlCampaignLogIsSalidaOk('latest_logs.status')}`,
     [campaignId, area]
   );
   return r.rows[0]?.n ?? 0;
@@ -37,23 +39,32 @@ async function fetchCampaignSalidaOkCount(query, campaignId, area) {
  */
 async function fetchCampaignResponders(query, campaignId, area) {
   const r = await query(
-    `SELECT
-       cl.phone,
+    `WITH latest_logs AS (
+       SELECT DISTINCT ON (cl.phone)
+         cl.phone,
+         cl.contact_id,
+         cl.created_at,
+         cl.status
+       FROM campaign_logs cl
+       JOIN campaigns c ON c.id = cl.campaign_id AND c.area = $2
+       WHERE cl.campaign_id = $1
+       ORDER BY cl.phone, cl.id DESC
+     )
+     SELECT
+       latest_logs.phone,
        COALESCE(ct.name, '') AS contact_name,
-       COALESCE(cl.contact_id, conv.contact_id) AS contact_id,
+       COALESCE(latest_logs.contact_id, conv.contact_id) AS contact_id,
        conv.id AS conversation_id,
        MIN(cm.created_at) AS first_response_at
-     FROM campaign_logs cl
-     JOIN campaigns c ON c.id = cl.campaign_id AND c.area = $2
-     INNER JOIN conversations conv ON conv.area = c.area AND conv.phone = cl.phone
+     FROM latest_logs
+     INNER JOIN conversations conv ON conv.area = $2 AND conv.phone = latest_logs.phone
      INNER JOIN chat_messages cm ON cm.conversation_id = conv.id
        AND cm.direction = 'inbound'
-       AND cm.created_at > cl.created_at
-       AND cm.created_at <= cl.created_at + INTERVAL '${RESPONSE_WINDOW_DAYS} days'
-     LEFT JOIN contacts ct ON ct.id = COALESCE(cl.contact_id, conv.contact_id)
-     WHERE cl.campaign_id = $1
-       AND ${sqlCampaignLogIsSalidaOk('cl.status')}
-     GROUP BY cl.phone, ct.name, cl.contact_id, conv.contact_id, conv.id
+       AND cm.created_at > latest_logs.created_at
+       AND cm.created_at <= latest_logs.created_at + INTERVAL '${RESPONSE_WINDOW_DAYS} days'
+     LEFT JOIN contacts ct ON ct.id = COALESCE(latest_logs.contact_id, conv.contact_id)
+     WHERE ${sqlCampaignLogIsSalidaOk('latest_logs.status')}
+     GROUP BY latest_logs.phone, ct.name, latest_logs.contact_id, conv.contact_id, conv.id
      ORDER BY first_response_at DESC`,
     [campaignId, area]
   );
@@ -68,9 +79,8 @@ async function fetchCampaignResponderMetrics(query, campaignId, area) {
   const respondedCount = responders.length;
   return {
     windowDays: RESPONSE_WINDOW_DAYS,
-    salidaOkCount,
+    sentCount: salidaOkCount,
     respondedCount,
-    respondedPct: buildRespondedPct(respondedCount, salidaOkCount),
     responders,
   };
 }
@@ -80,5 +90,4 @@ module.exports = {
   fetchCampaignResponders,
   fetchCampaignResponderMetrics,
   fetchCampaignSalidaOkCount,
-  buildRespondedPct,
 };

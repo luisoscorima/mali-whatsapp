@@ -59,13 +59,14 @@ function csvEscapeCell(value) {
 
 function buildCampaignFailedLogsCsv(logs, formatDate) {
   const format = typeof formatDate === 'function' ? formatDate : (d) => String(d ?? '');
-  const header = ['telefono', 'estado', 'motivo', 'fecha_envio'];
+  const header = ['telefono', 'estado', 'incidencia', 'motivo', 'fecha_envio'];
   const lines = [header.join(',')];
   for (const log of logs) {
     lines.push(
       [
         csvEscapeCell(log.phone),
         csvEscapeCell(log.status),
+        csvEscapeCell(log.incident_label || ''),
         csvEscapeCell(log.error_summary || summarizeCampaignLogResponse(log.response)),
         csvEscapeCell(format(log.created_at)),
       ].join(',')

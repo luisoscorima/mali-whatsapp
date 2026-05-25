@@ -5,6 +5,7 @@ const {
   sqlInList,
 } = require('../utils/campaignLogStatuses');
 const { summarizeCampaignLogResponse } = require('../utils/campaignLogErrorSummary');
+const { classifyCampaignDeliveryIncident } = require('../utils/campaignSendErrorClassify');
 
 const SALIDA_OK_IN = sqlInList(SALIDA_OK_STATUSES);
 
@@ -21,19 +22,26 @@ function sqlNoSuccessfulLogForPhone() {
 }
 
 function enrichFailedLogRow(row) {
+  const incident = classifyCampaignDeliveryIncident(row.response, row.status);
   return {
     ...row,
     error_summary: summarizeCampaignLogResponse(row.response),
+    incident_type: incident.incidentType,
+    incident_label: incident.incidentLabel,
   };
 }
 
 async function fetchCampaignFailedLogs(query, campaignId) {
   const r = await query(
     `SELECT id, phone, status, response, created_at, attempt, retryable, last_retry_at
-     FROM campaign_logs
-     WHERE campaign_id = $1
-       AND ${sqlCampaignLogIsError('status')}
-       AND ${sqlNoSuccessfulLogForPhone()}
+     FROM (
+       SELECT DISTINCT ON (phone)
+         id, phone, status, response, created_at, attempt, retryable, last_retry_at
+       FROM campaign_logs
+       WHERE campaign_id = $1
+       ORDER BY phone, id DESC
+     ) latest_logs
+     WHERE ${sqlCampaignLogIsError('status')}
      ORDER BY id DESC`,
     [campaignId]
   );
