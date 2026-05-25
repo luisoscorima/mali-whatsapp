@@ -1,13 +1,10 @@
-const axios = require('axios');
 const config = require('../config');
-const { getWhatsAppCredentialsForArea } = require('./metaSettingsCache');
-const { resolveWabaId } = require('./metaWhatsApp');
-const { sqlCampaignLogIsSalidaOk } = require('../utils/campaignLogStatuses');
+const { estimateCategoryCost, getCampaignTemplateCategory } = require('../utils/campaignPricing');
 
 /**
- * Cuenta destinatarios con envio vigente aceptado por Meta.
+ * Cuenta destinatarios cuya última traza ya quedó en delivered/read.
  */
-async function countDeliveredOkLogs(query, campaignId) {
+async function countDeliveredLogs(query, campaignId) {
   const r = await query(
     `SELECT COUNT(*)::int AS n
      FROM (
@@ -18,7 +15,7 @@ async function countDeliveredOkLogs(query, campaignId) {
        WHERE campaign_id = $1
        ORDER BY phone, id DESC
      ) latest_logs
-     WHERE ${sqlCampaignLogIsSalidaOk('latest_logs.status')}`,
+     WHERE LOWER(TRIM(COALESCE(latest_logs.status, ''))) IN ('delivered', 'read')`,
     [campaignId]
   );
   return r.rows[0]?.n ?? 0;
@@ -35,88 +32,35 @@ async function getCostPerMessageEstimate(query, area) {
 }
 
 /**
- * Intenta obtener costo desde template_analytics del WABA en ventana de la campaña.
- */
-async function fetchTemplateAnalyticsCost({ area, templateName, startUnix, endUnix }) {
-  const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
-  if (!token || !phoneNumberId) {
-    return null;
-  }
-  const wabaId = await resolveWabaId(area, token, phoneNumberId);
-  const url = `${config.GRAPH_BASE}/${wabaId}/template_analytics`;
-  const params = {
-    start: startUnix,
-    end: endUnix,
-    granularity: 'DAILY',
-    metric_types: 'COST,CLICKS,DELIVERED',
-    template_ids: JSON.stringify([]),
-  };
-  try {
-    const { data } = await axios.get(url, {
-      params: {
-        ...params,
-        template_ids: undefined,
-      },
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const points = data?.data?.[0]?.data_points;
-    if (!Array.isArray(points)) return null;
-    let totalCost = 0;
-    let currency = 'USD';
-    for (const p of points) {
-      if (String(p.template_name || '').toLowerCase() !== String(templateName || '').toLowerCase()) {
-        continue;
-      }
-      const c = Number(p.cost);
-      if (Number.isFinite(c)) totalCost += c;
-      if (p.cost_currency) currency = String(p.cost_currency);
-    }
-    if (totalCost <= 0) return null;
-    return { amount: totalCost, currency, source: 'template_analytics' };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Sincroniza costo de campaña: API Meta si responde; si no, estimado por envios vigentes.
+ * Sincroniza costo de campaña usando la tarifa oficial de WhatsApp por categoría.
  */
 async function syncCampaignCost(query, { campaignId, area }) {
   const campR = await query(
-    `SELECT id, template_name, created_at, status FROM campaigns WHERE id = $1 AND area = $2`,
+    `SELECT id, template_name, created_at, status, campaign_payload FROM campaigns WHERE id = $1 AND area = $2`,
     [campaignId, area]
   );
   if (campR.rowCount === 0) {
     return { ok: false, error: 'Campaña no encontrada' };
   }
   const campaign = campR.rows[0];
-  const deliveredOk = await countDeliveredOkLogs(query, campaignId);
-
-  const start = new Date(campaign.created_at);
-  const end = new Date();
-  const startUnix = Math.floor(start.getTime() / 1000);
-  const endUnix = Math.floor(end.getTime() / 1000) + 86400;
+  const deliveredCount = await countDeliveredLogs(query, campaignId);
+  const category = getCampaignTemplateCategory(campaign);
 
   let amount = null;
   let currency = 'USD';
   let source = 'estimated';
   let isEstimated = true;
 
-  const fromApi = await fetchTemplateAnalyticsCost({
-    area,
-    templateName: campaign.template_name,
-    startUnix,
-    endUnix,
-  });
-  if (fromApi && fromApi.amount > 0) {
-    amount = fromApi.amount;
-    currency = fromApi.currency || 'USD';
-    source = fromApi.source;
-    isEstimated = false;
+  const categoryEstimate = estimateCategoryCost(deliveredCount, category);
+  if (categoryEstimate) {
+    amount = categoryEstimate.usdAmount;
+    currency = 'USD';
+    source = 'category_rate';
+    isEstimated = true;
   } else {
     const rate = await getCostPerMessageEstimate(query, area);
-    amount = deliveredOk * rate;
-    source = 'estimated_sent';
+    amount = deliveredCount * rate;
+    source = 'estimated_delivered';
     isEstimated = true;
   }
 
@@ -137,11 +81,12 @@ async function syncCampaignCost(query, { campaignId, area }) {
     currency,
     source,
     isEstimated,
-    deliveredOk,
+    deliveredCount,
+    category,
   };
 }
 
 module.exports = {
   syncCampaignCost,
-  countDeliveredOkLogs,
+  countDeliveredLogs,
 };
