@@ -129,19 +129,23 @@ function formatMoneyDisplay(amount, currency = 'USD', minimumFractionDigits = 2,
 }
 
 function formatDualMoneyDisplay(usdAmount, penAmount, options = {}) {
+  const lines = formatDualMoneyLines(usdAmount, penAmount, options);
+  if (lines.length === 0) return EMPTY_METRIC_LABEL;
+  return lines.join(' · ');
+}
+
+function formatDualMoneyLines(usdAmount, penAmount, options = {}) {
   const minimumFractionDigits = options.minimumFractionDigits ?? 2;
   const maximumFractionDigits = options.maximumFractionDigits ?? 2;
   const hasUsd = toNumberOrNull(usdAmount) !== null;
   const hasPen = toNumberOrNull(penAmount) !== null;
-  if (!hasUsd && !hasPen) return EMPTY_METRIC_LABEL;
-  if (!hasUsd) return formatMoneyDisplay(penAmount, 'PEN', minimumFractionDigits, maximumFractionDigits);
-  if (!hasPen) return formatMoneyDisplay(usdAmount, 'USD', minimumFractionDigits, maximumFractionDigits);
-  return `${formatMoneyDisplay(penAmount, 'PEN', minimumFractionDigits, maximumFractionDigits)} · ${formatMoneyDisplay(
-    usdAmount,
-    'USD',
-    minimumFractionDigits,
-    maximumFractionDigits
-  )}`;
+  if (!hasUsd && !hasPen) return [];
+  if (!hasUsd) return [formatMoneyDisplay(penAmount, 'PEN', minimumFractionDigits, maximumFractionDigits)];
+  if (!hasPen) return [formatMoneyDisplay(usdAmount, 'USD', minimumFractionDigits, maximumFractionDigits)];
+  return [
+    formatMoneyDisplay(penAmount, 'PEN', minimumFractionDigits, maximumFractionDigits),
+    formatMoneyDisplay(usdAmount, 'USD', minimumFractionDigits, maximumFractionDigits),
+  ];
 }
 
 function formatCountPctDisplay(count, pct, options = {}) {
@@ -200,10 +204,11 @@ function collectIncidentCounts(failedLogs) {
   return counts;
 }
 
-function buildMetricCard({ label, display, tone = '', tooltip = '', action = null }) {
+function buildMetricCard({ label, display, displayLines = null, tone = '', tooltip = '', action = null }) {
   return {
     label,
     display,
+    displayLines,
     tone,
     tooltip,
     action,
@@ -250,12 +255,20 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
         }),
+        displayLines: formatDualMoneyLines(costInfo.usdAmount, costInfo.penAmount, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }),
         tone: 'neutral',
         tooltip: 'Monto total invertido en la campaña.',
       }),
       buildMetricCard({
         label: 'Costo por mensaje entregado',
         display: formatDualMoneyDisplay(costInfo.unitUsdAmount, costInfo.unitPenAmount, {
+          minimumFractionDigits: 4,
+          maximumFractionDigits: 4,
+        }),
+        displayLines: formatDualMoneyLines(costInfo.unitUsdAmount, costInfo.unitPenAmount, {
           minimumFractionDigits: 4,
           maximumFractionDigits: 4,
         }),
@@ -269,6 +282,14 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         maximumFractionDigits: 2,
       }),
       perDeliveredDisplay: formatDualMoneyDisplay(costInfo.unitUsdAmount, costInfo.unitPenAmount, {
+        minimumFractionDigits: 4,
+        maximumFractionDigits: 4,
+      }),
+      amountLines: formatDualMoneyLines(costInfo.usdAmount, costInfo.penAmount, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
+      perDeliveredLines: formatDualMoneyLines(costInfo.unitUsdAmount, costInfo.unitPenAmount, {
         minimumFractionDigits: 4,
         maximumFractionDigits: 4,
       }),
@@ -426,12 +447,22 @@ function buildCampaignIndexSummary(campaignTotals) {
               maximumFractionDigits: 2,
             })
           : EMPTY_METRIC_LABEL,
+        displayLines: hasCostData
+          ? formatDualMoneyLines(summarizedCosts.totalUsd, summarizedCosts.totalPen, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })
+          : null,
         tone: 'neutral',
         tooltip: 'Suma de costos calculados por campaña usando la categoría de plantilla y mensajes entregados.',
       }),
       buildMetricCard({
         label: 'Costo por mensaje entregado',
         display: formatDualMoneyDisplay(costPerDeliveredUsd, costPerDeliveredPen, {
+          minimumFractionDigits: 4,
+          maximumFractionDigits: 4,
+        }),
+        displayLines: formatDualMoneyLines(costPerDeliveredUsd, costPerDeliveredPen, {
           minimumFractionDigits: 4,
           maximumFractionDigits: 4,
         }),

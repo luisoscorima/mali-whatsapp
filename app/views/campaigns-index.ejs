@@ -28,7 +28,15 @@
         <div class="metrics-row metrics-row--history campaign-dashboard-grid campaign-dashboard-grid--2" role="region" aria-label="Resumen de negocio">
           <% summary.business.forEach(function (metric) { %>
           <div class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %>"<% if (metric.tooltip) { %> title="<%= metric.tooltip %>"<% } %>>
+            <% if (metric.displayLines && metric.displayLines.length) { %>
+            <span class="metric-num metric-num--stack">
+              <% metric.displayLines.forEach(function (line, idx) { %>
+              <span class="money-stack__line<%= idx > 0 ? ' money-stack__line--secondary' : '' %>"><%= line %></span>
+              <% }); %>
+            </span>
+            <% } else { %>
             <span class="metric-num"><%= metric.display %></span>
+            <% } %>
             <span class="metric-lbl"><%= metric.label %></span>
           </div>
           <% }); %>

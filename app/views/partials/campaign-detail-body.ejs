@@ -51,7 +51,15 @@
       <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--2" role="group" aria-label="Métricas de negocio">
         <% _businessMetrics.forEach(function (metric) { %>
         <div class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %>"<% if (metric.tooltip) { %> title="<%= metric.tooltip %>"<% } %>>
+          <% if (metric.displayLines && metric.displayLines.length) { %>
+          <span class="metric-num metric-num--stack">
+            <% metric.displayLines.forEach(function (line, idx) { %>
+            <span class="money-stack__line<%= idx > 0 ? ' money-stack__line--secondary' : '' %>"><%= line %></span>
+            <% }); %>
+          </span>
+          <% } else { %>
           <span class="metric-num"><%= metric.display %></span>
+          <% } %>
           <span class="metric-lbl"><%= metric.label %></span>
         </div>
         <% }); %>
@@ -184,8 +192,22 @@
       <div><dt>Recuperados en reintento</dt><dd><%= _recoveredCount %></dd></div>
       <% } %>
       <div><dt>Inversión / costo</dt><dd>
+        <% if (_costInfo && _costInfo.amountLines && _costInfo.amountLines.length) { %>
+        <span id="campaign-cost-display" class="money-stack">
+          <% _costInfo.amountLines.forEach(function (line, idx) { %>
+          <span class="money-stack__line<%= idx > 0 ? ' money-stack__line--secondary' : '' %>"><%= line %></span>
+          <% }); %>
+        </span>
+        <% } else { %>
         <span id="campaign-cost-display"><%= _costInfo ? _costInfo.amountDisplay : 'Aún sin datos' %></span>
-        <% if (_costInfo && _costInfo.perDeliveredDisplay) { %>
+        <% } %>
+        <% if (_costInfo && _costInfo.perDeliveredLines && _costInfo.perDeliveredLines.length) { %>
+        <span class="money-stack money-stack--compact">
+          <% _costInfo.perDeliveredLines.forEach(function (line, idx) { %>
+          <span class="money-stack__line<%= idx > 0 ? ' money-stack__line--secondary' : '' %>"><%= line %> por mensaje entregado</span>
+          <% }); %>
+        </span>
+        <% } else if (_costInfo && _costInfo.perDeliveredDisplay) { %>
         <span class="muted"> · <%= _costInfo.perDeliveredDisplay %> por mensaje entregado</span>
         <% } %>
         <span class="muted"> · <%= _costSourceLabel %></span>
