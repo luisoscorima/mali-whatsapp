@@ -32,268 +32,261 @@
     var _canSyncCost = campaign.status === 'completed' || campaign.status === 'failed';
   %>
 
-  <div class="card campaign-dashboard-card">
-    <section class="campaign-dashboard-section">
-      <div class="campaign-dashboard-section__head">
-        <div>
-          <h2 class="card-title">Negocio</h2>
-          <p class="campaign-dashboard-section__lead muted">Resumen comercial de la campaña.</p>
+  <div class="campaign-detail-stack">
+    <div class="card campaign-dashboard-card">
+      <% if (campaign.status === 'queued' || campaign.status === 'processing') { %>
+      <p class="toast toast--ok">Envío en segundo plano. Actualiza la página para ver el progreso.</p>
+      <% } else if (campaign.status === 'scheduled') { %>
+      <p class="toast toast--ok">Campaña programada: se enviará a la hora indicada. Actualiza la página para ver el progreso.</p>
+      <% } %>
+
+      <section class="campaign-dashboard-section">
+        <div class="campaign-dashboard-section__head">
+          <div>
+            <h2 class="card-title">Resultado global</h2>
+            <p class="campaign-dashboard-section__lead muted">Visión general de destinatarios, envíos y problemas.</p>
+          </div>
         </div>
-        <% if (_canSyncCost) { %>
-        <button
-          type="button"
-          class="small-btn secondary"
-          id="campaign-sync-cost-btn"
-          data-campaign-id="<%= campaign.id %>"
-        >Sincronizar costo</button>
-        <% } %>
-      </div>
-      <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--2" role="group" aria-label="Métricas de negocio">
-        <% _businessMetrics.forEach(function (metric) { %>
-        <div class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %>"<% if (metric.tooltip) { %> title="<%= metric.tooltip %>"<% } %>>
-          <% if (metric.displayLines && metric.displayLines.length) { %>
-          <span class="metric-num metric-num--stack">
-            <% metric.displayLines.forEach(function (line, idx) { %>
-            <span class="money-stack__line<%= idx > 0 ? ' money-stack__line--secondary' : '' %>"><%= line %></span>
-            <% }); %>
-          </span>
-          <% } else { %>
-          <span class="metric-num"><%= metric.display %></span>
+        <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--3" role="group" aria-label="Resultado global">
+          <% _globalMetrics.forEach(function (metric) { %>
+          <div class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %>"<% if (metric.tooltip) { %> title="<%= metric.tooltip %>"<% } %>>
+            <span class="metric-num"><%= metric.display %></span>
+            <span class="metric-lbl"><%= metric.label %></span>
+          </div>
+          <% }); %>
+        </div>
+      </section>
+
+      <section class="campaign-dashboard-section campaign-dashboard-section--last">
+        <div class="campaign-dashboard-section__head">
+          <div>
+            <h2 class="card-title">Detalle de campaña</h2>
+            <p class="campaign-dashboard-section__lead muted">Información general y contexto de la campaña.</p>
+          </div>
+        </div>
+        <dl class="detail-dl">
+          <div><dt>Segmento(s)</dt><dd><%= campaignSegmentDisplay(campaign) %></dd></div>
+          <% if (_excludeSegs.length || _excludeIds.length) { %>
+          <div><dt>Exclusiones</dt><dd>
+            <% if (_excludeSegs.length) { %>
+            <span>Segmentos: <%= _excludeSegs.join(', ') %></span>
+            <% } %>
+            <% if (_excludeSegs.length && _excludeIds.length) { %><br /><% } %>
+            <% if (_excludeIds.length) { %>
+            <span>Contactos (IDs): <%= _excludeIds.join(', ') %></span>
+            <% } %>
+          </dd></div>
           <% } %>
-          <span class="metric-lbl"><%= metric.label %></span>
-        </div>
-        <% }); %>
-      </div>
-      <p class="campaign-business-hint muted">
-        <strong>Fuente:</strong> <%= _costSourceLabel %>.
-        <% if (campaign.cost_synced_at) { %><span> Última sincronización: <%= formatMessageDateTime(campaign.cost_synced_at) %>.</span><% } %>
-        <% if (_costInfo && _costInfo.hint) { %><span> <%= _costInfo.hint %></span><% } %>
-      </p>
-    </section>
-
-    <section class="campaign-dashboard-section">
-      <div class="campaign-dashboard-section__head">
-        <div>
-          <h2 class="card-title">Resultado global</h2>
-          <p class="campaign-dashboard-section__lead muted">Visión general de destinatarios, envíos y problemas.</p>
-        </div>
-      </div>
-      <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--3" role="group" aria-label="Resultado global">
-        <% _globalMetrics.forEach(function (metric) { %>
-        <div class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %>"<% if (metric.tooltip) { %> title="<%= metric.tooltip %>"<% } %>>
-          <span class="metric-num"><%= metric.display %></span>
-          <span class="metric-lbl"><%= metric.label %></span>
-        </div>
-        <% }); %>
-      </div>
-    </section>
-
-    <section class="campaign-dashboard-section">
-      <div class="campaign-dashboard-section__head">
-        <div>
-          <h2 class="card-title">Rendimiento de envío</h2>
-          <p class="campaign-dashboard-section__lead muted"><%= _performanceNote %></p>
-        </div>
-      </div>
-      <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--4" role="group" aria-label="Rendimiento de envío">
-        <% _performanceMetrics.forEach(function (metric) { %>
-        <% if (metric.action) { %>
-        <button
-          type="button"
-          class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %> metric--action"
-          id="<%= metric.action.id %>"
-          aria-haspopup="dialog"
-          aria-controls="<%= metric.action.dialogId %>"
-          title="<%= metric.action.title || metric.tooltip || '' %>"
-        >
-          <span class="metric-num"><%= metric.display %></span>
-          <span class="metric-lbl"><%= metric.label %></span>
-        </button>
-        <% } else { %>
-        <div class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %>"<% if (metric.tooltip) { %> title="<%= metric.tooltip %>"<% } %>>
-          <span class="metric-num"><%= metric.display %></span>
-          <span class="metric-lbl"><%= metric.label %></span>
-        </div>
-        <% } %>
-        <% }); %>
-      </div>
-      <p class="campaign-responders-hint muted">
-        Cuenta como respuesta si el contacto escribió dentro de los <%= _respWindow %> días posteriores al envío.
-      </p>
-    </section>
-
-    <section class="campaign-dashboard-section">
-      <div class="campaign-dashboard-section__head">
-        <div>
-          <h2 class="card-title">Embudo Meta</h2>
-          <p class="campaign-dashboard-section__lead muted">Estados exclusivos que suman el total de enviados.</p>
-        </div>
-      </div>
-      <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--3" role="group" aria-label="Embudo Meta">
-        <% _funnelMetrics.forEach(function (metric) { %>
-        <div class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %>"<% if (metric.tooltip) { %> title="<%= metric.tooltip %>"<% } %>>
-          <span class="metric-num"><%= metric.display %></span>
-          <span class="metric-lbl"><%= metric.label %></span>
-        </div>
-        <% }); %>
-      </div>
-      <p class="campaign-dashboard-formula muted">
-        Validación: pendientes de entrega + entregados no leídos + leídos = enviados.
-      </p>
-    </section>
-
-    <section class="campaign-dashboard-section campaign-dashboard-section--last">
-      <div class="campaign-dashboard-section__head">
-        <div>
-          <h2 class="card-title">Incidencias de entrega</h2>
-          <p class="campaign-dashboard-section__lead muted">Detalle técnico de problemas reportados por Meta.</p>
-        </div>
-      </div>
-      <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--3" role="group" aria-label="Incidencias de entrega">
-        <% _incidentMetrics.forEach(function (metric) { %>
-        <div class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %>"<% if (metric.tooltip) { %> title="<%= metric.tooltip %>"<% } %>>
-          <span class="metric-num"><%= metric.display %></span>
-          <span class="metric-lbl"><%= metric.label %></span>
-        </div>
-        <% }); %>
-      </div>
-      <% if (_incidentsNote) { %>
-      <p class="campaign-dashboard-formula muted"><%= _incidentsNote %></p>
-      <% } %>
-    </section>
-  </div>
-
-  <div class="card">
-    <% if (campaign.status === 'queued' || campaign.status === 'processing') { %>
-    <p class="toast toast--ok">Envío en segundo plano. Actualiza la página para ver el progreso.</p>
-    <% } else if (campaign.status === 'scheduled') { %>
-    <p class="toast toast--ok">Campaña programada: se enviará a la hora indicada. Actualiza la página para ver el progreso.</p>
-    <% } %>
-    <dl class="detail-dl">
-      <div><dt>Segmento(s)</dt><dd><%= campaignSegmentDisplay(campaign) %></dd></div>
-      <% if (_excludeSegs.length || _excludeIds.length) { %>
-      <div><dt>Exclusiones</dt><dd>
-        <% if (_excludeSegs.length) { %>
-        <span>Segmentos: <%= _excludeSegs.join(', ') %></span>
-        <% } %>
-        <% if (_excludeSegs.length && _excludeIds.length) { %><br /><% } %>
-        <% if (_excludeIds.length) { %>
-        <span>Contactos (IDs): <%= _excludeIds.join(', ') %></span>
-        <% } %>
-      </dd></div>
-      <% } %>
-      <div><dt>Plantilla</dt><dd><%= campaign.template_name %></dd></div>
-      <div><dt>Estado</dt><dd><span class="badge <%= campaign.status %>"><%= campaign.status %></span></dd></div>
-      <% if (campaign.scheduled_at) { %>
-      <div><dt>Programada para</dt><dd><%= formatMessageDateTime(campaign.scheduled_at) %></dd></div>
-      <% } %>
-      <div><dt>Destinatarios</dt><dd><%= campaign.total_recipients %></dd></div>
-      <% if (_recoveredCount > 0) { %>
-      <div><dt>Recuperados en reintento</dt><dd><%= _recoveredCount %></dd></div>
-      <% } %>
-      <div><dt>Inversión / costo</dt><dd>
-        <% if (_costInfo && _costInfo.amountLines && _costInfo.amountLines.length) { %>
-        <span id="campaign-cost-display" class="money-stack">
-          <% _costInfo.amountLines.forEach(function (line, idx) { %>
-          <span class="money-stack__line<%= idx > 0 ? ' money-stack__line--secondary' : '' %>"><%= line %></span>
-          <% }); %>
-        </span>
-        <% } else { %>
-        <span id="campaign-cost-display"><%= _costInfo ? _costInfo.amountDisplay : 'Aún sin datos' %></span>
-        <% } %>
-        <% if (_costInfo && _costInfo.perDeliveredLines && _costInfo.perDeliveredLines.length) { %>
-        <span class="money-stack money-stack--compact">
-          <% _costInfo.perDeliveredLines.forEach(function (line, idx) { %>
-          <span class="money-stack__line<%= idx > 0 ? ' money-stack__line--secondary' : '' %>"><%= line %> por mensaje entregado</span>
-          <% }); %>
-        </span>
-        <% } else if (_costInfo && _costInfo.perDeliveredDisplay) { %>
-        <span class="muted"> · <%= _costInfo.perDeliveredDisplay %> por mensaje entregado</span>
-        <% } %>
-        <span class="muted"> · <%= _costSourceLabel %></span>
-      </dd></div>
-      <div><dt>Parámetros</dt><dd><%= campaign.message_text %></dd></div>
-      <% if (campaign.image_url) { %>
-      <div><dt>Imagen</dt><dd><a href="<%= campaign.image_url %>" target="_blank" rel="noopener">Abrir enlace</a></dd></div>
-      <% } %>
-    </dl>
-  </div>
-
-  <div class="card campaign-failed-card">
-    <div class="campaign-failed-card__head">
-      <h2 class="card-title">Incidencias detalladas (<%= _failedCount %>)</h2>
-      <div class="campaign-failed-card__actions">
-        <% if (_canManualRetry) { %>
-        <button type="button" class="small-btn" id="campaign-retry-failed-btn" data-campaign-id="<%= campaign.id %>">
-          Reintentar incidencias (<%= _failedCount %>)
-        </button>
-        <% } %>
-        <% if (_failedCount > 0) { %>
-        <a
-          class="small-btn secondary"
-          href="<%= basePath %>/api/campaigns/<%= campaign.id %>/failed-export"
-          download
-        >Exportar CSV</a>
-        <% } %>
-      </div>
+          <div><dt>Plantilla</dt><dd><%= campaign.template_name %></dd></div>
+          <div><dt>Estado</dt><dd><span class="badge <%= campaign.status %>"><%= campaign.status %></span></dd></div>
+          <% if (campaign.scheduled_at) { %>
+          <div><dt>Programada para</dt><dd><%= formatMessageDateTime(campaign.scheduled_at) %></dd></div>
+          <% } %>
+          <% if (_recoveredCount > 0) { %>
+          <div><dt>Recuperados en reintento</dt><dd><%= _recoveredCount %></dd></div>
+          <% } %>
+          <div><dt>Parámetros</dt><dd><%= campaign.message_text %></dd></div>
+          <% if (campaign.image_url) { %>
+          <div><dt>Imagen</dt><dd><a href="<%= campaign.image_url %>" target="_blank" rel="noopener">Abrir enlace</a></dd></div>
+          <% } %>
+        </dl>
+      </section>
     </div>
-    <p class="muted campaign-retry-hint">
-      Reintento automático ~<%= _retryDelayMin %> min después del envío para errores temporales.
-      <% if (_autoRetryPending) { %> Pendiente de reintento automático.<% } %>
-      <% if (_manualRetryCount > 0) { %> Reintentos manuales: <%= _manualRetryCount %>/<%= _maxManualRetries %>.<% } %>
-    </p>
-    <p id="campaign-retry-feedback" class="inline-warn" hidden role="status"></p>
-    <% if (_failedCount === 0) { %>
-    <p class="muted campaign-failed-empty">No hay incidencias activas de entrega en esta campaña.</p>
-    <% } else { %>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Teléfono</th>
-            <th>Estado</th>
-            <th>Incidencia</th>
-            <th>Motivo</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% _failedLogs.forEach(function (log) { %>
-          <tr>
-            <td class="mono"><%= log.phone %></td>
-            <td><span class="badge <%= log.status %>"><%= log.status %></span></td>
-            <td><%= log.incident_label || 'Mensajes no entregables' %></td>
-            <td><%= log.error_summary %></td>
-          </tr>
-          <% }); %>
-        </tbody>
-      </table>
-    </div>
-    <% } %>
-  </div>
 
-  <div class="card">
-    <h2 class="card-title">Registro de envíos</h2>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Teléfono</th>
-            <th>Estado</th>
-            <th>ID mensaje</th>
-            <th>Detalle</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% logs.forEach(function (log) { %>
-          <tr>
-            <td class="mono"><%= log.phone %></td>
-            <td><span class="badge <%= log.status %>"><%= log.status %></span></td>
-            <td class="mono"><%= log.whatsapp_message_id || '—' %></td>
-            <td><pre class="log-pre"><%= JSON.stringify(log.response, null, 2) %></pre></td>
-          </tr>
+    <div class="card campaign-dashboard-card">
+      <section class="campaign-dashboard-section">
+        <div class="campaign-dashboard-section__head">
+          <div>
+            <h2 class="card-title">Rendimiento de envío</h2>
+            <p class="campaign-dashboard-section__lead muted"><%= _performanceNote %></p>
+          </div>
+        </div>
+        <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--4" role="group" aria-label="Rendimiento de envío">
+          <% _performanceMetrics.forEach(function (metric) { %>
+          <% if (metric.action) { %>
+          <button
+            type="button"
+            class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %> metric--action"
+            id="<%= metric.action.id %>"
+            aria-haspopup="dialog"
+            aria-controls="<%= metric.action.dialogId %>"
+            title="<%= metric.action.title || metric.tooltip || '' %>"
+          >
+            <span class="metric-num"><%= metric.display %></span>
+            <span class="metric-lbl"><%= metric.label %></span>
+          </button>
+          <% } else { %>
+          <div class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %>"<% if (metric.tooltip) { %> title="<%= metric.tooltip %>"<% } %>>
+            <span class="metric-num"><%= metric.display %></span>
+            <span class="metric-lbl"><%= metric.label %></span>
+          </div>
+          <% } %>
           <% }); %>
-        </tbody>
-      </table>
+        </div>
+        <p class="campaign-responders-hint muted">
+          Cuenta como respuesta si el contacto escribió dentro de los <%= _respWindow %> días posteriores al envío.
+        </p>
+        <details class="campaign-meta-funnel-details">
+          <summary class="campaign-meta-funnel-summary">Embudo Meta</summary>
+          <div class="campaign-meta-funnel-grid" role="group" aria-label="Embudo Meta">
+            <% _funnelMetrics.forEach(function (metric) { %>
+            <span class="campaign-meta-funnel-item"<% if (metric.tooltip) { %> title="<%= metric.tooltip %>"<% } %>>
+              <strong><%= metric.label %></strong> <%= metric.display %>
+            </span>
+            <% }); %>
+          </div>
+          <p class="campaign-meta-funnel-ratios muted">
+            Validación: pendientes de entrega + entregados no leídos + leídos = enviados.
+          </p>
+        </details>
+      </section>
+
+      <section class="campaign-dashboard-section">
+        <div class="campaign-dashboard-section__head">
+          <div>
+            <h2 class="card-title">Negocio</h2>
+            <p class="campaign-dashboard-section__lead muted">Resumen comercial de la campaña.</p>
+          </div>
+          <% if (_canSyncCost) { %>
+          <button
+            type="button"
+            class="small-btn secondary"
+            id="campaign-sync-cost-btn"
+            data-campaign-id="<%= campaign.id %>"
+          >Sincronizar costo</button>
+          <% } %>
+        </div>
+        <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--2" role="group" aria-label="Métricas de negocio">
+          <% _businessMetrics.forEach(function (metric) { %>
+          <div class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %>"<% if (metric.tooltip) { %> title="<%= metric.tooltip %>"<% } %>>
+            <% if (metric.displayLines && metric.displayLines.length) { %>
+            <span class="metric-num metric-num--stack">
+              <% metric.displayLines.forEach(function (line, idx) { %>
+              <span class="money-stack__line<%= idx > 0 ? ' money-stack__line--secondary' : '' %>"><%= line %></span>
+              <% }); %>
+            </span>
+            <% } else { %>
+            <span class="metric-num"><%= metric.display %></span>
+            <% } %>
+            <span class="metric-lbl"><%= metric.label %></span>
+          </div>
+          <% }); %>
+        </div>
+        <p class="campaign-business-hint muted">
+          <strong>Fuente:</strong> <%= _costSourceLabel %>.
+          <% if (campaign.cost_synced_at) { %><span> Última sincronización: <%= formatMessageDateTime(campaign.cost_synced_at) %>.</span><% } %>
+          <% if (_costInfo && _costInfo.hint) { %><span> <%= _costInfo.hint %></span><% } %>
+        </p>
+      </section>
+
+      <section class="campaign-dashboard-section campaign-dashboard-section--last">
+        <div class="campaign-dashboard-section__head">
+          <div>
+            <h2 class="card-title">Registro de envíos</h2>
+            <p class="campaign-dashboard-section__lead muted">Historial técnico completo de los envíos de la campaña.</p>
+          </div>
+          <a
+            class="small-btn secondary"
+            href="<%= basePath %>/api/campaigns/<%= campaign.id %>/logs-export"
+          >Exportar Excel</a>
+        </div>
+        <div class="table-wrap campaign-log-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Teléfono</th>
+                <th>Estado</th>
+                <th>ID mensaje</th>
+                <th>Detalle</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% logs.forEach(function (log) { %>
+              <tr>
+                <td class="mono"><%= log.phone %></td>
+                <td><span class="badge <%= log.status %>"><%= log.status %></span></td>
+                <td class="mono"><%= log.whatsapp_message_id || '—' %></td>
+                <td><pre class="log-pre"><%= JSON.stringify(log.response, null, 2) %></pre></td>
+              </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="card campaign-dashboard-card campaign-failed-card">
+      <section class="campaign-dashboard-section">
+        <div class="campaign-dashboard-section__head">
+          <div>
+            <h2 class="card-title">Incidencias de entrega</h2>
+            <p class="campaign-dashboard-section__lead muted">Detalle técnico de problemas reportados por Meta.</p>
+          </div>
+        </div>
+        <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--3" role="group" aria-label="Incidencias de entrega">
+          <% _incidentMetrics.forEach(function (metric) { %>
+          <div class="metric campaign-summary-metric metric-tone--<%= metric.tone || 'neutral' %>"<% if (metric.tooltip) { %> title="<%= metric.tooltip %>"<% } %>>
+            <span class="metric-num"><%= metric.display %></span>
+            <span class="metric-lbl"><%= metric.label %></span>
+          </div>
+          <% }); %>
+        </div>
+        <% if (_incidentsNote) { %>
+        <p class="campaign-dashboard-formula muted"><%= _incidentsNote %></p>
+        <% } %>
+      </section>
+
+      <section class="campaign-dashboard-section campaign-dashboard-section--last">
+        <div class="campaign-failed-card__head">
+          <h2 class="card-title">Incidencias detalladas (<%= _failedCount %>)</h2>
+          <div class="campaign-failed-card__actions">
+            <% if (_canManualRetry) { %>
+            <button type="button" class="small-btn" id="campaign-retry-failed-btn" data-campaign-id="<%= campaign.id %>">
+              Reintentar incidencias (<%= _failedCount %>)
+            </button>
+            <% } %>
+            <% if (_failedCount > 0) { %>
+            <a
+              class="small-btn secondary"
+              href="<%= basePath %>/api/campaigns/<%= campaign.id %>/failed-export"
+              download
+            >Exportar CSV</a>
+            <% } %>
+          </div>
+        </div>
+        <p class="muted campaign-retry-hint">
+          Reintento automático ~<%= _retryDelayMin %> min después del envío para errores temporales.
+          <% if (_autoRetryPending) { %> Pendiente de reintento automático.<% } %>
+          <% if (_manualRetryCount > 0) { %> Reintentos manuales: <%= _manualRetryCount %>/<%= _maxManualRetries %>.<% } %>
+        </p>
+        <p id="campaign-retry-feedback" class="inline-warn" hidden role="status"></p>
+        <% if (_failedCount === 0) { %>
+        <p class="muted campaign-failed-empty">No hay incidencias activas de entrega en esta campaña.</p>
+        <% } else { %>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Teléfono</th>
+                <th>Estado</th>
+                <th>Incidencia</th>
+                <th>Motivo</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% _failedLogs.forEach(function (log) { %>
+              <tr>
+                <td class="mono"><%= log.phone %></td>
+                <td><span class="badge <%= log.status %>"><%= log.status %></span></td>
+                <td><%= log.incident_label || 'Mensajes no entregables' %></td>
+                <td><%= log.error_summary %></td>
+              </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+        <% } %>
+      </section>
     </div>
   </div>
 

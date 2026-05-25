@@ -1,3 +1,4 @@
+const XLSX = require('xlsx');
 const { logError } = require('../utils/logger');
 const { auditLog, AuditEvent } = require('../services/auditLog');
 const config = require('../config');
@@ -15,6 +16,34 @@ const {
   validateRecipientsMatchRequest,
 } = require('../services/campaignRecipients');
 const { mergeCampaignExcludeContactIds } = require('../services/exclusionLists');
+
+function stringifyExportDetail(response) {
+  if (response == null || response === '') return '';
+  if (typeof response === 'string') return response;
+  try {
+    return JSON.stringify(response);
+  } catch {
+    return String(response);
+  }
+}
+
+function buildCampaignLogsExportBuffer(logs, formatDate) {
+  const aoa = [
+    ['Fecha y hora', 'Teléfono', 'Estado', 'ID mensaje', 'Detalle'],
+    ...logs.map((log) => [
+      formatDate(log.created_at),
+      String(log.phone || ''),
+      String(log.status || ''),
+      String(log.whatsapp_message_id || ''),
+      stringifyExportDetail(log.response),
+    ]),
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 24 }, { wch: 18 }, { wch: 14 }, { wch: 28 }, { wch: 90 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Registro de envíos');
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
 
 function registerCampaigns(app, ctx) {
   const { query, getSegmentSlugSet, validateCampaignWithSync, appPath } = ctx;
@@ -359,6 +388,45 @@ function registerCampaigns(app, ctx) {
     } catch (error) {
       logError(req, 'Error exportando fallidos de campana', error);
       res.status(500).send('No se pudo exportar');
+    }
+  });
+
+  app.get('/api/campaigns/:id/logs-export', async (req, res) => {
+    const campaignId = Number(req.params.id);
+    if (!Number.isInteger(campaignId) || campaignId <= 0) {
+      return res.status(400).send('Id invalido');
+    }
+
+    const area = normalizeArea(req.user.area);
+    try {
+      const [campaignResult, logsResult] = await Promise.all([
+        query(`SELECT id FROM campaigns WHERE id = $1 AND area = $2`, [campaignId, area]),
+        query(
+          `SELECT id, phone, whatsapp_message_id, status, response, created_at
+           FROM campaign_logs
+           WHERE campaign_id = $1
+           ORDER BY id DESC`,
+          [campaignId]
+        ),
+      ]);
+      if (campaignResult.rowCount === 0) {
+        return res.status(404).send('Campaña no encontrada');
+      }
+
+      const stamp = datetimeDisplay.exportFilenameDateStamp();
+      const buffer = buildCampaignLogsExportBuffer(logsResult.rows, datetimeDisplay.formatExportDate);
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="campana-${campaignId}-registro-${stamp}.xlsx"`
+      );
+      return res.send(buffer);
+    } catch (error) {
+      logError(req, 'Error exportando registro de campana', error);
+      return res.status(500).send('No se pudo exportar');
     }
   });
 

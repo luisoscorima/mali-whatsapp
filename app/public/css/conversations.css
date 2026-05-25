@@ -1830,9 +1830,18 @@ html[data-theme='dark'] .admin-online-dot {
   gap: 0.65rem;
 }
 
+.campaign-detail-stack {
+  display: grid;
+  gap: 1rem;
+}
+
 .campaign-dashboard-card {
   display: grid;
   gap: 0;
+}
+
+.campaign-dashboard-card > .toast {
+  margin: 0 0 1rem;
 }
 
 .campaign-dashboard-section {
@@ -1984,6 +1993,15 @@ button.metric.campaign-summary-metric.metric--action:focus-visible {
 
 .campaign-responders-dialog__actions {
   white-space: nowrap;
+}
+
+.campaign-log-table-wrap {
+  max-height: min(60vh, 560px);
+  overflow: auto;
+}
+
+.campaign-log-table-wrap table {
+  min-width: 760px;
 }
 
 @media (max-width: 920px) {
