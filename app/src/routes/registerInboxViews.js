@@ -323,7 +323,7 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         tooltip: 'Número único de destinatarios incluidos en la campaña.',
         action: buildLogsMetricAction(
           'all_current',
-          'Registro de envíos · Total destinatarios',
+          'Registro actual · Total destinatarios',
           hasIncompleteSendAccounting
             ? 'La campaña está programada o en proceso; pueden existir destinatarios aún sin traza en el registro actual.'
             : ''
@@ -335,7 +335,7 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         tone: 'sent',
         tooltip:
           'Número de mensajes que tu negocio envió a los clientes y salieron correctamente hacia los destinatarios.',
-        action: buildLogsMetricAction('sent_all', 'Registro de envíos · Enviados'),
+        action: buildLogsMetricAction('sent_all', 'Registro actual · Enviados'),
       }),
       buildMetricCard({
         label: 'Problemas de entrega',
@@ -345,7 +345,7 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
           'Mensajes que no pudieron enviarse o entregarse debido a errores técnicos, limitaciones de Meta o condiciones del usuario.',
         action: buildIncidentsMetricAction(
           'all',
-          'Incidencias detalladas · Problemas de entrega',
+          'Incidencias activas · Problemas de entrega',
           hasIncompleteSendAccounting ? 'La campaña aún está programada o en proceso; este detalle puede seguir creciendo.' : ''
         ),
       }),
@@ -357,7 +357,7 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         tone: 'sent',
         tooltip:
           'Número de mensajes que tu negocio envió a los clientes y salieron correctamente hacia los destinatarios. Las métricas de rendimiento se registran en los 7 días posteriores al envío de un mensaje.',
-        action: buildLogsMetricAction('sent_all', 'Registro de envíos · Enviados'),
+        action: buildLogsMetricAction('sent_all', 'Registro actual · Enviados'),
       }),
       buildMetricCard({
         label: 'Entregados',
@@ -365,7 +365,7 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         tone: 'delivered',
         tooltip:
           'Número de mensajes entregados en un plazo de 7 días desde el envío. Algunos mensajes pueden no entregarse si el dispositivo del cliente está fuera de servicio.',
-        action: buildLogsMetricAction('delivered_all', 'Registro de envíos · Entregados'),
+        action: buildLogsMetricAction('delivered_all', 'Registro actual · Entregados'),
       }),
       buildMetricCard({
         label: 'Leídos',
@@ -373,7 +373,7 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         tone: 'read',
         tooltip:
           'Número de mensajes enviados, entregados y leídos dentro de los 7 días posteriores al envío.',
-        action: buildLogsMetricAction('read_only', 'Registro de envíos · Leídos'),
+        action: buildLogsMetricAction('read_only', 'Registro actual · Leídos'),
       }),
       buildMetricCard({
         label: 'Respuestas únicas',
@@ -394,7 +394,7 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         display: formatCountPctDisplay(statusCounts.sentOnly, roundPct(statusCounts.sentOnly, sentCount), { allowZeroFallback: true }),
         tone: 'sent',
         tooltip: 'Mensajes enviados que aún no fueron confirmados como entregados o leídos.',
-        action: buildLogsMetricAction('sent_only', 'Registro de envíos · Pendientes de entrega'),
+        action: buildLogsMetricAction('sent_only', 'Registro actual · Pendientes de entrega'),
       }),
       buildMetricCard({
         label: 'Entregados no leídos',
@@ -405,14 +405,14 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         ),
         tone: 'delivered',
         tooltip: 'Mensajes entregados correctamente pero aún no leídos por el usuario.',
-        action: buildLogsMetricAction('delivered_only', 'Registro de envíos · Entregados no leídos'),
+        action: buildLogsMetricAction('delivered_only', 'Registro actual · Entregados no leídos'),
       }),
       buildMetricCard({
         label: 'Leídos',
         display: formatCountPctDisplay(readCount, roundPct(readCount, sentCount), { allowZeroFallback: true }),
         tone: 'read',
         tooltip: 'Mensajes leídos por el usuario dentro de la ventana de medición.',
-        action: buildLogsMetricAction('read_only', 'Registro de envíos · Leídos'),
+        action: buildLogsMetricAction('read_only', 'Registro actual · Leídos'),
       }),
     ],
     incidents: [
@@ -425,7 +425,7 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         ),
         tone: 'problem',
         tooltip: 'Mensajes no entregados por condiciones del usuario, del dispositivo o errores permanentes.',
-        action: buildIncidentsMetricAction('undeliverable', 'Incidencias detalladas · Mensajes no entregables'),
+        action: buildIncidentsMetricAction('undeliverable', 'Incidencias activas · Mensajes no entregables'),
       }),
       buildMetricCard({
         label: 'Limitaciones Meta',
@@ -435,7 +435,7 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         tone: 'meta-limit',
         tooltip:
           'Meta decidió no enviar o limitar el mensaje por restricciones del ecosistema, rate limits o baja probabilidad de interacción.',
-        action: buildIncidentsMetricAction('meta_limit', 'Incidencias detalladas · Limitaciones Meta'),
+        action: buildIncidentsMetricAction('meta_limit', 'Incidencias activas · Limitaciones Meta'),
       }),
       buildMetricCard({
         label: 'Experimentos',
@@ -444,7 +444,7 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
         }),
         tone: 'response',
         tooltip: 'Mensajes no enviados porque el número participa en un experimento de Meta.',
-        action: buildIncidentsMetricAction('experiment', 'Incidencias detalladas · Experimentos'),
+        action: buildIncidentsMetricAction('experiment', 'Incidencias activas · Experimentos'),
       }),
     ],
     incidentsNote:

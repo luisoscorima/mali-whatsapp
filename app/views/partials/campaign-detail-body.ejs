@@ -65,7 +65,7 @@
         <div class="campaign-dashboard-section__head">
           <div>
             <h2 class="card-title">Resultado global</h2>
-            <p class="campaign-dashboard-section__lead muted">Visión general de destinatarios, envíos y problemas.</p>
+            <p class="campaign-dashboard-section__lead muted">Visión general de destinatarios, envíos y problemas. Haz clic en un indicador para abrir el detalle.</p>
           </div>
         </div>
         <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--3" role="group" aria-label="Resultado global">
@@ -135,7 +135,7 @@
         <div class="campaign-dashboard-section__head">
           <div>
             <h2 class="card-title">Rendimiento de envío</h2>
-            <p class="campaign-dashboard-section__lead muted"><%= _performanceNote %></p>
+            <p class="campaign-dashboard-section__lead muted"><%= _performanceNote %> Haz clic en un indicador para abrir el registro actual filtrado.</p>
           </div>
         </div>
         <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--4" role="group" aria-label="Rendimiento de envío">
@@ -248,38 +248,9 @@
       </section>
 
       <section class="campaign-dashboard-section campaign-dashboard-section--last">
-        <div class="campaign-dashboard-section__head">
-          <div>
-            <h2 class="card-title">Registro de envíos</h2>
-            <p class="campaign-dashboard-section__lead muted">Historial técnico completo de los envíos de la campaña.</p>
-          </div>
-          <a
-            class="small-btn secondary"
-            href="<%= basePath %>/api/campaigns/<%= campaign.id %>/logs-export"
-          >Exportar Excel</a>
-        </div>
-        <div class="table-wrap campaign-log-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Teléfono</th>
-                <th>Estado</th>
-                <th>ID mensaje</th>
-                <th>Detalle</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% logs.forEach(function (log) { %>
-              <tr>
-                <td class="mono"><%= log.phone %></td>
-                <td><span class="badge <%= log.status %>"><%= log.status %></span></td>
-                <td class="mono"><%= log.whatsapp_message_id || '—' %></td>
-                <td><pre class="log-pre"><%= JSON.stringify(log.response, null, 2) %></pre></td>
-              </tr>
-              <% }); %>
-            </tbody>
-          </table>
-        </div>
+        <p class="campaign-dashboard-inline-hint muted">
+          El registro actual se abre al hacer clic en cualquier indicador de resultado global, rendimiento o embudo.
+        </p>
       </section>
     </div>
 
@@ -288,7 +259,7 @@
         <div class="campaign-dashboard-section__head">
           <div>
             <h2 class="card-title">Incidencias de entrega</h2>
-            <p class="campaign-dashboard-section__lead muted">Detalle técnico de problemas reportados por Meta.</p>
+            <p class="campaign-dashboard-section__lead muted">Detalle técnico de problemas reportados por Meta. Haz clic en un indicador para abrir las incidencias activas filtradas.</p>
           </div>
         </div>
         <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--3" role="group" aria-label="Incidencias de entrega">
@@ -321,48 +292,14 @@
       </section>
 
       <section class="campaign-dashboard-section campaign-dashboard-section--last">
-        <div class="campaign-failed-card__head">
-          <h2 class="card-title">Incidencias detalladas (<%= _failedCount %>)</h2>
-          <div class="campaign-failed-card__actions">
-            <% if (_canManualRetry) { %>
-            <button type="button" class="small-btn" id="campaign-retry-failed-btn" data-campaign-id="<%= campaign.id %>">
-              Reintentar incidencias (<%= _failedCount %>)
-            </button>
-            <% } %>
-          </div>
-        </div>
+        <p class="campaign-dashboard-inline-hint muted">
+          Las incidencias activas y el botón de reintento se muestran al hacer clic en cualquiera de los indicadores de esta tarjeta.
+        </p>
         <p class="muted campaign-retry-hint">
           Reintento automático ~<%= _retryDelayMin %> min después del envío para errores temporales.
           <% if (_autoRetryPending) { %> Pendiente de reintento automático.<% } %>
           <% if (_manualRetryCount > 0) { %> Reintentos manuales: <%= _manualRetryCount %>/<%= _maxManualRetries %>.<% } %>
         </p>
-        <p id="campaign-retry-feedback" class="inline-warn" hidden role="status"></p>
-        <% if (_failedCount === 0) { %>
-        <p class="muted campaign-failed-empty">No hay incidencias activas de entrega en esta campaña.</p>
-        <% } else { %>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Teléfono</th>
-                <th>Estado</th>
-                <th>Incidencia</th>
-                <th>Motivo</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% _failedLogs.forEach(function (log) { %>
-              <tr>
-                <td class="mono"><%= log.phone %></td>
-                <td><span class="badge <%= log.status %>"><%= log.status %></span></td>
-                <td><%= log.incident_label || 'Mensajes no entregables' %></td>
-                <td><%= log.error_summary %></td>
-              </tr>
-              <% }); %>
-            </tbody>
-          </table>
-        </div>
-        <% } %>
       </section>
     </div>
   </div>
@@ -371,8 +308,8 @@
     <form method="dialog" class="modal-dialog-form campaign-drilldown-dialog__form">
       <div class="campaign-drilldown-dialog__head">
         <div>
-          <h2 id="campaign-logs-dialog-title" class="modal-dialog-title">Registro de envíos</h2>
-          <p class="muted campaign-drilldown-dialog__hint">Registro actual por destinatario. Si hubo reintentos, se muestra solo la traza más reciente.</p>
+          <h2 id="campaign-logs-dialog-title" class="modal-dialog-title">Registro actual</h2>
+          <p class="muted campaign-drilldown-dialog__hint">Trazas actuales por destinatario. Si hubo reintentos, se muestra solo la última traza registrada.</p>
         </div>
         <div class="campaign-drilldown-dialog__actions campaign-drilldown-dialog__actions--top">
           <a id="campaign-logs-export-link" class="small-btn secondary" href="#">Exportar Excel</a>
@@ -392,7 +329,7 @@
           <tbody id="campaign-logs-dialog-body"></tbody>
         </table>
       </div>
-      <p id="campaign-logs-dialog-empty" class="muted" hidden>No hay registros para este filtro.</p>
+      <p id="campaign-logs-dialog-empty" class="muted" hidden>No hay trazas actuales para este filtro.</p>
       <div class="modal-dialog-actions">
         <button type="submit" class="small-btn secondary">Cerrar</button>
       </div>
@@ -403,8 +340,8 @@
     <form method="dialog" class="modal-dialog-form campaign-drilldown-dialog__form">
       <div class="campaign-drilldown-dialog__head">
         <div>
-          <h2 id="campaign-incidents-dialog-title" class="modal-dialog-title">Incidencias detalladas</h2>
-          <p class="muted campaign-drilldown-dialog__hint">Solo se listan las incidencias activas más recientes por destinatario.</p>
+          <h2 id="campaign-incidents-dialog-title" class="modal-dialog-title">Incidencias activas</h2>
+          <p class="muted campaign-drilldown-dialog__hint">Incidencias activas por destinatario según la última traza con error.</p>
         </div>
         <div class="campaign-drilldown-dialog__actions campaign-drilldown-dialog__actions--top">
           <a id="campaign-incidents-export-link" class="small-btn secondary" href="#">Exportar Excel</a>
@@ -427,7 +364,7 @@
           <tbody id="campaign-incidents-dialog-body"></tbody>
         </table>
       </div>
-      <p id="campaign-incidents-dialog-empty" class="muted" hidden>No hay incidencias para este filtro.</p>
+      <p id="campaign-incidents-dialog-empty" class="muted" hidden>No hay incidencias activas para este filtro.</p>
       <div class="modal-dialog-actions">
         <button type="submit" class="small-btn secondary">Cerrar</button>
       </div>
@@ -442,7 +379,7 @@
             Respuestas únicas (<%= _respWindow %> días) · <%= _respCount %>
           </h2>
           <p class="muted campaign-responders-dialog__hint">
-            Contactos que enviaron al menos un mensaje inbound dentro de los <%= _respWindow %> días posteriores al envío de la plantilla.
+            Cuentas únicas que respondieron dentro de los <%= _respWindow %> días posteriores al envío de la plantilla.
           </p>
         </div>
         <div class="campaign-drilldown-dialog__actions campaign-drilldown-dialog__actions--top">
@@ -514,8 +451,6 @@
       var incidentsDialogEmpty = document.getElementById('campaign-incidents-dialog-empty');
       var incidentsExportLink = document.getElementById('campaign-incidents-export-link');
       var incidentsRetryBtn = document.getElementById('campaign-incidents-retry-btn');
-      var retryBtn = document.getElementById('campaign-retry-failed-btn');
-      var retryFeedback = document.getElementById('campaign-retry-feedback');
 
       function normalizeStatus(status) {
         return String(status || '').trim().toLowerCase();
@@ -730,17 +665,12 @@
       }
 
       function setRetryButtonsDisabled(disabled) {
-        if (retryBtn) retryBtn.disabled = disabled;
         if (incidentsRetryBtn) incidentsRetryBtn.disabled = disabled;
       }
 
       function runRetryRequest() {
-        if (!retryBtn && !incidentsRetryBtn) return;
+        if (!incidentsRetryBtn) return;
         setRetryButtonsDisabled(true);
-        if (retryFeedback) {
-          retryFeedback.hidden = true;
-          retryFeedback.textContent = '';
-        }
         if (incidentsDialogNote) {
           setOptionalNote(incidentsDialogNote, incidentsDialog.getAttribute('data-base-note') || '');
         }
@@ -757,11 +687,6 @@
           .then(function (result) {
             if (!result.ok || !result.data.ok) {
               var msg = (result.data && result.data.error) || 'No se pudo reintentar';
-              if (retryFeedback) {
-                retryFeedback.className = 'inline-warn';
-                retryFeedback.textContent = msg;
-                retryFeedback.hidden = false;
-              }
               if (incidentsDialogNote && incidentsDialog.open) {
                 incidentsDialogNote.textContent = msg;
                 incidentsDialogNote.hidden = false;
@@ -777,12 +702,7 @@
               d.recovered +
               ' recuperado(s), ' +
               d.stillFailed +
-              ' aún con incidencia.';
-            if (retryFeedback) {
-              retryFeedback.className = 'toast toast--ok';
-              retryFeedback.textContent = summary;
-              retryFeedback.hidden = false;
-            }
+              ' aún con incidencia activa.';
             if (incidentsDialogNote && incidentsDialog.open) {
               incidentsDialogNote.textContent = summary;
               incidentsDialogNote.hidden = false;
@@ -792,11 +712,6 @@
             }, 1200);
           })
           .catch(function () {
-            if (retryFeedback) {
-              retryFeedback.className = 'inline-warn';
-              retryFeedback.textContent = 'Error de red al reintentar';
-              retryFeedback.hidden = false;
-            }
             if (incidentsDialogNote && incidentsDialog.open) {
               incidentsDialogNote.textContent = 'Error de red al reintentar';
               incidentsDialogNote.hidden = false;
@@ -805,11 +720,6 @@
           });
       }
 
-      if (retryBtn) {
-        retryBtn.addEventListener('click', function () {
-          runRetryRequest();
-        });
-      }
       if (incidentsRetryBtn) {
         incidentsRetryBtn.addEventListener('click', function () {
           runRetryRequest();

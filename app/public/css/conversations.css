@@ -1955,6 +1955,12 @@ html[data-theme='dark'] .metric-tone--meta-limit {
   line-height: 1.45;
 }
 
+.campaign-dashboard-inline-hint {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
 button.metric.campaign-summary-metric.metric--action {
   cursor: pointer;
   text-align: left;
