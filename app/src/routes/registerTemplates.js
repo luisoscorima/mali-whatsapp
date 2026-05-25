@@ -53,6 +53,39 @@ function registerTemplates(app, ctx) {
     return r.rows[0] || null;
   }
 
+  async function findTemplateReplacementId(area, template) {
+    if (!template) return null;
+    const a = normalizeArea(area);
+    if (template.meta_id) {
+      const byMeta = await query(
+        `SELECT id FROM whatsapp_templates
+         WHERE area = $1 AND meta_id = $2
+         ORDER BY id DESC
+         LIMIT 1`,
+        [a, String(template.meta_id)]
+      );
+      if (byMeta.rows[0]?.id) return byMeta.rows[0].id;
+    }
+    if (template.name && template.language) {
+      const byName = await query(
+        `SELECT id FROM whatsapp_templates
+         WHERE area = $1 AND name = $2 AND language = $3
+         ORDER BY CASE WHEN UPPER(status) = 'APPROVED' THEN 0 ELSE 1 END, id DESC
+         LIMIT 1`,
+        [a, template.name, template.language]
+      );
+      if (byName.rows[0]?.id) return byName.rows[0].id;
+    }
+    return null;
+  }
+
+  async function resolveTemplateRedirectIdAfterSync(area, templateId, previousTemplate) {
+    if (!Number.isInteger(templateId) || templateId <= 0) return null;
+    const existingTemplate = await loadTemplateById(area, templateId);
+    if (existingTemplate) return existingTemplate.id;
+    return findTemplateReplacementId(area, previousTemplate);
+  }
+
   function renderTemplatesPage(req, res, opts) {
     const {
       view,
@@ -268,22 +301,32 @@ function registerTemplates(app, ctx) {
   });
 
   app.post('/templates/sync', templateSyncLimiter, async (req, res) => {
+    const area = normalizeArea(req.user.area);
     const returnTo = String(req.body.returnTo || 'templates').trim().toLowerCase();
     const templateId = Number(req.body.templateId);
+    const previousTemplate =
+      Number.isInteger(templateId) && templateId > 0
+        ? await loadTemplateById(area, templateId)
+        : null;
     const detailSuffix =
       Number.isInteger(templateId) && templateId > 0 ? `/${templateId}` : '';
-    const redirectPath =
-      returnTo === 'campaigns' || returnTo === 'campaigns/new'
-        ? '/campaigns/new?templates_synced=1'
-        : `/templates${detailSuffix}?templates_synced=1`;
     try {
-      await syncTemplatesForArea(req.user.area);
+      await syncTemplatesForArea(area);
       auditLog(query, {
         req,
         event_type: AuditEvent.TEMPLATE_SYNC,
-        message: `Sincronización de plantillas Meta (área ${req.user.area})`,
-        meta: { area: req.user.area },
+        message: `Sincronización de plantillas Meta (área ${area})`,
+        meta: { area },
       });
+      let redirectPath = '/templates?templates_synced=1';
+      if (returnTo === 'campaigns' || returnTo === 'campaigns/new') {
+        redirectPath = '/campaigns/new?templates_synced=1';
+      } else {
+        const redirectTemplateId = await resolveTemplateRedirectIdAfterSync(area, templateId, previousTemplate);
+        if (redirectTemplateId) {
+          redirectPath = `/templates/${redirectTemplateId}?templates_synced=1`;
+        }
+      }
       res.redirect(appPath(redirectPath));
     } catch (error) {
       logError(req, 'Error sincronizando plantillas', error);
