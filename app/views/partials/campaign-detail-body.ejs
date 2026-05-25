@@ -28,7 +28,7 @@
     }
     var _excludeSegs = _payload && Array.isArray(_payload.excludeSegmentSlugs) ? _payload.excludeSegmentSlugs : [];
     var _excludeIds = _payload && Array.isArray(_payload.excludeContactIds) ? _payload.excludeContactIds : [];
-    var _costSourceLabel = campaign.cost_is_estimated ? 'Estimado' : 'Meta WABA';
+    var _costSourceLabel = _costInfo && _costInfo.sourceLabel ? _costInfo.sourceLabel : (campaign.cost_is_estimated ? 'Estimado' : 'Meta WABA');
     var _canSyncCost = campaign.status === 'completed' || campaign.status === 'failed';
   %>
 
@@ -185,6 +185,9 @@
       <% } %>
       <div><dt>Inversión / costo</dt><dd>
         <span id="campaign-cost-display"><%= _costInfo ? _costInfo.amountDisplay : 'Aún sin datos' %></span>
+        <% if (_costInfo && _costInfo.perDeliveredDisplay) { %>
+        <span class="muted"> · <%= _costInfo.perDeliveredDisplay %> por mensaje entregado</span>
+        <% } %>
         <span class="muted"> · <%= _costSourceLabel %></span>
       </dd></div>
       <div><dt>Parámetros</dt><dd><%= campaign.message_text %></dd></div>

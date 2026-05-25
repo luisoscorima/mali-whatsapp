@@ -14,6 +14,7 @@ const {
   loadAttributeDefinitionsForArea,
   getApplicableAttributeDefinitions,
 } = require('../services/contactAttributeDefinitions');
+const { buildCampaignCostSummary } = require('../utils/campaignPricing');
 
 const LOG_STATUS = CAMPAIGN_LOG_STATUS_SQL;
 const SALIDA_OK_IN = sqlInList(SALIDA_OK_STATUSES);
@@ -116,11 +117,31 @@ function formatNumberLocale(value, minimumFractionDigits = 2, maximumFractionDig
   }).format(n);
 }
 
-function formatMoneyDisplay(amount, currency = 'USD') {
+function formatMoneyDisplay(amount, currency = 'USD', minimumFractionDigits = 2, maximumFractionDigits = 2) {
   const n = toNumberOrNull(amount);
   if (n === null) return EMPTY_METRIC_LABEL;
-  const formatted = formatNumberLocale(n, 2, 2);
-  return `${formatted || n.toFixed(2)} ${String(currency || 'USD').trim().toUpperCase() || 'USD'}`;
+  const normalizedCurrency = String(currency || 'USD').trim().toUpperCase() || 'USD';
+  const formatted = formatNumberLocale(n, minimumFractionDigits, maximumFractionDigits);
+  if (normalizedCurrency === 'PEN') {
+    return `S/ ${formatted || n.toFixed(maximumFractionDigits)}`;
+  }
+  return `${formatted || n.toFixed(maximumFractionDigits)} ${normalizedCurrency}`;
+}
+
+function formatDualMoneyDisplay(usdAmount, penAmount, options = {}) {
+  const minimumFractionDigits = options.minimumFractionDigits ?? 2;
+  const maximumFractionDigits = options.maximumFractionDigits ?? 2;
+  const hasUsd = toNumberOrNull(usdAmount) !== null;
+  const hasPen = toNumberOrNull(penAmount) !== null;
+  if (!hasUsd && !hasPen) return EMPTY_METRIC_LABEL;
+  if (!hasUsd) return formatMoneyDisplay(penAmount, 'PEN', minimumFractionDigits, maximumFractionDigits);
+  if (!hasPen) return formatMoneyDisplay(usdAmount, 'USD', minimumFractionDigits, maximumFractionDigits);
+  return `${formatMoneyDisplay(penAmount, 'PEN', minimumFractionDigits, maximumFractionDigits)} · ${formatMoneyDisplay(
+    usdAmount,
+    'USD',
+    minimumFractionDigits,
+    maximumFractionDigits
+  )}`;
 }
 
 function formatCountPctDisplay(count, pct, options = {}) {
@@ -212,9 +233,7 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
   const classifiedProblemCount =
     incidentCounts.undeliverable + incidentCounts.metaLimit + incidentCounts.experiment;
   const pendingClassificationCount = Math.max(problemsCount - classifiedProblemCount, 0);
-  const costAmount = toNumberOrNull(campaign?.cost_amount);
-  const costCurrency = String(campaign?.cost_currency || 'USD').trim().toUpperCase() || 'USD';
-  const costPerSentAmount = costAmount !== null && sentCount > 0 ? costAmount / sentCount : null;
+  const costInfo = buildCampaignCostSummary(campaign, deliveredCount);
 
   const problemsDisplay = hasIncompleteSendAccounting
     ? EMPTY_METRIC_LABEL
@@ -227,24 +246,35 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
     business: [
       buildMetricCard({
         label: 'Importe gastado',
-        display: formatMoneyDisplay(costAmount, costCurrency),
+        display: formatDualMoneyDisplay(costInfo.usdAmount, costInfo.penAmount, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }),
         tone: 'neutral',
         tooltip: 'Monto total invertido en la campaña.',
       }),
       buildMetricCard({
-        label: 'Costo por mensaje enviado',
-        display:
-          costPerSentAmount !== null ? formatMoneyDisplay(costPerSentAmount, costCurrency) : EMPTY_METRIC_LABEL,
+        label: 'Costo por mensaje entregado',
+        display: formatDualMoneyDisplay(costInfo.unitUsdAmount, costInfo.unitPenAmount, {
+          minimumFractionDigits: 4,
+          maximumFractionDigits: 4,
+        }),
         tone: 'sent',
-        tooltip: 'Importe gastado dividido entre mensajes enviados correctamente hacia Meta.',
+        tooltip: 'Importe gastado dividido entre mensajes entregados o leídos, que son los mensajes cobrables.',
       }),
     ],
     cost: {
-      amountDisplay: formatMoneyDisplay(costAmount, costCurrency),
-      perSentDisplay:
-        costPerSentAmount !== null ? formatMoneyDisplay(costPerSentAmount, costCurrency) : EMPTY_METRIC_LABEL,
-      currency: costCurrency,
-      hint: 'Dato Meta WABA o estimado por mensajes enviados; no incluye pauta Ads.',
+      amountDisplay: formatDualMoneyDisplay(costInfo.usdAmount, costInfo.penAmount, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
+      perDeliveredDisplay: formatDualMoneyDisplay(costInfo.unitUsdAmount, costInfo.unitPenAmount, {
+        minimumFractionDigits: 4,
+        maximumFractionDigits: 4,
+      }),
+      sourceLabel: costInfo.sourceLabel,
+      currency: 'MIXED',
+      hint: `${costInfo.hint} No incluye pauta Ads.`,
     },
     globalResult: [
       buildMetricCard({
@@ -367,28 +397,46 @@ function buildCampaignDetailAnalytics(campaign, logs, failedLogs, responderMetri
 
 function buildCampaignIndexSummary(campaignTotals) {
   const sentCount = toInt(campaignTotals?.salida_ok, 0);
+  const deliveredCount = toInt(campaignTotals?.delivered_count, 0);
   const totalRecipients = Math.max(toInt(campaignTotals?.total_recipients, 0), sentCount + toInt(campaignTotals?.failed_count, 0));
   const problemsCount = Math.max(totalRecipients - sentCount, 0);
-  const campaignsWithCost = toInt(campaignTotals?.campaigns_with_cost, 0);
-  const costCurrencyCount = toInt(campaignTotals?.cost_currency_count, 0);
-  const costCurrency = String(campaignTotals?.cost_currency || 'USD').trim().toUpperCase() || 'USD';
-  const totalCostAmount =
-    campaignsWithCost > 0 && costCurrencyCount <= 1 ? toNumberOrNull(campaignTotals?.total_cost_amount) : null;
-  const costPerSentAmount = totalCostAmount !== null && sentCount > 0 ? totalCostAmount / sentCount : null;
+  const costRows = Array.isArray(campaignTotals?.cost_rows) ? campaignTotals.cost_rows : [];
+  const summarizedCosts = costRows.reduce(
+    (acc, row) => {
+      const costInfo = buildCampaignCostSummary(row, row.delivered_count);
+      if (costInfo.usdAmount === null && costInfo.penAmount === null) return acc;
+      acc.campaignsWithCost += 1;
+      acc.totalUsd += Number(costInfo.usdAmount || 0);
+      acc.totalPen += Number(costInfo.penAmount || 0);
+      return acc;
+    },
+    { campaignsWithCost: 0, totalUsd: 0, totalPen: 0 }
+  );
+  const hasCostData = summarizedCosts.campaignsWithCost > 0;
+  const costPerDeliveredUsd = hasCostData && deliveredCount > 0 ? summarizedCosts.totalUsd / deliveredCount : null;
+  const costPerDeliveredPen = hasCostData && deliveredCount > 0 ? summarizedCosts.totalPen / deliveredCount : null;
 
   return {
     business: [
       buildMetricCard({
         label: 'Importe gastado',
-        display: totalCostAmount !== null ? formatMoneyDisplay(totalCostAmount, costCurrency) : EMPTY_METRIC_LABEL,
+        display: hasCostData
+          ? formatDualMoneyDisplay(summarizedCosts.totalUsd, summarizedCosts.totalPen, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })
+          : EMPTY_METRIC_LABEL,
         tone: 'neutral',
-        tooltip: 'Suma de costos sincronizados o estimados en las campañas del área.',
+        tooltip: 'Suma de costos calculados por campaña usando la categoría de plantilla y mensajes entregados.',
       }),
       buildMetricCard({
-        label: 'Costo por mensaje enviado',
-        display: costPerSentAmount !== null ? formatMoneyDisplay(costPerSentAmount, costCurrency) : EMPTY_METRIC_LABEL,
+        label: 'Costo por mensaje entregado',
+        display: formatDualMoneyDisplay(costPerDeliveredUsd, costPerDeliveredPen, {
+          minimumFractionDigits: 4,
+          maximumFractionDigits: 4,
+        }),
         tone: 'sent',
-        tooltip: 'Importe gastado dividido entre mensajes enviados en las campañas del área.',
+        tooltip: 'Importe gastado dividido entre mensajes entregados o leídos en las campañas del área.',
       }),
     ],
     results: [
@@ -412,7 +460,7 @@ function buildCampaignIndexSummary(campaignTotals) {
       }),
     ],
     hint:
-      'Resumen agregado del área. Para ver entregados, leídos, respuestas únicas, embudo Meta e incidencias por campaña, entra al detalle de una campaña.',
+      'Resumen agregado del área. Los costos se calculan con la tarifa oficial de WhatsApp por categoría y se muestran en soles y dólares. Para ver entregados, leídos, respuestas únicas, embudo Meta e incidencias por campaña, entra al detalle de una campaña.',
     campaignsCount: toInt(campaignTotals?.campaign_count, 0),
   };
 }
@@ -583,7 +631,7 @@ function registerInboxViews(app, ctx) {
   }
 
   async function loadCampaignTotals(area) {
-    const [logTotals, campaignTotals] = await Promise.all([
+    const [logTotals, campaignTotals, campaignCostRows] = await Promise.all([
       query(
         `WITH latest_logs AS (
            SELECT DISTINCT ON (cl.campaign_id, cl.phone)
@@ -607,13 +655,35 @@ function registerInboxViews(app, ctx) {
       query(
         `SELECT
            COUNT(*)::int AS campaign_count,
-           COALESCE(SUM(total_recipients), 0)::int AS total_recipients,
-           COUNT(*) FILTER (WHERE cost_amount IS NOT NULL)::int AS campaigns_with_cost,
-           COUNT(DISTINCT NULLIF(TRIM(COALESCE(cost_currency, '')), ''))::int AS cost_currency_count,
-           MAX(NULLIF(TRIM(COALESCE(cost_currency, '')), '')) AS cost_currency,
-           COALESCE(SUM(cost_amount), 0)::numeric AS total_cost_amount
+           COALESCE(SUM(total_recipients), 0)::int AS total_recipients
          FROM campaigns
          WHERE area = $1`,
+        [area]
+      ),
+      query(
+        `WITH latest_logs AS (
+           SELECT DISTINCT ON (cl.campaign_id, cl.phone)
+             cl.campaign_id,
+             cl.phone,
+             cl.status
+           FROM campaign_logs cl
+           JOIN campaigns cx ON cx.id = cl.campaign_id
+           WHERE cx.area = $1
+           ORDER BY cl.campaign_id, cl.phone, cl.id DESC
+         )
+         SELECT
+           c.id,
+           c.campaign_payload,
+           c.cost_amount,
+           c.cost_currency,
+           c.cost_source,
+           c.cost_is_estimated,
+           COALESCE(SUM(CASE WHEN ${LOG_STATUS} IN ('delivered', 'read') THEN 1 ELSE 0 END), 0)::int AS delivered_count
+         FROM campaigns c
+         LEFT JOIN latest_logs cl ON cl.campaign_id = c.id
+         WHERE c.area = $1
+         GROUP BY c.id
+         ORDER BY c.id DESC`,
         [area]
       ),
     ]);
@@ -627,14 +697,11 @@ function registerInboxViews(app, ctx) {
     const campaignRow = campaignTotals.rows[0] || {
       campaign_count: 0,
       total_recipients: 0,
-      campaigns_with_cost: 0,
-      cost_currency_count: 0,
-      cost_currency: null,
-      total_cost_amount: null,
     };
     return {
       ...logRow,
       ...campaignRow,
+      cost_rows: campaignCostRows.rows,
     };
   }
 
