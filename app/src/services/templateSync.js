@@ -1,4 +1,4 @@
-const { resolveWabaId, fetchAllApprovedTemplates, getWhatsAppCredentialsForArea } = require('./metaWhatsApp');
+const { resolveWabaId, fetchAllMessageTemplates, getWhatsAppCredentialsForArea } = require('./metaWhatsApp');
 
 function normalizeArea(area) {
   const a = String(area || '').trim().toLowerCase();
@@ -6,7 +6,7 @@ function normalizeArea(area) {
   return 'ti';
 }
 
-function buildApprovedTemplatesDeleteQuery(area, templates) {
+function buildSyncedTemplatesDeleteQuery(area, templates) {
   const keyClauses = [];
   const params = [area];
   for (const t of templates) {
@@ -21,7 +21,7 @@ function buildApprovedTemplatesDeleteQuery(area, templates) {
 
   if (keyClauses.length === 0) {
     return {
-      sql: `DELETE FROM whatsapp_templates WHERE area = $1 AND UPPER(status) = 'APPROVED'`,
+      sql: `DELETE FROM whatsapp_templates WHERE area = $1`,
       params,
     };
   }
@@ -29,14 +29,13 @@ function buildApprovedTemplatesDeleteQuery(area, templates) {
   return {
     sql: `DELETE FROM whatsapp_templates
           WHERE area = $1
-            AND UPPER(status) = 'APPROVED'
             AND NOT (${keyClauses.join(' OR ')})`,
     params,
   };
 }
 
 /**
- * Sincroniza plantillas aprobadas manteniendo el id local si la plantilla sigue existiendo.
+ * Sincroniza todas las plantillas de Meta manteniendo el id local si siguen existiendo.
  */
 async function syncTemplatesForArea(area) {
   const a = normalizeArea(area);
@@ -46,7 +45,7 @@ async function syncTemplatesForArea(area) {
   }
 
   const wabaId = await resolveWabaId(a, token, phoneNumberId);
-  const templates = await fetchAllApprovedTemplates(wabaId, token);
+  const templates = await fetchAllMessageTemplates(wabaId, token);
 
   const { pool } = require('../db/pool');
   const c = await pool.connect();
@@ -69,12 +68,15 @@ async function syncTemplatesForArea(area) {
            category = EXCLUDED.category,
            status = EXCLUDED.status,
            components_json = EXCLUDED.components_json,
-           rejection_reason = NULL,
+           rejection_reason = CASE
+             WHEN UPPER(EXCLUDED.status) = 'REJECTED' THEN whatsapp_templates.rejection_reason
+             ELSE NULL
+           END,
            synced_at = NOW()`,
         [a, metaId, name, language, category || null, status, JSON.stringify(components)]
       );
     }
-    const staleDelete = buildApprovedTemplatesDeleteQuery(a, templates);
+    const staleDelete = buildSyncedTemplatesDeleteQuery(a, templates);
     await c.query(staleDelete.sql, staleDelete.params);
     await c.query('COMMIT');
     return { count: templates.length };

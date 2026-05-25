@@ -305,20 +305,21 @@ async function fetchMessageTemplatesPage(wabaId, token, after) {
   return data;
 }
 
-async function fetchAllApprovedTemplates(wabaId, token) {
+async function fetchAllMessageTemplates(wabaId, token) {
   const all = [];
   let after = null;
   do {
     const data = await fetchMessageTemplatesPage(wabaId, token, after);
     const list = Array.isArray(data.data) ? data.data : [];
-    for (const t of list) {
-      if (String(t.status || '').toUpperCase() === 'APPROVED') {
-        all.push(t);
-      }
-    }
+    all.push(...list);
     after = data.paging?.cursors?.after || null;
   } while (after);
   return all;
+}
+
+async function fetchAllApprovedTemplates(wabaId, token) {
+  const templates = await fetchAllMessageTemplates(wabaId, token);
+  return templates.filter((t) => String(t.status || '').toUpperCase() === 'APPROVED');
 }
 
 async function sendTemplateWithComponents({ to, templateName, languageCode, components, area }) {
@@ -428,6 +429,7 @@ module.exports = {
   getWhatsAppCredentialsForArea,
   getWabaIdOverrideForArea,
   resolveWabaId,
+  fetchAllMessageTemplates,
   fetchAllApprovedTemplates,
   createMessageTemplateOnWaba,
   sendTemplateWithComponents,

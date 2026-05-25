@@ -37,7 +37,7 @@
       <% if (_selId) { %><input type="hidden" name="templateId" value="<%= _selId %>" /><% } %>
       <button type="submit" class="small-btn secondary">Sincronizar todo</button>
     </form>
-    <p class="inline-help muted templates-sync-hint">Trae las <strong>aprobadas</strong> desde Meta. En campañas solo se usan esas; aquí ves también pendientes y rechazadas.</p>
+    <p class="inline-help muted templates-sync-hint">Trae todas las plantillas desde Meta, incluyendo pendientes, aprobadas y rechazadas. En campañas solo se pueden usar las aprobadas.</p>
   </div>
   <% if (!templates || !templates.length) { %>
   <p class="empty-state inbox-empty-list">No hay plantillas en caché. Pulsa <strong>Sincronizar todo</strong>.</p>
