@@ -525,8 +525,19 @@
 
     root.addEventListener('input', function () {
       var state = readStateFromDom(root);
+      var target = document.activeElement;
       renderPreview(root, state);
-      renderExampleBlocks(root, state);
+      if (
+        target &&
+        target.matches &&
+        (
+          target.matches('[data-builder-header-text]') ||
+          target.matches('[data-builder-body-text]') ||
+          target.matches('[data-builder-button-url]')
+        )
+      ) {
+        renderExampleBlocks(root, state);
+      }
     });
 
     root.addEventListener('click', function (ev) {

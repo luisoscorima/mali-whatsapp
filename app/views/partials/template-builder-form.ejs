@@ -12,18 +12,19 @@
     ? submitLabel
     : (_mode === 'edit' ? 'Guardar y reenviar a revisión' : 'Enviar a revisión Meta');
 %>
-<div class="card template-builder-card">
-  <h2 class="card-title"><%= _mode === 'edit' ? 'Editar y reenviar a Meta' : 'Nueva plantilla' %></h2>
-  <p class="card-lead">
-    <% if (_mode === 'edit') { %>
-    Ajusta cuerpo, cabecera, pie y botones URL. Los aliases como <code>{{fecha}}</code> o <code>{{mes}}</code> se convierten internamente a <code>{{1}}</code>, <code>{{2}}</code>, etc.
-    <% } else { %>
-    Se envía a revisión en Meta. Puedes trabajar con variables nombradas como <code>{{fecha}}</code>, <code>{{horario}}</code> o <code>{{mes}}</code>; el sistema las normaliza a placeholders numéricos.
-    <% } %>
-  </p>
-  <% if (error) { %><p class="inline-warn"><%= error %></p><% } %>
+<form method="post" action="<%= _action %>" class="form-stack template-builder-form" data-template-builder-root>
+  <div class="template-builder-page">
+    <div class="card template-builder-card">
+      <h2 class="card-title"><%= _mode === 'edit' ? 'Editar y reenviar a Meta' : 'Nueva plantilla' %></h2>
+      <p class="card-lead">
+        <% if (_mode === 'edit') { %>
+        Ajusta cuerpo, cabecera, pie y botones URL. Los aliases como <code>{{fecha}}</code> o <code>{{mes}}</code> se convierten internamente a <code>{{1}}</code>, <code>{{2}}</code>, etc.
+        <% } else { %>
+        Se envía a revisión en Meta. Puedes trabajar con variables nombradas como <code>{{fecha}}</code>, <code>{{horario}}</code> o <code>{{mes}}</code>; el sistema las normaliza a placeholders numéricos.
+        <% } %>
+      </p>
+      <% if (error) { %><p class="inline-warn"><%= error %></p><% } %>
 
-  <form method="post" action="<%= _action %>" class="form-stack template-builder-form" data-template-builder-root>
     <% if (_mode === 'edit' && selectedTemplate) { %>
     <div class="field-row">
       <label class="field">
@@ -58,19 +59,17 @@
     <input type="hidden" name="builderPayloadJson" value="" data-template-builder-payload />
     <script type="application/json" data-template-builder-state><%- _stateJson %></script>
 
-    <div class="template-builder-layout">
-      <div class="template-builder-layout__main">
-        <div class="template-builder-shell" data-template-builder-shell></div>
-      </div>
-      <aside class="template-builder-layout__preview" aria-label="Vista previa editorial">
-        <div class="template-live-preview" data-template-preview-shell></div>
-      </aside>
+      <div class="template-builder-shell" data-template-builder-shell></div>
+
+      <noscript>
+        <p class="inline-warn">Activa JavaScript para usar el constructor de plantillas.</p>
+      </noscript>
+
+      <button type="submit" class="small-btn primary"><%= _submitLabel %></button>
     </div>
 
-    <noscript>
-      <p class="inline-warn">Activa JavaScript para usar el constructor de plantillas.</p>
-    </noscript>
-
-    <button type="submit" class="small-btn primary"><%= _submitLabel %></button>
-  </form>
-</div>
+    <aside class="template-builder-page__preview" aria-label="Vista previa editorial">
+      <div class="template-live-preview" data-template-preview-shell></div>
+    </aside>
+  </div>
+</form>

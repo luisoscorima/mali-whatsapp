@@ -440,18 +440,19 @@ function contactChatHref(contact) {
         </label>
         <fieldset class="field segment-chips-fieldset">
           <legend class="field-label">Segmentos</legend>
-          <div class="segment-checkbox-grid segment-checkbox-grid--responsive segment-checkbox-grid--compact segment-checkbox-grid--campaignlike">
+          <div class="campaign-segments-grid" role="group" aria-label="Segmentos del contacto">
             <% const _editSlugs = contact.segment_slugs || []; %>
             <% segments.forEach(function (segment) { %>
-            <label class="segment-checkbox-label segment-checkbox-label--compact segment-checkbox-label--campaignlike">
+            <label class="campaign-segment-tile">
               <input
                 type="checkbox"
                 name="segments"
                 value="<%= segment.value %>"
+                class="campaign-segment-input"
                 <%= _editSlugs.indexOf(segment.value) !== -1 ? 'checked' : '' %>
                 <%= _isReplaced ? 'disabled' : '' %>
               />
-              <span><%= segment.label %></span>
+              <span class="campaign-segment-text"><%= segment.label %></span>
             </label>
             <% }) %>
           </div>

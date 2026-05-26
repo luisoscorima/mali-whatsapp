@@ -1091,18 +1091,18 @@ html[data-theme='dark'] .settings-ai-prompt-textarea {
   gap: 14px;
 }
 
-.template-builder-layout {
+.template-builder-page {
   display: grid;
   gap: 16px;
 }
 
-.template-builder-layout__main,
-.template-builder-layout__preview {
+.template-builder-page__preview {
   min-width: 0;
 }
 
 .template-builder-grid {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
 }
 
@@ -1338,18 +1338,14 @@ html[data-theme='dark'] .settings-ai-prompt-textarea {
 }
 
 @media (min-width: 900px) {
-  .template-builder-layout {
+  .template-builder-page {
     grid-template-columns: minmax(0, 1fr) 340px;
     align-items: start;
   }
 
-  .template-builder-layout__preview {
+  .template-builder-page__preview {
     position: sticky;
     top: 18px;
-  }
-
-  .template-builder-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
