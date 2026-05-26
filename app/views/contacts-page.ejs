@@ -60,13 +60,14 @@ function contactChatHref(contact) {
   <div class="inbox-chat-filter-pills inbox-chat-filter-pills--row contact-filter-pills" aria-label="Filtrar por segmento">
     <a
       href="<%= contactListHref('') %>"
-      class="inbox-chat-pill <%= _segF === '' ? 'is-active' : '' %>"
+      class="inbox-chat-pill contact-filter-pill <%= _segF === '' ? 'is-active' : '' %>"
       <% if (_segF === '') { %>aria-current="page"<% } %>
     >Todos</a>
     <% segments.forEach(function (seg) { %>
     <a
       href="<%= contactListHref(seg.value) %>"
-      class="inbox-chat-pill <%= _segF === seg.value ? 'is-active' : '' %>"
+      class="inbox-chat-pill contact-filter-pill <%= _segF === seg.value ? 'is-active' : '' %>"
+      data-seg-tone="<%= seg.colorKey || 'slate' %>"
       <% if (_segF === seg.value) { %>aria-current="page"<% } %>
     ><%= seg.label %></a>
     <% }); %>
@@ -93,9 +94,12 @@ function contactChatHref(contact) {
       </div>
     </label>
     <div class="contact-filters-inline">
-      <label class="contact-inline-check" title="Mostrar contactos reemplazados">
-        <input type="checkbox" name="show_replaced" value="1" <%= _showReplaced ? 'checked' : '' %> data-inbox-filter />
-        <span>Reemplazados</span>
+      <label class="field field--inbox contact-filter-inline-item contact-filter-inline-item--checkbox">
+        <span class="field-label">Reemplazados</span>
+        <span class="contact-inline-check" title="Mostrar contactos reemplazados">
+          <input type="checkbox" name="show_replaced" value="1" <%= _showReplaced ? 'checked' : '' %> data-inbox-filter />
+          <span>Mostrar</span>
+        </span>
       </label>
       <label class="field field--inbox contact-filter-inline-item">
         <span class="field-label">Atributo</span>
@@ -328,9 +332,9 @@ function contactChatHref(contact) {
           <% if (segments.length === 0) { %>
           <p class="inline-warn">Define segmentos en <strong>Segmentos</strong>.</p>
           <% } else { %>
-          <div class="segment-checkbox-grid segment-checkbox-grid--responsive segment-checkbox-grid--compact">
+          <div class="segment-checkbox-grid segment-checkbox-grid--responsive segment-checkbox-grid--compact segment-checkbox-grid--campaignlike">
             <% segments.forEach(function (segment) { %>
-            <label class="segment-checkbox-label segment-checkbox-label--compact">
+            <label class="segment-checkbox-label segment-checkbox-label--compact segment-checkbox-label--campaignlike">
               <input type="checkbox" name="segments" value="<%= segment.value %>" />
               <span><%= segment.label %></span>
             </label>
@@ -425,7 +429,7 @@ function contactChatHref(contact) {
         Este contacto está reemplazado (<%= contact.replacement_reason || 'replaced' %>) y no se puede editar.
       </p>
       <% } %>
-      <form method="POST" action="<%= basePath %>/contacts/<%= contact.id %>/update" class="form-grid tight">
+      <form method="POST" action="<%= basePath %>/contacts/<%= contact.id %>/update" class="form-grid tight" id="contact-edit-form">
         <label class="field">
           <span class="field-label">Nombre</span>
           <input type="text" name="name" value="<%= contact.name %>" required maxlength="150" <%= _isReplaced ? 'disabled' : '' %> />
@@ -436,10 +440,10 @@ function contactChatHref(contact) {
         </label>
         <fieldset class="field segment-chips-fieldset">
           <legend class="field-label">Segmentos</legend>
-          <div class="segment-checkbox-grid segment-checkbox-grid--responsive segment-checkbox-grid--compact">
+          <div class="segment-checkbox-grid segment-checkbox-grid--responsive segment-checkbox-grid--compact segment-checkbox-grid--campaignlike">
             <% const _editSlugs = contact.segment_slugs || []; %>
             <% segments.forEach(function (segment) { %>
-            <label class="segment-checkbox-label segment-checkbox-label--compact">
+            <label class="segment-checkbox-label segment-checkbox-label--compact segment-checkbox-label--campaignlike">
               <input
                 type="checkbox"
                 name="segments"
@@ -464,11 +468,9 @@ function contactChatHref(contact) {
             attributeGateBySegment: false
           }) %>
         </div>
-        <div class="form-actions form-actions--resource">
-          <button type="submit" class="small-btn primary" <%= _isReplaced ? 'disabled' : '' %>>Guardar cambios</button>
-        </div>
       </form>
-      <div class="resource-secondary-actions">
+      <div class="resource-actions-row">
+        <button type="submit" form="contact-edit-form" class="small-btn primary" <%= _isReplaced ? 'disabled' : '' %>>Guardar cambios</button>
         <% if (_isReplaced) { %>
         <form method="POST" action="<%= basePath %>/contacts/<%= contact.id %>/reactivate" class="inline-delete-form inline-delete-form--spaced" onsubmit="return confirm('¿Reactivar este contacto?');">
           <button type="submit" class="small-btn secondary">Reactivar contacto</button>

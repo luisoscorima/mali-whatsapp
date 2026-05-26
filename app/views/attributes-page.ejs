@@ -139,7 +139,7 @@
   <div class="inbox-chat-body inbox-chat-body--form">
     <% if (flash === 'updated') { %><p class="toast toast--ok">Guardado.</p><% } %>
     <div class="card">
-      <form method="post" action="<%= basePath %>/attributes/<%= _d.id %>/update" class="form-stack">
+      <form method="post" action="<%= basePath %>/attributes/<%= _d.id %>/update" class="form-stack" id="attribute-edit-form">
         <p class="muted">El slug <code><%= _d.slug %></code> y el ámbito no se pueden cambiar (evita romper datos importados).</p>
         <label class="field">
           <span class="field-label">Etiqueta visible</span>
@@ -163,11 +163,9 @@
         <label class="field">
           <input type="checkbox" name="active" value="1" <%= _d.active !== false ? 'checked' : '' %> /> Activo (visible en formularios)
         </label>
-        <div class="form-actions form-actions--resource">
-          <button type="submit" class="small-btn primary">Guardar cambios</button>
-        </div>
       </form>
-      <div class="resource-secondary-actions">
+      <div class="resource-actions-row">
+        <button type="submit" form="attribute-edit-form" class="small-btn primary">Guardar cambios</button>
         <form method="post" action="<%= basePath %>/attributes/<%= _d.id %>/delete" class="inline-delete-form inline-delete-form--spaced" onsubmit="return confirm('¿Eliminar esta definición? Los valores guardados en contactos permanecen en la base de datos.');">
           <button type="submit" class="small-btn danger-outline">Eliminar definición</button>
         </form>

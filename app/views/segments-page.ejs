@@ -109,7 +109,7 @@ function segmentMemberChatHref(member) {
     <div class="card">
       <h2 class="card-title">Editar segmento</h2>
       <p class="card-lead">Si cambias el slug, se actualizan los contactos y el histórico de campañas de ese segmento en esta área.</p>
-      <form method="POST" action="<%= basePath %>/settings/segment-update" class="segment-update-form">
+      <form method="POST" action="<%= basePath %>/settings/segment-update" class="segment-update-form" id="segment-edit-form">
         <input type="hidden" name="id" value="<%= selectedSegment.id %>" />
         <div class="segment-update-row">
           <label class="segment-field segment-field--slug">
@@ -136,11 +136,9 @@ function segmentMemberChatHref(member) {
           </label>
           <%- include('partials/segment-color-field', { selectedColorKey: selectedSegment.colorKey || 'teal', compactRow: true }) %>
         </div>
-        <div class="form-actions form-actions--resource">
-          <button type="submit" class="small-btn primary">Guardar cambios</button>
-        </div>
       </form>
-      <div class="resource-secondary-actions">
+      <div class="resource-actions-row">
+        <button type="submit" form="segment-edit-form" class="small-btn primary">Guardar cambios</button>
         <form method="POST" action="<%= basePath %>/settings/segment-delete" class="inline-delete-form inline-delete-form--spaced" onsubmit="return confirm('¿Borrar este segmento? Se quitará de los contactos (vínculos), no se borran las personas.');">
           <input type="hidden" name="id" value="<%= selectedSegment.id %>" />
           <button type="submit" class="small-btn danger-outline">Borrar segmento</button>
