@@ -535,6 +535,7 @@ async function runMigrations(query) {
   await query(`ALTER TABLE whatsapp_templates ADD COLUMN IF NOT EXISTS rejection_reason TEXT NULL`);
   await query(`ALTER TABLE whatsapp_templates ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ NULL`);
   await query(`ALTER TABLE whatsapp_templates ADD COLUMN IF NOT EXISTS submitted_by INTEGER NULL`);
+  await query(`ALTER TABLE whatsapp_templates ADD COLUMN IF NOT EXISTS placeholder_aliases_json JSONB NULL`);
 
   await migratePamSlugToTiThreeAreas(query);
   await cleanUpCrossAreaSeededSegments(query);

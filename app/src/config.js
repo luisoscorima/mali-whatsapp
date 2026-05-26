@@ -66,6 +66,7 @@ module.exports = {
     String(process.env.REQUIRE_AUTH || (isProduction ? 'true' : 'false')).trim().toLowerCase() ===
     'true',
   sessionSecret: String(process.env.SESSION_SECRET || '').trim(),
+  META_APP_ID: String(process.env.META_APP_ID || '').trim(),
   GRAPH_API_VERSION: 'v23.0',
   GRAPH_BASE: 'https://graph.facebook.com/v23.0',
   AREA_LABELS: {

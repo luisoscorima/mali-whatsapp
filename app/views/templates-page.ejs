@@ -19,7 +19,7 @@
   showAdminNav,
   shellPageClass: 'conversations-page',
   layoutModifier: _templatesMobileDetail ? 'conversations-inbox--detail' : '',
-  extraHeadScripts: null
+  extraHeadScripts: typeof extraHeadScripts !== 'undefined' ? extraHeadScripts : null
 }) %>
 <aside class="inbox-sidebar" aria-label="Plantillas WhatsApp">
   <div class="inbox-sidebar-header inbox-sidebar-header--with-actions">
@@ -107,7 +107,7 @@
     <% if (typeof templatesSyncError !== 'undefined' && templatesSyncError) { %>
     <p class="inline-warn">Sync: <%= templatesSyncError %></p>
     <% } %>
-    <%- include('partials/templates-new-form', { basePath, error }) %>
+    <%- include('partials/templates-new-form', { basePath, error, templateBuilderState }) %>
   </div>
   <% } else if (_view === 'detail' && selectedTemplate) { %>
   <div class="inbox-chat-header">
@@ -137,6 +137,9 @@
       basePath,
       selectedTemplate,
       templateDisplay,
+      templateDefinition,
+      templateAliasSummary,
+      templateBuilderState,
       templateCanEdit,
       error,
       templateStatusBadgeClass

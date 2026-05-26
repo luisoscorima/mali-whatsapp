@@ -1,5 +1,7 @@
 <% const _t = selectedTemplate; %>
 <% const _d = templateDisplay; %>
+<% const _def = typeof templateDefinition !== 'undefined' ? templateDefinition : null; %>
+<% const _aliasSummary = Array.isArray(templateAliasSummary) ? templateAliasSummary : []; %>
 <% const _canEdit = typeof templateCanEdit !== 'undefined' && templateCanEdit; %>
 <div class="card template-detail-card">
   <dl class="detail-dl detail-dl--compact">
@@ -38,34 +40,27 @@
   <% } %>
 </div>
 
-<% if (_canEdit) { %>
-<div class="card">
-  <h2 class="card-title">Editar y reenviar a Meta</h2>
-  <p class="card-lead">Solo disponible en estado <strong>PENDING</strong> o <strong>REJECTED</strong>. Se conservan cabecera, pie y botones; puedes cambiar el cuerpo y la categoría.</p>
-  <% if (error) { %><p class="inline-warn"><%= error %></p><% } %>
-  <form method="post" action="<%= basePath %>/templates/<%= _t.id %>/update" class="form-stack">
-    <label class="field">
-      <span class="field-label">Categoría</span>
-      <select name="category">
-        <option value="MARKETING" <%= (_t.category || '').toUpperCase() === 'MARKETING' ? 'selected' : '' %>>MARKETING</option>
-        <option value="UTILITY" <%= (_t.category || '').toUpperCase() === 'UTILITY' ? 'selected' : '' %>>UTILITY</option>
-        <option value="AUTHENTICATION" <%= (_t.category || '').toUpperCase() === 'AUTHENTICATION' ? 'selected' : '' %>>AUTHENTICATION</option>
-      </select>
-    </label>
-    <label class="field">
-      <span class="field-label">Texto cuerpo</span>
-      <textarea name="bodyText" rows="5" required><%= _d.bodyText %></textarea>
-    </label>
-    <% for (var ei = 0; ei < Math.max(3, (_d.bodyExamples || []).length); ei++) { %>
-    <label class="field">
-      <span class="field-label">Ejemplo {{<%= ei + 1 %>}}</span>
-      <input type="text" name="bodyExample_<%= ei + 1 %>" value="<%= (_d.bodyExamples && _d.bodyExamples[ei]) ? _d.bodyExamples[ei] : '' %>" />
-    </label>
-    <% } %>
-    <p class="inline-help muted">Un ejemplo por cada <code>{{n}}</code> del cuerpo.</p>
-    <button type="submit" class="small-btn primary">Guardar y reenviar a revisión</button>
-  </form>
+<% if (_aliasSummary.length) { %>
+<div class="card template-preview-card">
+  <h2 class="card-title">Aliases locales</h2>
+  <ul class="template-preview-buttons">
+    <% _aliasSummary.forEach(function (item) { %>
+    <li><span class="badge neutral"><%= item.scope %></span> <code>{{<%= item.alias %>}}</code> → <code>{{<%= item.placeholder %>}}</code></li>
+    <% }) %>
+  </ul>
 </div>
+<% } %>
+
+<% if (_canEdit) { %>
+<%- include('template-builder-form', {
+  basePath,
+  error,
+  selectedTemplate: _t,
+  templateBuilderState,
+  formMode: 'edit',
+  formAction: `${basePath}/templates/${_t.id}/update`,
+  submitLabel: 'Guardar y reenviar a revisión'
+}) %>
 <% } else { %>
 <div class="card">
   <p class="muted">Las plantillas <strong>aprobadas</strong> no se pueden editar desde Meta sin crear una nueva versión con otro nombre. Usa esta vista como referencia o crea otra plantilla.</p>

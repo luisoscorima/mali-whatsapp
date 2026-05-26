@@ -1,3 +1,8 @@
+const {
+  buildAliasLabel,
+  parseStoredPlaceholderAliases,
+} = require('./templateBuilder');
+
 /**
  * Orden de aparición de {{n}} en el texto (primera ocurrencia de cada índice en orden de lectura).
  */
@@ -50,7 +55,7 @@ function parseMetaTemplateComponents(components) {
         if (bt === 'URL' && btn.url) {
           const order = extractPlaceholderOrderSequential(btn.url);
           if (order.length) {
-            result.buttons.push({ index: idx, paramCount: order.length });
+            result.buttons.push({ index: idx, paramCount: order.length, order });
           }
         }
       });
@@ -79,7 +84,49 @@ function buildTemplateDefinition(row) {
   const components = Array.isArray(row.components_json) ? row.components_json : [];
   const parsed = parseMetaTemplateComponents(components);
   const buttonsWithOffset = assignButtonOffsets(parsed.buttons);
+  const aliases = parseStoredPlaceholderAliases(row.placeholder_aliases_json);
   const totalButtonParams = buttonsWithOffset.reduce((a, b) => a + b.paramCount, 0);
+  const headerParamDefs = parsed.headerTextOrder.map((placeholder, idx) => {
+    const alias = String(aliases.headerText[idx] || '').trim();
+    return {
+      index: idx,
+      placeholder,
+      alias,
+      label: buildAliasLabel(alias, placeholder, 'Texto cabecera', idx),
+    };
+  });
+  const bodyParamDefs = parsed.bodyTextOrder.map((placeholder, idx) => {
+    const alias = String(aliases.bodyText[idx] || '').trim();
+    return {
+      index: idx,
+      placeholder,
+      alias,
+      label: buildAliasLabel(alias, placeholder, 'Texto cuerpo', idx),
+    };
+  });
+  const buttonParamDefs = [];
+  const buttons = buttonsWithOffset.map((btn) => {
+    const aliasEntry = aliases.buttons.find((entry) => entry.index === btn.index);
+    const aliasList = Array.isArray(aliasEntry?.aliases) ? aliasEntry.aliases : [];
+    const paramDefs = (btn.order || []).map((placeholder, idx) => {
+      const globalIndex = btn.offset + idx;
+      const alias = String(aliasList[idx] || '').trim();
+      const def = {
+        index: globalIndex,
+        buttonIndex: btn.index,
+        placeholder,
+        alias,
+        label: buildAliasLabel(alias, placeholder, 'Botón URL', globalIndex),
+      };
+      buttonParamDefs.push(def);
+      return def;
+    });
+    return {
+      ...btn,
+      aliases: aliasList,
+      paramDefs,
+    };
+  });
 
   return {
     id: row.id,
@@ -90,10 +137,14 @@ function buildTemplateDefinition(row) {
     headerMedia: parsed.headerMedia,
     headerTextOrder: parsed.headerTextOrder,
     headerTextSlotCount: parsed.headerTextOrder.length,
+    headerParamDefs,
     bodyTextOrder: parsed.bodyTextOrder,
     bodySlotCount: parsed.bodyTextOrder.length,
-    buttons: buttonsWithOffset,
+    bodyParamDefs,
+    buttons,
     totalButtonParams,
+    buttonParamDefs,
+    placeholderAliases: aliases,
     needsHeaderMedia: Boolean(parsed.headerMedia),
     needsHeaderText: parsed.headerTextOrder.length > 0,
     needsBody: parsed.bodyTextOrder.length > 0,

@@ -10,6 +10,7 @@ const {
 /** MIME permitidos para adjuntos desde Conversaciones (subida a Graph + mensaje). */
 const ALLOWED_MEDIA_MIMES = new Set([
   'image/jpeg',
+  'image/jpg',
   'image/png',
   'video/mp4',
   'audio/mpeg',
@@ -22,6 +23,14 @@ const ALLOWED_MEDIA_MIMES = new Set([
   'audio/m4a',
   'application/pdf',
 ]);
+
+const TEMPLATE_HEADER_MIME_LIMITS = {
+  'image/jpeg': { format: 'IMAGE', maxBytes: config.MAX_MEDIA_IMAGE_BYTES },
+  'image/jpg': { format: 'IMAGE', maxBytes: config.MAX_MEDIA_IMAGE_BYTES },
+  'image/png': { format: 'IMAGE', maxBytes: config.MAX_MEDIA_IMAGE_BYTES },
+  'video/mp4': { format: 'VIDEO', maxBytes: config.MAX_MEDIA_VIDEO_BYTES },
+  'application/pdf': { format: 'DOCUMENT', maxBytes: config.MAX_MEDIA_DOCUMENT_BYTES },
+};
 
 /**
  * @returns {{ waType: 'image'|'video'|'audio'|'document', maxBytes: number }}
@@ -73,6 +82,23 @@ function sanitizeUploadFilename(originalName, waType) {
   return base.slice(0, 200);
 }
 
+function classifyTemplateHeaderUpload(mimeType, sizeBytes) {
+  const mime = String(mimeType || '')
+    .toLowerCase()
+    .split(';')[0]
+    .trim();
+  const rule = TEMPLATE_HEADER_MIME_LIMITS[mime];
+  if (!rule) {
+    throw new Error('Usa un archivo JPG, PNG, MP4 o PDF para la cabecera de la plantilla.');
+  }
+  if (typeof sizeBytes === 'number' && sizeBytes > rule.maxBytes) {
+    throw new Error(
+      `Archivo de cabecera demasiado grande (máx. ${Math.round(rule.maxBytes / (1024 * 1024))} MB).`
+    );
+  }
+  return { mimeType: mime, format: rule.format, maxBytes: rule.maxBytes };
+}
+
 /**
  * Sube binario a WhatsApp Cloud API y devuelve { id } del media handle.
  */
@@ -113,6 +139,72 @@ async function uploadMediaToWhatsApp({ area, buffer, mimeType, filename }) {
       const err = e.response.data?.error || e.response.data;
       const msg = err?.message || err?.error_user_msg || JSON.stringify(err);
       throw new Error(`Error subiendo media: ${msg}`);
+    }
+    throw e;
+  }
+}
+
+/**
+ * Sube el ejemplo de cabecera media para creación de plantillas y devuelve el `header_handle`.
+ */
+async function uploadTemplateHeaderHandle({ area, buffer, mimeType, filename }) {
+  const { token } = getWhatsAppCredentialsForArea(area);
+  if (!token) {
+    throw new Error('Faltan credenciales WhatsApp para generar el header handle.');
+  }
+  if (!config.META_APP_ID) {
+    throw new Error('Falta META_APP_ID para crear plantillas con cabecera media.');
+  }
+  if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+    throw new Error('Archivo de ejemplo vacío o inválido.');
+  }
+
+  const { mimeType: safeMime } = classifyTemplateHeaderUpload(mimeType, buffer.length);
+  const safeName = path.basename(String(filename || 'cabecera-media').trim()) || 'cabecera-media';
+
+  let sessionId = '';
+  try {
+    const initRes = await axios.post(`${config.GRAPH_BASE}/${config.META_APP_ID}/uploads`, null, {
+      params: {
+        file_name: safeName,
+        file_length: buffer.length,
+        file_type: safeMime,
+        access_token: token,
+      },
+    });
+    sessionId = String(initRes.data?.id || '').trim();
+    if (!sessionId) {
+      throw new Error('Meta no devolvió una sesión de upload.');
+    }
+  } catch (e) {
+    if (axios.isAxiosError(e) && e.response?.data) {
+      const err = e.response.data?.error || e.response.data;
+      const msg = err?.message || err?.error_user_msg || JSON.stringify(err);
+      throw new Error(`Error iniciando upload de cabecera: ${msg}`);
+    }
+    throw e;
+  }
+
+  try {
+    const uploadRes = await axios.post(`${config.GRAPH_BASE}/${sessionId}`, buffer, {
+      headers: {
+        Authorization: `OAuth ${token}`,
+        file_offset: '0',
+        'Content-Type': 'application/octet-stream',
+      },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    });
+    const handle = String(uploadRes.data?.h || '').trim();
+    if (!handle) {
+      throw new Error('Meta no devolvió el header handle.');
+    }
+    return handle;
+  } catch (e) {
+    if (axios.isAxiosError(e) && e.response?.data) {
+      const err = e.response.data?.error || e.response.data;
+      const msg = err?.message || err?.error_user_msg || JSON.stringify(err);
+      throw new Error(`Error subiendo cabecera media: ${msg}`);
     }
     throw e;
   }
@@ -436,8 +528,10 @@ module.exports = {
   sendSessionTextMessage,
   fetchWabaIdFromPhoneNumberId,
   ALLOWED_MEDIA_MIMES,
+  classifyTemplateHeaderUpload,
   classifyConversationUpload,
   uploadMediaToWhatsApp,
+  uploadTemplateHeaderHandle,
   sendSessionMediaMessage,
   downloadWhatsAppMediaBuffer,
 };

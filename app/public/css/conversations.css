@@ -1079,6 +1079,65 @@ html[data-theme='dark'] .settings-ai-prompt-textarea {
   margin-top: 12px;
 }
 
+.template-builder-card {
+  margin-top: 12px;
+}
+
+.template-builder-form {
+  gap: 14px;
+}
+
+.template-builder-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.template-builder-section {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  background: color-mix(in srgb, var(--surface-elevated, var(--surface)) 80%, transparent);
+}
+
+.template-builder-inline-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: -4px;
+}
+
+.template-builder-examples {
+  display: grid;
+  gap: 10px;
+}
+
+.template-builder-button-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--surface);
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.template-builder-button-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.template-builder-button-card__head strong {
+  font-size: 0.95rem;
+}
+
+@media (min-width: 900px) {
+  .template-builder-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .inbox-chat-header-profile--link {
   text-decoration: none;
   color: inherit;

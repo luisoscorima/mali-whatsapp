@@ -162,6 +162,9 @@
   function buildFields(def) {
     const parts = [];
     parts.push('<span class="form-section-label">Contenido de la plantilla</span>');
+    const headerDefs = Array.isArray(def.headerParamDefs) ? def.headerParamDefs : [];
+    const bodyDefs = Array.isArray(def.bodyParamDefs) ? def.bodyParamDefs : [];
+    const buttonDefs = Array.isArray(def.buttonParamDefs) ? def.buttonParamDefs : [];
 
     if (def.needsHeaderMedia) {
       const label =
@@ -181,12 +184,14 @@
     }
 
     for (let i = 0; i < def.headerTextSlotCount; i++) {
+      const meta = headerDefs[i];
+      const label = meta && meta.label ? meta.label : 'Texto cabecera (' + (i + 1) + ')';
       parts.push(
         '<div class="campaign-param-row">' +
           '<label class="field">' +
-          '<span class="field-label">Texto cabecera (' +
-          (i + 1) +
-          ')</span>' +
+          '<span class="field-label">' +
+          esc(label) +
+          '</span>' +
           '<input type="text" name="headerParam_' +
           i +
           '" class="campaign-param-input" required maxlength="1024" autocomplete="off" data-static-placeholder="Dato fijo para todos los destinatarios" />' +
@@ -198,12 +203,14 @@
     }
 
     for (let i = 0; i < def.bodySlotCount; i++) {
+      const meta = bodyDefs[i];
+      const label = meta && meta.label ? meta.label : 'Texto cuerpo (' + (i + 1) + ')';
       parts.push(
         '<div class="campaign-param-row">' +
           '<label class="field">' +
-          '<span class="field-label">Texto cuerpo (' +
-          (i + 1) +
-          ')</span>' +
+          '<span class="field-label">' +
+          esc(label) +
+          '</span>' +
           '<input type="text" name="bodyParam_' +
           i +
           '" class="campaign-param-input" required maxlength="1024" autocomplete="off" data-static-placeholder="Dato fijo para todos los destinatarios" />' +
@@ -215,12 +222,14 @@
     }
 
     for (let i = 0; i < def.totalButtonParams; i++) {
+      const meta = buttonDefs[i];
+      const label = meta && meta.label ? meta.label : 'Botón URL (' + (i + 1) + ')';
       parts.push(
         '<div class="campaign-param-row">' +
           '<label class="field">' +
-          '<span class="field-label">Botón URL (' +
-          (i + 1) +
-          ')</span>' +
+          '<span class="field-label">' +
+          esc(label) +
+          '</span>' +
           '<input type="text" name="buttonParam_' +
           i +
           '" class="campaign-param-input" required maxlength="1024" autocomplete="off" data-static-placeholder="Dato fijo para todos los destinatarios" />' +

@@ -1,0 +1,69 @@
+<%
+  const _mode = typeof formMode !== 'undefined' ? formMode : 'create';
+  const _state = typeof templateBuilderState !== 'undefined' && templateBuilderState ? templateBuilderState : {
+    header: { type: 'none', text: '', exampleValues: [], exampleMediaUrl: '', exampleHandle: '' },
+    body: { text: '', exampleValues: [] },
+    footer: { text: '' },
+    buttons: []
+  };
+  const _stateJson = JSON.stringify(_state).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
+  const _action = typeof formAction !== 'undefined' ? formAction : `${basePath}/templates/create`;
+  const _submitLabel = typeof submitLabel !== 'undefined'
+    ? submitLabel
+    : (_mode === 'edit' ? 'Guardar y reenviar a revisión' : 'Enviar a revisión Meta');
+%>
+<div class="card template-builder-card">
+  <h2 class="card-title"><%= _mode === 'edit' ? 'Editar y reenviar a Meta' : 'Nueva plantilla' %></h2>
+  <p class="card-lead">
+    <% if (_mode === 'edit') { %>
+    Ajusta cuerpo, cabecera, pie y botones URL. Los aliases como <code>{{fecha}}</code> o <code>{{mes}}</code> se convierten internamente a <code>{{1}}</code>, <code>{{2}}</code>, etc.
+    <% } else { %>
+    Se envía a revisión en Meta. Puedes trabajar con variables nombradas como <code>{{fecha}}</code>, <code>{{horario}}</code> o <code>{{mes}}</code>; el sistema las normaliza a placeholders numéricos.
+    <% } %>
+  </p>
+  <% if (error) { %><p class="inline-warn"><%= error %></p><% } %>
+
+  <form method="post" action="<%= _action %>" class="form-stack template-builder-form" data-template-builder-root>
+    <% if (_mode === 'edit' && selectedTemplate) { %>
+    <div class="field-row">
+      <label class="field">
+        <span class="field-label">Nombre</span>
+        <input type="text" value="<%= selectedTemplate.name %>" readonly disabled />
+      </label>
+      <label class="field">
+        <span class="field-label">Idioma</span>
+        <input type="text" value="<%= selectedTemplate.language %>" readonly disabled />
+      </label>
+    </div>
+    <% } else { %>
+    <label class="field">
+      <span class="field-label">Nombre (snake_case)</span>
+      <input type="text" name="name" required pattern="[a-z0-9_]+" placeholder="recordatorio_pago_mayo" />
+    </label>
+    <label class="field">
+      <span class="field-label">Idioma</span>
+      <input type="text" name="language" value="es" required />
+    </label>
+    <% } %>
+
+    <label class="field">
+      <span class="field-label">Categoría</span>
+      <select name="category">
+        <option value="MARKETING" <%= selectedTemplate && (selectedTemplate.category || '').toUpperCase() === 'MARKETING' ? 'selected' : '' %>>MARKETING</option>
+        <option value="UTILITY" <%= selectedTemplate && (selectedTemplate.category || '').toUpperCase() === 'UTILITY' ? 'selected' : '' %>>UTILITY</option>
+        <option value="AUTHENTICATION" <%= selectedTemplate && (selectedTemplate.category || '').toUpperCase() === 'AUTHENTICATION' ? 'selected' : '' %>>AUTHENTICATION</option>
+      </select>
+    </label>
+
+    <input type="hidden" name="builderPayloadJson" value="" data-template-builder-payload />
+    <script type="application/json" data-template-builder-state><%- _stateJson %></script>
+
+    <div class="template-builder-shell" data-template-builder-shell></div>
+
+    <noscript>
+      <p class="inline-warn">Activa JavaScript para usar el constructor de plantillas.</p>
+    </noscript>
+
+    <button type="submit" class="small-btn primary"><%= _submitLabel %></button>
+  </form>
+</div>

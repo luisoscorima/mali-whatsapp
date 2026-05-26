@@ -1,3 +1,5 @@
+const path = require('path');
+const axios = require('axios');
 const config = require('../config');
 const { logError } = require('../utils/logger');
 const { auditLog, AuditEvent } = require('../services/auditLog');
@@ -6,28 +8,112 @@ const {
   buildTemplateDefinition,
   extractTemplateDisplayContent,
   templateStatusAllowsEdit,
-  rebuildComponentsWithBody,
 } = require('../services/templateParser');
-const { createMessageTemplateOnWaba } = require('../services/metaWhatsApp');
+const {
+  createMessageTemplateOnWaba,
+  classifyTemplateHeaderUpload,
+  uploadTemplateHeaderHandle,
+} = require('../services/metaWhatsApp');
 const { templateSyncLimiter } = require('../middleware/limiters');
 const { normalizeArea } = require('../middleware/auth');
 const { resolveAppBaseUrl } = require('./shared/routeContext');
+const {
+  buildTemplateBuilderState,
+  compileTemplateBuilderPayload,
+  hasPlaceholderAliases,
+  parseStoredPlaceholderAliases,
+  parseTemplateBuilderPayload,
+} = require('../services/templateBuilder');
 
-function buildBodyExampleRow(bodyText, reqBody) {
-  const varNums = [...new Set((bodyText.match(/\{\{(\d+)\}\}/g) || []).map((m) => parseInt(m.replace(/\D/g, ''), 10)))].sort(
-    (a, b) => a - b
-  );
-  const maxVar = varNums.length ? Math.max(...varNums) : 0;
-  const exampleRow = [];
-  for (let i = 1; i <= maxVar; i++) {
-    const fromField = String(reqBody[`bodyExample_${i}`] || '').trim();
-    const fallback = String(reqBody.bodyExample || 'ejemplo').trim() || 'ejemplo';
-    exampleRow.push(fromField || `${fallback}${i > 1 ? i : ''}`);
+function decodeMaybeUriComponent(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
   }
-  if (exampleRow.length === 0 && bodyText.includes('{{')) {
-    exampleRow.push(String(reqBody.bodyExample || 'ejemplo').trim() || 'ejemplo');
+}
+
+function parseComponentsJson(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return [];
+    }
   }
-  return exampleRow;
+  return [];
+}
+
+function buildTemplateAliasSummary(def) {
+  if (!def || !def.placeholderAliases) return [];
+  const items = [];
+  def.headerParamDefs.forEach((item) => {
+    if (!item.alias) return;
+    items.push({ scope: 'Cabecera', alias: item.alias, placeholder: item.placeholder });
+  });
+  def.bodyParamDefs.forEach((item) => {
+    if (!item.alias) return;
+    items.push({ scope: 'Cuerpo', alias: item.alias, placeholder: item.placeholder });
+  });
+  def.buttonParamDefs.forEach((item) => {
+    if (!item.alias) return;
+    items.push({ scope: 'Botón URL', alias: item.alias, placeholder: item.placeholder });
+  });
+  return items;
+}
+
+function guessFilenameFromUrl(urlStr, fallbackExt) {
+  try {
+    const parsed = new URL(urlStr);
+    const fromPath = path.basename(parsed.pathname || '');
+    if (fromPath && fromPath !== '/') return decodeURIComponent(fromPath);
+  } catch {
+    /* */
+  }
+  return `template-header${fallbackExt || ''}`;
+}
+
+async function downloadTemplateMediaFromUrl(urlStr) {
+  let parsed;
+  try {
+    parsed = new URL(String(urlStr || '').trim());
+  } catch {
+    throw new Error('La URL del archivo de ejemplo no es válida.');
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('La URL del archivo de ejemplo debe empezar con http:// o https://');
+  }
+
+  let response;
+  try {
+    response = await axios.get(parsed.toString(), {
+      responseType: 'arraybuffer',
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+      timeout: 30000,
+    });
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status) {
+      throw new Error(`No se pudo descargar el archivo de ejemplo (HTTP ${error.response.status}).`);
+    }
+    throw new Error('No se pudo descargar el archivo de ejemplo.');
+  }
+
+  const mimeType = String(response.headers['content-type'] || '')
+    .split(';')[0]
+    .trim()
+    .toLowerCase();
+  const { format } = classifyTemplateHeaderUpload(mimeType, response.data?.byteLength || 0);
+  const fallbackExt = format === 'IMAGE' ? '.jpg' : format === 'VIDEO' ? '.mp4' : '.pdf';
+  return {
+    buffer: Buffer.from(response.data),
+    mimeType,
+    format,
+    filename: guessFilenameFromUrl(parsed.toString(), fallbackExt),
+  };
 }
 
 function registerTemplates(app, ctx) {
@@ -46,7 +132,7 @@ function registerTemplates(app, ctx) {
   async function loadTemplateById(area, id) {
     const r = await query(
       `SELECT id, meta_id, name, language, category, status, rejection_reason,
-              components_json, submitted_at, synced_at
+              components_json, placeholder_aliases_json, submitted_at, synced_at
        FROM whatsapp_templates WHERE id = $1 AND area = $2`,
       [id, normalizeArea(area)]
     );
@@ -86,12 +172,39 @@ function registerTemplates(app, ctx) {
     return findTemplateReplacementId(area, previousTemplate);
   }
 
+  async function compileBuilderForArea(area, reqBody) {
+    const builderPayload = parseTemplateBuilderPayload(reqBody);
+    return compileTemplateBuilderPayload(builderPayload, {
+      resolveHeaderMediaHandle: async ({ format, exampleMediaUrl, existingHandle }) => {
+        const keepHandle = String(existingHandle || '').trim();
+        const url = String(exampleMediaUrl || '').trim();
+        if (!url) {
+          if (keepHandle) return keepHandle;
+          throw new Error('La cabecera media requiere una URL pública de ejemplo para revisión en Meta.');
+        }
+        const media = await downloadTemplateMediaFromUrl(url);
+        if (media.format !== String(format || '').trim().toUpperCase()) {
+          throw new Error(`La URL de ejemplo no corresponde a una cabecera ${String(format || '').toUpperCase()}.`);
+        }
+        return uploadTemplateHeaderHandle({
+          area,
+          buffer: media.buffer,
+          mimeType: media.mimeType,
+          filename: media.filename,
+        });
+      },
+    });
+  }
+
   function renderTemplatesPage(req, res, opts) {
     const {
       view,
       templates,
       selectedTemplate = null,
       templateDisplay = null,
+      templateDefinition = null,
+      templateAliasSummary = [],
+      templateBuilderState = null,
       templateCanEdit = false,
       flash,
       error,
@@ -120,11 +233,16 @@ function registerTemplates(app, ctx) {
       selectedTemplateId,
       selectedTemplate,
       templateDisplay,
+      templateDefinition,
+      templateAliasSummary,
+      templateBuilderState,
       templateCanEdit,
       flash: flash || null,
       error: error || null,
       templatesSynced,
       templatesSyncError,
+      extraHeadScripts:
+        view === 'new' || view === 'detail' ? [`${config.basePath || ''}/js/template-builder.js`] : null,
     });
   }
 
@@ -135,7 +253,7 @@ function registerTemplates(app, ctx) {
       view: 'list',
       templates,
       flash: req.query.flash || null,
-      error: req.query.error || null,
+      error: decodeMaybeUriComponent(req.query.error),
     });
   });
 
@@ -146,7 +264,8 @@ function registerTemplates(app, ctx) {
       view: 'new',
       templates,
       flash: req.query.flash || null,
-      error: req.query.error || null,
+      error: decodeMaybeUriComponent(req.query.error),
+      templateBuilderState: buildTemplateBuilderState([], null),
     });
   });
 
@@ -163,20 +282,23 @@ function registerTemplates(app, ctx) {
     if (!selectedTemplate) {
       return res.status(404).send('Plantilla no encontrada');
     }
-    const components = Array.isArray(selectedTemplate.components_json)
-      ? selectedTemplate.components_json
-      : typeof selectedTemplate.components_json === 'string'
-        ? JSON.parse(selectedTemplate.components_json)
-        : [];
+    const components = parseComponentsJson(selectedTemplate.components_json);
     const templateDisplay = extractTemplateDisplayContent(components);
+    const templateDefinition = buildTemplateDefinition(selectedTemplate);
     renderTemplatesPage(req, res, {
       view: 'detail',
       templates,
       selectedTemplate,
       templateDisplay,
+      templateDefinition,
+      templateAliasSummary: buildTemplateAliasSummary(templateDefinition),
+      templateBuilderState: buildTemplateBuilderState(
+        components,
+        parseStoredPlaceholderAliases(selectedTemplate.placeholder_aliases_json)
+      ),
       templateCanEdit: templateStatusAllowsEdit(selectedTemplate.status),
       flash: req.query.flash || null,
-      error: req.query.error ? decodeURIComponent(String(req.query.error)) : null,
+      error: decodeMaybeUriComponent(req.query.error),
     });
   });
 
@@ -189,25 +311,13 @@ function registerTemplates(app, ctx) {
       .slice(0, 128);
     const language = String(req.body.language || 'es').trim();
     const category = String(req.body.category || 'MARKETING').trim().toUpperCase();
-    const bodyText = String(req.body.bodyText || '').trim();
 
     if (!config.allowedTemplateNameRegex.test(name)) {
-      return res.redirect(appPath('/templates/new?error=name'));
+      return res.redirect(appPath(`/templates/new?error=${encodeURIComponent('El nombre debe ir en snake_case.')}`));
     }
-    if (!bodyText) {
-      return res.redirect(appPath('/templates/new?error=body'));
-    }
-
-    const exampleRow = buildBodyExampleRow(bodyText, req.body);
-    const components = [
-      {
-        type: 'BODY',
-        text: bodyText,
-        example: { body_text: [exampleRow] },
-      },
-    ];
 
     try {
+      const { components, placeholderAliases } = await compileBuilderForArea(area, req.body);
       const apiData = await createMessageTemplateOnWaba({
         area,
         name,
@@ -218,24 +328,48 @@ function registerTemplates(app, ctx) {
       const metaId = apiData?.id != null ? String(apiData.id) : null;
       const status = String(apiData?.status || 'PENDING').trim().toUpperCase();
       const ins = await query(
-        `INSERT INTO whatsapp_templates (area, meta_id, name, language, category, status, components_json, submitted_at, submitted_by, synced_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, NOW(), $8, NOW())
+        `INSERT INTO whatsapp_templates (
+           area, meta_id, name, language, category, status, components_json, placeholder_aliases_json,
+           submitted_at, submitted_by, synced_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, NOW(), $9, NOW())
          ON CONFLICT (area, name, language)
-         DO UPDATE SET meta_id = EXCLUDED.meta_id, status = EXCLUDED.status, category = EXCLUDED.category,
-           components_json = EXCLUDED.components_json, submitted_at = NOW(), rejection_reason = NULL, synced_at = NOW()
+         DO UPDATE SET
+           meta_id = EXCLUDED.meta_id,
+           status = EXCLUDED.status,
+           category = EXCLUDED.category,
+           components_json = EXCLUDED.components_json,
+           placeholder_aliases_json = EXCLUDED.placeholder_aliases_json,
+           submitted_at = NOW(),
+           rejection_reason = NULL,
+           synced_at = NOW()
          RETURNING id`,
-        [area, metaId, name, language, category, status, JSON.stringify(components), null]
+        [
+          area,
+          metaId,
+          name,
+          language,
+          category,
+          status,
+          JSON.stringify(components),
+          JSON.stringify(placeholderAliases),
+          null,
+        ]
       );
       const newId = ins.rows[0]?.id;
       auditLog(query, {
         req,
         event_type: AuditEvent.TEMPLATE_SYNC,
         message: `Plantilla enviada a revisión Meta: ${name}`,
-        meta: { area, name, language, status },
+        meta: {
+          area,
+          name,
+          language,
+          status,
+          has_aliases: hasPlaceholderAliases(placeholderAliases),
+        },
       });
-      res.redirect(
-        appPath(newId ? `/templates/${newId}?flash=created` : '/templates?flash=created')
-      );
+      res.redirect(appPath(newId ? `/templates/${newId}?flash=created` : '/templates?flash=created'));
     } catch (error) {
       logError(req, 'Error creando plantilla en Meta', error);
       res.redirect(appPath(`/templates/new?error=${encodeURIComponent(error.message)}`));
@@ -253,24 +387,15 @@ function registerTemplates(app, ctx) {
       return res.status(404).send('Plantilla no encontrada');
     }
     if (!templateStatusAllowsEdit(row.status)) {
-      return res.redirect(appPath(`/templates/${id}?error=${encodeURIComponent('Esta plantilla no se puede editar en su estado actual')}`));
+      return res.redirect(
+        appPath(`/templates/${id}?error=${encodeURIComponent('Esta plantilla no se puede editar en su estado actual')}`)
+      );
     }
 
-    const bodyText = String(req.body.bodyText || '').trim();
     const category = String(req.body.category || row.category || 'MARKETING').trim().toUpperCase();
-    if (!bodyText) {
-      return res.redirect(appPath(`/templates/${id}?error=${encodeURIComponent('El cuerpo no puede estar vacío')}`));
-    }
-
-    const componentsRaw = Array.isArray(row.components_json)
-      ? row.components_json
-      : typeof row.components_json === 'string'
-        ? JSON.parse(row.components_json)
-        : [];
-    const exampleRow = buildBodyExampleRow(bodyText, req.body);
-    const components = rebuildComponentsWithBody(componentsRaw, bodyText, exampleRow);
 
     try {
+      const { components, placeholderAliases } = await compileBuilderForArea(area, req.body);
       const apiData = await createMessageTemplateOnWaba({
         area,
         name: row.name,
@@ -282,16 +407,27 @@ function registerTemplates(app, ctx) {
       const status = String(apiData?.status || 'PENDING').trim().toUpperCase();
       await query(
         `UPDATE whatsapp_templates SET
-           meta_id = $1, category = $2, status = $3, components_json = $4::jsonb,
-           rejection_reason = NULL, submitted_at = NOW(), synced_at = NOW()
-         WHERE id = $5 AND area = $6`,
-        [metaId, category, status, JSON.stringify(components), id, area]
+           meta_id = $1,
+           category = $2,
+           status = $3,
+           components_json = $4::jsonb,
+           placeholder_aliases_json = $5::jsonb,
+           rejection_reason = NULL,
+           submitted_at = NOW(),
+           synced_at = NOW()
+         WHERE id = $6 AND area = $7`,
+        [metaId, category, status, JSON.stringify(components), JSON.stringify(placeholderAliases), id, area]
       );
       auditLog(query, {
         req,
         event_type: AuditEvent.TEMPLATE_SYNC,
         message: `Plantilla reenviada a revisión Meta: ${row.name}`,
-        meta: { area, id, status },
+        meta: {
+          area,
+          id,
+          status,
+          has_aliases: hasPlaceholderAliases(placeholderAliases),
+        },
       });
       res.redirect(appPath(`/templates/${id}?flash=updated`));
     } catch (error) {
@@ -305,11 +441,8 @@ function registerTemplates(app, ctx) {
     const returnTo = String(req.body.returnTo || 'templates').trim().toLowerCase();
     const templateId = Number(req.body.templateId);
     const previousTemplate =
-      Number.isInteger(templateId) && templateId > 0
-        ? await loadTemplateById(area, templateId)
-        : null;
-    const detailSuffix =
-      Number.isInteger(templateId) && templateId > 0 ? `/${templateId}` : '';
+      Number.isInteger(templateId) && templateId > 0 ? await loadTemplateById(area, templateId) : null;
+    const detailSuffix = Number.isInteger(templateId) && templateId > 0 ? `/${templateId}` : '';
     try {
       await syncTemplatesForArea(area);
       auditLog(query, {
@@ -344,7 +477,9 @@ function registerTemplates(app, ctx) {
       return res.status(400).json({ ok: false, error: 'Id invalido' });
     }
     const r = await query(
-      `SELECT id, name, language, category, status, components_json FROM whatsapp_templates WHERE id = $1 AND area = $2`,
+      `SELECT id, name, language, category, status, components_json, placeholder_aliases_json
+       FROM whatsapp_templates
+       WHERE id = $1 AND area = $2`,
       [id, req.user.area]
     );
     if (r.rowCount === 0) {
