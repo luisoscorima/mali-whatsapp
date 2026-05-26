@@ -1,5 +1,6 @@
 const {
   resumeQueuedCampaigns,
+  resumeInterruptedCampaigns,
   promoteDueScheduledCampaigns,
   promoteDueCampaignRetries,
 } = require('../services/campaignSender');
@@ -42,6 +43,7 @@ function createRegisterRoutes({ query, pool, appPath }) {
   return {
     register,
     resumeQueuedCampaigns: () => resumeQueuedCampaigns(query),
+    resumeInterruptedCampaigns: () => resumeInterruptedCampaigns(query),
     promoteDueScheduledCampaigns: () => promoteDueScheduledCampaigns(query),
     promoteDueCampaignRetries: () => promoteDueCampaignRetries(query),
   };

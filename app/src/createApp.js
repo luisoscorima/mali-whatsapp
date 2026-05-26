@@ -186,6 +186,7 @@ function createApp() {
   const {
     register,
     resumeQueuedCampaigns,
+    resumeInterruptedCampaigns,
     promoteDueScheduledCampaigns,
     promoteDueCampaignRetries,
   } = createRegisterRoutes({
@@ -213,7 +214,13 @@ function createApp() {
     });
   }, auditPurgeMs);
 
-  return { app, resumeQueuedCampaigns, promoteDueScheduledCampaigns, promoteDueCampaignRetries };
+  return {
+    app,
+    resumeQueuedCampaigns,
+    resumeInterruptedCampaigns,
+    promoteDueScheduledCampaigns,
+    promoteDueCampaignRetries,
+  };
 }
 
 module.exports = { createApp };

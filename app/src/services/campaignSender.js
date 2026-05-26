@@ -29,6 +29,84 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function buildCampaignRecipients(query, area, ctx) {
+  const recipientOptions = {};
+  let mergedExclude =
+    Array.isArray(ctx.excludeContactIdsMerged) && ctx.excludeContactIdsMerged.length > 0
+      ? ctx.excludeContactIdsMerged
+      : null;
+  if (!mergedExclude) {
+    const excludeMerge = await mergeCampaignExcludeContactIds(
+      query,
+      area,
+      {
+        excludeContactIds: ctx.excludeContactIds || [],
+        excludeListIds: ctx.excludeListIds || [],
+      },
+      config.CAMPAIGN_MAX_RECIPIENT_IDS
+    );
+    mergedExclude = excludeMerge.ok ? excludeMerge.ids : [];
+  }
+  if (mergedExclude.length > 0) {
+    recipientOptions.excludeContactIds = mergedExclude;
+  }
+  if (Array.isArray(ctx.excludeSegmentSlugs) && ctx.excludeSegmentSlugs.length > 0) {
+    recipientOptions.excludeSegmentSlugs = ctx.excludeSegmentSlugs;
+  }
+
+  if (
+    Array.isArray(ctx.recipientContactIds) &&
+    ctx.recipientContactIds.length > 0 &&
+    Array.isArray(ctx.segments) &&
+    ctx.segments.length > 0
+  ) {
+    const recipients = await fetchRecipientsUnion(query, area, ctx.segments, {
+      ...recipientOptions,
+      contactIds: ctx.recipientContactIds,
+    });
+    if (!validateRecipientsMatchRequest(recipients, ctx.recipientContactIds)) {
+      throw new Error('Destinatarios de campaña inválidos o fuera de segmentos');
+    }
+    return recipients;
+  }
+  if (ctx.segment) {
+    return fetchRecipientsUnion(query, area, [ctx.segment], recipientOptions);
+  }
+  if (Array.isArray(ctx.segments) && ctx.segments.length > 0) {
+    return fetchRecipientsUnion(query, area, ctx.segments, recipientOptions);
+  }
+  throw new Error('Payload de campaña inválido: falta segmento o lista de destinatarios');
+}
+
+async function fetchProcessedRecipientState(query, campaignId) {
+  const r = await query(
+    `SELECT contact_id, phone
+     FROM campaign_logs
+     WHERE campaign_id = $1`,
+    [campaignId]
+  );
+  const contactIds = new Set();
+  const phones = new Set();
+  for (const row of r.rows) {
+    if (Number.isInteger(row.contact_id) && row.contact_id > 0) {
+      contactIds.add(row.contact_id);
+    }
+    if (row.phone) {
+      phones.add(normalizePhone(row.phone));
+    }
+  }
+  return { contactIds, phones };
+}
+
+function filterPendingRecipients(recipients, processedState) {
+  return recipients.filter((contact) => {
+    if (processedState.contactIds.has(contact.id)) return false;
+    const phoneNorm = normalizePhone(contact.phone);
+    if (phoneNorm && processedState.phones.has(phoneNorm)) return false;
+    return true;
+  });
+}
+
 /**
  * @param {object} ctx - campaign_payload deserializado + campaignId
  */
@@ -71,53 +149,19 @@ async function runCampaignSendJob(query, ctx) {
       phoneNumberId: creds.phoneNumberId || null,
     });
 
-    const recipientOptions = {};
-    let mergedExclude =
-      Array.isArray(ctx.excludeContactIdsMerged) && ctx.excludeContactIdsMerged.length > 0
-        ? ctx.excludeContactIdsMerged
-        : null;
-    if (!mergedExclude) {
-      const excludeMerge = await mergeCampaignExcludeContactIds(
-        query,
-        area,
-        {
-          excludeContactIds: ctx.excludeContactIds || [],
-          excludeListIds: ctx.excludeListIds || [],
-        },
-        config.CAMPAIGN_MAX_RECIPIENT_IDS
-      );
-      mergedExclude = excludeMerge.ok ? excludeMerge.ids : [];
-    }
-    if (mergedExclude.length > 0) {
-      recipientOptions.excludeContactIds = mergedExclude;
-    }
-    if (Array.isArray(ctx.excludeSegmentSlugs) && ctx.excludeSegmentSlugs.length > 0) {
-      recipientOptions.excludeSegmentSlugs = ctx.excludeSegmentSlugs;
-    }
-
-    let recipients;
-    if (
-      Array.isArray(ctx.recipientContactIds) &&
-      ctx.recipientContactIds.length > 0 &&
-      Array.isArray(ctx.segments) &&
-      ctx.segments.length > 0
-    ) {
-      recipients = await fetchRecipientsUnion(query, area, ctx.segments, {
-        ...recipientOptions,
-        contactIds: ctx.recipientContactIds,
+    const allRecipients = await buildCampaignRecipients(query, area, ctx);
+    await query(`UPDATE campaigns SET total_recipients = $1 WHERE id = $2`, [allRecipients.length, campaignId]);
+    const processedState = await fetchProcessedRecipientState(query, campaignId);
+    const recipients = filterPendingRecipients(allRecipients, processedState);
+    const alreadyProcessed = allRecipients.length - recipients.length;
+    if (alreadyProcessed > 0) {
+      logInfo(fakeReqLog, 'Campana reanudada sin duplicados', {
+        campaignId,
+        totalRecipients: allRecipients.length,
+        pendingRecipients: recipients.length,
+        alreadyProcessed,
       });
-      if (!validateRecipientsMatchRequest(recipients, ctx.recipientContactIds)) {
-        throw new Error('Destinatarios de campaña inválidos o fuera de segmentos');
-      }
-    } else if (ctx.segment) {
-      recipients = await fetchRecipientsUnion(query, area, [ctx.segment], recipientOptions);
-    } else if (Array.isArray(ctx.segments) && ctx.segments.length > 0) {
-      recipients = await fetchRecipientsUnion(query, area, ctx.segments, recipientOptions);
-    } else {
-      throw new Error('Payload de campaña inválido: falta segmento o lista de destinatarios');
     }
-
-    await query(`UPDATE campaigns SET total_recipients = $1 WHERE id = $2`, [recipients.length, campaignId]);
 
     let attrsMap = new Map();
     if (usePerContactParams) {
@@ -230,7 +274,11 @@ async function runCampaignSendJob(query, ctx) {
        WHERE id = $1`,
       [campaignId, config.CAMPAIGN_AUTO_RETRY_DELAY_MINUTES]
     );
-    logInfo(fakeReqLog, 'Campana completada', { campaignId, recipients: recipients.length });
+    logInfo(fakeReqLog, 'Campana completada', {
+      campaignId,
+      totalRecipients: allRecipients.length,
+      processedNow: recipients.length,
+    });
   } catch (error) {
     try {
       await query(`UPDATE campaigns SET status = 'failed' WHERE id = $1`, [campaignId]);
@@ -279,9 +327,26 @@ async function resumeQueuedCampaigns(query) {
   }
 }
 
+async function resumeInterruptedCampaigns(query) {
+  const r = await query(
+    `SELECT id FROM campaigns WHERE status = 'processing' ORDER BY id ASC`
+  );
+  for (const row of r.rows) {
+    const lock = await query(
+      `UPDATE campaigns SET status = 'queued' WHERE id = $1 AND status = 'processing' RETURNING id`,
+      [row.id]
+    );
+    if (lock.rowCount === 0) continue;
+    logInfo(fakeReqLog, 'Campana interrumpida devuelta a cola', {
+      campaignId: row.id,
+    });
+  }
+}
+
 module.exports = {
   runCampaignSendJob,
   resumeQueuedCampaigns,
+  resumeInterruptedCampaigns,
   promoteDueScheduledCampaigns,
   runCampaignRetryJob,
   promoteDueCampaignRetries,
