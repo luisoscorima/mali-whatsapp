@@ -65,12 +65,6 @@
     })).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
   %>
 
-  <div class="campaign-detail-tools">
-    <button type="button" class="text-link campaign-concepts-trigger" id="campaign-concepts-open">
-      Leyenda de conceptos
-    </button>
-  </div>
-
   <div class="campaign-detail-stack">
     <div class="card campaign-dashboard-card">
       <% if (campaign.status === 'queued' || campaign.status === 'processing') { %>
@@ -155,6 +149,7 @@
             <h2 class="card-title">Rendimiento de envío</h2>
             <p class="campaign-dashboard-section__lead muted"><%= _performanceNote %> Haz clic en un indicador para abrir el registro actual filtrado.</p>
           </div>
+          <a href="#" class="campaign-concepts-link" id="campaign-concepts-open">Leyenda de conceptos</a>
         </div>
         <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--4" role="group" aria-label="Rendimiento de envío">
           <% _performanceMetrics.forEach(function (metric) { %>
@@ -193,9 +188,6 @@
           <% } %>
           <% }); %>
         </div>
-        <p class="campaign-responders-hint muted">
-          Cuenta como respuesta si el contacto escribió dentro de los <%= _respWindow %> días posteriores al envío.
-        </p>
         <details class="campaign-meta-funnel-details">
           <summary class="campaign-meta-funnel-summary">Embudo Meta</summary>
           <div class="campaign-meta-funnel-grid" role="group" aria-label="Embudo Meta">
@@ -258,17 +250,9 @@
           </div>
           <% }); %>
         </div>
-        <p class="campaign-business-hint muted">
-          <strong>Fuente:</strong> <%= _costSourceLabel %>.
-          <% if (campaign.cost_synced_at) { %><span> Última sincronización: <%= formatMessageDateTime(campaign.cost_synced_at) %>.</span><% } %>
-          <% if (_costInfo && _costInfo.hint) { %><span> <%= _costInfo.hint %></span><% } %>
-        </p>
       </section>
 
       <section class="campaign-dashboard-section campaign-dashboard-section--last">
-        <p class="campaign-dashboard-inline-hint muted">
-          El registro actual se abre al hacer clic en cualquier indicador de resultado global, rendimiento o embudo.
-        </p>
       </section>
     </div>
 
@@ -310,9 +294,6 @@
       </section>
 
       <section class="campaign-dashboard-section campaign-dashboard-section--last">
-        <p class="campaign-dashboard-inline-hint muted">
-          Las incidencias activas y el botón de reintento se muestran al hacer clic en cualquiera de los indicadores de esta tarjeta.
-        </p>
         <p class="muted campaign-retry-hint">
           Reintento automático ~<%= _retryDelayMin %> min después del envío para errores temporales.
           <% if (_autoRetryPending) { %> Pendiente de reintento automático.<% } %>
@@ -680,7 +661,8 @@
       });
 
       if (conceptsBtn && conceptsDialog) {
-        conceptsBtn.addEventListener('click', function () {
+        conceptsBtn.addEventListener('click', function (ev) {
+          ev.preventDefault();
           openDialog(conceptsDialog);
         });
       }
