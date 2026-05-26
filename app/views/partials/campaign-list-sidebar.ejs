@@ -31,8 +31,10 @@
           <span class="inbox-chat-row-top">
             <span class="inbox-chat-title">#<%= c.id %> · <%= c.template_name || '—' %></span>
             <span class="inbox-chat-time-wrap">
-              <span class="inbox-chat-time campaign-list-percent" title="Salida OK / destinatarios"><%= _pct %></span>
-              <span class="badge <%= c.status %>"><%= c.status %></span>
+              <span class="badge <%= c.status %> campaign-list-status-badge" title="Salida OK / destinatarios y estado">
+                <span class="campaign-list-percent"><%= _pct %></span>
+                <span><%= c.status %></span>
+              </span>
             </span>
           </span>
           <span class="inbox-chat-row-mid campaign-list-row-mid">

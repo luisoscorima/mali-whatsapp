@@ -1743,8 +1743,15 @@ html[data-theme='dark'] .admin-online-dot {
   font-weight: 600;
 }
 
+.campaign-list-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .campaign-list-ratio {
   font-weight: 600;
+  font-size: 0.66rem;
   opacity: 0.9;
   margin-left: 0;
   flex-shrink: 0;
