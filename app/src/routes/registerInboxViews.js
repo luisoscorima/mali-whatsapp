@@ -532,7 +532,7 @@ function buildCampaignIndexSummary(campaignTotals) {
       }),
     ],
     hint:
-      'Resumen agregado del área. Los costos se calculan con la tarifa oficial de WhatsApp por categoría y se muestran en soles y dólares. Para ver entregados, leídos, respuestas únicas, embudo Meta e incidencias por campaña, entra al detalle de una campaña.',
+      'Resumen agregado del área. Los costos se calculan con la tarifa oficial de WhatsApp.',
     campaignsCount: toInt(campaignTotals?.campaign_count, 0),
   };
 }
