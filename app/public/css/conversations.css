@@ -1835,6 +1835,12 @@ html[data-theme='dark'] .admin-online-dot {
   gap: 1rem;
 }
 
+.campaign-detail-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+
 .campaign-dashboard-card {
   display: grid;
   gap: 0;
@@ -2005,6 +2011,14 @@ button.metric.campaign-summary-metric.metric--action:focus-visible {
   max-width: min(1100px, calc(100% - 32px));
 }
 
+.campaign-concepts-dialog {
+  max-width: min(820px, calc(100% - 32px));
+}
+
+.campaign-concepts-dialog__form {
+  gap: 14px;
+}
+
 .campaign-drilldown-dialog__form {
   gap: 12px;
 }
@@ -2074,27 +2088,9 @@ button.metric.campaign-summary-metric.metric--action:focus-visible {
   outline: none;
 }
 
-.campaign-concepts-legend {
-  margin-top: 0.9rem;
-  padding-top: 0.6rem;
-  border-top: 1px solid var(--line, #e5e7eb);
-}
-
-.campaign-concepts-legend__summary {
-  cursor: pointer;
-  font-weight: 600;
-  color: var(--accent, #2563eb);
-  list-style: none;
-}
-
-.campaign-concepts-legend__summary::-webkit-details-marker {
-  display: none;
-}
-
 .campaign-concepts-legend__body {
   display: grid;
   gap: 0.7rem;
-  margin-top: 0.7rem;
 }
 
 .campaign-concepts-legend__intro {

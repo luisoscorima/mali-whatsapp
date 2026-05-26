@@ -65,6 +65,12 @@
     })).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
   %>
 
+  <div class="campaign-detail-tools">
+    <button type="button" class="small-btn secondary campaign-concepts-trigger" id="campaign-concepts-open">
+      Leyenda de conceptos
+    </button>
+  </div>
+
   <div class="campaign-detail-stack">
     <div class="card campaign-dashboard-card">
       <% if (campaign.status === 'queued' || campaign.status === 'processing') { %>
@@ -219,28 +225,6 @@
             Validación: pendientes de entrega + entregados no leídos + leídos = enviados.
           </p>
         </details>
-        <details class="campaign-concepts-legend">
-          <summary class="campaign-concepts-legend__summary">Leyenda de conceptos</summary>
-          <div class="campaign-concepts-legend__body">
-            <p class="campaign-concepts-legend__intro muted">
-              Meta trabaja con estados acumulativos en rendimiento y con estados exclusivos en el embudo. Los estados técnicos de referencia son <code>sent</code>, <code>delivered</code> y <code>read</code>.
-            </p>
-            <ul class="campaign-concepts-legend__list">
-              <li><strong>Pendientes de entrega (sent)</strong>: enviados que aún no fueron confirmados como entregados o leídos.</li>
-              <li><strong>Entregados no leídos (delivered)</strong>: entregados correctamente, pero aún no leídos.</li>
-              <li><strong>Leídos (read)</strong>: subconjunto final de entregados.</li>
-              <li><strong>Enviados</strong>: <code>sent + delivered + read</code>.</li>
-              <li><strong>Entregados</strong>: <code>delivered + read</code>.</li>
-              <li><strong>Problemas de entrega</strong>: casos en <code>error</code>, <code>failed</code> o <code>undelivered</code>, además de destinatarios aún sin traza exitosa cuando la campaña sigue en proceso.</li>
-              <li><strong>Total destinatarios</strong>: enviados + problemas de entrega.</li>
-            </ul>
-            <div class="campaign-concepts-legend__formulas">
-              <p><code>Pendientes de entrega (sent) + Entregados no leídos (delivered) + Leídos (read) = Enviados</code></p>
-              <p><code>Entregados no leídos (delivered) + Leídos (read) = Entregados</code></p>
-              <p><code>Enviados + Problemas de entrega = Total destinatarios</code></p>
-            </div>
-          </div>
-        </details>
       </section>
 
       <section class="campaign-dashboard-section">
@@ -337,6 +321,38 @@
       </section>
     </div>
   </div>
+
+  <dialog id="campaign-concepts-dialog" class="modal-dialog campaign-concepts-dialog" aria-labelledby="campaign-concepts-dialog-title">
+    <form method="dialog" class="modal-dialog-form campaign-concepts-dialog__form">
+      <div class="campaign-drilldown-dialog__head">
+        <div>
+          <h2 id="campaign-concepts-dialog-title" class="modal-dialog-title">Leyenda de conceptos</h2>
+          <p class="muted campaign-concepts-legend__intro">
+            Meta trabaja con estados acumulativos en rendimiento y con estados exclusivos en el embudo. Los estados técnicos de referencia son <code>sent</code>, <code>delivered</code> y <code>read</code>.
+          </p>
+        </div>
+      </div>
+      <div class="campaign-concepts-legend__body">
+        <ul class="campaign-concepts-legend__list">
+          <li><strong>Pendientes de entrega (sent)</strong>: enviados que aún no fueron confirmados como entregados o leídos.</li>
+          <li><strong>Entregados no leídos (delivered)</strong>: entregados correctamente, pero aún no leídos.</li>
+          <li><strong>Leídos (read)</strong>: subconjunto final de entregados.</li>
+          <li><strong>Enviados</strong>: <code>sent + delivered + read</code>.</li>
+          <li><strong>Entregados</strong>: <code>delivered + read</code>.</li>
+          <li><strong>Problemas de entrega</strong>: casos en <code>error</code>, <code>failed</code> o <code>undelivered</code>, además de destinatarios aún sin traza exitosa cuando la campaña sigue en proceso.</li>
+          <li><strong>Total destinatarios</strong>: enviados + problemas de entrega.</li>
+        </ul>
+        <div class="campaign-concepts-legend__formulas">
+          <p><code>Pendientes de entrega (sent) + Entregados no leídos (delivered) + Leídos (read) = Enviados</code></p>
+          <p><code>Entregados no leídos (delivered) + Leídos (read) = Entregados</code></p>
+          <p><code>Enviados + Problemas de entrega = Total destinatarios</code></p>
+        </div>
+      </div>
+      <div class="modal-dialog-actions">
+        <button type="submit" class="small-btn secondary">Cerrar</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="campaign-logs-dialog" class="modal-dialog campaign-drilldown-dialog" aria-labelledby="campaign-logs-dialog-title">
     <form method="dialog" class="modal-dialog-form campaign-drilldown-dialog__form">
@@ -470,6 +486,8 @@
       var campaignId = '<%= campaign.id %>';
       var allLogs = <%- _modalLogsJson %>;
       var allFailedLogs = <%- _modalFailedLogsJson %>;
+      var conceptsBtn = document.getElementById('campaign-concepts-open');
+      var conceptsDialog = document.getElementById('campaign-concepts-dialog');
       var respondersBtn = document.getElementById('campaign-responders-open');
       var respondersDialog = document.getElementById('campaign-responders-dialog');
       var logsDialog = document.getElementById('campaign-logs-dialog');
@@ -661,12 +679,19 @@
         });
       });
 
+      if (conceptsBtn && conceptsDialog) {
+        conceptsBtn.addEventListener('click', function () {
+          openDialog(conceptsDialog);
+        });
+      }
+
       if (respondersBtn && respondersDialog) {
         respondersBtn.addEventListener('click', function () {
           openDialog(respondersDialog);
         });
       }
 
+      wireDialogDismiss(conceptsDialog);
       wireDialogDismiss(respondersDialog);
       wireDialogDismiss(logsDialog);
       wireDialogDismiss(incidentsDialog);
