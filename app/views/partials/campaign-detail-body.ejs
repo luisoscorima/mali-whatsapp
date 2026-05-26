@@ -48,6 +48,15 @@
     }
     var _excludeSegs = _payload && Array.isArray(_payload.excludeSegmentSlugs) ? _payload.excludeSegmentSlugs : [];
     var _excludeIds = _payload && Array.isArray(_payload.excludeContactIds) ? _payload.excludeContactIds : [];
+    var _logRows = Array.isArray(logs) ? logs : [];
+    var _firstSendAt = null;
+    _logRows.forEach(function (log) {
+      if (!log || !log.created_at) return;
+      if (!_firstSendAt || new Date(log.created_at).getTime() < new Date(_firstSendAt).getTime()) {
+        _firstSendAt = log.created_at;
+      }
+    });
+    var _detailDateTime = _firstSendAt || campaign.created_at || null;
     var _modalLogsJson = JSON.stringify((Array.isArray(logs) ? logs : []).map(function (log) {
       return {
         id: log.id,
@@ -121,6 +130,7 @@
         </div>
         <dl class="detail-dl">
           <div><dt>Segmento(s)</dt><dd><%= campaignSegmentDisplay(campaign) %></dd></div>
+          <div><dt>Fecha y hora</dt><dd><%= _detailDateTime ? formatMessageDateTime(_detailDateTime) : '—' %></dd></div>
           <% if (_excludeSegs.length || _excludeIds.length) { %>
           <div><dt>Exclusiones</dt><dd>
             <% if (_excludeSegs.length) { %>

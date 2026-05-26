@@ -1729,11 +1729,25 @@ html[data-theme='dark'] .admin-online-dot {
   word-break: break-all;
 }
 
-/* Lista campañas: ratio enviados/total */
+/* Lista campañas: porcentaje y ratio */
+.campaign-list-row-mid {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.campaign-list-row-mid .inbox-chat-preview {
+  min-width: 0;
+}
+
+.campaign-list-percent {
+  font-weight: 600;
+}
+
 .campaign-list-ratio {
   font-weight: 600;
   opacity: 0.9;
-  margin-left: 0.25rem;
+  margin-left: 0;
+  flex-shrink: 0;
 }
 
 .campaign-list-send-when {

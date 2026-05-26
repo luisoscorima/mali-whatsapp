@@ -19,6 +19,7 @@
     <% campaigns.forEach(function (c) { %>
     <% const _denom = Number(c.total_recipients) > 0 ? Number(c.total_recipients) : Number(c.log_count || 0); %>
     <% const _sentCount = Number(c.salida_ok || 0); %>
+    <% const _pct = _denom > 0 ? (Math.round((_sentCount * 100) / _denom) + '%') : '—'; %>
     <% const _ratio = _denom > 0 ? (_sentCount + '/' + _denom) : '—'; %>
     <% const _hasFirstSend = c.first_send_at != null && String(c.first_send_at).trim() !== ''; %>
     <% const _schedPending = c.status === 'scheduled' && !_hasFirstSend && c.scheduled_at != null && String(c.scheduled_at).trim() !== ''; %>
@@ -28,11 +29,15 @@
       <a class="inbox-chat-link" href="<%= basePath %><%= _listBase %>/<%= c.id %>">
         <span class="inbox-chat-link-main">
           <span class="inbox-chat-row-top">
-            <span class="inbox-chat-title">#<%= c.id %> · <%= campaignSegmentDisplay(c) %></span>
-            <span class="inbox-chat-time"><span class="badge <%= c.status %>"><%= c.status %></span></span>
+            <span class="inbox-chat-title">#<%= c.id %> · <%= c.template_name || '—' %></span>
+            <span class="inbox-chat-time-wrap">
+              <span class="inbox-chat-time campaign-list-percent" title="Salida OK / destinatarios"><%= _pct %></span>
+              <span class="badge <%= c.status %>"><%= c.status %></span>
+            </span>
           </span>
-          <span class="inbox-chat-row-mid">
-            <span class="inbox-chat-preview mono"><%= c.template_name || '—' %> <span class="campaign-list-ratio" title="Enviados / destinatarios"><%= _ratio %></span></span>
+          <span class="inbox-chat-row-mid campaign-list-row-mid">
+            <span class="inbox-chat-preview mono"><%= campaignSegmentDisplay(c) %></span>
+            <span class="campaign-list-ratio" title="Enviados / destinatarios"><%= _ratio %></span>
           </span>
           <span class="inbox-chat-row-mid campaign-list-send-when muted" title="<%= _sendTitle %>"><%= _sendWhen ? formatMessageDateTime(_sendWhen) : '—' %></span>
         </span>
