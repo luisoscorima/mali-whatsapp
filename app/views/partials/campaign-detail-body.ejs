@@ -12,6 +12,14 @@
         _incidentTotalMetric = Object.assign({}, metric, { label: 'Total de incidencias' });
       }
     });
+    if (_incidentTotalMetric && _incidentTotalMetric.display) {
+      var _incidentTotalMatch = String(_incidentTotalMetric.display).match(/^(\d+)\s*\(\d+%\)$/);
+      if (_incidentTotalMatch) {
+        _incidentTotalMetric = Object.assign({}, _incidentTotalMetric, {
+          display: Number(_incidentTotalMatch[1]) > 0 ? (_incidentTotalMatch[1] + ' (100%)') : '0 (0%)'
+        });
+      }
+    }
     var _incidentMetricsWithTotal = _incidentTotalMetric ? [_incidentTotalMetric].concat(_incidentMetrics) : _incidentMetrics;
     var _funnelStatusMap = {
       'Pendientes de entrega': 'sent',
@@ -40,8 +48,6 @@
     }
     var _excludeSegs = _payload && Array.isArray(_payload.excludeSegmentSlugs) ? _payload.excludeSegmentSlugs : [];
     var _excludeIds = _payload && Array.isArray(_payload.excludeContactIds) ? _payload.excludeContactIds : [];
-    var _costSourceLabel = _costInfo && _costInfo.sourceLabel ? _costInfo.sourceLabel : (campaign.cost_is_estimated ? 'Estimado' : 'Meta WABA');
-    var _canSyncCost = campaign.status === 'completed' || campaign.status === 'failed';
     var _modalLogsJson = JSON.stringify((Array.isArray(logs) ? logs : []).map(function (log) {
       return {
         id: log.id,
@@ -225,14 +231,6 @@
             <h2 class="card-title">Negocio</h2>
             <p class="campaign-dashboard-section__lead muted">Resumen comercial de la campaña.</p>
           </div>
-          <% if (_canSyncCost) { %>
-          <button
-            type="button"
-            class="small-btn secondary"
-            id="campaign-sync-cost-btn"
-            data-campaign-id="<%= campaign.id %>"
-          >Sincronizar costo</button>
-          <% } %>
         </div>
         <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--2" role="group" aria-label="Métricas de negocio">
           <% _businessMetrics.forEach(function (metric) { %>
@@ -323,11 +321,6 @@
           <li><strong>Problemas de entrega</strong>: casos en <code>error</code>, <code>failed</code> o <code>undelivered</code>, además de destinatarios aún sin traza exitosa cuando la campaña sigue en proceso.</li>
           <li><strong>Total destinatarios</strong>: enviados + problemas de entrega.</li>
         </ul>
-        <div class="campaign-concepts-legend__formulas">
-          <p><code>Pendientes de entrega (sent) + Entregados no leídos (delivered) + Leídos (read) = Enviados</code></p>
-          <p><code>Entregados no leídos (delivered) + Leídos (read) = Entregados</code></p>
-          <p><code>Enviados + Problemas de entrega = Total destinatarios</code></p>
-        </div>
       </div>
       <div class="modal-dialog-actions">
         <button type="submit" class="small-btn secondary">Cerrar</button>
@@ -677,33 +670,6 @@
       wireDialogDismiss(respondersDialog);
       wireDialogDismiss(logsDialog);
       wireDialogDismiss(incidentsDialog);
-
-      var costBtn = document.getElementById('campaign-sync-cost-btn');
-      if (costBtn) {
-        costBtn.addEventListener('click', function () {
-          var campaignId = costBtn.getAttribute('data-campaign-id');
-          costBtn.disabled = true;
-          fetch(basePath + '/api/campaigns/' + encodeURIComponent(campaignId) + '/sync-cost', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { Accept: 'application/json' },
-          })
-            .then(function (r) {
-              return r.json();
-            })
-            .then(function (data) {
-              if (data.ok) window.location.reload();
-              else {
-                costBtn.disabled = false;
-                alert(data.error || 'No se pudo sincronizar');
-              }
-            })
-            .catch(function () {
-              costBtn.disabled = false;
-              alert('Error de red');
-            });
-        });
-      }
 
       function setRetryButtonsDisabled(disabled) {
         if (incidentsRetryBtn) incidentsRetryBtn.disabled = disabled;

@@ -144,7 +144,7 @@ function buildCampaignCostSummary(campaign, deliveredCount) {
       deliveredCount: delivered,
       category,
       categoryLabel: getTemplateCategoryLabel(category),
-      sourceLabel: 'Tarifa WhatsApp',
+      sourceLabel: 'Tarifa oficial WhatsApp API',
       sourceKey: 'category_rate',
       hint: `Calculado con la tarifa oficial de ${getTemplateCategoryLabel(category)} sobre mensajes entregados.`,
       isEstimated: false,
@@ -179,11 +179,17 @@ function buildCampaignCostSummary(campaign, deliveredCount) {
     deliveredCount: delivered,
     category,
     categoryLabel: getTemplateCategoryLabel(category),
-    sourceLabel: campaign?.cost_is_estimated ? 'Estimado' : 'Meta WABA',
     sourceKey: String(campaign?.cost_source || '').trim() || (campaign?.cost_is_estimated ? 'estimated' : 'meta_waba'),
+    sourceLabel: campaign?.cost_is_estimated
+      ? 'Estimado'
+      : String(campaign?.cost_source || '').trim() === 'category_rate'
+        ? 'Tarifa oficial WhatsApp API'
+        : 'Meta WABA',
     hint: campaign?.cost_is_estimated
       ? 'Se muestra el valor guardado previamente porque la categoría de la plantilla no tiene tarifa configurada.'
-      : 'Costo reportado por Meta; convertido para mostrar ambas monedas.',
+      : String(campaign?.cost_source || '').trim() === 'category_rate'
+        ? 'Costo calculado con la tarifa oficial de WhatsApp API; convertido para mostrar ambas monedas.'
+        : 'Costo reportado por Meta; convertido para mostrar ambas monedas.',
     isEstimated: Boolean(campaign?.cost_is_estimated),
   };
 }

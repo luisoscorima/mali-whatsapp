@@ -56,7 +56,7 @@ async function syncCampaignCost(query, { campaignId, area }) {
     amount = categoryEstimate.usdAmount;
     currency = 'USD';
     source = 'category_rate';
-    isEstimated = true;
+    isEstimated = false;
   } else {
     const rate = await getCostPerMessageEstimate(query, area);
     amount = deliveredCount * rate;

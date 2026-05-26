@@ -14,6 +14,7 @@ const {
   loadAttributeDefinitionsForArea,
   getApplicableAttributeDefinitions,
 } = require('../services/contactAttributeDefinitions');
+const { syncCampaignCost } = require('../services/campaignCostSync');
 const { buildCampaignCostSummary } = require('../utils/campaignPricing');
 
 const LOG_STATUS = CAMPAIGN_LOG_STATUS_SQL;
@@ -842,6 +843,14 @@ function registerInboxViews(app, ctx) {
       return res.status(400).send('Id de campana invalido');
     }
     const area = req.user.area;
+    const campaignStatusResult = await query(`SELECT status FROM campaigns WHERE id = $1 AND area = $2`, [campaignId, area]);
+    if (campaignStatusResult.rowCount === 0) {
+      return res.status(404).send('Campaña no encontrada');
+    }
+    const campaignStatus = String(campaignStatusResult.rows[0]?.status || '').trim().toLowerCase();
+    if (campaignStatus === 'completed' || campaignStatus === 'failed') {
+      await syncCampaignCost(query, { campaignId, area });
+    }
     const detail = await loadCampaignDetail(area, campaignId);
     if (!detail) {
       return res.status(404).send('Campaña no encontrada');
