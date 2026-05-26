@@ -919,7 +919,7 @@ html[data-theme='dark'] .campaign-recipients-list .campaign-recipient-row.field-
 @media (min-width: 640px) {
   .campaign-param-row {
     grid-template-columns: 1fr minmax(12rem, 14rem);
-    align-items: end;
+    align-items: start;
   }
 }
 
