@@ -91,35 +91,35 @@
           <span class="campaign-step-badge campaign-step-badge--compact" aria-hidden="true">3</span>
           <span class="campaign-segments-titleline">Plantilla (Meta)</span>
         </div>
-        <div class="template-sync-row template-sync-row--inline">
-          <form method="POST" action="<%= basePath %>/templates/sync" class="inline-form-sync">
-            <input type="hidden" name="returnTo" value="campaigns" />
-            <button type="submit" class="secondary">
-              <span aria-hidden="true">↻</span>
-              <span>Sincronizar todo</span>
-            </button>
-          </form>
-          <p class="card-lead template-sync-hint">Actualiza las plantillas de tu cuenta WhatsApp (Meta). En campañas solo se mostrarán las <strong>aprobadas</strong>.</p>
-        </div>
       </div>
-      <label class="field">
-        <span class="field-label">Seleccionar plantilla</span>
-        <select name="templateSyncId" id="template-sync-select" required <%= (!syncedTemplates || syncedTemplates.length === 0) ? 'disabled' : '' %>>
-          <option value="">— Elige una plantilla —</option>
-          <% if (syncedTemplates && syncedTemplates.length) { %>
-            <% syncedTemplates.forEach(function (t) { %>
-            <option value="<%= t.id %>"><%= t.name %> · <%= t.language %> · <%= t.category || '—' %></option>
-            <% }) %>
-          <% } %>
-        </select>
-      </label>
+      <div class="campaign-template-controls">
+        <label class="field campaign-template-select-field">
+          <span class="field-label">Seleccionar plantilla</span>
+          <select name="templateSyncId" id="template-sync-select" required <%= (!syncedTemplates || syncedTemplates.length === 0) ? 'disabled' : '' %>>
+            <option value="">— Elige una plantilla —</option>
+            <% if (syncedTemplates && syncedTemplates.length) { %>
+              <% syncedTemplates.forEach(function (t) { %>
+              <option value="<%= t.id %>"><%= t.name %> · <%= t.language %> · <%= t.category || '—' %></option>
+              <% }) %>
+            <% } %>
+          </select>
+        </label>
+        <form method="POST" action="<%= basePath %>/templates/sync" class="inline-form-sync campaign-template-sync-form">
+          <input type="hidden" name="returnTo" value="campaigns" />
+          <button type="submit" class="small-btn secondary campaign-template-sync-btn">
+            <span aria-hidden="true">↻</span>
+            <span>Sincronizar</span>
+          </button>
+        </form>
+      </div>
+      <p class="card-lead template-sync-hint">Actualiza las plantillas de tu cuenta WhatsApp (Meta). En campañas solo se mostrarán las <strong>aprobadas</strong>.</p>
     </div>
 
     <div id="dynamic-template-fields" class="form-section" hidden></div>
 
     <p id="campaign-send-error" class="inline-warn" hidden></p>
 
-    <div class="form-section">
+    <div class="form-section form-section--schedule">
       <div class="campaign-step-head">
         <span class="campaign-step-badge campaign-step-badge--compact" aria-hidden="true">4</span>
         <span class="campaign-segments-titleline">Cuándo enviar</span>

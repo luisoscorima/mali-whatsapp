@@ -38,8 +38,8 @@
           ? parsed.buttons.map(function (button) {
               return {
                 type: 'url',
-                text: String(button && button.text || ''),
-                url: String(button && button.url || ''),
+                text: String((button && button.text) || ''),
+                url: String((button && button.url) || ''),
                 exampleValues: Array.isArray(button && button.exampleValues) ? button.exampleValues.map(String) : [],
               };
             })
@@ -105,6 +105,69 @@
     if (type === 'image') return 'URL pública de imagen de ejemplo';
     if (type === 'video') return 'URL pública de video de ejemplo';
     return 'URL pública de documento PDF de ejemplo';
+  }
+
+  function previewTokenLabel(token) {
+    return '{{' + token + '}}';
+  }
+
+  function buildPreviewWarnings(state) {
+    var warnings = [];
+    var headerPlaceholders = extractPlaceholders(state.header.text);
+    if (state.header.type === 'text' && headerPlaceholders.length > 1) {
+      warnings.push('La cabecera de texto solo admite 1 variable.');
+    }
+    state.buttons.forEach(function (button, idx) {
+      var placeholders = extractPlaceholders(button.url);
+      if (placeholders.length > 1) {
+        warnings.push('El botón URL ' + (idx + 1) + ' solo admite 1 variable.');
+      } else if (placeholders.length === 1 && !/\}\}\s*$/.test(button.url || '')) {
+        warnings.push('La variable del botón URL ' + (idx + 1) + ' debe ir al final.');
+      }
+    });
+    return warnings;
+  }
+
+  function applyPreviewMode(text, exampleValues, mode) {
+    var placeholders = extractPlaceholders(text);
+    if (!placeholders.length) return String(text || '');
+    var examples = alignExampleValues(exampleValues, placeholders.length);
+    if (mode !== 'examples') return String(text || '');
+    return String(text || '').replace(/\{\{([^{}]+)\}\}/g, function (_, token) {
+      var clean = String(token || '').trim();
+      var idx = placeholders.indexOf(clean);
+      if (idx === -1) return '{{' + clean + '}}';
+      return examples[idx] || '{{' + clean + '}}';
+    });
+  }
+
+  function highlightPreviewText(text) {
+    return esc(String(text || '')).replace(/\{\{[^{}]+\}\}/g, function (match) {
+      return '<span class="template-live-preview__token">' + match + '</span>';
+    }).replace(/\n/g, '<br />');
+  }
+
+  function renderPreviewText(text, exampleValues, mode) {
+    return highlightPreviewText(applyPreviewMode(text, exampleValues, mode));
+  }
+
+  function summarizeUrl(url, exampleValues, mode) {
+    var rendered = applyPreviewMode(url, exampleValues, mode);
+    if (rendered.length <= 44) return rendered;
+    return rendered.slice(0, 41) + '...';
+  }
+
+  function buildMappingItems(scopeLabel, text, exampleValues) {
+    var placeholders = extractPlaceholders(text);
+    var examples = alignExampleValues(exampleValues, placeholders.length);
+    return placeholders.map(function (token, idx) {
+      return {
+        scope: scopeLabel,
+        token: token,
+        position: idx + 1,
+        example: examples[idx] || '',
+      };
+    });
   }
 
   function builderShellHtml(state) {
@@ -178,7 +241,6 @@
           '</label>' +
           headerHtml +
         '</section>' +
-
         '<section class="template-builder-section">' +
           '<div class="campaign-step-head">' +
             '<span class="campaign-step-badge campaign-step-badge--compact" aria-hidden="true">2</span>' +
@@ -193,7 +255,6 @@
           '</div>' +
           '<div class="template-builder-examples" data-builder-examples-wrap="body"></div>' +
         '</section>' +
-
         '<section class="template-builder-section">' +
           '<div class="campaign-step-head">' +
             '<span class="campaign-step-badge campaign-step-badge--compact" aria-hidden="true">3</span>' +
@@ -205,7 +266,6 @@
           '</label>' +
           '<p class="inline-help muted">El pie no admite variables.</p>' +
         '</section>' +
-
         '<section class="template-builder-section">' +
           '<div class="campaign-step-head">' +
             '<span class="campaign-step-badge campaign-step-badge--compact" aria-hidden="true">4</span>' +
@@ -216,6 +276,128 @@
             '<button type="button" class="small-btn secondary" data-add-button ' + (state.buttons.length >= 2 ? 'disabled' : '') + '>Añadir botón URL</button>' +
           '</div>' +
         '</section>' +
+      '</div>'
+    );
+  }
+
+  function previewShellHtml(state, mode) {
+    var previewMode = mode === 'examples' ? 'examples' : 'aliases';
+    var headerType = String(state.header.type || 'none');
+    var mappingItems = [];
+    var warnings = buildPreviewWarnings(state);
+
+    if (headerType === 'text') {
+      mappingItems = mappingItems.concat(buildMappingItems('Cabecera', state.header.text, state.header.exampleValues));
+    }
+    mappingItems = mappingItems.concat(buildMappingItems('Cuerpo', state.body.text, state.body.exampleValues));
+    state.buttons.forEach(function (button, idx) {
+      mappingItems = mappingItems.concat(buildMappingItems('Botón ' + (idx + 1), button.url, button.exampleValues));
+    });
+
+    var headerPreviewHtml = '';
+    if (headerType === 'text' && state.header.text) {
+      headerPreviewHtml =
+        '<div class="template-live-preview__header-text">' +
+          renderPreviewText(state.header.text, state.header.exampleValues, previewMode) +
+        '</div>';
+    } else if (headerType === 'image') {
+      if (state.header.exampleMediaUrl) {
+        headerPreviewHtml =
+          '<div class="template-live-preview__media template-live-preview__media--image">' +
+            '<img src="' + esc(state.header.exampleMediaUrl) + '" alt="Imagen de cabecera" loading="lazy" />' +
+          '</div>';
+      } else {
+        headerPreviewHtml =
+          '<div class="template-live-preview__media template-live-preview__media--placeholder">' +
+            '<span class="badge neutral">IMAGE</span><span>Imagen de cabecera</span>' +
+          '</div>';
+      }
+    } else if (headerType === 'video' || headerType === 'document') {
+      headerPreviewHtml =
+        '<div class="template-live-preview__media template-live-preview__media--placeholder">' +
+          '<span class="badge neutral">' + esc(headerType.toUpperCase()) + '</span><span>' + esc(headerType === 'video' ? 'Video de cabecera' : 'Documento de cabecera') + '</span>' +
+        '</div>';
+    }
+
+    var bodyPreviewHtml = state.body.text
+      ? '<div class="template-live-preview__body">' + renderPreviewText(state.body.text, state.body.exampleValues, previewMode) + '</div>'
+      : '<div class="template-live-preview__body template-live-preview__body--empty">Empieza a escribir el cuerpo para ver la vista previa.</div>';
+
+    var footerPreviewHtml = state.footer.text
+      ? '<div class="template-live-preview__footer">' + esc(state.footer.text) + '</div>'
+      : '';
+
+    var buttonsPreviewHtml = state.buttons.length
+      ? '<div class="template-live-preview__buttons">' +
+          state.buttons.map(function (button) {
+            return (
+              '<button type="button" class="template-live-preview__button" tabindex="-1">' +
+                '<span class="template-live-preview__button-text">' + esc(button.text || 'Botón URL') + '</span>' +
+                (button.url
+                  ? '<span class="template-live-preview__button-url">' + esc(summarizeUrl(button.url, button.exampleValues, previewMode)) + '</span>'
+                  : '') +
+              '</button>'
+            );
+          }).join('') +
+        '</div>'
+      : '';
+
+    var mappingHtml = mappingItems.length
+      ? '<div class="template-live-preview__meta-card">' +
+          '<h4 class="template-live-preview__meta-title">Mapeo interno</h4>' +
+          '<ul class="template-live-preview__meta-list">' +
+            mappingItems.map(function (item) {
+              return (
+                '<li>' +
+                  '<span class="template-live-preview__meta-scope">' + esc(item.scope) + '</span>' +
+                  '<span><code>' + esc(previewTokenLabel(item.token)) + '</code> → <code>{{' + item.position + '}}</code>' +
+                  (item.example ? ' · ej. ' + esc(item.example) : '') +
+                  '</span>' +
+                '</li>'
+              );
+            }).join('') +
+          '</ul>' +
+        '</div>'
+      : '';
+
+    var warningsHtml = warnings.length
+      ? '<div class="template-live-preview__meta-card template-live-preview__meta-card--warn">' +
+          '<h4 class="template-live-preview__meta-title">Avisos</h4>' +
+          '<ul class="template-live-preview__meta-list">' +
+            warnings.map(function (warning) {
+              return '<li>' + esc(warning) + '</li>';
+            }).join('') +
+          '</ul>' +
+        '</div>'
+      : '';
+
+    return (
+      '<div class="template-live-preview__sticky">' +
+        '<div class="template-live-preview__head">' +
+          '<div>' +
+            '<h3 class="card-title">Vista previa</h3>' +
+            '<p class="inline-help muted template-live-preview__subtitle">Editorial / no exacta a Meta</p>' +
+          '</div>' +
+          '<div class="template-live-preview__toggle" role="tablist" aria-label="Modo de vista previa">' +
+            '<button type="button" class="small-btn ' + (previewMode === 'aliases' ? 'primary' : 'secondary') + '" data-preview-mode="aliases" aria-pressed="' + (previewMode === 'aliases' ? 'true' : 'false') + '">Aliases</button>' +
+            '<button type="button" class="small-btn ' + (previewMode === 'examples' ? 'primary' : 'secondary') + '" data-preview-mode="examples" aria-pressed="' + (previewMode === 'examples' ? 'true' : 'false') + '">Ejemplo</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="template-live-preview__phone">' +
+          '<div class="template-live-preview__screen">' +
+            '<div class="template-live-preview__message">' +
+              headerPreviewHtml +
+              bodyPreviewHtml +
+              footerPreviewHtml +
+              buttonsPreviewHtml +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<details class="template-live-preview__details" open>' +
+          '<summary>Detalles</summary>' +
+          mappingHtml +
+          warningsHtml +
+        '</details>' +
       '</div>'
     );
   }
@@ -297,11 +479,20 @@
     });
   }
 
+  function renderPreview(root, state) {
+    var previewShell = root.querySelector('[data-template-preview-shell]');
+    if (!root.__templatePreviewMode) root.__templatePreviewMode = 'aliases';
+    if (previewShell) {
+      previewShell.innerHTML = previewShellHtml(state, root.__templatePreviewMode);
+    }
+  }
+
   function render(root, state) {
     var shell = root.querySelector('[data-template-builder-shell]');
     if (!shell) return;
     root.__templateBuilderState = state;
     shell.innerHTML = builderShellHtml(state);
+    renderPreview(root, state);
     renderExampleBlocks(root, state);
   }
 
@@ -333,10 +524,20 @@
     });
 
     root.addEventListener('input', function () {
-      renderExampleBlocks(root, readStateFromDom(root));
+      var state = readStateFromDom(root);
+      renderPreview(root, state);
+      renderExampleBlocks(root, state);
     });
 
     root.addEventListener('click', function (ev) {
+      var previewModeBtn = ev.target.closest('[data-preview-mode]');
+      if (previewModeBtn) {
+        ev.preventDefault();
+        root.__templatePreviewMode = previewModeBtn.getAttribute('data-preview-mode') === 'examples' ? 'examples' : 'aliases';
+        render(root, readStateFromDom(root));
+        return;
+      }
+
       var addBtn = ev.target.closest('[data-add-button]');
       if (addBtn) {
         ev.preventDefault();

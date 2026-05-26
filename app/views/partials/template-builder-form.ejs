@@ -58,7 +58,14 @@
     <input type="hidden" name="builderPayloadJson" value="" data-template-builder-payload />
     <script type="application/json" data-template-builder-state><%- _stateJson %></script>
 
-    <div class="template-builder-shell" data-template-builder-shell></div>
+    <div class="template-builder-layout">
+      <div class="template-builder-layout__main">
+        <div class="template-builder-shell" data-template-builder-shell></div>
+      </div>
+      <aside class="template-builder-layout__preview" aria-label="Vista previa editorial">
+        <div class="template-live-preview" data-template-preview-shell></div>
+      </aside>
+    </div>
 
     <noscript>
       <p class="inline-warn">Activa JavaScript para usar el constructor de plantillas.</p>

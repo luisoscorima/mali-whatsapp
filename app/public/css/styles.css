@@ -624,15 +624,15 @@ html[data-theme='dark'] .nav-link.is-active {
 .campaign-segment-tile,
 .segment-checkbox-label--campaignlike {
   display: flex;
-  align-items: flex-start;
-  gap: 0.55rem;
+  align-items: center;
+  gap: 6px;
   margin: 0;
-  padding: 0.75rem 0.85rem;
+  padding: 6px 8px 6px 6px;
   border: 1px solid var(--line);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--surface-strong) 45%, transparent);
+  border-radius: 8px;
+  background: var(--surface-strong);
   cursor: pointer;
-  min-height: 5rem;
+  min-height: 0;
   transition:
     border-color 0.15s ease,
     background 0.15s ease,
@@ -663,7 +663,7 @@ html[data-theme='dark'] .nav-link.is-active {
 .segment-checkbox-label--campaignlike input {
   width: 0.9rem;
   height: 0.9rem;
-  margin: 0.2rem 0 0;
+  margin: 0;
   flex-shrink: 0;
   accent-color: var(--accent);
 }
@@ -678,7 +678,7 @@ html[data-theme='dark'] .nav-link.is-active {
 }
 
 .campaign-segment-text {
-  font-size: 0.95rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--ink);
   line-height: 1.25;
@@ -686,7 +686,7 @@ html[data-theme='dark'] .nav-link.is-active {
 }
 
 .segment-checkbox-label--campaignlike span {
-  font-size: 0.95rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--ink);
   line-height: 1.25;
@@ -2304,19 +2304,33 @@ button.small-btn.primary {
 
 .campaign-template-head {
   display: grid;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 
-.template-sync-row--inline {
-  align-items: center;
-  margin-bottom: 0;
+.campaign-template-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 12px;
 }
 
-.template-sync-row--inline .inline-form-sync button {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+.campaign-template-select-field {
+  flex: 1 1 340px;
+  margin: 0;
+}
+
+.campaign-template-sync-form {
+  margin: 0;
+}
+
+.campaign-template-sync-btn {
+  min-height: 40px;
+  padding-inline: 12px;
+}
+
+.campaign-template-sync-btn span[aria-hidden='true'] {
+  font-size: 0.95rem;
 }
 
 .inline-form-sync {
@@ -2324,9 +2338,23 @@ button.small-btn.primary {
 }
 
 .template-sync-hint {
-  flex: 1 1 220px;
   margin: 0;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
+  opacity: 0.86;
+}
+
+.form-section--schedule {
+  margin-top: 6px;
+}
+
+@media (max-width: 720px) {
+  .campaign-template-controls {
+    align-items: stretch;
+  }
+
+  .campaign-template-select-field {
+    flex-basis: 100%;
+  }
 }
 
 /* Conversaciones: inbox tipo WhatsApp Web */
