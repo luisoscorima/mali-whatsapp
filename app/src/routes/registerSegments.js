@@ -2,6 +2,12 @@ const { logError } = require('../utils/logger');
 const { auditLog, AuditEvent } = require('../services/auditLog');
 const { normalizeArea } = require('../middleware/auth');
 const { normalizeSegmentColorKey } = require('../utils/segmentColors');
+const { removeContactSegment } = require('../utils/contactSegments');
+
+function firstSegmentForLegacyColumn(segments) {
+  if (!segments || segments.length === 0) return null;
+  return [...segments].sort()[0];
+}
 
 function registerSegments(app, ctx) {
   const { query, pool, config, appPath } = ctx;
@@ -177,6 +183,90 @@ function registerSegments(app, ctx) {
     } catch (error) {
       logError(req, 'Error borrando segmento', error);
       res.status(500).send(`No se pudo borrar: ${error.message}`);
+    }
+  });
+
+  app.post('/segments/:segmentId/contacts/:contactId/remove', async (req, res) => {
+    const area = normalizeArea(req.user.area);
+    const segmentId = Number(req.params.segmentId);
+    const contactId = Number(req.params.contactId);
+    if (!Number.isInteger(segmentId) || segmentId <= 0 || !Number.isInteger(contactId) || contactId <= 0) {
+      return res.status(400).send('Parámetros inválidos');
+    }
+
+    const segResult = await query(`SELECT id, slug, label FROM segment_definitions WHERE id = $1 AND area = $2`, [
+      segmentId,
+      area,
+    ]);
+    if (segResult.rowCount === 0) {
+      return res.status(404).send('Segmento no encontrado');
+    }
+    const segment = segResult.rows[0];
+
+    const membership = await query(
+      `SELECT
+         c.id,
+         COALESCE((
+           SELECT array_agg(cs.segment_slug ORDER BY cs.segment_slug)
+           FROM contact_segments cs
+           WHERE cs.contact_id = c.id AND cs.area = c.area
+         ), ARRAY[]::varchar[]) AS segment_slugs
+       FROM contacts c
+       WHERE c.id = $1 AND c.area = $2
+         AND EXISTS (
+           SELECT 1
+           FROM contact_segments csf
+           WHERE csf.contact_id = c.id
+             AND csf.area = c.area
+             AND csf.segment_slug = $3
+         )`,
+      [contactId, area, segment.slug]
+    );
+    if (membership.rowCount === 0) {
+      return res.redirect(`${appPath(`/segments/${segmentId}`)}?segment_member_error=not_found`);
+    }
+
+    const currentSegments = membership.rows[0].segment_slugs || [];
+    if (currentSegments.length <= 1) {
+      return res.redirect(`${appPath(`/segments/${segmentId}`)}?segment_member_error=last_segment`);
+    }
+
+    const nextSegments = currentSegments.filter((slug) => slug !== segment.slug);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await removeContactSegment(client.query.bind(client), contactId, area, segment.slug);
+      await client.query(
+        `UPDATE contacts
+         SET segment = $1,
+             updated_at = NOW()
+         WHERE id = $2 AND area = $3`,
+        [firstSegmentForLegacyColumn(nextSegments), contactId, area]
+      );
+      await client.query('COMMIT');
+      auditLog(query, {
+        req,
+        event_type: AuditEvent.CONTACT_UPDATED,
+        message: `Contacto ${contactId}: se quitó del segmento ${segment.slug}`,
+        meta: {
+          area,
+          contact_id: contactId,
+          segment_id: segmentId,
+          removed_segment_slug: segment.slug,
+          remaining_segments: nextSegments,
+        },
+      });
+      return res.redirect(`${appPath(`/segments/${segmentId}`)}?segment_member_removed=1`);
+    } catch (error) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        /* ignore */
+      }
+      logError(req, 'Error quitando contacto de segmento', error);
+      return res.status(500).send(`No se pudo quitar del segmento: ${error.message}`);
+    } finally {
+      client.release();
     }
   });
 }

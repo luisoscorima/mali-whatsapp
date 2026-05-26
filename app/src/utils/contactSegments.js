@@ -67,10 +67,21 @@ async function appendContactSegments(query, contactId, area, slugs) {
   );
 }
 
+async function removeContactSegment(query, contactId, area, slug) {
+  await query(
+    `DELETE FROM contact_segments
+     WHERE contact_id = $1
+       AND area = $2
+       AND segment_slug = $3`,
+    [contactId, area, slug]
+  );
+}
+
 module.exports = {
   parseSegmentListFromBody,
   parseSegmentListFromImportCell,
   validateSegmentMembership,
   replaceContactSegments,
   appendContactSegments,
+  removeContactSegment,
 };

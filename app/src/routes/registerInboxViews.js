@@ -629,6 +629,14 @@ function registerInboxViews(app, ctx) {
          c.id,
          c.name,
          c.phone,
+         COALESCE((
+           SELECT conv.id
+           FROM conversations conv
+           WHERE conv.area = c.area
+             AND (conv.contact_id = c.id OR conv.phone = c.phone)
+           ORDER BY conv.id ASC
+           LIMIT 1
+         ), -c.id) AS chat_target_id,
          c.opt_in,
          c.active,
          c.replaced_by_contact_id,
@@ -1211,15 +1219,56 @@ function registerInboxViews(app, ctx) {
     if (!sel) {
       return res.status(404).send('Segmento no encontrado');
     }
+    const members = await query(
+      `SELECT
+         c.id,
+         c.name,
+         c.phone,
+         c.active,
+         c.replaced_by_contact_id,
+         c.replaced_at,
+         c.replacement_reason,
+         COALESCE((
+           SELECT conv.id
+           FROM conversations conv
+           WHERE conv.area = c.area
+             AND (conv.contact_id = c.id OR conv.phone = c.phone)
+           ORDER BY conv.id ASC
+           LIMIT 1
+         ), -c.id) AS chat_target_id,
+         COALESCE((
+           SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
+           FROM contact_segments cs
+           JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+           WHERE cs.contact_id = c.id
+         ), ARRAY[]::varchar[]) AS segment_slugs
+       FROM contacts c
+       WHERE c.area = $1
+         AND c.replacement_reason IS NULL
+         AND c.replaced_by_contact_id IS NULL
+         AND EXISTS (
+           SELECT 1
+           FROM contact_segments csf
+           WHERE csf.contact_id = c.id
+             AND csf.area = c.area
+             AND csf.segment_slug = $2
+         )
+       ORDER BY COALESCE(NULLIF(c.name, ''), c.phone) ASC, c.id DESC
+       LIMIT 400`,
+      [area, sel.value]
+    );
     res.render('segments-page', {
       ...commonLocals(req, res),
       activeNav: 'segments',
       pageTitle: `${sel.label} · Segmentos · MALI WhatsApp`,
       layoutModifier: 'conversations-inbox--detail',
       segments: segmentsList,
+      segmentMembers: members.rows,
       view: 'detail',
       selectedSegmentId: segId,
       selectedSegment: sel,
+      segmentMemberRemoved: String(req.query.segment_member_removed || '') === '1',
+      segmentMemberError: String(req.query.segment_member_error || ''),
       segmentsSaved: String(req.query.segments_saved || '') === '1',
     });
   });

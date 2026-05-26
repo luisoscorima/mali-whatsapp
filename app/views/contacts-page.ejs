@@ -20,6 +20,23 @@
   const s = segments.find(function (x) { return x.value === slug; });
   return s ? s.label : slug;
 }
+function contactListHref(nextSegmentSlug) {
+  const sp = new URLSearchParams();
+  if (nextSegmentSlug) sp.set('segment', nextSegmentSlug);
+  if (_qF) sp.set('q', _qF);
+  if (_showReplaced) sp.set('show_replaced', '1');
+  if (_attrKey) sp.set('attr_key', _attrKey);
+  if (_attrVal) sp.set('attr_value', _attrVal);
+  const qs = sp.toString();
+  return basePath + '/contacts' + (qs ? '?' + qs : '');
+}
+function contactEditHref(contactId) {
+  return basePath + '/contacts/' + contactId + _cq;
+}
+function contactChatHref(contact) {
+  const targetId = contact && contact.chat_target_id ? contact.chat_target_id : -(contact && contact.id ? contact.id : 0);
+  return basePath + '/conversations/' + targetId;
+}
   var _contactsMobileDetail = view === 'edit' || view === 'new' || view === 'import';
 %>
 <%- include('layouts/inbox-shell-start', {
@@ -35,60 +52,30 @@
   layoutModifier: _contactsMobileDetail ? 'conversations-inbox--detail' : '',
   extraHeadScripts: null
 }) %>
-<aside class="inbox-sidebar" aria-label="Contactos">
+<aside class="inbox-sidebar inbox-sidebar--contacts" aria-label="Contactos">
   <div class="inbox-sidebar-header inbox-sidebar-header--with-actions">
     <h2 class="inbox-sidebar-title">Contactos</h2>
     <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar contactos', refreshAriaLabel: 'Actualizar contactos' }) %>
   </div>
-  <div class="inbox-filters inbox-filters--campaign-new contact-actions-row-wrap">
-    <div class="contact-actions-row" role="group" aria-label="Añadir o importar contactos">
-      <a
-        href="<%= basePath %>/contacts/new<%= _cq %>"
-        class="contact-action-tile <%= view === 'new' ? 'is-active' : '' %>"
-        aria-label="Añadir un contacto"
-        <% if (view === 'new') { %>aria-current="page"<% } %>
-      >
-        <span class="contact-action-tile__icon" aria-hidden="true">
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-            <circle cx="9" cy="7" r="4" />
-            <line x1="19" y1="8" x2="19" y2="14" />
-            <line x1="22" y1="11" x2="16" y2="11" />
-          </svg>
-        </span>
-        <span class="contact-action-tile__label">Añadir</span>
-      </a>
-      <a
-        href="<%= basePath %>/contacts/import<%= _cq %>"
-        class="contact-action-tile <%= view === 'import' ? 'is-active' : '' %>"
-        aria-label="Importar desde Excel o CSV"
-        <% if (view === 'import') { %>aria-current="page"<% } %>
-      >
-        <span class="contact-action-tile__icon" aria-hidden="true">
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <path d="M12 18V9" />
-            <polyline points="9 12 12 9 15 12" />
-          </svg>
-        </span>
-        <span class="contact-action-tile__label">Excel</span>
-      </a>
-    </div>
+  <div class="inbox-chat-filter-pills inbox-chat-filter-pills--row contact-filter-pills" aria-label="Filtrar por segmento">
+    <a
+      href="<%= contactListHref('') %>"
+      class="inbox-chat-pill <%= _segF === '' ? 'is-active' : '' %>"
+      <% if (_segF === '') { %>aria-current="page"<% } %>
+    >Todos</a>
+    <% segments.forEach(function (seg) { %>
+    <a
+      href="<%= contactListHref(seg.value) %>"
+      class="inbox-chat-pill <%= _segF === seg.value ? 'is-active' : '' %>"
+      <% if (_segF === seg.value) { %>aria-current="page"<% } %>
+    ><%= seg.label %></a>
+    <% }); %>
   </div>
-  <form class="inbox-filters" method="get" action="<%= basePath %>/contacts">
-    <label class="field field--inbox">
-      <span class="field-label">Segmento</span>
-      <select name="segment" class="inbox-select" data-inbox-filter>
-        <option value="" <%= _segF === '' ? 'selected' : '' %>>Todos</option>
-        <% segments.forEach(function (seg) { %>
-        <option value="<%= seg.value %>" <%= _segF === seg.value ? 'selected' : '' %>><%= seg.label %></option>
-        <% }); %>
-      </select>
-    </label>
+  <form class="inbox-filters contact-filters-form" method="get" action="<%= basePath %>/contacts">
+    <% if (_segF) { %><input type="hidden" name="segment" value="<%= _segF %>" /><% } %>
     <label class="field field--inbox">
       <span class="field-label">Buscar número o nombre</span>
-      <div class="inbox-search-row">
+      <div class="inbox-search-row contact-search-row">
         <input
           type="search"
           name="q"
@@ -97,30 +84,42 @@
           autocomplete="off"
           class="inbox-search-input"
         />
-        <button type="submit" class="small-btn primary">Buscar</button>
+        <button type="submit" class="small-btn secondary contact-search-btn" aria-label="Buscar contactos" title="Buscar contactos">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35" />
+          </svg>
+        </button>
       </div>
     </label>
-    <label class="field field--inbox">
-      <span class="field-label">Mostrar reemplazados</span>
-      <select name="show_replaced" class="inbox-select" data-inbox-filter>
-        <option value="0" <%= !_showReplaced ? 'selected' : '' %>>No</option>
-        <option value="1" <%= _showReplaced ? 'selected' : '' %>>Sí</option>
-      </select>
-    </label>
-    <label class="field field--inbox">
-      <span class="field-label">Atributo (filtro)</span>
-      <select name="attr_key" class="inbox-select">
-        <option value="" <%= _attrKey === '' ? 'selected' : '' %>>—</option>
-        <% const _attrFilters = typeof attributeFilterOptions !== 'undefined' ? attributeFilterOptions : []; %>
-        <% _attrFilters.forEach(function (opt) { %>
-        <option value="<%= opt.slug %>" <%= _attrKey === opt.slug ? 'selected' : '' %>><%= opt.label %><% if (opt.segment_slug) { %> (<%= opt.segment_slug %>)<% } %></option>
-        <% }); %>
-      </select>
-    </label>
-    <label class="field field--inbox">
-      <span class="field-label">Valor atributo</span>
-      <input type="search" name="attr_value" value="<%= _attrVal %>" placeholder="Contiene…" class="inbox-search-input" />
-    </label>
+    <div class="contact-filters-inline">
+      <label class="contact-inline-check" title="Mostrar contactos reemplazados">
+        <input type="checkbox" name="show_replaced" value="1" <%= _showReplaced ? 'checked' : '' %> data-inbox-filter />
+        <span>Reemplazados</span>
+      </label>
+      <label class="field field--inbox contact-filter-inline-item">
+        <span class="field-label">Atributo</span>
+        <select name="attr_key" class="inbox-select" id="contact-attr-key">
+          <option value="" <%= _attrKey === '' ? 'selected' : '' %>>Todos</option>
+          <% const _attrFilters = typeof attributeFilterOptions !== 'undefined' ? attributeFilterOptions : []; %>
+          <% _attrFilters.forEach(function (opt) { %>
+          <option value="<%= opt.slug %>" <%= _attrKey === opt.slug ? 'selected' : '' %>><%= opt.label %><% if (opt.segment_slug) { %> (<%= opt.segment_slug %>)<% } %></option>
+          <% }); %>
+        </select>
+      </label>
+      <label class="field field--inbox contact-filter-inline-item contact-filter-inline-item--value" id="contact-attr-value-wrap" <%= !_attrKey ? 'hidden' : '' %>>
+        <span class="field-label">Valor</span>
+        <input
+          type="search"
+          name="attr_value"
+          value="<%= _attrVal %>"
+          placeholder="Contiene…"
+          class="inbox-search-input"
+          id="contact-attr-value"
+          <%= !_attrKey ? 'disabled' : '' %>
+        />
+      </label>
+    </div>
   </form>
   <% if (view === 'list' && contacts && contacts.length && segments.length) { %>
   <span id="contact-bulk-live" class="sr-only" aria-live="polite"></span>
@@ -182,7 +181,7 @@
         <span class="sr-only">Seleccionar contacto</span>
       </label>
       <% } %>
-      <a class="inbox-chat-link" href="<%= basePath %>/contacts/<%= c.id %><%= _cq %>">
+      <a class="inbox-chat-link" href="<%= contactEditHref(c.id) %>">
         <span class="inbox-chat-link-main">
           <span class="inbox-chat-row-top">
             <span class="inbox-chat-title"><%= c.name || c.phone %></span>
@@ -204,10 +203,77 @@
           </span>
         </span>
       </a>
+      <div class="contact-row-actions" role="group" aria-label="Acciones del contacto">
+        <a
+          class="contact-row-action-btn"
+          href="<%= contactChatHref(c) %>"
+          title="Abrir chat"
+          aria-label="Abrir chat"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+          </svg>
+        </a>
+        <a
+          class="contact-row-action-btn <%= _contactSel === c.id ? 'is-active' : '' %>"
+          href="<%= contactEditHref(c.id) %>"
+          title="Editar contacto"
+          aria-label="Editar contacto"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z" />
+          </svg>
+        </a>
+      </div>
     </li>
     <% }); %>
   </ul>
   <% } %>
+  <details class="contact-fab">
+    <summary
+      class="contact-fab__trigger"
+      title="Añadir o importar contactos"
+      aria-label="Añadir o importar contactos"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M12 5v14" />
+        <path d="M5 12h14" />
+      </svg>
+    </summary>
+    <div class="contact-fab__menu" role="menu" aria-label="Acciones de contactos">
+      <a
+        href="<%= basePath %>/contacts/new<%= _cq %>"
+        class="contact-fab__action <%= view === 'new' ? 'is-active' : '' %>"
+        role="menuitem"
+      >
+        <span class="contact-fab__action-icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <line x1="19" y1="8" x2="19" y2="14" />
+            <line x1="22" y1="11" x2="16" y2="11" />
+          </svg>
+        </span>
+        <span>Añadir contacto</span>
+      </a>
+      <a
+        href="<%= basePath %>/contacts/import<%= _cq %>"
+        class="contact-fab__action <%= view === 'import' ? 'is-active' : '' %>"
+        role="menuitem"
+      >
+        <span class="contact-fab__action-icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <path d="M12 18V9" />
+            <polyline points="9 12 12 9 15 12" />
+          </svg>
+        </span>
+        <span>Carga masiva</span>
+      </a>
+    </div>
+  </details>
 </aside>
 <section class="inbox-main" aria-label="Detalle de contactos">
   <% if (view === 'list') { %>
@@ -217,7 +283,7 @@
         <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       </span>
       <h2 class="inbox-empty-heading">Contactos</h2>
-      <p class="inbox-empty-text">Selecciona un contacto en la lista, usa <strong>Añadir</strong> para uno solo o <strong>Excel</strong> para importar CSV / Excel.</p>
+      <p class="inbox-empty-text">Selecciona un contacto en la lista o usa el botón <strong>+</strong> para añadir uno nuevo o hacer una carga masiva.</p>
       <% if (typeof contactUpdated !== 'undefined' && contactUpdated) { %>
       <p class="toast toast--ok">Contacto actualizado.</p>
       <% } %>
@@ -262,9 +328,9 @@
           <% if (segments.length === 0) { %>
           <p class="inline-warn">Define segmentos en <strong>Segmentos</strong>.</p>
           <% } else { %>
-          <div class="segment-checkbox-grid segment-checkbox-grid--responsive">
+          <div class="segment-checkbox-grid segment-checkbox-grid--responsive segment-checkbox-grid--compact">
             <% segments.forEach(function (segment) { %>
-            <label class="segment-checkbox-label">
+            <label class="segment-checkbox-label segment-checkbox-label--compact">
               <input type="checkbox" name="segments" value="<%= segment.value %>" />
               <span><%= segment.label %></span>
             </label>
@@ -370,10 +436,10 @@
         </label>
         <fieldset class="field segment-chips-fieldset">
           <legend class="field-label">Segmentos</legend>
-          <div class="segment-checkbox-grid segment-checkbox-grid--responsive">
+          <div class="segment-checkbox-grid segment-checkbox-grid--responsive segment-checkbox-grid--compact">
             <% const _editSlugs = contact.segment_slugs || []; %>
             <% segments.forEach(function (segment) { %>
-            <label class="segment-checkbox-label">
+            <label class="segment-checkbox-label segment-checkbox-label--compact">
               <input
                 type="checkbox"
                 name="segments"
@@ -398,18 +464,20 @@
             attributeGateBySegment: false
           }) %>
         </div>
-        <div class="form-actions">
-          <button type="submit" <%= _isReplaced ? 'disabled' : '' %>>Guardar cambios</button>
+        <div class="form-actions form-actions--resource">
+          <button type="submit" class="small-btn primary" <%= _isReplaced ? 'disabled' : '' %>>Guardar cambios</button>
         </div>
       </form>
-      <% if (_isReplaced) { %>
-      <form method="POST" action="<%= basePath %>/contacts/<%= contact.id %>/reactivate" class="inline-delete-form" onsubmit="return confirm('¿Reactivar este contacto?');">
-        <button type="submit" class="small-btn">Reactivar contacto</button>
-      </form>
-      <% } %>
-      <form method="POST" action="<%= basePath %>/contacts/<%= contact.id %>/delete" class="inline-delete-form" onsubmit="return confirm('¿Eliminar este contacto?');">
-        <button type="submit" class="small-btn danger-outline">Eliminar contacto</button>
-      </form>
+      <div class="resource-secondary-actions">
+        <% if (_isReplaced) { %>
+        <form method="POST" action="<%= basePath %>/contacts/<%= contact.id %>/reactivate" class="inline-delete-form inline-delete-form--spaced" onsubmit="return confirm('¿Reactivar este contacto?');">
+          <button type="submit" class="small-btn secondary">Reactivar contacto</button>
+        </form>
+        <% } %>
+        <form method="POST" action="<%= basePath %>/contacts/<%= contact.id %>/delete" class="inline-delete-form inline-delete-form--spaced" onsubmit="return confirm('¿Eliminar este contacto?');">
+          <button type="submit" class="small-btn danger-outline">Eliminar contacto</button>
+        </form>
+      </div>
     </div>
   </div>
   <% } %>
@@ -526,6 +594,32 @@
     document.querySelectorAll('input[name="segments"]').forEach(function (cb) {
       cb.addEventListener('change', syncContactAttrSegmentFields);
     });
+
+    var attrKeyEl = document.getElementById('contact-attr-key');
+    var attrValueWrap = document.getElementById('contact-attr-value-wrap');
+    var attrValueInput = document.getElementById('contact-attr-value');
+
+    function syncAttrValueField() {
+      var hasAttr = attrKeyEl && attrKeyEl.value;
+      if (attrValueWrap) attrValueWrap.hidden = !hasAttr;
+      if (attrValueInput) {
+        attrValueInput.disabled = !hasAttr;
+        if (!hasAttr) attrValueInput.value = '';
+      }
+    }
+
+    if (attrKeyEl) {
+      attrKeyEl.addEventListener('change', syncAttrValueField);
+      syncAttrValueField();
+    }
+
+    var fabEl = document.querySelector('.contact-fab');
+    if (fabEl) {
+      document.addEventListener('click', function (ev) {
+        if (!fabEl.open) return;
+        if (!fabEl.contains(ev.target)) fabEl.open = false;
+      });
+    }
   })();
 </script>
 <%- include('layouts/inbox-shell-end') %>

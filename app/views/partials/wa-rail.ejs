@@ -1,6 +1,7 @@
 <% const nav = typeof activeNav !== 'undefined' ? activeNav : ''; %>
 <% const showAdmin = typeof showAdminNav !== 'undefined' && showAdminNav; %>
 <% const railInitial = requireAuth && currentUser && currentUser.email ? String(currentUser.email).charAt(0).toUpperCase() : '?'; %>
+<% const mobileMoreActive = ['segments', 'templates', 'attributes', 'anuncios'].includes(nav); %>
 <aside class="wa-rail" aria-label="Navegación principal">
   <div class="wa-rail__brand">
     <a href="<%= basePath %>/campaigns" class="wa-rail__logo-link" title="MALI WhatsApp" aria-label="Inicio">
@@ -60,7 +61,7 @@
       <span class="wa-rail__label">Contactos</span>
     </a>
     <a
-      class="wa-rail__item nav-item <%= nav === 'segments' ? 'is-active' : '' %>"
+      class="wa-rail__item wa-rail__item--mobile-secondary nav-item <%= nav === 'segments' ? 'is-active' : '' %>"
       href="<%= basePath %>/segments"
       aria-label="Segmentos"
       title="Segmentos"
@@ -71,18 +72,7 @@
       <span class="wa-rail__label">Segmentos</span>
     </a>
     <a
-      class="wa-rail__item nav-item <%= nav === 'attributes' ? 'is-active' : '' %>"
-      href="<%= basePath %>/attributes"
-      aria-label="Atributos de contacto"
-      title="Atributos de contacto"
-    >
-      <span class="wa-rail__icon" aria-hidden="true"
-        ><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h6"/><circle cx="17" cy="17" r="3"/></svg
-      ></span>
-      <span class="wa-rail__label">Atributos</span>
-    </a>
-    <a
-      class="wa-rail__item nav-item <%= nav === 'templates' ? 'is-active' : '' %>"
+      class="wa-rail__item wa-rail__item--mobile-secondary nav-item <%= nav === 'templates' ? 'is-active' : '' %>"
       href="<%= basePath %>/templates"
       aria-label="Plantillas"
       title="Plantillas WhatsApp"
@@ -93,7 +83,18 @@
       <span class="wa-rail__label">Plantillas</span>
     </a>
     <a
-      class="wa-rail__item nav-item <%= nav === 'anuncios' ? 'is-active' : '' %>"
+      class="wa-rail__item wa-rail__item--mobile-secondary nav-item <%= nav === 'attributes' ? 'is-active' : '' %>"
+      href="<%= basePath %>/attributes"
+      aria-label="Atributos de contacto"
+      title="Atributos de contacto"
+    >
+      <span class="wa-rail__icon" aria-hidden="true"
+        ><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h6"/><circle cx="17" cy="17" r="3"/></svg
+      ></span>
+      <span class="wa-rail__label">Atributos</span>
+    </a>
+    <a
+      class="wa-rail__item wa-rail__item--mobile-secondary nav-item <%= nav === 'anuncios' ? 'is-active' : '' %>"
       href="<%= basePath %>/anuncios"
       aria-label="Anuncios Meta"
       title="Anuncios Click-to-WhatsApp"
@@ -103,6 +104,20 @@
       ></span>
       <span class="wa-rail__label">Anuncios</span>
     </a>
+    <details class="wa-rail__more <%= mobileMoreActive ? 'is-active' : '' %>">
+      <summary class="wa-rail__item wa-rail__item--more" aria-label="Más secciones" title="Más">
+        <span class="wa-rail__icon" aria-hidden="true"
+          ><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/><circle cx="5" cy="12" r="1.5"/></svg
+        ></span>
+        <span class="wa-rail__label">Más</span>
+      </summary>
+      <div class="wa-rail__more-panel" role="menu" aria-label="Más secciones">
+        <a href="<%= basePath %>/segments" class="<%= nav === 'segments' ? 'is-active' : '' %>" role="menuitem">Segmentos</a>
+        <a href="<%= basePath %>/templates" class="<%= nav === 'templates' ? 'is-active' : '' %>" role="menuitem">Plantillas</a>
+        <a href="<%= basePath %>/attributes" class="<%= nav === 'attributes' ? 'is-active' : '' %>" role="menuitem">Atributos</a>
+        <a href="<%= basePath %>/anuncios" class="<%= nav === 'anuncios' ? 'is-active' : '' %>" role="menuitem">Anuncios</a>
+      </div>
+    </details>
   </nav>
 
   <div class="wa-rail__footer">

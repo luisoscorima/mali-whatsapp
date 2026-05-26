@@ -975,6 +975,32 @@ html[data-theme='dark'] .campaign-recipients-list .campaign-recipient-row.field-
   padding-top: 4px;
 }
 
+.form-actions--resource {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.resource-secondary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.inline-delete-form--spaced,
+.inline-delete-form--inline {
+  margin: 0;
+}
+
+.inline-delete-form--inline {
+  display: inline-flex;
+  align-items: center;
+}
+
 #campaign-form .form-actions {
   display: flex;
   justify-content: center;
@@ -2242,6 +2268,23 @@ a.small-btn.primary {
   align-items: flex-start;
   gap: 12px 16px;
   margin-bottom: 16px;
+}
+
+.campaign-template-head {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.template-sync-row--inline {
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.template-sync-row--inline .inline-form-sync button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .inline-form-sync {

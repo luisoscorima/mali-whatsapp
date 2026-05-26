@@ -25,7 +25,7 @@
     <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar', refreshAriaLabel: 'Actualizar atributos' }) %>
   </div>
   <div class="inbox-filters inbox-filters--campaign-new">
-    <a href="<%= basePath %>/attributes/new?scope=area" class="small-btn primary <%= _view === 'new' ? 'is-active' : '' %>">Nuevo atributo</a>
+    <a href="<%= basePath %>/attributes/new?scope=area" class="small-btn primary <%= _view === 'new' ? 'is-active' : '' %>">+ Nuevo atributo</a>
   </div>
   <% if (!definitions || !definitions.length) { %>
   <p class="empty-state inbox-empty-list">Sin definiciones. Crea atributos del área o por segmento.</p>
@@ -163,11 +163,15 @@
         <label class="field">
           <input type="checkbox" name="active" value="1" <%= _d.active !== false ? 'checked' : '' %> /> Activo (visible en formularios)
         </label>
-        <button type="submit" class="small-btn primary">Guardar</button>
+        <div class="form-actions form-actions--resource">
+          <button type="submit" class="small-btn primary">Guardar cambios</button>
+        </div>
       </form>
-      <form method="post" action="<%= basePath %>/attributes/<%= _d.id %>/delete" class="inline-delete-form" onsubmit="return confirm('¿Eliminar esta definición? Los valores guardados en contactos permanecen en la base de datos.');">
-        <button type="submit" class="small-btn danger-outline">Eliminar definición</button>
-      </form>
+      <div class="resource-secondary-actions">
+        <form method="post" action="<%= basePath %>/attributes/<%= _d.id %>/delete" class="inline-delete-form inline-delete-form--spaced" onsubmit="return confirm('¿Eliminar esta definición? Los valores guardados en contactos permanecen en la base de datos.');">
+          <button type="submit" class="small-btn danger-outline">Eliminar definición</button>
+        </form>
+      </div>
     </div>
   </div>
   <% } %>

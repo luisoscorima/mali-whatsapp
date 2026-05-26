@@ -1,5 +1,20 @@
 <% const _segSel = typeof selectedSegmentId !== 'undefined' ? selectedSegmentId : null; %>
 <% var _segmentsMobileDetail = view === 'detail' || view === 'new'; %>
+<% function segmentMemberLabel(slug) {
+  if (!slug) return '';
+  const s = segments.find(function (x) { return x.value === slug; });
+  return s ? s.label : slug;
+}
+function segmentMemberColorKey(slug) {
+  if (!slug) return 'slate';
+  const s = segments.find(function (x) { return x.value === slug; });
+  return s && s.colorKey ? s.colorKey : 'slate';
+}
+function segmentMemberChatHref(member) {
+  const targetId = member && member.chat_target_id ? member.chat_target_id : -(member && member.id ? member.id : 0);
+  return basePath + '/conversations/' + targetId;
+}
+%>
 <%- include('layouts/inbox-shell-start', {
   pageTitle,
   basePath,
@@ -19,7 +34,7 @@
     <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar segmentos', refreshAriaLabel: 'Actualizar segmentos' }) %>
   </div>
   <div class="inbox-filters inbox-filters--campaign-new">
-    <a href="<%= basePath %>/segments/new" class="small-btn primary">Añadir segmento</a>
+    <a href="<%= basePath %>/segments/new" class="small-btn primary">+ Añadir segmento</a>
   </div>
   <% if (!segments || segments.length === 0) { %>
   <p class="empty-state inbox-empty-list">No hay segmentos definidos.</p>
@@ -83,6 +98,14 @@
     <% if (typeof segmentsSaved !== 'undefined' && segmentsSaved) { %>
     <p class="toast toast--ok">Segmentos actualizados.</p>
     <% } %>
+    <% if (typeof segmentMemberRemoved !== 'undefined' && segmentMemberRemoved) { %>
+    <p class="toast toast--ok">Contacto quitado del segmento.</p>
+    <% } %>
+    <% if (typeof segmentMemberError !== 'undefined' && segmentMemberError === 'last_segment') { %>
+    <p class="toast toast--warn">No se puede quitar el único segmento del contacto.</p>
+    <% } else if (typeof segmentMemberError !== 'undefined' && segmentMemberError === 'not_found') { %>
+    <p class="toast toast--warn">Ese contacto ya no pertenece a este segmento.</p>
+    <% } %>
     <div class="card">
       <h2 class="card-title">Editar segmento</h2>
       <p class="card-lead">Si cambias el slug, se actualizan los contactos y el histórico de campañas de ese segmento en esta área.</p>
@@ -112,13 +135,65 @@
             <input type="number" name="sort_order" value="<%= selectedSegment.sort_order %>" step="1" class="segment-order-input" />
           </label>
           <%- include('partials/segment-color-field', { selectedColorKey: selectedSegment.colorKey || 'teal', compactRow: true }) %>
-          <button type="submit" class="small-btn segment-save-btn">Guardar</button>
+        </div>
+        <div class="form-actions form-actions--resource">
+          <button type="submit" class="small-btn primary">Guardar cambios</button>
         </div>
       </form>
-      <form method="POST" action="<%= basePath %>/settings/segment-delete" class="inline-delete-form" onsubmit="return confirm('¿Borrar este segmento? Se quitará de los contactos (vínculos), no se borran las personas.');">
-        <input type="hidden" name="id" value="<%= selectedSegment.id %>" />
-        <button type="submit" class="small-btn danger-outline">Borrar</button>
-      </form>
+      <div class="resource-secondary-actions">
+        <form method="POST" action="<%= basePath %>/settings/segment-delete" class="inline-delete-form inline-delete-form--spaced" onsubmit="return confirm('¿Borrar este segmento? Se quitará de los contactos (vínculos), no se borran las personas.');">
+          <input type="hidden" name="id" value="<%= selectedSegment.id %>" />
+          <button type="submit" class="small-btn danger-outline">Borrar segmento</button>
+        </form>
+      </div>
+    </div>
+    <div class="card segment-members-card">
+      <div class="segment-members-card__head">
+        <div>
+          <h2 class="card-title">Contactos del segmento</h2>
+          <p class="card-lead">Aquí puedes revisar quién pertenece a <strong><%= selectedSegment.label %></strong>, abrir su chat o quitar solo este vínculo.</p>
+        </div>
+        <span class="badge neutral"><%= (segmentMembers || []).length %> contacto(s)</span>
+      </div>
+      <% if (!segmentMembers || segmentMembers.length === 0) { %>
+      <p class="empty-state">No hay contactos activos en este segmento.</p>
+      <% } else { %>
+      <ul class="segment-members-list" aria-label="Contactos del segmento">
+        <% segmentMembers.forEach(function (member) { %>
+        <% const _memberSlugs = member.segment_slugs || []; %>
+        <% const _canRemove = _memberSlugs.length > 1; %>
+        <li class="segment-members-item">
+          <div class="segment-members-item__main">
+            <div class="segment-members-item__top">
+              <strong class="segment-members-item__name"><%= member.name || member.phone %></strong>
+              <span class="mono muted"><%= member.phone %></span>
+            </div>
+            <div class="contact-segment-chips segment-members-item__chips" role="group" aria-label="Segmentos del contacto">
+              <% _memberSlugs.forEach(function (slug) { %>
+              <span class="inbox-chat-segment inbox-chat-segment--contact-pill" data-seg-tone="<%= segmentMemberColorKey(slug) %>"><%= segmentMemberLabel(slug) %></span>
+              <% }); %>
+            </div>
+          </div>
+          <div class="segment-members-item__actions" role="group" aria-label="Acciones del contacto">
+            <a class="contact-row-action-btn" href="<%= segmentMemberChatHref(member) %>" title="Abrir chat" aria-label="Abrir chat">
+              <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+              </svg>
+            </a>
+            <a class="contact-row-action-btn" href="<%= basePath %>/contacts/<%= member.id %>" title="Editar contacto" aria-label="Editar contacto">
+              <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            </a>
+            <form method="POST" action="<%= basePath %>/segments/<%= selectedSegment.id %>/contacts/<%= member.id %>/remove" class="inline-delete-form inline-delete-form--inline" onsubmit="return confirm('¿Quitar este contacto del segmento?');">
+              <button type="submit" class="small-btn danger-outline" <%= !_canRemove ? 'disabled title="El contacto debe conservar al menos un segmento"' : '' %>>Quitar</button>
+            </form>
+          </div>
+        </li>
+        <% }); %>
+      </ul>
+      <% } %>
     </div>
   </div>
   <% } %>

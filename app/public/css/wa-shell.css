@@ -468,6 +468,67 @@ html[data-theme='dark'] .wa-rail__logo--dark {
   opacity: 1;
 }
 
+.wa-rail__item--mobile-secondary {
+  display: flex;
+}
+
+.wa-rail__more {
+  position: relative;
+  display: none;
+  list-style: none;
+}
+
+.wa-rail__more[open] {
+  z-index: 300;
+}
+
+.wa-rail__more summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.wa-rail__more summary::-webkit-details-marker {
+  display: none;
+}
+
+.wa-rail__more.is-active .wa-rail__item--more,
+.wa-rail__more[open] .wa-rail__item--more {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.wa-rail__more-panel {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 0;
+  width: min(220px, calc(100vw - 100px));
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.18);
+  display: grid;
+  gap: 6px;
+  z-index: 220;
+}
+
+.wa-rail__more-panel a {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.wa-rail__more-panel a:hover,
+.wa-rail__more-panel a.is-active {
+  background: color-mix(in srgb, var(--accent-soft) 70%, var(--surface));
+  color: var(--accent);
+}
+
 @media (hover: none) {
   .wa-rail__label {
     display: none;
@@ -679,7 +740,7 @@ html[data-theme='dark'] .wa-rail__logo--dark {
     height: auto;
     min-height: 52px;
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     column-gap: 6px;
     padding: 6px max(8px, env(safe-area-inset-right, 0px))
@@ -689,9 +750,7 @@ html[data-theme='dark'] .wa-rail__logo--dark {
   }
 
   .wa-layout--dashboard .wa-rail__brand {
-    margin: 0;
-    justify-self: start;
-    flex-shrink: 0;
+    display: none;
   }
 
   .wa-layout--dashboard .wa-rail__logo-wrap {
@@ -716,9 +775,28 @@ html[data-theme='dark'] .wa-rail__logo--dark {
     flex: 1 1 0;
     min-width: 0;
     width: auto;
-    max-width: 44px;
+    max-width: 48px;
     min-height: 40px;
     padding: 4px 2px;
+  }
+
+  .wa-layout--dashboard .wa-rail__item--mobile-secondary {
+    display: none;
+  }
+
+  .wa-layout--dashboard .wa-rail__more {
+    display: block;
+  }
+
+  .wa-layout--dashboard .wa-rail__more-panel {
+    left: auto;
+    right: 0;
+    top: auto;
+    bottom: calc(100% + 8px);
+    width: min(240px, calc(100vw - 24px));
+    max-height: min(65vh, 360px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .wa-layout--dashboard .wa-rail__icon svg {

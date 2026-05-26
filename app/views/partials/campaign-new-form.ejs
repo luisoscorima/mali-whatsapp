@@ -6,13 +6,6 @@
   <% if (typeof templatesSyncError !== 'undefined' && templatesSyncError) { %>
   <p class="inline-warn">No se pudieron sincronizar: <%= templatesSyncError %></p>
   <% } %>
-  <div class="template-sync-row">
-    <form method="POST" action="<%= basePath %>/templates/sync" class="inline-form-sync">
-      <input type="hidden" name="returnTo" value="campaigns" />
-      <button type="submit" class="secondary">Sincronizar todo</button>
-    </form>
-    <p class="card-lead template-sync-hint">Actualiza todas las plantillas de tu cuenta WhatsApp (Meta). Para campañas solo se mostrarán las <strong>aprobadas</strong>.</p>
-  </div>
   <% if (!syncedTemplates || syncedTemplates.length === 0) { %>
   <p class="inline-warn">No hay plantillas aprobadas en caché. Pulsa <strong>Sincronizar todo</strong> (requiere token con permisos para la cuenta de WhatsApp).</p>
   <% } %>
@@ -93,9 +86,21 @@
     </div>
 
     <div class="form-section">
-      <div class="campaign-step-head">
-        <span class="campaign-step-badge campaign-step-badge--compact" aria-hidden="true">3</span>
-        <span class="campaign-segments-titleline">Plantilla (Meta)</span>
+      <div class="campaign-template-head">
+        <div class="campaign-step-head">
+          <span class="campaign-step-badge campaign-step-badge--compact" aria-hidden="true">3</span>
+          <span class="campaign-segments-titleline">Plantilla (Meta)</span>
+        </div>
+        <div class="template-sync-row template-sync-row--inline">
+          <form method="POST" action="<%= basePath %>/templates/sync" class="inline-form-sync">
+            <input type="hidden" name="returnTo" value="campaigns" />
+            <button type="submit" class="secondary">
+              <span aria-hidden="true">↻</span>
+              <span>Sincronizar todo</span>
+            </button>
+          </form>
+          <p class="card-lead template-sync-hint">Actualiza las plantillas de tu cuenta WhatsApp (Meta). En campañas solo se mostrarán las <strong>aprobadas</strong>.</p>
+        </div>
       </div>
       <label class="field">
         <span class="field-label">Seleccionar plantilla</span>
