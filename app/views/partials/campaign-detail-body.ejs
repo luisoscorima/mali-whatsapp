@@ -6,6 +6,18 @@
     var _performanceMetrics = _analytics ? _analytics.performance : [];
     var _funnelMetrics = _analytics ? _analytics.funnel : [];
     var _incidentMetrics = _analytics ? _analytics.incidents : [];
+    var _incidentTotalMetric = null;
+    _globalMetrics.forEach(function (metric) {
+      if (!_incidentTotalMetric && metric && metric.label === 'Problemas de entrega') {
+        _incidentTotalMetric = Object.assign({}, metric, { label: 'Total de incidencias' });
+      }
+    });
+    var _incidentMetricsWithTotal = _incidentTotalMetric ? [_incidentTotalMetric].concat(_incidentMetrics) : _incidentMetrics;
+    var _funnelStatusMap = {
+      'Pendientes de entrega': 'sent',
+      'Entregados no leídos': 'delivered',
+      'Leídos': 'read'
+    };
     var _performanceNote = _analytics ? _analytics.performanceNote : '';
     var _incidentsNote = _analytics ? _analytics.incidentsNote : '';
     var _costInfo = _analytics ? _analytics.cost : null;
@@ -195,7 +207,7 @@
             <% } else { %>
             <span class="campaign-meta-funnel-item"<% if (metric.tooltip) { %> title="<%= metric.tooltip %>"<% } %>>
             <% } %>
-              <strong><%= metric.label %></strong> <%= metric.display %>
+              <strong><%= metric.label %><% if (_funnelStatusMap[metric.label]) { %> (<%= _funnelStatusMap[metric.label] %>)<% } %></strong> <%= metric.display %>
             <% if (metric.action) { %>
             </button>
             <% } else { %>
@@ -206,6 +218,28 @@
           <p class="campaign-meta-funnel-ratios muted">
             Validación: pendientes de entrega + entregados no leídos + leídos = enviados.
           </p>
+        </details>
+        <details class="campaign-concepts-legend">
+          <summary class="campaign-concepts-legend__summary">Leyenda de conceptos</summary>
+          <div class="campaign-concepts-legend__body">
+            <p class="campaign-concepts-legend__intro muted">
+              Meta trabaja con estados acumulativos en rendimiento y con estados exclusivos en el embudo. Los estados técnicos de referencia son <code>sent</code>, <code>delivered</code> y <code>read</code>.
+            </p>
+            <ul class="campaign-concepts-legend__list">
+              <li><strong>Pendientes de entrega (sent)</strong>: enviados que aún no fueron confirmados como entregados o leídos.</li>
+              <li><strong>Entregados no leídos (delivered)</strong>: entregados correctamente, pero aún no leídos.</li>
+              <li><strong>Leídos (read)</strong>: subconjunto final de entregados.</li>
+              <li><strong>Enviados</strong>: <code>sent + delivered + read</code>.</li>
+              <li><strong>Entregados</strong>: <code>delivered + read</code>.</li>
+              <li><strong>Problemas de entrega</strong>: casos en <code>error</code>, <code>failed</code> o <code>undelivered</code>, además de destinatarios aún sin traza exitosa cuando la campaña sigue en proceso.</li>
+              <li><strong>Total destinatarios</strong>: enviados + problemas de entrega.</li>
+            </ul>
+            <div class="campaign-concepts-legend__formulas">
+              <p><code>Pendientes de entrega (sent) + Entregados no leídos (delivered) + Leídos (read) = Enviados</code></p>
+              <p><code>Entregados no leídos (delivered) + Leídos (read) = Entregados</code></p>
+              <p><code>Enviados + Problemas de entrega = Total destinatarios</code></p>
+            </div>
+          </div>
         </details>
       </section>
 
@@ -262,8 +296,8 @@
             <p class="campaign-dashboard-section__lead muted">Detalle técnico de problemas reportados por Meta. Haz clic en un indicador para abrir las incidencias activas filtradas.</p>
           </div>
         </div>
-        <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--3" role="group" aria-label="Incidencias de entrega">
-          <% _incidentMetrics.forEach(function (metric) { %>
+        <div class="metrics-row campaign-dashboard-grid campaign-dashboard-grid--4" role="group" aria-label="Incidencias de entrega">
+          <% _incidentMetricsWithTotal.forEach(function (metric) { %>
           <% if (metric.action) { %>
           <button
             type="button"

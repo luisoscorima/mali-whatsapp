@@ -2074,6 +2074,53 @@ button.metric.campaign-summary-metric.metric--action:focus-visible {
   outline: none;
 }
 
+.campaign-concepts-legend {
+  margin-top: 0.9rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line, #e5e7eb);
+}
+
+.campaign-concepts-legend__summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--accent, #2563eb);
+  list-style: none;
+}
+
+.campaign-concepts-legend__summary::-webkit-details-marker {
+  display: none;
+}
+
+.campaign-concepts-legend__body {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 0.7rem;
+}
+
+.campaign-concepts-legend__intro {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.campaign-concepts-legend__list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.84rem;
+}
+
+.campaign-concepts-legend__formulas {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.campaign-concepts-legend__formulas p {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
 @media (max-width: 920px) {
   .campaign-dashboard-grid--4 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
