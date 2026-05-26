@@ -77,7 +77,7 @@
         <fieldset class="field">
           <legend class="field-label">Ámbito</legend>
           <label><input type="radio" name="scope" value="area" <%= (typeof prefillScope === 'undefined' || prefillScope !== 'segment') ? 'checked' : '' %> /> Todo el área (<%= areaLabel %>)</label>
-          <label><input type="radio" name="scope" value="segment" <%= prefillScope === 'segment' ? 'checked' : '' %> /> Solo un segmento</label>
+          <label><input type="radio" name="scope" value="segment" <%= (typeof prefillScope !== 'undefined' && prefillScope === 'segment') ? 'checked' : '' %> /> Solo un segmento</label>
         </fieldset>
         <label class="field" id="attr-new-segment-wrap">
           <span class="field-label">Segmento</span>

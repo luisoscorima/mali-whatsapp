@@ -1212,7 +1212,7 @@ html[data-theme='dark'] .settings-ai-prompt-textarea {
 }
 
 .template-live-preview__body {
-  white-space: normal;
+  white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.45;
 }

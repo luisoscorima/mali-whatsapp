@@ -172,6 +172,12 @@ function registerTemplates(app, ctx) {
     return findTemplateReplacementId(area, previousTemplate);
   }
 
+  function redirectPathForCreateError(sourceTemplateId) {
+    return Number.isInteger(sourceTemplateId) && sourceTemplateId > 0
+      ? `/templates/${sourceTemplateId}`
+      : '/templates/new';
+  }
+
   async function compileBuilderForArea(area, reqBody) {
     const builderPayload = parseTemplateBuilderPayload(reqBody);
     return compileTemplateBuilderPayload(builderPayload, {
@@ -304,6 +310,11 @@ function registerTemplates(app, ctx) {
 
   app.post('/templates/create', templateSyncLimiter, async (req, res) => {
     const area = normalizeArea(req.user.area);
+    const sourceTemplateId = Number.parseInt(String(req.body.sourceTemplateId || '').trim(), 10);
+    const sourceTemplate =
+      Number.isInteger(sourceTemplateId) && sourceTemplateId > 0
+        ? await loadTemplateById(area, sourceTemplateId)
+        : null;
     const name = String(req.body.name || '')
       .trim()
       .toLowerCase()
@@ -313,7 +324,21 @@ function registerTemplates(app, ctx) {
     const category = String(req.body.category || 'MARKETING').trim().toUpperCase();
 
     if (!config.allowedTemplateNameRegex.test(name)) {
-      return res.redirect(appPath(`/templates/new?error=${encodeURIComponent('El nombre debe ir en snake_case.')}`));
+      return res.redirect(
+        appPath(`${redirectPathForCreateError(sourceTemplate ? sourceTemplate.id : null)}?error=${encodeURIComponent('El nombre debe ir en snake_case.')}`)
+      );
+    }
+
+    if (
+      sourceTemplate &&
+      String(sourceTemplate.name || '').trim().toLowerCase() === name &&
+      String(sourceTemplate.language || '').trim() === language
+    ) {
+      return res.redirect(
+        appPath(
+          `/templates/${sourceTemplate.id}?error=${encodeURIComponent('Para crear una nueva versión usa otro nombre o idioma distinto al original.')}`
+        )
+      );
     }
 
     try {
@@ -372,7 +397,11 @@ function registerTemplates(app, ctx) {
       res.redirect(appPath(newId ? `/templates/${newId}?flash=created` : '/templates?flash=created'));
     } catch (error) {
       logError(req, 'Error creando plantilla en Meta', error);
-      res.redirect(appPath(`/templates/new?error=${encodeURIComponent(error.message)}`));
+      res.redirect(
+        appPath(
+          `${redirectPathForCreateError(sourceTemplate ? sourceTemplate.id : null)}?error=${encodeURIComponent(error.message)}`
+        )
+      );
     }
   });
 

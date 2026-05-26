@@ -2,6 +2,20 @@
 <% const _d = templateDisplay; %>
 <% const _def = typeof templateDefinition !== 'undefined' ? templateDefinition : null; %>
 <% const _aliasSummary = Array.isArray(templateAliasSummary) ? templateAliasSummary : []; %>
+<%
+  const _previewState = typeof templateBuilderState !== 'undefined' && templateBuilderState
+    ? templateBuilderState
+    : {
+        header: { type: 'none', text: '', exampleValues: [], exampleMediaUrl: '', exampleHandle: '' },
+        body: { text: _d && _d.bodyText ? _d.bodyText : '', exampleValues: [] },
+        footer: { text: _d && _d.footerText ? _d.footerText : '' },
+        buttons: _d && Array.isArray(_d.buttons)
+          ? _d.buttons.map(function (btn) {
+              return { type: 'url', text: btn.text || '', url: btn.url || '', exampleValues: [] };
+            })
+          : []
+      };
+%>
 <% const _canEdit = typeof templateCanEdit !== 'undefined' && templateCanEdit; %>
 <div class="card template-detail-card">
   <dl class="detail-dl detail-dl--compact">
@@ -18,26 +32,70 @@
 
 <div class="card template-preview-card">
   <h2 class="card-title">Vista previa</h2>
-  <% if (_d.headerFormat && _d.headerFormat !== 'TEXT') { %>
-  <p class="muted">Cabecera: <%= _d.headerFormat %></p>
-  <% } else if (_d.headerText) { %>
-  <p class="template-preview-block"><strong>Cabecera:</strong> <%= _d.headerText %></p>
-  <% } %>
-  <% if (_d.bodyText) { %>
-  <p class="template-preview-block template-preview-block--body"><%= _d.bodyText %></p>
-  <% } else { %>
-  <p class="muted">Sin texto de cuerpo almacenado.</p>
-  <% } %>
-  <% if (_d.footerText) { %>
-  <p class="template-preview-block muted"><%= _d.footerText %></p>
-  <% } %>
-  <% if (_d.buttons && _d.buttons.length) { %>
-  <ul class="template-preview-buttons">
-    <% _d.buttons.forEach(function (btn) { %>
-    <li><span class="badge neutral"><%= btn.type %></span> <%= btn.text || btn.url || '—' %></li>
-    <% }); %>
-  </ul>
-  <% } %>
+  <div class="template-live-preview template-live-preview--detail">
+    <div class="template-live-preview__sticky">
+      <div class="template-live-preview__phone">
+        <div class="template-live-preview__screen">
+          <div class="template-live-preview__message">
+            <% if (_previewState.header && _previewState.header.type === 'text' && _previewState.header.text) { %>
+            <div class="template-live-preview__header-text"><%= _previewState.header.text %></div>
+            <% } %>
+
+            <% if (_previewState.header && _previewState.header.type === 'image') { %>
+              <% if (_previewState.header.exampleMediaUrl) { %>
+              <div class="template-live-preview__media template-live-preview__media--image">
+                <img src="<%= _previewState.header.exampleMediaUrl %>" alt="Imagen de cabecera" loading="lazy" />
+              </div>
+              <% } else { %>
+              <div class="template-live-preview__media template-live-preview__media--placeholder">
+                <span class="badge neutral">IMAGE</span><span>Imagen de cabecera</span>
+              </div>
+              <% } %>
+            <% } %>
+
+            <% if (_previewState.header && _previewState.header.type === 'video') { %>
+            <div class="template-live-preview__media template-live-preview__media--placeholder">
+              <span class="badge neutral">VIDEO</span><span>Video de cabecera</span>
+            </div>
+            <% } %>
+
+            <% if (_previewState.header && _previewState.header.type === 'document') { %>
+            <div class="template-live-preview__media template-live-preview__media--placeholder">
+              <span class="badge neutral">DOCUMENT</span><span>Documento de cabecera</span>
+            </div>
+            <% } %>
+
+            <% if (_previewState.body && _previewState.body.text) { %>
+            <div class="template-live-preview__body"><%= _previewState.body.text %></div>
+            <% } else { %>
+            <div class="template-live-preview__body template-live-preview__body--empty">Sin texto de cuerpo almacenado.</div>
+            <% } %>
+
+            <% if (_previewState.footer && _previewState.footer.text) { %>
+            <div class="template-live-preview__footer"><%= _previewState.footer.text %></div>
+            <% } %>
+
+            <% if (_previewState.buttons && _previewState.buttons.length) { %>
+            <div class="template-live-preview__buttons">
+              <% _previewState.buttons.forEach(function (btn) { %>
+              <button type="button" class="template-live-preview__button" tabindex="-1">
+                <span class="template-live-preview__button-text"><%= btn.text || 'Botón URL' %></span>
+                <% if (btn.url) { %><span class="template-live-preview__button-url"><%= btn.url %></span><% } %>
+              </button>
+              <% }) %>
+            </div>
+            <% } %>
+          </div>
+        </div>
+      </div>
+
+      <% if (_previewState.header && _previewState.header.type && _previewState.header.type !== 'none') { %>
+      <p class="inline-help muted">
+        Cabecera: <strong><%= _previewState.header.type === 'text' ? 'TEXT' : _previewState.header.type.toUpperCase() %></strong>
+      </p>
+      <% } %>
+    </div>
+  </div>
 </div>
 
 <% if (_aliasSummary.length) { %>
@@ -62,8 +120,19 @@
   submitLabel: 'Guardar y reenviar a revisión'
 }) %>
 <% } else { %>
+<%- include('template-builder-form', {
+  basePath,
+  error,
+  selectedTemplate: _t,
+  templateBuilderState,
+  formMode: 'clone',
+  formAction: `${basePath}/templates/create`,
+  submitLabel: 'Crear nueva versión',
+  initialName: `${_t.name}_v2`,
+  initialLanguage: _t.language
+}) %>
 <div class="card">
-  <p class="muted">Las plantillas <strong>aprobadas</strong> no se pueden editar desde Meta sin crear una nueva versión con otro nombre. Usa esta vista como referencia o crea otra plantilla.</p>
+  <p class="muted">La plantilla original no se modifica en Meta. Este formulario crea una <strong>nueva versión</strong> para revisión con otro nombre.</p>
   <p><a class="small-btn secondary" href="<%= basePath %>/campaigns/new">Usar en nueva campaña</a></p>
 </div>
 <% } %>

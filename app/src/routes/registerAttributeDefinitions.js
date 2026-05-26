@@ -22,6 +22,8 @@ function registerAttributeDefinitions(app, ctx) {
       selectedDefinition = null,
       flash,
       error,
+      prefillScope = 'area',
+      prefillSegment = '',
     } = opts;
     res.render('attributes-page', {
       basePath: config.basePath,
@@ -44,6 +46,8 @@ function registerAttributeDefinitions(app, ctx) {
       selectedDefinition,
       flash: flash || null,
       error: error || null,
+      prefillScope,
+      prefillSegment,
     });
   }
 

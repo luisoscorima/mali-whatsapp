@@ -1,5 +1,7 @@
 <%
   const _mode = typeof formMode !== 'undefined' ? formMode : 'create';
+  const _isClone = _mode === 'clone';
+  const _isEdit = _mode === 'edit';
   const _state = typeof templateBuilderState !== 'undefined' && templateBuilderState ? templateBuilderState : {
     header: { type: 'none', text: '', exampleValues: [], exampleMediaUrl: '', exampleHandle: '' },
     body: { text: '', exampleValues: [] },
@@ -10,22 +12,31 @@
   const _action = typeof formAction !== 'undefined' ? formAction : `${basePath}/templates/create`;
   const _submitLabel = typeof submitLabel !== 'undefined'
     ? submitLabel
-    : (_mode === 'edit' ? 'Guardar y reenviar a revisión' : 'Enviar a revisión Meta');
+    : (_isEdit ? 'Guardar y reenviar a revisión' : _isClone ? 'Crear nueva versión' : 'Enviar a revisión Meta');
+  const _title = _isEdit ? 'Editar y reenviar a Meta' : _isClone ? 'Editar como nueva versión' : 'Nueva plantilla';
+  const _initialName = typeof initialName !== 'undefined'
+    ? initialName
+    : (_isClone && selectedTemplate ? `${selectedTemplate.name}_v2` : '');
+  const _initialLanguage = typeof initialLanguage !== 'undefined'
+    ? initialLanguage
+    : (selectedTemplate && selectedTemplate.language ? selectedTemplate.language : 'es');
 %>
 <form method="post" action="<%= _action %>" class="form-stack template-builder-form" data-template-builder-root>
   <div class="template-builder-page">
     <div class="card template-builder-card">
-      <h2 class="card-title"><%= _mode === 'edit' ? 'Editar y reenviar a Meta' : 'Nueva plantilla' %></h2>
+      <h2 class="card-title"><%= _title %></h2>
       <p class="card-lead">
-        <% if (_mode === 'edit') { %>
+        <% if (_isEdit) { %>
         Ajusta cuerpo, cabecera, pie y botones URL. Los aliases como <code>{{fecha}}</code> o <code>{{mes}}</code> se convierten internamente a <code>{{1}}</code>, <code>{{2}}</code>, etc.
+        <% } else if (_isClone) { %>
+        Meta no permite editar plantillas aprobadas en el mismo nombre. Aquí puedes modificar la plantilla y crear una <strong>nueva versión</strong> con otro nombre.
         <% } else { %>
         Se envía a revisión en Meta. Puedes trabajar con variables nombradas como <code>{{fecha}}</code>, <code>{{horario}}</code> o <code>{{mes}}</code>; el sistema las normaliza a placeholders numéricos.
         <% } %>
       </p>
       <% if (error) { %><p class="inline-warn"><%= error %></p><% } %>
 
-    <% if (_mode === 'edit' && selectedTemplate) { %>
+    <% if (_isEdit && selectedTemplate) { %>
     <div class="field-row">
       <label class="field">
         <span class="field-label">Nombre</span>
@@ -39,11 +50,11 @@
     <% } else { %>
     <label class="field">
       <span class="field-label">Nombre (snake_case)</span>
-      <input type="text" name="name" required pattern="[a-z0-9_]+" placeholder="recordatorio_pago_mayo" />
+      <input type="text" name="name" required pattern="[a-z0-9_]+" placeholder="recordatorio_pago_mayo" value="<%= _initialName %>" />
     </label>
     <label class="field">
       <span class="field-label">Idioma</span>
-      <input type="text" name="language" value="es" required />
+      <input type="text" name="language" value="<%= _initialLanguage %>" required />
     </label>
     <% } %>
 
@@ -55,6 +66,10 @@
         <option value="AUTHENTICATION" <%= selectedTemplate && (selectedTemplate.category || '').toUpperCase() === 'AUTHENTICATION' ? 'selected' : '' %>>AUTHENTICATION</option>
       </select>
     </label>
+
+    <% if (_isClone && selectedTemplate) { %>
+    <input type="hidden" name="sourceTemplateId" value="<%= selectedTemplate.id %>" />
+    <% } %>
 
     <input type="hidden" name="builderPayloadJson" value="" data-template-builder-payload />
     <script type="application/json" data-template-builder-state><%- _stateJson %></script>
