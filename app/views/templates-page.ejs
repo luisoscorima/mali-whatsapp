@@ -93,8 +93,13 @@
   <div class="inbox-chat-header">
     <a class="inbox-back-mobile" href="<%= basePath %>/templates">← Plantillas</a>
     <div class="inbox-chat-header-main">
-      <h1 class="inbox-chat-heading">Nueva plantilla</h1>
-      <p class="inbox-chat-sub muted">Envío a revisión Meta · área <strong><%= areaLabel %></strong></p>
+      <h1 class="inbox-chat-heading"><%= duplicateSourceTemplate ? 'Duplicar plantilla' : 'Nueva plantilla' %></h1>
+      <p class="inbox-chat-sub muted">
+        Envío a revisión Meta · área <strong><%= areaLabel %></strong>
+        <% if (duplicateSourceTemplate) { %>
+        · basada en <strong class="mono"><%= duplicateSourceTemplate.name %></strong>
+        <% } %>
+      </p>
     </div>
   </div>
   <div class="inbox-chat-body inbox-chat-body--form">
@@ -107,7 +112,14 @@
     <% if (typeof templatesSyncError !== 'undefined' && templatesSyncError) { %>
     <p class="inline-warn">Sync: <%= templatesSyncError %></p>
     <% } %>
-    <%- include('partials/templates-new-form', { basePath, error, templateBuilderState }) %>
+    <%- include('partials/templates-new-form', {
+      basePath,
+      error,
+      templateBuilderState,
+      duplicateSourceTemplate,
+      initialName,
+      initialLanguage
+    }) %>
   </div>
   <% } else if (_view === 'detail' && selectedTemplate) { %>
   <div class="inbox-chat-header">

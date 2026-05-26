@@ -1,9 +1,12 @@
 <%- include('template-builder-form', {
   basePath,
   error,
-  selectedTemplate: null,
+  selectedTemplate: duplicateSourceTemplate || null,
   templateBuilderState,
   formMode: 'create',
   formAction: `${basePath}/templates/create`,
-  submitLabel: 'Enviar a revisión Meta'
+  submitLabel: duplicateSourceTemplate ? 'Crear nueva versión' : 'Enviar a revisión Meta',
+  sourceTemplateId: duplicateSourceTemplate ? duplicateSourceTemplate.id : null,
+  initialName,
+  initialLanguage
 }) %>

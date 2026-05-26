@@ -174,7 +174,7 @@ function registerTemplates(app, ctx) {
 
   function redirectPathForCreateError(sourceTemplateId) {
     return Number.isInteger(sourceTemplateId) && sourceTemplateId > 0
-      ? `/templates/${sourceTemplateId}`
+      ? `/templates/new?duplicate_from=${sourceTemplateId}`
       : '/templates/new';
   }
 
@@ -207,6 +207,9 @@ function registerTemplates(app, ctx) {
       view,
       templates,
       selectedTemplate = null,
+      duplicateSourceTemplate = null,
+      initialName = '',
+      initialLanguage = '',
       templateDisplay = null,
       templateDefinition = null,
       templateAliasSummary = [],
@@ -238,6 +241,9 @@ function registerTemplates(app, ctx) {
       templates,
       selectedTemplateId,
       selectedTemplate,
+      duplicateSourceTemplate,
+      initialName,
+      initialLanguage,
       templateDisplay,
       templateDefinition,
       templateAliasSummary,
@@ -265,13 +271,30 @@ function registerTemplates(app, ctx) {
 
   app.get('/templates/new', async (req, res) => {
     const area = normalizeArea(req.user.area);
-    const templates = await loadAllTemplates(area);
+    const duplicateFromId = Number.parseInt(String(req.query.duplicate_from || '').trim(), 10);
+    const [templates, duplicateSourceTemplate] = await Promise.all([
+      loadAllTemplates(area),
+      Number.isInteger(duplicateFromId) && duplicateFromId > 0
+        ? loadTemplateById(area, duplicateFromId)
+        : Promise.resolve(null),
+    ]);
+    const duplicateComponents = duplicateSourceTemplate
+      ? parseComponentsJson(duplicateSourceTemplate.components_json)
+      : [];
     renderTemplatesPage(req, res, {
       view: 'new',
       templates,
       flash: req.query.flash || null,
       error: decodeMaybeUriComponent(req.query.error),
-      templateBuilderState: buildTemplateBuilderState([], null),
+      duplicateSourceTemplate,
+      initialName: duplicateSourceTemplate ? `${duplicateSourceTemplate.name}_v2` : '',
+      initialLanguage: duplicateSourceTemplate ? duplicateSourceTemplate.language : 'es',
+      templateBuilderState: duplicateSourceTemplate
+        ? buildTemplateBuilderState(
+            duplicateComponents,
+            parseStoredPlaceholderAliases(duplicateSourceTemplate.placeholder_aliases_json)
+          )
+        : buildTemplateBuilderState([], null),
     });
   });
 
@@ -336,7 +359,7 @@ function registerTemplates(app, ctx) {
     ) {
       return res.redirect(
         appPath(
-          `/templates/${sourceTemplate.id}?error=${encodeURIComponent('Para crear una nueva versión usa otro nombre o idioma distinto al original.')}`
+          `/templates/new?duplicate_from=${sourceTemplate.id}&error=${encodeURIComponent('Para crear una nueva versión usa otro nombre o idioma distinto al original.')}`
         )
       );
     }

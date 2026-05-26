@@ -20,6 +20,9 @@
   const _initialLanguage = typeof initialLanguage !== 'undefined'
     ? initialLanguage
     : (selectedTemplate && selectedTemplate.language ? selectedTemplate.language : 'es');
+  const _sourceTemplateId = typeof sourceTemplateId !== 'undefined'
+    ? sourceTemplateId
+    : (_isClone && selectedTemplate ? selectedTemplate.id : null);
 %>
 <form method="post" action="<%= _action %>" class="form-stack template-builder-form" data-template-builder-root>
   <div class="template-builder-page">
@@ -67,8 +70,8 @@
       </select>
     </label>
 
-    <% if (_isClone && selectedTemplate) { %>
-    <input type="hidden" name="sourceTemplateId" value="<%= selectedTemplate.id %>" />
+    <% if (_sourceTemplateId) { %>
+    <input type="hidden" name="sourceTemplateId" value="<%= _sourceTemplateId %>" />
     <% } %>
 
     <input type="hidden" name="builderPayloadJson" value="" data-template-builder-payload />

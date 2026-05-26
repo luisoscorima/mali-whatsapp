@@ -17,6 +17,7 @@
       };
 %>
 <% const _canEdit = typeof templateCanEdit !== 'undefined' && templateCanEdit; %>
+<div class="template-detail-overview">
 <div class="card template-detail-card">
   <dl class="detail-dl detail-dl--compact">
     <div><dt>Estado</dt><dd><span class="badge <%= typeof templateStatusBadgeClass === 'function' ? templateStatusBadgeClass(_t.status) : 'neutral' %>"><%= _t.status %></span></dd></div>
@@ -97,6 +98,7 @@
     </div>
   </div>
 </div>
+</div>
 
 <% if (_aliasSummary.length) { %>
 <div class="card template-preview-card">
@@ -120,19 +122,11 @@
   submitLabel: 'Guardar y reenviar a revisión'
 }) %>
 <% } else { %>
-<%- include('template-builder-form', {
-  basePath,
-  error,
-  selectedTemplate: _t,
-  templateBuilderState,
-  formMode: 'clone',
-  formAction: `${basePath}/templates/create`,
-  submitLabel: 'Crear nueva versión',
-  initialName: `${_t.name}_v2`,
-  initialLanguage: _t.language
-}) %>
 <div class="card">
-  <p class="muted">La plantilla original no se modifica en Meta. Este formulario crea una <strong>nueva versión</strong> para revisión con otro nombre.</p>
-  <p><a class="small-btn secondary" href="<%= basePath %>/campaigns/new">Usar en nueva campaña</a></p>
+  <p class="muted">Las plantillas aprobadas no se editan sobre el mismo nombre en Meta. Duplica esta plantilla para crear una nueva versión prellenada y reenviarla a revisión.</p>
+  <p class="template-detail-actions">
+    <a class="small-btn primary" href="<%= basePath %>/templates/new?duplicate_from=<%= _t.id %>">Duplicar plantilla</a>
+    <a class="small-btn secondary" href="<%= basePath %>/campaigns/new">Usar en nueva campaña</a>
+  </p>
 </div>
 <% } %>
