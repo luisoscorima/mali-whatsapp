@@ -16,11 +16,47 @@
   const sendErrorEl = document.getElementById('campaign-send-error');
 
   let recipientsLoaded = false;
+  let templateDefinitionReady = false;
+  let templateLoadRequestId = 0;
 
   function esc(s) {
     const d = document.createElement('div');
     d.textContent = s;
     return d.innerHTML;
+  }
+
+  function ensureToastHost() {
+    let host = document.getElementById('campaign-toast-stack');
+    if (host) return host;
+    host = document.createElement('div');
+    host.id = 'campaign-toast-stack';
+    host.className = 'campaign-toast-stack';
+    host.setAttribute('aria-live', 'polite');
+    host.setAttribute('aria-atomic', 'true');
+    const card = form.closest('.card');
+    if (card) {
+      card.insertBefore(host, form);
+    } else {
+      form.parentNode.insertBefore(host, form);
+    }
+    return host;
+  }
+
+  function showCampaignToast(message, type) {
+    const msg = String(message || '').trim();
+    if (!msg) return;
+    const host = ensureToastHost();
+    while (host.children.length >= 3) {
+      host.removeChild(host.firstElementChild);
+    }
+    const toast = document.createElement('p');
+    const kind = type === 'ok' ? 'ok' : type === 'warn' ? 'warn' : 'err';
+    toast.className = 'toast toast--' + kind + ' campaign-toast';
+    toast.textContent = msg;
+    host.appendChild(toast);
+    window.setTimeout(function () {
+      if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, kind === 'err' ? 9000 : 6500);
   }
 
   function getCheckedSegments() {
@@ -137,6 +173,7 @@
     if (msg) {
       sendErrorEl.textContent = msg;
       sendErrorEl.hidden = false;
+      showCampaignToast(msg, 'err');
     } else {
       sendErrorEl.textContent = '';
       sendErrorEl.hidden = true;
@@ -154,9 +191,20 @@
   function updateSubmitEnabled() {
     if (!submitBtn) return;
     if (submitBtn.hasAttribute('data-disabled-by-server')) return;
-    const hasTemplate = select && select.value;
+    const hasSelectedTemplate = Boolean(select && select.value);
+    const hasTemplate = hasSelectedTemplate && templateDefinitionReady;
     const hasRecipients = recipientsLoaded && getCheckedRecipientIds().length > 0;
-    submitBtn.disabled = !hasTemplate || !hasRecipients;
+    const disabled = !hasTemplate || !hasRecipients;
+    submitBtn.disabled = disabled;
+    if (!disabled) {
+      submitBtn.removeAttribute('title');
+    } else if (!hasSelectedTemplate) {
+      submitBtn.title = 'Selecciona una plantilla para continuar.';
+    } else if (!templateDefinitionReady) {
+      submitBtn.title = 'Espera a que cargue la plantilla seleccionada.';
+    } else {
+      submitBtn.title = 'Pulsa "Mostrar destinatarios" y selecciona al menos un contacto.';
+    }
   }
 
   function buildFields(def) {
@@ -251,6 +299,8 @@
 
   async function loadDefinition(id) {
     if (!select || !container) return;
+    const requestId = ++templateLoadRequestId;
+    templateDefinitionReady = false;
     if (!id) {
       container.innerHTML = '';
       container.hidden = true;
@@ -259,18 +309,29 @@
     }
     container.innerHTML = '<p class="muted">Cargando…</p>';
     container.hidden = false;
+    updateSubmitEnabled();
     try {
       const url = basePath + '/api/templates/' + encodeURIComponent(id) + '/definition';
       const r = await fetch(url, { credentials: 'same-origin' });
-      const data = await r.json();
+      const data = await r.json().catch(function () {
+        return {};
+      });
+      if (requestId !== templateLoadRequestId) return;
       if (!data.ok || !data.definition) {
-        container.innerHTML = '<p class="inline-warn">No se pudo cargar la plantilla.</p>';
+        const msg = data.error || 'No se pudo cargar la plantilla seleccionada.';
+        container.innerHTML = '<p class="inline-warn">' + esc(msg) + '</p>';
+        showCampaignToast(msg, 'err');
+        updateSubmitEnabled();
         return;
       }
       buildFields(data.definition);
+      templateDefinitionReady = true;
       updateSubmitEnabled();
     } catch (e) {
+      if (requestId !== templateLoadRequestId) return;
       container.innerHTML = '<p class="inline-warn">Error al cargar la definición.</p>';
+      showCampaignToast('Error de red al cargar la definición de la plantilla.', 'err');
+      updateSubmitEnabled();
     }
   }
 
@@ -333,6 +394,7 @@
     const segments = getCheckedSegments();
     if (segments.length === 0) {
       recipientsStatus.textContent = 'Marca al menos un segmento.';
+      showCampaignToast('Marca al menos un segmento para cargar destinatarios.', 'warn');
       return;
     }
     recipientsStatus.textContent = 'Cargando…';
@@ -353,7 +415,9 @@
         return {};
       });
       if (!r.ok || !data.ok) {
-        recipientsStatus.textContent = data.error || 'No se pudo cargar la lista.';
+        const msg = data.error || 'No se pudo cargar la lista de destinatarios.';
+        recipientsStatus.textContent = msg;
+        showCampaignToast(msg, 'err');
         if (recipientsListEl) {
           recipientsListEl.innerHTML = '';
           recipientsListEl.hidden = true;
@@ -365,8 +429,13 @@
       }
       recipientsStatus.textContent = data.total ? data.total + ' contacto(s).' : '';
       renderRecipients(data.contacts || []);
+      if (!data.total) {
+        showCampaignToast('No hay contactos elegibles para los segmentos seleccionados.', 'warn');
+      }
     } catch (e) {
-      recipientsStatus.textContent = 'Error de red al cargar destinatarios.';
+      const msg = 'Error de red al cargar destinatarios.';
+      recipientsStatus.textContent = msg;
+      showCampaignToast(msg, 'err');
       recipientsLoaded = false;
       updateSubmitEnabled();
     } finally {
@@ -490,6 +559,7 @@
     showSendError('');
 
     if (!form.checkValidity()) {
+      showCampaignToast('Completa los campos obligatorios antes de enviar la campaña.', 'warn');
       form.reportValidity();
       return;
     }
@@ -503,6 +573,11 @@
     const segs = getCheckedSegments();
     if (segs.length === 0) {
       showSendError('Selecciona al menos un segmento.');
+      return;
+    }
+
+    if (!templateDefinitionReady) {
+      showSendError('Espera a que cargue la plantilla seleccionada antes de enviar.');
       return;
     }
 
@@ -556,13 +631,19 @@
   });
 
   function invalidateRecipientsPreview() {
+    const hadRecipients = recipientsLoaded;
     recipientsLoaded = false;
     if (recipientsListEl) {
       recipientsListEl.innerHTML = '';
       recipientsListEl.hidden = true;
     }
     if (recipientsToolbar) recipientsToolbar.hidden = true;
-    if (recipientsStatus) recipientsStatus.textContent = '';
+    if (recipientsStatus) {
+      recipientsStatus.textContent = hadRecipients ? 'Vuelve a mostrar destinatarios.' : '';
+    }
+    if (hadRecipients) {
+      showCampaignToast('Cambiaste los segmentos. Vuelve a mostrar destinatarios antes de enviar.', 'warn');
+    }
     updateSubmitEnabled();
   }
 
@@ -582,8 +663,12 @@
       if (data && data.ok && Array.isArray(data.options)) {
         paramSourceOptions = data.options;
         refreshParamSourceSelects();
+        return;
       }
+      showCampaignToast('No se pudieron cargar los atributos de contacto. Puedes usar valores fijos, nombre o teléfono.', 'warn');
     })
-    .catch(function () {});
+    .catch(function () {
+      showCampaignToast('No se pudieron cargar los atributos de contacto. Puedes usar valores fijos, nombre o teléfono.', 'warn');
+    });
 
 })();

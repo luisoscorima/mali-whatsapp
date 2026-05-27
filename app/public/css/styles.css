@@ -1084,6 +1084,21 @@ html[data-theme='dark'] .campaign-recipients-list .campaign-recipient-row.field-
   color: var(--bad);
 }
 
+.toast--warn {
+  background: rgba(180, 83, 9, 0.1);
+  color: var(--warn, #b45309);
+}
+
+.campaign-toast-stack {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.campaign-toast-stack .toast {
+  margin: 0;
+}
+
 .config-compact {
   display: grid;
   gap: 12px;
