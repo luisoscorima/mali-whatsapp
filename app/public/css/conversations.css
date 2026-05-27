@@ -110,7 +110,7 @@ html[data-theme='dark'] body.page-conversations .wa-layout--inbox.inbox-layout-w
   background: var(--wa-list-bg);
 }
 
-/* Pills Todos / No leídos (junto al selector de segmento vía formulario debajo) */
+/* Pills Todos / No leídos y chips de segmento (debajo, fila propia) */
 .inbox-chat-filter-pills {
   display: flex;
   flex-wrap: wrap;
@@ -2476,10 +2476,16 @@ button.metric.campaign-summary-metric.metric--action:focus-visible {
   }
 }
 
-/* Contactos: filtros y acciones rápidas */
-.contact-filter-pills {
+/* Contactos y conversaciones: chips de segmento */
+.contact-filter-pills,
+.conversation-segment-pills {
   padding-top: 10px;
   padding-bottom: 10px;
+}
+
+.conversation-segment-pills {
+  border-bottom: none;
+  padding-top: 0;
 }
 
 .contact-filters-form {

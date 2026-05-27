@@ -34,6 +34,19 @@
       const s = segments.find(function (x) { return x.value === slug; });
       return s ? s.colorKey : 'slate';
     }; %>
+    <% const _segF = typeof segmentFilter !== 'undefined' ? segmentFilter : ''; %>
+    <% const _chatFConv = typeof chatFilter !== 'undefined' ? chatFilter : 'all'; %>
+    <% function conversationListHref(nextSegmentSlug) {
+      const sp = new URLSearchParams();
+      if (nextSegmentSlug) sp.set('segment', nextSegmentSlug);
+      const _sq = typeof searchQ !== 'undefined' ? searchQ : '';
+      if (_sq) sp.set('q', _sq);
+      if (_chatFConv === 'unread') sp.set('chat', 'unread');
+      else if (_chatFConv === 'bot') sp.set('chat', 'bot');
+      else if (_chatFConv === 'human') sp.set('chat', 'human');
+      const qs = sp.toString();
+      return basePath + '/conversations' + (qs ? '?' + qs : '');
+    } %>
     <% function inboxInitials(contactName, phone) {
       var n = String(contactName || '').trim();
       if (n) {
@@ -81,6 +94,27 @@
           ><span class="inbox-pill-icon" aria-hidden="true">👤</span> Asesor</a>
           <% } %>
         </div>
+        <div class="inbox-chat-filter-pills inbox-chat-filter-pills--row contact-filter-pills conversation-segment-pills" aria-label="Filtrar por segmento">
+          <a
+            href="<%= conversationListHref('') %>"
+            class="inbox-chat-pill contact-filter-pill <%= _segF === '' ? 'is-active' : '' %>"
+            <% if (_segF === '') { %>aria-current="page"<% } %>
+          >Todos</a>
+          <a
+            href="<%= conversationListHref('__none__') %>"
+            class="inbox-chat-pill contact-filter-pill <%= _segF === '__none__' ? 'is-active' : '' %>"
+            data-seg-tone="slate"
+            <% if (_segF === '__none__') { %>aria-current="page"<% } %>
+          >Sin segmento</a>
+          <% segments.forEach(function (seg) { %>
+          <a
+            href="<%= conversationListHref(seg.value) %>"
+            class="inbox-chat-pill contact-filter-pill <%= _segF === seg.value ? 'is-active' : '' %>"
+            data-seg-tone="<%= seg.colorKey || 'slate' %>"
+            <% if (_segF === seg.value) { %>aria-current="page"<% } %>
+          ><%= seg.label %></a>
+          <% }); %>
+        </div>
         <form class="inbox-filters" method="get" action="<%= basePath %>/conversations">
           <% if (_chatF === 'unread') { %>
             <input type="hidden" name="chat" value="unread" />
@@ -89,16 +123,7 @@
           <% } else if (_chatF === 'human') { %>
             <input type="hidden" name="chat" value="human" />
           <% } %>
-          <label class="field field--inbox">
-            <span class="field-label">Segmento</span>
-            <select name="segment" class="inbox-select" data-inbox-filter>
-              <option value="" <%= segmentFilter === '' ? 'selected' : '' %>>Todos</option>
-              <option value="__none__" <%= segmentFilter === '__none__' ? 'selected' : '' %>>Sin segmento</option>
-              <% segments.forEach(function (seg) { %>
-                <option value="<%= seg.value %>" <%= segmentFilter === seg.value ? 'selected' : '' %>><%= seg.label %></option>
-              <% }); %>
-            </select>
-          </label>
+          <% if (_segF) { %><input type="hidden" name="segment" value="<%= _segF %>" /><% } %>
           <label class="field field--inbox">
             <span class="field-label">Buscar en todos los chats</span>
             <div class="inbox-search-row">
