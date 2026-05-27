@@ -1,0 +1,103 @@
+<%
+const _sf = typeof segmentFilter !== 'undefined' && segmentFilter
+  ? segmentFilter
+  : { slugs: [], includeNone: false };
+const _slugs = Array.isArray(_sf.slugs) ? _sf.slugs : [];
+const _none = Boolean(_sf.includeNone);
+const _hasFilter = _slugs.length > 0 || _none;
+const _chipRoute = typeof chipListPath !== 'undefined' ? chipListPath : basePath + '/contacts';
+const _preserve = typeof chipPreserveQuery !== 'undefined' && chipPreserveQuery ? chipPreserveQuery : {};
+const _showNone = typeof showNoneSegmentChip !== 'undefined' ? Boolean(showNoneSegmentChip) : false;
+const _pillsClass = typeof segmentPillsClass !== 'undefined' ? segmentPillsClass : '';
+
+function _appendPreserve(sp) {
+  if (_preserve.q) sp.set('q', _preserve.q);
+  if (_preserve.chat === 'unread') sp.set('chat', 'unread');
+  else if (_preserve.chat === 'bot') sp.set('chat', 'bot');
+  else if (_preserve.chat === 'human') sp.set('chat', 'human');
+  if (_preserve.show_replaced) sp.set('show_replaced', '1');
+  if (_preserve.attr_key) sp.set('attr_key', _preserve.attr_key);
+  if (_preserve.attr_value) sp.set('attr_value', _preserve.attr_value);
+}
+
+function _filterToParams(filter) {
+  const sp = new URLSearchParams();
+  if (filter.includeNone) sp.append('segment', '__none__');
+  (filter.slugs || []).forEach(function (slug) {
+    sp.append('segment', slug);
+  });
+  _appendPreserve(sp);
+  return sp;
+}
+
+function segmentChipHref(nextFilter) {
+  const qs = _filterToParams(nextFilter).toString();
+  return _chipRoute + (qs ? '?' + qs : '');
+}
+
+function segmentChipToggle(slug) {
+  const next = { slugs: _slugs.slice(), includeNone: _none };
+  if (slug === '__none__') {
+    next.includeNone = !next.includeNone;
+    return next;
+  }
+  const idx = next.slugs.indexOf(slug);
+  if (idx >= 0) next.slugs.splice(idx, 1);
+  else next.slugs.push(slug);
+  return next;
+}
+
+const _activeSegs = [];
+_slugs.forEach(function (slug) {
+  const seg = segments.find(function (x) { return x.value === slug; });
+  if (seg) _activeSegs.push(seg);
+});
+const _inactiveSegs = segments.filter(function (seg) {
+  return _slugs.indexOf(seg.value) < 0;
+});
+%>
+<div
+  class="inbox-chat-filter-pills inbox-chat-filter-pills--row contact-filter-pills segment-filter-chips <%= _pillsClass %>"
+  aria-label="Filtrar por segmento"
+  <% if (_hasFilter) { %>title="Unión: resultados en cualquiera de los segmentos seleccionados"<% } %>
+>
+  <a
+    href="<%= segmentChipHref({ slugs: [], includeNone: false }) %>"
+    class="inbox-chat-pill contact-filter-pill <%= !_hasFilter ? 'is-active' : '' %>"
+    <% if (!_hasFilter) { %>aria-current="true"<% } %>
+  >Todos</a>
+  <% if (_showNone && _none) { %>
+  <a
+    href="<%= segmentChipHref(segmentChipToggle('__none__')) %>"
+    class="inbox-chat-pill contact-filter-pill is-active"
+    data-seg-tone="slate"
+    aria-current="true"
+    title="Quitar filtro sin segmento"
+  >Sin segmento</a>
+  <% } %>
+  <% _activeSegs.forEach(function (seg) { %>
+  <a
+    href="<%= segmentChipHref(segmentChipToggle(seg.value)) %>"
+    class="inbox-chat-pill contact-filter-pill is-active"
+    data-seg-tone="<%= seg.colorKey || 'slate' %>"
+    aria-current="true"
+    title="Quitar <%= seg.label %>"
+  ><%= seg.label %></a>
+  <% }); %>
+  <% if (_showNone && !_none) { %>
+  <a
+    href="<%= segmentChipHref(segmentChipToggle('__none__')) %>"
+    class="inbox-chat-pill contact-filter-pill"
+    data-seg-tone="slate"
+    title="Añadir filtro sin segmento"
+  >Sin segmento</a>
+  <% } %>
+  <% _inactiveSegs.forEach(function (seg) { %>
+  <a
+    href="<%= segmentChipHref(segmentChipToggle(seg.value)) %>"
+    class="inbox-chat-pill contact-filter-pill"
+    data-seg-tone="<%= seg.colorKey || 'slate' %>"
+    title="Añadir <%= seg.label %>"
+  ><%= seg.label %></a>
+  <% }); %>
+</div>

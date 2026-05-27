@@ -15,6 +15,13 @@ const { escapeForLikePattern } = require('../../utils/searchEscape');
 const { normalizeSegmentColorKey } = require('../../utils/segmentColors');
 const { parseAiConfigValue } = require('../../utils/aiConfig');
 const { parseParamMappingFromBody } = require('../../services/contactTemplateParams');
+const {
+  parseSegmentListFilter,
+  hasActiveSegmentFilter,
+  appendSegmentFilterToSearchParams,
+  buildContactSegmentUnionSql,
+  buildConversationSegmentUnionSql,
+} = require('../../utils/segmentListFilter');
 
 function resolveAppBaseUrl() {
   const u = String(process.env.APP_BASE_URL || '').trim().replace(/\/$/, '');
@@ -42,14 +49,6 @@ function createRouteContext({ query, pool, appPath }) {
     }));
   }
 
-  function parseInboxSegmentFilter(reqQuery, slugSet) {
-    const raw = String(reqQuery.segment ?? '').trim();
-    if (!raw) return '';
-    if (raw === '__none__') return '__none__';
-    if (slugSet.has(raw)) return raw;
-    return '';
-  }
-
   function parseInboxSearchQ(reqQuery) {
     return String(reqQuery.q ?? '').trim();
   }
@@ -65,7 +64,7 @@ function createRouteContext({ query, pool, appPath }) {
 
   function inboxQueryString(segmentFilter, searchQ, chatFilter) {
     const sp = new URLSearchParams();
-    if (segmentFilter) sp.set('segment', segmentFilter);
+    if (hasActiveSegmentFilter(segmentFilter)) appendSegmentFilterToSearchParams(sp, segmentFilter);
     if (searchQ) sp.set('q', searchQ);
     if (chatFilter === 'unread') sp.set('chat', 'unread');
     else if (chatFilter === 'bot') sp.set('chat', 'bot');
@@ -86,15 +85,11 @@ function createRouteContext({ query, pool, appPath }) {
     const params = [area];
     let p = 2;
     let extra = '';
-    if (segmentFilter === '__none__') {
-      extra += ` AND c.contact_id IS NULL`;
-    } else if (segmentFilter) {
-      extra += ` AND EXISTS (
-        SELECT 1 FROM contact_segments cseg
-        WHERE cseg.contact_id = ct.id AND cseg.segment_slug = $${p}
-      )`;
-      params.push(segmentFilter);
-      p += 1;
+    const segSql = buildConversationSegmentUnionSql(segmentFilter, 'ct.id', 'c.contact_id', p);
+    if (segSql.sql) {
+      extra += segSql.sql;
+      params.push(...segSql.params);
+      p = segSql.nextIndex;
     }
     if (searchQText) {
       const pat = `%${escapeForLikePattern(searchQText)}%`;
@@ -180,18 +175,11 @@ function createRouteContext({ query, pool, appPath }) {
     const contactParams = [area];
     let cp = 2;
     let contactWhere = `WHERE ct.area = $1`;
-    if (segmentFilter === '__none__') {
-      contactWhere += ` AND NOT EXISTS (
-        SELECT 1 FROM contact_segments csn
-        WHERE csn.contact_id = ct.id
-      )`;
-    } else if (segmentFilter) {
-      contactWhere += ` AND EXISTS (
-        SELECT 1 FROM contact_segments cseg
-        WHERE cseg.contact_id = ct.id AND cseg.segment_slug = $${cp}
-      )`;
-      contactParams.push(segmentFilter);
-      cp += 1;
+    const contactSegSql = buildContactSegmentUnionSql(segmentFilter, 'ct.id', cp);
+    if (contactSegSql.sql) {
+      contactWhere += contactSegSql.sql;
+      contactParams.push(...contactSegSql.params);
+      cp = contactSegSql.nextIndex;
     }
     const contactPat = `%${escapeForLikePattern(searchQText)}%`;
     const contactDigits = String(searchQText).replace(/\D/g, '');
@@ -466,7 +454,7 @@ function createRouteContext({ query, pool, appPath }) {
   async function buildInboxRenderData(req, { selectedId }) {
     const area = req.user.area;
     const slugSet = await getSegmentSlugSet(area);
-    const segmentFilter = parseInboxSegmentFilter(req.query, slugSet);
+    const segmentFilter = parseSegmentListFilter(req.query, slugSet);
     const searchQ = parseInboxSearchQ(req.query);
     const chatFilter = parseInboxChatFilter(req.query);
     const [segments, listRows, aiAreaEnabled] = await Promise.all([

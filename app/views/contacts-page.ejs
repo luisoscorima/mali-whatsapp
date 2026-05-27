@@ -1,6 +1,7 @@
 <% const _contactSel = typeof selectedContactId !== 'undefined' ? selectedContactId : null; %>
 <% const _cq = typeof contactListQuery !== 'undefined' ? contactListQuery : ''; %>
-<% const _segF = typeof contactSegmentFilter !== 'undefined' ? contactSegmentFilter : ''; %>
+<% const _segmentFilter = typeof segmentFilter !== 'undefined' ? segmentFilter : { slugs: [], includeNone: false }; %>
+<% const _hasSegFilter = (_segmentFilter.slugs && _segmentFilter.slugs.length > 0) || _segmentFilter.includeNone; %>
 <% const _qF = typeof contactSearchQ !== 'undefined' ? contactSearchQ : ''; %>
 <% const _showReplaced = typeof showReplaced !== 'undefined' ? Boolean(showReplaced) : false; %>
 <% const _attrKey = typeof contactAttrKey !== 'undefined' ? contactAttrKey : ''; %>
@@ -19,16 +20,6 @@
   if (!slug) return '';
   const s = segments.find(function (x) { return x.value === slug; });
   return s ? s.label : slug;
-}
-function contactListHref(nextSegmentSlug) {
-  const sp = new URLSearchParams();
-  if (nextSegmentSlug) sp.set('segment', nextSegmentSlug);
-  if (_qF) sp.set('q', _qF);
-  if (_showReplaced) sp.set('show_replaced', '1');
-  if (_attrKey) sp.set('attr_key', _attrKey);
-  if (_attrVal) sp.set('attr_value', _attrVal);
-  const qs = sp.toString();
-  return basePath + '/contacts' + (qs ? '?' + qs : '');
 }
 function contactEditHref(contactId) {
   return basePath + '/contacts/' + contactId + _cq;
@@ -57,23 +48,19 @@ function contactChatHref(contact) {
     <h2 class="inbox-sidebar-title">Contactos</h2>
     <%- include('partials/wa-refresh-btn', { refreshTitle: 'Actualizar contactos', refreshAriaLabel: 'Actualizar contactos' }) %>
   </div>
-  <div class="inbox-chat-filter-pills inbox-chat-filter-pills--row contact-filter-pills" aria-label="Filtrar por segmento">
-    <a
-      href="<%= contactListHref('') %>"
-      class="inbox-chat-pill contact-filter-pill <%= _segF === '' ? 'is-active' : '' %>"
-      <% if (_segF === '') { %>aria-current="page"<% } %>
-    >Todos</a>
-    <% segments.forEach(function (seg) { %>
-    <a
-      href="<%= contactListHref(seg.value) %>"
-      class="inbox-chat-pill contact-filter-pill <%= _segF === seg.value ? 'is-active' : '' %>"
-      data-seg-tone="<%= seg.colorKey || 'slate' %>"
-      <% if (_segF === seg.value) { %>aria-current="page"<% } %>
-    ><%= seg.label %></a>
-    <% }); %>
-  </div>
+  <%- include('partials/segment-filter-chips', {
+    segments,
+    segmentFilter: _segmentFilter,
+    chipListPath: basePath + '/contacts',
+    chipPreserveQuery: {
+      q: _qF,
+      show_replaced: _showReplaced,
+      attr_key: _attrKey,
+      attr_value: _attrVal
+    }
+  }) %>
   <form class="inbox-filters contact-filters-form" method="get" action="<%= basePath %>/contacts">
-    <% if (_segF) { %><input type="hidden" name="segment" value="<%= _segF %>" /><% } %>
+    <%- include('partials/segment-filter-hidden', { segmentFilter: _segmentFilter }) %>
     <label class="field field--inbox">
       <span class="field-label">Buscar número o nombre</span>
       <div class="inbox-search-row contact-search-row">
@@ -168,7 +155,7 @@ function contactChatHref(contact) {
   </div>
   <% } %>
   <% if (!contacts || contacts.length === 0) { %>
-  <p class="empty-state inbox-empty-list"><%= _segF || _qF || _attrKey ? 'No hay contactos con estos filtros.' : 'No hay contactos en esta área.' %></p>
+  <p class="empty-state inbox-empty-list"><%= _hasSegFilter || _qF || _attrKey ? 'No hay contactos con estos filtros.' : 'No hay contactos en esta área.' %></p>
   <% } else { %>
   <ul class="inbox-chat-list">
     <% contacts.forEach(function (c) { %>
