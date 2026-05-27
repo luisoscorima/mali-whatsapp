@@ -468,6 +468,26 @@ async function compileTemplateBuilderPayload(builderPayload, options = {}) {
   };
 }
 
+function escapeTemplatePreviewHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function highlightTemplatePreviewHtml(text) {
+  return escapeTemplatePreviewHtml(text)
+    .replace(/\{\{[^{}]+\}\}/g, (match) => `<span class="template-live-preview__token">${match}</span>`)
+    .replace(/\n/g, '<br />');
+}
+
+function summarizeTemplatePreviewUrl(url) {
+  const rendered = String(url || '');
+  if (rendered.length <= 44) return escapeTemplatePreviewHtml(rendered);
+  return escapeTemplatePreviewHtml(`${rendered.slice(0, 41)}...`);
+}
+
 module.exports = {
   HEADER_TEXT_MAX_LEN,
   FOOTER_MAX_LEN,
@@ -478,7 +498,9 @@ module.exports = {
   buildExampleValues,
   buildTemplateBuilderState,
   compileTemplateBuilderPayload,
+  highlightTemplatePreviewHtml,
   hasPlaceholderAliases,
+  summarizeTemplatePreviewUrl,
   normalizeTemplateTextPlaceholders,
   parseStoredPlaceholderAliases,
   parseTemplateBuilderPayload,

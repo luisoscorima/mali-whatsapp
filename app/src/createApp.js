@@ -15,6 +15,10 @@ const {
 const { globalLimiter } = require('./middleware/limiters');
 const { createRegisterRoutes } = require('./routes/registerRoutes');
 const { purgeOldAuditLogs } = require('./services/auditLog');
+const {
+  highlightTemplatePreviewHtml,
+  summarizeTemplatePreviewUrl,
+} = require('./services/templateBuilder');
 
 function parseCampaignPayload(payload) {
   if (!payload) return null;
@@ -131,6 +135,8 @@ function createApp() {
       return String(campaign.segment || '');
     };
     res.locals.campaignParamSummary = buildCampaignParamSummary;
+    res.locals.highlightTemplatePreviewHtml = highlightTemplatePreviewHtml;
+    res.locals.summarizeTemplatePreviewUrl = summarizeTemplatePreviewUrl;
     next();
   });
 
