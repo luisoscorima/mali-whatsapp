@@ -48,30 +48,14 @@
     }
     var _excludeSegs = _payload && Array.isArray(_payload.excludeSegmentSlugs) ? _payload.excludeSegmentSlugs : [];
     var _excludeIds = _payload && Array.isArray(_payload.excludeContactIds) ? _payload.excludeContactIds : [];
-    var _staticParams = _payload && _payload.staticParams && typeof _payload.staticParams === 'object' ? _payload.staticParams : null;
     var _paramRows = [];
-    if (_staticParams) {
-      var _headerMediaUrl = String(_staticParams.headerMediaUrl || '').trim();
-      if (_headerMediaUrl) {
-        _paramRows.push({ label: 'Cabecera', value: 'media:' + _headerMediaUrl });
-      }
-      (Array.isArray(_staticParams.headerParams) ? _staticParams.headerParams : []).forEach(function (value, idx) {
-        var _headerValue = String(value || '').trim();
-        if (_headerValue) {
-          _paramRows.push({ label: 'Cabecera {{' + (idx + 1) + '}}', value: _headerValue });
-        }
-      });
-      (Array.isArray(_staticParams.bodyParams) ? _staticParams.bodyParams : []).forEach(function (value, idx) {
-        var _bodyValue = String(value || '').trim();
-        if (_bodyValue) {
-          _paramRows.push({ label: '{{' + (idx + 1) + '}}', value: _bodyValue });
-        }
-      });
-      (Array.isArray(_staticParams.buttonParams) ? _staticParams.buttonParams : []).forEach(function (value, idx) {
-        var _buttonValue = String(value || '').trim();
-        if (_buttonValue) {
-          _paramRows.push({ label: 'Boton URL {{' + (idx + 1) + '}}', value: _buttonValue });
-        }
+    if (typeof campaignParamSummary === 'function') {
+      campaignParamSummary(campaign).forEach(function (item) {
+        if (!item || !item.label) return;
+        _paramRows.push({
+          label: String(item.label),
+          value: String(item.value || '').trim() || '—',
+        });
       });
     }
     if (_paramRows.length === 0) {
