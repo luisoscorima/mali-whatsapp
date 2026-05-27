@@ -1346,7 +1346,7 @@ html[data-theme='dark'] .settings-ai-prompt-textarea {
 
 @media (min-width: 900px) {
   .template-detail-overview {
-    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 340px;
     align-items: start;
   }
 
