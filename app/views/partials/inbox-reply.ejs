@@ -9,7 +9,7 @@
     enctype="multipart/form-data"
     class="reply-form reply-form--stack inbox-reply-form"
   >
-    <%- include('partials/segment-filter-hidden', {
+    <%- include('./segment-filter-hidden', {
       segmentFilter: typeof segmentFilter !== 'undefined' ? segmentFilter : { slugs: [], includeNone: false },
       segmentHiddenName: 'inbox_segment'
     }) %>
