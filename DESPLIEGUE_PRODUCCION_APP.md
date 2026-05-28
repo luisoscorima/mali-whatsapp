@@ -204,6 +204,34 @@ docker compose up -d
 
 Si el contenedor no toma los cambios, prueba: `docker compose up -d --force-recreate app`.
 
+### Script recomendado (backup + despliegue)
+
+En el servidor, desde la raíz del repo (`~/mali-whatsapp`):
+
+```bash
+chmod +x scripts/*.sh
+./scripts/deploy-production.sh          # backup → pull → build → up → /health
+./scripts/deploy-production.sh --no-cache   # rebuild completo de la imagen
+./scripts/backup-postgres.sh            # solo respaldo (sin desplegar)
+```
+
+- Los volcados quedan en `backups/postgres/` (no se versionan; copia periódica fuera del EC2, p. ej. S3).
+- Por defecto se conservan los **14** últimos respaldos (`KEEP_BACKUPS=14`).
+- **Restaurar** (solo si hace falta rollback de datos):
+
+```bash
+gunzip -c backups/postgres/mali_whatsapp_YYYYMMDD_HHMMSS.sql.gz \
+  | docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+```
+
+(Usa las variables del contenedor Postgres o las de tu `.env`.)
+
+**Cron diario** (respaldo a las 03:00, sin desplegar):
+
+```cron
+0 3 * * * cd /home/ubuntu/mali-whatsapp && ./scripts/backup-postgres.sh >> /var/log/mali-whatsapp-backup.log 2>&1
+```
+
 ### Desarrollo local (hot reload)
 
 ```bash
