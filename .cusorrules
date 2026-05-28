@@ -1,6 +1,11 @@
 # Reglas de Oro para Mali-WhatsApp
-Responde de forma breve. No expliques conceptos básicos a menos que te lo pida. Genera solo el código que ha cambiado, no el archivo completo.
-"No borres comentarios", "Usa nombres de variables en inglés", "Si el cambio es pequeño, no reescribas todo el archivo"
+Responde de forma breve.
+No expliques conceptos básicos a menos que te lo pida.
+Genera solo el código que ha cambiado, no el archivo completo.
+"No borres comentarios".
+"Si el cambio es pequeño, no reescribas todo el archivo".
+No tocar flujo de envio de campaigns/new, recepcion y envio de mensajes en conversations/id.
+
 
 ## Contexto del Proyecto
 - Tech Stack: Node.js, Express, Docker, PostgreSQL, Groq (vía OpenAI SDK).
