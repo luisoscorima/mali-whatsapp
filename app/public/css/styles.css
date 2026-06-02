@@ -75,7 +75,6 @@ a {
   gap: 2px;
 }
 
-/* Logo: el tema viene de html[data-theme] (theme.js), no de prefers-color-scheme */
 .brand-logo-wrap {
   max-width: 160px;
   margin-bottom: 6px;
@@ -86,18 +85,7 @@ a {
   width: 100%;
   height: auto;
   display: block;
-}
-
-.brand-logo-img--dark {
-  display: none;
-}
-
-html[data-theme='dark'] .brand-logo-img--light {
-  display: none;
-}
-
-html[data-theme='dark'] .brand-logo-img--dark {
-  display: block;
+  object-fit: contain;
 }
 
 .brand-mark {

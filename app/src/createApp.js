@@ -122,6 +122,7 @@ function createApp() {
 
   app.use((req, res, next) => {
     res.locals.basePath = config.basePath;
+    res.locals.maliLogoUrl = config.MALI_LOGO_URL;
     res.locals.displayTimezone = datetimeDisplay.DISPLAY_TIMEZONE;
     res.locals.formatChatListTime = datetimeDisplay.formatChatListTime;
     res.locals.formatMessageDateTime = datetimeDisplay.formatMessageDateTime;

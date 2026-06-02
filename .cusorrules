@@ -16,6 +16,7 @@ No tocar flujo de envio de campaigns/new, recepcion y envio de mensajes en conve
 2. **Manejo de Errores:** Siempre que una llamada a la IA falle, se DEBE ejecutar la función de transferencia a humano y actualizar el status en DB a 'human'.
 3. **Prohibido Duplicar:** Si vas a escribir lógica de envío de mensajes, usa la función centralizada `persistAndSendOutbound`. No repitas `axios.post` ni `db.query` de envío en varios archivos.
 4. **Logs:** Usa el formato JSON estructurado para logs que ya tiene el proyecto. No uses `console.log` simples en producción.
+5. **Creación de archivos:** Primero investiga que ya exista archivos que manejen ciertas configuraciones.No crear partials ni módulos nuevos solo para repetir una URL, un favicon o un <img> de marca.Un dato, un sitio: constante en config.js (o variable de entorno si aplica).
 
 ## Restricciones
 - No cambies nombres de variables de entorno (.env) sin preguntar.
