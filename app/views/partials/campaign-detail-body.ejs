@@ -84,6 +84,7 @@
       return {
         id: log.id,
         phone: log.phone || '',
+        contactName: log.contact_name || '',
         whatsappMessageId: log.whatsapp_message_id || '',
         status: log.status || '',
         detailText: JSON.stringify(log.response, null, 2),
@@ -94,6 +95,7 @@
       return {
         id: log.id,
         phone: log.phone || '',
+        contactName: log.contact_name || '',
         status: log.status || '',
         incidentType: log.incident_type || '',
         incidentLabel: log.incident_label || 'Mensajes no entregables',
@@ -386,6 +388,7 @@
           <thead>
             <tr>
               <th>Teléfono</th>
+              <th>Nombre</th>
               <th>Estado</th>
               <th>ID mensaje</th>
               <th>Detalle</th>
@@ -421,6 +424,7 @@
           <thead>
             <tr>
               <th>Teléfono</th>
+              <th>Nombre</th>
               <th>Estado</th>
               <th>Incidencia</th>
               <th>Motivo</th>
@@ -583,6 +587,7 @@
         (rows || []).forEach(function (row) {
           var tr = document.createElement('tr');
           tr.appendChild(createCell('td', row.phone, 'mono'));
+          tr.appendChild(createCell('td', row.contactName));
 
           var statusTd = document.createElement('td');
           var badge = document.createElement('span');
@@ -610,6 +615,7 @@
         (rows || []).forEach(function (row) {
           var tr = document.createElement('tr');
           tr.appendChild(createCell('td', row.phone, 'mono'));
+          tr.appendChild(createCell('td', row.contactName));
 
           var statusTd = document.createElement('td');
           var badge = document.createElement('span');

@@ -16,6 +16,11 @@ const {
 } = require('../services/contactAttributeDefinitions');
 const { syncCampaignCost } = require('../services/campaignCostSync');
 const { buildCampaignCostSummary } = require('../utils/campaignPricing');
+const {
+  sqlCampaignLogContactJoin,
+  sqlCampaignLogContactName,
+  sqlCampaignLogSegmentLabels,
+} = require('../utils/campaignExportContactMeta');
 
 const LOG_STATUS = CAMPAIGN_LOG_STATUS_SQL;
 const SALIDA_OK_IN = sqlInList(SALIDA_OK_STATUSES);
@@ -805,11 +810,15 @@ function registerInboxViews(app, ctx) {
     const [campaignResult, logsResult, failedLogs, responderMetrics, retryStats] = await Promise.all([
       query(`SELECT * FROM campaigns WHERE id = $1 AND area = $2`, [campaignId, area]),
       query(
-        `SELECT id, phone, whatsapp_message_id, status, response, created_at, attempt, retryable, last_retry_at
-         FROM campaign_logs
-         WHERE campaign_id = $1
-         ORDER BY id DESC`,
-        [campaignId]
+        `SELECT cl.id, cl.phone, cl.whatsapp_message_id, cl.status, cl.response, cl.created_at,
+                cl.attempt, cl.retryable, cl.last_retry_at,
+                ${sqlCampaignLogContactName('$2')},
+                ${sqlCampaignLogSegmentLabels('$2')}
+         FROM campaign_logs cl
+         ${sqlCampaignLogContactJoin('cl', '$2')}
+         WHERE cl.campaign_id = $1
+         ORDER BY cl.id DESC`,
+        [campaignId, area]
       ),
       fetchCampaignFailedLogs(query, campaignId, area),
       fetchCampaignResponderMetrics(query, campaignId, area),
