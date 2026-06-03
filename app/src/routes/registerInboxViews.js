@@ -811,7 +811,7 @@ function registerInboxViews(app, ctx) {
          ORDER BY id DESC`,
         [campaignId]
       ),
-      fetchCampaignFailedLogs(query, campaignId),
+      fetchCampaignFailedLogs(query, campaignId, area),
       fetchCampaignResponderMetrics(query, campaignId, area),
       fetchCampaignRetryStats(query, campaignId),
     ]);

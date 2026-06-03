@@ -17,6 +17,13 @@ const {
   validateRecipientsMatchRequest,
 } = require('../services/campaignRecipients');
 const { mergeCampaignExcludeContactIds } = require('../services/exclusionLists');
+const {
+  sqlCampaignLogContactJoin,
+  sqlCampaignLogContactName,
+  sqlCampaignLogSegmentLabels,
+  exportContactName,
+  exportSegmentLabels,
+} = require('../utils/campaignExportContactMeta');
 
 function stringifyExportDetail(response) {
   if (response == null || response === '') return '';
@@ -71,17 +78,19 @@ function filterCampaignFailedLogs(logs, filter) {
 
 function buildCampaignLogsExportBuffer(logs, formatDate) {
   const aoa = [
-    ['Fecha y hora', 'Teléfono', 'Estado', 'ID mensaje', 'Detalle'],
+    ['Fecha y hora', 'Teléfono', 'Nombre', 'Segmentos', 'Estado', 'ID mensaje', 'Detalle'],
     ...logs.map((log) => [
       formatDate(log.created_at),
       String(log.phone || ''),
+      exportContactName(log),
+      exportSegmentLabels(log),
       String(log.status || ''),
       String(log.whatsapp_message_id || ''),
       stringifyExportDetail(log.response),
     ]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{ wch: 24 }, { wch: 18 }, { wch: 14 }, { wch: 28 }, { wch: 90 }];
+  ws['!cols'] = [{ wch: 24 }, { wch: 18 }, { wch: 28 }, { wch: 36 }, { wch: 14 }, { wch: 28 }, { wch: 90 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Registro de envíos');
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
@@ -89,17 +98,19 @@ function buildCampaignLogsExportBuffer(logs, formatDate) {
 
 function buildCampaignFailedLogsExportBuffer(logs, formatDate) {
   const aoa = [
-    ['Fecha y hora', 'Teléfono', 'Estado', 'Incidencia', 'Motivo'],
+    ['Fecha y hora', 'Teléfono', 'Nombre', 'Segmentos', 'Estado', 'Incidencia', 'Motivo'],
     ...(Array.isArray(logs) ? logs : []).map((log) => [
       formatDate(log.created_at),
       String(log.phone || ''),
+      exportContactName(log),
+      exportSegmentLabels(log),
       String(log.status || ''),
       String(log.incident_label || ''),
       String(log.error_summary || ''),
     ]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{ wch: 24 }, { wch: 18 }, { wch: 14 }, { wch: 24 }, { wch: 80 }];
+  ws['!cols'] = [{ wch: 24 }, { wch: 18 }, { wch: 28 }, { wch: 36 }, { wch: 14 }, { wch: 24 }, { wch: 80 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Incidencias');
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
@@ -107,15 +118,16 @@ function buildCampaignFailedLogsExportBuffer(logs, formatDate) {
 
 function buildCampaignRespondersExportBuffer(rows, formatDate) {
   const aoa = [
-    ['Teléfono', 'Nombre', 'Primera respuesta'],
+    ['Teléfono', 'Nombre', 'Segmentos', 'Primera respuesta'],
     ...(Array.isArray(rows) ? rows : []).map((row) => [
       String(row.phone || ''),
       String(row.contactName || ''),
+      String(row.segmentLabels || ''),
       formatDate(row.firstResponseAt),
     ]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 24 }];
+  ws['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 36 }, { wch: 24 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Respuestas');
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
@@ -452,7 +464,7 @@ function registerCampaigns(app, ctx) {
         return res.status(404).send('Campaña no encontrada');
       }
 
-      const failedLogs = await fetchCampaignFailedLogs(query, campaignId);
+      const failedLogs = await fetchCampaignFailedLogs(query, campaignId, area);
       const csv = buildCampaignFailedLogsCsv(failedLogs, datetimeDisplay.formatExportDate);
       const stamp = new Date().toISOString().slice(0, 10);
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -479,11 +491,14 @@ function registerCampaigns(app, ctx) {
       const [campaignResult, logsResult] = await Promise.all([
         query(`SELECT id FROM campaigns WHERE id = $1 AND area = $2`, [campaignId, area]),
         query(
-          `SELECT id, phone, whatsapp_message_id, status, response, created_at
-           FROM campaign_logs
-           WHERE campaign_id = $1
-           ORDER BY id DESC`,
-          [campaignId]
+          `SELECT cl.id, cl.phone, cl.whatsapp_message_id, cl.status, cl.response, cl.created_at,
+                  ${sqlCampaignLogContactName('$2')},
+                  ${sqlCampaignLogSegmentLabels('$2')}
+           FROM campaign_logs cl
+           ${sqlCampaignLogContactJoin('cl', '$2')}
+           WHERE cl.campaign_id = $1
+           ORDER BY cl.id DESC`,
+          [campaignId, area]
         ),
       ]);
       if (campaignResult.rowCount === 0) {
@@ -522,7 +537,7 @@ function registerCampaigns(app, ctx) {
         return res.status(404).send('Campaña no encontrada');
       }
 
-      const failedLogs = await fetchCampaignFailedLogs(query, campaignId);
+      const failedLogs = await fetchCampaignFailedLogs(query, campaignId, area);
       const exportRows = filter ? filterCampaignFailedLogs(failedLogs, filter) : failedLogs;
       const stamp = datetimeDisplay.exportFilenameDateStamp();
       const buffer = buildCampaignFailedLogsExportBuffer(exportRows, datetimeDisplay.formatExportDate);
