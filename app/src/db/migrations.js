@@ -308,7 +308,8 @@ async function runMigrations(query) {
      ON CONFLICT (area, key) DO NOTHING`,
     [tiAiConfig]
   );
-  for (const area of ['pam', 'patronato', 'educacion']) {
+  /* patronato: semilla tras migratePamToPatronato (constraints viejos en BD existente). */
+  for (const area of ['pam', 'educacion']) {
     await query(
       `INSERT INTO app_settings (area, key, value, updated_at) VALUES ($1, 'ai_config', $2, NOW())
        ON CONFLICT (area, key) DO NOTHING`,
@@ -470,8 +471,6 @@ async function runMigrations(query) {
      ON contact_attribute_definitions(area, segment_slug, slug) WHERE segment_slug IS NOT NULL`
   );
 
-  await seedDefaultContactAttributeDefinitions(query);
-
   await query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS attribution JSONB NULL`);
 
   await query(`
@@ -533,6 +532,9 @@ async function runMigrations(query) {
     `CREATE INDEX IF NOT EXISTS idx_meta_ctwa_ad_leads_ad ON meta_ctwa_ad_leads(meta_ctwa_ad_id)`
   );
 
+  /* Antes de cualquier INSERT con slug patronato (semillas, atributos). */
+  await migratePamToPatronato(query);
+
   await query(
     `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS meta_ctwa_ad_id INTEGER NULL REFERENCES meta_ctwa_ads(id) ON DELETE SET NULL`
   );
@@ -544,7 +546,7 @@ async function runMigrations(query) {
 
   await migratePamSlugToTiThreeAreas(query);
   await cleanUpCrossAreaSeededSegments(query);
-  await migratePamToPatronato(query);
+  await seedDefaultContactAttributeDefinitions(query);
 }
 
 /** Atributos por defecto (área) si el área aún no tiene definiciones. */
