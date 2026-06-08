@@ -16,6 +16,11 @@ const {
 } = require('../services/contactAttributeDefinitions');
 const { syncCampaignCost } = require('../services/campaignCostSync');
 const { buildCampaignCostSummary } = require('../utils/campaignPricing');
+const {
+  sqlCampaignLogContactJoin,
+  sqlCampaignLogContactName,
+  sqlCampaignLogSegmentLabels,
+} = require('../utils/campaignExportContactMeta');
 
 const LOG_STATUS = CAMPAIGN_LOG_STATUS_SQL;
 const SALIDA_OK_IN = sqlInList(SALIDA_OK_STATUSES);
@@ -537,18 +542,31 @@ function buildCampaignIndexSummary(campaignTotals) {
   };
 }
 
+const {
+  parseSegmentListFilter,
+  hasActiveSegmentFilter,
+  appendSegmentFilterToSearchParams,
+  buildContactSegmentUnionSql,
+} = require('../utils/segmentListFilter');
+
 function registerInboxViews(app, ctx) {
   const { query, config, loadSegments, loadSyncedTemplates, resolveAppBaseUrl, appPath } = ctx;
   const { loadContactAttributes } = require('../services/contactAttributes');
 
-  function contactFiltersFromQuery(req) {
+  function contactFiltersFromQuery(req, slugSet) {
     return {
-      contactSegmentFilter: String(req.query.segment || '').trim(),
+      segmentFilter: parseSegmentListFilter(req.query, slugSet),
       contactSearchQ: String(req.query.q || '').trim(),
       showReplaced: String(req.query.show_replaced || '').trim() === '1',
       contactAttrKey: String(req.query.attr_key || '').trim(),
       contactAttrValue: String(req.query.attr_value || '').trim(),
     };
+  }
+
+  async function contactListContextFromRequest(req, area) {
+    const segmentsList = await loadSegments(area);
+    const slugSet = new Set(segmentsList.map((s) => s.value));
+    return { segmentsList, ...contactFiltersFromQuery(req, slugSet) };
   }
 
   async function loadContactAttributeViewData(area, segmentSlugs = null) {
@@ -579,15 +597,17 @@ function registerInboxViews(app, ctx) {
   async function loadContactsList(
     area,
     segmentsList,
-    segmentFilterRaw,
+    segmentFilterInput,
     searchQRaw,
     showReplacedRaw,
     attrKeyRaw = '',
     attrValueRaw = ''
   ) {
     const slugSet = new Set(segmentsList.map((s) => s.value));
-    const rawSeg = String(segmentFilterRaw || '').trim();
-    const seg = rawSeg && slugSet.has(rawSeg) ? rawSeg : '';
+    const segmentFilter =
+      segmentFilterInput && segmentFilterInput.slugs !== undefined
+        ? segmentFilterInput
+        : parseSegmentListFilter({ segment: segmentFilterInput }, slugSet);
     const showReplaced = String(showReplacedRaw || '').trim() === '1';
     const params = [area];
     let wh = 'WHERE c.area = $1';
@@ -595,10 +615,11 @@ function registerInboxViews(app, ctx) {
     if (!showReplaced) {
       wh += ' AND c.replacement_reason IS NULL AND c.replaced_by_contact_id IS NULL';
     }
-    if (seg) {
-      wh += ` AND EXISTS (SELECT 1 FROM contact_segments csf WHERE csf.contact_id = c.id AND csf.segment_slug = $${p})`;
-      params.push(seg);
-      p += 1;
+    const segSql = buildContactSegmentUnionSql(segmentFilter, 'c.id', p);
+    if (segSql.sql) {
+      wh += segSql.sql;
+      params.push(...segSql.params);
+      p = segSql.nextIndex;
     }
     const searchQ = String(searchQRaw || '').trim();
     const qDigits = searchQ.replace(/\D/g, '');
@@ -660,7 +681,7 @@ function registerInboxViews(app, ctx) {
 
   function contactListQueryString(segmentFilter, searchQ, showReplaced, attrKey, attrValue) {
     const sp = new URLSearchParams();
-    if (segmentFilter) sp.set('segment', segmentFilter);
+    if (hasActiveSegmentFilter(segmentFilter)) appendSegmentFilterToSearchParams(sp, segmentFilter);
     if (searchQ) sp.set('q', searchQ);
     if (showReplaced) sp.set('show_replaced', '1');
     if (attrKey) sp.set('attr_key', attrKey);
@@ -789,13 +810,17 @@ function registerInboxViews(app, ctx) {
     const [campaignResult, logsResult, failedLogs, responderMetrics, retryStats] = await Promise.all([
       query(`SELECT * FROM campaigns WHERE id = $1 AND area = $2`, [campaignId, area]),
       query(
-        `SELECT id, phone, whatsapp_message_id, status, response, created_at, attempt, retryable, last_retry_at
-         FROM campaign_logs
-         WHERE campaign_id = $1
-         ORDER BY id DESC`,
-        [campaignId]
+        `SELECT cl.id, cl.phone, cl.whatsapp_message_id, cl.status, cl.response, cl.created_at,
+                cl.attempt, cl.retryable, cl.last_retry_at,
+                ${sqlCampaignLogContactName('$2')},
+                ${sqlCampaignLogSegmentLabels('$2')}
+         FROM campaign_logs cl
+         ${sqlCampaignLogContactJoin('cl', '$2')}
+         WHERE cl.campaign_id = $1
+         ORDER BY cl.id DESC`,
+        [campaignId, area]
       ),
-      fetchCampaignFailedLogs(query, campaignId),
+      fetchCampaignFailedLogs(query, campaignId, area),
       fetchCampaignResponderMetrics(query, campaignId, area),
       fetchCampaignRetryStats(query, campaignId),
     ]);
@@ -915,12 +940,13 @@ function registerInboxViews(app, ctx) {
   app.get('/contacts/new', async (req, res) => {
     const area = req.user.area;
     const {
-      contactSegmentFilter,
+      segmentsList,
+      segmentFilter,
       contactSearchQ,
       showReplaced,
       contactAttrKey,
       contactAttrValue,
-    } = contactFiltersFromQuery(req);
+    } = await contactListContextFromRequest(req, area);
     const prefillName = String(req.query.prefill_name || '').trim().slice(0, 150);
     const prefillPhone = String(req.query.prefill_phone || '').replace(/\D/g, '');
     const prefillPrefixRaw = String(req.query.prefill_prefix || '').replace(/\D/g, '');
@@ -928,12 +954,11 @@ function registerInboxViews(app, ctx) {
     const inferred = inferPrefillPhoneParts(prefillPhone, prefillPrefixRaw, prefillLocalRaw);
     const prefillPhonePrefix = inferred.prefix;
     const prefillPhoneLocal = inferred.local;
-    const segmentsList = await loadSegments(area);
     const [contactsRows, attrView] = await Promise.all([
       loadContactsList(
         area,
         segmentsList,
-        contactSegmentFilter,
+        segmentFilter,
         contactSearchQ,
         showReplaced,
         contactAttrKey,
@@ -949,13 +974,13 @@ function registerInboxViews(app, ctx) {
       layoutModifier: '',
       segments: segmentsList,
       contacts: contactsRows,
-      contactSegmentFilter,
+      segmentFilter,
       contactSearchQ,
       showReplaced,
       contactAttrKey,
       contactAttrValue,
       contactListQuery: contactListQueryString(
-        contactSegmentFilter,
+        segmentFilter,
         contactSearchQ,
         showReplaced,
         contactAttrKey,
@@ -977,18 +1002,18 @@ function registerInboxViews(app, ctx) {
   app.get('/contacts/import', async (req, res) => {
     const area = req.user.area;
     const {
-      contactSegmentFilter,
+      segmentsList,
+      segmentFilter,
       contactSearchQ,
       showReplaced,
       contactAttrKey,
       contactAttrValue,
-    } = contactFiltersFromQuery(req);
-    const segmentsList = await loadSegments(area);
+    } = await contactListContextFromRequest(req, area);
     const [contactsRows, attrView] = await Promise.all([
       loadContactsList(
         area,
         segmentsList,
-        contactSegmentFilter,
+        segmentFilter,
         contactSearchQ,
         showReplaced,
         contactAttrKey,
@@ -1004,13 +1029,13 @@ function registerInboxViews(app, ctx) {
       layoutModifier: '',
       segments: segmentsList,
       contacts: contactsRows,
-      contactSegmentFilter,
+      segmentFilter,
       contactSearchQ,
       showReplaced,
       contactAttrKey,
       contactAttrValue,
       contactListQuery: contactListQueryString(
-        contactSegmentFilter,
+        segmentFilter,
         contactSearchQ,
         showReplaced,
         contactAttrKey,
@@ -1047,18 +1072,18 @@ function registerInboxViews(app, ctx) {
     }
     const area = req.user.area;
     const {
-      contactSegmentFilter,
+      segmentsList,
+      segmentFilter,
       contactSearchQ,
       showReplaced,
       contactAttrKey,
       contactAttrValue,
-    } = contactFiltersFromQuery(req);
-    const segmentsList = await loadSegments(area);
+    } = await contactListContextFromRequest(req, area);
     const [contactsRows, one, contactAttributes] = await Promise.all([
       loadContactsList(
         area,
         segmentsList,
-        contactSegmentFilter,
+        segmentFilter,
         contactSearchQ,
         showReplaced,
         contactAttrKey,
@@ -1102,13 +1127,13 @@ function registerInboxViews(app, ctx) {
       layoutModifier: 'conversations-inbox--detail',
       segments: segmentsList,
       contacts: contactsRows,
-      contactSegmentFilter,
+      segmentFilter,
       contactSearchQ,
       showReplaced,
       contactAttrKey,
       contactAttrValue,
       contactListQuery: contactListQueryString(
-        contactSegmentFilter,
+        segmentFilter,
         contactSearchQ,
         showReplaced,
         contactAttrKey,
@@ -1128,18 +1153,18 @@ function registerInboxViews(app, ctx) {
   app.get('/contacts', async (req, res) => {
     const area = req.user.area;
     const {
-      contactSegmentFilter,
+      segmentsList,
+      segmentFilter,
       contactSearchQ,
       showReplaced,
       contactAttrKey,
       contactAttrValue,
-    } = contactFiltersFromQuery(req);
-    const segmentsList = await loadSegments(area);
+    } = await contactListContextFromRequest(req, area);
     const [contactsRows, attrView] = await Promise.all([
       loadContactsList(
         area,
         segmentsList,
-        contactSegmentFilter,
+        segmentFilter,
         contactSearchQ,
         showReplaced,
         contactAttrKey,
@@ -1155,13 +1180,13 @@ function registerInboxViews(app, ctx) {
       layoutModifier: '',
       segments: segmentsList,
       contacts: contactsRows,
-      contactSegmentFilter,
+      segmentFilter,
       contactSearchQ,
       showReplaced,
       contactAttrKey,
       contactAttrValue,
       contactListQuery: contactListQueryString(
-        contactSegmentFilter,
+        segmentFilter,
         contactSearchQ,
         showReplaced,
         contactAttrKey,

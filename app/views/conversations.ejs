@@ -3,6 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="<%= maliLogoUrl %>" />
+    <link rel="apple-touch-icon" href="<%= maliLogoUrl %>" />
     <title>
       <% if (typeof selectedConversation !== 'undefined' && selectedConversation) { %>Chat · <%= selectedConversation.phone %><% } else { %>Conversaciones<% } %> · MALI WhatsApp
     </title>
@@ -34,6 +36,7 @@
       const s = segments.find(function (x) { return x.value === slug; });
       return s ? s.colorKey : 'slate';
     }; %>
+    <% const _segmentFilter = typeof segmentFilter !== 'undefined' ? segmentFilter : { slugs: [], includeNone: false }; %>
     <% function inboxInitials(contactName, phone) {
       var n = String(contactName || '').trim();
       if (n) {
@@ -81,6 +84,14 @@
           ><span class="inbox-pill-icon" aria-hidden="true">👤</span> Asesor</a>
           <% } %>
         </div>
+        <%- include('partials/segment-filter-chips', {
+          segments,
+          segmentFilter: _segmentFilter,
+          chipListPath: basePath + '/conversations',
+          chipPreserveQuery: { q: searchQ, chat: _chatF },
+          showNoneSegmentChip: true,
+          segmentPillsClass: 'conversation-segment-pills'
+        }) %>
         <form class="inbox-filters" method="get" action="<%= basePath %>/conversations">
           <% if (_chatF === 'unread') { %>
             <input type="hidden" name="chat" value="unread" />
@@ -89,16 +100,7 @@
           <% } else if (_chatF === 'human') { %>
             <input type="hidden" name="chat" value="human" />
           <% } %>
-          <label class="field field--inbox">
-            <span class="field-label">Segmento</span>
-            <select name="segment" class="inbox-select" data-inbox-filter>
-              <option value="" <%= segmentFilter === '' ? 'selected' : '' %>>Todos</option>
-              <option value="__none__" <%= segmentFilter === '__none__' ? 'selected' : '' %>>Sin segmento</option>
-              <% segments.forEach(function (seg) { %>
-                <option value="<%= seg.value %>" <%= segmentFilter === seg.value ? 'selected' : '' %>><%= seg.label %></option>
-              <% }); %>
-            </select>
-          </label>
+          <%- include('partials/segment-filter-hidden', { segmentFilter: _segmentFilter }) %>
           <label class="field field--inbox">
             <span class="field-label">Buscar en todos los chats</span>
             <div class="inbox-search-row">
@@ -266,9 +268,7 @@
                     action="<%= basePath %>/conversations/<%= selectedConversation.id %>/mark-unread"
                     class="inbox-lead-score-form inbox-lead-score-form--in-more"
                   >
-                    <% if (segmentFilter) { %>
-                      <input type="hidden" name="inbox_segment" value="<%= segmentFilter %>" />
-                    <% } %>
+                    <%- include('partials/segment-filter-hidden', { segmentFilter: _segmentFilter, segmentHiddenName: 'inbox_segment' }) %>
                     <% if (searchQ) { %>
                       <input type="hidden" name="inbox_q" value="<%= searchQ %>" />
                     <% } %>
@@ -323,9 +323,7 @@
                       action="<%= basePath %>/conversations/<%= selectedConversation.id %>/lead-score"
                       class="inbox-lead-score-form inbox-lead-score-form--in-more"
                     >
-                      <% if (segmentFilter) { %>
-                        <input type="hidden" name="inbox_segment" value="<%= segmentFilter %>" />
-                      <% } %>
+                      <%- include('partials/segment-filter-hidden', { segmentFilter: _segmentFilter, segmentHiddenName: 'inbox_segment' }) %>
                       <% if (searchQ) { %>
                         <input type="hidden" name="inbox_q" value="<%= searchQ %>" />
                       <% } %>
@@ -363,7 +361,7 @@
           </div>
           <div class="inbox-compose">
             <h2 class="inbox-compose-title">Responder</h2>
-            <%- include('partials/inbox-reply', { conversation: selectedConversation, canReply, basePath, segmentFilter, searchQ, chatFilter, replyBlockedReason }) %>
+            <%- include('partials/inbox-reply', { conversation: selectedConversation, canReply, basePath, segmentFilter: _segmentFilter, searchQ, chatFilter, replyBlockedReason }) %>
           </div>
         <% } %>
       </section>

@@ -9,9 +9,10 @@
     enctype="multipart/form-data"
     class="reply-form reply-form--stack inbox-reply-form"
   >
-    <% if (typeof segmentFilter !== 'undefined' && segmentFilter) { %>
-      <input type="hidden" name="inbox_segment" value="<%= segmentFilter %>" />
-    <% } %>
+    <%- include('./segment-filter-hidden', {
+      segmentFilter: typeof segmentFilter !== 'undefined' ? segmentFilter : { slugs: [], includeNone: false },
+      segmentHiddenName: 'inbox_segment'
+    }) %>
     <% if (typeof searchQ !== 'undefined' && searchQ) { %>
       <input type="hidden" name="inbox_q" value="<%= searchQ %>" />
     <% } %>

@@ -39,7 +39,7 @@
         <div class="template-live-preview__screen">
           <div class="template-live-preview__message">
             <% if (_previewState.header && _previewState.header.type === 'text' && _previewState.header.text) { %>
-            <div class="template-live-preview__header-text"><%= _previewState.header.text %></div>
+            <div class="template-live-preview__header-text"><%- highlightTemplatePreviewHtml(_previewState.header.text) %></div>
             <% } %>
 
             <% if (_previewState.header && _previewState.header.type === 'image') { %>
@@ -67,13 +67,13 @@
             <% } %>
 
             <% if (_previewState.body && _previewState.body.text) { %>
-            <div class="template-live-preview__body"><%= _previewState.body.text %></div>
+            <div class="template-live-preview__body"><%- highlightTemplatePreviewHtml(_previewState.body.text) %></div>
             <% } else { %>
             <div class="template-live-preview__body template-live-preview__body--empty">Sin texto de cuerpo almacenado.</div>
             <% } %>
 
             <% if (_previewState.footer && _previewState.footer.text) { %>
-            <div class="template-live-preview__footer"><%= _previewState.footer.text %></div>
+            <div class="template-live-preview__footer"><%- highlightTemplatePreviewHtml(_previewState.footer.text) %></div>
             <% } %>
 
             <% if (_previewState.buttons && _previewState.buttons.length) { %>
@@ -81,7 +81,7 @@
               <% _previewState.buttons.forEach(function (btn) { %>
               <button type="button" class="template-live-preview__button" tabindex="-1">
                 <span class="template-live-preview__button-text"><%= btn.text || 'Botón URL' %></span>
-                <% if (btn.url) { %><span class="template-live-preview__button-url"><%= btn.url %></span><% } %>
+                <% if (btn.url) { %><span class="template-live-preview__button-url" title="<%= btn.url %>"><%- summarizeTemplatePreviewUrl(btn.url) %></span><% } %>
               </button>
               <% }) %>
             </div>

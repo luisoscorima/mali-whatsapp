@@ -6,6 +6,11 @@ const {
 } = require('../utils/campaignLogStatuses');
 const { summarizeCampaignLogResponse } = require('../utils/campaignLogErrorSummary');
 const { classifyCampaignDeliveryIncident } = require('../utils/campaignSendErrorClassify');
+const {
+  sqlCampaignLogContactJoin,
+  sqlCampaignLogContactName,
+  sqlCampaignLogSegmentLabels,
+} = require('../utils/campaignExportContactMeta');
 
 const SALIDA_OK_IN = sqlInList(SALIDA_OK_STATUSES);
 
@@ -31,19 +36,23 @@ function enrichFailedLogRow(row) {
   };
 }
 
-async function fetchCampaignFailedLogs(query, campaignId) {
+async function fetchCampaignFailedLogs(query, campaignId, area) {
   const r = await query(
-    `SELECT id, phone, status, response, created_at, attempt, retryable, last_retry_at
+    `SELECT latest_logs.id, latest_logs.phone, latest_logs.status, latest_logs.response,
+            latest_logs.created_at, latest_logs.attempt, latest_logs.retryable, latest_logs.last_retry_at,
+            ${sqlCampaignLogContactName('$2')},
+            ${sqlCampaignLogSegmentLabels('$2')}
      FROM (
        SELECT DISTINCT ON (phone)
-         id, phone, status, response, created_at, attempt, retryable, last_retry_at
+         id, phone, contact_id, status, response, created_at, attempt, retryable, last_retry_at
        FROM campaign_logs
        WHERE campaign_id = $1
        ORDER BY phone, id DESC
      ) latest_logs
-     WHERE ${sqlCampaignLogIsError('status')}
-     ORDER BY id DESC`,
-    [campaignId]
+     ${sqlCampaignLogContactJoin('latest_logs', '$2')}
+     WHERE ${sqlCampaignLogIsError('latest_logs.status')}
+     ORDER BY latest_logs.id DESC`,
+    [campaignId, area]
   );
   return r.rows.map(enrichFailedLogRow);
 }

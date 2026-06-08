@@ -1,5 +1,6 @@
 const config = require('../config');
 const { sqlCampaignLogIsSalidaOk } = require('../utils/campaignLogStatuses');
+const { sqlContactSegmentLabels } = require('../utils/campaignExportContactMeta');
 
 /** Ventana fija v1: respuesta inbound dentro de N días posteriores al envío (campaign_log.created_at). */
 const RESPONSE_WINDOW_DAYS = config.CAMPAIGN_RESPONSE_WINDOW_DAYS;
@@ -8,6 +9,7 @@ function mapResponderRow(row) {
   return {
     phone: row.phone,
     contactName: row.contact_name || '',
+    segmentLabels: row.segment_labels || '',
     contactId: row.contact_id,
     conversationId: row.conversation_id,
     firstResponseAt: row.first_response_at,
@@ -53,6 +55,7 @@ async function fetchCampaignResponders(query, campaignId, area) {
      SELECT
        latest_logs.phone,
        COALESCE(ct.name, '') AS contact_name,
+       ${sqlContactSegmentLabels('COALESCE(latest_logs.contact_id, conv.contact_id)', '$2')} AS segment_labels,
        COALESCE(latest_logs.contact_id, conv.contact_id) AS contact_id,
        conv.id AS conversation_id,
        MIN(cm.created_at) AS first_response_at

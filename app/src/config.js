@@ -70,6 +70,8 @@ module.exports = {
   GRAPH_API_VERSION: 'v23.0',
   GRAPH_BASE: 'https://graph.facebook.com/v23.0',
   BUSINESS_AREAS: ['ti', 'pam', 'patronato', 'educacion'],
+  MALI_LOGO_URL:
+    'https://mali-assets.s3.us-east-1.amazonaws.com/assets-web-mali/Logo_MALI_Whatsapp_Texto.png',
   AREA_LABELS: {
     ti: 'TI (dev)',
     pam: 'PAM',

@@ -578,6 +578,7 @@ body.landing-marketing {
   width: 100%;
   height: auto;
   display: block;
+  object-fit: contain;
 }
 
 .landing-nav-wa {
@@ -608,6 +609,7 @@ body.landing-marketing {
   width: 100%;
   height: auto;
   display: block;
+  object-fit: contain;
 }
 
 .landing-footer-brand .landing-nav-wa {

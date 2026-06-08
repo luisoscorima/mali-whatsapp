@@ -19,3 +19,6 @@ app/public/uploads/chat-media/*
 !app/public/uploads/chat-media/.gitkeep
 
 UI-references/
+
+# Respaldos locales del servidor (scripts/backup-postgres.sh)
+backups/

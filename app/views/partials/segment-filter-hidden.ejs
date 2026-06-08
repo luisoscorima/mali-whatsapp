@@ -1,0 +1,7 @@
+<% const _sfH = typeof segmentFilter !== 'undefined' && segmentFilter ? segmentFilter : { slugs: [], includeNone: false }; %>
+<% if (_sfH.includeNone) { %>
+<input type="hidden" name="<%= typeof segmentHiddenName !== 'undefined' ? segmentHiddenName : 'segment' %>" value="__none__" />
+<% } %>
+<% (_sfH.slugs || []).forEach(function (slug) { %>
+<input type="hidden" name="<%= typeof segmentHiddenName !== 'undefined' ? segmentHiddenName : 'segment' %>" value="<%= slug %>" />
+<% }); %>

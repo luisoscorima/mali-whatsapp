@@ -57,14 +57,18 @@ function csvEscapeCell(value) {
   return s;
 }
 
+const { exportContactName, exportSegmentLabels } = require('./campaignExportContactMeta');
+
 function buildCampaignFailedLogsCsv(logs, formatDate) {
   const format = typeof formatDate === 'function' ? formatDate : (d) => String(d ?? '');
-  const header = ['telefono', 'estado', 'incidencia', 'motivo', 'fecha_envio'];
+  const header = ['telefono', 'nombre', 'segmentos', 'estado', 'incidencia', 'motivo', 'fecha_envio'];
   const lines = [header.join(',')];
   for (const log of logs) {
     lines.push(
       [
         csvEscapeCell(log.phone),
+        csvEscapeCell(exportContactName(log)),
+        csvEscapeCell(exportSegmentLabels(log)),
         csvEscapeCell(log.status),
         csvEscapeCell(log.incident_label || ''),
         csvEscapeCell(log.error_summary || summarizeCampaignLogResponse(log.response)),

@@ -14,6 +14,11 @@ const { parseAiConfigValue } = require('../utils/aiConfig');
 const { buildExportRows, buildXlsxBuffer, safeFilenamePart } = require('../utils/conversationExport');
 const { exportFilenameDateStamp } = require('../utils/datetimeDisplay');
 const { getLocalPreview, streamMessageMediaDownload } = require('../utils/chatMediaDownload');
+const {
+  appendSegmentFilterToSearchParams,
+  segmentFilterFromBodyField,
+  parseSegmentListFilter,
+} = require('../utils/segmentListFilter');
 
 const MEDIA_TYPE_LABEL = {
   image: 'Imagen',
@@ -22,12 +27,23 @@ const MEDIA_TYPE_LABEL = {
   document: 'Documento',
 };
 
-function inboxRedirectSuffixFromBody(body) {
-  const seg = String(body.inbox_segment || '').trim();
+function inboxRedirectSuffixFromBody(body, slugSet) {
+  const segmentFilter = segmentFilterFromBodyField(body.inbox_segment);
   const qText = String(body.inbox_q || '').trim();
   const inboxChat = String(body.inbox_chat || '').trim();
   const sp = new URLSearchParams();
-  if (seg) sp.set('segment', seg);
+  const validated = slugSet
+    ? parseSegmentListFilter(
+        {
+          segment: [
+            ...(segmentFilter.includeNone ? ['__none__'] : []),
+            ...segmentFilter.slugs,
+          ],
+        },
+        slugSet
+      )
+    : segmentFilter;
+  appendSegmentFilterToSearchParams(sp, validated);
   if (qText) sp.set('q', qText);
   if (inboxChat === 'unread') sp.set('chat', 'unread');
   else if (inboxChat === 'bot') sp.set('chat', 'bot');
@@ -36,12 +52,11 @@ function inboxRedirectSuffixFromBody(body) {
   return s ? `?${s}` : '';
 }
 
-function inboxRedirectSuffixFromQuery(reqQuery) {
-  const seg = String(reqQuery.segment || '').trim();
+function inboxRedirectSuffixFromQuery(reqQuery, slugSet) {
   const qText = String(reqQuery.q || '').trim();
   const inboxChat = String(reqQuery.chat || '').trim();
   const sp = new URLSearchParams();
-  if (seg) sp.set('segment', seg);
+  if (slugSet) appendSegmentFilterToSearchParams(sp, parseSegmentListFilter(reqQuery, slugSet));
   if (qText) sp.set('q', qText);
   if (inboxChat === 'unread') sp.set('chat', 'unread');
   else if (inboxChat === 'bot') sp.set('chat', 'bot');
@@ -51,7 +66,7 @@ function inboxRedirectSuffixFromQuery(reqQuery) {
 }
 
 function registerConversations(app, ctx) {
-  const { query, config, buildInboxRenderData, appPath, resolveAppBaseUrl } = ctx;
+  const { query, config, buildInboxRenderData, appPath, resolveAppBaseUrl, getSegmentSlugSet } = ctx;
 
   function handleReplyUpload(req, res, next) {
     conversationMediaUpload.single('file')(req, res, (err) => {
@@ -139,7 +154,8 @@ function registerConversations(app, ctx) {
       return res.status(500).send(`No se pudo guardar: ${error.message}`);
     }
 
-    const suffix = inboxRedirectSuffixFromBody(req.body);
+    const slugSet = await getSegmentSlugSet(area);
+    const suffix = inboxRedirectSuffixFromBody(req.body, slugSet);
     res.redirect(appPath(`/conversations/${conversationId}${suffix}`));
   });
 
@@ -159,7 +175,8 @@ function registerConversations(app, ctx) {
     if (upd.rowCount === 0) {
       return res.status(404).send('Conversacion no encontrada');
     }
-    const suffix = inboxRedirectSuffixFromBody(req.body);
+    const slugSet = await getSegmentSlugSet(area);
+    const suffix = inboxRedirectSuffixFromBody(req.body, slugSet);
     return res.redirect(appPath(`/conversations${suffix}`));
   });
 
@@ -247,8 +264,9 @@ function registerConversations(app, ctx) {
         );
         resolvedConversationId = ins.rows[0].id;
       }
+      const slugSet = await getSegmentSlugSet(area);
       return res.redirect(
-        appPath(`/conversations/${resolvedConversationId}${inboxRedirectSuffixFromQuery(req.query)}`)
+        appPath(`/conversations/${resolvedConversationId}${inboxRedirectSuffixFromQuery(req.query, slugSet)}`)
       );
     }
     const data = await buildInboxRenderData(req, { selectedId: conversationId });
@@ -426,7 +444,8 @@ function registerConversations(app, ctx) {
           );
       }
 
-      const suffix = inboxRedirectSuffixFromBody(req.body);
+      const slugSet = await getSegmentSlugSet(area);
+      const suffix = inboxRedirectSuffixFromBody(req.body, slugSet);
       const redirectUrl = appPath(`/conversations/${conversationId}${suffix}`);
 
       try {

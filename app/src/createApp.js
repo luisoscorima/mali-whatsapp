@@ -15,6 +15,10 @@ const {
 const { globalLimiter } = require('./middleware/limiters');
 const { createRegisterRoutes } = require('./routes/registerRoutes');
 const { purgeOldAuditLogs } = require('./services/auditLog');
+const {
+  highlightTemplatePreviewHtml,
+  summarizeTemplatePreviewUrl,
+} = require('./services/templateBuilder');
 
 function parseCampaignPayload(payload) {
   if (!payload) return null;
@@ -118,6 +122,7 @@ function createApp() {
 
   app.use((req, res, next) => {
     res.locals.basePath = config.basePath;
+    res.locals.maliLogoUrl = config.MALI_LOGO_URL;
     res.locals.displayTimezone = datetimeDisplay.DISPLAY_TIMEZONE;
     res.locals.formatChatListTime = datetimeDisplay.formatChatListTime;
     res.locals.formatMessageDateTime = datetimeDisplay.formatMessageDateTime;
@@ -131,6 +136,8 @@ function createApp() {
       return String(campaign.segment || '');
     };
     res.locals.campaignParamSummary = buildCampaignParamSummary;
+    res.locals.highlightTemplatePreviewHtml = highlightTemplatePreviewHtml;
+    res.locals.summarizeTemplatePreviewUrl = summarizeTemplatePreviewUrl;
     next();
   });
 
