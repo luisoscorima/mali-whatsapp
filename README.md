@@ -1,10 +1,10 @@
 # MALI WhatsApp MVP
 
-Plataforma web para **operar WhatsApp Business (Cloud API)** en MALI: **varios números** (líneas por área: TI, PAM, Educación), campañas con plantillas aprobadas, gestión de contactos y **inbox unificado** con conversaciones en tiempo casi real. Incluye **respuesta automática con IA** (bot) por área, con posibilidad de **pasar el hilo a un asesor humano** cuando haga falta.
+Plataforma web para **operar WhatsApp Business (Cloud API)** en MALI: **varios números** (líneas por área: TI, PAM, Patronato, Educación), campañas con plantillas aprobadas, gestión de contactos y **inbox unificado** con conversaciones en tiempo casi real. Incluye **respuesta automática con IA** (bot) por área, con posibilidad de **pasar el hilo a un asesor humano** cuando haga falta.
 
 ## Características
 
-- **Multi-área y multi-número:** TI (desarrollo), PAM y Educación operan como **líneas de WhatsApp distintas**: cada área tiene su **token** y **Phone Number ID** (`WHATSAPP_TOKEN_*` / `PHONE_NUMBER_ID_*` en `.env`, o credenciales guardadas en **Admin → Meta** con prioridad sobre el entorno). Los envíos y la bandeja usan siempre la línea del área del usuario. Un mismo webhook de Meta puede alimentar las tres líneas: el sistema **resuelve el área** según `metadata.phone_number_id`, el **WABA** (`WABA_ID_TI`, `WABA_ID_PAM`, `WABA_ID_EDUCACION` si hace falta) o, en casos límite, el teléfono del remitente ya vinculado en contactos/conversaciones/campañas.
+- **Multi-área y multi-número:** TI (desarrollo), PAM, Patronato y Educación operan como **líneas de WhatsApp distintas**: cada área tiene su **token** y **Phone Number ID** (`WHATSAPP_TOKEN_*` / `PHONE_NUMBER_ID_*` en `.env`, o credenciales guardadas en **Admin → Meta** con prioridad sobre el entorno). Los envíos y la bandeja usan siempre la línea del área del usuario. Un mismo webhook de Meta puede alimentar las cuatro líneas: el sistema **resuelve el área** según `metadata.phone_number_id`, el **WABA** (`WABA_ID_TI`, `WABA_ID_PAM`, `WABA_ID_PATRONATO`, `WABA_ID_EDUCACION` si hace falta) o, en casos límite, el teléfono del remitente ya vinculado en contactos/conversaciones/campañas.
 - **Integración Meta:** envío de plantillas, recepción de mensajes y medios, webhook de estados (`sent` / `delivered` / `read` / `failed`) y de **estado de plantillas** (`message_template_status_update`).
 - **Segmentación:** contactos con etiquetas de segmento; campañas dirigidas a segmentos con **exclusiones** (segmentos, IDs o listas guardadas).
 - **Panel unificado:** rutas reales (sin “tabs” por hash), vista tipo inbox para conversaciones y KPIs de campañas ampliados (fallidos, respondieron, costo, reintentos).
@@ -84,7 +84,7 @@ cp .env.example .env
 
 2. Completa en `.env`:
 
-- `WHATSAPP_TOKEN_TI` / `PHONE_NUMBER_ID_TI`, `WHATSAPP_TOKEN_PAM` / `PHONE_NUMBER_ID_PAM` y `WHATSAPP_TOKEN_EDUCACION` / `PHONE_NUMBER_ID_EDUCACION` (o `WHATSAPP_TOKEN` / `PHONE_NUMBER_ID` como respaldo genérico)
+- `WHATSAPP_TOKEN_TI` / `PHONE_NUMBER_ID_TI`, `WHATSAPP_TOKEN_PAM` / `PHONE_NUMBER_ID_PAM`, `WHATSAPP_TOKEN_PATRONATO` / `PHONE_NUMBER_ID_PATRONATO` y `WHATSAPP_TOKEN_EDUCACION` / `PHONE_NUMBER_ID_EDUCACION` (o `WHATSAPP_TOKEN` / `PHONE_NUMBER_ID` como respaldo genérico)
 - `VERIFY_TOKEN`
 - `APP_SECRET` (obligatorio en produccion)
 - `REQUIRE_WEBHOOK_SIGNATURE=true` en produccion
@@ -102,7 +102,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-4. Usuarios del panel (correos **@mali.pe**; áreas **TI (dev)** `ti`, **PAM** `pam`, **Educación** `educacion`):
+4. Usuarios del panel (correos **@mali.pe**; áreas **TI (dev)** `ti`, **PAM** `pam`, **Patronato** `patronato`, **Educación** `educacion`):
 
 Las dependencias Node se instalan **solo al construir la imagen Docker** (`Dockerfile` + `npm install` dentro del contenedor). No hace falta ejecutar `npm` en tu sistema operativo.
 
@@ -114,7 +114,7 @@ docker compose exec app sh -c 'cd /usr/src/app && node scripts/create-user.js "o
 docker compose exec app sh -c 'cd /usr/src/app && node scripts/create-user.js "otro@mali.pe" "tu_clave" pam master'
 ```
 
-Tercer argumento: `ti`, `pam` o `educacion`. El último argumento opcional `master` marca usuario master (insignia en el panel). Cada usuario normal solo ve datos de su área; los envíos usan `WHATSAPP_TOKEN_*` / `PHONE_NUMBER_ID_*` de esa área.
+Tercer argumento: `ti`, `pam`, `patronato` o `educacion`. El último argumento opcional `master` marca usuario master (insignia en el panel). Cada usuario normal solo ve datos de su área; los envíos usan `WHATSAPP_TOKEN_*` / `PHONE_NUMBER_ID_*` de esa área.
 
 5. Abre el panel:
 
@@ -181,7 +181,7 @@ En **Campañas** (`GET /campaigns`) se muestran la lista de campañas y el **res
 - **Crear:** `GET /templates/new` → `POST /templates/create` envía la plantilla a revisión (`PENDING`). Meta notifica por webhook `message_template_status_update`; al aprobarse, aparece tras sync en campañas.
 - El formulario de campaña se adapta a cabeceras (imagen/video/documento), textos `{{1}}`… y botones URL; cada variable puede ser **valor fijo** o **por contacto** (nombre, teléfono, atributos).
 
-El token debe poder leer/escribir plantillas (`whatsapp_business_management`). Si falla la resolución del WABA, define `WABA_ID_TI`, `WABA_ID_PAM` y/o `WABA_ID_EDUCACION`.
+El token debe poder leer/escribir plantillas (`whatsapp_business_management`). Si falla la resolución del WABA, define `WABA_ID_TI`, `WABA_ID_PAM`, `WABA_ID_PATRONATO` y/o `WABA_ID_EDUCACION`.
 
 Errores frecuentes: `132001` (plantilla/idioma inexistente), `132000` (parámetros incorrectos), `131030` en sandbox (número no permitido).
 

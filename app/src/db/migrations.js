@@ -4,13 +4,18 @@
  * Jerarquía de negocio: áreas → usuarios → segmentos → contactos; campañas y chat por área.
  */
 
+const { BUSINESS_AREAS } = require('../config');
+
+const AREA_CHECK_IN = `(${BUSINESS_AREAS.map((a) => `'${a}'`).join(', ')})`;
+const AREA_CHECK_IN_WITH_GLOBAL = `(${[...BUSINESS_AREAS, 'global'].map((a) => `'${a}'`).join(', ')})`;
+
 async function runMigrations(query) {
   await query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
       email VARCHAR(120) NOT NULL UNIQUE,
       password_hash VARCHAR(120) NOT NULL,
-      area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion')),
+      area VARCHAR(20) NOT NULL CHECK (area IN ${AREA_CHECK_IN}),
       is_master BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     )
@@ -72,7 +77,7 @@ async function runMigrations(query) {
 
   await query(`
     CREATE TABLE IF NOT EXISTS app_settings (
-      area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion', 'global')),
+      area VARCHAR(20) NOT NULL CHECK (area IN ${AREA_CHECK_IN_WITH_GLOBAL}),
       key TEXT NOT NULL,
       value TEXT NOT NULL,
       updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -86,7 +91,7 @@ async function runMigrations(query) {
       name VARCHAR(150) NOT NULL,
       phone VARCHAR(20) NOT NULL,
       segment VARCHAR(50) NOT NULL,
-      area VARCHAR(20) NOT NULL DEFAULT 'ti' CHECK (area IN ('ti', 'pam', 'educacion')),
+      area VARCHAR(20) NOT NULL DEFAULT 'ti' CHECK (area IN ${AREA_CHECK_IN}),
       opt_in BOOLEAN NOT NULL DEFAULT TRUE,
       active BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -137,7 +142,7 @@ async function runMigrations(query) {
   await query(`
     CREATE TABLE IF NOT EXISTS campaigns (
       id SERIAL PRIMARY KEY,
-      area VARCHAR(20) NOT NULL DEFAULT 'ti' CHECK (area IN ('ti', 'pam', 'educacion')),
+      area VARCHAR(20) NOT NULL DEFAULT 'ti' CHECK (area IN ${AREA_CHECK_IN}),
       segment VARCHAR(50) NOT NULL,
       template_name VARCHAR(100) NOT NULL,
       message_text TEXT NOT NULL,
@@ -209,7 +214,7 @@ async function runMigrations(query) {
   await query(`
     CREATE TABLE IF NOT EXISTS segment_definitions (
       id SERIAL PRIMARY KEY,
-      area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion')),
+      area VARCHAR(20) NOT NULL CHECK (area IN ${AREA_CHECK_IN}),
       slug VARCHAR(50) NOT NULL,
       label VARCHAR(120) NOT NULL,
       sort_order INT NOT NULL DEFAULT 0,
@@ -227,7 +232,7 @@ async function runMigrations(query) {
     CREATE TABLE IF NOT EXISTS contact_segments (
       id SERIAL PRIMARY KEY,
       contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-      area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion')),
+      area VARCHAR(20) NOT NULL CHECK (area IN ${AREA_CHECK_IN}),
       segment_slug VARCHAR(50) NOT NULL,
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       UNIQUE (contact_id, segment_slug)
@@ -265,7 +270,7 @@ async function runMigrations(query) {
   await query(`
     CREATE TABLE IF NOT EXISTS conversations (
       id SERIAL PRIMARY KEY,
-      area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion')),
+      area VARCHAR(20) NOT NULL CHECK (area IN ${AREA_CHECK_IN}),
       phone VARCHAR(20) NOT NULL,
       contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
       last_user_message_at TIMESTAMP WITH TIME ZONE,
@@ -303,7 +308,7 @@ async function runMigrations(query) {
      ON CONFLICT (area, key) DO NOTHING`,
     [tiAiConfig]
   );
-  for (const area of ['pam', 'educacion']) {
+  for (const area of ['pam', 'patronato', 'educacion']) {
     await query(
       `INSERT INTO app_settings (area, key, value, updated_at) VALUES ($1, 'ai_config', $2, NOW())
        ON CONFLICT (area, key) DO NOTHING`,
@@ -356,7 +361,7 @@ async function runMigrations(query) {
   await query(`
     CREATE TABLE IF NOT EXISTS whatsapp_templates (
       id SERIAL PRIMARY KEY,
-      area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion')),
+      area VARCHAR(20) NOT NULL CHECK (area IN ${AREA_CHECK_IN}),
       meta_id VARCHAR(64),
       name VARCHAR(200) NOT NULL,
       language VARCHAR(32) NOT NULL,
@@ -384,7 +389,7 @@ async function runMigrations(query) {
   }
   try {
     await query(
-      `ALTER TABLE app_settings ADD CONSTRAINT app_settings_area_check CHECK (area IN ('ti', 'pam', 'educacion', 'global'))`
+      `ALTER TABLE app_settings ADD CONSTRAINT app_settings_area_check CHECK (area IN ${AREA_CHECK_IN_WITH_GLOBAL})`
     );
   } catch {
     /* ya aplicado o otro nombre de constraint */
@@ -399,7 +404,7 @@ async function runMigrations(query) {
   await query(`
     CREATE TABLE IF NOT EXISTS exclusion_lists (
       id SERIAL PRIMARY KEY,
-      area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion')),
+      area VARCHAR(20) NOT NULL CHECK (area IN ${AREA_CHECK_IN}),
       name VARCHAR(120) NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -441,7 +446,7 @@ async function runMigrations(query) {
   await query(`
     CREATE TABLE IF NOT EXISTS contact_attribute_definitions (
       id SERIAL PRIMARY KEY,
-      area VARCHAR(20) NOT NULL CHECK (area IN ('ti', 'pam', 'educacion')),
+      area VARCHAR(20) NOT NULL CHECK (area IN ${AREA_CHECK_IN}),
       segment_slug VARCHAR(50) NULL,
       slug VARCHAR(64) NOT NULL,
       label VARCHAR(120) NOT NULL,
@@ -539,11 +544,12 @@ async function runMigrations(query) {
 
   await migratePamSlugToTiThreeAreas(query);
   await cleanUpCrossAreaSeededSegments(query);
+  await migratePamToPatronato(query);
 }
 
 /** Atributos por defecto (área) si el área aún no tiene definiciones. */
 async function seedDefaultContactAttributeDefinitions(query) {
-  const areas = ['ti', 'pam', 'educacion'];
+  const areas = BUSINESS_AREAS;
   const defaults = [
     { slug: 'sede', label: 'Sede', field_type: 'text', sort_order: 10 },
     { slug: 'monto', label: 'Monto', field_type: 'text', sort_order: 20 },
@@ -595,7 +601,7 @@ async function migratePamSlugToTiThreeAreas(query) {
     flag,
   ]);
   if (done.rows.length > 0) {
-    await ensureAreaConstraintsThreeWay(query);
+    await ensureAreaConstraints(query);
     return;
   }
 
@@ -610,7 +616,7 @@ async function migratePamSlugToTiThreeAreas(query) {
        ON CONFLICT (area, key) DO UPDATE SET value = '1', updated_at = NOW()`,
       [flag]
     );
-    await ensureAreaConstraintsThreeWay(query);
+    await ensureAreaConstraints(query);
     return;
   }
 
@@ -642,10 +648,29 @@ async function migratePamSlugToTiThreeAreas(query) {
     [flag]
   );
 
-  await ensureAreaConstraintsThreeWay(query);
+  await ensureAreaConstraints(query);
 }
 
-async function ensureAreaConstraintsThreeWay(query) {
+async function dropAreaCheckConstraints(query) {
+  const tables = [
+    'users',
+    'contacts',
+    'campaigns',
+    'segment_definitions',
+    'conversations',
+    'whatsapp_templates',
+    'contact_segments',
+    'exclusion_lists',
+    'contact_attribute_definitions',
+  ];
+  for (const t of tables) {
+    await query(`ALTER TABLE ${t} DROP CONSTRAINT IF EXISTS ${t}_area_check`);
+  }
+  await query(`ALTER TABLE app_settings DROP CONSTRAINT IF EXISTS app_settings_area_check`);
+  await query(`ALTER TABLE app_settings DROP CONSTRAINT IF EXISTS app_settings_check`);
+}
+
+async function ensureAreaConstraints(query) {
   const add = async (sql) => {
     try {
       await query(sql);
@@ -654,26 +679,115 @@ async function ensureAreaConstraintsThreeWay(query) {
     }
   };
   await add(
-    `ALTER TABLE users ADD CONSTRAINT users_area_check CHECK (area IN ('ti', 'pam', 'educacion'))`
+    `ALTER TABLE users ADD CONSTRAINT users_area_check CHECK (area IN ${AREA_CHECK_IN})`
   );
   await add(
-    `ALTER TABLE contacts ADD CONSTRAINT contacts_area_check CHECK (area IN ('ti', 'pam', 'educacion'))`
+    `ALTER TABLE contacts ADD CONSTRAINT contacts_area_check CHECK (area IN ${AREA_CHECK_IN})`
   );
   await add(
-    `ALTER TABLE campaigns ADD CONSTRAINT campaigns_area_check CHECK (area IN ('ti', 'pam', 'educacion'))`
+    `ALTER TABLE campaigns ADD CONSTRAINT campaigns_area_check CHECK (area IN ${AREA_CHECK_IN})`
   );
   await add(
-    `ALTER TABLE segment_definitions ADD CONSTRAINT segment_definitions_area_check CHECK (area IN ('ti', 'pam', 'educacion'))`
+    `ALTER TABLE segment_definitions ADD CONSTRAINT segment_definitions_area_check CHECK (area IN ${AREA_CHECK_IN})`
   );
   await add(
-    `ALTER TABLE conversations ADD CONSTRAINT conversations_area_check CHECK (area IN ('ti', 'pam', 'educacion'))`
+    `ALTER TABLE conversations ADD CONSTRAINT conversations_area_check CHECK (area IN ${AREA_CHECK_IN})`
   );
   await add(
-    `ALTER TABLE whatsapp_templates ADD CONSTRAINT whatsapp_templates_area_check CHECK (area IN ('ti', 'pam', 'educacion'))`
+    `ALTER TABLE whatsapp_templates ADD CONSTRAINT whatsapp_templates_area_check CHECK (area IN ${AREA_CHECK_IN})`
   );
   await add(
-    `ALTER TABLE app_settings ADD CONSTRAINT app_settings_area_check CHECK (area IN ('ti', 'pam', 'educacion', 'global'))`
+    `ALTER TABLE contact_segments ADD CONSTRAINT contact_segments_area_check CHECK (area IN ${AREA_CHECK_IN})`
   );
+  await add(
+    `ALTER TABLE exclusion_lists ADD CONSTRAINT exclusion_lists_area_check CHECK (area IN ${AREA_CHECK_IN})`
+  );
+  await add(
+    `ALTER TABLE contact_attribute_definitions ADD CONSTRAINT contact_attribute_definitions_area_check CHECK (area IN ${AREA_CHECK_IN})`
+  );
+  await add(
+    `ALTER TABLE app_settings ADD CONSTRAINT app_settings_area_check CHECK (area IN ${AREA_CHECK_IN_WITH_GLOBAL})`
+  );
+}
+
+/** PAM comercial nuevo: semilla mínima (sin contactos ni segmentos). */
+async function seedFreshPamDefaults(query) {
+  const defaultPrompt =
+    'Eres un asistente virtual del MALI. Responde en español de forma breve y profesional. Si el usuario necesita hablar con un humano, responde únicamente con la palabra clave de transferencia que se te indica.';
+  const pamAiConfig = JSON.stringify({
+    enabled: false,
+    prompt: defaultPrompt,
+    transfer_keyword: '[TRANSFERIR]',
+  });
+  await query(
+    `INSERT INTO app_settings (area, key, value, updated_at) VALUES ('pam', 'ai_config', $1, NOW())
+     ON CONFLICT (area, key) DO NOTHING`,
+    [pamAiConfig]
+  );
+
+  const defaults = [
+    { slug: 'sede', label: 'Sede', field_type: 'text', sort_order: 10 },
+    { slug: 'monto', label: 'Monto', field_type: 'text', sort_order: 20 },
+    { slug: 'fecha_pago', label: 'Fecha de pago', field_type: 'date', sort_order: 30 },
+  ];
+  const c = await query(
+    `SELECT COUNT(*)::int AS n FROM contact_attribute_definitions WHERE area = 'pam'`
+  );
+  if (Number(c.rows[0]?.n || 0) > 0) return;
+  for (const d of defaults) {
+    await query(
+      `INSERT INTO contact_attribute_definitions (area, segment_slug, slug, label, field_type, sort_order)
+       VALUES ('pam', NULL, $1, $2, $3, $4)`,
+      [d.slug, d.label, d.field_type, d.sort_order]
+    );
+  }
+}
+
+/** Una sola vez: renombrar área pam (histórico) → patronato; pam queda vacío para línea nueva. */
+async function migratePamToPatronato(query) {
+  const flag = 'migration.pam_to_patronato_v1';
+  const done = await query(`SELECT 1 AS ok FROM app_settings WHERE area = 'global' AND key = $1`, [flag]);
+  if (done.rows.length > 0) {
+    await ensureAreaConstraints(query);
+    return;
+  }
+
+  await dropAreaCheckConstraints(query);
+
+  await query(`
+    DELETE FROM app_settings a
+    USING app_settings b
+    WHERE a.area = 'pam' AND b.area = 'patronato' AND a.key = b.key
+  `);
+
+  const tablesToRename = [
+    'users',
+    'contacts',
+    'contact_segments',
+    'campaigns',
+    'segment_definitions',
+    'conversations',
+    'whatsapp_templates',
+    'app_settings',
+    'contact_attribute_definitions',
+    'exclusion_lists',
+    'meta_ctwa_ads',
+    'meta_ctwa_ad_leads',
+    'audit_logs',
+  ];
+  for (const t of tablesToRename) {
+    await query(`UPDATE ${t} SET area = 'patronato' WHERE area = 'pam'`);
+  }
+
+  await seedFreshPamDefaults(query);
+
+  await query(
+    `INSERT INTO app_settings (area, key, value, updated_at) VALUES ('global', $1, '1', NOW())
+     ON CONFLICT (area, key) DO UPDATE SET value = '1', updated_at = NOW()`,
+    [flag]
+  );
+
+  await ensureAreaConstraints(query);
 }
 
 /**
@@ -687,7 +801,7 @@ async function cleanUpCrossAreaSeededSegments(query) {
   if (done.rows.length > 0) return;
 
   const defaultSlugs = ['suscriptor_1', 'suscriptor_2', 'suscriptor_3', 'asociado'];
-  for (const area of ['pam', 'educacion']) {
+  for (const area of ['patronato', 'educacion']) {
     const seg = await query(
       `SELECT slug FROM segment_definitions WHERE area = $1 ORDER BY slug ASC`,
       [area]
@@ -724,7 +838,7 @@ async function migrateAiTiOnlyEnabled(query) {
     return;
   }
   const { parseAiConfigValue } = require('../utils/aiConfig');
-  for (const area of ['pam', 'educacion']) {
+  for (const area of ['pam', 'patronato', 'educacion']) {
     const r = await query(`SELECT value FROM app_settings WHERE area = $1 AND key = 'ai_config'`, [area]);
     const cfg = parseAiConfigValue(r.rows[0]?.value);
     if (cfg) {

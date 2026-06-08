@@ -1,10 +1,5 @@
+const { normalizeArea } = require('../middleware/auth');
 const { resolveWabaId, fetchAllMessageTemplates, getWhatsAppCredentialsForArea } = require('./metaWhatsApp');
-
-function normalizeArea(area) {
-  const a = String(area || '').trim().toLowerCase();
-  if (a === 'ti' || a === 'pam' || a === 'educacion') return a;
-  return 'ti';
-}
 
 function buildSyncedTemplatesDeleteQuery(area, templates) {
   const keyClauses = [];

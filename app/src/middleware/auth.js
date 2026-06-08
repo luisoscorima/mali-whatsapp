@@ -24,8 +24,13 @@ function isProtectedPath(pathname) {
 
 function normalizeArea(area) {
   const a = String(area || '').trim().toLowerCase();
-  if (a === 'ti' || a === 'pam' || a === 'educacion') return a;
+  if (config.BUSINESS_AREAS.includes(a)) return a;
   return 'ti';
+}
+
+function isValidBusinessArea(area) {
+  const a = String(area || '').trim().toLowerCase();
+  return config.BUSINESS_AREAS.includes(a);
 }
 
 const LOGIN_LOG_SEEN_BUMP_MS = 60 * 1000;
@@ -177,6 +182,7 @@ function createRequirePasswordChange(appPath) {
 module.exports = {
   isProtectedPath,
   normalizeArea,
+  isValidBusinessArea,
   createResolveSessionUser,
   createRequireSessionLogin,
   createRequirePasswordChange,

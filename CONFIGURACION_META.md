@@ -62,9 +62,9 @@ En el menú lateral: **WhatsApp** → **Introducción** / **API Setup** / **Conf
 
 | En la pantalla de Meta | Uso en el MVP |
 |------------------------|----------------|
-| **Token de acceso** (temporal ~24 h o de larga duración) | `WHATSAPP_TOKEN` o `WHATSAPP_TOKEN_PAM` / `WHATSAPP_TOKEN_EDUCACION` |
-| **Phone number ID** (ID numérico largo; **no** es el +51…) | `PHONE_NUMBER_ID` o `PHONE_NUMBER_ID_PAM` / `PHONE_NUMBER_ID_EDUCACION` |
-| **WhatsApp Business Account ID (WABA)** | Opcional: `WABA_ID_PAM` / `WABA_ID_EDUCACION` si falla la detección al sincronizar plantillas |
+| **Token de acceso** (temporal ~24 h o de larga duración) | `WHATSAPP_TOKEN` o `WHATSAPP_TOKEN_PAM` / `WHATSAPP_TOKEN_PATRONATO` / `WHATSAPP_TOKEN_EDUCACION` |
+| **Phone number ID** (ID numérico largo; **no** es el +51…) | `PHONE_NUMBER_ID` o `PHONE_NUMBER_ID_PAM` / `PHONE_NUMBER_ID_PATRONATO` / `PHONE_NUMBER_ID_EDUCACION` |
+| **WhatsApp Business Account ID (WABA)** | Opcional: `WABA_ID_PAM` / `WABA_ID_PATRONATO` / `WABA_ID_EDUCACION` si falla la detección al sincronizar plantillas |
 | Números de **prueba** / lista de destinatarios permitidos | En modo desarrollo, solo esos números reciben mensajes |
 
 **Token de larga duración (recomendado en producción):** suele obtenerse desde **Administrador comercial** (usuarios del sistema y permisos sobre el activo de WhatsApp) o desde el flujo de generación de token en la sección WhatsApp de la app.
@@ -174,8 +174,8 @@ curl -G "https://graph.facebook.com/v20.0/{WABA_ID}/subscribed_apps" \
 **Ejemplo** (WABA Educación MALI):
 
 ```bash
-curl -G "https://graph.facebook.com/v20.0/958313150113818/subscribed_apps" \
-  -d "access_token=TU_TOKEN_DE_SISTEMA"
+curl -G "https://graph.facebook.com/v20.0/983584127989245/subscribed_apps" \
+  -d "access_token=EAAM4bQO7kUkBRNSaT4iV5SZAb73safm9UPdhyyhOzz4z4XrQVsrqB4j333cW1tCt08vwBN9lU8coHALg89TjbxBSXtCpqi8ay93MQLnGIJDoGzdGHZAGgtScZBtoPdG3lNQYtXUFpykHMU4CLaSVuJ27YZBseWamafW2AzZACrXpFjA8636u5upn5YK6kocqu6QZDZD"
 ```
 
 Respuesta **válida** (tu app aparece en `data`), ejemplo:
@@ -198,8 +198,8 @@ curl -X POST "https://graph.facebook.com/v20.0/{WABA_ID}/subscribed_apps" \
 **Ejemplo:**
 
 ```bash
-curl -X POST "https://graph.facebook.com/v20.0/958313150113818/subscribed_apps" \
-  -d "access_token=TU_TOKEN_DE_SISTEMA"
+curl -X POST "https://graph.facebook.com/v20.0/983584127989245/subscribed_apps" \
+  -d "access_token=EAAM4bQO7kUkBRNSaT4iV5SZAb73safm9UPdhyyhOzz4z4XrQVsrqB4j333cW1tCt08vwBN9lU8coHALg89TjbxBSXtCpqi8ay93MQLnGIJDoGzdGHZAGgtScZBtoPdG3lNQYtXUFpykHMU4CLaSVuJ27YZBseWamafW2AzZACrXpFjA8636u5upn5YK6kocqu6QZDZD"
 ```
 
 Vuelve a ejecutar el **GET** de [7.1](#71-ver-en-qué-apps-está-suscrita-la-waba): debe aparecer tu **App ID** (p. ej. `906465795346761`).
@@ -309,7 +309,7 @@ Desde el ecosistema Meta / Business: **WhatsApp Manager** — crear plantillas, 
 3. **¿Meta envía `messages` en el JSON?**  
    Pon temporalmente **`WEBHOOK_DEBUG=true`** en `.env`, reinicia la app y revisa `Webhook DEBUG estructura`: `messagesCount` > 0 al escribir desde el móvil. Quita `WEBHOOK_DEBUG` tras diagnosticar.
 
-4. **Área (`pam` / `educacion`)**  
+4. **Área (`pam` / `patronato` / `educacion`)**  
    Si `metadata.phone_number_id` viene vacío, ayuda **`WABA_ID_*`** coincidente con `entry.id`, o una sola línea `PHONE_NUMBER_ID_*` configurada. Si el POST ni siquiera llega con el WABA correcto, prioriza **`subscribed_apps`** ([sección 7](#7-suscribir-la-app-al-waba-subscribed_apps--crítico-para-webhooks)).
 
 5. **Teléfono del remitente**  

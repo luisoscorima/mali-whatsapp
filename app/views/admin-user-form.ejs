@@ -59,6 +59,7 @@
           <select name="area" required>
             <option value="ti" <%= (u.area || 'ti') === 'ti' ? 'selected' : '' %>>TI (dev)</option>
             <option value="pam" <%= u.area === 'pam' ? 'selected' : '' %>>PAM</option>
+            <option value="patronato" <%= u.area === 'patronato' ? 'selected' : '' %>>Patronato</option>
             <option value="educacion" <%= u.area === 'educacion' ? 'selected' : '' %>>Educación</option>
           </select>
         </label>

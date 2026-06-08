@@ -1,6 +1,6 @@
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
-const { normalizeArea, createRequireMaster } = require('../middleware/auth');
+const { normalizeArea, isValidBusinessArea, createRequireMaster } = require('../middleware/auth');
 const { isValidMaliEmail, normalizeEmail } = require('../utils/contactsCsv');
 const { parseUsersBulkCsvBuffer, parseUsersBulkXlsxBuffer } = require('../utils/usersBulkCsv');
 const { usersBulkImportLimiter, usersBulkImportUpload } = require('../middleware/limiters');
@@ -99,6 +99,9 @@ function metaAuditNonEmptyKeys(body) {
   if (String(b.pam_whatsapp_token || '').trim()) keys.push('pam_whatsapp_token');
   if (String(b.pam_phone_number_id || '').trim()) keys.push('pam_phone_number_id');
   if (String(b.pam_waba_id || '').trim()) keys.push('pam_waba_id');
+  if (String(b.patronato_whatsapp_token || '').trim()) keys.push('patronato_whatsapp_token');
+  if (String(b.patronato_phone_number_id || '').trim()) keys.push('patronato_phone_number_id');
+  if (String(b.patronato_waba_id || '').trim()) keys.push('patronato_waba_id');
   if (String(b.edu_whatsapp_token || '').trim()) keys.push('edu_whatsapp_token');
   if (String(b.edu_phone_number_id || '').trim()) keys.push('edu_phone_number_id');
   if (String(b.edu_waba_id || '').trim()) keys.push('edu_waba_id');
@@ -119,17 +122,16 @@ async function upsertMetaSetting(query, area, key, rawValue) {
 }
 
 function registerAdmin(app, ctx) {
-  const { query, pool, resolveAppBaseUrl, appPath } = ctx;
+  const { query, pool, config, resolveAppBaseUrl, appPath } = ctx;
   const requireMaster = createRequireMaster();
-  const AREA_DEFS = [
-    { slug: 'ti', label: 'TI (dev)' },
-    { slug: 'pam', label: 'PAM' },
-    { slug: 'educacion', label: 'Educación' },
-  ];
+  const AREA_DEFS = config.BUSINESS_AREAS.map((slug) => ({
+    slug,
+    label: config.AREA_LABELS[slug] || slug,
+  }));
 
   app.post('/admin/switch-area', requireMaster, async (req, res) => {
     const area = normalizeArea(req.body.area);
-    if (area !== 'ti' && area !== 'pam' && area !== 'educacion') {
+    if (!isValidBusinessArea(area)) {
       return res.redirect(appPath('/campaigns'));
     }
     req.session.area = area;
@@ -410,7 +412,7 @@ function registerAdmin(app, ctx) {
 
       const password = String(req.body.password || '');
       const area = normalizeArea(req.body.area);
-      if (area !== 'ti' && area !== 'pam' && area !== 'educacion') {
+      if (!isValidBusinessArea(area)) {
         return res.redirect(`${appPath('/admin/users')}?bulk_import=1&err=bad_area`);
       }
       if (password.length < 6) {
@@ -542,7 +544,7 @@ function registerAdmin(app, ctx) {
         }),
       });
     }
-    if (area !== 'ti' && area !== 'pam' && area !== 'educacion') {
+    if (!isValidBusinessArea(area)) {
       return res.status(400).send('Area invalida');
     }
 
@@ -621,7 +623,7 @@ function registerAdmin(app, ctx) {
     const canEditAiPrompt =
       String(req.body.can_edit_ai_prompt || '') === '1' || req.body.can_edit_ai_prompt === 'on';
 
-    if (area !== 'ti' && area !== 'pam' && area !== 'educacion') {
+    if (!isValidBusinessArea(area)) {
       return res.status(400).send('Area invalida');
     }
 
@@ -714,7 +716,10 @@ function registerAdmin(app, ctx) {
 
   app.get('/admin/meta', requireMaster, async (req, res) => {
     const r = await query(`SELECT area, key, value FROM app_settings WHERE key LIKE 'meta.%'`);
-    const rows = { global: {}, ti: {}, pam: {}, educacion: {} };
+    const rows = { global: {} };
+    for (const slug of config.BUSINESS_AREAS) {
+      rows[slug] = {};
+    }
     for (const row of r.rows) {
       const a = String(row.area || '').trim();
       if (rows[a]) rows[a][row.key] = row.value;
@@ -772,6 +777,10 @@ function registerAdmin(app, ctx) {
     await upsertMetaSetting(query, 'pam', KEYS.whatsappToken, b.pam_whatsapp_token);
     await upsertMetaSetting(query, 'pam', KEYS.phoneNumberId, b.pam_phone_number_id);
     await upsertMetaSetting(query, 'pam', KEYS.wabaId, b.pam_waba_id);
+
+    await upsertMetaSetting(query, 'patronato', KEYS.whatsappToken, b.patronato_whatsapp_token);
+    await upsertMetaSetting(query, 'patronato', KEYS.phoneNumberId, b.patronato_phone_number_id);
+    await upsertMetaSetting(query, 'patronato', KEYS.wabaId, b.patronato_waba_id);
 
     await upsertMetaSetting(query, 'educacion', KEYS.whatsappToken, b.edu_whatsapp_token);
     await upsertMetaSetting(query, 'educacion', KEYS.phoneNumberId, b.edu_phone_number_id);

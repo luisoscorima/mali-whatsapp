@@ -1,7 +1,8 @@
+const config = require('../config');
 const { parseAiConfigValue } = require('../utils/aiConfig');
 const { auditLog, AuditEvent } = require('../services/auditLog');
 
-const AREA_SLUGS = new Set(['ti', 'pam', 'educacion']);
+const AREA_SLUGS = new Set(config.BUSINESS_AREAS);
 
 function registerSettingsApi(app, ctx) {
   const { query, pool } = ctx;
@@ -21,7 +22,7 @@ function registerSettingsApi(app, ctx) {
     const userArea = String(req.user.area || '').trim().toLowerCase();
     const isMaster = Boolean(req.user.isMaster);
     const canEditPrompt =
-      Boolean(req.user.canEditAiPrompt) && userArea === area && ['ti', 'pam', 'educacion'].includes(userArea);
+      Boolean(req.user.canEditAiPrompt) && userArea === area && config.BUSINESS_AREAS.includes(userArea);
 
     if (!isMaster && !canEditPrompt) {
       return res.status(403).json({ ok: false, error: 'No autorizado' });

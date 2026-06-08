@@ -113,9 +113,9 @@ Completa un archivo **`.env`** en la **raíz del proyecto** (en el servidor, jun
 | `BASE_PATH` | Vacío si la app está en la raíz del dominio |
 | `VERIFY_TOKEN` | Texto que **tú defines** en Webhook → Verify token (mismo valor) |
 | `APP_SECRET` | App → Configuración → Básica → App Secret |
-| `WHATSAPP_TOKEN` / `WHATSAPP_TOKEN_PAM` / `WHATSAPP_TOKEN_EDUCACION` | Token de la API (Graph) con permisos WhatsApp |
-| `PHONE_NUMBER_ID` / `PHONE_NUMBER_ID_PAM` / `PHONE_NUMBER_ID_EDUCACION` | WhatsApp → API Setup → **Phone number ID** |
-| `WABA_ID_PAM` / `WABA_ID_EDUCACION` | Opcional: ID de cuenta WhatsApp Business si la app no deduce el WABA |
+| `WHATSAPP_TOKEN` / `WHATSAPP_TOKEN_PAM` / `WHATSAPP_TOKEN_PATRONATO` / `WHATSAPP_TOKEN_EDUCACION` | Token de la API (Graph) con permisos WhatsApp |
+| `PHONE_NUMBER_ID` / `PHONE_NUMBER_ID_PAM` / `PHONE_NUMBER_ID_PATRONATO` / `PHONE_NUMBER_ID_EDUCACION` | WhatsApp → API Setup → **Phone number ID** |
+| `WABA_ID_PAM` / `WABA_ID_PATRONATO` / `WABA_ID_EDUCACION` | Opcional: ID de cuenta WhatsApp Business si la app no deduce el WABA |
 
 ### Tabla ampliada de variables
 
@@ -127,15 +127,15 @@ Completa un archivo **`.env`** en la **raíz del proyecto** (en el servidor, jun
 | `BASE_PATH` | Vacío (`BASE_PATH=`) si la app está en la raíz del host. |
 | `REQUIRE_AUTH` | `true` en producción para login con correo `@mali.pe`. |
 | `SESSION_SECRET` | Secreto para firmar la cookie de sesión (obligatorio si `REQUIRE_AUTH=true`). |
-| `DEV_AREA` | Solo desarrollo sin auth: `pam` o `educacion`. |
+| `DEV_AREA` | Solo desarrollo sin auth: `ti`, `pam`, `patronato` o `educacion`. |
 | `VERIFY_TOKEN` | Igual que el **Verify token** del webhook en Meta. |
 | `APP_SECRET` | Firma `X-Hub-Signature-256` del webhook. |
 | `REQUIRE_WEBHOOK_SIGNATURE` | `true` en producción recomendado. |
 | `WHATSAPP_TOKEN` | Respaldo si no usas sufijos por área. |
 | `PHONE_NUMBER_ID` | Respaldo si no usas sufijos por área. |
-| `WHATSAPP_TOKEN_PAM` / `WHATSAPP_TOKEN_EDUCACION` | Token por área (Comercial PAM / Educación). |
-| `PHONE_NUMBER_ID_PAM` / `PHONE_NUMBER_ID_EDUCACION` | Phone number ID por área. |
-| `WABA_ID_PAM` / `WABA_ID_EDUCACION` | Opcional si falla la detección automática del WABA. |
+| `WHATSAPP_TOKEN_PAM` / `WHATSAPP_TOKEN_PATRONATO` / `WHATSAPP_TOKEN_EDUCACION` | Token por área (PAM nuevo / Patronato / Educación). |
+| `PHONE_NUMBER_ID_PAM` / `PHONE_NUMBER_ID_PATRONATO` / `PHONE_NUMBER_ID_EDUCACION` | Phone number ID por área. |
+| `WABA_ID_PAM` / `WABA_ID_PATRONATO` / `WABA_ID_EDUCACION` | Opcional si falla la detección automática del WABA. |
 | `POSTGRES_*` / `DATABASE_URL` | Credenciales de PostgreSQL (compose usa servicio `postgres`). |
 | `WEBHOOK_DEBUG` | `true` temporalmente para logs de estructura del webhook (quitar tras diagnosticar). |
 
@@ -265,8 +265,9 @@ Pensado para **un único operador master** (tú). Herramientas opcionales en el 
 
 ### Área activa y master
 
-- **Área** (`pam` | `educacion`): filtra campañas, contactos e historial. Viene del usuario al login y se guarda en sesión.
-- **Usuario master** (`is_master` en `users`): ve la barra lateral **Admin** (Usuarios, Credenciales Meta) y el **selector de área** en la barra superior (formulario “Cambiar” entre PAM y Educación). Al cambiar de área se actualizan sesión y fila del usuario master en BD para que no queden desalineados.
+- **Área** (`ti` | `pam` | `patronato` | `educacion`): filtra campañas, contactos e historial. Viene del usuario al login y se guarda en sesión.
+- **Usuario master** (`is_master` en `users`): ve la barra lateral **Admin** (Usuarios, Credenciales Meta) y el **selector de área** en la barra superior. Al cambiar de área se actualizan sesión y fila del usuario master en BD para que no queden desalineados.
+- **Patronato** conserva el número e historial que antes estaban bajo PAM; **PAM** es la línea comercial nueva (sin datos migrados).
 
 ### Usuarios del panel
 
@@ -275,13 +276,15 @@ Pensado para **un único operador master** (tú). Herramientas opcionales en el 
 
 ### Credenciales Meta: `app_settings` + `.env`
 
-- La app lee primero **`app_settings`** (claves `meta.*`; área `global` para verify token y app secret; `pam` / `educacion` para token, phone number ID y WABA por área). Si un valor **no está en BD**, se usa **`process.env`** como hasta ahora.
+- La app lee primero **`app_settings`** (claves `meta.*`; área `global` para verify token y app secret; `ti` / `pam` / `patronato` / `educacion` para token, phone number ID y WABA por área). Si un valor **no está en BD**, se usa **`process.env`** como hasta ahora.
 - **Pantalla (solo master):** **`/admin/meta`** — guardar actualiza BD y refresca la caché en memoria; **dejar un campo vacío y guardar** borra el override en BD y vuelve a aplicar solo `.env`.
 - Tras cambios solo en **`.env`**, recarga del contenedor según sección 8 (no hace falta entrar al panel).
 
-### “CRUD de áreas” nuevas
+### Áreas fijas y migración PAM → Patronato
 
-- Siguen siendo **solo dos** áreas fijas en esquema (`pam`, `educacion`). No se añaden áreas dinámicas desde el panel.
+- El esquema admite **cuatro** áreas: `ti`, `pam`, `patronato`, `educacion`. No se crean áreas dinámicas desde el panel.
+- Al desplegar la versión con migración `pam_to_patronato_v1`, todo el historial que estaba en `pam` pasa a **`patronato`** (incluye credenciales Meta en BD). **`pam`** queda vacío para el número nuevo.
+- **Post-deploy:** en **Admin → Credenciales Meta**, confirma Patronato (número viejo) y carga PAM (número nuevo). Actualiza `.env`: `*_PATRONATO` para el número anterior; `*_PAM` para el nuevo. Ejecuta `subscribed_apps` en Meta para la WABA del PAM nuevo.
 
 ---
 
@@ -427,7 +430,7 @@ Códigos Meta (**133010**, **131030**, webhook, `subscribed_apps`): [CONFIGURACI
 - **Plantilla**: nombre e idioma exactos; parámetros alineados con la plantilla en Meta.
 - **Rendimiento**: lotes más pequeños y más delay entre lotes.
 
-### Webhook y áreas (`pam` / `educacion`)
+### Webhook y áreas (`pam` / `patronato` / `educacion`)
 
 Si no ves mensajes entrantes en el chat aunque envíes campañas bien, el problema suele ser **Meta** (suscripción `subscribed_apps` por WABA), no el mapeo de área en base de datos. Ver [CONFIGURACION_META.md § Varias WABA y webhooks](./CONFIGURACION_META.md#varias-waba-y-por-qué-solo-una-línea-recibe-webhooks).
 

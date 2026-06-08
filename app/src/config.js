@@ -69,9 +69,11 @@ module.exports = {
   META_APP_ID: String(process.env.META_APP_ID || '').trim(),
   GRAPH_API_VERSION: 'v23.0',
   GRAPH_BASE: 'https://graph.facebook.com/v23.0',
+  BUSINESS_AREAS: ['ti', 'pam', 'patronato', 'educacion'],
   AREA_LABELS: {
     ti: 'TI (dev)',
     pam: 'PAM',
+    patronato: 'Patronato',
     educacion: 'Educación',
   },
   MALI_EMAIL_REGEX: /^[^\s@]+@mali\.pe$/i,

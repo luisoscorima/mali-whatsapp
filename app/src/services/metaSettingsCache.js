@@ -2,15 +2,10 @@
  * Credenciales Meta: valores en app_settings (clave meta.*) con fallback a process.env.
  * Caché en memoria refrescada al arrancar y tras guardar en /admin/meta.
  *
- * Áreas: ti (TI dev), pam (PAM), educacion (Educación).
+ * Áreas: ti, pam, patronato, educacion.
  */
 
-let cache = {
-  global: {},
-  ti: {},
-  pam: {},
-  educacion: {},
-};
+const config = require('../config');
 
 const KEYS = {
   verifyToken: 'meta.verify_token',
@@ -20,7 +15,40 @@ const KEYS = {
   wabaId: 'meta.waba_id',
 };
 
-const VALID_META_AREAS = ['ti', 'pam', 'educacion'];
+const VALID_META_AREAS = config.BUSINESS_AREAS;
+
+const ENV_BY_AREA = {
+  ti: {
+    token: 'WHATSAPP_TOKEN_TI',
+    phone: 'PHONE_NUMBER_ID_TI',
+    waba: 'WABA_ID_TI',
+  },
+  pam: {
+    token: 'WHATSAPP_TOKEN_PAM',
+    phone: 'PHONE_NUMBER_ID_PAM',
+    waba: 'WABA_ID_PAM',
+  },
+  patronato: {
+    token: 'WHATSAPP_TOKEN_PATRONATO',
+    phone: 'PHONE_NUMBER_ID_PATRONATO',
+    waba: 'WABA_ID_PATRONATO',
+  },
+  educacion: {
+    token: 'WHATSAPP_TOKEN_EDUCACION',
+    phone: 'PHONE_NUMBER_ID_EDUCACION',
+    waba: 'WABA_ID_EDUCACION',
+  },
+};
+
+function emptyAreaCache() {
+  const empty = { global: {} };
+  for (const area of VALID_META_AREAS) {
+    empty[area] = {};
+  }
+  return empty;
+}
+
+let cache = emptyAreaCache();
 
 /** Evita spam en logs al corregir Phone Number ID duplicado con TI. */
 const warnedPhoneIdDupWithTi = new Set();
@@ -41,14 +69,12 @@ function normalizeSecretValue(s) {
 
 function normalizeCredentialArea(area) {
   const a = String(area || '').trim().toLowerCase();
-  if (a === 'educacion') return 'educacion';
-  if (a === 'pam') return 'pam';
-  if (a === 'ti') return 'ti';
+  if (VALID_META_AREAS.includes(a)) return a;
   return 'ti';
 }
 
 async function refreshMetaSettingsCache(queryFn) {
-  const empty = { global: {}, ti: {}, pam: {}, educacion: {} };
+  const empty = emptyAreaCache();
   try {
     const r = await queryFn(
       `SELECT area, key, value FROM app_settings WHERE key LIKE 'meta.%'`
@@ -84,25 +110,14 @@ function buildWhatsAppCredentialsRaw(norm) {
 
   const fallbackToken = normalizeSecretValue(process.env.WHATSAPP_TOKEN || '');
   const fallbackPhone = String(process.env.PHONE_NUMBER_ID || '').trim();
+  const envKeys = ENV_BY_AREA[norm] || ENV_BY_AREA.ti;
 
   if (!token) {
-    if (norm === 'ti') {
-      token = normalizeSecretValue(process.env.WHATSAPP_TOKEN_TI || fallbackToken);
-    } else if (norm === 'pam') {
-      token = normalizeSecretValue(process.env.WHATSAPP_TOKEN_PAM || fallbackToken);
-    } else {
-      token = normalizeSecretValue(process.env.WHATSAPP_TOKEN_EDUCACION || fallbackToken);
-    }
+    token = normalizeSecretValue(process.env[envKeys.token] || fallbackToken);
   }
 
   if (!phoneNumberId) {
-    if (norm === 'ti') {
-      phoneNumberId = String(process.env.PHONE_NUMBER_ID_TI || fallbackPhone).trim();
-    } else if (norm === 'pam') {
-      phoneNumberId = String(process.env.PHONE_NUMBER_ID_PAM || fallbackPhone).trim();
-    } else {
-      phoneNumberId = String(process.env.PHONE_NUMBER_ID_EDUCACION || fallbackPhone).trim();
-    }
+    phoneNumberId = String(process.env[envKeys.phone] || fallbackPhone).trim();
   }
 
   return { token, phoneNumberId };
@@ -113,20 +128,16 @@ function getWhatsAppCredentialsForArea(area) {
   let { token, phoneNumberId } = buildWhatsAppCredentialsRaw(norm);
 
   /**
-   * Si en app_settings el área pam/educacion tiene el mismo Phone Number ID que TI
-   * (error típico al copiar credenciales en Admin), la API de Meta envía con la línea TI
-   * y el webhook trae metadata.phone_number_id de TI. Si .env tiene un ID distinto para
-   * ese área, preferimos el entorno.
+   * Si en app_settings un área distinta de TI tiene el mismo Phone Number ID que TI
+   * (error típico al copiar credenciales en Admin), preferimos el .env del área.
    */
   if (norm !== 'ti') {
     const tiPid = String(buildWhatsAppCredentialsRaw('ti').phoneNumberId || '').trim();
     const pid = String(phoneNumberId || '').trim();
     if (tiPid && pid && pid === tiPid) {
       const fallbackPhone = String(process.env.PHONE_NUMBER_ID || '').trim();
-      const preferred =
-        norm === 'pam'
-          ? String(process.env.PHONE_NUMBER_ID_PAM || fallbackPhone).trim()
-          : String(process.env.PHONE_NUMBER_ID_EDUCACION || fallbackPhone).trim();
+      const envKeys = ENV_BY_AREA[norm] || {};
+      const preferred = String(process.env[envKeys.phone] || fallbackPhone).trim();
       if (preferred && preferred !== pid) {
         if (!warnedPhoneIdDupWithTi.has(norm)) {
           warnedPhoneIdDupWithTi.add(norm);
@@ -134,7 +145,7 @@ function getWhatsAppCredentialsForArea(area) {
             JSON.stringify({
               level: 'warn',
               message:
-                'Credenciales Meta: Phone Number ID en app_settings para este area coincide con TI; se usa PHONE_NUMBER_ID_PAM o PHONE_NUMBER_ID_EDUCACION del entorno',
+                'Credenciales Meta: Phone Number ID en app_settings para este area coincide con TI; se usa el PHONE_NUMBER_ID_* del entorno del area',
               area: norm,
             })
           );
@@ -153,13 +164,8 @@ function getWabaIdOverrideForArea(area) {
   const fromDb = String(row[KEYS.wabaId] || '').trim();
   if (fromDb) return fromDb;
   const fallbackWaba = String(process.env.WABA_ID || '').trim();
-  if (norm === 'ti') {
-    return String(process.env.WABA_ID_TI || fallbackWaba).trim();
-  }
-  if (norm === 'pam') {
-    return String(process.env.WABA_ID_PAM || fallbackWaba).trim();
-  }
-  return String(process.env.WABA_ID_EDUCACION || fallbackWaba).trim();
+  const envKeys = ENV_BY_AREA[norm] || ENV_BY_AREA.ti;
+  return String(process.env[envKeys.waba] || fallbackWaba).trim();
 }
 
 module.exports = {

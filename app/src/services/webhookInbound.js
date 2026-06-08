@@ -1,4 +1,5 @@
 const config = require('../config');
+const { BUSINESS_AREAS } = config;
 const { normalizePhone } = require('../utils/phone');
 const { downloadWhatsAppMediaBuffer, sendSessionTextMessage } = require('./metaWhatsApp');
 const { saveInboundChatMediaFromBuffer } = require('../utils/chatMediaStorage');
@@ -54,11 +55,10 @@ async function persistAndSendOutbound(query, { area, conversationId, phone, text
 
 function resolveAreaFromPhoneNumberId(phoneNumberId) {
   const id = String(phoneNumberId || '').trim();
-  const lines = [
-    { area: 'ti', pid: getWhatsAppCredentialsForArea('ti').phoneNumberId },
-    { area: 'pam', pid: getWhatsAppCredentialsForArea('pam').phoneNumberId },
-    { area: 'educacion', pid: getWhatsAppCredentialsForArea('educacion').phoneNumberId },
-  ].filter((x) => String(x.pid || '').trim());
+  const lines = BUSINESS_AREAS.map((area) => ({
+    area,
+    pid: getWhatsAppCredentialsForArea(area).phoneNumberId,
+  })).filter((x) => String(x.pid || '').trim());
   const matching = lines.filter((x) => x.pid === id);
   if (matching.length === 1) return matching[0].area;
   return null;
@@ -75,17 +75,16 @@ function resolveInboundArea(value, wabaEntryId) {
 
   const waba = String(wabaEntryId ?? '').trim();
   if (waba) {
-    for (const slug of ['ti', 'pam', 'educacion']) {
+    for (const slug of BUSINESS_AREAS) {
       const w = String(getWabaIdOverrideForArea(slug) || '').trim();
       if (w && w === waba) return { area: slug, source: 'waba_entry_id' };
     }
   }
 
-  const lines = [
-    { area: 'ti', ...getWhatsAppCredentialsForArea('ti') },
-    { area: 'pam', ...getWhatsAppCredentialsForArea('pam') },
-    { area: 'educacion', ...getWhatsAppCredentialsForArea('educacion') },
-  ].filter((x) => !!x.phoneNumberId);
+  const lines = BUSINESS_AREAS.map((area) => ({
+    area,
+    ...getWhatsAppCredentialsForArea(area),
+  })).filter((x) => !!x.phoneNumberId);
   if (lines.length === 1) return { area: lines[0].area, source: 'single_configured_line' };
 
   return { area: null, source: null };

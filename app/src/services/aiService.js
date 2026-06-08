@@ -1,19 +1,15 @@
+const config = require('../config');
 const { OpenAI } = require('openai');
 
 const UNAVAILABLE_REPLY_MESSAGE =
   'Lo siento, estamos experimentando una carga alta de consultas. Por favor, intenta de nuevo en unos momentos.';
 
 /**
- * @param {string} [areaSlug] - ti | pam | educacion
+ * @param {string} [areaSlug] - ti | pam | patronato | educacion
  */
 function areaDisplayName(areaSlug) {
-  const m = {
-    ti: 'TI',
-    pam: 'PAM',
-    educacion: 'Educación',
-  };
   const k = String(areaSlug || '').trim().toLowerCase();
-  return m[k] || (k ? k.charAt(0).toUpperCase() + k.slice(1) : 'MALI');
+  return config.AREA_LABELS[k] || (k ? k.charAt(0).toUpperCase() + k.slice(1) : 'MALI');
 }
 
 /**
@@ -81,7 +77,7 @@ function llmTurnsToOpenAiMessages(turns) {
  * @param {string} text - Mensaje actual del usuario
  * @param {{ role: 'user'|'model', text: string }[]} history - Turnos previos (sin el mensaje actual)
  * @param {{ prompt?: string, transfer_keyword?: string }} config - De app_settings.ai_config
- * @param {string} [area] - Slug de área (ti, pam, educacion)
+ * @param {string} [area] - Slug de área (ti, pam, patronato, educacion)
  * @returns {Promise<string|null>} Texto del modelo, mensaje genérico si no hay salida, o `null` si la llamada a Groq falló (excepción).
  */
 async function getAiResponse(text, history, config, area) {

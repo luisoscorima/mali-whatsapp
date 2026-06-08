@@ -1,7 +1,7 @@
 /**
  * Contexto compartido para routers (MALI WhatsApp).
  * Jerarquía de negocio prevista: museo → áreas → usuarios por área → segmentos → clientes.
- * Áreas en BD: ti | pam | educacion (CHECK en migraciones).
+ * Áreas en BD: ti | pam | patronato | educacion (CHECK en migraciones).
  */
 const config = require('../../config');
 const { normalizeArea } = require('../../middleware/auth');

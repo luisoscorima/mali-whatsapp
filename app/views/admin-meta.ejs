@@ -52,6 +52,7 @@
             <select id="admin-meta-area-select" aria-label="Seleccionar área de credenciales">
               <option value="ti">TI (dev)</option>
               <option value="pam">PAM</option>
+              <option value="patronato">Patronato</option>
               <option value="educacion">Educación</option>
             </select>
           </label>
@@ -80,7 +81,7 @@
 
         <div class="admin-meta-area-panel" data-meta-area="pam" hidden>
           <h3 class="card-subtitle">PAM</h3>
-          <p class="muted card-lead" style="margin-top:0">Respaldo: <code>WHATSAPP_TOKEN_PAM</code>, <code>PHONE_NUMBER_ID_PAM</code>, <code>WABA_ID_PAM</code>.</p>
+          <p class="muted card-lead" style="margin-top:0">Línea comercial nueva. Respaldo: <code>WHATSAPP_TOKEN_PAM</code>, <code>PHONE_NUMBER_ID_PAM</code>, <code>WABA_ID_PAM</code>.</p>
           <label class="field">
             <span class="field-label">Token de acceso WhatsApp</span>
             <input type="password" name="pam_whatsapp_token" class="js-meta-secret" autocomplete="off" value="<%= metaRows.pam[keys.whatsappToken] || '' %>" />
@@ -92,6 +93,23 @@
           <label class="field">
             <span class="field-label">WABA ID (opcional)</span>
             <input type="text" name="pam_waba_id" value="<%= metaRows.pam[keys.wabaId] || '' %>" />
+          </label>
+        </div>
+
+        <div class="admin-meta-area-panel" data-meta-area="patronato" hidden>
+          <h3 class="card-subtitle">Patronato</h3>
+          <p class="muted card-lead" style="margin-top:0">Número e historial anteriores (ex PAM). Respaldo: <code>WHATSAPP_TOKEN_PATRONATO</code>, <code>PHONE_NUMBER_ID_PATRONATO</code>, <code>WABA_ID_PATRONATO</code>.</p>
+          <label class="field">
+            <span class="field-label">Token de acceso WhatsApp</span>
+            <input type="password" name="patronato_whatsapp_token" class="js-meta-secret" autocomplete="off" value="<%= metaRows.patronato[keys.whatsappToken] || '' %>" />
+          </label>
+          <label class="field">
+            <span class="field-label">Phone number ID</span>
+            <input type="text" name="patronato_phone_number_id" value="<%= metaRows.patronato[keys.phoneNumberId] || '' %>" />
+          </label>
+          <label class="field">
+            <span class="field-label">WABA ID (opcional)</span>
+            <input type="text" name="patronato_waba_id" value="<%= metaRows.patronato[keys.wabaId] || '' %>" />
           </label>
         </div>
 
