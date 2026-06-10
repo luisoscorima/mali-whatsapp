@@ -17,7 +17,7 @@ Plataforma web para **operar WhatsApp Business (Cloud API)** en MALI: **varios n
 | Ámbito | Qué incluye |
 |--------|-------------|
 | **Campañas** | Plantillas sincronizadas o **creadas desde la app** (envío a revisión Meta); parámetros **por contacto** (nombre, atributos `sede`/`monto`/`fecha_pago`, etc.); preview de destinatarios con exclusiones; **lista de fallidos** + export CSV; KPI **respondieron (7 días)** con lista de teléfonos; **reintento** automático (~10 min) y manual; **costo/inversión** del envío (WABA o estimado). |
-| **Contactos** | Alta manual, edición, filtros por **número, nombre y atributos**; **importación masiva CSV/Excel** (columnas extra → atributos); ejemplo en `/contacts/sample.csv`. |
+| **Contactos** | Alta manual, edición, filtros por **número, nombre y atributos**; **importación masiva CSV/Excel** (columnas extra → atributos); ejemplo en `/contacts/sample.xlsx`. |
 | **Segmentos** | Definición y mantenimiento de segmentos para filtrar audiencias. |
 | **Exclusiones en campaña** | Segmentos a excluir en nueva campaña; destinatarios puntuales desmarcando en el paso 2. |
 | **Conversaciones** | Lista e hilo; búsqueda por texto, nombre o número; chips de **segmento y anuncio Meta**; globo con origen FB/IG y texto del anuncio; **descarga** de imágenes/documentos del hilo; marcado no leído; respuesta del asesor en ventana de 24 h; adjuntos y exportación. |

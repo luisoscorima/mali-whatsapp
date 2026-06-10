@@ -27,8 +27,8 @@ function createRegisterRoutes({ query, pool, appPath }) {
     registerAuth(app, ctx);
     registerAdmin(app, ctx);
     registerDashboard(app, ctx);
-    registerInboxViews(app, ctx);
     registerSystem(app, ctx);
+    registerInboxViews(app, ctx);
     registerTemplates(app, ctx);
     registerContacts(app, ctx);
     registerSegments(app, ctx);

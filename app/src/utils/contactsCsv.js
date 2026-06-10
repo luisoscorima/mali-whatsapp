@@ -233,6 +233,70 @@ function parseContactXlsxBuffer(buffer, segmentSet) {
   return { rows: dedupeRowsByPhone(rows), errors };
 }
 
+/** Plantilla Excel con casos representativos de importación (segmentos múltiples, atributos, prefijos). */
+function buildContactImportSampleXlsxBuffer() {
+  const rows = [
+    {
+      name: 'Ejemplo Local PE',
+      phone: '982160981',
+      segment: 'suscriptor_1',
+      prefix: '',
+      sede: 'Lima Norte',
+      monto: '150.00',
+      fecha_pago: '2025-01-15',
+    },
+    {
+      name: 'Dos segmentos (punto y coma)',
+      phone: '987654321',
+      segment: 'suscriptor_1;suscriptor_2',
+      prefix: '',
+      sede: '',
+      monto: '',
+      fecha_pago: '',
+    },
+    {
+      name: 'Tres segmentos (coma)',
+      phone: '51911111111',
+      segment: 'suscriptor_1,suscriptor_2,suscriptor_3',
+      prefix: '',
+      sede: 'Cusco',
+      monto: '200',
+      fecha_pago: '',
+    },
+    {
+      name: 'E164 sin prefix',
+      phone: '51922222222',
+      segment: 'suscriptor_2',
+      prefix: '',
+      sede: '',
+      monto: '',
+      fecha_pago: '',
+    },
+    {
+      name: 'Internacional con prefix',
+      phone: '5551234567',
+      segment: 'suscriptor_1',
+      prefix: '1',
+      sede: '',
+      monto: '',
+      fecha_pago: '',
+    },
+    {
+      name: 'Segmento + atributos',
+      phone: '976543210',
+      segment: 'suscriptor_3',
+      prefix: '',
+      sede: 'Arequipa',
+      monto: '89.50',
+      fecha_pago: '2025-06-01',
+    },
+  ];
+  const sheet = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, sheet, 'Contactos');
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
+
 module.exports = {
   isValidMaliEmail,
   normalizeEmail,
@@ -243,4 +307,5 @@ module.exports = {
   parseContactXlsxBuffer,
   pickContactFieldsFromRecord,
   normalizeImportRecord,
+  buildContactImportSampleXlsxBuffer,
 };

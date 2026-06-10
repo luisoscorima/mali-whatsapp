@@ -1,4 +1,15 @@
 const config = require('../config');
+const { buildContactImportSampleXlsxBuffer } = require('../utils/contactsCsv');
+
+function sendContactImportSampleXlsx(res) {
+  const buffer = buildContactImportSampleXlsxBuffer();
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  );
+  res.setHeader('Content-Disposition', 'attachment; filename="contactos_ejemplo.xlsx"');
+  res.send(buffer);
+}
 
 function registerSystem(app, ctx) {
   const { query } = ctx;
@@ -16,17 +27,12 @@ function registerSystem(app, ctx) {
     }
   });
 
+  app.get('/contacts/sample.xlsx', (req, res) => {
+    sendContactImportSampleXlsx(res);
+  });
+
   app.get('/contacts/sample.csv', (req, res) => {
-    const sample = [
-      'name,phone,segment,prefix',
-      'Ejemplo Usuario,982160981,suscriptor_1,',
-      'Dos Segmentos,51977777777,"suscriptor_1;suscriptor_2",',
-      'Maria Ejemplo,51988888888,suscriptor_2,',
-      'Internacional,5551234567,suscriptor_1,1',
-    ].join('\n');
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="contactos_ejemplo.csv"');
-    res.send(`${sample}\n`);
+    sendContactImportSampleXlsx(res);
   });
 }
 
