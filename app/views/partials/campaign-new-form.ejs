@@ -166,8 +166,17 @@
     </details>
 
     <div class="form-actions">
-      <div class="campaign-submit-wrap<%= segments.length === 0 || !syncedTemplates || syncedTemplates.length === 0 ? ' is-blocked' : '' %>" id="campaign-submit-wrap" aria-disabled="<%= segments.length === 0 || !syncedTemplates || syncedTemplates.length === 0 ? 'true' : 'false' %>">
-        <button type="submit" id="campaign-submit-btn" <%= segments.length === 0 || !syncedTemplates || syncedTemplates.length === 0 ? 'disabled data-disabled-by-server="1"' : '' %>>Enviar campaña</button>
+      <% var _submitTooltip = '';
+         if (segments.length === 0) {
+           _submitTooltip = 'Faltan segmentos. Añádelos en la sección Segmentos.';
+         } else if (!syncedTemplates || syncedTemplates.length === 0) {
+           _submitTooltip = 'No hay plantillas aprobadas. Sincroniza desde Meta antes de enviar.';
+         }
+         var _submitBlocked = segments.length === 0 || !syncedTemplates || syncedTemplates.length === 0;
+      %>
+      <div class="campaign-submit-wrap<%= _submitBlocked ? ' is-blocked' : '' %>" id="campaign-submit-wrap" aria-disabled="<%= _submitBlocked ? 'true' : 'false' %>"<% if (_submitTooltip) { %> data-tooltip="<%= _submitTooltip %>" tabindex="0"<% } %>>
+        <button type="submit" id="campaign-submit-btn" <%= _submitBlocked ? 'disabled data-disabled-by-server="1" aria-describedby="campaign-submit-tooltip-hint"' : '' %>>Enviar campaña</button>
+        <span id="campaign-submit-tooltip-hint" class="visually-hidden"><%= _submitTooltip %></span>
       </div>
     </div>
   </form>

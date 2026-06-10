@@ -14,6 +14,7 @@
   const selectNoneBtn = document.getElementById('campaign-select-none');
   const submitBtn = document.getElementById('campaign-submit-btn');
   const submitWrap = document.getElementById('campaign-submit-wrap');
+  const submitTooltipHint = document.getElementById('campaign-submit-tooltip-hint');
   const sendErrorEl = document.getElementById('campaign-send-error');
   const scheduleWrap = document.getElementById('campaign-schedule-datetime-wrap');
   const scheduledAtInput = document.getElementById('campaign-scheduled-at');
@@ -236,10 +237,20 @@
     return blockers;
   }
 
-  function notifyBlockedSubmit() {
-    const blockers = getSubmitBlockers();
-    if (!blockers.length) return;
-    showCampaignToast(blockers[0], 'warn');
+  function updateSubmitTooltip(blockers) {
+    if (!submitWrap) return;
+    if (!blockers.length) {
+      submitWrap.removeAttribute('data-tooltip');
+      submitWrap.removeAttribute('tabindex');
+      if (submitBtn) submitBtn.removeAttribute('aria-describedby');
+      if (submitTooltipHint) submitTooltipHint.textContent = '';
+      return;
+    }
+    const msg = blockers[0];
+    submitWrap.setAttribute('data-tooltip', msg);
+    submitWrap.setAttribute('tabindex', '0');
+    if (submitBtn) submitBtn.setAttribute('aria-describedby', 'campaign-submit-tooltip-hint');
+    if (submitTooltipHint) submitTooltipHint.textContent = msg;
   }
 
   function updateSubmitEnabled() {
@@ -250,6 +261,7 @@
     if (submitWrap) {
       submitWrap.classList.toggle('is-blocked', disabled);
       submitWrap.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+      updateSubmitTooltip(blockers);
     }
   }
 
@@ -571,14 +583,6 @@
   }
   updateScheduleUi();
 
-  if (submitWrap) {
-    submitWrap.addEventListener('click', function (ev) {
-      if (!submitBtn || !submitBtn.disabled) return;
-      ev.preventDefault();
-      notifyBlockedSubmit();
-    });
-  }
-
   form.addEventListener(
     'invalid',
     function (ev) {
@@ -639,7 +643,6 @@
 
     const blockers = getSubmitBlockers();
     if (blockers.length) {
-      notifyBlockedSubmit();
       return;
     }
 

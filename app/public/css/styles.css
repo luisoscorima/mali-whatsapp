@@ -859,16 +859,44 @@ html[data-theme='dark'] .campaign-recipients-list .campaign-recipient-row.field-
 }
 
 .campaign-submit-wrap {
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  max-width: 360px;
+  justify-content: center;
 }
 
 .campaign-submit-wrap.is-blocked {
+  position: relative;
   cursor: not-allowed;
+}
+
+.campaign-submit-wrap.is-blocked::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  z-index: 30;
+  width: max-content;
+  max-width: 18rem;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  transform: translateX(-50%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s ease, visibility 0.12s ease;
+}
+
+.campaign-submit-wrap.is-blocked:hover::after,
+.campaign-submit-wrap.is-blocked:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
 }
 
 #campaign-submit-btn:disabled {
