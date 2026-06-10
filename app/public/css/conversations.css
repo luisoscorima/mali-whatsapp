@@ -3177,6 +3177,36 @@ html[data-theme='dark'] .contact-filter-pill.is-active[data-seg-tone='slate'] {
   flex-shrink: 0;
 }
 
+.segment-remove-form {
+  margin: 0;
+}
+
+.segment-remove-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.segment-remove-wrap.is-blocked {
+  cursor: not-allowed;
+}
+
+.segment-remove-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.35);
+  pointer-events: none;
+}
+
+.segment-remove-hint {
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: var(--warn, #b45309);
+  max-width: 9rem;
+  text-align: right;
+}
+
 @media (max-width: 768px) {
   .segment-members-card__head,
   .segment-members-item {

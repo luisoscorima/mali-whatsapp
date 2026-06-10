@@ -13,7 +13,11 @@
   const selectAllBtn = document.getElementById('campaign-select-all');
   const selectNoneBtn = document.getElementById('campaign-select-none');
   const submitBtn = document.getElementById('campaign-submit-btn');
+  const submitWrap = document.getElementById('campaign-submit-wrap');
+  const submitHintEl = document.getElementById('campaign-submit-hint');
   const sendErrorEl = document.getElementById('campaign-send-error');
+  const scheduleWrap = document.getElementById('campaign-schedule-datetime-wrap');
+  const scheduledAtInput = document.getElementById('campaign-scheduled-at');
 
   let recipientsLoaded = false;
   let templateDefinitionReady = false;
@@ -168,15 +172,138 @@
     });
   }
 
-  function showSendError(msg) {
-    if (!sendErrorEl) return;
-    if (msg) {
-      sendErrorEl.textContent = msg;
-      sendErrorEl.hidden = false;
-      showCampaignToast(msg, 'err');
-    } else {
-      sendErrorEl.textContent = '';
-      sendErrorEl.hidden = true;
+  function formatBackendError(raw, status) {
+    const msg = String(raw || '').trim();
+    if (!msg) {
+      return status >= 500
+        ? 'Error del servidor al enviar. Revisa los datos e inténtalo de nuevo.'
+        : 'No se pudo enviar la campaña.';
+    }
+    if (/^Envío rechazado:/i.test(msg)) return msg;
+    return 'Envío rechazado: ' + msg;
+  }
+
+  function showSendError(msg, status) {
+    const formatted = msg ? formatBackendError(msg, status || 400) : '';
+    if (sendErrorEl) {
+      if (formatted) {
+        sendErrorEl.textContent = formatted;
+        sendErrorEl.hidden = false;
+      } else {
+        sendErrorEl.textContent = '';
+        sendErrorEl.hidden = true;
+      }
+    }
+    if (formatted) {
+      showCampaignToast(formatted, 'err');
+      if (status >= 500) {
+        console.error('Campaign send failed:', msg);
+      }
+    }
+  }
+
+  function getSubmitBlockers() {
+    const blockers = [];
+
+    if (submitBtn && submitBtn.hasAttribute('data-disabled-by-server')) {
+      blockers.push('Faltan segmentos o plantillas aprobadas. Revisa la configuración inicial de la campaña.');
+      return blockers;
+    }
+
+    if (!getCheckedSegments().length) {
+      blockers.push('Paso 1 — Segmentos: marca al menos un segmento.');
+    }
+
+    if (!recipientsLoaded) {
+      blockers.push('Paso 2 — Destinatarios: pulsa "Mostrar destinatarios".');
+    } else if (getCheckedRecipientIds().length === 0) {
+      blockers.push('Paso 2 — Destinatarios: selecciona al menos un contacto.');
+    }
+
+    if (!select || !select.value) {
+      blockers.push('Paso 3 — Plantilla: elige una plantilla sincronizada.');
+    } else if (!templateDefinitionReady) {
+      blockers.push('Paso 3 — Plantilla: espera a que cargue la definición.');
+    }
+
+    const scheduleMode = form.querySelector('input[name="scheduleMode"]:checked');
+    if (scheduleMode && scheduleMode.value === 'scheduled') {
+      const dt = scheduledAtInput && String(scheduledAtInput.value || '').trim();
+      if (!dt) {
+        blockers.push('Paso 4 — Cuándo enviar: indica fecha y hora de programación.');
+      }
+    }
+
+    return blockers;
+  }
+
+  function updateSubmitHint(blockers) {
+    if (!submitHintEl) return;
+    if (!blockers.length) {
+      submitHintEl.textContent = '';
+      submitHintEl.hidden = true;
+      return;
+    }
+    submitHintEl.textContent = blockers.length === 1 ? blockers[0] : blockers.join(' · ');
+    submitHintEl.hidden = false;
+  }
+
+  function scrollToFirstBlocker() {
+    const blockers = getSubmitBlockers();
+    if (!blockers.length) return;
+
+    if (blockers.some(function (b) {
+      return b.indexOf('Paso 1') === 0;
+    })) {
+      const el = form.querySelector('.campaign-segments-panel');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+    }
+    if (blockers.some(function (b) {
+      return b.indexOf('Paso 2') === 0;
+    })) {
+      const el = document.querySelector('.campaign-destinatarios-block');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+    }
+    if (blockers.some(function (b) {
+      return b.indexOf('Paso 3') === 0;
+    })) {
+      const el = form.querySelector('.campaign-template-head') || container;
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+    }
+    if (blockers.some(function (b) {
+      return b.indexOf('Paso 4') === 0;
+    })) {
+      const el = form.querySelector('.form-section--schedule') || scheduleWrap;
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  function showSubmitBlockersToasts(blockers) {
+    blockers.forEach(function (msg, i) {
+      window.setTimeout(function () {
+        showCampaignToast(msg, 'warn');
+      }, i * 450);
+    });
+  }
+
+  function updateSubmitEnabled() {
+    if (!submitBtn) return;
+    const blockers = getSubmitBlockers();
+    const disabled = blockers.length > 0;
+    submitBtn.disabled = disabled;
+    updateSubmitHint(blockers);
+    if (submitWrap) {
+      submitWrap.classList.toggle('is-blocked', disabled);
+      submitWrap.setAttribute('aria-disabled', disabled ? 'true' : 'false');
     }
   }
 
@@ -186,25 +313,6 @@
     const checked = getCheckedRecipientIds().length;
     recipientsCountEl.textContent = total ? checked + ' / ' + total + ' seleccionados' : '';
     updateSubmitEnabled();
-  }
-
-  function updateSubmitEnabled() {
-    if (!submitBtn) return;
-    if (submitBtn.hasAttribute('data-disabled-by-server')) return;
-    const hasSelectedTemplate = Boolean(select && select.value);
-    const hasTemplate = hasSelectedTemplate && templateDefinitionReady;
-    const hasRecipients = recipientsLoaded && getCheckedRecipientIds().length > 0;
-    const disabled = !hasTemplate || !hasRecipients;
-    submitBtn.disabled = disabled;
-    if (!disabled) {
-      submitBtn.removeAttribute('title');
-    } else if (!hasSelectedTemplate) {
-      submitBtn.title = 'Selecciona una plantilla para continuar.';
-    } else if (!templateDefinitionReady) {
-      submitBtn.title = 'Espera a que cargue la plantilla seleccionada.';
-    } else {
-      submitBtn.title = 'Pulsa "Mostrar destinatarios" y selecciona al menos un contacto.';
-    }
   }
 
   function buildFields(def) {
@@ -474,8 +582,6 @@
   }
 
   const scheduleRadios = form.querySelectorAll('input[name="scheduleMode"]');
-  const scheduleWrap = document.getElementById('campaign-schedule-datetime-wrap');
-  const scheduledAtInput = document.getElementById('campaign-scheduled-at');
 
   function setMinScheduleTime() {
     if (!scheduledAtInput) return;
@@ -513,7 +619,37 @@
   scheduleRadios.forEach(function (r) {
     r.addEventListener('change', updateScheduleUi);
   });
+  if (scheduledAtInput) {
+    scheduledAtInput.addEventListener('change', updateSubmitEnabled);
+    scheduledAtInput.addEventListener('input', updateSubmitEnabled);
+  }
   updateScheduleUi();
+
+  if (submitWrap) {
+    submitWrap.addEventListener('click', function (ev) {
+      if (!submitBtn || !submitBtn.disabled) return;
+      const blockers = getSubmitBlockers();
+      if (!blockers.length) return;
+      ev.preventDefault();
+      showSubmitBlockersToasts(blockers);
+      scrollToFirstBlocker();
+    });
+  }
+
+  form.addEventListener(
+    'invalid',
+    function (ev) {
+      const el = ev.target;
+      if (!el || !form.contains(el)) return;
+      const label =
+        (el.labels && el.labels[0] && el.labels[0].textContent && el.labels[0].textContent.trim()) ||
+        el.getAttribute('aria-label') ||
+        el.name ||
+        'Campo obligatorio';
+      showCampaignToast('Completa el campo: ' + label, 'warn');
+    },
+    true
+  );
 
   function collectPayload() {
     const templateSyncId = parseInt(String(select ? select.value : '').trim(), 10);
@@ -558,26 +694,16 @@
     ev.preventDefault();
     showSendError('');
 
+    const blockers = getSubmitBlockers();
+    if (blockers.length) {
+      showSubmitBlockersToasts(blockers);
+      scrollToFirstBlocker();
+      return;
+    }
+
     if (!form.checkValidity()) {
-      showCampaignToast('Completa los campos obligatorios antes de enviar la campaña.', 'warn');
+      showCampaignToast('Completa los campos obligatorios de la plantilla o la programación.', 'warn');
       form.reportValidity();
-      return;
-    }
-
-    const ids = getCheckedRecipientIds();
-    if (ids.length === 0) {
-      showSendError('Selecciona al menos un destinatario.');
-      return;
-    }
-
-    const segs = getCheckedSegments();
-    if (segs.length === 0) {
-      showSendError('Selecciona al menos un segmento.');
-      return;
-    }
-
-    if (!templateDefinitionReady) {
-      showSendError('Espera a que cargue la plantilla seleccionada antes de enviar.');
       return;
     }
 
@@ -609,20 +735,22 @@
           });
         }
         if (r.status === 400 || r.status === 500) {
-          return r.json().then(function (j) {
-            showSendError(j.error || 'No se pudo enviar.');
-          }).catch(function () {
-            return r.text().then(function (t) {
-              showSendError(t || 'Error al enviar.');
+          return r.json()
+            .then(function (j) {
+              showSendError(j.error || j.message || 'No se pudo enviar.', r.status);
+            })
+            .catch(function () {
+              return r.text().then(function (t) {
+                showSendError(t || 'Error al enviar.', r.status);
+              });
             });
-          });
         }
         return r.text().then(function (t) {
-          showSendError(t || 'Error al enviar.');
+          showSendError(t || 'Error al enviar.', r.status);
         });
       })
       .catch(function () {
-        showSendError('Error de red.');
+        showSendError('Error de red al contactar con el servidor.', 0);
       })
       .finally(function () {
         updateScheduleUi();

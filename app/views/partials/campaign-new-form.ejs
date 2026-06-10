@@ -166,7 +166,10 @@
     </details>
 
     <div class="form-actions">
-      <button type="submit" id="campaign-submit-btn" <%= segments.length === 0 || !syncedTemplates || syncedTemplates.length === 0 ? 'disabled data-disabled-by-server="1"' : '' %>>Enviar campaña</button>
+      <div class="campaign-submit-wrap<%= segments.length === 0 || !syncedTemplates || syncedTemplates.length === 0 ? ' is-blocked' : '' %>" id="campaign-submit-wrap" aria-disabled="<%= segments.length === 0 || !syncedTemplates || syncedTemplates.length === 0 ? 'true' : 'false' %>">
+        <button type="submit" id="campaign-submit-btn" <%= segments.length === 0 || !syncedTemplates || syncedTemplates.length === 0 ? 'disabled data-disabled-by-server="1"' : '' %>>Enviar campaña</button>
+        <p id="campaign-submit-hint" class="campaign-submit-hint" <%= segments.length === 0 || !syncedTemplates || syncedTemplates.length === 0 ? '' : 'hidden' %>><% if (segments.length === 0) { %>Faltan segmentos. Añádelos en la sección Segmentos.<% } else if (!syncedTemplates || syncedTemplates.length === 0) { %>No hay plantillas aprobadas. Sincroniza desde Meta antes de enviar.<% } %></p>
+      </div>
     </div>
   </form>
 </div>

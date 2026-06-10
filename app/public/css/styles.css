@@ -858,6 +858,47 @@ html[data-theme='dark'] .campaign-recipients-list .campaign-recipient-row.field-
   padding-top: 10px;
 }
 
+.campaign-submit-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.campaign-submit-wrap.is-blocked {
+  cursor: not-allowed;
+}
+
+#campaign-submit-btn:disabled {
+  background: var(--surface-strong);
+  color: var(--muted);
+  border: 1px dashed color-mix(in srgb, var(--line) 70%, var(--muted));
+  cursor: not-allowed;
+  opacity: 0.62;
+  filter: grayscale(0.45);
+  box-shadow: none;
+  pointer-events: none;
+}
+
+#campaign-submit-btn:disabled:hover,
+#campaign-submit-btn:disabled:active,
+#campaign-submit-btn:disabled:focus-visible {
+  background: var(--surface-strong);
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.campaign-submit-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--warn, #b45309);
+  max-width: 34rem;
+}
+
 .form-section .field input,
 .form-section .field textarea,
 .form-section .field select {
