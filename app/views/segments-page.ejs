@@ -26,7 +26,7 @@ function segmentMemberChatHref(member) {
   showAdminNav,
   shellPageClass: 'conversations-page',
   layoutModifier: _segmentsMobileDetail ? 'conversations-inbox--detail' : '',
-  extraHeadScripts: view === 'detail' ? [(basePath || '') + '/js/segments-detail.js'] : null
+  extraHeadScripts: null
 }) %>
 <aside class="inbox-sidebar" aria-label="Segmentos">
   <div class="inbox-sidebar-header inbox-sidebar-header--with-actions">
@@ -185,7 +185,13 @@ function segmentMemberChatHref(member) {
               </svg>
             </a>
             <form method="POST" action="<%= basePath %>/segments/<%= selectedSegment.id %>/contacts/<%= member.id %>/remove" class="inline-delete-form inline-delete-form--inline segment-remove-form" onsubmit="return confirm('¿Quitar este contacto del segmento?');">
-              <div class="segment-remove-wrap<%= !_canRemove ? ' is-blocked' : '' %>"<% if (!_canRemove) { %> data-blocked-msg="El contacto debe conservar al menos un segmento. Asígnale otro segmento antes de quitar este vínculo."<% } %>>
+              <div
+                class="segment-remove-wrap<%= !_canRemove ? ' is-blocked' : '' %>"
+                <% if (!_canRemove) { %>
+                tabindex="0"
+                data-tooltip="El contacto debe conservar al menos un segmento. Asígnale otro segmento antes de quitar este vínculo."
+                <% } %>
+              >
                 <button
                   type="submit"
                   class="small-btn danger-outline segment-remove-btn"
@@ -193,7 +199,7 @@ function segmentMemberChatHref(member) {
                   <% if (!_canRemove) { %>aria-describedby="segment-remove-hint-<%= member.id %>"<% } %>
                 >Quitar</button>
                 <% if (!_canRemove) { %>
-                <span id="segment-remove-hint-<%= member.id %>" class="segment-remove-hint">Único segmento del contacto</span>
+                <span id="segment-remove-hint-<%= member.id %>" class="visually-hidden">El contacto debe conservar al menos un segmento. Asígnale otro segmento antes de quitar este vínculo.</span>
                 <% } %>
               </div>
             </form>

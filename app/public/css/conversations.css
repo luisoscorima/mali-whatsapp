@@ -3183,13 +3183,41 @@ html[data-theme='dark'] .contact-filter-pill.is-active[data-seg-tone='slate'] {
 
 .segment-remove-wrap {
   display: inline-flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
+  align-items: center;
 }
 
 .segment-remove-wrap.is-blocked {
+  position: relative;
   cursor: not-allowed;
+}
+
+.segment-remove-wrap.is-blocked::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: max-content;
+  max-width: 15rem;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s ease, visibility 0.12s ease;
+}
+
+.segment-remove-wrap.is-blocked:hover::after,
+.segment-remove-wrap.is-blocked:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
 }
 
 .segment-remove-btn:disabled {
@@ -3197,14 +3225,6 @@ html[data-theme='dark'] .contact-filter-pill.is-active[data-seg-tone='slate'] {
   cursor: not-allowed;
   filter: grayscale(0.35);
   pointer-events: none;
-}
-
-.segment-remove-hint {
-  font-size: 0.72rem;
-  line-height: 1.3;
-  color: var(--warn, #b45309);
-  max-width: 9rem;
-  text-align: right;
 }
 
 @media (max-width: 768px) {

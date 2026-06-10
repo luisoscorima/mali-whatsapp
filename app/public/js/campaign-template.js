@@ -14,7 +14,6 @@
   const selectNoneBtn = document.getElementById('campaign-select-none');
   const submitBtn = document.getElementById('campaign-submit-btn');
   const submitWrap = document.getElementById('campaign-submit-wrap');
-  const submitHintEl = document.getElementById('campaign-submit-hint');
   const sendErrorEl = document.getElementById('campaign-send-error');
   const scheduleWrap = document.getElementById('campaign-schedule-datetime-wrap');
   const scheduledAtInput = document.getElementById('campaign-scheduled-at');
@@ -237,62 +236,10 @@
     return blockers;
   }
 
-  function updateSubmitHint(blockers) {
-    if (!submitHintEl) return;
-    if (!blockers.length) {
-      submitHintEl.textContent = '';
-      submitHintEl.hidden = true;
-      return;
-    }
-    submitHintEl.textContent = blockers.length === 1 ? blockers[0] : blockers.join(' · ');
-    submitHintEl.hidden = false;
-  }
-
-  function scrollToFirstBlocker() {
+  function notifyBlockedSubmit() {
     const blockers = getSubmitBlockers();
     if (!blockers.length) return;
-
-    if (blockers.some(function (b) {
-      return b.indexOf('Paso 1') === 0;
-    })) {
-      const el = form.querySelector('.campaign-segments-panel');
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-      }
-    }
-    if (blockers.some(function (b) {
-      return b.indexOf('Paso 2') === 0;
-    })) {
-      const el = document.querySelector('.campaign-destinatarios-block');
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-      }
-    }
-    if (blockers.some(function (b) {
-      return b.indexOf('Paso 3') === 0;
-    })) {
-      const el = form.querySelector('.campaign-template-head') || container;
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-      }
-    }
-    if (blockers.some(function (b) {
-      return b.indexOf('Paso 4') === 0;
-    })) {
-      const el = form.querySelector('.form-section--schedule') || scheduleWrap;
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  }
-
-  function showSubmitBlockersToasts(blockers) {
-    blockers.forEach(function (msg, i) {
-      window.setTimeout(function () {
-        showCampaignToast(msg, 'warn');
-      }, i * 450);
-    });
+    showCampaignToast(blockers[0], 'warn');
   }
 
   function updateSubmitEnabled() {
@@ -300,7 +247,6 @@
     const blockers = getSubmitBlockers();
     const disabled = blockers.length > 0;
     submitBtn.disabled = disabled;
-    updateSubmitHint(blockers);
     if (submitWrap) {
       submitWrap.classList.toggle('is-blocked', disabled);
       submitWrap.setAttribute('aria-disabled', disabled ? 'true' : 'false');
@@ -628,11 +574,8 @@
   if (submitWrap) {
     submitWrap.addEventListener('click', function (ev) {
       if (!submitBtn || !submitBtn.disabled) return;
-      const blockers = getSubmitBlockers();
-      if (!blockers.length) return;
       ev.preventDefault();
-      showSubmitBlockersToasts(blockers);
-      scrollToFirstBlocker();
+      notifyBlockedSubmit();
     });
   }
 
@@ -696,8 +639,7 @@
 
     const blockers = getSubmitBlockers();
     if (blockers.length) {
-      showSubmitBlockersToasts(blockers);
-      scrollToFirstBlocker();
+      notifyBlockedSubmit();
       return;
     }
 
@@ -768,9 +710,6 @@
     if (recipientsToolbar) recipientsToolbar.hidden = true;
     if (recipientsStatus) {
       recipientsStatus.textContent = hadRecipients ? 'Vuelve a mostrar destinatarios.' : '';
-    }
-    if (hadRecipients) {
-      showCampaignToast('Cambiaste los segmentos. Vuelve a mostrar destinatarios antes de enviar.', 'warn');
     }
     updateSubmitEnabled();
   }

@@ -890,15 +890,6 @@ html[data-theme='dark'] .campaign-recipients-list .campaign-recipient-row.field-
   box-shadow: none;
 }
 
-.campaign-submit-hint {
-  margin: 0;
-  text-align: center;
-  font-size: 0.86rem;
-  line-height: 1.45;
-  color: var(--warn, #b45309);
-  max-width: 34rem;
-}
-
 .form-section .field input,
 .form-section .field textarea,
 .form-section .field select {
