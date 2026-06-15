@@ -136,7 +136,16 @@ function createRouteContext({ query, pool, appPath }) {
           c.inbox_unread,
           c.status AS conversation_status,
           ct.lead_score AS contact_lead_score,
-          ct.name AS contact_name,
+          COALESCE(
+            ct.name,
+            (
+              SELECT ct_alt.name
+              FROM contacts ct_alt
+              WHERE ct_alt.phone = c.phone AND (ct.id IS NULL OR ct_alt.id <> ct.id)
+              ORDER BY ct_alt.updated_at DESC NULLS LAST
+              LIMIT 1
+            )
+          ) AS contact_name,
           COALESCE((
             SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
             FROM contact_segments cs
@@ -519,6 +528,26 @@ function createRouteContext({ query, pool, appPath }) {
           )
         : { rows: [] };
       contact = contactRow.rows[0] || null;
+      if (!contact && selectedConversation.phone) {
+        const fallbackContact = await query(
+          `SELECT
+             c.name,
+             c.phone,
+             c.lead_score,
+             COALESCE((
+               SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
+               FROM contact_segments cs
+               JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+               WHERE cs.contact_id = c.id
+             ), ARRAY[]::varchar[]) AS segment_slugs
+           FROM contacts c
+           WHERE c.phone = $1
+           ORDER BY CASE WHEN c.area = $2 THEN 0 ELSE 1 END, c.updated_at DESC NULLS LAST
+           LIMIT 1`,
+          [selectedConversation.phone, area]
+        );
+        contact = fallbackContact.rows[0] || null;
+      }
       const messagesResult = await query(
         `SELECT id, direction, body_text, message_type, created_at, wa_message_id, raw_payload, is_ai
          FROM chat_messages

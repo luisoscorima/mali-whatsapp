@@ -424,6 +424,8 @@ function registerConversations(app, ctx) {
         return res.status(404).send('Conversacion no encontrada');
       }
       const conversation = convResult.rows[0];
+      const linePhoneNumberId =
+        String(conversation.whatsapp_phone_number_id || '').trim() || undefined;
 
       const aiCfgRow = await query(`SELECT value FROM app_settings WHERE area = $1 AND key = 'ai_config'`, [
         area,
@@ -454,6 +456,7 @@ function registerConversations(app, ctx) {
             to: conversation.phone,
             text,
             area,
+            phoneNumberId: linePhoneNumberId,
           });
           const msgId = apiResponse.messages?.[0]?.id || null;
 
@@ -505,6 +508,7 @@ function registerConversations(app, ctx) {
           buffer: file.buffer,
           mimeType: file.mimetype,
           filename: file.originalname,
+          phoneNumberId: linePhoneNumberId,
         });
 
         const label = MEDIA_TYPE_LABEL[uploadResult.waType] || 'Archivo';
@@ -514,6 +518,7 @@ function registerConversations(app, ctx) {
             to: conversation.phone,
             text,
             area,
+            phoneNumberId: linePhoneNumberId,
           });
           const textMsgId = textResp.messages?.[0]?.id || null;
           await query(
@@ -543,6 +548,7 @@ function registerConversations(app, ctx) {
           caption: captionForMedia,
           documentFilename:
             uploadResult.waType === 'document' ? uploadResult.safeFilename : undefined,
+          phoneNumberId: linePhoneNumberId,
         });
         const msgId = sendResp.messages?.[0]?.id || null;
 

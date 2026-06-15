@@ -123,6 +123,40 @@ function buildWhatsAppCredentialsRaw(norm) {
   return { token, phoneNumberId };
 }
 
+/** Token + Phone Number ID de la línea que coincide con un ID de Meta (todas las áreas). */
+function getCredentialsForPhoneNumberId(phoneNumberId) {
+  const pid = String(phoneNumberId || '').trim();
+  if (!pid) return null;
+  for (const area of VALID_META_AREAS) {
+    const creds = getWhatsAppCredentialsForArea(area);
+    if (String(creds.phoneNumberId || '').trim() === pid) {
+      return { ...creds, area };
+    }
+  }
+  return null;
+}
+
+/**
+ * Credenciales para enviar: si hay phone_number_id de línea, usa esa; si no, el área.
+ */
+function resolveWhatsAppSendCredentials({ area, phoneNumberId } = {}) {
+  const pidOverride = String(phoneNumberId || '').trim();
+  if (pidOverride) {
+    const byLine = getCredentialsForPhoneNumberId(pidOverride);
+    if (!byLine?.token || !byLine?.phoneNumberId) {
+      throw new Error(`Linea WhatsApp no configurada para phone_number_id ${pidOverride}`);
+    }
+    return byLine;
+  }
+  const creds = getWhatsAppCredentialsForArea(area);
+  if (!creds.token || !creds.phoneNumberId) {
+    throw new Error(
+      'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_TI/PAM/EDUCACION y PHONE_NUMBER_ID_* (o WHATSAPP_TOKEN/PHONE_NUMBER_ID como respaldo)'
+    );
+  }
+  return creds;
+}
+
 function getWhatsAppCredentialsForArea(area) {
   const norm = normalizeCredentialArea(area);
   let { token, phoneNumberId } = buildWhatsAppCredentialsRaw(norm);
@@ -173,6 +207,8 @@ module.exports = {
   getVerifyToken,
   getAppSecret,
   getWhatsAppCredentialsForArea,
+  getCredentialsForPhoneNumberId,
+  resolveWhatsAppSendCredentials,
   getWabaIdOverrideForArea,
   KEYS,
   normalizeSecretValue,

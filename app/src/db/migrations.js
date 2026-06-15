@@ -539,14 +539,37 @@ async function runMigrations(query) {
     `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS meta_ctwa_ad_id INTEGER NULL REFERENCES meta_ctwa_ads(id) ON DELETE SET NULL`
   );
 
+  /** Línea WhatsApp (Phone Number ID de Meta) asociada al hilo para envíos de sesión. */
+  await query(
+    `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS whatsapp_phone_number_id VARCHAR(32) NULL`
+  );
+
   await query(`ALTER TABLE whatsapp_templates ADD COLUMN IF NOT EXISTS rejection_reason TEXT NULL`);
   await query(`ALTER TABLE whatsapp_templates ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ NULL`);
   await query(`ALTER TABLE whatsapp_templates ADD COLUMN IF NOT EXISTS submitted_by INTEGER NULL`);
   await query(`ALTER TABLE whatsapp_templates ADD COLUMN IF NOT EXISTS placeholder_aliases_json JSONB NULL`);
 
+  await backfillConversationWhatsAppLines(query);
   await migratePamSlugToTiThreeAreas(query);
   await cleanUpCrossAreaSeededSegments(query);
   await seedDefaultContactAttributeDefinitions(query);
+}
+
+/** Asigna Phone Number ID por defecto a hilos existentes según su área. */
+async function backfillConversationWhatsAppLines(query) {
+  const { getWhatsAppCredentialsForArea } = require('../services/metaSettingsCache');
+  for (const area of BUSINESS_AREAS) {
+    const { phoneNumberId } = getWhatsAppCredentialsForArea(area);
+    const pid = String(phoneNumberId || '').trim();
+    if (!pid) continue;
+    await query(
+      `UPDATE conversations
+       SET whatsapp_phone_number_id = $1
+       WHERE area = $2
+         AND (whatsapp_phone_number_id IS NULL OR TRIM(whatsapp_phone_number_id) = '')`,
+      [pid, area]
+    );
+  }
 }
 
 /** Atributos por defecto (área) si el área aún no tiene definiciones. */

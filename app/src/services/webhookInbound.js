@@ -16,17 +16,42 @@ const TRANSFER_TO_HUMAN_NOTICE =
   'He derivado tu consulta a un asesor. En breve te atenderán.';
 
 /**
+ * Phone Number ID de la línea que recibió el webhook (o la del área si Meta no lo envía).
+ */
+function resolveInboundLinePhoneNumberId(value, area) {
+  const metaPid = String(value?.metadata?.phone_number_id ?? '').trim();
+  if (metaPid) return metaPid;
+  if (area) {
+    const { phoneNumberId } = getWhatsAppCredentialsForArea(area);
+    return String(phoneNumberId || '').trim() || null;
+  }
+  return null;
+}
+
+/**
  * Envía texto por WhatsApp, persiste outbound y actualiza last_message_at.
  * @returns {Promise<boolean>} true si el envío y la persistencia tuvieron éxito
  */
-async function persistAndSendOutbound(query, { area, conversationId, phone, text, isAi }) {
+async function persistAndSendOutbound(
+  query,
+  { area, conversationId, phone, text, isAi, phoneNumberId }
+) {
   const toSend = String(text || '').slice(0, config.MAX_SESSION_TEXT_LEN);
   if (!toSend) return false;
   try {
+    let lineId = String(phoneNumberId || '').trim() || null;
+    if (!lineId && conversationId) {
+      const lineRow = await query(
+        `SELECT whatsapp_phone_number_id FROM conversations WHERE id = $1`,
+        [conversationId]
+      );
+      lineId = String(lineRow.rows[0]?.whatsapp_phone_number_id || '').trim() || null;
+    }
     const apiResponse = await sendSessionTextMessage({
       to: phone,
       text: toSend,
       area,
+      phoneNumberId: lineId || undefined,
     });
     const msgId = apiResponse.messages?.[0]?.id || null;
     await query(
@@ -315,24 +340,21 @@ async function persistInboundMessagesFromWebhookValue(query, value, context = {}
   const senderPhones = messages.map((m) => normalizePhone(m.from));
 
   const areaByPhone = await resolveAreaFromSenderPhones(query, senderPhones);
-  if (areaByPhone) {
-    if (!area) {
-      area = areaByPhone;
-      source = 'sender_phone_db';
-    } else if (area !== areaByPhone) {
-      console.log(
-        JSON.stringify({
-          level: 'warn',
-          message:
-            'Webhook inbound: metadata.phone_number_id apunta a un área distinta a contactos/conversaciones/campañas; se usa el área de la BD',
-          resolvedByPhoneNumberId: area,
-          resolvedByPhoneDb: areaByPhone,
-          phoneNumberId: metaPid,
-        })
-      );
-      area = areaByPhone;
-      source = 'sender_phone_db_override';
-    }
+  if (!area && areaByPhone) {
+    area = areaByPhone;
+    source = 'sender_phone_db';
+  } else if (area && areaByPhone && area !== areaByPhone) {
+    console.log(
+      JSON.stringify({
+        level: 'warn',
+        message:
+          'Webhook inbound: teléfono conocido en otra área de BD; se enruta por phone_number_id de Meta',
+        resolvedByPhoneNumberId: area,
+        knownInDbArea: areaByPhone,
+        phoneNumberId: metaPid,
+        senderPhone: senderPhones[0] || null,
+      })
+    );
   }
 
   if (!area) {
@@ -350,7 +372,7 @@ async function persistInboundMessagesFromWebhookValue(query, value, context = {}
     return;
   }
 
-  if (source !== 'phone_number_id' && source !== 'sender_phone_db_override') {
+  if (source !== 'phone_number_id') {
     console.log(
       JSON.stringify({
         level: 'info',
@@ -378,21 +400,30 @@ async function persistInboundMessagesFromWebhookValue(query, value, context = {}
       area,
       from,
     ]);
-    const contactId = contactRow.rows[0]?.id ?? null;
+    let contactId = contactRow.rows[0]?.id ?? null;
+    if (!contactId) {
+      const anyContact = await query(
+        `SELECT id FROM contacts WHERE phone = $1 ORDER BY updated_at DESC NULLS LAST LIMIT 1`,
+        [from]
+      );
+      contactId = anyContact.rows[0]?.id ?? null;
+    }
 
     const { messageType, bodyText } = extractInboundMessagePreview(msg);
+    const linePhoneNumberId = resolveInboundLinePhoneNumberId(value, area);
 
     const convResult = await query(
-      `INSERT INTO conversations (area, phone, contact_id, last_user_message_at, last_message_at, inbox_unread, updated_at)
-       VALUES ($1, $2, $3, NOW(), NOW(), TRUE, NOW())
+      `INSERT INTO conversations (area, phone, contact_id, last_user_message_at, last_message_at, inbox_unread, updated_at, whatsapp_phone_number_id)
+       VALUES ($1, $2, $3, NOW(), NOW(), TRUE, NOW(), $4)
        ON CONFLICT (area, phone) DO UPDATE SET
          contact_id = COALESCE(EXCLUDED.contact_id, conversations.contact_id),
          last_user_message_at = NOW(),
          last_message_at = NOW(),
          inbox_unread = TRUE,
+         whatsapp_phone_number_id = EXCLUDED.whatsapp_phone_number_id,
          updated_at = NOW()
        RETURNING id`,
-      [area, from, contactId]
+      [area, from, contactId, linePhoneNumberId]
     );
     const conversationId = convResult.rows[0].id;
 
@@ -415,12 +446,21 @@ async function persistInboundMessagesFromWebhookValue(query, value, context = {}
       );
     }
 
+    const inboundPayload = {
+      ...msg,
+      _mali_routing: {
+        phone_number_id: linePhoneNumberId,
+        routing_source: source,
+        known_db_area: areaByPhone && areaByPhone !== area ? areaByPhone : null,
+      },
+    };
+
     try {
       const insertResult = await query(
         `INSERT INTO chat_messages (conversation_id, direction, wa_message_id, body_text, message_type, raw_payload)
          VALUES ($1, 'inbound', $2, $3, $4, $5::jsonb)
          RETURNING id`,
-        [conversationId, waId || null, bodyText.slice(0, 8000), messageType, JSON.stringify(msg)]
+        [conversationId, waId || null, bodyText.slice(0, 8000), messageType, JSON.stringify(inboundPayload)]
       );
       const chatMessageId = insertResult.rows[0].id;
       saved += 1;

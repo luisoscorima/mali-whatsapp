@@ -5,6 +5,7 @@ const config = require('../config');
 const {
   getWhatsAppCredentialsForArea,
   getWabaIdOverrideForArea,
+  resolveWhatsAppSendCredentials,
 } = require('./metaSettingsCache');
 
 /** MIME permitidos para adjuntos desde Conversaciones (subida a Graph + mensaje). */
@@ -102,13 +103,8 @@ function classifyTemplateHeaderUpload(mimeType, sizeBytes) {
 /**
  * Sube binario a WhatsApp Cloud API y devuelve { id } del media handle.
  */
-async function uploadMediaToWhatsApp({ area, buffer, mimeType, filename }) {
-  const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
-  if (!token || !phoneNumberId) {
-    throw new Error(
-      'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_TI/PAM/EDUCACION y PHONE_NUMBER_ID_* (o WHATSAPP_TOKEN/PHONE_NUMBER_ID como respaldo)'
-    );
-  }
+async function uploadMediaToWhatsApp({ area, buffer, mimeType, filename, phoneNumberId }) {
+  const { token, phoneNumberId: lineId } = resolveWhatsAppSendCredentials({ area, phoneNumberId });
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
     throw new Error('Archivo vacío o inválido');
   }
@@ -120,7 +116,7 @@ async function uploadMediaToWhatsApp({ area, buffer, mimeType, filename }) {
   form.append('type', waType);
   form.append('file', buffer, { filename: safeName, contentType: String(mimeType).split(';')[0].trim() });
 
-  const url = `${config.GRAPH_BASE}/${phoneNumberId}/media`;
+  const url = `${config.GRAPH_BASE}/${lineId}/media`;
   try {
     const { data } = await axios.post(url, form, {
       headers: {
@@ -214,13 +210,16 @@ async function uploadTemplateHeaderHandle({ area, buffer, mimeType, filename }) 
  * Envía mensaje de sesión con media ya subida (id de Graph).
  * Para audio, WhatsApp no aplica caption en el mismo payload; usar envío de texto aparte si hace falta.
  */
-async function sendSessionMediaMessage({ to, area, waType, mediaId, caption, documentFilename }) {
-  const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
-  if (!token || !phoneNumberId) {
-    throw new Error(
-      'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_TI/PAM/EDUCACION y PHONE_NUMBER_ID_* (o WHATSAPP_TOKEN/PHONE_NUMBER_ID como respaldo)'
-    );
-  }
+async function sendSessionMediaMessage({
+  to,
+  area,
+  waType,
+  mediaId,
+  caption,
+  documentFilename,
+  phoneNumberId,
+}) {
+  const { token, phoneNumberId: lineId } = resolveWhatsAppSendCredentials({ area, phoneNumberId });
   const cap =
     caption != null && String(caption).trim()
       ? String(caption).trim().slice(0, config.MAX_MEDIA_CAPTION_LEN)
@@ -249,7 +248,7 @@ async function sendSessionMediaMessage({ to, area, waType, mediaId, caption, doc
   }
 
   try {
-    const response = await axios.post(`${config.GRAPH_BASE}/${phoneNumberId}/messages`, payload, {
+    const response = await axios.post(`${config.GRAPH_BASE}/${lineId}/messages`, payload, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -451,13 +450,8 @@ async function sendTemplateWithComponents({ to, templateName, languageCode, comp
   return response.data;
 }
 
-async function sendSessionTextMessage({ to, text, area }) {
-  const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
-  if (!token || !phoneNumberId) {
-    throw new Error(
-      'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_TI/PAM/EDUCACION y PHONE_NUMBER_ID_* (o WHATSAPP_TOKEN/PHONE_NUMBER_ID como respaldo)'
-    );
-  }
+async function sendSessionTextMessage({ to, text, area, phoneNumberId }) {
+  const { token, phoneNumberId: lineId } = resolveWhatsAppSendCredentials({ area, phoneNumberId });
   const safe = String(text || '').trim();
   if (!safe) {
     throw new Error('Mensaje vacio');
@@ -474,7 +468,7 @@ async function sendSessionTextMessage({ to, text, area }) {
   };
 
   const response = await axios.post(
-    `${config.GRAPH_BASE}/${phoneNumberId}/messages`,
+    `${config.GRAPH_BASE}/${lineId}/messages`,
     payload,
     {
       headers: {

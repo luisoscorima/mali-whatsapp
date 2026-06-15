@@ -1,4 +1,5 @@
 const { normalizePhone } = require('../utils/phone');
+const { getWhatsAppCredentialsForArea } = require('./metaSettingsCache');
 
 /**
  * Registra en el hilo de conversación un único mensaje de sistema por envío
@@ -13,16 +14,18 @@ async function upsertCampaignChatMessage(query, ctx) {
     template_name: templateName,
     source: 'campaign_send',
   });
+  const { phoneNumberId: linePhoneNumberId } = getWhatsAppCredentialsForArea(area);
 
   const convResult = await query(
-    `INSERT INTO conversations (area, phone, contact_id, last_message_at, updated_at)
-     VALUES ($1, $2, $3, NOW(), NOW())
+    `INSERT INTO conversations (area, phone, contact_id, last_message_at, updated_at, whatsapp_phone_number_id)
+     VALUES ($1, $2, $3, NOW(), NOW(), $4)
      ON CONFLICT (area, phone) DO UPDATE SET
        contact_id = COALESCE(EXCLUDED.contact_id, conversations.contact_id),
        last_message_at = NOW(),
+       whatsapp_phone_number_id = COALESCE(EXCLUDED.whatsapp_phone_number_id, conversations.whatsapp_phone_number_id),
        updated_at = NOW()
      RETURNING id`,
-    [area, phoneNorm, contactId]
+    [area, phoneNorm, contactId, linePhoneNumberId || null]
   );
   const conversationId = convResult.rows[0].id;
 
