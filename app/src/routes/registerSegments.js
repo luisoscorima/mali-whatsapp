@@ -3,6 +3,12 @@ const { auditLog, AuditEvent } = require('../services/auditLog');
 const { normalizeArea } = require('../middleware/auth');
 const { normalizeSegmentColorKey } = require('../utils/segmentColors');
 const { removeContactSegment } = require('../utils/contactSegments');
+const {
+  loadSegmentContactsForExport,
+  loadContactAttributesBatch,
+  buildSegmentContactsExportBuffer,
+  segmentExportFilename,
+} = require('../utils/segmentContactsExport');
 
 function firstSegmentForLegacyColumn(segments) {
   if (!segments || segments.length === 0) return null;
@@ -183,6 +189,46 @@ function registerSegments(app, ctx) {
     } catch (error) {
       logError(req, 'Error borrando segmento', error);
       res.status(500).send(`No se pudo borrar: ${error.message}`);
+    }
+  });
+
+  app.get('/segments/:id/export', async (req, res) => {
+    const segmentId = Number(req.params.id);
+    if (!Number.isInteger(segmentId) || segmentId <= 0) {
+      return res.status(400).send('Id de segmento invalido');
+    }
+    const area = normalizeArea(req.user.area);
+    const includeAttributes = String(req.query.attrs || '1') !== '0';
+
+    try {
+      const segResult = await query(`SELECT id, slug, label FROM segment_definitions WHERE id = $1 AND area = $2`, [
+        segmentId,
+        area,
+      ]);
+      if (segResult.rowCount === 0) {
+        return res.status(404).send('Segmento no encontrado');
+      }
+      const segment = segResult.rows[0];
+      const contacts = await loadSegmentContactsForExport(query, area, segment.slug);
+      if (contacts.length > config.MAX_CSV_ROWS) {
+        return res
+          .status(400)
+          .send(`Demasiados contactos (${contacts.length}). Maximo ${config.MAX_CSV_ROWS}; contacta al administrador.`);
+      }
+
+      const attrMap = includeAttributes
+        ? await loadContactAttributesBatch(
+            query,
+            contacts.map((c) => c.id)
+          )
+        : new Map();
+      const buffer = buildSegmentContactsExportBuffer(contacts, attrMap, { includeAttributes });
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${segmentExportFilename(segment.slug)}"`);
+      return res.send(buffer);
+    } catch (error) {
+      logError(req, 'Error exportando contactos de segmento', error, { segmentId });
+      return res.status(500).send(`No se pudo exportar: ${error.message}`);
     }
   });
 

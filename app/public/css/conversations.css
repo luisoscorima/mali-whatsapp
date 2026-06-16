@@ -3128,6 +3128,15 @@ html[data-theme='dark'] .contact-filter-pill.is-active[data-seg-tone='slate'] {
   margin-bottom: 12px;
 }
 
+.segment-members-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .segment-members-list {
   margin: 0;
   padding: 0;

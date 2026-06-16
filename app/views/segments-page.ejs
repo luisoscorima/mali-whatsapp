@@ -151,7 +151,14 @@ function segmentMemberChatHref(member) {
           <h2 class="card-title">Contactos del segmento</h2>
           <p class="card-lead">Aquí puedes revisar quién pertenece a <strong><%= selectedSegment.label %></strong>, abrir su chat o quitar solo este vínculo.</p>
         </div>
-        <span class="badge neutral"><%= (segmentMembers || []).length %> contacto(s)</span>
+        <div class="segment-members-card__meta">
+          <span class="badge neutral"><%= (segmentMembers || []).length %> contacto(s)</span>
+          <a
+            href="<%= basePath %>/segments/<%= selectedSegment.id %>/export"
+            class="small-btn secondary"
+            title="Descargar contactos del segmento en Excel"
+          >Exportar Excel</a>
+        </div>
       </div>
       <% if (!segmentMembers || segmentMembers.length === 0) { %>
       <p class="empty-state">No hay contactos activos en este segmento.</p>
