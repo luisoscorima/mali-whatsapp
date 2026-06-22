@@ -1,7 +1,10 @@
 const { escapeForLikePattern } = require('../utils/searchEscape');
 const { fetchCampaignFailedLogs } = require('../services/campaignFailedLogs');
 const { fetchCampaignRetryStats } = require('../services/campaignRetry');
-const { fetchCampaignResponderMetrics } = require('../services/campaignResponders');
+const {
+  fetchCampaignResponderMetrics,
+  fetchCampaignInteractiveResponders,
+} = require('../services/campaignResponders');
 const { parseAiConfigValue } = require('../utils/aiConfig');
 const {
   CAMPAIGN_LOG_STATUS_SQL,
@@ -807,23 +810,25 @@ function registerInboxViews(app, ctx) {
   }
 
   async function loadCampaignDetail(area, campaignId) {
-    const [campaignResult, logsResult, failedLogs, responderMetrics, retryStats] = await Promise.all([
-      query(`SELECT * FROM campaigns WHERE id = $1 AND area = $2`, [campaignId, area]),
-      query(
-        `SELECT cl.id, cl.phone, cl.whatsapp_message_id, cl.status, cl.response, cl.created_at,
-                cl.attempt, cl.retryable, cl.last_retry_at,
-                ${sqlCampaignLogContactName('$2')},
-                ${sqlCampaignLogSegmentLabels('$2')}
-         FROM campaign_logs cl
-         ${sqlCampaignLogContactJoin('cl', '$2')}
-         WHERE cl.campaign_id = $1
-         ORDER BY cl.id DESC`,
-        [campaignId, area]
-      ),
-      fetchCampaignFailedLogs(query, campaignId, area),
-      fetchCampaignResponderMetrics(query, campaignId, area),
-      fetchCampaignRetryStats(query, campaignId),
-    ]);
+    const [campaignResult, logsResult, failedLogs, responderMetrics, interactiveResponders, retryStats] =
+      await Promise.all([
+        query(`SELECT * FROM campaigns WHERE id = $1 AND area = $2`, [campaignId, area]),
+        query(
+          `SELECT cl.id, cl.phone, cl.whatsapp_message_id, cl.status, cl.response, cl.created_at,
+                  cl.attempt, cl.retryable, cl.last_retry_at,
+                  ${sqlCampaignLogContactName('$2')},
+                  ${sqlCampaignLogSegmentLabels('$2')}
+           FROM campaign_logs cl
+           ${sqlCampaignLogContactJoin('cl', '$2')}
+           WHERE cl.campaign_id = $1
+           ORDER BY cl.id DESC`,
+          [campaignId, area]
+        ),
+        fetchCampaignFailedLogs(query, campaignId, area),
+        fetchCampaignResponderMetrics(query, campaignId, area),
+        fetchCampaignInteractiveResponders(query, campaignId, area),
+        fetchCampaignRetryStats(query, campaignId),
+      ]);
     if (campaignResult.rowCount === 0) return null;
     const campaign = campaignResult.rows[0];
     const analytics = buildCampaignDetailAnalytics(campaign, logsResult.rows, failedLogs, responderMetrics, config);
@@ -832,6 +837,7 @@ function registerInboxViews(app, ctx) {
       logs: logsResult.rows,
       failedLogs,
       responderMetrics,
+      interactiveResponders,
       retryStats,
       analytics,
     };
@@ -898,6 +904,7 @@ function registerInboxViews(app, ctx) {
       logs: detail.logs,
       failedLogs: detail.failedLogs,
       responderMetrics: detail.responderMetrics,
+      interactiveResponders: detail.interactiveResponders,
       retryStats: detail.retryStats,
       analytics: detail.analytics,
       campaigns,

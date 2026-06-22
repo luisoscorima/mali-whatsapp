@@ -6,7 +6,11 @@ const { normalizeArea } = require('../middleware/auth');
 const datetimeDisplay = require('../utils/datetimeDisplay');
 const { buildCampaignFailedLogsCsv } = require('../utils/campaignLogErrorSummary');
 const { fetchCampaignFailedLogs } = require('../services/campaignFailedLogs');
-const { fetchCampaignResponders } = require('../services/campaignResponders');
+const {
+  fetchCampaignResponders,
+  fetchCampaignInteractiveResponders,
+  mergeInteractiveIntoResponders,
+} = require('../services/campaignResponders');
 const { campaignLimiter } = require('../middleware/limiters');
 const { runCampaignSendJob } = require('../services/campaignSender');
 const { runCampaignRetryJob } = require('../services/campaignRetry');
@@ -118,16 +122,17 @@ function buildCampaignFailedLogsExportBuffer(logs, formatDate) {
 
 function buildCampaignRespondersExportBuffer(rows, formatDate) {
   const aoa = [
-    ['Teléfono', 'Nombre', 'Segmentos', 'Primera respuesta'],
+    ['Teléfono', 'Nombre', 'Segmentos', 'Primera respuesta', 'Respuesta interactiva'],
     ...(Array.isArray(rows) ? rows : []).map((row) => [
       String(row.phone || ''),
       String(row.contactName || ''),
       String(row.segmentLabels || ''),
       formatDate(row.firstResponseAt),
+      String(row.interactiveResponseText || ''),
     ]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 36 }, { wch: 24 }];
+  ws['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 36 }, { wch: 24 }, { wch: 40 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Respuestas');
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
@@ -569,9 +574,13 @@ function registerCampaigns(app, ctx) {
         return res.status(404).send('Campaña no encontrada');
       }
 
-      const responders = await fetchCampaignResponders(query, campaignId, area);
+      const [responders, interactiveResponders] = await Promise.all([
+        fetchCampaignResponders(query, campaignId, area),
+        fetchCampaignInteractiveResponders(query, campaignId, area),
+      ]);
+      const rows = mergeInteractiveIntoResponders(responders, interactiveResponders);
       const stamp = datetimeDisplay.exportFilenameDateStamp();
-      const buffer = buildCampaignRespondersExportBuffer(responders, datetimeDisplay.formatExportDate);
+      const buffer = buildCampaignRespondersExportBuffer(rows, datetimeDisplay.formatExportDate);
       res.setHeader(
         'Content-Type',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

@@ -2335,7 +2335,13 @@ button.metric.campaign-summary-metric.metric--action:focus-visible {
 }
 
 .campaign-responders-dialog {
-  max-width: 640px;
+  max-width: min(820px, calc(100% - 32px));
+}
+
+.campaign-responders-dialog__response {
+  max-width: 220px;
+  word-break: break-word;
+  line-height: 1.35;
 }
 
 .campaign-responders-dialog__hint {

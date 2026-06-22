@@ -152,7 +152,14 @@ function extractInboundMessagePreview(msg) {
     const t = String(msg?.button?.text ?? '').trim();
     return { messageType: 'button', bodyText: t || '[Botón]' };
   }
-  if (type === 'interactive') return { messageType: 'interactive', bodyText: '[Interactivo]' };
+  if (type === 'interactive') {
+    const interactiveType = String(msg?.interactive?.type ?? '').trim();
+    if (interactiveType === 'button_reply') {
+      const t = String(msg?.interactive?.button_reply?.title ?? '').trim();
+      return { messageType: 'interactive', bodyText: t || '[Botón]' };
+    }
+    return { messageType: 'interactive', bodyText: '[Interactivo]' };
+  }
   return { messageType: type || 'unknown', bodyText: `[${type || 'mensaje'}]` };
 }
 

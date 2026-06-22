@@ -33,6 +33,13 @@
     var _respWindow = _analytics ? _analytics.responseWindowDays : (_respMetrics ? _respMetrics.windowDays : 7);
     var _respCount = _respMetrics ? _respMetrics.respondedCount : 0;
     var _respList = _respMetrics && Array.isArray(_respMetrics.responders) ? _respMetrics.responders : [];
+    var _interactiveList = typeof interactiveResponders !== 'undefined' && Array.isArray(interactiveResponders)
+      ? interactiveResponders
+      : [];
+    var _interactiveByPhone = {};
+    _interactiveList.forEach(function (row) {
+      if (row && row.phone) _interactiveByPhone[row.phone] = row;
+    });
     var _retryStats = typeof retryStats !== 'undefined' && retryStats ? retryStats : null;
     var _recoveredCount = _retryStats ? _retryStats.recoveredCount : 0;
     var _retryDelayMin = _retryStats ? _retryStats.autoRetryDelayMinutes : 10;
@@ -449,6 +456,7 @@
           </h2>
           <p class="muted campaign-responders-dialog__hint">
             Cuentas únicas que respondieron dentro de los <%= _respWindow %> días posteriores al envío de la plantilla.
+            La columna «Respuesta interactiva» muestra el botón pulsado, si aplica.
           </p>
         </div>
         <div class="campaign-drilldown-dialog__actions campaign-drilldown-dialog__actions--top">
@@ -468,6 +476,7 @@
               <th>Teléfono</th>
               <th>Nombre</th>
               <th>Primera respuesta</th>
+              <th>Respuesta interactiva</th>
               <th></th>
             </tr>
           </thead>
@@ -476,11 +485,17 @@
               var _chatHref = row.conversationId
                 ? basePath + '/conversations/' + row.conversationId
                 : (row.contactId ? basePath + '/conversations/' + (-row.contactId) : null);
+              var _interactive = _interactiveByPhone[row.phone] || null;
+              var _respText = _interactive
+                ? String(_interactive.interactiveResponseText || '').replace(/\s+/g, ' ').trim()
+                : '';
+              var _respPreview = _respText.length > 120 ? _respText.slice(0, 120) + '…' : _respText;
             %>
             <tr>
               <td class="mono"><%= row.phone %></td>
               <td><%= row.contactName || '—' %></td>
               <td><%= row.firstResponseAt ? formatMessageDateTime(row.firstResponseAt) : '—' %></td>
+              <td class="campaign-responders-dialog__response"<% if (_respText.length > 120) { %> title="<%= _respText %>"<% } %>><%= _respPreview || '—' %></td>
               <td class="campaign-responders-dialog__actions">
                 <% if (_chatHref) { %>
                 <a class="text-link" href="<%= _chatHref %>">Abrir chat</a>
