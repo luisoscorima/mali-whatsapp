@@ -30,6 +30,7 @@ const AuditEvent = {
   CONTACT_LEAD_SCORE: 'contact.lead_score',
   SETTINGS_AI_CONFIG: 'settings.ai_config',
   SETTINGS_AI_ENABLE: 'settings.ai_enable',
+  SETTINGS_BUSINESS_HOURS: 'settings.business_hours',
 };
 
 function getClientIp(req) {

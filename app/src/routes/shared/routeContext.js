@@ -506,7 +506,7 @@ function createRouteContext({ query, pool, appPath }) {
         metaAd = adR.rows[0] || null;
       }
       await query(
-        `UPDATE conversations SET inbox_unread = FALSE, updated_at = NOW() WHERE id = $1 AND area = $2`,
+        `UPDATE conversations SET inbox_unread = FALSE, outside_hours_notice_sent_at = NULL, updated_at = NOW() WHERE id = $1 AND area = $2`,
         [selectedId, area]
       );
       selectedConversation.inbox_unread = false;

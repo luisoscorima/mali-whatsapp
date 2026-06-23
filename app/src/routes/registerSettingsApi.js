@@ -1,5 +1,6 @@
 const config = require('../config');
 const { parseAiConfigValue } = require('../utils/aiConfig');
+const { validateBusinessHoursInput } = require('../utils/businessHours');
 const { auditLog, AuditEvent } = require('../services/auditLog');
 
 const AREA_SLUGS = new Set(config.BUSINESS_AREAS);
@@ -136,6 +137,54 @@ function registerSettingsApi(app, ctx) {
       event_type: AuditEvent.SETTINGS_AI_ENABLE,
       message: `IA del área ${area} ${enabled ? 'activada' : 'desactivada'} (conversaciones actualizadas)`,
       meta: { area, enabled, conversations_status: enabled ? 'bot' : 'human' },
+    });
+    return res.json({ ok: true });
+  });
+
+  /**
+   * Horario de atención y mensaje fuera de horario por área.
+   */
+  app.patch('/api/settings/business-hours/:area', async (req, res) => {
+    const area = String(req.params.area || '').trim().toLowerCase();
+    if (!AREA_SLUGS.has(area)) {
+      return res.status(400).json({ ok: false, error: 'Area invalida' });
+    }
+    if (!req.user) {
+      return res.status(401).json({ ok: false, error: 'No autenticado' });
+    }
+    const userArea = String(req.user.area || '').trim().toLowerCase();
+    const isMaster = Boolean(req.user.isMaster);
+    const canEdit =
+      Boolean(req.user.canEditAiPrompt) && userArea === area && config.BUSINESS_AREAS.includes(userArea);
+
+    if (!isMaster && !canEdit) {
+      return res.status(403).json({ ok: false, error: 'No autorizado' });
+    }
+
+    const validated = validateBusinessHoursInput(req.body, config.MAX_SESSION_TEXT_LEN);
+    if (validated.error) {
+      return res.status(400).json({ ok: false, error: validated.error });
+    }
+
+    const value = JSON.stringify(validated.config);
+    try {
+      await query(
+        `INSERT INTO app_settings (area, key, value, updated_at) VALUES ($1, 'business_hours', $2, NOW())
+         ON CONFLICT (area, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        [area, value]
+      );
+    } catch (e) {
+      return res.status(500).json({ ok: false, error: e.message || 'Error al guardar' });
+    }
+    auditLog(query, {
+      req,
+      event_type: AuditEvent.SETTINGS_BUSINESS_HOURS,
+      message: `Horario fuera de atención guardado (área ${area})`,
+      meta: {
+        area,
+        enabled: validated.config.enabled,
+        days_count: validated.config.days.length,
+      },
     });
     return res.json({ ok: true });
   });

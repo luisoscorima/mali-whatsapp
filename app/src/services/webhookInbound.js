@@ -7,6 +7,11 @@ const { sanitizeApiResponse } = require('../utils/apiSanitize');
 const { getAiResponse, UNAVAILABLE_REPLY_MESSAGE } = require('./aiService');
 const { parseAiConfigValue } = require('../utils/aiConfig');
 const {
+  parseBusinessHoursConfig,
+  isBusinessHoursConfigOperational,
+  isWithinBusinessHours,
+} = require('../utils/businessHours');
+const {
   getWhatsAppCredentialsForArea,
   getWabaIdOverrideForArea,
 } = require('./metaSettingsCache');
@@ -173,6 +178,44 @@ function extractInboundMediaRef(msg) {
   if (t === 'document' && msg.document?.id) return { mediaId: String(msg.document.id) };
   if (t === 'sticker' && msg.sticker?.id) return { mediaId: String(msg.sticker.id) };
   return null;
+}
+
+/**
+ * Fuera de horario: mensaje predefinido una vez por ciclo (hasta que el asesor abra el chat).
+ * Independiente de modo Bot/Asesor. No llama a Groq.
+ * @returns {Promise<boolean>} true si se debe omitir la respuesta con IA
+ */
+async function maybeOutsideHoursReply(query, { area, conversationId, phone, phoneNumberId }) {
+  const settingsRow = await query(
+    `SELECT value FROM app_settings WHERE area = $1 AND key = 'business_hours'`,
+    [area]
+  );
+  const bhCfg = parseBusinessHoursConfig(settingsRow.rows[0]?.value);
+  if (!isBusinessHoursConfigOperational(bhCfg)) return false;
+  if (isWithinBusinessHours(bhCfg, new Date())) return false;
+
+  const convRow = await query(
+    `SELECT outside_hours_notice_sent_at FROM conversations WHERE id = $1`,
+    [conversationId]
+  );
+  if (convRow.rows.length === 0) return true;
+  if (convRow.rows[0].outside_hours_notice_sent_at != null) return true;
+
+  const sent = await persistAndSendOutbound(query, {
+    area,
+    conversationId,
+    phone,
+    text: bhCfg.outside_hours_message,
+    isAi: false,
+    phoneNumberId,
+  });
+  if (sent) {
+    await query(
+      `UPDATE conversations SET outside_hours_notice_sent_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      [conversationId]
+    );
+  }
+  return true;
 }
 
 async function maybeAutoReplyWithAi(
@@ -472,19 +515,27 @@ async function persistInboundMessagesFromWebhookValue(query, value, context = {}
       const chatMessageId = insertResult.rows[0].id;
       saved += 1;
       await tryStoreInboundMedia(query, { chatMessageId, msg, area, conversationId });
-      const userTextForAi =
-        String(messageType || '').trim() === 'text'
-          ? String(msg?.text?.body ?? '').trim()
-          : String(bodyText || '').trim();
-      await maybeAutoReplyWithAi(query, {
+      const skipAi = await maybeOutsideHoursReply(query, {
         area,
         conversationId,
-        messageType,
-        bodyText,
         phone: from,
-        chatMessageId,
-        userText: userTextForAi,
+        phoneNumberId: linePhoneNumberId,
       });
+      if (!skipAi) {
+        const userTextForAi =
+          String(messageType || '').trim() === 'text'
+            ? String(msg?.text?.body ?? '').trim()
+            : String(bodyText || '').trim();
+        await maybeAutoReplyWithAi(query, {
+          area,
+          conversationId,
+          messageType,
+          bodyText,
+          phone: from,
+          chatMessageId,
+          userText: userTextForAi,
+        });
+      }
     } catch (e) {
       if (e.code === '23505') {
         skippedDuplicate += 1;

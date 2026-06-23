@@ -553,6 +553,11 @@ async function runMigrations(query) {
   await migratePamSlugToTiThreeAreas(query);
   await cleanUpCrossAreaSeededSegments(query);
   await seedDefaultContactAttributeDefinitions(query);
+
+  await query(
+    `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS outside_hours_notice_sent_at TIMESTAMPTZ NULL`
+  );
+  await seedBusinessHoursSettings(query);
 }
 
 /** Asigna Phone Number ID por defecto a hilos existentes según su área. */
@@ -853,6 +858,19 @@ async function cleanUpCrossAreaSeededSegments(query) {
      ON CONFLICT (area, key) DO UPDATE SET value = '1', updated_at = NOW()`,
     [flag]
   );
+}
+
+/** Semilla `business_hours` por área (desactivado hasta configuración explícita en Ajustes). */
+async function seedBusinessHoursSettings(query) {
+  const { defaultBusinessHoursSeed } = require('../utils/businessHours');
+  const value = JSON.stringify(defaultBusinessHoursSeed());
+  for (const area of BUSINESS_AREAS) {
+    await query(
+      `INSERT INTO app_settings (area, key, value, updated_at) VALUES ($1, 'business_hours', $2, NOW())
+       ON CONFLICT (area, key) DO NOTHING`,
+      [area, value]
+    );
+  }
 }
 
 /** Una sola vez: PAM y Educación con IA desactivada por defecto (solo TI dev con enabled true en semilla antigua). */
