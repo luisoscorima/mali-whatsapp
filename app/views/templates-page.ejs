@@ -8,6 +8,18 @@
   if (s === 'REJECTED' || s === 'DISABLED') return 'failed';
   return 'neutral';
 } %>
+<% function templateCreatedAtLabel(t, tz) {
+  const raw = t.submitted_at || t.synced_at;
+  if (!raw) return null;
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString('es-PE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: tz || 'America/Lima',
+  }).replace(/\//g, '-');
+} %>
 <%- include('layouts/inbox-shell-start', {
   pageTitle,
   basePath,
@@ -52,7 +64,8 @@
             <span class="badge <%= templateStatusBadgeClass(t.status) %> templates-list-badge"><%= t.status %></span>
           </span>
           <span class="inbox-chat-row-mid">
-            <span class="inbox-chat-preview"><%= t.language %> · <%= t.category || '—' %></span>
+            <% const _created = templateCreatedAtLabel(t, displayTimezone); %>
+            <span class="inbox-chat-preview"><%= t.language %> · <%= t.category || '—' %><% if (_created) { %> · Creación <%= _created %><% } %></span>
           </span>
           <% if (t.rejection_reason) { %>
           <span class="inbox-chat-row-mid">

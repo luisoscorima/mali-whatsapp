@@ -123,7 +123,7 @@ function registerTemplates(app, ctx) {
     const r = await query(
       `SELECT id, name, language, category, status, rejection_reason, submitted_at, synced_at
        FROM whatsapp_templates WHERE area = $1
-       ORDER BY status ASC, name ASC`,
+       ORDER BY COALESCE(submitted_at, synced_at) DESC, id DESC`,
       [normalizeArea(area)]
     );
     return r.rows;
