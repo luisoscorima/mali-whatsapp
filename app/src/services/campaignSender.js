@@ -12,7 +12,6 @@ const { upsertCampaignChatMessage } = require('./campaignConversationLog');
 const { buildCampaignMessagePreview } = require('./campaignMessagePreview');
 const { normalizeArea } = require('../middleware/auth');
 const { fetchRecipientsUnion, validateRecipientsMatchRequest } = require('./campaignRecipients');
-const { mergeCampaignExcludeContactIds } = require('./exclusionLists');
 const { classifyCampaignSendError } = require('../utils/campaignSendErrorClassify');
 const {
   fetchContactAttributesMap,
@@ -35,19 +34,9 @@ async function buildCampaignRecipients(query, area, ctx) {
   let mergedExclude =
     Array.isArray(ctx.excludeContactIdsMerged) && ctx.excludeContactIdsMerged.length > 0
       ? ctx.excludeContactIdsMerged
-      : null;
-  if (!mergedExclude) {
-    const excludeMerge = await mergeCampaignExcludeContactIds(
-      query,
-      area,
-      {
-        excludeContactIds: ctx.excludeContactIds || [],
-        excludeListIds: ctx.excludeListIds || [],
-      },
-      config.CAMPAIGN_MAX_RECIPIENT_IDS
-    );
-    mergedExclude = excludeMerge.ok ? excludeMerge.ids : [];
-  }
+      : Array.isArray(ctx.excludeContactIds) && ctx.excludeContactIds.length > 0
+        ? ctx.excludeContactIds
+        : [];
   if (mergedExclude.length > 0) {
     recipientOptions.excludeContactIds = mergedExclude;
   }

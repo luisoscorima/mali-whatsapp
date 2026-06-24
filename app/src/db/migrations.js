@@ -403,31 +403,6 @@ async function runMigrations(query) {
   await query(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS cost_is_estimated BOOLEAN NOT NULL DEFAULT FALSE`);
 
   await query(`
-    CREATE TABLE IF NOT EXISTS exclusion_lists (
-      id SERIAL PRIMARY KEY,
-      area VARCHAR(20) NOT NULL CHECK (area IN ${AREA_CHECK_IN}),
-      name VARCHAR(120) NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE (area, name)
-    )
-  `);
-  await query(
-    `CREATE INDEX IF NOT EXISTS idx_exclusion_lists_area ON exclusion_lists(area)`
-  );
-  await query(`
-    CREATE TABLE IF NOT EXISTS exclusion_list_members (
-      list_id INTEGER NOT NULL REFERENCES exclusion_lists(id) ON DELETE CASCADE,
-      contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (list_id, contact_id)
-    )
-  `);
-  await query(
-    `CREATE INDEX IF NOT EXISTS idx_exclusion_list_members_contact ON exclusion_list_members(contact_id)`
-  );
-
-  await query(`
     CREATE TABLE IF NOT EXISTS contact_attributes (
       id SERIAL PRIMARY KEY,
       contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
@@ -553,6 +528,7 @@ async function runMigrations(query) {
   await backfillCampaignChatPreviews(query);
   await migratePamSlugToTiThreeAreas(query);
   await cleanUpCrossAreaSeededSegments(query);
+  await dropExclusionListsTables(query);
   await seedDefaultContactAttributeDefinitions(query);
 
   await query(
@@ -699,7 +675,6 @@ async function dropAreaCheckConstraints(query) {
     'conversations',
     'whatsapp_templates',
     'contact_segments',
-    'exclusion_lists',
     'contact_attribute_definitions',
   ];
   for (const t of tables) {
@@ -737,9 +712,6 @@ async function ensureAreaConstraints(query) {
   );
   await add(
     `ALTER TABLE contact_segments ADD CONSTRAINT contact_segments_area_check CHECK (area IN ${AREA_CHECK_IN})`
-  );
-  await add(
-    `ALTER TABLE exclusion_lists ADD CONSTRAINT exclusion_lists_area_check CHECK (area IN ${AREA_CHECK_IN})`
   );
   await add(
     `ALTER TABLE contact_attribute_definitions ADD CONSTRAINT contact_attribute_definitions_area_check CHECK (area IN ${AREA_CHECK_IN})`
@@ -809,7 +781,6 @@ async function migratePamToPatronato(query) {
     'whatsapp_templates',
     'app_settings',
     'contact_attribute_definitions',
-    'exclusion_lists',
     'meta_ctwa_ads',
     'meta_ctwa_ad_leads',
     'audit_logs',
@@ -861,6 +832,22 @@ async function cleanUpCrossAreaSeededSegments(query) {
 
     await query(`DELETE FROM segment_definitions WHERE area = $1`, [area]);
   }
+
+  await query(
+    `INSERT INTO app_settings (area, key, value, updated_at) VALUES ('global', $1, '1', NOW())
+     ON CONFLICT (area, key) DO UPDATE SET value = '1', updated_at = NOW()`,
+    [flag]
+  );
+}
+
+/** Elimina tablas de listas de exclusión (feature no usada; exclusión real vía segmentos). */
+async function dropExclusionListsTables(query) {
+  const flag = 'migration.drop_exclusion_lists_v1';
+  const done = await query(`SELECT 1 AS ok FROM app_settings WHERE area = 'global' AND key = $1`, [flag]);
+  if (done.rows.length > 0) return;
+
+  await query(`DROP TABLE IF EXISTS exclusion_list_members`);
+  await query(`DROP TABLE IF EXISTS exclusion_lists`);
 
   await query(
     `INSERT INTO app_settings (area, key, value, updated_at) VALUES ('global', $1, '1', NOW())

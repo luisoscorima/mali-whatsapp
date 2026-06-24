@@ -20,7 +20,6 @@ const {
   countRecipientsUnion,
   validateRecipientsMatchRequest,
 } = require('../services/campaignRecipients');
-const { mergeCampaignExcludeContactIds } = require('../services/exclusionLists');
 const {
   sqlCampaignLogContactJoin,
   sqlCampaignLogContactName,
@@ -172,21 +171,20 @@ function registerCampaigns(app, ctx) {
         }
         if (excludeSlugs.length > 0) recipientOptions.excludeSegmentSlugs = excludeSlugs;
       }
-      const excludeMerge = await mergeCampaignExcludeContactIds(
-        query,
-        area,
-        {
-          excludeContactIds: Array.isArray(req.body?.excludeContactIds) ? req.body.excludeContactIds : [],
-          excludeListIds: Array.isArray(req.body?.excludeListIds) ? req.body.excludeListIds : [],
-        },
-        config.CAMPAIGN_MAX_RECIPIENT_IDS
-      );
-      if (!excludeMerge.ok) {
-        return res.status(400).json({ ok: false, error: excludeMerge.message });
+      const excludeIds = Array.isArray(req.body?.excludeContactIds)
+        ? [
+            ...new Set(
+              req.body.excludeContactIds.map((x) => Number(x)).filter((n) => Number.isInteger(n) && n > 0)
+            ),
+          ].sort((a, b) => a - b)
+        : [];
+      if (excludeIds.length > config.CAMPAIGN_MAX_RECIPIENT_IDS) {
+        return res.status(400).json({
+          ok: false,
+          error: `Demasiados contactos a excluir (máximo ${config.CAMPAIGN_MAX_RECIPIENT_IDS})`,
+        });
       }
-      if (excludeMerge.ids.length > 0) {
-        recipientOptions.excludeContactIds = excludeMerge.ids;
-      }
+      if (excludeIds.length > 0) recipientOptions.excludeContactIds = excludeIds;
 
       const maxN = config.CAMPAIGN_RECIPIENTS_PREVIEW_MAX;
       const total = await countRecipientsUnion(query, area, segments, recipientOptions);
@@ -236,7 +234,6 @@ function registerCampaigns(app, ctx) {
       recipientContactIds,
       excludeContactIds,
       excludeSegmentSlugs,
-      excludeListIds,
       audienceMode,
       templateRow: tRow,
       values,
@@ -248,16 +245,7 @@ function registerCampaigns(app, ctx) {
       scheduledAt,
     } = validation.value;
 
-    const excludeMerge = await mergeCampaignExcludeContactIds(
-      query,
-      area,
-      { excludeContactIds: excludeContactIds || [], excludeListIds: excludeListIds || [] },
-      config.CAMPAIGN_MAX_RECIPIENT_IDS
-    );
-    if (!excludeMerge.ok) {
-      return jsonErr(excludeMerge.message);
-    }
-    const uniqueExcludeIds = excludeMerge.ids;
+    const uniqueExcludeIds = excludeContactIds || [];
     const recipientOptions = {};
     if (uniqueExcludeIds.length > 0) {
       recipientOptions.excludeContactIds = uniqueExcludeIds;
@@ -314,9 +302,6 @@ function registerCampaigns(app, ctx) {
       }
       if (excludeSegmentSlugs && excludeSegmentSlugs.length > 0) {
         campaignPayload.excludeSegmentSlugs = excludeSegmentSlugs;
-      }
-      if (excludeListIds && excludeListIds.length > 0) {
-        campaignPayload.excludeListIds = excludeListIds;
       }
       if (uniqueExcludeIds.length > 0) {
         campaignPayload.excludeContactIdsMerged = uniqueExcludeIds;

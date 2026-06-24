@@ -2,49 +2,10 @@
  * Membresía contacto ↔ segmentos (tabla puente contact_segments).
  */
 
-function parseSegmentListFromBody(body) {
-  const raw = body?.segments;
-  if (Array.isArray(raw)) {
-    return [...new Set(raw.map((s) => String(s || '').trim()).filter(Boolean))];
-  }
-  if (raw != null && raw !== '') {
-    return [String(raw).trim()].filter(Boolean);
-  }
-  const legacy = String(body?.segment || '').trim();
-  if (!legacy) return [];
-  if (legacy.includes(';')) {
-    return [...new Set(legacy.split(';').map((s) => s.trim()).filter(Boolean))];
-  }
-  return [legacy];
-}
-
 function parseSegmentListFromImportCell(cell) {
   const s = String(cell ?? '').trim();
   if (!s) return [];
   return [...new Set(s.split(/[;,]/).map((x) => x.trim()).filter(Boolean))];
-}
-
-/**
- * @param {string[]} slugs
- * @param {Set<string>} segmentSet
- * @param {{ min?: number, max?: number }} opts
- */
-function validateSegmentMembership(slugs, segmentSet, opts = {}) {
-  const min = opts.min ?? 0;
-  const max = opts.max ?? 50;
-  const uniq = [...new Set(slugs.map((x) => String(x || '').trim()).filter(Boolean))];
-  if (uniq.length < min) {
-    return { ok: false, message: min === 0 ? 'Segmentos invalidos' : 'Selecciona al menos un segmento' };
-  }
-  if (uniq.length > max) {
-    return { ok: false, message: `Como maximo ${max} segmentos` };
-  }
-  for (const slug of uniq) {
-    if (!segmentSet.has(slug)) {
-      return { ok: false, message: `Segmento invalido: ${slug}` };
-    }
-  }
-  return { ok: true, value: uniq };
 }
 
 async function replaceContactSegments(query, contactId, area, slugs) {
@@ -78,9 +39,7 @@ async function removeContactSegment(query, contactId, area, slug) {
 }
 
 module.exports = {
-  parseSegmentListFromBody,
   parseSegmentListFromImportCell,
-  validateSegmentMembership,
   replaceContactSegments,
   appendContactSegments,
   removeContactSegment,

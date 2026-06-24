@@ -408,11 +408,6 @@ async function fetchAllMessageTemplates(wabaId, token) {
   return all;
 }
 
-async function fetchAllApprovedTemplates(wabaId, token) {
-  const templates = await fetchAllMessageTemplates(wabaId, token);
-  return templates.filter((t) => String(t.status || '').toUpperCase() === 'APPROVED');
-}
-
 async function sendTemplateWithComponents({ to, templateName, languageCode, components, area }) {
   const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
   if (!token || !phoneNumberId) {
@@ -516,7 +511,6 @@ module.exports = {
   getWabaIdOverrideForArea,
   resolveWabaId,
   fetchAllMessageTemplates,
-  fetchAllApprovedTemplates,
   createMessageTemplateOnWaba,
   sendTemplateWithComponents,
   sendSessionTextMessage,

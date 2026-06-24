@@ -285,15 +285,6 @@ function createRouteContext({ query, pool, appPath }) {
       }
     }
 
-    let excludeListIds = [];
-    if (Object.prototype.hasOwnProperty.call(reqBody, 'excludeListIds')) {
-      const raw = reqBody.excludeListIds;
-      if (!Array.isArray(raw)) {
-        return { ok: false, message: 'Listas de exclusión inválidas' };
-      }
-      excludeListIds = [...new Set(raw.map((x) => Number(x)).filter((n) => Number.isInteger(n) && n > 0))];
-    }
-
     let excludeSegmentSlugs = [];
     if (Object.prototype.hasOwnProperty.call(reqBody, 'excludeSegmentSlugs')) {
       const raw = reqBody.excludeSegmentSlugs;
@@ -312,7 +303,6 @@ function createRouteContext({ query, pool, appPath }) {
       ok: true,
       excludeContactIds,
       excludeSegmentSlugs,
-      excludeListIds,
     };
   }
 
@@ -462,7 +452,6 @@ function createRouteContext({ query, pool, appPath }) {
         recipientContactIds: audience.recipientContactIds,
         excludeContactIds: exclusions.excludeContactIds,
         excludeSegmentSlugs: exclusions.excludeSegmentSlugs,
-        excludeListIds: exclusions.excludeListIds,
         paramMapping,
         segment: audience.segmentLabelForDb,
         templateSyncId,

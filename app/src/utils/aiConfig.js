@@ -15,9 +15,4 @@ function parseAiConfigValue(raw) {
   }
 }
 
-function isAiAreaEnabledFromSettingsRow(valueRow) {
-  const cfg = parseAiConfigValue(valueRow);
-  return Boolean(cfg && cfg.enabled);
-}
-
-module.exports = { parseAiConfigValue, isAiAreaEnabledFromSettingsRow };
+module.exports = { parseAiConfigValue };

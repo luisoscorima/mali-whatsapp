@@ -31,16 +31,8 @@ async function upsertContactAttributes(query, contactId, attributes) {
   }
 }
 
-async function deleteContactAttribute(query, contactId, attrKey) {
-  await query(`DELETE FROM contact_attributes WHERE contact_id = $1 AND attr_key = $2`, [
-    contactId,
-    attrKey,
-  ]);
-}
-
 module.exports = {
   loadContactAttributes,
   upsertContactAttributes,
-  deleteContactAttribute,
   ALLOWED_ATTR_KEYS,
 };

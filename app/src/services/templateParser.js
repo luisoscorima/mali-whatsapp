@@ -269,32 +269,6 @@ function templateStatusAllowsEdit(status) {
   return s === 'PENDING' || s === 'REJECTED';
 }
 
-/**
- * Reemplaza solo el BODY manteniendo cabecera, pie y botones.
- */
-function rebuildComponentsWithBody(components, bodyText, exampleRow) {
-  const comps = Array.isArray(components) ? components : [];
-  let hasBody = false;
-  const out = comps.map((c) => {
-    const type = String(c.type || '').toUpperCase();
-    if (type !== 'BODY') return { ...c };
-    hasBody = true;
-    const next = { ...c, text: bodyText };
-    if (exampleRow?.length) {
-      next.example = { body_text: [exampleRow] };
-    }
-    return next;
-  });
-  if (!hasBody) {
-    const row = { type: 'BODY', text: bodyText };
-    if (exampleRow?.length) {
-      row.example = { body_text: [exampleRow] };
-    }
-    out.push(row);
-  }
-  return out;
-}
-
 function validateTemplateFormValues(def, values, { maxBodyLen, maxUrlLen, paramMapping }) {
   function isDynamicParam(listKey, index) {
     if (!paramMapping || !Array.isArray(paramMapping[listKey])) return false;
@@ -340,7 +314,6 @@ module.exports = {
   buildTemplateDefinition,
   extractTemplateDisplayContent,
   templateStatusAllowsEdit,
-  rebuildComponentsWithBody,
   extractFormValuesForTemplate,
   buildWhatsappGraphComponents,
   validateTemplateFormValues,
