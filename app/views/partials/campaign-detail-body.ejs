@@ -161,7 +161,7 @@
       <p class="toast toast--ok">Campaña programada: se enviará a la hora indicada. Actualiza la página para ver el progreso.</p>
       <% } %>
 
-      <section class="campaign-dashboard-section">
+      <section class="campaign-dashboard-section campaign-dashboard-section--last">
         <div class="campaign-dashboard-section__head">
           <div>
             <h2 class="card-title">Resultado global</h2>
@@ -193,16 +193,13 @@
           <% }); %>
         </div>
       </section>
+    </div>
 
-      <section class="campaign-dashboard-section campaign-dashboard-section--last">
-        <div class="campaign-dashboard-section__head">
-          <div>
-            <h2 class="card-title">Detalle de campaña</h2>
-            <p class="campaign-dashboard-section__lead muted">Información general y contexto de la campaña.</p>
-          </div>
-        </div>
-        <div class="campaign-detail-section__body<%= _campaignPreview ? ' campaign-detail-section__body--with-preview' : '' %>">
-        <dl class="detail-dl">
+    <div class="template-detail-overview">
+      <div class="card template-detail-card">
+        <h2 class="card-title">Detalle de campaña</h2>
+        <p class="campaign-dashboard-section__lead muted">Información general y contexto de la campaña.</p>
+        <dl class="detail-dl detail-dl--compact">
           <div><dt>Segmento(s)</dt><dd><%= campaignSegmentDisplay(campaign) %></dd></div>
           <div><dt>Fecha y hora</dt><dd><%= _detailDateTime ? formatMessageDateTime(_detailDateTime) : '—' %></dd></div>
           <% if (_excludeSegs.length || _excludeIds.length) { %>
@@ -220,7 +217,7 @@
             <% if (_campaignTemplateId) { %>
             <a class="text-link mono" href="<%= basePath %>/templates/<%= _campaignTemplateId %>"><%= campaign.template_name %></a>
             <% } else { %>
-            <%= campaign.template_name %>
+            <span class="mono"><%= campaign.template_name %></span>
             <% } %>
           </dd></div>
           <div><dt>Estado</dt><dd><span class="badge <%= campaign.status %>"><%= campaign.status %></span></dd></div>
@@ -243,17 +240,15 @@
           <div><dt>Imagen</dt><dd><a href="<%= campaign.image_url %>" target="_blank" rel="noopener">Abrir enlace</a></dd></div>
           <% } %>
         </dl>
-        <% if (_campaignPreview) { %>
-        <aside class="campaign-detail-preview" aria-label="Vista previa del mensaje enviado">
-          <p class="campaign-detail-preview__label muted">Vista previa</p>
-          <div class="campaign-detail-preview__bubble">
-            <%- include('campaign-message-preview', { preview: _campaignPreview }) %>
-          </div>
-          <p class="campaign-detail-preview__note muted">Valores fijos reales; los dinámicos se muestran entre corchetes.</p>
-        </aside>
-        <% } %>
-        </div>
-      </section>
+      </div>
+
+      <% if (_campaignPreview) { %>
+      <div class="card template-preview-card">
+        <h2 class="card-title">Vista previa</h2>
+        <%- include('campaign-template-live-preview', { preview: _campaignPreview }) %>
+        <p class="muted campaign-drilldown-dialog__note">Valores fijos reales; los dinámicos se muestran entre corchetes.</p>
+      </div>
+      <% } %>
     </div>
 
     <div class="card campaign-dashboard-card">
@@ -528,17 +523,10 @@
       <p class="muted">Aún sin datos de respuestas en esta ventana.</p>
       <% } else { %>
       <% if (_respTypeSummary.length > 0) { %>
-      <div class="campaign-responders-dialog__type-summary" aria-label="Resumen por tipo de respuesta">
-        <p class="campaign-responders-dialog__type-summary-title">Tipo:</p>
-        <dl class="campaign-responders-dialog__type-summary-list">
-          <% _respTypeSummary.forEach(function (item) { %>
-          <div class="campaign-responders-dialog__type-summary-row">
-            <dt><%= item.label %></dt>
-            <dd><%= item.count %></dd>
-          </div>
-          <% }); %>
-        </dl>
-      </div>
+      <p class="muted campaign-drilldown-dialog__note" aria-label="Resumen de respuestas">
+        Resumen:<br />
+        <% _respTypeSummary.forEach(function (item, idx) { %><%= String(item.count).padStart(2, '0') %> | <%= item.label %><% if (idx < _respTypeSummary.length - 1) { %><br /><% } %><% }); %>
+      </p>
       <% } %>
       <div class="table-wrap campaign-responders-dialog__table-wrap">
         <table>

@@ -169,9 +169,11 @@
           <div class="chat-bubble__text"><%= m.body_text %></div>
         <% } %>
         <div class="chat-meta">
-          <%= m.direction === 'outbound' ? 'Tú' : 'Usuario' %> · <%= mediaLabel(mt) || mt %>
+          <%= m.direction === 'outbound' ? 'Tú' : 'Usuario' %> ·
           <% if (mt === 'campaign' && raw && raw.campaign_id) { %>
-            · <a class="chat-campaign-ref" href="<%= bp %>/campaigns/<%= raw.campaign_id %>" title="Ver campaña #<%= raw.campaign_id %>">#<%= raw.campaign_id %></a>
+            <a class="chat-campaign-ref" href="<%= bp %>/campaigns/<%= raw.campaign_id %>" title="Ver campaña #<%= raw.campaign_id %>">Campaña #<%= raw.campaign_id %></a>
+          <% } else { %>
+            <%= mediaLabel(mt) || mt %>
           <% } %>
           · <%= formatMessageDateTime(m.created_at) %>
         </div>

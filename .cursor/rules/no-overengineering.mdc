@@ -1,0 +1,29 @@
+---
+description: Evitar sobreingeniería en cambios de UI y lógica simple
+alwaysApply: true
+---
+
+# Simplicidad ante todo
+
+Elige la solución más simple que cumpla el pedido. No añadas capas, componentes ni CSS si el contexto ya ofrece una vía más directa.
+
+## UI y presentación
+
+- Para resúmenes, etiquetas o texto auxiliar: preferir texto plano con clases existentes (`.muted`, `.campaign-drilldown-dialog__note`) antes de crear bloques, tablas o componentes nuevos.
+- No crear CSS dedicado si basta reutilizar utilidades o patrones ya usados en la misma vista.
+- En estilos, usar variables del tema del proyecto (`--ink`, `--muted`, `--surface`, `--line`); no inventar `--text-muted`, `--border`, etc. con fallbacks fijos que rompan dark mode.
+
+## Alcance
+
+- Un cambio pequeño en la plantilla o en un archivo suele bastar; no refactorizar ni extraer helpers salvo que el usuario lo pida o el código duplicado sea claro y repetido.
+- No añadir tests, documentación ni abstracciones para cambios puramente visuales o de una sola pantalla.
+
+## Ejemplo
+
+```
+// ❌ Bloque con dl/dt/dd, 40 líneas de CSS y variables inventadas
+// ✅ Párrafo con clase existente:
+<p class="muted campaign-drilldown-dialog__note">
+  Tipo:<br />Sí: 10<br />No: 5<br />Otros: 7
+</p>
+```
