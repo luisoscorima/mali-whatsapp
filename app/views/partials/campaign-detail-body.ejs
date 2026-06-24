@@ -97,6 +97,7 @@
       _campaignTemplateId = null;
     }
     var _respTypeSummary = [];
+    var _respSummaryPad = 2;
     if (_campaignPreview && Array.isArray(_campaignPreview.buttons)) {
       var _quickReplyLabels = [];
       _campaignPreview.buttons.forEach(function (btn) {
@@ -126,6 +127,11 @@
           _respTypeSummary.push({ label: label, count: _typeCounts[label] || 0 });
         });
         _respTypeSummary.push({ label: 'Otros', count: _otrosCount });
+        var _respSummaryMaxCount = 0;
+        _respTypeSummary.forEach(function (item) {
+          if (item.count > _respSummaryMaxCount) _respSummaryMaxCount = item.count;
+        });
+        _respSummaryPad = Math.max(2, String(_respSummaryMaxCount).length);
       }
     }
     var _modalLogsJson = JSON.stringify((Array.isArray(logs) ? logs : []).map(function (log) {
@@ -244,9 +250,13 @@
 
       <% if (_campaignPreview) { %>
       <div class="card template-preview-card">
-        <h2 class="card-title">Vista previa</h2>
-        <%- include('campaign-template-live-preview', { preview: _campaignPreview }) %>
-        <p class="muted campaign-drilldown-dialog__note">Valores fijos reales; los dinámicos se muestran entre corchetes.</p>
+        <details class="campaign-preview-details">
+          <summary class="campaign-preview-details__summary">Vista previa</summary>
+          <div class="campaign-preview-details__body">
+            <%- include('campaign-template-live-preview', { preview: _campaignPreview }) %>
+            <p class="muted campaign-drilldown-dialog__note">Valores fijos reales; los dinámicos se muestran entre corchetes.</p>
+          </div>
+        </details>
       </div>
       <% } %>
     </div>
@@ -523,10 +533,19 @@
       <p class="muted">Aún sin datos de respuestas en esta ventana.</p>
       <% } else { %>
       <% if (_respTypeSummary.length > 0) { %>
-      <p class="muted campaign-drilldown-dialog__note" aria-label="Resumen de respuestas">
-        Resumen:<br />
-        <% _respTypeSummary.forEach(function (item, idx) { %><%= String(item.count).padStart(2, '0') %> | <%= item.label %><% if (idx < _respTypeSummary.length - 1) { %><br /><% } %><% }); %>
-      </p>
+      <div class="campaign-responders-summary" aria-label="Resumen de respuestas">
+        <p class="muted campaign-drilldown-dialog__note">Resumen:</p>
+        <table class="campaign-responders-summary__table">
+          <tbody>
+            <% _respTypeSummary.forEach(function (item) { %>
+            <tr>
+              <td class="campaign-responders-summary__count"><%= String(item.count).padStart(_respSummaryPad, '0') %></td>
+              <td><%= item.label %></td>
+            </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
       <% } %>
       <div class="table-wrap campaign-responders-dialog__table-wrap">
         <table>
