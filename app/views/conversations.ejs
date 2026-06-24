@@ -66,11 +66,13 @@
             class="inbox-chat-pill <%= _chatF === 'all' ? 'is-active' : '' %>"
             title="Todos los chats"
           ><span class="inbox-pill-icon" aria-hidden="true">💬</span> Todos</a>
+          <% const _unreadCount = typeof unreadInboxCount !== 'undefined' ? unreadInboxCount : 0; %>
           <a
             href="<%= basePath %>/conversations<%= typeof inboxQueryUnread !== 'undefined' ? inboxQueryUnread : '' %>"
             class="inbox-chat-pill <%= _chatF === 'unread' ? 'is-active' : '' %>"
-            title="Solo no leídos"
-          ><span class="inbox-pill-icon" aria-hidden="true">●</span> No leídos</a>
+            title="Solo no leídos (<%= _unreadCount %>)"
+            aria-label="No leídos (<%= _unreadCount %>)"
+          ><span class="inbox-pill-icon" aria-hidden="true">●</span> No leídos <span class="inbox-pill-count" aria-hidden="true"><%= _unreadCount %></span></a>
           <% if (typeof aiAreaEnabled !== 'undefined' && aiAreaEnabled) { %>
           <a
             href="<%= basePath %>/conversations<%= typeof inboxQueryBot !== 'undefined' ? inboxQueryBot : '' %>"

@@ -127,14 +127,55 @@
             <p class="chat-msg-fallback">No se pudo descargar la vista previa del archivo.</p>
           <% } %>
         <% } %>
-        <% if (m.body_text) { %>
+        <% const campPreview = mt === 'campaign' && raw && raw.preview ? raw.preview : null; %>
+        <% if (campPreview) { %>
+          <div class="chat-campaign-preview">
+            <% if (campPreview.headerMediaUrl && campPreview.headerMediaType === 'image') { %>
+              <div class="chat-campaign-preview__media">
+                <img src="<%= campPreview.headerMediaUrl %>" alt="" loading="lazy" decoding="async" />
+              </div>
+            <% } else if (campPreview.headerMediaType === 'video') { %>
+              <div class="chat-campaign-preview__media chat-campaign-preview__media--placeholder">
+                <span class="chat-msg-type-icon" aria-hidden="true">🎬</span> Video de cabecera
+              </div>
+            <% } else if (campPreview.headerMediaType === 'document') { %>
+              <div class="chat-campaign-preview__media chat-campaign-preview__media--placeholder">
+                <span class="chat-msg-type-icon" aria-hidden="true">📎</span> Documento de cabecera
+              </div>
+            <% } %>
+            <% if (campPreview.headerText) { %>
+              <div class="chat-campaign-preview__header"><%- formatWhatsAppHtml(campPreview.headerText) %></div>
+            <% } %>
+            <% if (campPreview.bodyText) { %>
+              <div class="chat-campaign-preview__body"><%- formatWhatsAppHtml(campPreview.bodyText) %></div>
+            <% } %>
+            <% if (campPreview.footerText) { %>
+              <div class="chat-campaign-preview__footer"><%- formatWhatsAppHtml(campPreview.footerText) %></div>
+            <% } %>
+            <% if (campPreview.buttons && campPreview.buttons.length) { %>
+              <div class="chat-campaign-preview__buttons">
+                <% campPreview.buttons.forEach(function (btn) { %>
+                  <div class="chat-campaign-preview__button">
+                    <span class="chat-campaign-preview__button-text"><%= btn.text || 'Botón' %></span>
+                    <% if (btn.url) { %>
+                      <span class="chat-campaign-preview__button-url" title="<%= btn.url %>"><%- summarizeTemplatePreviewUrl(btn.url) %></span>
+                    <% } %>
+                  </div>
+                <% }); %>
+              </div>
+            <% } %>
+          </div>
+        <% } else if (m.body_text) { %>
           <div class="chat-bubble__text"><%= m.body_text %></div>
         <% } %>
         <div class="chat-meta">
-          <%= m.direction === 'outbound' ? 'Tú' : 'Usuario' %> · <%= mediaLabel(mt) || mt %> ·
-          <%= formatMessageDateTime(m.created_at) %>
+          <%= m.direction === 'outbound' ? 'Tú' : 'Usuario' %> · <%= mediaLabel(mt) || mt %>
+          <% if (mt === 'campaign' && raw && raw.campaign_id) { %>
+            · <a class="chat-campaign-ref" href="<%= bp %>/campaigns/<%= raw.campaign_id %>" title="Ver campaña #<%= raw.campaign_id %>">#<%= raw.campaign_id %></a>
+          <% } %>
+          · <%= formatMessageDateTime(m.created_at) %>
         </div>
-        <% if (m.direction === 'outbound' && mt !== 'campaign') { %>
+        <% if (m.direction === 'outbound') { %>
           <% 
             var _ds = raw && raw.delivery_status;
             var _dso = _ds && (typeof _ds === 'string' ? (function(){ try { return JSON.parse(_ds); } catch (e) { return null; } })() : _ds);

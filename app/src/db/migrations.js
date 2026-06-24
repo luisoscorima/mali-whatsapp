@@ -550,6 +550,7 @@ async function runMigrations(query) {
   await query(`ALTER TABLE whatsapp_templates ADD COLUMN IF NOT EXISTS placeholder_aliases_json JSONB NULL`);
 
   await backfillConversationWhatsAppLines(query);
+  await backfillCampaignChatPreviews(query);
   await migratePamSlugToTiThreeAreas(query);
   await cleanUpCrossAreaSeededSegments(query);
   await seedDefaultContactAttributeDefinitions(query);
@@ -575,6 +576,14 @@ async function backfillConversationWhatsAppLines(query) {
       [pid, area]
     );
   }
+}
+
+/** Reconstruye vista previa en mensajes de campaña antiguos (una sola vez). */
+async function backfillCampaignChatPreviews(query) {
+  const { backfillCampaignChatPreviews: run, backfillCampaignChatPreviewMedia: runMedia } =
+    require('../services/campaignChatPreviewBackfill');
+  await run(query);
+  await runMedia(query);
 }
 
 /** Atributos por defecto (área) si el área aún no tiene definiciones. */

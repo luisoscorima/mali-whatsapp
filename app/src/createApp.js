@@ -19,6 +19,7 @@ const {
   highlightTemplatePreviewHtml,
   summarizeTemplatePreviewUrl,
 } = require('./services/templateBuilder');
+const { formatWhatsAppHtml } = require('./utils/whatsappTextFormat');
 
 function parseCampaignPayload(payload) {
   if (!payload) return null;
@@ -138,6 +139,7 @@ function createApp() {
     res.locals.campaignParamSummary = buildCampaignParamSummary;
     res.locals.highlightTemplatePreviewHtml = highlightTemplatePreviewHtml;
     res.locals.summarizeTemplatePreviewUrl = summarizeTemplatePreviewUrl;
+    res.locals.formatWhatsAppHtml = formatWhatsAppHtml;
     next();
   });
 

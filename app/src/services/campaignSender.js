@@ -9,6 +9,7 @@ const {
   buildWhatsappGraphComponents,
 } = require('./templateParser');
 const { upsertCampaignChatMessage } = require('./campaignConversationLog');
+const { buildCampaignMessagePreview } = require('./campaignMessagePreview');
 const { normalizeArea } = require('../middleware/auth');
 const { fetchRecipientsUnion, validateRecipientsMatchRequest } = require('./campaignRecipients');
 const { mergeCampaignExcludeContactIds } = require('./exclusionLists');
@@ -227,6 +228,11 @@ async function runCampaignSendJob(query, ctx) {
           );
 
           try {
+            const { preview } = buildCampaignMessagePreview(
+              def,
+              templateSnapshot.components_json,
+              resolvedParams
+            );
             await upsertCampaignChatMessage(query, {
               area,
               campaignId,
@@ -234,6 +240,7 @@ async function runCampaignSendJob(query, ctx) {
               phone: contact.phone,
               contactId: contact.id,
               waMessageId: messageId,
+              preview,
             });
           } catch (chatErr) {
             logError(fakeReqLog, 'No se pudo registrar campaña en conversación', chatErr, {

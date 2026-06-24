@@ -81,6 +81,25 @@ function createRouteContext({ query, pool, appPath }) {
     return Boolean(cfg && cfg.enabled);
   }
 
+  async function countInboxUnread(area, segmentFilter) {
+    const params = [area];
+    let extra = '';
+    const segSql = buildConversationSegmentUnionSql(segmentFilter, 'ct.id', 'c.contact_id', 2);
+    if (segSql.sql) {
+      extra += segSql.sql;
+      params.push(...segSql.params);
+    }
+    const r = await query(
+      `SELECT COUNT(*)::int AS n
+       FROM conversations c
+       LEFT JOIN contacts ct ON ct.id = c.contact_id
+       WHERE c.area = $1 AND c.inbox_unread = TRUE
+       ${extra}`,
+      params
+    );
+    return r.rows[0]?.n ?? 0;
+  }
+
   async function fetchInboxConversations(area, segmentFilter, searchQText, chatFilter) {
     const params = [area];
     let p = 2;
@@ -466,10 +485,11 @@ function createRouteContext({ query, pool, appPath }) {
     const segmentFilter = parseSegmentListFilter(req.query, slugSet);
     const searchQ = parseInboxSearchQ(req.query);
     const chatFilter = parseInboxChatFilter(req.query);
-    const [segments, listRows, aiAreaEnabled] = await Promise.all([
+    const [segments, listRows, aiAreaEnabled, unreadInboxCount] = await Promise.all([
       loadSegments(area),
       fetchInboxConversations(area, segmentFilter, searchQ, chatFilter),
       loadAiAreaEnabled(area),
+      countInboxUnread(area, segmentFilter),
     ]);
     const inboxQuery = inboxQueryString(segmentFilter, searchQ, chatFilter);
     const inboxQueryAll = inboxQueryString(segmentFilter, searchQ, 'all');
@@ -584,6 +604,7 @@ function createRouteContext({ query, pool, appPath }) {
       inboxQueryBot,
       inboxQueryHuman,
       aiAreaEnabled,
+      unreadInboxCount,
       conversations: conversationsOut,
       selectedConversation,
       metaAd,

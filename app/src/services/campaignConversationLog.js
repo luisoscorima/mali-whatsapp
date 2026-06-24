@@ -2,18 +2,26 @@ const { normalizePhone } = require('../utils/phone');
 const { getWhatsAppCredentialsForArea } = require('./metaSettingsCache');
 
 /**
- * Registra en el hilo de conversación un único mensaje de sistema por envío
- * de plantilla de campaña (Meta ya devolvió message id).
+ * Registra en el hilo de conversación un mensaje por envío de plantilla de campaña.
  */
 async function upsertCampaignChatMessage(query, ctx) {
-  const { area, campaignId, templateName, phone, contactId, waMessageId } = ctx;
+  const { area, campaignId, templateName, phone, contactId, waMessageId, preview } = ctx;
   const phoneNorm = normalizePhone(phone);
-  const bodyText = `Se envió la plantilla «${String(templateName || '').slice(0, 200)}» (campaña #${campaignId}).`;
-  const rawPayload = JSON.stringify({
+
+  const hasPreview = preview && typeof preview === 'object' && preview.bodyText;
+  const bodyText = hasPreview
+    ? String(preview.bodyText).slice(0, 8000)
+    : `Se envió la plantilla «${String(templateName || '').slice(0, 200)}» (campaña #${campaignId}).`;
+
+  const rawPayload = {
     campaign_id: campaignId,
     template_name: templateName,
     source: 'campaign_send',
-  });
+  };
+  if (hasPreview) {
+    rawPayload.preview = preview;
+  }
+
   const { phoneNumberId: linePhoneNumberId } = getWhatsAppCredentialsForArea(area);
 
   const convResult = await query(
@@ -32,7 +40,7 @@ async function upsertCampaignChatMessage(query, ctx) {
   await query(
     `INSERT INTO chat_messages (conversation_id, direction, wa_message_id, body_text, message_type, raw_payload)
      VALUES ($1, 'outbound', $2, $3, 'campaign', $4::jsonb)`,
-    [conversationId, waMessageId || null, bodyText.slice(0, 8000), rawPayload]
+    [conversationId, waMessageId || null, bodyText, JSON.stringify(rawPayload)]
   );
 }
 

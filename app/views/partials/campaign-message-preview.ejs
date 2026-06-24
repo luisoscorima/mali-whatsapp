@@ -1,0 +1,39 @@
+<% const _p = typeof preview !== 'undefined' && preview ? preview : null; %>
+<% if (_p) { %>
+<div class="chat-campaign-preview<%= typeof previewModifier !== 'undefined' && previewModifier ? ' ' + previewModifier : '' %>">
+  <% if (_p.headerMediaUrl && _p.headerMediaType === 'image') { %>
+  <div class="chat-campaign-preview__media">
+    <img src="<%= _p.headerMediaUrl %>" alt="" loading="lazy" decoding="async" />
+  </div>
+  <% } else if (_p.headerMediaType === 'video') { %>
+  <div class="chat-campaign-preview__media chat-campaign-preview__media--placeholder">
+    <span class="chat-msg-type-icon" aria-hidden="true">🎬</span> Video de cabecera
+  </div>
+  <% } else if (_p.headerMediaType === 'document') { %>
+  <div class="chat-campaign-preview__media chat-campaign-preview__media--placeholder">
+    <span class="chat-msg-type-icon" aria-hidden="true">📎</span> Documento de cabecera
+  </div>
+  <% } %>
+  <% if (_p.headerText) { %>
+  <div class="chat-campaign-preview__header"><%- formatWhatsAppHtml(_p.headerText) %></div>
+  <% } %>
+  <% if (_p.bodyText) { %>
+  <div class="chat-campaign-preview__body"><%- formatWhatsAppHtml(_p.bodyText) %></div>
+  <% } %>
+  <% if (_p.footerText) { %>
+  <div class="chat-campaign-preview__footer"><%- formatWhatsAppHtml(_p.footerText) %></div>
+  <% } %>
+  <% if (_p.buttons && _p.buttons.length) { %>
+  <div class="chat-campaign-preview__buttons">
+    <% _p.buttons.forEach(function (btn) { %>
+    <div class="chat-campaign-preview__button">
+      <span class="chat-campaign-preview__button-text"><%= btn.text || 'Botón' %></span>
+      <% if (btn.url) { %>
+      <span class="chat-campaign-preview__button-url" title="<%= btn.url %>"><%- summarizeTemplatePreviewUrl(btn.url) %></span>
+      <% } %>
+    </div>
+    <% }); %>
+  </div>
+  <% } %>
+</div>
+<% } %>

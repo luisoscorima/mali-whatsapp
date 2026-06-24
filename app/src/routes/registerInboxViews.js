@@ -19,6 +19,8 @@ const {
   getApplicableAttributeDefinitions,
 } = require('../services/contactAttributeDefinitions');
 const { syncCampaignCost } = require('../services/campaignCostSync');
+const { parseCampaignPayload } = require('../services/campaignSendContext');
+const { buildCampaignDetailPreviewFromRow } = require('../services/campaignMessagePreview');
 const { buildCampaignCostSummary } = require('../utils/campaignPricing');
 const {
   sqlCampaignLogContactJoin,
@@ -810,6 +812,37 @@ function registerInboxViews(app, ctx) {
     };
   }
 
+  async function resolveTemplateRowForCampaignPreview(area, campaign) {
+    const payload = parseCampaignPayload(campaign.campaign_payload);
+    const snapshot = payload && payload.templateSnapshot ? payload.templateSnapshot : null;
+    const templateName = String(campaign.template_name || '').trim();
+    const snapshotId = Number(snapshot && snapshot.id);
+
+    if (snapshot && snapshot.components_json) {
+      if (Number.isInteger(snapshotId) && snapshotId > 0) {
+        return {
+          id: snapshotId,
+          name: snapshot.name || templateName,
+          language: snapshot.language,
+          category: snapshot.category || '',
+          components_json: snapshot.components_json,
+        };
+      }
+    }
+
+    if (!templateName) return null;
+
+    const r = await query(
+      `SELECT id, name, language, category, components_json
+       FROM whatsapp_templates
+       WHERE area = $1 AND name = $2
+       ORDER BY id DESC
+       LIMIT 1`,
+      [area, templateName]
+    );
+    return r.rows[0] || null;
+  }
+
   async function loadCampaignDetail(area, campaignId) {
     const [campaignResult, logsResult, failedLogs, responderMetrics, interactiveResponders, retryStats] =
       await Promise.all([
@@ -832,6 +865,9 @@ function registerInboxViews(app, ctx) {
       ]);
     if (campaignResult.rowCount === 0) return null;
     const campaign = campaignResult.rows[0];
+    const templateRow = await resolveTemplateRowForCampaignPreview(area, campaign);
+    const { preview: campaignMessagePreview, templateId: campaignTemplateId } =
+      buildCampaignDetailPreviewFromRow(campaign, templateRow);
     const analytics = buildCampaignDetailAnalytics(campaign, logsResult.rows, failedLogs, responderMetrics, config);
     return {
       campaign,
@@ -841,6 +877,8 @@ function registerInboxViews(app, ctx) {
       interactiveResponders,
       retryStats,
       analytics,
+      campaignMessagePreview,
+      campaignTemplateId,
     };
   }
 
@@ -908,6 +946,8 @@ function registerInboxViews(app, ctx) {
       interactiveResponders: detail.interactiveResponders,
       retryStats: detail.retryStats,
       analytics: detail.analytics,
+      campaignMessagePreview: detail.campaignMessagePreview,
+      campaignTemplateId: detail.campaignTemplateId,
       campaigns,
       listBasePath: '/campaigns',
       sidebarTitle: 'Campañas',

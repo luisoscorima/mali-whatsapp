@@ -8,6 +8,7 @@ const {
   buildWhatsappGraphComponents,
 } = require('./templateParser');
 const { upsertCampaignChatMessage } = require('./campaignConversationLog');
+const { buildCampaignMessagePreview } = require('./campaignMessagePreview');
 const { normalizeArea } = require('../middleware/auth');
 const { classifyCampaignSendError } = require('../utils/campaignSendErrorClassify');
 const {
@@ -61,18 +62,22 @@ function buildSendContext(payload) {
   };
 }
 
-function buildComponentsForRetry(sendCtx, contact, attrsMap) {
-  const { def, staticParams, paramMapping } = sendCtx;
+function resolveParamsForRetry(sendCtx, contact, attrsMap) {
+  const { staticParams, paramMapping } = sendCtx;
   if (paramMapping && contact) {
-    const resolved = buildParamsForContact(
+    return buildParamsForContact(
       staticParams,
       paramMapping,
       contact,
       attrsMap.get(contact.id)
     );
-    return buildWhatsappGraphComponents(def, resolved);
   }
-  return buildWhatsappGraphComponents(def, staticParams);
+  return staticParams;
+}
+
+function buildComponentsForRetry(sendCtx, contact, attrsMap) {
+  const resolved = resolveParamsForRetry(sendCtx, contact, attrsMap);
+  return buildWhatsappGraphComponents(sendCtx.def, resolved);
 }
 
 /**
@@ -284,6 +289,16 @@ async function runCampaignRetryJob(query, { campaignId, mode = 'auto' }) {
         );
 
         try {
+          const resolvedParams = resolveParamsForRetry(
+            sendCtx,
+            contact || { id: row.contact_id, name: '', phone: row.phone },
+            attrsMap
+          );
+          const { preview } = buildCampaignMessagePreview(
+            sendCtx.def,
+            sendCtx.templateSnapshot.components_json,
+            resolvedParams
+          );
           await upsertCampaignChatMessage(query, {
             area: sendCtx.area,
             campaignId,
@@ -291,6 +306,7 @@ async function runCampaignRetryJob(query, { campaignId, mode = 'auto' }) {
             phone: row.phone,
             contactId: row.contact_id,
             waMessageId: messageId,
+            preview,
           });
         } catch (chatErr) {
           logError(fakeReqLog, 'No se pudo registrar reintento en conversación', chatErr, {

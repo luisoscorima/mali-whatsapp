@@ -87,6 +87,47 @@
       }
     });
     var _detailDateTime = _firstSendAt || campaign.created_at || null;
+    var _campaignPreview = typeof campaignMessagePreview !== 'undefined' && campaignMessagePreview
+      ? campaignMessagePreview
+      : null;
+    var _campaignTemplateId = typeof campaignTemplateId !== 'undefined' && campaignTemplateId
+      ? Number(campaignTemplateId)
+      : null;
+    if (!Number.isInteger(_campaignTemplateId) || _campaignTemplateId <= 0) {
+      _campaignTemplateId = null;
+    }
+    var _respTypeSummary = [];
+    if (_campaignPreview && Array.isArray(_campaignPreview.buttons)) {
+      var _quickReplyLabels = [];
+      _campaignPreview.buttons.forEach(function (btn) {
+        if (!btn) return;
+        if (String(btn.type || '').toUpperCase() !== 'QUICK_REPLY') return;
+        var _btnLabel = String(btn.text || '').replace(/\s+/g, ' ').trim();
+        if (!_btnLabel || _quickReplyLabels.indexOf(_btnLabel) !== -1) return;
+        _quickReplyLabels.push(_btnLabel);
+      });
+      if (_quickReplyLabels.length > 0) {
+        var _typeCounts = {};
+        _quickReplyLabels.forEach(function (label) { _typeCounts[label] = 0; });
+        var _matchedPhones = {};
+        _interactiveList.forEach(function (row) {
+          if (!row || !row.phone) return;
+          var _btnText = String(row.interactiveResponseText || '').replace(/\s+/g, ' ').trim();
+          if (!_btnText || !_typeCounts.hasOwnProperty(_btnText)) return;
+          _typeCounts[_btnText] += 1;
+          _matchedPhones[row.phone] = true;
+        });
+        var _otrosCount = 0;
+        _respList.forEach(function (row) {
+          if (!row || !row.phone) return;
+          if (!_matchedPhones[row.phone]) _otrosCount += 1;
+        });
+        _quickReplyLabels.forEach(function (label) {
+          _respTypeSummary.push({ label: label, count: _typeCounts[label] || 0 });
+        });
+        _respTypeSummary.push({ label: 'Otros', count: _otrosCount });
+      }
+    }
     var _modalLogsJson = JSON.stringify((Array.isArray(logs) ? logs : []).map(function (log) {
       return {
         id: log.id,
@@ -160,6 +201,7 @@
             <p class="campaign-dashboard-section__lead muted">Información general y contexto de la campaña.</p>
           </div>
         </div>
+        <div class="campaign-detail-section__body<%= _campaignPreview ? ' campaign-detail-section__body--with-preview' : '' %>">
         <dl class="detail-dl">
           <div><dt>Segmento(s)</dt><dd><%= campaignSegmentDisplay(campaign) %></dd></div>
           <div><dt>Fecha y hora</dt><dd><%= _detailDateTime ? formatMessageDateTime(_detailDateTime) : '—' %></dd></div>
@@ -174,7 +216,13 @@
             <% } %>
           </dd></div>
           <% } %>
-          <div><dt>Plantilla</dt><dd><%= campaign.template_name %></dd></div>
+          <div><dt>Plantilla</dt><dd>
+            <% if (_campaignTemplateId) { %>
+            <a class="text-link mono" href="<%= basePath %>/templates/<%= _campaignTemplateId %>"><%= campaign.template_name %></a>
+            <% } else { %>
+            <%= campaign.template_name %>
+            <% } %>
+          </dd></div>
           <div><dt>Estado</dt><dd><span class="badge <%= campaign.status %>"><%= campaign.status %></span></dd></div>
           <% if (campaign.scheduled_at) { %>
           <div><dt>Programada para</dt><dd><%= formatMessageDateTime(campaign.scheduled_at) %></dd></div>
@@ -195,6 +243,16 @@
           <div><dt>Imagen</dt><dd><a href="<%= campaign.image_url %>" target="_blank" rel="noopener">Abrir enlace</a></dd></div>
           <% } %>
         </dl>
+        <% if (_campaignPreview) { %>
+        <aside class="campaign-detail-preview" aria-label="Vista previa del mensaje enviado">
+          <p class="campaign-detail-preview__label muted">Vista previa</p>
+          <div class="campaign-detail-preview__bubble">
+            <%- include('campaign-message-preview', { preview: _campaignPreview }) %>
+          </div>
+          <p class="campaign-detail-preview__note muted">Valores fijos reales; los dinámicos se muestran entre corchetes.</p>
+        </aside>
+        <% } %>
+        </div>
       </section>
     </div>
 
@@ -469,6 +527,19 @@
       <% if (_respList.length === 0) { %>
       <p class="muted">Aún sin datos de respuestas en esta ventana.</p>
       <% } else { %>
+      <% if (_respTypeSummary.length > 0) { %>
+      <div class="campaign-responders-dialog__type-summary" aria-label="Resumen por tipo de respuesta">
+        <p class="campaign-responders-dialog__type-summary-title">Tipo:</p>
+        <dl class="campaign-responders-dialog__type-summary-list">
+          <% _respTypeSummary.forEach(function (item) { %>
+          <div class="campaign-responders-dialog__type-summary-row">
+            <dt><%= item.label %></dt>
+            <dd><%= item.count %></dd>
+          </div>
+          <% }); %>
+        </dl>
+      </div>
+      <% } %>
       <div class="table-wrap campaign-responders-dialog__table-wrap">
         <table>
           <thead>
