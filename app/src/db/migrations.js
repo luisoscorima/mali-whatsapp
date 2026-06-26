@@ -38,6 +38,18 @@ async function runMigrations(query) {
   await query(
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS can_edit_ai_prompt BOOLEAN NOT NULL DEFAULT FALSE`
   );
+  await query(
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS can_view_audit_logs BOOLEAN NOT NULL DEFAULT FALSE`
+  );
+  await query(
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS can_view_integration BOOLEAN NOT NULL DEFAULT FALSE`
+  );
+  await query(
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS can_edit_business_hours BOOLEAN NOT NULL DEFAULT FALSE`
+  );
+  await query(
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS can_view_reports BOOLEAN NOT NULL DEFAULT FALSE`
+  );
 
   await query(`
     CREATE TABLE IF NOT EXISTS login_logs (

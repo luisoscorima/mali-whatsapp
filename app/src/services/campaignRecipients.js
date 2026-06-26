@@ -3,15 +3,21 @@
  * Soporta filtro por IDs incluidos y exclusiones por IDs o segmentos negados.
  */
 
+const config = require('../config');
+
+const CONVERSATION_JOIN = `
+  LEFT JOIN conversations conv ON conv.area = c.area AND conv.contact_id = c.id
+`;
+
 /**
  * @param {string} sql
  * @param {unknown[]} params
  * @param {number} paramIdx
- * @param {{ contactIds?: number[], excludeContactIds?: number[], excludeSegmentSlugs?: string[] }} options
+ * @param {{ contactIds?: number[], excludeContactIds?: number[], excludeSegmentSlugs?: string[], excludeOpenServiceWindow?: boolean }} options
  * @returns {{ sql: string, params: unknown[], nextIdx: number }}
  */
 function appendRecipientFilters(sql, params, paramIdx, options) {
-  const { contactIds, excludeContactIds, excludeSegmentSlugs } = options;
+  const { contactIds, excludeContactIds, excludeSegmentSlugs, excludeOpenServiceWindow } = options;
   let nextIdx = paramIdx;
 
   if (contactIds != null && contactIds.length > 0) {
@@ -38,6 +44,16 @@ function appendRecipientFilters(sql, params, paramIdx, options) {
     nextIdx += 1;
   }
 
+  if (excludeOpenServiceWindow) {
+    sql += `
+      AND (
+        conv.last_user_message_at IS NULL
+        OR conv.last_user_message_at < NOW() - ($${nextIdx}::bigint * INTERVAL '1 millisecond')
+      )`;
+    params.push(config.SESSION_WINDOW_MS);
+    nextIdx += 1;
+  }
+
   return { sql, params, nextIdx };
 }
 
@@ -54,14 +70,15 @@ const RECIPIENT_BASE_WHERE = `
  * @param {*} query - función query del pool
  * @param {string} area
  * @param {string[]} segmentSlugs - sin vacíos, validados contra segment_definitions
- * @param {{ contactIds?: number[], excludeContactIds?: number[], excludeSegmentSlugs?: string[] }} [options]
+ * @param {{ contactIds?: number[], excludeContactIds?: number[], excludeSegmentSlugs?: string[], excludeOpenServiceWindow?: boolean }} [options]
  */
 async function fetchRecipientsUnion(query, area, segmentSlugs, options = {}) {
   const params = [area, segmentSlugs];
   let sql = `
-    SELECT DISTINCT c.id, c.name, c.phone
+    SELECT DISTINCT c.id, c.name, c.phone, conv.last_user_message_at
     FROM contacts c
     INNER JOIN contact_segments cs ON cs.contact_id = c.id AND cs.area = c.area
+    ${CONVERSATION_JOIN}
     ${RECIPIENT_BASE_WHERE}
   `;
   const filtered = appendRecipientFilters(sql, params, 3, options);
@@ -74,7 +91,7 @@ async function fetchRecipientsUnion(query, area, segmentSlugs, options = {}) {
  * @param {*} query
  * @param {string} area
  * @param {string[]} segmentSlugs
- * @param {{ contactIds?: number[], excludeContactIds?: number[], excludeSegmentSlugs?: string[] }} [options]
+ * @param {{ contactIds?: number[], excludeContactIds?: number[], excludeSegmentSlugs?: string[], excludeOpenServiceWindow?: boolean }} [options]
  */
 async function countRecipientsUnion(query, area, segmentSlugs, options = {}) {
   const params = [area, segmentSlugs];
@@ -82,6 +99,7 @@ async function countRecipientsUnion(query, area, segmentSlugs, options = {}) {
     SELECT COUNT(DISTINCT c.id)::int AS n
     FROM contacts c
     INNER JOIN contact_segments cs ON cs.contact_id = c.id AND cs.area = c.area
+    ${CONVERSATION_JOIN}
     ${RECIPIENT_BASE_WHERE}
   `;
   const filtered = appendRecipientFilters(sql, params, 3, options);

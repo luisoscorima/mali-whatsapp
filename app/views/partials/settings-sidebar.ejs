@@ -1,0 +1,22 @@
+<% const _section = typeof settingsSection !== 'undefined' ? settingsSection : ''; %>
+<aside class="inbox-sidebar" aria-label="Ajustes">
+  <div class="inbox-sidebar-header">
+    <h2 class="inbox-sidebar-title">Ajustes</h2>
+  </div>
+  <ul class="inbox-chat-list">
+    <% (typeof settingsModules !== 'undefined' ? settingsModules : []).forEach(function (mod) { %>
+    <li class="inbox-chat-item <%= _section === mod.id ? 'is-active' : '' %>">
+      <a class="inbox-chat-link" href="<%= basePath %><%= mod.path %>">
+        <span class="inbox-chat-link-main">
+          <span class="inbox-chat-row-top">
+            <span class="inbox-chat-title"><%= mod.title %></span>
+          </span>
+          <span class="inbox-chat-row-mid">
+            <span class="inbox-chat-preview"><%= mod.preview %></span>
+          </span>
+        </span>
+      </a>
+    </li>
+    <% }); %>
+  </ul>
+</aside>

@@ -58,6 +58,17 @@
           </div>
         </fieldset>
 
+        <div class="campaign-service-window-panel">
+          <label class="field field--row checkbox-row campaign-service-window-option">
+            <input type="checkbox" id="campaign-exclude-open-service-window" name="excludeOpenServiceWindow" value="1" />
+            <span>Excluir contactos con ventana de 24 h activa</span>
+          </label>
+          <p class="inline-help campaign-segments-hint">
+            Si el contacto ya escribió en las últimas 24 h, puedes responderle con mensaje libre (sin costo de plantilla).
+            Al activar esta opción, esos contactos no aparecerán en la lista ni recibirán el masivo.
+          </p>
+        </div>
+
         <div class="campaign-destinatarios-block">
           <div class="campaign-destinatarios-head">
             <span class="campaign-step-badge" aria-hidden="true">2</span>
@@ -180,4 +191,16 @@
       </div>
     </div>
   </form>
+
+  <dialog id="campaign-send-confirm-dialog" class="modal-dialog campaign-send-confirm-dialog" aria-labelledby="campaign-send-confirm-title">
+    <form method="dialog" class="modal-dialog-form campaign-send-confirm-dialog__form">
+      <h2 id="campaign-send-confirm-title" class="modal-dialog-title">Confirmar envío</h2>
+      <p id="campaign-send-confirm-lead" class="muted campaign-send-confirm-dialog__lead"></p>
+      <p id="campaign-send-confirm-summary" class="muted campaign-send-confirm-dialog__summary"></p>
+      <div class="modal-dialog-actions">
+        <button type="submit" class="small-btn secondary" value="cancel">Cancelar</button>
+        <button type="submit" class="small-btn" id="campaign-send-confirm-btn" value="confirm">Confirmar</button>
+      </div>
+    </form>
+  </dialog>
 </div>

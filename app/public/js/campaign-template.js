@@ -18,8 +18,15 @@
   const sendErrorEl = document.getElementById('campaign-send-error');
   const scheduleWrap = document.getElementById('campaign-schedule-datetime-wrap');
   const scheduledAtInput = document.getElementById('campaign-scheduled-at');
+  const excludeOpenServiceWindowInput = document.getElementById('campaign-exclude-open-service-window');
+  const sendConfirmDialog = document.getElementById('campaign-send-confirm-dialog');
+  const sendConfirmLead = document.getElementById('campaign-send-confirm-lead');
+  const sendConfirmSummary = document.getElementById('campaign-send-confirm-summary');
+  const sendConfirmBtn = document.getElementById('campaign-send-confirm-btn');
+  const sendConfirmTitle = document.getElementById('campaign-send-confirm-title');
 
   let recipientsLoaded = false;
+  let recipientsContacts = [];
   let templateDefinitionReady = false;
   let templateLoadRequestId = 0;
 
@@ -61,6 +68,93 @@
     window.setTimeout(function () {
       if (toast.parentNode) toast.parentNode.removeChild(toast);
     }, kind === 'err' ? 9000 : 6500);
+  }
+
+  function getExcludeOpenServiceWindow() {
+    return Boolean(excludeOpenServiceWindowInput && excludeOpenServiceWindowInput.checked);
+  }
+
+  function getSegmentLabel(value) {
+    const el = form.querySelector('input[name="campaignSegment"][value="' + CSS.escape(value) + '"]');
+    if (!el) return value;
+    const tile = el.closest('.campaign-segment-tile');
+    const text = tile && tile.querySelector('.campaign-segment-text');
+    return text ? String(text.textContent || '').trim() || value : value;
+  }
+
+  function getExcludeSegmentLabel(value) {
+    const el = form.querySelector('input[name="campaignExcludeSegment"][value="' + CSS.escape(value) + '"]');
+    if (!el) return value;
+    const tile = el.closest('.campaign-segment-tile');
+    const text = tile && tile.querySelector('.campaign-segment-text');
+    return text ? String(text.textContent || '').trim() || value : value;
+  }
+
+  function formatScheduleSummary() {
+    const scheduleMode = form.querySelector('input[name="scheduleMode"]:checked');
+    const mode = scheduleMode ? scheduleMode.value : 'now';
+    if (mode !== 'scheduled' || !scheduledAtInput) return 'Enviar ahora';
+    const localVal = String(scheduledAtInput.value || '').trim();
+    if (!localVal) return 'Programar (sin fecha)';
+    const d = new Date(localVal);
+    if (Number.isNaN(d.getTime())) return 'Programar';
+    return 'Programar para ' + d.toLocaleString('es-PE', { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
+  function buildSendConfirmSummary() {
+    const segments = getCheckedSegments().map(getSegmentLabel);
+    const excludeSegs = getCheckedExcludeSegments().map(getExcludeSegmentLabel);
+    const recipientCount = getCheckedRecipientIds().length;
+    const totalLoaded = recipientsContacts.length;
+    const windowOpenCount = recipientsContacts.filter(function (c) {
+      return c.serviceWindowOpen;
+    }).length;
+    const templateLabel =
+      select && select.selectedIndex > 0
+        ? String(select.options[select.selectedIndex].text || '').trim()
+        : '—';
+
+    const lines = [
+      'Plantilla: ' + templateLabel,
+      'Segmentos: ' + (segments.length ? segments.join(', ') : '—'),
+      'Excluir segmentos: ' + (excludeSegs.length ? excludeSegs.join(', ') : 'Ninguno'),
+      'Destinatarios: ' + recipientCount + (totalLoaded ? ' de ' + totalLoaded + ' en lista' : ''),
+      'Ventana 24 h: ' +
+        (getExcludeOpenServiceWindow()
+          ? 'excluye contactos con ventana activa (mensaje libre disponible)'
+          : windowOpenCount + ' con ventana activa de ' + totalLoaded + ' (podrías excluirlos para ahorrar plantilla)'),
+      'Cuándo: ' + formatScheduleSummary(),
+    ];
+    return lines.join('\n');
+  }
+
+  function openSendConfirmDialog() {
+    if (!sendConfirmDialog) return Promise.resolve(true);
+    const scheduleMode = form.querySelector('input[name="scheduleMode"]:checked');
+    const isSched = scheduleMode && scheduleMode.value === 'scheduled';
+    if (sendConfirmTitle) {
+      sendConfirmTitle.textContent = isSched ? 'Confirmar programación' : 'Confirmar envío';
+    }
+    if (sendConfirmLead) {
+      sendConfirmLead.textContent = isSched
+        ? 'Revisa el resumen antes de programar la campaña.'
+        : 'Revisa el resumen antes de enviar la campaña.';
+    }
+    if (sendConfirmSummary) {
+      sendConfirmSummary.textContent = buildSendConfirmSummary();
+    }
+    if (sendConfirmBtn) {
+      sendConfirmBtn.textContent = isSched ? 'Programar' : 'Enviar';
+    }
+    sendConfirmDialog.returnValue = 'cancel';
+    sendConfirmDialog.showModal();
+    return new Promise(function (resolve) {
+      function onClose() {
+        sendConfirmDialog.removeEventListener('close', onClose);
+        resolve(sendConfirmDialog.returnValue === 'confirm');
+      }
+      sendConfirmDialog.addEventListener('close', onClose);
+    });
   }
 
   function getCheckedSegments() {
@@ -420,6 +514,7 @@
 
   function renderRecipients(contacts) {
     if (!recipientsListEl) return;
+    recipientsContacts = Array.isArray(contacts) ? contacts.slice() : [];
     if (!contacts.length) {
       recipientsListEl.innerHTML =
         '<p class="campaign-recipients-empty">No hay contactos elegibles (opt-in y activos) en la unión de los segmentos elegidos.</p>';
@@ -433,6 +528,14 @@
       const id = Number(c.id);
       const name = c.name != null ? String(c.name) : '';
       const phone = c.phone != null ? String(c.phone) : '';
+      const windowOpen = Boolean(c.serviceWindowOpen);
+      const chipClass = windowOpen
+        ? 'campaign-recipient-window-chip campaign-recipient-window-chip--open'
+        : 'campaign-recipient-window-chip campaign-recipient-window-chip--closed';
+      const chipLabel = windowOpen ? '24 h' : 'Sin 24 h';
+      const chipTitle = windowOpen
+        ? 'Ventana activa: puedes escribirle con mensaje libre (sin plantilla)'
+        : 'Sin ventana activa: hace falta plantilla para contactarlo';
       return (
         '<label class="field field--row campaign-recipient-row">' +
         '<input type="checkbox" name="recipientContact" value="' +
@@ -445,6 +548,13 @@
         '<span class="mono campaign-recipient-phone">' +
         esc(phone) +
         '</span></span>' +
+        '<span class="' +
+        chipClass +
+        '" title="' +
+        esc(chipTitle) +
+        '">' +
+        esc(chipLabel) +
+        '</span>' +
         '</label>'
       );
     });
@@ -470,6 +580,7 @@
       const previewBody = { segments: segments };
       const excludeSegs = getCheckedExcludeSegments();
       if (excludeSegs.length) previewBody.excludeSegmentSlugs = excludeSegs;
+      if (getExcludeOpenServiceWindow()) previewBody.excludeOpenServiceWindow = true;
 
       const r = await fetch(basePath + '/api/campaigns/recipients-preview', {
         method: 'POST',
@@ -617,6 +728,10 @@
       excludeSegmentSlugs: excludeSegs,
     };
 
+    if (getExcludeOpenServiceWindow()) {
+      payload.excludeOpenServiceWindow = true;
+    }
+
     if (container) {
       container.querySelectorAll('input, textarea, select').forEach(function (el) {
         if (!el.name) return;
@@ -637,8 +752,7 @@
     return payload;
   }
 
-  form.addEventListener('submit', function (ev) {
-    ev.preventDefault();
+  function submitCampaign() {
     showSendError('');
 
     const blockers = getSubmitBlockers();
@@ -656,7 +770,7 @@
 
     if (submitBtn) {
       submitBtn.disabled = true;
-      submitBtn.textContent = 'Enviando…';
+      submitBtn.textContent = payload.scheduleMode === 'scheduled' ? 'Programando…' : 'Enviando…';
     }
 
     fetch(basePath + '/campaigns/send', {
@@ -701,11 +815,33 @@
         updateScheduleUi();
         updateSubmitEnabled();
       });
+  }
+
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    showSendError('');
+
+    const blockers = getSubmitBlockers();
+    if (blockers.length) {
+      return;
+    }
+
+    if (!form.checkValidity()) {
+      showCampaignToast('Completa los campos obligatorios de la plantilla o la programación.', 'warn');
+      form.reportValidity();
+      return;
+    }
+
+    openSendConfirmDialog().then(function (confirmed) {
+      if (!confirmed) return;
+      submitCampaign();
+    });
   });
 
   function invalidateRecipientsPreview() {
     const hadRecipients = recipientsLoaded;
     recipientsLoaded = false;
+    recipientsContacts = [];
     if (recipientsListEl) {
       recipientsListEl.innerHTML = '';
       recipientsListEl.hidden = true;
@@ -724,6 +860,10 @@
   form.querySelectorAll('input[name="campaignExcludeSegment"]').forEach(function (el) {
     el.addEventListener('change', invalidateRecipientsPreview);
   });
+
+  if (excludeOpenServiceWindowInput) {
+    excludeOpenServiceWindowInput.addEventListener('change', invalidateRecipientsPreview);
+  }
 
   fetch((basePath || '') + '/api/attribute-definitions/options', { credentials: 'same-origin' })
     .then(function (r) {

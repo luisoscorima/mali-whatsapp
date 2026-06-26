@@ -5,8 +5,6 @@ const {
   fetchCampaignResponderMetrics,
   fetchCampaignInteractiveResponders,
 } = require('../services/campaignResponders');
-const { parseAiConfigValue } = require('../utils/aiConfig');
-const { parseBusinessHoursConfig, defaultBusinessHoursSeed } = require('../utils/businessHours');
 const {
   CAMPAIGN_LOG_STATUS_SQL,
   sqlInList,
@@ -1362,63 +1360,7 @@ function registerInboxViews(app, ctx) {
     });
   });
 
-  /* --- Ajustes --- */
-  app.get('/settings', async (req, res) => {
-    let aiAreaEnabled = false;
-    let aiPrompt = '';
-    let aiTransferKeyword = '[TRANSFERIR]';
-    const bhDefaults = defaultBusinessHoursSeed();
-    let businessHoursEnabled = bhDefaults.enabled;
-    let businessHoursDays = bhDefaults.days;
-    let businessHoursFrom = bhDefaults.from;
-    let businessHoursTo = bhDefaults.to;
-    let businessHoursMessage = bhDefaults.outside_hours_message;
-    let businessHoursTimezone = bhDefaults.timezone;
-    const u = req.user;
-    const settingsShowAiMaster = Boolean(u && u.isMaster);
-    const settingsShowAiPromptEditor = Boolean(
-      u && (u.isMaster || u.canEditAiPrompt)
-    );
-    if (u && settingsShowAiPromptEditor) {
-      const [aiRow, bhRow] = await Promise.all([
-        query(`SELECT value FROM app_settings WHERE area = $1 AND key = 'ai_config'`, [u.area]),
-        query(`SELECT value FROM app_settings WHERE area = $1 AND key = 'business_hours'`, [u.area]),
-      ]);
-      const cfg = parseAiConfigValue(aiRow.rows[0]?.value);
-      aiAreaEnabled = Boolean(cfg && cfg.enabled);
-      if (cfg) {
-        aiPrompt = cfg.prompt || '';
-        aiTransferKeyword = cfg.transfer_keyword || '[TRANSFERIR]';
-      }
-      const bhCfg = parseBusinessHoursConfig(bhRow.rows[0]?.value);
-      if (bhCfg) {
-        businessHoursEnabled = bhCfg.enabled;
-        businessHoursDays = bhCfg.days.length ? bhCfg.days : bhDefaults.days;
-        businessHoursFrom = bhCfg.from || bhDefaults.from;
-        businessHoursTo = bhCfg.to || bhDefaults.to;
-        businessHoursMessage = bhCfg.outside_hours_message || '';
-        businessHoursTimezone = bhCfg.timezone || bhDefaults.timezone;
-      }
-    }
-    res.render('settings-page', {
-      ...commonLocals(req, res),
-      activeNav: 'settings',
-      pageTitle: 'Ajustes · MALI WhatsApp',
-      layoutModifier: '',
-      aiAreaEnabled,
-      masterArea: u && u.area ? u.area : '',
-      aiPrompt,
-      aiTransferKeyword,
-      settingsShowAiMaster,
-      settingsShowAiPromptEditor,
-      businessHoursEnabled,
-      businessHoursDays,
-      businessHoursFrom,
-      businessHoursTo,
-      businessHoursMessage,
-      businessHoursTimezone,
-    });
-  });
+  /* --- Ajustes: ver registerSettingsViews.js --- */
 }
 
 module.exports = { registerInboxViews };

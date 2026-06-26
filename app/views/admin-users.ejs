@@ -71,7 +71,11 @@
               <th>Correo</th>
               <th>Área</th>
               <th>Master</th>
-              <th>Prompt IA</th>
+              <th>Integr.</th>
+              <th>IA</th>
+              <th>Horario</th>
+              <th>Bitácora</th>
+              <th>Reportes</th>
               <th>Cambio pwd</th>
               <th></th>
             </tr>
@@ -82,7 +86,11 @@
               <td><%= u.email %></td>
               <td><%= u.area %></td>
               <td><%= u.is_master ? 'Sí' : '—' %></td>
+              <td><%= u.can_view_integration ? 'Sí' : '—' %></td>
               <td><%= u.can_edit_ai_prompt ? 'Sí' : '—' %></td>
+              <td><%= u.can_edit_business_hours ? 'Sí' : '—' %></td>
+              <td><%= u.can_view_audit_logs ? 'Sí' : '—' %></td>
+              <td><%= u.can_view_reports ? 'Sí' : '—' %></td>
               <td><%= u.must_change_password ? 'Sí' : '—' %></td>
               <td class="table-actions">
                 <a class="small-btn secondary" href="<%= basePath %>/admin/users/<%= u.id %>/edit">Editar</a>

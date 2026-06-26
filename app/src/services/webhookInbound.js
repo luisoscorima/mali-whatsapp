@@ -39,7 +39,7 @@ function resolveInboundLinePhoneNumberId(value, area) {
  */
 async function persistAndSendOutbound(
   query,
-  { area, conversationId, phone, text, isAi, phoneNumberId }
+  { area, conversationId, phone, text, isAi, phoneNumberId, outboundSource }
 ) {
   const toSend = String(text || '').slice(0, config.MAX_SESSION_TEXT_LEN);
   if (!toSend) return false;
@@ -59,10 +59,12 @@ async function persistAndSendOutbound(
       phoneNumberId: lineId || undefined,
     });
     const msgId = apiResponse.messages?.[0]?.id || null;
+    const payload = sanitizeApiResponse(apiResponse);
+    if (outboundSource) payload.source = outboundSource;
     await query(
       `INSERT INTO chat_messages (conversation_id, direction, wa_message_id, body_text, message_type, raw_payload, is_ai)
        VALUES ($1, 'outbound', $2, $3, 'text', $4::jsonb, $5)`,
-      [conversationId, msgId, toSend, JSON.stringify(sanitizeApiResponse(apiResponse)), Boolean(isAi)]
+      [conversationId, msgId, toSend, JSON.stringify(payload), Boolean(isAi)]
     );
     await query(
       `UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1`,
@@ -208,6 +210,7 @@ async function maybeOutsideHoursReply(query, { area, conversationId, phone, phon
     text: bhCfg.outside_hours_message,
     isAi: false,
     phoneNumberId,
+    outboundSource: 'outside_hours',
   });
   if (sent) {
     await query(

@@ -688,7 +688,7 @@ html[data-theme='dark'] .campaign-step-badge {
   padding: 2px 6px 2px 4px;
   gap: 6px;
   align-items: center;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   cursor: pointer;
   line-height: 1.2;
 }
@@ -731,6 +731,53 @@ html[data-theme='dark'] .campaign-recipients-list .campaign-recipient-row.field-
   font-weight: 500;
   color: var(--ink);
   opacity: 0.92;
+}
+
+.campaign-recipient-window-chip {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.campaign-recipient-window-chip--open {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.campaign-recipient-window-chip--closed {
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.campaign-service-window-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface-strong);
+}
+
+.campaign-service-window-option {
+  margin: 0;
+}
+
+.campaign-send-confirm-dialog {
+  max-width: min(480px, calc(100% - 32px));
+}
+
+.campaign-send-confirm-dialog__summary {
+  margin: 0;
+  white-space: pre-line;
+  line-height: 1.45;
+}
+
+.campaign-send-confirm-dialog__lead {
+  margin: 0;
 }
 
 .campaign-param-row {

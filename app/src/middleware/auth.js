@@ -50,13 +50,17 @@ function createResolveSessionUser(appPath, query) {
     if (config.requireAuth && req.session && req.session.userId != null) {
       try {
         const r = await query(
-          `SELECT area, is_master, can_edit_ai_prompt FROM users WHERE id = $1`,
+          `SELECT area, is_master, can_edit_ai_prompt, can_view_audit_logs, can_view_integration, can_edit_business_hours, can_view_reports FROM users WHERE id = $1`,
           [req.session.userId]
         );
         if (r.rows.length > 0) {
           req.session.area = normalizeArea(r.rows[0].area);
           req.session.isMaster = Boolean(r.rows[0].is_master);
           req.session.canEditAiPrompt = Boolean(r.rows[0].can_edit_ai_prompt);
+          req.session.canViewAuditLogs = Boolean(r.rows[0].can_view_audit_logs);
+          req.session.canViewIntegration = Boolean(r.rows[0].can_view_integration);
+          req.session.canEditBusinessHours = Boolean(r.rows[0].can_edit_business_hours);
+          req.session.canViewReports = Boolean(r.rows[0].can_view_reports);
         }
       } catch {
         /* */
@@ -71,6 +75,10 @@ function createResolveSessionUser(appPath, query) {
         area: devArea,
         isMaster: false,
         canEditAiPrompt: false,
+        canViewAuditLogs: false,
+        canViewIntegration: false,
+        canEditBusinessHours: false,
+        canViewReports: false,
       };
       res.locals.currentUser = req.user;
       res.locals.areaLabel = config.AREA_LABELS[req.user.area] || req.user.area;
@@ -84,6 +92,10 @@ function createResolveSessionUser(appPath, query) {
         area: normalizeArea(req.session.area),
         isMaster: Boolean(req.session.isMaster),
         canEditAiPrompt: Boolean(req.session.canEditAiPrompt),
+        canViewAuditLogs: Boolean(req.session.canViewAuditLogs),
+        canViewIntegration: Boolean(req.session.canViewIntegration),
+        canEditBusinessHours: Boolean(req.session.canEditBusinessHours),
+        canViewReports: Boolean(req.session.canViewReports),
       };
       res.locals.currentUser = req.user;
       res.locals.areaLabel = config.AREA_LABELS[req.user.area] || req.user.area;
@@ -106,6 +118,26 @@ function createResolveSessionUser(appPath, query) {
     req.user = null;
     res.locals.showAdminNav = false;
     return next();
+  };
+}
+
+function createRequireAuditLogsAccess() {
+  return function requireAuditLogsAccess(req, res, next) {
+    if (!config.requireAuth) {
+      if (req.accepts('html')) {
+        return res
+          .status(403)
+          .send('La bitácora de auditoría requiere REQUIRE_AUTH=true');
+      }
+      return res.status(403).json({ ok: false, error: 'Forbidden' });
+    }
+    if (req.user && (req.user.isMaster || req.user.canViewAuditLogs)) {
+      return next();
+    }
+    if (req.accepts('html')) {
+      return res.status(403).send('No tienes acceso a la bitácora de auditoría');
+    }
+    return res.status(403).json({ ok: false, error: 'Forbidden' });
   };
 }
 
@@ -187,4 +219,5 @@ module.exports = {
   createRequireSessionLogin,
   createRequirePasswordChange,
   createRequireMaster,
+  createRequireAuditLogsAccess,
 };

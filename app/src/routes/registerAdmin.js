@@ -1,13 +1,18 @@
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const { normalizeArea, isValidBusinessArea, createRequireMaster } = require('../middleware/auth');
+const {
+  buildAuditLogWhere,
+  summarizeMetaForAuditRow,
+  AUDIT_LEVEL_OPTIONS,
+  AUDIT_EVENT_GROUP_OPTIONS,
+} = require('../utils/auditLogQuery');
 const { isValidMaliEmail, normalizeEmail } = require('../utils/contactsCsv');
 const { parseUsersBulkCsvBuffer, parseUsersBulkXlsxBuffer } = require('../utils/usersBulkCsv');
 const { usersBulkImportLimiter, usersBulkImportUpload } = require('../middleware/limiters');
 const { refreshMetaSettingsCache, KEYS } = require('../services/metaSettingsCache');
 const { formatExportDate } = require('../utils/datetimeDisplay');
 const { auditLog, AuditEvent } = require('../services/auditLog');
-const { auditCreatedDateSql } = require('../utils/auditSqlDate');
 
 function adminLocals(req, res, ctx, extra) {
   const { config, resolveAppBaseUrl, appPath } = ctx;
@@ -28,65 +33,36 @@ function parseQueryInt(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Misma ventana que “en línea” en login_logs (coherente con middleware de last_seen). */
-const ONLINE_USER_IDLE_MINUTES = 5;
+function parseCheckbox(body, name) {
+  return String(body[name] || '') === '1' || body[name] === 'on';
+}
 
-/** Filtros de bitácora reutilizables (lista, export TXT). */
-function buildAuditLogWhere(q) {
-  const level = String(q.level || '').trim().toLowerCase();
-  const event = String(q.event || '').trim();
-  const from = String(q.from || '').trim();
-  const to = String(q.to || '').trim();
-  const where = [];
-  const params = [];
-  let n = 1;
-
-  if (['info', 'warn', 'error'].includes(level)) {
-    where.push(`level = $${n}`);
-    params.push(level);
-    n += 1;
-  }
-  if (event) {
-    if (event.includes('.')) {
-      where.push(`event_type = $${n}`);
-      params.push(event);
-      n += 1;
-    } else {
-      where.push(`event_type LIKE $${n}`);
-      params.push(`${event}.%`);
-      n += 1;
-    }
-  }
-  const dateExpr = auditCreatedDateSql();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(from)) {
-    where.push(`${dateExpr} >= $${n}::date`);
-    params.push(from);
-    n += 1;
-  }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(to)) {
-    where.push(`${dateExpr} <= $${n}::date`);
-    params.push(to);
-    n += 1;
-  }
-
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+function parseUserSettingsPerms(body) {
   return {
-    whereSql,
-    params,
-    filters: { level, event, from, to },
+    canViewIntegration: parseCheckbox(body, 'can_view_integration'),
+    canEditAiPrompt: parseCheckbox(body, 'can_edit_ai_prompt'),
+    canEditBusinessHours: parseCheckbox(body, 'can_edit_business_hours'),
+    canViewAuditLogs: parseCheckbox(body, 'can_view_audit_logs'),
+    canViewReports: parseCheckbox(body, 'can_view_reports'),
   };
 }
 
-function summarizeMetaForAuditRow(meta) {
-  if (!meta || typeof meta !== 'object') return '—';
-  try {
-    const s = JSON.stringify(meta);
-    if (s.length <= 200) return s;
-    return `${s.slice(0, 197)}…`;
-  } catch {
-    return '—';
-  }
+function userRowWithPerms(row, perms) {
+  return {
+    ...row,
+    can_view_integration: perms.canViewIntegration,
+    can_edit_ai_prompt: perms.canEditAiPrompt,
+    can_edit_business_hours: perms.canEditBusinessHours,
+    can_view_audit_logs: perms.canViewAuditLogs,
+    can_view_reports: perms.canViewReports,
+  };
 }
+
+const USER_SETTINGS_PERM_COLS =
+  'can_edit_ai_prompt, can_view_audit_logs, can_view_integration, can_edit_business_hours, can_view_reports';
+
+/** Misma ventana que “en línea” en login_logs (coherente con middleware de last_seen). */
+const ONLINE_USER_IDLE_MINUTES = 5;
 
 function metaAuditNonEmptyKeys(body) {
   const b = body || {};
@@ -190,24 +166,6 @@ function registerAdmin(app, ctx) {
       }),
     });
   });
-
-  const AUDIT_LEVEL_OPTIONS = [
-    { value: '', label: 'Todos los niveles' },
-    { value: 'info', label: 'info' },
-    { value: 'warn', label: 'warn' },
-    { value: 'error', label: 'error' },
-  ];
-  const AUDIT_EVENT_GROUP_OPTIONS = [
-    { value: '', label: 'Todos los tipos' },
-    { value: 'auth', label: 'Autenticación' },
-    { value: 'admin', label: 'Administración' },
-    { value: 'segment', label: 'Segmentos' },
-    { value: 'contact', label: 'Contactos' },
-    { value: 'campaign', label: 'Campañas' },
-    { value: 'template', label: 'Plantillas' },
-    { value: 'conversation', label: 'Conversaciones' },
-    { value: 'settings', label: 'Ajustes IA' },
-  ];
 
   app.get('/admin/audit-logs/export.txt', requireMaster, async (req, res) => {
     const { whereSql, params, filters } = buildAuditLogWhere(req.query);
@@ -348,7 +306,7 @@ function registerAdmin(app, ctx) {
 
   app.get('/admin/users', requireMaster, async (req, res) => {
     const r = await query(
-      `SELECT id, email, area, is_master, must_change_password, can_edit_ai_prompt, created_at FROM users ORDER BY email ASC`
+      `SELECT id, email, area, is_master, must_change_password, ${USER_SETTINGS_PERM_COLS}, created_at FROM users ORDER BY email ASC`
     );
     const q = req.query;
     const bulkImport =
@@ -509,21 +467,17 @@ function registerAdmin(app, ctx) {
     const isMaster = String(req.body.is_master || '') === '1' || req.body.is_master === 'on';
     const mustChangePassword =
       String(req.body.must_change_password || '') === '1' || req.body.must_change_password === 'on';
-    const canEditAiPrompt =
-      String(req.body.can_edit_ai_prompt || '') === '1' || req.body.can_edit_ai_prompt === 'on';
+    const perms = parseUserSettingsPerms(req.body);
 
     if (!isValidMaliEmail(email)) {
       return res.status(400).render('admin-user-form', {
         ...adminLocals(req, res, ctx, {
           activeNav: 'admin-users',
           mode: 'create',
-          userRow: {
-            email,
-            area,
-            is_master: isMaster,
-            must_change_password: mustChangePassword,
-            can_edit_ai_prompt: canEditAiPrompt,
-          },
+          userRow: userRowWithPerms(
+            { email, area, is_master: isMaster, must_change_password: mustChangePassword },
+            perms
+          ),
           formError: 'Correo invalido (debe ser @mali.pe)',
         }),
       });
@@ -533,13 +487,10 @@ function registerAdmin(app, ctx) {
         ...adminLocals(req, res, ctx, {
           activeNav: 'admin-users',
           mode: 'create',
-          userRow: {
-            email,
-            area,
-            is_master: isMaster,
-            must_change_password: mustChangePassword,
-            can_edit_ai_prompt: canEditAiPrompt,
-          },
+          userRow: userRowWithPerms(
+            { email, area, is_master: isMaster, must_change_password: mustChangePassword },
+            perms
+          ),
           formError: 'La contraseña debe tener al menos 6 caracteres',
         }),
       });
@@ -551,8 +502,19 @@ function registerAdmin(app, ctx) {
     try {
       const hash = await bcrypt.hash(password, 10);
       await query(
-        `INSERT INTO users (email, password_hash, area, is_master, must_change_password, can_edit_ai_prompt) VALUES ($1, $2, $3, $4, $5, $6)`,
-        [email, hash, area, isMaster, mustChangePassword, canEditAiPrompt]
+        `INSERT INTO users (email, password_hash, area, is_master, must_change_password, can_edit_ai_prompt, can_view_audit_logs, can_view_integration, can_edit_business_hours, can_view_reports) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          email,
+          hash,
+          area,
+          isMaster,
+          mustChangePassword,
+          perms.canEditAiPrompt,
+          perms.canViewAuditLogs,
+          perms.canViewIntegration,
+          perms.canEditBusinessHours,
+          perms.canViewReports,
+        ]
       );
       auditLog(query, {
         req,
@@ -563,7 +525,11 @@ function registerAdmin(app, ctx) {
           area,
           is_master: isMaster,
           must_change_password: mustChangePassword,
-          can_edit_ai_prompt: canEditAiPrompt,
+          can_view_integration: perms.canViewIntegration,
+          can_edit_ai_prompt: perms.canEditAiPrompt,
+          can_edit_business_hours: perms.canEditBusinessHours,
+          can_view_audit_logs: perms.canViewAuditLogs,
+          can_view_reports: perms.canViewReports,
         },
       });
       res.redirect(`${appPath('/admin/users')}?saved=1`);
@@ -573,13 +539,10 @@ function registerAdmin(app, ctx) {
           ...adminLocals(req, res, ctx, {
             activeNav: 'admin-users',
             mode: 'create',
-            userRow: {
-              email,
-              area,
-              is_master: isMaster,
-              must_change_password: mustChangePassword,
-              can_edit_ai_prompt: canEditAiPrompt,
-            },
+            userRow: userRowWithPerms(
+              { email, area, is_master: isMaster, must_change_password: mustChangePassword },
+              perms
+            ),
             formError: 'Ese correo ya existe',
           }),
         });
@@ -594,7 +557,7 @@ function registerAdmin(app, ctx) {
       return res.status(400).send('ID invalido');
     }
     const r = await query(
-      `SELECT id, email, area, is_master, must_change_password, can_edit_ai_prompt FROM users WHERE id = $1`,
+      `SELECT id, email, area, is_master, must_change_password, ${USER_SETTINGS_PERM_COLS} FROM users WHERE id = $1`,
       [id]
     );
     if (r.rowCount === 0) {
@@ -620,8 +583,7 @@ function registerAdmin(app, ctx) {
     const password = String(req.body.password || '').trim();
     const mustChangePassword =
       String(req.body.must_change_password || '') === '1' || req.body.must_change_password === 'on';
-    const canEditAiPrompt =
-      String(req.body.can_edit_ai_prompt || '') === '1' || req.body.can_edit_ai_prompt === 'on';
+    const perms = parseUserSettingsPerms(req.body);
 
     if (!isValidBusinessArea(area)) {
       return res.status(400).send('Area invalida');
@@ -634,20 +596,22 @@ function registerAdmin(app, ctx) {
 
     if (password.length > 0 && password.length < 6) {
       const r = await query(
-        `SELECT id, email, area, is_master, must_change_password, can_edit_ai_prompt FROM users WHERE id = $1`,
+        `SELECT id, email, area, is_master, must_change_password, ${USER_SETTINGS_PERM_COLS} FROM users WHERE id = $1`,
         [id]
       );
       return res.status(400).render('admin-user-form', {
         ...adminLocals(req, res, ctx, {
           activeNav: 'admin-users',
           mode: 'edit',
-          userRow: {
-            ...r.rows[0],
-            area,
-            is_master: isMaster,
-            must_change_password: mustChangePassword,
-            can_edit_ai_prompt: canEditAiPrompt,
-          },
+          userRow: userRowWithPerms(
+            {
+              ...r.rows[0],
+              area,
+              is_master: isMaster,
+              must_change_password: mustChangePassword,
+            },
+            perms
+          ),
           formError: 'La contraseña debe tener al menos 6 caracteres',
         }),
       });
@@ -656,19 +620,44 @@ function registerAdmin(app, ctx) {
     if (password.length > 0) {
       const hash = await bcrypt.hash(password, 10);
       await query(
-        `UPDATE users SET area = $1, is_master = $2, password_hash = $3, must_change_password = FALSE, can_edit_ai_prompt = $4 WHERE id = $5`,
-        [area, isMaster, hash, canEditAiPrompt, id]
+        `UPDATE users SET area = $1, is_master = $2, password_hash = $3, must_change_password = FALSE, can_edit_ai_prompt = $4, can_view_audit_logs = $5, can_view_integration = $6, can_edit_business_hours = $7, can_view_reports = $8 WHERE id = $9`,
+        [
+          area,
+          isMaster,
+          hash,
+          perms.canEditAiPrompt,
+          perms.canViewAuditLogs,
+          perms.canViewIntegration,
+          perms.canEditBusinessHours,
+          perms.canViewReports,
+          id,
+        ]
       );
     } else {
       await query(
-        `UPDATE users SET area = $1, is_master = $2, must_change_password = $3, can_edit_ai_prompt = $4 WHERE id = $5`,
-        [area, isMaster, mustChangePassword, canEditAiPrompt, id]
+        `UPDATE users SET area = $1, is_master = $2, must_change_password = $3, can_edit_ai_prompt = $4, can_view_audit_logs = $5, can_view_integration = $6, can_edit_business_hours = $7, can_view_reports = $8 WHERE id = $9`,
+        [
+          area,
+          isMaster,
+          mustChangePassword,
+          perms.canEditAiPrompt,
+          perms.canViewAuditLogs,
+          perms.canViewIntegration,
+          perms.canEditBusinessHours,
+          perms.canViewReports,
+          id,
+        ]
       );
     }
 
     if (id === req.session.userId) {
       req.session.area = area;
       req.session.isMaster = isMaster;
+      req.session.canViewAuditLogs = perms.canViewAuditLogs;
+      req.session.canViewIntegration = perms.canViewIntegration;
+      req.session.canEditAiPrompt = perms.canEditAiPrompt;
+      req.session.canEditBusinessHours = perms.canEditBusinessHours;
+      req.session.canViewReports = perms.canViewReports;
       if (password.length > 0) {
         req.session.mustChangePassword = false;
       } else {
@@ -687,7 +676,11 @@ function registerAdmin(app, ctx) {
         is_master: isMaster,
         password_changed: password.length > 0,
         must_change_password: mustChangePassword,
-        can_edit_ai_prompt: canEditAiPrompt,
+        can_view_integration: perms.canViewIntegration,
+        can_edit_ai_prompt: perms.canEditAiPrompt,
+        can_edit_business_hours: perms.canEditBusinessHours,
+        can_view_audit_logs: perms.canViewAuditLogs,
+        can_view_reports: perms.canViewReports,
       },
     });
 

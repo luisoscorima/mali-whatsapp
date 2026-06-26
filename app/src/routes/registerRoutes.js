@@ -17,6 +17,7 @@ const { registerConversations } = require('./registerConversations');
 const { registerWebhook } = require('./registerWebhook');
 const { registerAdmin } = require('./registerAdmin');
 const { registerSettingsApi } = require('./registerSettingsApi');
+const { registerSettingsViews } = require('./registerSettingsViews');
 const { registerMetaAds } = require('./registerMetaAds');
 const { registerAttributeDefinitions } = require('./registerAttributeDefinitions');
 
@@ -35,6 +36,7 @@ function createRegisterRoutes({ query, pool, appPath }) {
     registerCampaigns(app, ctx);
     registerConversations(app, ctx);
     registerSettingsApi(app, ctx);
+    registerSettingsViews(app, ctx);
     registerMetaAds(app, ctx);
     registerAttributeDefinitions(app, ctx);
     registerWebhook(app, ctx);

@@ -155,7 +155,7 @@ function registerSettingsApi(app, ctx) {
     const userArea = String(req.user.area || '').trim().toLowerCase();
     const isMaster = Boolean(req.user.isMaster);
     const canEdit =
-      Boolean(req.user.canEditAiPrompt) && userArea === area && config.BUSINESS_AREAS.includes(userArea);
+      Boolean(req.user.canEditBusinessHours) && userArea === area && config.BUSINESS_AREAS.includes(userArea);
 
     if (!isMaster && !canEdit) {
       return res.status(403).json({ ok: false, error: 'No autorizado' });

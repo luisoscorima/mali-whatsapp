@@ -69,6 +69,28 @@
           <span class="field-label">Usuario master</span>
         </label>
 
+        <p class="field-label" style="margin: 0.5rem 0 0">Módulos de Ajustes</p>
+        <label class="field field--checkbox">
+          <input type="checkbox" name="can_view_integration" value="1" <%= u.can_view_integration ? 'checked' : '' %> />
+          <span class="field-label">Integración (webhook y documentación)</span>
+        </label>
+        <label class="field field--checkbox">
+          <input type="checkbox" name="can_edit_ai_prompt" value="1" <%= u.can_edit_ai_prompt ? 'checked' : '' %> />
+          <span class="field-label">Respuesta automática (IA)</span>
+        </label>
+        <label class="field field--checkbox">
+          <input type="checkbox" name="can_edit_business_hours" value="1" <%= u.can_edit_business_hours ? 'checked' : '' %> />
+          <span class="field-label">Fuera de horario</span>
+        </label>
+        <label class="field field--checkbox">
+          <input type="checkbox" name="can_view_audit_logs" value="1" <%= u.can_view_audit_logs ? 'checked' : '' %> />
+          <span class="field-label">Bitácora de auditoría (solo su área)</span>
+        </label>
+        <label class="field field--checkbox">
+          <input type="checkbox" name="can_view_reports" value="1" <%= u.can_view_reports ? 'checked' : '' %> />
+          <span class="field-label">Reportería (comunicaciones por contacto)</span>
+        </label>
+
         <div class="field-row">
           <button type="submit" class="primary">Guardar</button>
           <a class="secondary small-btn" href="<%= basePath %>/admin/users">Cancelar</a>

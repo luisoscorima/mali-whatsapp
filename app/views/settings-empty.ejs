@@ -1,0 +1,32 @@
+<%- include('layouts/inbox-shell-start', {
+  pageTitle,
+  basePath,
+  appBaseUrl,
+  requireAuth,
+  currentUser,
+  areaLabel,
+  activeNav,
+  showAdminNav,
+  shellPageClass: 'conversations-page',
+  layoutModifier: 'conversations-inbox--detail',
+  extraHeadScripts: null
+}) %>
+<aside class="inbox-sidebar" aria-label="Ajustes">
+  <div class="inbox-sidebar-header">
+    <h2 class="inbox-sidebar-title">Ajustes</h2>
+  </div>
+</aside>
+<section class="inbox-main" aria-label="Ajustes">
+  <div class="inbox-chat-header inbox-chat-header--static">
+    <h1 class="inbox-chat-heading">Ajustes</h1>
+  </div>
+  <div class="inbox-chat-body inbox-chat-body--form">
+    <div class="card">
+      <p class="card-lead muted" style="margin-top: 0">
+        No tienes módulos de ajustes asignados. Contacta al administrador master para que te habilite acceso.
+      </p>
+      <p class="card-lead muted"><a href="<%= basePath %>/campaigns">← Volver a campañas</a></p>
+    </div>
+  </div>
+</section>
+<%- include('layouts/inbox-shell-end') %>

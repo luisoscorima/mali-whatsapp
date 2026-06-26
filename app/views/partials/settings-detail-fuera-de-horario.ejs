@@ -1,0 +1,53 @@
+<div class="card" id="settings-business-hours-card">
+  <h2 class="card-title">Fuera de horario · <%= areaLabel %></h2>
+  <p class="inbox-compose-hint-inline">
+    Fuera de este horario se envía el mensaje predefinido <strong>una sola vez</strong> por chat hasta que un asesor lo abra. Aplica en modo Bot y Asesor. No usa IA.
+  </p>
+  <div class="settings-ai-toggle">
+    <label class="settings-ai-switch">
+      <input
+        type="checkbox"
+        id="settings-bh-enabled"
+        <%= typeof businessHoursEnabled !== 'undefined' && businessHoursEnabled ? 'checked' : '' %>
+        data-area="<%= typeof masterArea !== 'undefined' ? masterArea : '' %>"
+      />
+      <span>Activar mensaje fuera de horario</span>
+    </label>
+  </div>
+  <fieldset class="campaign-schedule-fieldset" style="margin-top: 1rem; border: none; padding: 0;">
+    <legend class="settings-ai-prompt-label">Días de atención</legend>
+    <div class="campaign-schedule-options" style="flex-wrap: wrap; gap: 0.75rem;">
+      <% const _bhDayLabels = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']; %>
+      <% const _bhDays = typeof businessHoursDays !== 'undefined' && Array.isArray(businessHoursDays) ? businessHoursDays : [1,2,3,4,5]; %>
+      <% for (let d = 0; d <= 6; d++) { %>
+      <label class="campaign-schedule-option">
+        <input type="checkbox" class="settings-bh-day" value="<%= d %>" <%= _bhDays.indexOf(d) >= 0 ? 'checked' : '' %> />
+        <%= _bhDayLabels[d] %>
+      </label>
+      <% } %>
+    </div>
+  </fieldset>
+  <div class="settings-bh-times" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1rem;">
+    <label class="settings-ai-prompt-label">
+      Desde
+      <input type="time" id="settings-bh-from" class="settings-ai-transfer-input" value="<%= typeof businessHoursFrom !== 'undefined' ? businessHoursFrom : '09:00' %>" />
+    </label>
+    <label class="settings-ai-prompt-label">
+      Hasta
+      <input type="time" id="settings-bh-to" class="settings-ai-transfer-input" value="<%= typeof businessHoursTo !== 'undefined' ? businessHoursTo : '18:00' %>" />
+    </label>
+  </div>
+  <p class="inbox-compose-hint-inline">Zona horaria: <%= typeof businessHoursTimezone !== 'undefined' ? businessHoursTimezone : 'America/Lima' %></p>
+  <label class="settings-ai-prompt-label" for="settings-bh-message">Mensaje predefinido (fuera de horario)</label>
+  <textarea
+    id="settings-bh-message"
+    class="settings-ai-prompt-textarea"
+    rows="5"
+    maxlength="4096"
+    placeholder="Ej.: Gracias por escribir. Te responderemos en horario de atención (Lun–Vie 9–18h)."
+  ><%= typeof businessHoursMessage !== 'undefined' ? businessHoursMessage : '' %></textarea>
+  <div class="settings-ai-prompt-actions">
+    <button type="button" class="small-btn" id="settings-bh-save">Guardar horario</button>
+    <span class="settings-ai-prompt-status" id="settings-bh-status" aria-live="polite"></span>
+  </div>
+</div>

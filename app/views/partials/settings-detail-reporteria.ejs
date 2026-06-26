@@ -1,0 +1,68 @@
+<div class="card">
+  <p class="card-lead muted" style="margin-top: 0">
+  Contactos del área <strong><%= typeof reportAreaLabel !== 'undefined' ? reportAreaLabel : '' %></strong> con al menos un mensaje en el chat.
+  Vista previa paginada; el Excel incluye todos los registros.
+  </p>
+  <div class="card-head card-head--actions-only" style="margin-bottom: 0.75rem">
+    <a class="small-btn primary" href="<%= typeof reportExportHref !== 'undefined' ? reportExportHref : (basePath + '/settings/reporteria/export.xlsx') %>">Descargar Excel</a>
+  </div>
+
+  <% const pag = typeof reportPagination !== 'undefined' && reportPagination ? reportPagination : { page: 1, totalPages: 1, total: 0, prev: null, next: null }; %>
+  <p class="muted" style="margin: 0 0 0.75rem">
+    <%= pag.total %> contacto<% if (pag.total !== 1) { %>s<% } %> · página <%= pag.page %> de <%= pag.totalPages %>
+  </p>
+
+  <div class="table-wrap table-wrap--compact">
+    <table>
+      <thead>
+        <tr>
+          <th>Número</th>
+          <th>Nombre</th>
+          <th>1.ª comunicación</th>
+          <th>Iniciada por</th>
+          <th>Inicio (2 msgs)</th>
+          <th>Última comunicación</th>
+          <th>Última por</th>
+          <th>Cola cliente</th>
+          <th>Cola equipo</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (!reportRows || reportRows.length === 0) { %>
+        <tr>
+          <td colspan="9" class="muted">No hay contactos con mensajes en esta área.</td>
+        </tr>
+        <% } else { %>
+        <% reportRows.forEach(function (row) { %>
+        <tr>
+          <td class="mono"><%= row.phone %></td>
+          <td><%= row.name %></td>
+          <td class="audit-log-table__time"><%= row.firstCommunicationDisplay %></td>
+          <td><%= row.initiatedBy || '—' %></td>
+          <td class="muted" style="max-width: 14rem">
+            <% if (row.message1Preview) { %><span title="<%= row.message1 %>">1: <%= row.message1Preview %></span><% } %>
+            <% if (row.message2Preview) { %><br /><span title="<%= row.message2 %>">2: <%= row.message2Preview %></span><% } %>
+            <% if (!row.message1Preview && !row.message2Preview) { %>—<% } %>
+          </td>
+          <td class="audit-log-table__time"><%= row.lastCommunicationDisplay %></td>
+          <td><%= row.lastCommunicationBy || '—' %></td>
+          <td class="muted" style="max-width: 12rem" title="<%= row.lastClientMessage %>"><%= row.lastClientMessagePreview || '—' %></td>
+          <td class="muted" style="max-width: 12rem" title="<%= row.lastTeamMessage %>"><%= row.lastTeamMessagePreview || '—' %></td>
+        </tr>
+        <% }); %>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+
+  <% if (pag.prev != null || pag.next != null) { %>
+  <nav class="audit-log-pagination" aria-label="Paginación del reporte" style="margin-top: 0.75rem">
+    <% if (pag.prev != null) { %>
+    <a class="small-btn secondary" href="<%= basePath %>/settings/reporteria<%= pag.prev %>">Anterior</a>
+    <% } %>
+    <% if (pag.next != null) { %>
+    <a class="small-btn secondary" href="<%= basePath %>/settings/reporteria<%= pag.next %>">Siguiente</a>
+    <% } %>
+  </nav>
+  <% } %>
+</div>

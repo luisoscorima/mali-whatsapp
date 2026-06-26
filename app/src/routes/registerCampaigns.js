@@ -20,6 +20,7 @@ const {
   countRecipientsUnion,
   validateRecipientsMatchRequest,
 } = require('../services/campaignRecipients');
+const { isWithinUserServiceWindow } = require('../utils/conversations');
 const {
   sqlCampaignLogContactJoin,
   sqlCampaignLogContactName,
@@ -186,6 +187,9 @@ function registerCampaigns(app, ctx) {
       }
       if (excludeIds.length > 0) recipientOptions.excludeContactIds = excludeIds;
 
+      const excludeOpenServiceWindow = req.body?.excludeOpenServiceWindow === true;
+      if (excludeOpenServiceWindow) recipientOptions.excludeOpenServiceWindow = true;
+
       const maxN = config.CAMPAIGN_RECIPIENTS_PREVIEW_MAX;
       const total = await countRecipientsUnion(query, area, segments, recipientOptions);
       if (total > maxN) {
@@ -198,7 +202,13 @@ function registerCampaigns(app, ctx) {
       }
 
       const contacts = await fetchRecipientsUnion(query, area, segments, recipientOptions);
-      return res.json({ ok: true, contacts, total: contacts.length });
+      const mapped = contacts.map((c) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        serviceWindowOpen: isWithinUserServiceWindow(c.last_user_message_at),
+      }));
+      return res.json({ ok: true, contacts: mapped, total: mapped.length, excludeOpenServiceWindow });
     } catch (error) {
       logError(req, 'Error vista previa campaña', error);
       return res.status(500).json({ ok: false, error: 'No se pudo cargar la lista' });
@@ -234,6 +244,7 @@ function registerCampaigns(app, ctx) {
       recipientContactIds,
       excludeContactIds,
       excludeSegmentSlugs,
+      excludeOpenServiceWindow,
       audienceMode,
       templateRow: tRow,
       values,
@@ -253,6 +264,9 @@ function registerCampaigns(app, ctx) {
     if (excludeSegmentSlugs && excludeSegmentSlugs.length > 0) {
       recipientOptions.excludeSegmentSlugs = excludeSegmentSlugs;
     }
+    if (excludeOpenServiceWindow) {
+      recipientOptions.excludeOpenServiceWindow = true;
+    }
 
     try {
       let recipients;
@@ -262,7 +276,10 @@ function registerCampaigns(app, ctx) {
           contactIds: recipientContactIds,
         });
         if (!validateRecipientsMatchRequest(recipients, recipientContactIds)) {
-          return jsonErr('Destinatarios inválidos o no pertenecen a los segmentos seleccionados');
+          const msg = excludeOpenServiceWindow
+            ? 'Destinatarios inválidos, fuera de los segmentos o con ventana de 24 h activa (excluidos por el filtro)'
+            : 'Destinatarios inválidos o no pertenecen a los segmentos seleccionados';
+          return jsonErr(msg);
         }
       } else {
         recipients = await fetchRecipientsUnion(query, area, segments, recipientOptions);
@@ -302,6 +319,9 @@ function registerCampaigns(app, ctx) {
       }
       if (excludeSegmentSlugs && excludeSegmentSlugs.length > 0) {
         campaignPayload.excludeSegmentSlugs = excludeSegmentSlugs;
+      }
+      if (excludeOpenServiceWindow) {
+        campaignPayload.excludeOpenServiceWindow = true;
       }
       if (uniqueExcludeIds.length > 0) {
         campaignPayload.excludeContactIdsMerged = uniqueExcludeIds;

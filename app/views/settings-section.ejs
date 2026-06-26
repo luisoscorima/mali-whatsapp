@@ -1,0 +1,146 @@
+<%- include('layouts/inbox-shell-start', {
+  pageTitle,
+  basePath,
+  appBaseUrl,
+  requireAuth,
+  currentUser,
+  areaLabel,
+  activeNav,
+  showAdminNav,
+  shellPageClass: 'conversations-page',
+  layoutModifier: 'conversations-inbox--detail',
+  extraHeadScripts: null
+}) %>
+<%- include('partials/settings-sidebar', { basePath, settingsSection, settingsModules }) %>
+<section class="inbox-main" aria-label="Ajustes de la aplicación">
+  <div class="inbox-chat-header inbox-chat-header--static">
+    <h1 class="inbox-chat-heading"><%= typeof settingsHeading !== 'undefined' ? settingsHeading : 'Ajustes' %></h1>
+  </div>
+  <div class="inbox-chat-body inbox-chat-body--form">
+    <% if (settingsSection === 'integracion') { %>
+    <%- include('partials/settings-detail-integracion') %>
+    <% } else if (settingsSection === 'ia') { %>
+    <%- include('partials/settings-detail-ia') %>
+    <% } else if (settingsSection === 'fuera-de-horario') { %>
+    <%- include('partials/settings-detail-fuera-de-horario') %>
+    <% } else if (settingsSection === 'bitacora') { %>
+    <%- include('partials/settings-detail-bitacora') %>
+    <% } else if (settingsSection === 'reporteria') { %>
+    <%- include('partials/settings-detail-reporteria') %>
+    <% } %>
+  </div>
+</section>
+<% if (settingsSection === 'ia') { %>
+<script>
+  (function () {
+    var cb = document.getElementById('settings-ai-area-enabled');
+    var fb = document.getElementById('settings-ai-feedback');
+    var bp = '<%= basePath %>';
+    var area = '<%= typeof masterArea !== "undefined" ? masterArea : "" %>';
+    if (cb) {
+      cb.addEventListener('change', function () {
+        if (!area) return;
+        fetch(bp + '/api/settings/ai/' + encodeURIComponent(area) + '/enable', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ enabled: cb.checked }),
+        })
+          .then(function (r) {
+            if (!r.ok) return r.json().then(function (j) { throw new Error(j.error || 'Error'); });
+            if (fb) { fb.hidden = true; fb.textContent = ''; }
+          })
+          .catch(function (e) {
+            cb.checked = !cb.checked;
+            if (fb) { fb.hidden = false; fb.textContent = e.message || 'Error'; }
+          });
+      });
+    }
+    var saveBtn = document.getElementById('settings-ai-save-prompt');
+    var ta = document.getElementById('settings-ai-prompt');
+    var tk = document.getElementById('settings-ai-transfer');
+    var st = document.getElementById('settings-ai-prompt-status');
+    if (saveBtn && ta && tk) {
+      saveBtn.addEventListener('click', function () {
+        if (!area) return;
+        var prompt = String(ta.value || '').trim();
+        if (!prompt) {
+          if (st) st.textContent = 'El prompt no puede estar vacío.';
+          return;
+        }
+        var transferKw = String(tk.value || '').trim() || '[TRANSFERIR]';
+        var enabled = cb ? cb.checked : false;
+        saveBtn.disabled = true;
+        if (st) st.textContent = 'Guardando…';
+        fetch(bp + '/api/settings/ai/' + encodeURIComponent(area), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ enabled: enabled, prompt: prompt, transfer_keyword: transferKw }),
+        })
+          .then(function (r) {
+            if (!r.ok) return r.json().then(function (j) { throw new Error(j.error || 'Error'); });
+            if (st) st.textContent = 'Guardado.';
+            setTimeout(function () { if (st) st.textContent = ''; }, 4000);
+          })
+          .catch(function (e) { if (st) st.textContent = e.message || 'Error'; })
+          .finally(function () { saveBtn.disabled = false; });
+      });
+    }
+  })();
+</script>
+<% } else if (settingsSection === 'fuera-de-horario') { %>
+<script>
+  (function () {
+    var bp = '<%= basePath %>';
+    var bhSave = document.getElementById('settings-bh-save');
+    var bhEnabled = document.getElementById('settings-bh-enabled');
+    var bhFrom = document.getElementById('settings-bh-from');
+    var bhTo = document.getElementById('settings-bh-to');
+    var bhMsg = document.getElementById('settings-bh-message');
+    var bhSt = document.getElementById('settings-bh-status');
+    if (bhSave && bhEnabled && bhFrom && bhTo && bhMsg) {
+      bhSave.addEventListener('click', function () {
+        var area = String(bhEnabled.getAttribute('data-area') || '').trim();
+        if (!area) return;
+        var days = [];
+        document.querySelectorAll('.settings-bh-day:checked').forEach(function (el) {
+          days.push(Number(el.value));
+        });
+        var payload = {
+          enabled: bhEnabled.checked,
+          timezone: 'America/Lima',
+          days: days,
+          from: String(bhFrom.value || '').slice(0, 5),
+          to: String(bhTo.value || '').slice(0, 5),
+          outside_hours_message: String(bhMsg.value || '').trim(),
+        };
+        if (payload.enabled && days.length === 0) {
+          if (bhSt) bhSt.textContent = 'Selecciona al menos un día.';
+          return;
+        }
+        if (payload.enabled && !payload.outside_hours_message) {
+          if (bhSt) bhSt.textContent = 'El mensaje fuera de horario es obligatorio.';
+          return;
+        }
+        bhSave.disabled = true;
+        if (bhSt) bhSt.textContent = 'Guardando…';
+        fetch(bp + '/api/settings/business-hours/' + encodeURIComponent(area), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(payload),
+        })
+          .then(function (r) {
+            if (!r.ok) return r.json().then(function (j) { throw new Error(j.error || 'Error'); });
+            if (bhSt) bhSt.textContent = 'Guardado.';
+            setTimeout(function () { if (bhSt) bhSt.textContent = ''; }, 4000);
+          })
+          .catch(function (e) { if (bhSt) bhSt.textContent = e.message || 'Error'; })
+          .finally(function () { bhSave.disabled = false; });
+      });
+    }
+  })();
+</script>
+<% } %>
+<%- include('layouts/inbox-shell-end') %>

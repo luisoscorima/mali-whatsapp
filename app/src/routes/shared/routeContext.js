@@ -382,6 +382,8 @@ function createRouteContext({ query, pool, appPath }) {
       return exclusions;
     }
 
+    const excludeOpenServiceWindow = reqBody?.excludeOpenServiceWindow === true;
+
     const templateSyncId = parseInt(String(reqBody.templateSyncId || '').trim(), 10);
     if (!Number.isInteger(templateSyncId) || templateSyncId <= 0) {
       return { ok: false, message: 'Selecciona una plantilla sincronizada' };
@@ -452,6 +454,7 @@ function createRouteContext({ query, pool, appPath }) {
         recipientContactIds: audience.recipientContactIds,
         excludeContactIds: exclusions.excludeContactIds,
         excludeSegmentSlugs: exclusions.excludeSegmentSlugs,
+        excludeOpenServiceWindow,
         paramMapping,
         segment: audience.segmentLabelForDb,
         templateSyncId,
