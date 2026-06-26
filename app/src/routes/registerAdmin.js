@@ -7,6 +7,7 @@ const {
   AUDIT_LEVEL_OPTIONS,
   AUDIT_EVENT_GROUP_OPTIONS,
 } = require('../utils/auditLogQuery');
+const { buildAuditLogXlsxBuffer, auditLogExportFilename } = require('../utils/auditLogExport');
 const { isValidMaliEmail, normalizeEmail } = require('../utils/contactsCsv');
 const { parseUsersBulkCsvBuffer, parseUsersBulkXlsxBuffer } = require('../utils/usersBulkCsv');
 const { usersBulkImportLimiter, usersBulkImportUpload } = require('../middleware/limiters');
@@ -167,8 +168,8 @@ function registerAdmin(app, ctx) {
     });
   });
 
-  app.get('/admin/audit-logs/export.txt', requireMaster, async (req, res) => {
-    const { whereSql, params, filters } = buildAuditLogWhere(req.query);
+  app.get('/admin/audit-logs/export.xlsx', requireMaster, async (req, res) => {
+    const { whereSql, params } = buildAuditLogWhere(req.query);
     const maxRows = 25000;
     const exportParams = [...params, maxRows];
     const limIdx = params.length + 1;
@@ -180,50 +181,16 @@ function registerAdmin(app, ctx) {
       exportParams
     );
 
-    const lines = [];
-    lines.push('# MALI WhatsApp — bitácora de auditoría (TXT, columnas separadas por TAB)');
-    lines.push(
-      `# Filtros: level=${filters.level || '—'} event=${filters.event || '—'} from=${filters.from || '—'} to=${filters.to || '—'}`
+    const buf = buildAuditLogXlsxBuffer(r.rows);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     );
-    lines.push(`# Zona de fechas en panel: ${ctx.config.DISPLAY_TIMEZONE}`);
-    lines.push(`# Filas exportadas (máx. ${maxRows}): ${r.rows.length}`);
-    lines.push(
-      '# fecha_hora\tnivel\ttipo\tmensaje\tactor_id\tactor_email\tarea\tip\trequest_id\tmeta_json'
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${auditLogExportFilename('bitacora-admin')}"`
     );
-    lines.push('');
-
-    for (const row of r.rows) {
-      const ts = formatExportDate(row.created_at) || String(row.created_at || '');
-      let metaStr = '{}';
-      try {
-        metaStr = JSON.stringify(row.meta != null ? row.meta : {});
-      } catch {
-        metaStr = '{}';
-      }
-      const cells = [
-        ts,
-        row.level,
-        row.event_type,
-        String(row.message || '')
-          .replace(/\t/g, ' ')
-          .replace(/\r\n/g, ' ')
-          .replace(/\n/g, ' ')
-          .replace(/\r/g, ' '),
-        row.actor_user_id != null ? String(row.actor_user_id) : '',
-        row.actor_email != null ? String(row.actor_email) : '',
-        row.area != null ? String(row.area) : '',
-        row.client_ip != null ? String(row.client_ip) : '',
-        row.request_id != null ? String(row.request_id) : '',
-        metaStr.replace(/\t/g, ' '),
-      ];
-      lines.push(cells.join('\t'));
-    }
-
-    const stamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-    const body = `${lines.join('\n')}\n`;
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="bitacora-audit-${stamp}.txt"`);
-    res.send(body);
+    res.send(buf);
   });
 
   app.get('/admin/audit-logs', requireMaster, async (req, res) => {
@@ -238,7 +205,7 @@ function registerAdmin(app, ctx) {
     if (from) exportSp.set('from', from);
     if (to) exportSp.set('to', to);
     const exportQs = exportSp.toString();
-    const auditExportHref = `${appPath('/admin/audit-logs/export.txt')}${exportQs ? `?${exportQs}` : ''}`;
+    const auditExportHref = `${appPath('/admin/audit-logs/export.xlsx')}${exportQs ? `?${exportQs}` : ''}`;
 
     const countR = await query(`SELECT COUNT(*)::int AS c FROM audit_logs ${whereSql}`, params);
     const total = Number(countR.rows[0]?.c || 0);

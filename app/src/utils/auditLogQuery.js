@@ -16,6 +16,20 @@ function buildAuditLogWhere(q, opts = {}) {
     params.push(areaScope);
     n += 1;
   }
+  if (opts.excludeMasterActors) {
+    where.push(`NOT EXISTS (
+      SELECT 1 FROM users u
+      WHERE u.is_master = TRUE
+        AND (
+          u.id = actor_user_id
+          OR (
+            actor_user_id IS NULL
+            AND actor_email IS NOT NULL
+            AND LOWER(u.email) = LOWER(actor_email)
+          )
+        )
+    )`);
+  }
   if (['info', 'warn', 'error'].includes(level)) {
     where.push(`level = $${n}`);
     params.push(level);
@@ -58,6 +72,19 @@ function auditAreaScopeForUser(user) {
   return null;
 }
 
+function auditLogQueryOptsForUser(user) {
+  if (!user || user.isMaster) {
+    return { areaScope: null, excludeMasterActors: false };
+  }
+  if (!user.canViewAuditLogs) {
+    return { areaScope: null, excludeMasterActors: false };
+  }
+  return {
+    areaScope: user.area,
+    excludeMasterActors: true,
+  };
+}
+
 function summarizeMetaForAuditRow(meta) {
   if (!meta || typeof meta !== 'object') return '—';
   try {
@@ -91,6 +118,7 @@ const AUDIT_EVENT_GROUP_OPTIONS = [
 module.exports = {
   buildAuditLogWhere,
   auditAreaScopeForUser,
+  auditLogQueryOptsForUser,
   summarizeMetaForAuditRow,
   AUDIT_LEVEL_OPTIONS,
   AUDIT_EVENT_GROUP_OPTIONS,
