@@ -14,6 +14,11 @@ const { usersBulkImportLimiter, usersBulkImportUpload } = require('../middleware
 const { refreshMetaSettingsCache, KEYS } = require('../services/metaSettingsCache');
 const { formatExportDate } = require('../utils/datetimeDisplay');
 const { auditLog, AuditEvent } = require('../services/auditLog');
+const {
+  parseExtraAreasFromBody,
+  fetchExtraAreasForUser,
+  replaceExtraAreasForUser,
+} = require('../utils/userAreas');
 
 function adminLocals(req, res, ctx, extra) {
   const { config, resolveAppBaseUrl, appPath } = ctx;
@@ -24,6 +29,10 @@ function adminLocals(req, res, ctx, extra) {
     areaLabel: res.locals.areaLabel,
     appBaseUrl: resolveAppBaseUrl(),
     showAdminNav: res.locals.showAdminNav,
+    areaDefs: config.BUSINESS_AREAS.map((slug) => ({
+      slug,
+      label: config.AREA_LABELS[slug] || slug,
+    })),
     ...extra,
   };
 }
@@ -82,6 +91,12 @@ function metaAuditNonEmptyKeys(body) {
   if (String(b.edu_whatsapp_token || '').trim()) keys.push('edu_whatsapp_token');
   if (String(b.edu_phone_number_id || '').trim()) keys.push('edu_phone_number_id');
   if (String(b.edu_waba_id || '').trim()) keys.push('edu_waba_id');
+  if (String(b.edu_ca_whatsapp_token || '').trim()) keys.push('edu_ca_whatsapp_token');
+  if (String(b.edu_ca_phone_number_id || '').trim()) keys.push('edu_ca_phone_number_id');
+  if (String(b.edu_ca_waba_id || '').trim()) keys.push('edu_ca_waba_id');
+  if (String(b.edu_ep_whatsapp_token || '').trim()) keys.push('edu_ep_whatsapp_token');
+  if (String(b.edu_ep_phone_number_id || '').trim()) keys.push('edu_ep_phone_number_id');
+  if (String(b.edu_ep_waba_id || '').trim()) keys.push('edu_ep_waba_id');
   return keys;
 }
 
@@ -105,35 +120,6 @@ function registerAdmin(app, ctx) {
     slug,
     label: config.AREA_LABELS[slug] || slug,
   }));
-
-  app.post('/admin/switch-area', requireMaster, async (req, res) => {
-    const area = normalizeArea(req.body.area);
-    if (!isValidBusinessArea(area)) {
-      return res.redirect(appPath('/campaigns'));
-    }
-    req.session.area = area;
-    try {
-      await query(`UPDATE users SET area = $1 WHERE id = $2`, [area, req.session.userId]);
-    } catch (e) {
-      console.error(
-        JSON.stringify({
-          level: 'warn',
-          message: 'No se pudo persistir cambio de area de master',
-          userId: req.session.userId || null,
-          area,
-          error: e?.message || 'unknown',
-        })
-      );
-    }
-    auditLog(query, {
-      req,
-      event_type: AuditEvent.ADMIN_SWITCH_AREA,
-      message: `Master cambió el área de trabajo a ${area}`,
-      actor: { userId: req.user.id, email: req.user.email, area: req.user.area },
-      meta: { new_area: area },
-    });
-    res.redirect(appPath('/campaigns'));
-  });
 
   app.get('/admin/login-logs', requireMaster, (req, res) => {
     res.redirect(302, appPath('/admin/users-online'));
@@ -468,8 +454,8 @@ function registerAdmin(app, ctx) {
 
     try {
       const hash = await bcrypt.hash(password, 10);
-      await query(
-        `INSERT INTO users (email, password_hash, area, is_master, must_change_password, can_edit_ai_prompt, can_view_audit_logs, can_view_integration, can_edit_business_hours, can_view_reports) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      const ins = await query(
+        `INSERT INTO users (email, password_hash, area, is_master, must_change_password, can_edit_ai_prompt, can_view_audit_logs, can_view_integration, can_edit_business_hours, can_view_reports) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
         [
           email,
           hash,
@@ -483,6 +469,15 @@ function registerAdmin(app, ctx) {
           perms.canViewReports,
         ]
       );
+      const userId = ins.rows[0]?.id;
+      if (userId != null) {
+        await replaceExtraAreasForUser(
+          query,
+          userId,
+          area,
+          parseExtraAreasFromBody(req.body)
+        );
+      }
       auditLog(query, {
         req,
         event_type: AuditEvent.ADMIN_USER_CREATED,
@@ -530,11 +525,12 @@ function registerAdmin(app, ctx) {
     if (r.rowCount === 0) {
       return res.status(404).send('Usuario no encontrado');
     }
+    const extraAreas = await fetchExtraAreasForUser(query, id);
     res.render('admin-user-form', {
       ...adminLocals(req, res, ctx, {
         activeNav: 'admin-users',
         mode: 'edit',
-        userRow: r.rows[0],
+        userRow: { ...r.rows[0], extra_areas: extraAreas },
         formError: null,
       }),
     });
@@ -616,6 +612,8 @@ function registerAdmin(app, ctx) {
         ]
       );
     }
+
+    await replaceExtraAreasForUser(query, id, area, parseExtraAreasFromBody(req.body));
 
     if (id === req.session.userId) {
       req.session.area = area;
@@ -745,6 +743,14 @@ function registerAdmin(app, ctx) {
     await upsertMetaSetting(query, 'educacion', KEYS.whatsappToken, b.edu_whatsapp_token);
     await upsertMetaSetting(query, 'educacion', KEYS.phoneNumberId, b.edu_phone_number_id);
     await upsertMetaSetting(query, 'educacion', KEYS.wabaId, b.edu_waba_id);
+
+    await upsertMetaSetting(query, 'educacion_ca', KEYS.whatsappToken, b.edu_ca_whatsapp_token);
+    await upsertMetaSetting(query, 'educacion_ca', KEYS.phoneNumberId, b.edu_ca_phone_number_id);
+    await upsertMetaSetting(query, 'educacion_ca', KEYS.wabaId, b.edu_ca_waba_id);
+
+    await upsertMetaSetting(query, 'educacion_ep', KEYS.whatsappToken, b.edu_ep_whatsapp_token);
+    await upsertMetaSetting(query, 'educacion_ep', KEYS.phoneNumberId, b.edu_ep_phone_number_id);
+    await upsertMetaSetting(query, 'educacion_ep', KEYS.wabaId, b.edu_ep_waba_id);
 
     await refreshMetaSettingsCache(query);
     auditLog(query, {

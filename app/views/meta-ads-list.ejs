@@ -5,7 +5,7 @@
 </head>
 <body class="page-conversations">
   <div class="wa-layout wa-layout--inbox" style="display:flex;min-height:100vh">
-  <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav: 'anuncios', showAdminNav, requireAuth, currentUser, areaLabel }) %>
+  <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav: 'anuncios', showAdminNav, requireAuth, currentUser, areaLabel, showAreaSwitch: typeof showAreaSwitch !== 'undefined' ? showAreaSwitch : false, areaSwitchOptions: typeof areaSwitchOptions !== 'undefined' ? areaSwitchOptions : [] }) %>
   <main class="main-panel" style="flex:1;padding:1.5rem">
     <header class="page-header">
       <h1>Anuncios Meta</h1>

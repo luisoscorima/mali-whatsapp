@@ -122,15 +122,14 @@
           <span class="area-pill area-pill--master area-pill--menu">Master</span>
           <% } %>
         </p>
-        <% if (requireAuth && currentUser && currentUser.isMaster) { %>
-        <form method="post" action="<%= basePath %>/admin/switch-area" class="wa-rail__area-form">
+        <% if (typeof showAreaSwitch !== 'undefined' && showAreaSwitch && typeof areaSwitchOptions !== 'undefined' && areaSwitchOptions.length > 0) { %>
+        <form method="post" action="<%= basePath %>/account/switch-area" class="wa-rail__area-form">
           <label class="wa-rail__area-label">
             <span>Área</span>
             <select name="area" class="area-switch-select" aria-label="Cambiar área">
-              <option value="ti" <%= currentUser.area === 'ti' ? 'selected' : '' %>>TI (dev)</option>
-              <option value="pam" <%= currentUser.area === 'pam' ? 'selected' : '' %>>PAM</option>
-              <option value="patronato" <%= currentUser.area === 'patronato' ? 'selected' : '' %>>Patronato</option>
-              <option value="educacion" <%= currentUser.area === 'educacion' ? 'selected' : '' %>>Educación</option>
+              <% areaSwitchOptions.forEach(function (opt) { %>
+              <option value="<%= opt.slug %>" <%= currentUser.area === opt.slug ? 'selected' : '' %>><%= opt.label %></option>
+              <% }); %>
             </select>
           </label>
           <button type="submit" class="small-btn secondary wa-rail__area-btn">Cambiar área</button>

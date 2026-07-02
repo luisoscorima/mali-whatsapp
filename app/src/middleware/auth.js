@@ -1,4 +1,8 @@
 const config = require('../config');
+const {
+  fetchAllowedAreasForUser,
+  resolveActiveArea,
+} = require('../utils/userAreas');
 
 function isProtectedPath(pathname) {
   const p = String(pathname || '').trim();
@@ -54,13 +58,23 @@ function createResolveSessionUser(appPath, query) {
           [req.session.userId]
         );
         if (r.rows.length > 0) {
-          req.session.area = normalizeArea(r.rows[0].area);
-          req.session.isMaster = Boolean(r.rows[0].is_master);
-          req.session.canEditAiPrompt = Boolean(r.rows[0].can_edit_ai_prompt);
-          req.session.canViewAuditLogs = Boolean(r.rows[0].can_view_audit_logs);
-          req.session.canViewIntegration = Boolean(r.rows[0].can_view_integration);
-          req.session.canEditBusinessHours = Boolean(r.rows[0].can_edit_business_hours);
-          req.session.canViewReports = Boolean(r.rows[0].can_view_reports);
+          const row = r.rows[0];
+          const primaryArea = normalizeArea(row.area);
+          const isMaster = Boolean(row.is_master);
+          const allowedAreas = await fetchAllowedAreasForUser(query, {
+            userId: req.session.userId,
+            primaryArea,
+            isMaster,
+          });
+          const activeArea = resolveActiveArea(req.session.area, primaryArea, allowedAreas);
+          req.session.area = activeArea;
+          req.session.isMaster = isMaster;
+          req.session.canEditAiPrompt = Boolean(row.can_edit_ai_prompt);
+          req.session.canViewAuditLogs = Boolean(row.can_view_audit_logs);
+          req.session.canViewIntegration = Boolean(row.can_view_integration);
+          req.session.canEditBusinessHours = Boolean(row.can_edit_business_hours);
+          req.session.canViewReports = Boolean(row.can_view_reports);
+          req.session.allowedAreas = allowedAreas;
         }
       } catch {
         /* */
@@ -86,10 +100,14 @@ function createResolveSessionUser(appPath, query) {
       return next();
     }
     if (req.session && req.session.userId != null) {
+      const allowedAreas = Array.isArray(req.session.allowedAreas)
+        ? req.session.allowedAreas
+        : [normalizeArea(req.session.area)];
       req.user = {
         id: req.session.userId,
         email: req.session.email || '',
         area: normalizeArea(req.session.area),
+        allowedAreas,
         isMaster: Boolean(req.session.isMaster),
         canEditAiPrompt: Boolean(req.session.canEditAiPrompt),
         canViewAuditLogs: Boolean(req.session.canViewAuditLogs),
@@ -100,6 +118,14 @@ function createResolveSessionUser(appPath, query) {
       res.locals.currentUser = req.user;
       res.locals.areaLabel = config.AREA_LABELS[req.user.area] || req.user.area;
       res.locals.showAdminNav = Boolean(req.user.isMaster);
+      res.locals.showAreaSwitch =
+        Boolean(req.user.isMaster) || (Array.isArray(allowedAreas) && allowedAreas.length > 1);
+      res.locals.areaSwitchOptions = (req.user.isMaster ? config.BUSINESS_AREAS : allowedAreas).map(
+        (slug) => ({
+          slug,
+          label: config.AREA_LABELS[slug] || slug,
+        })
+      );
       if (
         config.requireAuth &&
         req.session.loginLogId != null &&

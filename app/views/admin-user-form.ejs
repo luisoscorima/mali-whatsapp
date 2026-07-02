@@ -55,14 +55,23 @@
         <% } %>
 
         <label class="field">
-          <span class="field-label">Área</span>
+          <span class="field-label">Área principal</span>
           <select name="area" required>
-            <option value="ti" <%= (u.area || 'ti') === 'ti' ? 'selected' : '' %>>TI (dev)</option>
-            <option value="pam" <%= u.area === 'pam' ? 'selected' : '' %>>PAM</option>
-            <option value="patronato" <%= u.area === 'patronato' ? 'selected' : '' %>>Patronato</option>
-            <option value="educacion" <%= u.area === 'educacion' ? 'selected' : '' %>>Educación</option>
+            <% (typeof areaDefs !== 'undefined' ? areaDefs : []).forEach(function (opt) { %>
+            <option value="<%= opt.slug %>" <%= (u.area || 'ti') === opt.slug ? 'selected' : '' %>><%= opt.label %></option>
+            <% }); %>
           </select>
         </label>
+
+        <p class="field-label" style="margin: 0.5rem 0 0">Acceso adicional a otras áreas</p>
+        <p class="muted card-lead" style="margin-top:0">El área principal siempre está incluida. Marca otras áreas si el usuario debe cambiar entre ellas desde el menú de cuenta.</p>
+        <% const extraSet = new Set(Array.isArray(u.extra_areas) ? u.extra_areas : []); %>
+        <% (typeof areaDefs !== 'undefined' ? areaDefs : []).forEach(function (opt) { %>
+        <label class="field field--checkbox">
+          <input type="checkbox" name="allowed_areas" value="<%= opt.slug %>" <%= extraSet.has(opt.slug) ? 'checked' : '' %> />
+          <span class="field-label"><%= opt.label %></span>
+        </label>
+        <% }); %>
 
         <label class="field field--checkbox">
           <input type="checkbox" name="is_master" value="1" <%= u.is_master ? 'checked' : '' %> />

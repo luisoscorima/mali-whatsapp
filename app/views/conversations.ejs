@@ -52,7 +52,7 @@
     <div
       class="wa-layout wa-layout--inbox inbox-layout-wa conversations-inbox conversations-page <%= typeof selectedConversation !== 'undefined' && selectedConversation ? 'conversations-inbox--detail' : '' %>"
     >
-      <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav, showAdminNav: typeof showAdminNav !== 'undefined' ? showAdminNav : false, requireAuth, currentUser, areaLabel }) %>
+      <%- include('partials/wa-rail', { basePath, appBaseUrl, activeNav, showAdminNav: typeof showAdminNav !== 'undefined' ? showAdminNav : false, requireAuth, currentUser, areaLabel, showAreaSwitch: typeof showAreaSwitch !== 'undefined' ? showAreaSwitch : false, areaSwitchOptions: typeof areaSwitchOptions !== 'undefined' ? areaSwitchOptions : [] }) %>
 
       <aside class="inbox-sidebar" aria-label="Lista de conversaciones">
         <div class="inbox-sidebar-header inbox-sidebar-header--with-actions">

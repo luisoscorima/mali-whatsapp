@@ -54,6 +54,8 @@
               <option value="pam">PAM</option>
               <option value="patronato">Patronato</option>
               <option value="educacion">Educación</option>
+              <option value="educacion_ca">Educación CA</option>
+              <option value="educacion_ep">Educación EP</option>
             </select>
           </label>
           <label class="field">
@@ -115,7 +117,7 @@
 
         <div class="admin-meta-area-panel" data-meta-area="educacion" hidden>
           <h3 class="card-subtitle">Educación</h3>
-          <p class="muted card-lead" style="margin-top:0">Respaldo: <code>WHATSAPP_TOKEN_EDUCACION</code>, <code>PHONE_NUMBER_ID_EDUCACION</code>, <code>WABA_ID_EDUCACION</code>.</p>
+          <p class="muted card-lead" style="margin-top:0">Respaldo: <code>WHATSAPP_TOKEN_EDUCACION</code>, <code>PHONE_NUMBER_ID_EDUCACION</code>, <code>WABA_ID_EDUCACION</code>. Mismo WABA Meta que CA/EP: token y WABA pueden repetirse; el Phone number ID debe ser único por área.</p>
           <label class="field">
             <span class="field-label">Token de acceso WhatsApp</span>
             <input type="password" name="edu_whatsapp_token" class="js-meta-secret" autocomplete="off" value="<%= metaRows.educacion[keys.whatsappToken] || '' %>" />
@@ -127,6 +129,40 @@
           <label class="field">
             <span class="field-label">WABA ID (opcional)</span>
             <input type="text" name="edu_waba_id" value="<%= metaRows.educacion[keys.wabaId] || '' %>" />
+          </label>
+        </div>
+
+        <div class="admin-meta-area-panel" data-meta-area="educacion_ca" hidden>
+          <h3 class="card-subtitle">Educación CA</h3>
+          <p class="muted card-lead" style="margin-top:0">Respaldo: <code>WHATSAPP_TOKEN_EDUCACION_CA</code>, <code>PHONE_NUMBER_ID_EDUCACION_CA</code>, <code>WABA_ID_EDUCACION_CA</code>.</p>
+          <label class="field">
+            <span class="field-label">Token de acceso WhatsApp</span>
+            <input type="password" name="edu_ca_whatsapp_token" class="js-meta-secret" autocomplete="off" value="<%= metaRows.educacion_ca[keys.whatsappToken] || '' %>" />
+          </label>
+          <label class="field">
+            <span class="field-label">Phone number ID</span>
+            <input type="text" name="edu_ca_phone_number_id" value="<%= metaRows.educacion_ca[keys.phoneNumberId] || '' %>" />
+          </label>
+          <label class="field">
+            <span class="field-label">WABA ID (opcional)</span>
+            <input type="text" name="edu_ca_waba_id" value="<%= metaRows.educacion_ca[keys.wabaId] || '' %>" />
+          </label>
+        </div>
+
+        <div class="admin-meta-area-panel" data-meta-area="educacion_ep" hidden>
+          <h3 class="card-subtitle">Educación EP</h3>
+          <p class="muted card-lead" style="margin-top:0">Respaldo: <code>WHATSAPP_TOKEN_EDUCACION_EP</code>, <code>PHONE_NUMBER_ID_EDUCACION_EP</code>, <code>WABA_ID_EDUCACION_EP</code>.</p>
+          <label class="field">
+            <span class="field-label">Token de acceso WhatsApp</span>
+            <input type="password" name="edu_ep_whatsapp_token" class="js-meta-secret" autocomplete="off" value="<%= metaRows.educacion_ep[keys.whatsappToken] || '' %>" />
+          </label>
+          <label class="field">
+            <span class="field-label">Phone number ID</span>
+            <input type="text" name="edu_ep_phone_number_id" value="<%= metaRows.educacion_ep[keys.phoneNumberId] || '' %>" />
+          </label>
+          <label class="field">
+            <span class="field-label">WABA ID (opcional)</span>
+            <input type="text" name="edu_ep_waba_id" value="<%= metaRows.educacion_ep[keys.wabaId] || '' %>" />
           </label>
         </div>
 

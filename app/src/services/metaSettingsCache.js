@@ -2,7 +2,7 @@
  * Credenciales Meta: valores en app_settings (clave meta.*) con fallback a process.env.
  * Caché en memoria refrescada al arrancar y tras guardar en /admin/meta.
  *
- * Áreas: ti, pam, patronato, educacion.
+ * Áreas: ti, pam, patronato, educacion, educacion_ca, educacion_ep.
  */
 
 const config = require('../config');
@@ -37,6 +37,16 @@ const ENV_BY_AREA = {
     token: 'WHATSAPP_TOKEN_EDUCACION',
     phone: 'PHONE_NUMBER_ID_EDUCACION',
     waba: 'WABA_ID_EDUCACION',
+  },
+  educacion_ca: {
+    token: 'WHATSAPP_TOKEN_EDUCACION_CA',
+    phone: 'PHONE_NUMBER_ID_EDUCACION_CA',
+    waba: 'WABA_ID_EDUCACION_CA',
+  },
+  educacion_ep: {
+    token: 'WHATSAPP_TOKEN_EDUCACION_EP',
+    phone: 'PHONE_NUMBER_ID_EDUCACION_EP',
+    waba: 'WABA_ID_EDUCACION_EP',
   },
 };
 

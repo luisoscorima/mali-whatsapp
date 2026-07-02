@@ -52,10 +52,9 @@
         <label class="field">
           <span class="field-label">Área</span>
           <select name="area" required>
-            <option value="ti">TI (dev)</option>
-            <option value="pam">PAM</option>
-            <option value="patronato">Patronato</option>
-            <option value="educacion">Educación</option>
+            <% (typeof areaDefs !== 'undefined' ? areaDefs : []).forEach(function (opt) { %>
+            <option value="<%= opt.slug %>"><%= opt.label %></option>
+            <% }); %>
           </select>
         </label>
         <div class="field-row">

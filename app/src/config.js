@@ -69,7 +69,7 @@ module.exports = {
   META_APP_ID: String(process.env.META_APP_ID || '').trim(),
   GRAPH_API_VERSION: 'v23.0',
   GRAPH_BASE: 'https://graph.facebook.com/v23.0',
-  BUSINESS_AREAS: ['ti', 'pam', 'patronato', 'educacion'],
+  BUSINESS_AREAS: ['ti', 'pam', 'patronato', 'educacion', 'educacion_ca', 'educacion_ep'],
   MALI_LOGO_URL:
     'https://mali-assets.s3.us-east-1.amazonaws.com/assets-web-mali/Logo_MALI_Whatsapp_Texto.png',
   AREA_LABELS: {
@@ -77,6 +77,8 @@ module.exports = {
     pam: 'PAM',
     patronato: 'Patronato',
     educacion: 'Educación',
+    educacion_ca: 'Educación CA',
+    educacion_ep: 'Educación EP',
   },
   MALI_EMAIL_REGEX: /^[^\s@]+@mali\.pe$/i,
   DEFAULT_MASTER_EMAIL: 'loscorima@mali.pe',

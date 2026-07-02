@@ -2,6 +2,8 @@ const bcrypt = require('bcryptjs');
 const { logError } = require('../utils/logger');
 const { auditLog, AuditEvent } = require('../services/auditLog');
 const { isValidMaliEmail, normalizeEmail } = require('../utils/contactsCsv');
+const { normalizeArea, isValidBusinessArea } = require('../middleware/auth');
+const { canAccessArea } = require('../utils/userAreas');
 
 function registerAuth(app, ctx) {
   const { config, query, appPath } = ctx;
@@ -93,6 +95,40 @@ function registerAuth(app, ctx) {
       logError(req, 'Error en login', err);
       res.status(500).render('login', { error: 'Error interno. Intenta de nuevo.', basePath: config.basePath });
     }
+  });
+
+  app.post('/account/switch-area', async (req, res) => {
+    if (!config.requireAuth || !req.user) {
+      return res.redirect(appPath('/login'));
+    }
+    const area = normalizeArea(req.body.area);
+    if (!isValidBusinessArea(area)) {
+      return res.redirect(appPath('/campaigns'));
+    }
+    if (!canAccessArea(req.user, area)) {
+      if (req.accepts('html')) {
+        return res.status(403).send('No tienes acceso a esa área');
+      }
+      return res.status(403).json({ ok: false, error: 'Forbidden' });
+    }
+
+    req.session.area = area;
+    if (req.user.isMaster) {
+      try {
+        await query(`UPDATE users SET area = $1 WHERE id = $2`, [area, req.session.userId]);
+      } catch (e) {
+        logError(req, 'No se pudo persistir cambio de area de master', e);
+      }
+    }
+
+    auditLog(query, {
+      req,
+      event_type: AuditEvent.ADMIN_SWITCH_AREA,
+      message: `Cambió el área de trabajo a ${area}`,
+      actor: { userId: req.user.id, email: req.user.email, area: req.user.area },
+      meta: { new_area: area },
+    });
+    res.redirect(appPath('/campaigns'));
   });
 
   app.post('/logout', (req, res) => {

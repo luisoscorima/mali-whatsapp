@@ -3,7 +3,8 @@
  * Crea o actualiza un usuario del panel (solo correos @mali.pe).
  * Ejecutar dentro del contenedor, no hace falta npm en el host.
  *
- * Uso: node scripts/create-user.js <correo@mali.pe> <contraseña> <ti|pam|patronato|educacion> [master]
+ * Uso: node scripts/create-user.js <correo@mali.pe> <contraseña> <area> [master]
+ * Áreas: ti, pam, patronato, educacion, educacion_ca, educacion_ep
  * Opcional: último argumento "master" para marcar usuario master.
  */
 require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '.env') });
@@ -19,7 +20,7 @@ const args = process.argv.slice(5);
 const isMaster = args.includes('master');
 
 if (!email || !password || !area) {
-  console.error('Uso: node scripts/create-user.js <correo@mali.pe> <contraseña> <ti|pam|patronato|educacion> [master]');
+  console.error('Uso: node scripts/create-user.js <correo@mali.pe> <contraseña> <area> [master]');
   process.exit(1);
 }
 

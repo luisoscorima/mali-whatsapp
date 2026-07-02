@@ -547,6 +547,8 @@ async function runMigrations(query) {
     `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS outside_hours_notice_sent_at TIMESTAMPTZ NULL`
   );
   await seedBusinessHoursSettings(query);
+  await migrateUserAreas(query);
+  await migrateAddEducacionCaEpAreas(query);
 }
 
 /** Asigna Phone Number ID por defecto a hilos existentes según su área. */
@@ -694,6 +696,12 @@ async function dropAreaCheckConstraints(query) {
   }
   await query(`ALTER TABLE app_settings DROP CONSTRAINT IF EXISTS app_settings_area_check`);
   await query(`ALTER TABLE app_settings DROP CONSTRAINT IF EXISTS app_settings_check`);
+  const hasUserAreas = await query(
+    `SELECT 1 AS ok FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'user_areas'`
+  );
+  if (hasUserAreas.rows.length > 0) {
+    await query(`ALTER TABLE user_areas DROP CONSTRAINT IF EXISTS user_areas_area_check`);
+  }
 }
 
 async function ensureAreaConstraints(query) {
@@ -731,6 +739,14 @@ async function ensureAreaConstraints(query) {
   await add(
     `ALTER TABLE app_settings ADD CONSTRAINT app_settings_area_check CHECK (area IN ${AREA_CHECK_IN_WITH_GLOBAL})`
   );
+  const hasUserAreas = await query(
+    `SELECT 1 AS ok FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'user_areas'`
+  );
+  if (hasUserAreas.rows.length > 0) {
+    await add(
+      `ALTER TABLE user_areas ADD CONSTRAINT user_areas_area_check CHECK (area IN ${AREA_CHECK_IN})`
+    );
+  }
 }
 
 /** PAM comercial nuevo: semilla mínima (sin contactos ni segmentos). */
@@ -900,6 +916,78 @@ async function migrateAiTiOnlyEnabled(query) {
       );
     }
   }
+  await query(
+    `INSERT INTO app_settings (area, key, value, updated_at) VALUES ('global', $1, '1', NOW())
+     ON CONFLICT (area, key) DO UPDATE SET value = '1', updated_at = NOW()`,
+    [flag]
+  );
+}
+
+/** Tabla de áreas adicionales por usuario (multi-área sin ser master). */
+async function migrateUserAreas(query) {
+  await query(`
+    CREATE TABLE IF NOT EXISTS user_areas (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      area VARCHAR(20) NOT NULL,
+      PRIMARY KEY (user_id, area)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_user_areas_area ON user_areas(area)`);
+}
+
+/** Áreas Educación CA / EP: mismo WABA Meta, entornos MALI separados. */
+async function migrateAddEducacionCaEpAreas(query) {
+  const flag = 'migration.educacion_ca_ep_v1';
+  const done = await query(`SELECT 1 AS ok FROM app_settings WHERE area = 'global' AND key = $1`, [flag]);
+  if (done.rows.length > 0) {
+    await ensureAreaConstraints(query);
+    return;
+  }
+
+  await dropAreaCheckConstraints(query);
+  await ensureAreaConstraints(query);
+
+  const defaultPrompt =
+    'Eres un asistente virtual del MALI. Responde en español de forma breve y profesional. Si el usuario necesita hablar con un humano, responde únicamente con la palabra clave de transferencia que se te indica.';
+  const eduAiConfig = JSON.stringify({
+    enabled: false,
+    prompt: defaultPrompt,
+    transfer_keyword: '[TRANSFERIR]',
+  });
+  const { defaultBusinessHoursSeed } = require('../utils/businessHours');
+  const businessHours = JSON.stringify(defaultBusinessHoursSeed());
+  const attrDefaults = [
+    { slug: 'sede', label: 'Sede', field_type: 'text', sort_order: 10 },
+    { slug: 'monto', label: 'Monto', field_type: 'text', sort_order: 20 },
+    { slug: 'fecha_pago', label: 'Fecha de pago', field_type: 'date', sort_order: 30 },
+  ];
+
+  for (const area of ['educacion_ca', 'educacion_ep']) {
+    await query(
+      `INSERT INTO app_settings (area, key, value, updated_at) VALUES ($1, 'ai_config', $2, NOW())
+       ON CONFLICT (area, key) DO NOTHING`,
+      [area, eduAiConfig]
+    );
+    await query(
+      `INSERT INTO app_settings (area, key, value, updated_at) VALUES ($1, 'business_hours', $2, NOW())
+       ON CONFLICT (area, key) DO NOTHING`,
+      [area, businessHours]
+    );
+    const c = await query(
+      `SELECT COUNT(*)::int AS n FROM contact_attribute_definitions WHERE area = $1`,
+      [area]
+    );
+    if (Number(c.rows[0]?.n || 0) === 0) {
+      for (const d of attrDefaults) {
+        await query(
+          `INSERT INTO contact_attribute_definitions (area, segment_slug, slug, label, field_type, sort_order)
+           VALUES ($1, NULL, $2, $3, $4, $5)`,
+          [area, d.slug, d.label, d.field_type, d.sort_order]
+        );
+      }
+    }
+  }
+
   await query(
     `INSERT INTO app_settings (area, key, value, updated_at) VALUES ('global', $1, '1', NOW())
      ON CONFLICT (area, key) DO UPDATE SET value = '1', updated_at = NOW()`,
