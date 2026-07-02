@@ -1,0 +1,9 @@
+{
+  "name": "mali-whatsapp-mvp",
+  "private": true,
+  "workspaces": ["api", "web"],
+  "scripts": {
+    "dev:api": "npm run start:dev -w api",
+    "dev:web": "npm run dev -w web"
+  }
+}

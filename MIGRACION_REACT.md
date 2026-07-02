@@ -298,7 +298,7 @@ _Actualizar al cierre de cada semana._
 
 | Sem | Etapa | Tema | Estado | PR / commit | Notas |
 |-----|-------|------|--------|-------------|-------|
-| 1 | 0 | Scaffold api + web | Pendiente | | |
+| 1 | 0 | Scaffold api + web | Completada | | Rama `migrate/v2` |
 | 2 | 0 | Docker + Prisma introspect | Pendiente | | |
 | 3 | 1 | Auth + `/api/me` | Pendiente | | |
 | 4 | 1 | apiClient + convenciones | Pendiente | | |
@@ -349,7 +349,7 @@ _Actualizar al cierre de cada semana._
 | 49 | 10 | Responsive QA | Pendiente | | |
 | 50 | 10 | Cierre EJS/CSS | Pendiente | | |
 
-**Próxima semana:** Semana 1 — scaffold `api/` + `web/` en rama `migrate/v2` o repo nuevo.
+**Próxima semana:** Semana 2 — Docker Compose (postgres + redis + api + web) y Prisma introspect.
 
 ---
 
@@ -418,10 +418,10 @@ _Actualizar al cierre de cada semana._
 
 ## Checklist Semana 1 (empezar ya)
 
-- [ ] Crear rama `migrate/v2` o repo `mali-whatsapp-v2`.
-- [ ] `nest new api` + `npm create vite@latest web -- --template react-ts`.
-- [ ] Root `package.json` con workspaces (`api`, `web`).
-- [ ] `GET /health` en Nest responde `{ ok: true }`.
-- [ ] `web` muestra «MALI WhatsApp v2» en dev.
+- [x] Crear rama `migrate/v2` o repo `mali-whatsapp-v2`.
+- [x] `nest new api` + `npm create vite@latest web -- --template react-ts`.
+- [x] Root `package.json` con workspaces (`api`, `web`).
+- [x] `GET /health` en Nest responde `{ ok: true }`.
+- [x] `web` muestra «MALI WhatsApp v2» en dev.
 - [ ] Commit inicial: `chore: scaffold api (NestJS) + web (Vite React TS)`.
-- [ ] Actualizar fila Semana 1 en «Seguimiento semanal».
+- [x] Actualizar fila Semana 1 en «Seguimiento semanal».
