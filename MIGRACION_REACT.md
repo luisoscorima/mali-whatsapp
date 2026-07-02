@@ -299,7 +299,7 @@ _Actualizar al cierre de cada semana._
 | Sem | Etapa | Tema | Estado | PR / commit | Notas |
 |-----|-------|------|--------|-------------|-------|
 | 1 | 0 | Scaffold api + web | Completada | e1412fa | Rama `migrate/v2` |
-| 2 | 0 | Docker + Prisma introspect | Completada | | Ver ARRANQUE_V2.md |
+| 2 | 0 | Docker + Prisma introspect | Completada | 9a5d5ad | Ver ARRANQUE_V2.md |
 | 3 | 1 | Auth + `/api/me` | Pendiente | | |
 | 4 | 1 | apiClient + convenciones | Pendiente | | |
 | 5 | 1 | AppShell + dashboard | Pendiente | | |
