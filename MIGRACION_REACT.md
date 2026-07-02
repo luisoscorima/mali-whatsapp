@@ -298,7 +298,7 @@ _Actualizar al cierre de cada semana._
 
 | Sem | Etapa | Tema | Estado | PR / commit | Notas |
 |-----|-------|------|--------|-------------|-------|
-| 1 | 0 | Scaffold api + web | Completada | | Rama `migrate/v2` |
+| 1 | 0 | Scaffold api + web | Completada | e1412fa | Rama `migrate/v2` |
 | 2 | 0 | Docker + Prisma introspect | Pendiente | | |
 | 3 | 1 | Auth + `/api/me` | Pendiente | | |
 | 4 | 1 | apiClient + convenciones | Pendiente | | |
@@ -423,5 +423,5 @@ _Actualizar al cierre de cada semana._
 - [x] Root `package.json` con workspaces (`api`, `web`).
 - [x] `GET /health` en Nest responde `{ ok: true }`.
 - [x] `web` muestra «MALI WhatsApp v2» en dev.
-- [ ] Commit inicial: `chore: scaffold api (NestJS) + web (Vite React TS)`.
+- [x] Commit inicial: `chore: scaffold api (NestJS) + web (Vite React TS)`.
 - [x] Actualizar fila Semana 1 en «Seguimiento semanal».
