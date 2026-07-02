@@ -1,10 +1,79 @@
-# Backlog de migración EJS → API + React (Vite)
+# Plan de migración por etapas — MALI WhatsApp v2
 
 **Objetivo:** escalar producto y código sin parar producción (`whatsapp.mali.pe`).  
-**Stack objetivo:** Express (API) + React + Vite; **Tailwind en fase final** de pulido visual.  
-**Estrategia:** strangler fig — EJS y React conviven; webhook, envío de campañas y mensajes en conversaciones se tocan al final y con mucho cuidado (alineado a `.cusorrules`).
+**Stack objetivo:**
+
+| Capa | Tecnología |
+|------|------------|
+| API | NestJS + Prisma + PostgreSQL |
+| Colas / cache | Redis (BullMQ — fase tardía) |
+| Web | React + Vite + TypeScript + Tailwind |
+| Legacy (transitorio) | Express + EJS en `app/` |
+
+**Estrategia:** strangler fig — el panel EJS sigue en producción mientras v2 crece en paralelo; webhook, envío de campañas y mensajes del inbox se migran **al final** y con mucho cuidado.
 
 Relacionado con: [Mejoras.md](Mejoras.md) (backlog de producto).
+
+---
+
+## Cómo usar este documento
+
+1. Elegir **rama** o **repo nuevo** (sección siguiente).
+2. Trabajar **una semana = una fila** de la tabla de seguimiento.
+3. Al cerrar la semana: marcar estado, anotar PR/commit, actualizar «Próxima semana».
+4. No saltar semanas de módulos críticos (campañas, inbox) sin cumplir el DoD.
+
+**Ritmo orientativo:** 1 dev a tiempo completo ≈ **50 semanas** (~12 meses). Con 2 devs (API + Web) ≈ **28–32 semanas**.
+
+---
+
+## Rama vs repo nuevo
+
+| Criterio | Rama `migrate/v2` (mismo repo) | Repo nuevo `mali-whatsapp-v2` |
+|----------|-------------------------------|-------------------------------|
+| Historial git | Un solo repo, PRs contra `main` | Historial limpio; legacy como remoto/subtree |
+| Deploy producción | Más simple al inicio (mismo Docker) | Requiere pipeline aparte hasta cutover |
+| Aislamiento | Convive con `app/` legacy | Cero riesgo de tocar prod accidentalmente |
+| Recomendado si… | Equipo pequeño, deploys frecuentes | Queréis reiniciar CI, monorepo npm/pnpm workspaces |
+
+### Estructura objetivo (ambas opciones)
+
+```txt
+mali-whatsapp-mvp/          # o mali-whatsapp-v2/
+  app/                      # Legacy Express + EJS (prod hasta cutover final)
+  api/                      # NestJS + Prisma
+    src/
+      modules/              # auth, contacts, campaigns…
+    prisma/
+      schema.prisma
+  web/                      # React + Vite + Tailwind
+    src/
+      app/                  # router, providers
+      features/             # inbox, campaigns, contacts…
+      shared/               # ui, api-client, hooks
+  docker-compose.yml        # postgres (existente) + redis + api + web + legacy
+  MIGRACION_REACT.md        # este archivo
+```
+
+### Convención de ramas (si mismo repo)
+
+```txt
+main              → producción (solo legacy hasta cutover por módulo)
+migrate/v2        → rama larga de migración
+migrate/w01-setup → PR semanal contra migrate/v2 (opcional)
+```
+
+### Arranque repo nuevo (Semana 1)
+
+```bash
+# Opción A — rama
+git checkout -b migrate/v2
+
+# Opción B — repo nuevo
+git clone <url-actual> mali-whatsapp-v2 && cd mali-whatsapp-v2
+git remote rename origin legacy
+git checkout -b main   # primer commit solo con api/ + web/ scaffold
+```
 
 ---
 
@@ -12,390 +81,347 @@ Relacionado con: [Mejoras.md](Mejoras.md) (backlog de producto).
 
 | # | Regla |
 |---|--------|
-| 1 | **Producción siempre usable:** cada entrega deja una ruta EJS funcional hasta que la versión React esté validada. |
-| 2 | **API-first para lo nuevo:** toda feature de `Mejoras.md` nace en React consumiendo JSON; no nuevas pantallas EJS grandes. |
-| 3 | **Lógica en `services/`:** las rutas solo autentican, validan y responden JSON/HTML. |
-| 4 | **No duplicar envíos:** campañas y chat reutilizan `campaignSender`, `persistAndSendOutbound`, webhook actual. |
-| 5 | **Migración por feature flag** (`UI_REACT_CONTACTS=1`, etc.) o ruta paralela (`/app/contacts` → luego swap a `/contacts`). |
-| 6 | **Tailwind al final:** primero componentes y flujos; diseño unificado cuando el 80 % del panel ya esté en React. |
+| 1 | **Producción siempre usable:** cada semana deja el legacy intacto hasta cutover validado del módulo. |
+| 2 | **API-first:** toda feature nueva nace en Nest + React; no pantallas EJS grandes. |
+| 3 | **Lógica en servicios:** portar desde `app/src/services/` a providers Nest; controllers delgados. |
+| 4 | **No duplicar envíos:** campañas y chat reutilizan la misma lógica (portada, no reescrita desde cero). |
+| 5 | **Cutover por módulo** con flag (`UI_V2_CONTACTS=1`) o ruta `/app/*` → swap a URL definitiva. |
+| 6 | **Prisma progresivo:** introspect del esquema actual; `migrations.js` legacy sigue en prod hasta Etapa 9. |
+| 7 | **Redis al final:** colas BullMQ solo cuando workers estén listos; hasta entonces polling como legacy. |
+| 8 | **Tailwind en Etapa 10:** semanas 1–9 usan variables CSS del tema (`--ink`, `--muted`…); pulido visual al cierre. |
 
 ---
 
-## Arquitectura objetivo
+## Arquitectura en runtime (transición)
 
 ```txt
-mali-whatsapp-mvp/
-  app/                    # Express (sin cambiar dominio)
-    src/
-      routes/
-        api/              # NUEVO: routers JSON por dominio
-      services/           # Se mantiene / crece
-    public/
-      app/                # Build de Vite (assets)
-  web/                    # NUEVO: React + Vite
-    src/
-      app/                # Router, providers
-      features/           # inbox, campaigns, contacts…
-      shared/             # ui, api-client, hooks
+                    ┌─────────────────┐
+  Usuario ─────────►│ Nginx / NPM     │
+                    └────────┬────────┘
+                             │
+         ┌───────────────────┼───────────────────┐
+         ▼                   ▼                   ▼
+   /webhook, /app/*    /api/* (v2)         /campaigns, /conversations…
+   (legacy Express)   NestJS :4000        (legacy EJS)
+         │                   │
+         └─────────┬─────────┘
+                   ▼
+            PostgreSQL (compartido)
+                   │
+            Redis (desde Etapa 9)
 ```
 
-### Convivencia en runtime
-
-- `GET /webhook`, `POST /webhook` → sin cambios.
-- Rutas legacy EJS siguen en `/campaigns`, `/conversations`, etc.
-- React montado en `/app/*` al inicio; al validar, **misma URL** con flag o redirect 302 controlado.
-- Sesión actual (`express-session` + cookie) → React usa `credentials: 'include'` en `fetch`.
+- `GET/POST /webhook` → **legacy** hasta Semana 43.
+- React en `/app/*` al inicio; cutover cambia a rutas canónicas.
+- Sesión: fase 1 cookie legacy; fase 2 JWT o session store Redis en Nest.
 
 ---
 
 ## Inventario: API hoy vs falta
 
-| Módulo | Rutas HTML (EJS) | API JSON existente | Gap principal |
-|--------|------------------|-------------------|---------------|
-| Auth / login | Sí | No formal | `GET /api/me`, login JSON |
-| Campañas | Sí | Parcial (`/api/campaigns/*`) | Listado, detalle completo, crear (sin tocar send al inicio) |
-| Conversaciones | Sí | `PATCH mode` | Lista, hilo, enviar mensaje, media |
-| Contactos | Sí | Casi nada | CRUD + filtros + import |
-| Segmentos | Sí | No | CRUD + contactos del segmento |
-| Plantillas | Sí | `definition` | Listado, create, sync |
+| Módulo | EJS legacy | API hoy (Express) | Nest v2 |
+|--------|------------|-------------------|---------|
+| Auth / login | Sí | — | `GET /api/me`, `POST /api/auth/login` |
+| Campañas | Sí | Parcial | Lista, detalle, crear, exports |
+| Conversaciones | Sí | `PATCH mode` | Lista, hilo, enviar, media |
+| Contactos | Sí | — | CRUD, filtros, import |
+| Segmentos | Sí | — | CRUD + contactos |
+| Plantillas | Sí | `definition` | CRUD + sync |
 | Atributos | Sí | `options` | CRUD |
-| Anuncios CTWA | Sí | No | List + detalle + rename |
-| Exclusiones | Sí | No | CRUD listas |
-| Ajustes / IA | Sí | Parcial AI | Leer config completa |
+| Anuncios CTWA | Sí | — | List + detalle + rename |
+| Exclusiones | Sí | — | CRUD listas |
+| Ajustes / IA | Sí | Parcial | Config completa |
 | Admin | Sí | `online-users` | Usuarios, meta, audit |
-| Informes (nuevo) | — | — | **Solo React + API nueva** |
+| Informes | — | — | **Solo v2** |
 
 ---
 
-## Roadmap por épicas
+## Etapas y calendario semanal
 
-Estimación orientativa con **1 dev** a tiempo completo. Ajustar si hay más gente.
-
----
-
-### Épica 0 — Cimientos (2–3 semanas)
-
-**Producto:** ningún cambio visible para usuarios.  
-**Código:**
-
-| ID | Tarea | DoD |
-|----|--------|-----|
-| 0.1 | Crear `web/` con Vite + React + TS (recomendado) | `npm run build` genera `app/public/app/` |
-| 0.2 | Express sirve estáticos + `GET /app/*` → `index.html` | Login EJS sigue; `/app` carga shell vacío |
-| 0.3 | Cliente API (`apiClient.ts`): basePath, cookies, errores 401 → login | Una llamada de prueba a `/health` |
-| 0.4 | `GET /api/me` (usuario, área, master, permisos) | React muestra nombre en shell |
-| 0.5 | Convención respuestas `{ ok, data?, error? }` | Documento interno 1 página |
-| 0.6 | Carpeta `app/src/routes/api/` + primer router montado | Sin romper rutas actuales |
-| 0.7 | CI/Docker: build frontend en imagen | Deploy actual sigue funcionando |
-
-**Riesgo:** bajo.
+Cada **semana** tiene: entregable concreto, criterio de cierre y riesgo.
 
 ---
 
-### Épica 1 — Shell de aplicación (1–2 semanas)
+### Etapa 0 — Arranque (Semanas 1–2)
 
-**Producto:** layout tipo panel (rail + sidebar + main) sin recargas entre rutas React.  
-**Código:**
+**Meta:** monorepo listo, CI local, sin impacto en usuarios.
 
-| ID | Tarea | DoD |
-|----|--------|-----|
-| 1.1 | `AppShell`: navegación, área activa, enlace “volver a panel clásico” | Paridad visual básica con `wa-rail` |
-| 1.2 | React Router: rutas hijas bajo `/app` | Navegación sin full reload |
-| 1.3 | Componentes UI base **sin Tailwind** (CSS modules o variables CSS) | Button, Input, Table, Badge, Toast, Modal |
-| 1.4 | Página placeholder `/app` (dashboard mínimo) | KPIs desde `GET /api/dashboard` |
-| 1.5 | Enlace en EJS: “Panel nuevo (beta)” | Usuarios entran voluntariamente |
+| Sem | Entregable | DoD (cerrar semana) | Riesgo |
+|-----|------------|---------------------|--------|
+| **1** | Repo/rama + scaffold `api/` (NestJS) + `web/` (Vite+React+TS) | `npm run start:dev` en api responde `GET /health`; `npm run dev` en web abre página vacía | Bajo |
+| **2** | Docker Compose: postgres + redis + api + web; Prisma introspect | `schema.prisma` refleja tablas actuales; api conecta a BD existente; README de arranque v2 | Bajo |
 
-**Riesgo:** bajo.
+**Tareas detalladas S1:** `nest new api`, `npm create vite@latest web -- --template react-ts`, workspaces en root `package.json`, `.env.example` unificado.
+
+**Tareas detalladas S2:** `npx prisma db pull`, servicio `PrismaModule`, Redis container (sin uso aún), script `docker compose up` documentado.
 
 ---
 
-### Épica 2 — Módulos de lectura / bajo riesgo (3–4 semanas)
+### Etapa 1 — Cimientos API + shell web (Semanas 3–5)
 
-Migrar primero lo que **no** toca envío de mensajes ni campañas.
+**Meta:** auth básica, cliente API, shell navegable.
 
-#### 2A — Anuncios Meta (`/anuncios`)
+| Sem | Entregable | DoD | Riesgo |
+|-----|------------|-----|--------|
+| **3** | Módulo `AuthModule`: guards, área, permisos; `GET /api/me` | React muestra usuario logueado vía cookie proxy o login dev | Medio |
+| **4** | `apiClient` en web; convención `{ ok, data?, error? }`; proxy dev | 401 redirige a login; `/health` y `/api/me` desde web | Bajo |
+| **5** | `AppShell` + React Router bajo `/app`; enlace «Panel clásico» en EJS legacy | Navegación SPA sin reload; dashboard placeholder consume `GET /api/dashboard` (proxy Nest → legacy o reimplementado) | Bajo |
 
-| ID | Tarea | API nueva |
-|----|--------|-----------|
-| 2A.1 | `GET /api/meta-ads` | Lista con conteo leads |
-| 2A.2 | `GET /api/meta-ads/:id` | Detalle + leads |
-| 2A.3 | `PATCH /api/meta-ads/:id` | Nombre editable |
-| 2A.4 | Pantallas React list + detail | Flag → sustituir EJS |
-
-#### 2B — Atributos (`/attributes`)
-
-| ID | Tarea | API |
-|----|--------|-----|
-| 2B.1 | CRUD JSON | `GET/POST/PATCH/DELETE /api/attribute-definitions` |
-| 2B.2 | Formularios dinámicos React | Reutilizar reglas de segmento/área |
-
-#### 2C — Listas de exclusión
-
-| ID | Tarea | API |
-|----|--------|-----|
-| 2C.1 | CRUD + miembros | `/api/exclusion-lists` |
-
-**Riesgo:** bajo.
+**Nota S3:** Opción rápida — Nest proxy a Express para `/api/dashboard` mientras se portan queries. Opción limpia — reimplementar dashboard en Prisma.
 
 ---
 
-### Épica 3 — Segmentos → futuras “Etiquetas” (2–3 semanas)
+### Etapa 2 — Módulos bajo riesgo (Semanas 6–9)
 
-| ID | Tarea | Notas |
-|----|--------|-------|
-| 3.1 | `GET/POST/PATCH/DELETE /api/segments` | Unificar lo que hoy está en `/settings/segment-*` |
-| 3.2 | UI React list + edit + color | Preparar rename producto “Etiquetas” solo en copy |
-| 3.3 | Quitar contacto de segmento | `DELETE /api/segments/:id/contacts/:contactId` |
-| 3.4 | Flag y cutover `/segments` | EJS deprecado |
+**Meta:** primer cutover end-to-end (Anuncios Meta).
 
-**Backlog producto:** segmentos automáticos por reglas → **implementar solo en React** (épica 8).
+| Sem | Entregable | DoD | Riesgo |
+|-----|------------|-----|--------|
+| **6** | `MetaAdsModule`: `GET /api/meta-ads`, `GET /api/meta-ads/:id` | Paridad datos con EJS `/anuncios` | Bajo |
+| **7** | `PATCH /api/meta-ads/:id` + pantallas React list/detail | CRUD nombre editable; beta `/app/anuncios` | Bajo |
+| **8** | `AttributeDefinitionsModule` CRUD + UI React | Cutover `/attributes` con flag | Bajo |
+| **9** | `ExclusionListsModule` CRUD + UI React | Listas de exclusión operativas en v2 | Bajo |
 
-**Riesgo:** bajo-medio.
-
----
-
-### Épica 4 — Contactos (4–5 semanas)
-
-| ID | Tarea | API / UI |
-|----|--------|----------|
-| 4.1 | `GET /api/contacts` con filtros, paginación, atributos | Lista |
-| 4.2 | `GET/POST/PATCH /api/contacts/:id` | Alta/edición |
-| 4.3 | Import CSV: `POST /api/contacts/import` (multipart) | Sustituye form EJS |
-| 4.4 | `GET /api/contacts/sample.csv` | Descarga plantilla |
-| 4.5 | Bulk add segment | `POST /api/contacts/bulk-add-segment` |
-| 4.6 | React: lista, filtros chips, detalle | Paridad con `contacts-page.ejs` |
-| 4.7 | Cutover `/contacts` | |
-
-**Backlog producto en esta épica:**
-
-- Fecha de creación de contacto → campo en API + columna UI.
-- Filtro rango `fecha_pago` → API + UI (mejor que en EJS).
-- Orden del backlog: **export → whitelist import → preview atributos → UI** (como en `Mejoras.md`).
-
-**Riesgo:** medio (import masivo).
+**Cutover S7:** flag `UI_V2_META_ADS=1` → redirect EJS a React.
 
 ---
 
-### Épica 5 — Plantillas (3–4 semanas)
+### Etapa 3 — Segmentos y contactos (Semanas 10–15)
 
-| ID | Tarea | Notas |
-|----|--------|-------|
-| 5.1 | `GET /api/templates` | Estados PENDING/APPROVED/REJECTED |
-| 5.2 | `POST /api/templates`, `POST /api/templates/sync` | Reutilizar `templateBuilder` / Meta |
-| 5.3 | Builder React (wizard) | Portar lógica de `template-builder.js` por fases |
-| 5.4 | Detalle plantilla | |
-| 5.5 | Cutover `/templates` | |
+**Meta:** gestión de audiencia en v2.
 
-**Riesgo:** medio (integración Meta).
+| Sem | Entregable | DoD | Riesgo |
+|-----|------------|-----|--------|
+| **10** | `SegmentsModule`: list + create + edit + color | API completa | Bajo |
+| **11** | UI segmentos + quitar contacto de segmento | Beta `/app/segments` | Bajo |
+| **12** | `ContactsModule`: `GET /api/contacts` filtros + paginación | Paridad filtros EJS | Medio |
+| **13** | Contacto CRUD + formulario atributos dinámicos | Alta/edición funcional | Medio |
+| **14** | Import CSV/XLSX `POST /api/contacts/import` + sample | Import masivo probado en staging | Medio |
+| **15** | Cutover `/contacts` + `/segments` | 1 semana beta área TI | Medio |
 
----
-
-### Épica 6 — Campañas (5–7 semanas) ⚠️
-
-**Regla:** no tocar `POST /campaigns/send` ni el flujo de `campaigns/new` hasta sub-épica 6.4 validada en staging.
-
-| ID | Tarea | Fase |
-|----|--------|------|
-| 6.1 | `GET /api/campaigns` (lista + KPIs globales) | Solo lectura |
-| 6.2 | Ampliar `GET /api/campaigns/:id` (fallidos, respondieron, costo, logs) | Ya existe parcial; completar |
-| 6.3 | React: lista + detalle (acciones: retry, sync-cost, exports vía API existente) | Sin crear campaña aún |
-| 6.4 | Wizard nueva campaña en React | Reutilizar `recipients-preview`, **mismo** `POST /campaigns/send` al final |
-| 6.5 | Confirmación pre-envío (“¿Está seguro…?”) | **Solo en React** — ítem `Mejoras.md` |
-| 6.6 | Cutover `/campaigns`, `/campaigns/new`, `/campaigns/:id` | Tras prueba real en TI |
-
-**No migrar aún:** jobs `setInterval`, `resumeQueuedCampaigns` — siguen en Node.
-
-**Riesgo:** alto en 6.4–6.6. Mitigación: feature flag por área `ti` primero.
+**Producto en S12–15:** fecha creación contacto, filtro `fecha_pago`, export (ver [Mejoras.md](Mejoras.md)).
 
 ---
 
-### Épica 7 — Ajustes (1–2 semanas)
+### Etapa 4 — Plantillas (Semanas 16–19)
 
-| ID | Tarea |
-|----|--------|
-| 7.1 | `GET /api/settings/ai/:area` |
-| 7.2 | React settings (ya hay PATCH/enable en API) |
-| 7.3 | Cutover `/settings` |
-
-**Incluye:** respuestas predefinidas (cuando se defina) → **nace en React**.
-
-**Riesgo:** bajo.
+| Sem | Entregable | DoD | Riesgo |
+|-----|------------|-----|--------|
+| **16** | `TemplatesModule`: list + estados Meta | Sync lectura desde BD | Medio |
+| **17** | `POST /api/templates`, `POST /api/templates/sync` | Portar `templateBuilder` / Meta | Medio |
+| **18** | Builder React (wizard) fase 1 — cabecera y body | Crear borrador local | Medio |
+| **19** | Detalle + cutover `/templates` | Envío a revisión Meta OK en staging | Medio |
 
 ---
 
-### Épica 8 — Features nuevas solo en React (continuo, 4+ semanas)
+### Etapa 5 — Campañas ⚠️ (Semanas 20–26)
 
-Construir aquí lo pendiente de `Mejoras.md` que **no** tiene sentido en EJS:
+**Regla:** no tocar envío real hasta **Semana 24** validada en staging.
 
-| Feature | Dependencias API |
-|---------|------------------|
-| Informes / KPIs | Nuevo módulo `reportsService`, agregaciones SQL |
-| Permisos, roles, equipos | Extender `users` + middleware auth |
-| Vista previa campaña (resumen) | Épica 6.5 |
-| Segmentos automáticos (etiquetas) | Épica 3 + motor de reglas |
-| SIGE (v2) | Integración externa |
-| Mensajes reintento por inactividad | Jobs + conversaciones API |
-| Inversión pauta Ads | Integración Meta Ads API |
-| Llamadas WhatsApp | Cloud API (fase posterior) |
-| Mejor integración Cloud API | Transversal en `services/` |
+| Sem | Entregable | DoD | Riesgo |
+|-----|------------|-----|--------|
+| **20** | `GET /api/campaigns` lista + KPIs | Solo lectura | Bajo |
+| **21** | Ampliar detalle: fallidos, respondieron, costo, logs | Paridad con EJS detalle | Medio |
+| **22** | React lista + detalle; retry, sync-cost, exports | Sin wizard crear aún | Medio |
+| **23** | Wizard nueva campaña: pasos 1–2 (segmento, preview) | `recipients-preview` en Nest | Alto |
+| **24** | Wizard paso 3 + envío; confirmación pre-envío | Mismo flujo que legacy; prueba TI | **Alto** |
+| **25** | Beta `/app/campaigns` área TI | 1 semana sin incidentes | **Alto** |
+| **26** | Cutover `/campaigns`, `/campaigns/new`, `/campaigns/:id` | Rollback documentado | **Alto** |
 
-**Riesgo:** variable; no bloquea migración del legacy.
+**No migrar aún:** jobs `setInterval` — siguen en legacy Express hasta Etapa 9.
 
 ---
 
-### Épica 9 — Conversaciones / Inbox (6–8 semanas) ⚠️⚠️
+### Etapa 6 — Ajustes + informes (Semanas 27–30)
 
-**Último módulo core** — máximo uso diario y `.cusorrules` protege envío/recepción.
-
-| ID | Tarea | Orden |
-|----|--------|-------|
-| 9.1 | `GET /api/conversations` (lista, filtros, búsqueda) | Lectura |
-| 9.2 | `GET /api/conversations/:id/messages` | Hilo |
-| 9.3 | React inbox (lista + hilo, sin enviar) | Beta `/app/conversations` |
-| 9.4 | `POST /api/conversations/:id/messages` | Delegar a lógica existente, **no** nuevo axios suelto |
-| 9.5 | mark-unread, lead-score, download media, export | Paridad API |
-| 9.6 | Polling o SSE para mensajes nuevos | Evitar reload; evaluar WebSocket después |
-| 9.7 | Cutover `/conversations` | Solo tras 2 semanas en beta |
-
-**Riesgo:** muy alto. Mitigación: beta obligatoria en área TI; rollback instantáneo a EJS.
+| Sem | Entregable | DoD | Riesgo |
+|-----|------------|-----|--------|
+| **27** | `SettingsModule`: IA, horario, integración (lectura) | Paridad `/settings` | Bajo |
+| **28** | UI Ajustes React + PATCH existentes | Cutover `/settings` | Bajo |
+| **29** | `ReportsModule` — KPIs e informes (nuevo) | Solo v2; agregaciones SQL/Prisma | Medio |
+| **30** | Pulir informes + permisos de vista | Área TI valida | Medio |
 
 ---
 
-### Épica 10 — Admin (3–4 semanas)
+### Etapa 7 — Conversaciones / Inbox ⚠️⚠️ (Semanas 31–38)
 
-| ID | Módulo |
-|----|--------|
-| 10.1 | Usuarios CRUD + import CSV |
-| 10.2 | Meta credenciales por área |
-| 10.3 | Audit logs + export |
-| 10.4 | Usuarios en línea (ya hay API) |
-| 10.5 | Cutover `/admin/*` |
+**Último módulo core.** Beta obligatoria 2 semanas antes de cutover.
 
-**Riesgo:** medio (solo master).
-
----
-
-### Épica 11 — Auth y cierre EJS (2 semanas)
-
-| ID | Tarea |
-|----|--------|
-| 11.1 | Login React + `POST /api/auth/login` |
-| 11.2 | Cambio contraseña |
-| 11.3 | Redirect `/` → React |
-| 11.4 | Eliminar vistas EJS no usadas |
-| 11.5 | CSS legacy (`styles.css` monolito) archivado |
+| Sem | Entregable | DoD | Riesgo |
+|-----|------------|-----|--------|
+| **31** | `GET /api/conversations` lista, filtros, búsqueda | Solo lectura | Medio |
+| **32** | `GET /api/conversations/:id/messages` | Hilo completo | Medio |
+| **33** | React inbox: lista + hilo **sin enviar** | Beta `/app/conversations` | Medio |
+| **34** | `POST /api/conversations/:id/messages` | Delegar lógica portada de legacy | **Alto** |
+| **35** | mark-unread, lead-score, media download, export | Paridad API | Alto |
+| **36** | Polling o SSE mensajes nuevos | Sin full reload | Medio |
+| **37–38** | Beta 2 semanas TI + cutover `/conversations` | Rollback instantáneo a EJS | **Muy alto** |
 
 ---
 
-### Épica 12 — Pulido Tailwind (2–3 semanas)
+### Etapa 8 — Admin y auth React (Semanas 39–42)
 
-| ID | Tarea |
-|----|--------|
-| 12.1 | Instalar Tailwind en `web/` |
-| 12.2 | Tokens (colores MALI, spacing, tipografía) |
-| 12.3 | Refactor componentes `shared/ui` |
-| 12.4 | Responsive audit (móvil/tablet en inbox y campañas) |
-| 12.5 | Dark mode opcional |
-
-**Por qué al final:** evita rehacer clases en cada pantalla mientras los flujos aún cambian.
+| Sem | Entregable | DoD | Riesgo |
+|-----|------------|-----|--------|
+| **39** | `AdminUsersModule` CRUD + import CSV | Solo master | Medio |
+| **40** | Meta credenciales + audit logs + export | Paridad admin | Medio |
+| **41** | Login React + cambio contraseña | `POST /api/auth/login` | Medio |
+| **42** | Cutover `/admin/*`; redirect `/` → React | EJS admin deprecado | Medio |
 
 ---
 
-## Cronograma sugerido (sin parar producción)
+### Etapa 9 — Backend: Redis, webhook, apagar legacy (Semanas 43–46)
 
-Orientativo con 1 dev:
-
-| Fase | Épicas | Semanas aprox. |
-|------|--------|----------------|
-| Base | 0–1 | 4–5 |
-| Bajo riesgo | 2 | 3–4 |
-| Datos | 3–4 | 6–8 |
-| Medio | 5–6 (lectura + wizard) | 8–11 |
-| Ajustes + nuevas features | 7–8 | continuo |
-| Alto | 9 | 6–8 |
-| Admin + cierre | 10–11 | 5–6 |
-| Diseño | 12 | 2–3 |
-
-**Total:** ~12–14 meses (1 dev). Con 2 devs (API + React): ~7–9 meses.
+| Sem | Entregable | DoD | Riesgo |
+|-----|------------|-----|--------|
+| **43** | BullMQ: cola campañas; worker Nest | Sustituye `resumeQueuedCampaigns` en legacy | **Alto** |
+| **44** | Jobs: scheduled, auto-retry, audit purge en workers | Sin `setInterval` en Express | Alto |
+| **45** | Webhook `GET/POST /webhook` en Nest | Firma Meta validada; smoke 48 h | **Muy alto** |
+| **46** | Apagar rutas Express excepto fallback; Prisma Migrate oficial | `migrations.js` solo histórico | Alto |
 
 ---
 
-## Matriz: ítems `Mejoras.md` → dónde implementar
+### Etapa 10 — Tailwind y cierre (Semanas 47–50)
 
-| Pendiente | Épica | Solo React |
-|-----------|-------|------------|
-| Confirmación pre-envío campaña | 6.5 | Sí |
-| Export / whitelist import / preview atributos | 4 | Sí |
-| Fecha creación contacto | 4 | Sí |
-| Filtro rango `fecha_pago` | 4 | Sí |
-| Renombrar segmentos → Etiquetas | 3 (copy) + 8 (reglas auto) | Sí |
-| Respuestas predefinidas | 7 u 8 | Sí |
-| Informes KPIs | 8 | Sí |
-| Permisos / equipos | 8 + 10 | Sí |
-| SIGE | 8 | Sí |
-| Inversión pauta Ads | 8 | Sí |
-| Reintento por inactividad | 8 + 9 | Sí |
-| Mejor integración Cloud API | Transversal servicios | N/A |
+| Sem | Entregable | DoD | Riesgo |
+|-----|------------|-----|--------|
+| **47** | Tailwind en `web/` + tokens MALI | Build OK | Bajo |
+| **48** | Refactor `shared/ui` a utilidades Tailwind | Componentes base migrados | Bajo |
+| **49** | Responsive audit (inbox, campañas, móvil) | QA manual | Bajo |
+| **50** | Eliminar EJS no usados; archivar `styles.css` legacy | Repo limpio; doc final | Bajo |
 
 ---
 
-## Definition of Done por módulo migrado
+## Seguimiento semanal
 
-- [ ] API documentada y probada con curl/Postman.
-- [ ] Pantalla React con paridad funcional vs EJS.
-- [ ] Auth por sesión; filtro por `area` del usuario respetado.
-- [ ] Feature flag + rollback en 1 variable de entorno.
-- [ ] 1 semana mínimo en beta (área TI) antes del cutover.
-- [ ] EJS de ese módulo marcado `@deprecated` (comentario), no borrado hasta cutover.
-- [ ] Sin regresión en webhook ni envíos masivos en smoke test.
+_Actualizar al cierre de cada semana._
+
+| Sem | Etapa | Tema | Estado | PR / commit | Notas |
+|-----|-------|------|--------|-------------|-------|
+| 1 | 0 | Scaffold api + web | Pendiente | | |
+| 2 | 0 | Docker + Prisma introspect | Pendiente | | |
+| 3 | 1 | Auth + `/api/me` | Pendiente | | |
+| 4 | 1 | apiClient + convenciones | Pendiente | | |
+| 5 | 1 | AppShell + dashboard | Pendiente | | |
+| 6 | 2 | Meta ads API | Pendiente | | |
+| 7 | 2 | Meta ads UI + cutover | Pendiente | | |
+| 8 | 2 | Atributos | Pendiente | | |
+| 9 | 2 | Exclusiones | Pendiente | | |
+| 10 | 3 | Segmentos API | Pendiente | | |
+| 11 | 3 | Segmentos UI | Pendiente | | |
+| 12 | 3 | Contactos lista | Pendiente | | |
+| 13 | 3 | Contactos CRUD | Pendiente | | |
+| 14 | 3 | Import contactos | Pendiente | | |
+| 15 | 3 | Cutover contactos/segmentos | Pendiente | | |
+| 16 | 4 | Plantillas list | Pendiente | | |
+| 17 | 4 | Plantillas sync/create | Pendiente | | |
+| 18 | 4 | Builder wizard 1 | Pendiente | | |
+| 19 | 4 | Cutover plantillas | Pendiente | | |
+| 20 | 5 | Campañas lista | Pendiente | | |
+| 21 | 5 | Campañas detalle | Pendiente | | |
+| 22 | 5 | Campañas UI lectura | Pendiente | | |
+| 23 | 5 | Wizard campaña 1–2 | Pendiente | | |
+| 24 | 5 | Wizard envío | Pendiente | | |
+| 25 | 5 | Beta campañas TI | Pendiente | | |
+| 26 | 5 | Cutover campañas | Pendiente | | |
+| 27 | 6 | Settings API | Pendiente | | |
+| 28 | 6 | Settings UI | Pendiente | | |
+| 29 | 6 | Informes KPIs | Pendiente | | |
+| 30 | 6 | Informes pulido | Pendiente | | |
+| 31 | 7 | Conversaciones lista | Pendiente | | |
+| 32 | 7 | Hilo mensajes | Pendiente | | |
+| 33 | 7 | Inbox UI lectura | Pendiente | | |
+| 34 | 7 | Enviar mensaje | Pendiente | | |
+| 35 | 7 | Media + export | Pendiente | | |
+| 36 | 7 | Polling/SSE | Pendiente | | |
+| 37 | 7 | Beta inbox TI | Pendiente | | |
+| 38 | 7 | Cutover inbox | Pendiente | | |
+| 39 | 8 | Admin usuarios | Pendiente | | |
+| 40 | 8 | Admin meta + audit | Pendiente | | |
+| 41 | 8 | Login React | Pendiente | | |
+| 42 | 8 | Cutover admin | Pendiente | | |
+| 43 | 9 | BullMQ campañas | Pendiente | | |
+| 44 | 9 | Workers jobs | Pendiente | | |
+| 45 | 9 | Webhook Nest | Pendiente | | |
+| 46 | 9 | Apagar legacy API | Pendiente | | |
+| 47 | 10 | Tailwind setup | Pendiente | | |
+| 48 | 10 | UI refactor | Pendiente | | |
+| 49 | 10 | Responsive QA | Pendiente | | |
+| 50 | 10 | Cierre EJS/CSS | Pendiente | | |
+
+**Próxima semana:** Semana 1 — scaffold `api/` + `web/` en rama `migrate/v2` o repo nuevo.
 
 ---
 
-## Qué no migrar / no reescribir
+## Definition of Done (cada semana con entrega de módulo)
 
-| Componente | Acción |
-|------------|--------|
-| `POST /webhook` | Intocable |
-| `migrations.js` / PostgreSQL | Intocable (solo nuevas migraciones) |
-| `campaignSender`, `webhookInbound`, `persistAndSendOutbound` | Reutilizar desde API nueva |
-| Jobs `setInterval` | Mantener en Node; más adelante worker + Redis |
-| Docker / Nginx producción | Solo añadir paso build Vite |
-
----
-
-## Orden de prioridad (atajos)
-
-**Mínimo viable escalable (MVS):** 0 → 1 → 4 (contactos) → 6.1–6.3 (campañas lectura) → 8 (informes) → 9 (inbox al final).
-
-**Máximo impacto UX pronto:** 0 → 1 → 9.1–9.3 (inbox solo lectura en beta) — contradice `.cusorrules` de no tocar conversaciones hasta estar listos; **recomendado:** inbox completo al final (épica 9).
+- [ ] Código en rama `migrate/v2` (o repo v2) con PR revisado.
+- [ ] Endpoint(s) probados con curl o colección Postman.
+- [ ] Paridad funcional vs EJS del módulo (si aplica).
+- [ ] Filtro por `area` y permisos respetados.
+- [ ] Feature flag documentado en `.env.example` para cutover.
+- [ ] Smoke test: webhook + envío campaña sin regresión (desde Semana 20).
+- [ ] Tabla «Seguimiento semanal» actualizada.
 
 ---
 
-## Próximo paso (Sprint 1 — Épica 0)
+## Qué no migrar / no reescribir (hasta la semana indicada)
 
-1. Crear `web/` con Vite + React + TypeScript.
-2. Implementar `GET /api/me` + shell con navegación.
-3. Deploy: build frontend en Docker sin cambiar URL pública.
-4. Primera pantalla real: **Anuncios** (épica 2A) — validar patrón end-to-end con riesgo mínimo.
+| Componente | Acción | Semana earliest |
+|------------|--------|-----------------|
+| `POST /webhook` | Mantener en legacy | 45 |
+| `migrations.js` | Intocable en prod; Prisma introspect paralelo | 46 (Migrate oficial) |
+| `campaignSender`, `webhookInbound` | Portar a Nest providers, no reescribir lógica | 24 / 45 |
+| Jobs `setInterval` | Legacy hasta BullMQ | 43–44 |
+| Envío conversaciones | Legacy hasta inbox API | 34 |
 
 ---
 
-## Seguimiento de estado
+## Matriz: `Mejoras.md` → semana
 
-| Épica | Estado | Notas |
-|-------|--------|-------|
-| 0 Cimientos | Pendiente | |
-| 1 Shell | Pendiente | |
-| 2 Bajo riesgo | Pendiente | |
-| 3 Segmentos | Pendiente | |
-| 4 Contactos | Pendiente | |
-| 5 Plantillas | Pendiente | |
-| 6 Campañas | Pendiente | |
-| 7 Ajustes | Pendiente | |
-| 8 Features nuevas | Pendiente | |
-| 9 Conversaciones | Pendiente | |
-| 10 Admin | Pendiente | |
-| 11 Cierre EJS | Pendiente | |
-| 12 Tailwind | Pendiente | |
+| Pendiente | Semanas | Solo v2 |
+|-----------|---------|---------|
+| Confirmación pre-envío campaña | 24 | Sí |
+| Export / whitelist import / preview atributos | 12–15 | Sí |
+| Fecha creación contacto | 12 | Sí |
+| Filtro rango `fecha_pago` | 12 | Sí |
+| Renombrar segmentos → Etiquetas | 10–11 (copy) | Sí |
+| Respuestas predefinidas | 27–28 | Sí |
+| Informes KPIs | 29–30 | Sí |
+| Permisos / equipos | 39–40 | Sí |
+| SIGE | post-30 | Sí |
+| Inversión pauta Ads | post-30 | Sí |
+| Reintento por inactividad | 35+ | Sí |
+| Mejor integración Cloud API | transversal | N/A |
 
-_Actualizar la tabla «Seguimiento de estado» al cerrar cada épica._
+---
+
+## Resumen de etapas
+
+| Etapa | Semanas | Foco | Riesgo global |
+|-------|---------|------|---------------|
+| 0 Arranque | 1–2 | Monorepo, Prisma, Docker | Bajo |
+| 1 Cimientos | 3–5 | Auth, shell, apiClient | Bajo |
+| 2 Bajo riesgo | 6–9 | Anuncios, atributos, exclusiones | Bajo |
+| 3 Datos | 10–15 | Segmentos, contactos | Medio |
+| 4 Plantillas | 16–19 | Builder, sync Meta | Medio |
+| 5 Campañas | 20–26 | Wizard + envío | **Alto** |
+| 6 Ajustes | 27–30 | Settings, informes | Bajo–medio |
+| 7 Inbox | 31–38 | Chat completo | **Muy alto** |
+| 8 Admin | 39–42 | Usuarios, login React | Medio |
+| 9 Backend | 43–46 | Redis, webhook, apagar legacy | **Alto** |
+| 10 Cierre | 47–50 | Tailwind, limpieza | Bajo |
+
+**Total:** 50 semanas (1 dev) · 28–32 semanas (2 devs en paralelo API/Web).
+
+---
+
+## Checklist Semana 1 (empezar ya)
+
+- [ ] Crear rama `migrate/v2` o repo `mali-whatsapp-v2`.
+- [ ] `nest new api` + `npm create vite@latest web -- --template react-ts`.
+- [ ] Root `package.json` con workspaces (`api`, `web`).
+- [ ] `GET /health` en Nest responde `{ ok: true }`.
+- [ ] `web` muestra «MALI WhatsApp v2» en dev.
+- [ ] Commit inicial: `chore: scaffold api (NestJS) + web (Vite React TS)`.
+- [ ] Actualizar fila Semana 1 en «Seguimiento semanal».
