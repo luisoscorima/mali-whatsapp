@@ -35,6 +35,13 @@ services:
     networks:
       - default
 
+  redis:
+    image: redis:7-alpine
+    container_name: mali-whatsapp-redis
+    restart: unless-stopped
+    networks:
+      - default
+
 volumes:
   postgres_data:
   chat_media:

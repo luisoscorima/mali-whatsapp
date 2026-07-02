@@ -1,0 +1,334 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model app_settings {
+  area       String   @db.VarChar(20)
+  key        String
+  value      String
+  updated_at DateTime @default(now()) @db.Timestamp(6)
+
+  @@id([area, key])
+}
+
+model audit_logs {
+  id            BigInt   @id @default(autoincrement())
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  level         String   @default("info") @db.VarChar(16)
+  event_type    String   @db.VarChar(100)
+  message       String
+  actor_user_id Int?
+  actor_email   String?  @db.VarChar(160)
+  area          String?  @db.VarChar(32)
+  client_ip     String?  @db.VarChar(128)
+  request_id    String?  @db.VarChar(64)
+  meta          Json     @default("{}")
+  users         users?   @relation(fields: [actor_user_id], references: [id], onUpdate: NoAction)
+
+  @@index([actor_user_id, created_at(sort: Desc)], map: "idx_audit_logs_actor_user")
+  @@index([created_at(sort: Desc)], map: "idx_audit_logs_created_at")
+  @@index([event_type], map: "idx_audit_logs_event_type")
+  @@index([level], map: "idx_audit_logs_level")
+}
+
+model campaign_logs {
+  id                  Int       @id @default(autoincrement())
+  campaign_id         Int
+  contact_id          Int?
+  phone               String    @db.VarChar(20)
+  whatsapp_message_id String?   @db.VarChar(150)
+  status              String    @db.VarChar(30)
+  response            Json?
+  created_at          DateTime  @default(now()) @db.Timestamp(6)
+  attempt             Int       @default(1) @db.SmallInt
+  retryable           Boolean   @default(true)
+  last_retry_at       DateTime? @db.Timestamptz(6)
+  campaigns           campaigns @relation(fields: [campaign_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  contacts            contacts? @relation(fields: [contact_id], references: [id], onUpdate: NoAction)
+
+  @@index([campaign_id], map: "idx_campaign_logs_campaign_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model campaigns {
+  id                   Int             @id @default(autoincrement())
+  area                 String          @default("ti") @db.VarChar(20)
+  segment              String
+  template_name        String          @db.VarChar(100)
+  message_text         String
+  image_url            String?
+  status               String          @default("queued") @db.VarChar(30)
+  total_recipients     Int             @default(0)
+  campaign_payload     Json?
+  created_at           DateTime        @default(now()) @db.Timestamp(6)
+  scheduled_at         DateTime?       @db.Timestamptz(6)
+  auto_retry_at        DateTime?       @db.Timestamptz(6)
+  auto_retry_done      Boolean         @default(false)
+  last_manual_retry_at DateTime?       @db.Timestamptz(6)
+  manual_retry_count   Int             @default(0)
+  cost_amount          Decimal?        @db.Decimal(14, 4)
+  cost_currency        String?         @db.VarChar(8)
+  cost_synced_at       DateTime?       @db.Timestamptz(6)
+  cost_source          String?         @db.VarChar(40)
+  cost_is_estimated    Boolean         @default(false)
+  campaign_logs        campaign_logs[]
+
+  @@index([area], map: "idx_campaigns_area")
+  @@index([auto_retry_at], map: "idx_campaigns_auto_retry")
+  @@index([status, scheduled_at], map: "idx_campaigns_scheduled")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model chat_messages {
+  id              Int           @id @default(autoincrement())
+  conversation_id Int
+  direction       String        @db.VarChar(12)
+  wa_message_id   String?       @unique(map: "chat_messages_wa_unique") @db.VarChar(150)
+  body_text       String?
+  message_type    String        @default("text") @db.VarChar(32)
+  raw_payload     Json?
+  created_at      DateTime      @default(now()) @db.Timestamptz(6)
+  is_ai           Boolean       @default(false)
+  conversations   conversations @relation(fields: [conversation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([body_text(ops: raw("gin_trgm_ops"))], map: "idx_chat_messages_body_trgm", type: Gin)
+  @@index([conversation_id, created_at], map: "idx_chat_messages_conv")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model contact_attribute_definitions {
+  id           Int      @id @default(autoincrement())
+  area         String   @db.VarChar(20)
+  segment_slug String?  @db.VarChar(50)
+  slug         String   @db.VarChar(64)
+  label        String   @db.VarChar(120)
+  field_type   String   @default("text") @db.VarChar(16)
+  sort_order   Int      @default(0)
+  required     Boolean  @default(false)
+  active       Boolean  @default(true)
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([area, segment_slug, slug], map: "idx_contact_attr_defs_area_seg_slug")
+  @@unique([area, slug], map: "idx_contact_attr_defs_area_slug")
+  @@index([area], map: "idx_contact_attr_defs_area")
+}
+
+model contact_attributes {
+  id         Int      @id @default(autoincrement())
+  contact_id Int
+  attr_key   String   @db.VarChar(64)
+  attr_value String   @default("")
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  contacts   contacts @relation(fields: [contact_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([contact_id, attr_key])
+  @@index([contact_id], map: "idx_contact_attributes_contact")
+  @@index([attr_key, attr_value], map: "idx_contact_attributes_key_value")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model contact_segments {
+  id           Int      @id @default(autoincrement())
+  contact_id   Int
+  area         String   @db.VarChar(20)
+  segment_slug String   @db.VarChar(50)
+  created_at   DateTime @default(now()) @db.Timestamp(6)
+  contacts     contacts @relation(fields: [contact_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([contact_id, segment_slug])
+  @@index([area, segment_slug], map: "idx_contact_segments_area_slug")
+  @@index([contact_id], map: "idx_contact_segments_contact")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model contacts {
+  id                     Int                  @id @default(autoincrement())
+  name                   String               @db.VarChar(150)
+  phone                  String               @db.VarChar(20)
+  segment                String?              @db.VarChar(50)
+  area                   String               @default("ti") @db.VarChar(20)
+  opt_in                 Boolean              @default(true)
+  active                 Boolean              @default(true)
+  created_at             DateTime             @default(now()) @db.Timestamp(6)
+  updated_at             DateTime             @default(now()) @db.Timestamp(6)
+  lead_score             Int?                 @db.SmallInt
+  replaced_by_contact_id Int?
+  replaced_at            DateTime?            @db.Timestamptz(6)
+  replacement_reason     String?              @db.VarChar(64)
+  campaign_logs          campaign_logs[]
+  contact_attributes     contact_attributes[]
+  contact_segments       contact_segments[]
+  contacts               contacts?            @relation("contactsTocontacts", fields: [replaced_by_contact_id], references: [id], onUpdate: NoAction, map: "contacts_replaced_by_contact_fkey")
+  other_contacts         contacts[]           @relation("contactsTocontacts")
+  conversations          conversations[]
+  meta_ctwa_ad_leads     meta_ctwa_ad_leads[]
+
+  @@unique([area, phone])
+  @@index([area], map: "idx_contacts_area")
+  @@index([replaced_at(sort: Desc)], map: "idx_contacts_replaced_at")
+  @@index([replaced_by_contact_id], map: "idx_contacts_replaced_by_contact")
+  @@index([segment], map: "idx_contacts_segment")
+}
+
+model conversation_tags {
+  id              Int           @id @default(autoincrement())
+  conversation_id Int
+  label           String        @db.VarChar(120)
+  source          String        @default("manual") @db.VarChar(32)
+  meta_source_id  String?       @db.VarChar(64)
+  created_at      DateTime      @default(now()) @db.Timestamptz(6)
+  conversations   conversations @relation(fields: [conversation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([conversation_id, label], map: "conversation_tags_conv_label_uq")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model conversations {
+  id                           Int                  @id @default(autoincrement())
+  area                         String               @db.VarChar(20)
+  phone                        String               @db.VarChar(20)
+  contact_id                   Int?
+  last_user_message_at         DateTime?            @db.Timestamptz(6)
+  last_message_at              DateTime             @default(now()) @db.Timestamptz(6)
+  created_at                   DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at                   DateTime             @default(now()) @db.Timestamptz(6)
+  inbox_unread                 Boolean              @default(false)
+  status                       String               @default("bot")
+  attribution                  Json?
+  meta_ctwa_ad_id              Int?
+  whatsapp_phone_number_id     String?              @db.VarChar(32)
+  outside_hours_notice_sent_at DateTime?            @db.Timestamptz(6)
+  chat_messages                chat_messages[]
+  conversation_tags            conversation_tags[]
+  contacts                     contacts?            @relation(fields: [contact_id], references: [id], onUpdate: NoAction)
+  meta_ctwa_ads                meta_ctwa_ads?       @relation(fields: [meta_ctwa_ad_id], references: [id], onUpdate: NoAction)
+  meta_ctwa_ad_leads           meta_ctwa_ad_leads[]
+
+  @@unique([area, phone])
+  @@index([area, last_message_at(sort: Desc)], map: "idx_conversations_area_last_msg")
+}
+
+model login_logs {
+  id            Int       @id @default(autoincrement())
+  user_id       Int
+  email         String    @db.VarChar(120)
+  logged_at     DateTime  @default(now()) @db.Timestamptz(6)
+  logged_out_at DateTime? @db.Timestamptz(6)
+  last_seen_at  DateTime? @db.Timestamptz(6)
+  users         users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([logged_at(sort: Desc)], map: "idx_login_logs_logged_at")
+  @@index([user_id], map: "idx_login_logs_user_id")
+}
+
+model meta_ctwa_ad_leads {
+  id               Int           @id @default(autoincrement())
+  area             String        @db.VarChar(32)
+  meta_ctwa_ad_id  Int
+  conversation_id  Int
+  contact_id       Int?
+  phone            String        @db.VarChar(32)
+  first_message_at DateTime      @default(now()) @db.Timestamptz(6)
+  created_at       DateTime      @default(now()) @db.Timestamptz(6)
+  contacts         contacts?     @relation(fields: [contact_id], references: [id], onUpdate: NoAction)
+  conversations    conversations @relation(fields: [conversation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  meta_ctwa_ads    meta_ctwa_ads @relation(fields: [meta_ctwa_ad_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([area, meta_ctwa_ad_id, conversation_id])
+  @@index([meta_ctwa_ad_id], map: "idx_meta_ctwa_ad_leads_ad")
+}
+
+model meta_ctwa_ads {
+  id                 Int                  @id @default(autoincrement())
+  area               String               @db.VarChar(32)
+  meta_source_id     String               @db.VarChar(128)
+  display_name       String?              @db.VarChar(200)
+  ad_platform        String               @default("other") @db.VarChar(16)
+  source_url         String?
+  source_type        String?              @db.VarChar(32)
+  headline           String?
+  body               String?
+  media_type         String?              @db.VarChar(32)
+  image_url          String?
+  ctwa_clid          String?
+  referral_snapshot  Json?
+  lead_count         Int                  @default(0)
+  first_seen_at      DateTime             @default(now()) @db.Timestamptz(6)
+  last_seen_at       DateTime             @default(now()) @db.Timestamptz(6)
+  created_at         DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime             @default(now()) @db.Timestamptz(6)
+  conversations      conversations[]
+  meta_ctwa_ad_leads meta_ctwa_ad_leads[]
+
+  @@unique([area, meta_source_id])
+  @@index([area], map: "idx_meta_ctwa_ads_area")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model segment_definitions {
+  id         Int    @id @default(autoincrement())
+  area       String @db.VarChar(20)
+  slug       String @db.VarChar(50)
+  label      String @db.VarChar(120)
+  sort_order Int    @default(0)
+  color_key  String @default("teal") @db.VarChar(16)
+
+  @@unique([area, slug])
+  @@index([area], map: "idx_segment_definitions_area")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model user_areas {
+  user_id Int
+  area    String @db.VarChar(20)
+  users   users  @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([user_id, area])
+  @@index([area], map: "idx_user_areas_area")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model users {
+  id                      Int          @id @default(autoincrement())
+  email                   String       @unique @db.VarChar(120)
+  password_hash           String       @db.VarChar(120)
+  area                    String       @db.VarChar(20)
+  is_master               Boolean      @default(false)
+  created_at              DateTime     @default(now()) @db.Timestamp(6)
+  must_change_password    Boolean      @default(false)
+  can_edit_ai_prompt      Boolean      @default(false)
+  can_view_audit_logs     Boolean      @default(false)
+  can_view_integration    Boolean      @default(false)
+  can_edit_business_hours Boolean      @default(false)
+  can_view_reports        Boolean      @default(false)
+  audit_logs              audit_logs[]
+  login_logs              login_logs[]
+  user_areas              user_areas[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model whatsapp_templates {
+  id                       Int       @id @default(autoincrement())
+  area                     String    @db.VarChar(20)
+  meta_id                  String?   @db.VarChar(64)
+  name                     String    @db.VarChar(200)
+  language                 String    @db.VarChar(32)
+  category                 String?   @db.VarChar(80)
+  status                   String    @db.VarChar(40)
+  components_json          Json      @default("[]")
+  synced_at                DateTime  @default(now()) @db.Timestamptz(6)
+  rejection_reason         String?
+  submitted_at             DateTime? @db.Timestamptz(6)
+  submitted_by             Int?
+  placeholder_aliases_json Json?
+
+  @@unique([area, name, language])
+  @@index([area], map: "idx_whatsapp_templates_area")
+}

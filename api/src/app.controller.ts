@@ -1,9 +1,14 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { AppService } from './app.service';
+import { PrismaService } from './prisma/prisma.service';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  constructor(
+    private readonly appService: AppService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get()
   getHello(): string {
@@ -11,7 +16,16 @@ export class AppController {
   }
 
   @Get('health')
-  getHealth(): { ok: true } {
-    return { ok: true };
+  async getHealth(@Res({ passthrough: true }) res: Response) {
+    try {
+      await this.prisma.$queryRaw`SELECT 1`;
+      return { ok: true, db: 'up' };
+    } catch (error) {
+      res.status(500);
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'db error',
+      };
+    }
   }
 }

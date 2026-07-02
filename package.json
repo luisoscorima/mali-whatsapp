@@ -4,6 +4,9 @@
   "workspaces": ["api", "web"],
   "scripts": {
     "dev:api": "npm run start:dev -w api",
-    "dev:web": "npm run dev -w web"
+    "dev:web": "npm run dev -w web",
+    "dev:compose": "docker compose -f docker-compose.dev.yml up",
+    "prisma:generate": "npm exec prisma generate -w api",
+    "prisma:pull": "npm exec prisma db pull -w api"
   }
 }

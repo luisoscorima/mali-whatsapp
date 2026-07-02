@@ -1,8 +1,8 @@
 # Desarrollo local: panel en http://localhost:3000 (puertos publicados; sin red NPM).
+# Stack v2: API :4000, Web :5173, Redis :6379, Postgres :5435.
 # Si tras cambiar package.json ves "Cannot find module ...": reconstruye la imagen y reinstala deps
 # en el volumen de node_modules, por ejemplo:
-#   docker compose -f docker-compose.dev.yml build --no-cache app
-#   docker compose -f docker-compose.dev.yml run --rm app npm install
+#   docker compose -f docker-compose.dev.yml build --no-cache api web
 #   docker compose -f docker-compose.dev.yml up
 services:
   app:
@@ -22,6 +22,49 @@ services:
     volumes:
       - ./app:/usr/src/app
       - /usr/src/app/node_modules
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile.dev
+    container_name: mali-whatsapp-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      API_PORT: 4000
+    ports:
+      - "4000:4000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile.dev
+    container_name: mali-whatsapp-web
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:4000
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - api
+
+  redis:
+    image: redis:7-alpine
+    container_name: mali-whatsapp-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
 
   postgres:
     image: postgres:16-alpine

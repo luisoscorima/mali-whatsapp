@@ -8,6 +8,7 @@ api/node_modules/
 web/node_modules/
 api/dist/
 web/dist/
+api/generated/
 
 npm-debug.log*
 yarn-debug.log*
