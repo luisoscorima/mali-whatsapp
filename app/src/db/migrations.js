@@ -541,14 +541,14 @@ async function runMigrations(query) {
   await migratePamSlugToTiThreeAreas(query);
   await cleanUpCrossAreaSeededSegments(query);
   await dropExclusionListsTables(query);
+  await migrateUserAreas(query);
+  await migrateAddEducacionCaEpAreas(query);
   await seedDefaultContactAttributeDefinitions(query);
 
   await query(
     `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS outside_hours_notice_sent_at TIMESTAMPTZ NULL`
   );
   await seedBusinessHoursSettings(query);
-  await migrateUserAreas(query);
-  await migrateAddEducacionCaEpAreas(query);
 }
 
 /** Asigna Phone Number ID por defecto a hilos existentes según su área. */
