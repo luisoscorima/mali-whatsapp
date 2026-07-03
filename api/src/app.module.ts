@@ -8,6 +8,7 @@ import { AttributeDefinitionsModule } from './attribute-definitions/attribute-de
 import { MetaAdsModule } from './meta-ads/meta-ads.module';
 import { ContactsModule } from './contacts/contacts.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
+import { ReportsModule } from './reports/reports.module';
 import { SettingsModule } from './settings/settings.module';
 import { SegmentsModule } from './segments/segments.module';
 import { TemplatesModule } from './templates/templates.module';
@@ -25,6 +26,7 @@ import { PrismaModule } from './prisma/prisma.module';
     ContactsModule,
     CampaignsModule,
     SettingsModule,
+    ReportsModule,
     TemplatesModule,
   ],
   controllers: [AppController],

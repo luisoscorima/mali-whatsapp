@@ -182,7 +182,7 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 | Sem | Entregable | DoD |
 |-----|------------|-----|
 | **29–30** ✓ | `SettingsModule` + UI | IA, horario, integración |
-| **31–32** | `ReportsModule` | KPIs, bitácora, reportería |
+| **31–32** ✓ | `ReportsModule` | Bitácora + reportería + exports Excel |
 
 ---
 
@@ -249,9 +249,11 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 | 28 | 5 | Workers en segundo plano | Completada | | `CampaignJobsService` (poller, sin BullMQ aún) |
 | 29 | 6 | Settings API + UI integración/IA/horario | Completada | | `SettingsModule`, `/settings/*` |
 | 30 | 6 | Ajustes: permisos y placeholders bitácora/reportería | Completada | | sidebar por permisos; sem. 31–32 informes |
-| 31–46 | … | Ver etapas arriba | Pendiente | | |
+| 31 | 6 | ReportsModule bitácora | Completada | | filtros, paginación, export XLSX |
+| 32 | 6 | ReportsModule reportería | Completada | | comunicaciones por contacto + export |
+| 33–46 | … | Ver etapas arriba | Pendiente | | |
 
-**Próxima semana:** Semana 31 — `ReportsModule` (reportería y KPIs v2).
+**Próxima semana:** Semana 33 — inbox: lista de conversaciones (Etapa 7).
 
 ---
 

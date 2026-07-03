@@ -26,7 +26,8 @@ import { SettingsIndexPage } from '../features/settings/SettingsIndexPage'
 import { SettingsIntegrationPage } from '../features/settings/SettingsIntegrationPage'
 import { SettingsAiPage } from '../features/settings/SettingsAiPage'
 import { SettingsBusinessHoursPage } from '../features/settings/SettingsBusinessHoursPage'
-import { SettingsPlaceholderPage } from '../features/settings/SettingsPlaceholderPage'
+import { SettingsAuditPage } from '../features/settings/SettingsAuditPage'
+import { SettingsReporteriaPage } from '../features/settings/SettingsReporteriaPage'
 
 export function AppRouter() {
   return (
@@ -62,14 +63,8 @@ export function AppRouter() {
                 path="fuera-de-horario"
                 element={<SettingsBusinessHoursPage />}
               />
-              <Route
-                path="bitacora"
-                element={<SettingsPlaceholderPage title="Bitácora" />}
-              />
-              <Route
-                path="reporteria"
-                element={<SettingsPlaceholderPage title="Reportería" />}
-              />
+              <Route path="bitacora" element={<SettingsAuditPage />} />
+              <Route path="reporteria" element={<SettingsReporteriaPage />} />
             </Route>
           </Route>
         </Route>
