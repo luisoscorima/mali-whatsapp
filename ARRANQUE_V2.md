@@ -89,6 +89,28 @@ Archivos relevantes:
 
 `docker-compose.yml` incluye Redis desde Semana 2. Los servicios `api` y `web` en producción se añadirán en etapas posteriores; el contenedor `app` (legacy) no cambia.
 
+## Autenticación JWT (Semana 3)
+
+- `POST /api/auth/login` — email `@mali.pe` + contraseña → `{ ok, data: { accessToken, user } }`
+- `GET /api/me` — cabecera `Authorization: Bearer <token>`
+- Con `REQUIRE_AUTH=false` (dev): la API devuelve usuario simulado (`DEV_AREA`) sin token
+
+Variables en `.env`:
+
+```env
+JWT_SECRET=...          # obligatorio si REQUIRE_AUTH=true
+JWT_EXPIRES_IN=7d
+```
+
+Prueba rápida:
+
+```bash
+curl -s http://localhost:4000/api/me
+curl -s -X POST http://localhost:4000/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"tu@mali.pe","password":"..."}'
+```
+
 ## Siguiente etapa
 
-Semana 3: `AuthModule`, `GET /api/me` y login dev. Ver [`MIGRACION_REACT.md`](MIGRACION_REACT.md).
+Semana 4: `apiClient` en React, proxy dev y convención `{ ok, data?, error? }`. Ver [`MIGRACION_REACT.md`](MIGRACION_REACT.md).
