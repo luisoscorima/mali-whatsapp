@@ -1,0 +1,83 @@
+import { useEffect, useState } from 'react'
+import { apiClient } from '../../shared/api'
+
+type DashboardData = {
+  contacts: Array<{ id: number; name: string | null; phone: string }>
+  campaigns: Array<{ id: number; segment: string; template_name: string; status: string }>
+  stats: Array<{ segment: string; total: number }>
+  campaignTotals: { total_logs: number }
+}
+
+export function DashboardPage() {
+  const [data, setData] = useState<DashboardData | null>(null)
+  const [health, setHealth] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    async function load() {
+      const [dashboard, healthResult] = await Promise.all([
+        apiClient.get<DashboardData>('/api/dashboard'),
+        apiClient.getHealth(),
+      ])
+      if (!dashboard.ok) {
+        setError(dashboard.error)
+        return
+      }
+      setData(dashboard.data)
+      setHealth(
+        healthResult.ok
+          ? `API ${healthResult.db === 'up' ? 'conectada a BD' : 'activa'}`
+          : healthResult.error || 'API no disponible',
+      )
+    }
+    load()
+  }, [])
+
+  if (error) {
+    return <p className="text-bad">{error}</p>
+  }
+
+  if (!data) {
+    return <p className="text-muted">Cargando panel…</p>
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold">Panel</h1>
+        {health ? <p className="text-sm text-muted">{health}</p> : null}
+      </div>
+
+      <section className="grid gap-4 sm:grid-cols-3">
+        <div className="rounded-xl border border-line bg-surface-strong p-4">
+          <p className="text-sm text-muted">Contactos recientes</p>
+          <p className="text-2xl font-semibold">{data.contacts.length}</p>
+        </div>
+        <div className="rounded-xl border border-line bg-surface-strong p-4">
+          <p className="text-sm text-muted">Campañas recientes</p>
+          <p className="text-2xl font-semibold">{data.campaigns.length}</p>
+        </div>
+        <div className="rounded-xl border border-line bg-surface-strong p-4">
+          <p className="text-sm text-muted">Logs de campaña</p>
+          <p className="text-2xl font-semibold">{data.campaignTotals.total_logs}</p>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-line bg-surface-strong p-4">
+        <h2 className="mb-3 font-medium">Segmentos activos</h2>
+        {data.stats.length === 0 ? (
+          <p className="text-sm text-muted">Sin segmentos con contactos activos.</p>
+        ) : (
+          <ul className="space-y-1 text-sm">
+            {data.stats.map((row) => (
+              <li key={row.segment} className="flex justify-between gap-4">
+                <span>{row.segment}</span>
+                <span className="text-muted">{row.total}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  )
+}

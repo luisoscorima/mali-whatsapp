@@ -1,28 +1,8 @@
-# Desarrollo local: panel en http://localhost:3000 (puertos publicados; sin red NPM).
-# Stack v2: API :4000, Web :5173, Redis :6379, Postgres :5435.
-# Si tras cambiar package.json ves "Cannot find module ...": reconstruye la imagen y reinstala deps
-# en el volumen de node_modules, por ejemplo:
+# Desarrollo local v2 (aislado): API :4000, Web :5173, Postgres :5435, Redis :6379.
+# Si tras cambiar package.json ves "Cannot find module ...": reconstruye la imagen, p. ej.:
 #   docker compose -f docker-compose.dev.yml build --no-cache api web
 #   docker compose -f docker-compose.dev.yml up
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: mali-whatsapp-app
-    restart: unless-stopped
-    env_file:
-      - .env
-    depends_on:
-      postgres:
-        condition: service_healthy
-    command: npm run dev
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./app:/usr/src/app
-      - /usr/src/app/node_modules
-
   api:
     build:
       context: .
@@ -50,7 +30,7 @@ services:
     container_name: mali-whatsapp-web
     restart: unless-stopped
     environment:
-      VITE_API_URL: http://localhost:4000
+      VITE_API_URL: http://api:4000
     ports:
       - "5173:5173"
     volumes:

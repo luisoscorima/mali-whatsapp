@@ -1,18 +1,33 @@
+# Producción v2 (despliegue aislado). No incluye el panel legacy Express/EJS.
 services:
-  app:
+  api:
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: mali-whatsapp-app
+      dockerfile: api/Dockerfile
+    container_name: mali-whatsapp-api
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      API_PORT: 4000
     depends_on:
       postgres:
         condition: service_healthy
-    # Adjuntos del hilo (vista previa en conversaciones); sin esto se pierden al --build.
-    volumes:
-      - chat_media:/usr/src/app/public/uploads/chat-media
+      redis:
+        condition: service_started
+    networks:
+      - default
+      - npm_proxy
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    container_name: mali-whatsapp-web
+    restart: unless-stopped
+    depends_on:
+      - api
     networks:
       - default
       - npm_proxy
@@ -44,9 +59,7 @@ services:
 
 volumes:
   postgres_data:
-  chat_media:
 
-# Nginx Proxy Manager debe poder resolver mali-whatsapp-app:3000 (misma red Docker).
 networks:
   npm_proxy:
     external: true

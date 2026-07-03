@@ -98,6 +98,10 @@ async function request<T>(
 }
 
 export const apiClient = {
+  async get<T>(path: string): Promise<ApiResponse<T>> {
+    return request<T>(path);
+  },
+
   getMe(): Promise<ApiResponse<AuthUser>> {
     return request<AuthUser>('/api/me');
   },

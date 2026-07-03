@@ -1,125 +1,77 @@
 # Arranque v2 — MALI WhatsApp
 
-Guía para desarrollar la migración NestJS + React en la rama `migrate/v2`. El panel legacy (`app/`) sigue en producción sin cambios.
+Plataforma **aislada** (NestJS + React + Prisma). No usa el panel legacy `app/` en runtime.
+
+Ver [`app/DEPRECATED.md`](app/DEPRECATED.md) y [`MIGRACION_REACT.md`](MIGRACION_REACT.md).
 
 ## Requisitos
 
 - Node.js 20+
-- Docker y Docker Compose (recomendado para Postgres y Redis)
-- Archivo `.env` en la raíz (copiar desde `.env.example`)
+- Docker y Docker Compose
+- `.env` en la raíz (copiar desde `.env.example`)
 
-## Opción A — Docker Compose (recomendado)
-
-Levanta legacy, API v2, web v2, Postgres y Redis:
+## Docker Compose (recomendado)
 
 ```bash
-cp .env.example .env   # si aún no existe
+cp .env.example .env
 docker compose -f docker-compose.dev.yml up --build
 ```
 
 | Servicio | URL |
 |----------|-----|
-| Panel legacy | http://localhost:3000 |
 | API NestJS | http://localhost:4000 |
 | Web React | http://localhost:5173 |
 | Postgres | localhost:5435 |
 | Redis | localhost:6379 |
-
-Comprobación rápida:
 
 ```bash
 curl http://localhost:4000/health
 # → {"ok":true,"db":"up"}
 ```
 
-Si cambias dependencias en `package.json`, reconstruye:
-
-```bash
-docker compose -f docker-compose.dev.yml build --no-cache api web
-docker compose -f docker-compose.dev.yml up
-```
-
-## Opción B — npm en el host
-
-Instala dependencias del monorepo:
+## npm en el host
 
 ```bash
 npm install
-```
-
-### Postgres y Redis
-
-Asegúrate de que Postgres y Redis estén corriendo (p. ej. solo esos servicios de Compose):
-
-```bash
 docker compose -f docker-compose.dev.yml up postgres redis -d
-```
 
-Para la API desde el host, `DATABASE_URL` debe apuntar a `localhost:5435` (no `postgres`):
-
-```bash
 export DATABASE_URL="postgresql://mali_user:TU_CLAVE@localhost:5435/mali_whatsapp"
 export API_PORT=4000
 npm run prisma:generate
-npm run dev:api
+npm run dev:api   # terminal 1
+npm run dev:web   # terminal 2
 ```
 
-En otra terminal:
+## Auth JWT
 
-```bash
-npm run dev:web
-```
-
-## Prisma
-
-El esquema se introspecta desde la BD legacy (`app/src/db/migrations.js` sigue siendo la fuente de verdad en producción).
-
-```bash
-# Con Postgres accesible (ajusta DATABASE_URL si corres desde el host)
-DATABASE_URL="postgresql://mali_user:TU_CLAVE@localhost:5435/mali_whatsapp" npm run prisma:pull
-npm run prisma:generate
-```
-
-Archivos relevantes:
-
-- [`api/prisma/schema.prisma`](api/prisma/schema.prisma) — modelos introspectados
-- [`api/src/prisma/prisma.module.ts`](api/src/prisma/prisma.module.ts) — módulo global NestJS
-
-## Producción
-
-`docker-compose.yml` incluye Redis desde Semana 2. Los servicios `api` y `web` en producción se añadirán en etapas posteriores; el contenedor `app` (legacy) no cambia.
-
-## Autenticación JWT (Semana 3)
-
-- `POST /api/auth/login` — email `@mali.pe` + contraseña → `{ ok, data: { accessToken, user } }`
-- `GET /api/me` — cabecera `Authorization: Bearer <token>`
-- Con `REQUIRE_AUTH=false` (dev): la API devuelve usuario simulado (`DEV_AREA`) sin token
-
-Variables en `.env`:
+- `POST /api/auth/login` → `{ ok, data: { accessToken, user } }`
+- `GET /api/me` → `Authorization: Bearer <token>`
+- `REQUIRE_AUTH=false` (dev): usuario simulado sin token
 
 ```env
-JWT_SECRET=...          # obligatorio si REQUIRE_AUTH=true
+JWT_SECRET=...       # obligatorio con REQUIRE_AUTH=true
 JWT_EXPIRES_IN=7d
 ```
 
-Prueba rápida:
+## Cliente API (web)
+
+[`web/src/shared/api/`](web/src/shared/api/) — `apiClient`, convención `{ ok, data?, error? }`, proxy `/api` y `/health`.
+
+## Producción v2
+
+`docker-compose.yml` levanta **api + web + postgres + redis** (sin contenedor legacy).
+
+Nginx Proxy Manager apunta al servicio `web` (React) y/o `api` según rutas.
+
+## Prisma
+
+Esquema en [`api/prisma/schema.prisma`](api/prisma/schema.prisma). En v2 la fuente de verdad pasará a **Prisma Migrate** (no `app/src/db/migrations.js`).
 
 ```bash
-curl -s http://localhost:4000/api/me
-curl -s -X POST http://localhost:4000/api/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"tu@mali.pe","password":"..."}'
+DATABASE_URL="postgresql://..." npm run prisma:pull
+npm run prisma:generate
 ```
-
-## Cliente API en web (Semana 4)
-
-Módulo [`web/src/shared/api/`](web/src/shared/api/):
-
-- `apiClient.getMe()`, `apiClient.login()`, `apiClient.getHealth()`
-- Respuestas con convención `{ ok, data? }` / `{ ok: false, error }`
-- `401` limpia el token y vuelve al formulario de login (`onUnauthorized`)
-- Proxy Vite: `/api` y `/health` → API Nest (`:4000`)
 
 ## Siguiente etapa
 
-Semana 5: `AppShell` + React Router bajo `/app` y enlace «Panel clásico» en legacy. Ver [`MIGRACION_REACT.md`](MIGRACION_REACT.md).
+Semana 7: `MetaAdsModule` API. Ver [`MIGRACION_REACT.md`](MIGRACION_REACT.md).
