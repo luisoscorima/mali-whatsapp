@@ -224,8 +224,8 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 | 2 | 0 | Docker + Prisma | Completada | 9a5d5ad | |
 | 3 | 1 | Auth JWT + `/api/me` | Completada | 99f4524 | |
 | 4 | 1 | apiClient | Completada | eeb8c9e | |
-| 5 | 1 | Tailwind + AppShell + Router | Completada | | Rutas `/`, `/login` |
-| 6 | 1 | Dashboard API + UI | Completada | | `GET /api/dashboard` |
+| 5 | 1 | Tailwind + AppShell + Router | Completada | ea5cdce | Rutas `/`, `/login` |
+| 6 | 1 | Dashboard API + UI | Completada | ea5cdce | `GET /api/dashboard` |
 | 7 | 2 | Meta ads API | Pendiente | | |
 | 8 | 2 | Meta ads UI | Pendiente | | |
 | 9 | 2 | Atributos | Pendiente | | |
