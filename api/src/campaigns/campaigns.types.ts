@@ -45,6 +45,22 @@ export type RecipientsPreviewResult = {
   exclude_open_service_window: boolean;
 };
 
+export type SendCampaignResult = {
+  campaignId: number;
+  redirect: string;
+  status: string;
+  totalRecipients: number;
+  isScheduled: boolean;
+};
+
+export type CampaignRetryActionResult = {
+  retried: number;
+  recovered: number;
+  stillFailed: number;
+  skipped: boolean;
+  error?: string;
+};
+
 export type CampaignDetail = {
   id: number;
   segment: string;

@@ -21,6 +21,12 @@ import { TemplateNewPage } from '../features/templates/TemplateNewPage'
 import { CampaignsListPage } from '../features/campaigns/CampaignsListPage'
 import { CampaignNewPage } from '../features/campaigns/CampaignNewPage'
 import { CampaignDetailPage } from '../features/campaigns/CampaignDetailPage'
+import { SettingsShell } from '../features/settings/SettingsShell'
+import { SettingsIndexPage } from '../features/settings/SettingsIndexPage'
+import { SettingsIntegrationPage } from '../features/settings/SettingsIntegrationPage'
+import { SettingsAiPage } from '../features/settings/SettingsAiPage'
+import { SettingsBusinessHoursPage } from '../features/settings/SettingsBusinessHoursPage'
+import { SettingsPlaceholderPage } from '../features/settings/SettingsPlaceholderPage'
 
 export function AppRouter() {
   return (
@@ -48,6 +54,23 @@ export function AppRouter() {
             <Route path="campaigns" element={<CampaignsListPage />} />
             <Route path="campaigns/new" element={<CampaignNewPage />} />
             <Route path="campaigns/:id" element={<CampaignDetailPage />} />
+            <Route path="settings" element={<SettingsShell />}>
+              <Route index element={<SettingsIndexPage />} />
+              <Route path="integracion" element={<SettingsIntegrationPage />} />
+              <Route path="ia" element={<SettingsAiPage />} />
+              <Route
+                path="fuera-de-horario"
+                element={<SettingsBusinessHoursPage />}
+              />
+              <Route
+                path="bitacora"
+                element={<SettingsPlaceholderPage title="Bitácora" />}
+              />
+              <Route
+                path="reporteria"
+                element={<SettingsPlaceholderPage title="Reportería" />}
+              />
+            </Route>
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -175,6 +175,30 @@ export function CampaignDetailPage() {
     await reload()
   }
 
+  async function handleRetryFailed() {
+    if (!id) return
+    if (
+      !window.confirm(
+        '¿Reintentar envíos fallidos elegibles de esta campaña?',
+      )
+    ) {
+      return
+    }
+    setActionError('')
+    setBusy('retry')
+    const result = await apiClient.post<{
+      retried: number
+      recovered: number
+      stillFailed: number
+    }>(`/api/campaigns/${id}/retry-failed`, {})
+    setBusy('')
+    if (!result.ok) {
+      setActionError(result.error)
+      return
+    }
+    await reload()
+  }
+
   if (error) {
     return (
       <div className="space-y-3">
@@ -214,7 +238,7 @@ export function CampaignDetailPage() {
     )
   }
   if (rs.canManualRetry) {
-    retryHintParts.push('Reintento manual disponible al habilitar envío (semana 27).')
+    retryHintParts.push('Puedes reintentar fallidos manualmente.')
   }
 
   return (
@@ -611,6 +635,16 @@ export function CampaignDetailPage() {
         </div>
 
         <p className="text-xs text-muted">{retryHintParts.join(' · ')}</p>
+        {rs.canManualRetry ? (
+          <button
+            type="button"
+            className={actionButtonClass()}
+            disabled={busy !== ''}
+            onClick={() => handleRetryFailed()}
+          >
+            {busy === 'retry' ? 'Reintentando…' : 'Reintentar fallidos'}
+          </button>
+        ) : null}
 
         {filteredFailed.length === 0 ? (
           <p className="text-sm text-muted">Sin incidencias para este filtro.</p>

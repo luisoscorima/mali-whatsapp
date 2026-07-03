@@ -18,8 +18,10 @@ import { RecipientsPreviewDto } from './dto/recipients-preview.dto';
 import type {
   CampaignDetail,
   CampaignListItem,
+  CampaignRetryActionResult,
   CampaignSummary,
   RecipientsPreviewResult,
+  SendCampaignResult,
 } from './campaigns.types';
 
 @Controller('campaigns')
@@ -49,6 +51,15 @@ export class CampaignsController {
     @Body() body: RecipientsPreviewDto,
   ): Promise<ApiResponse<RecipientsPreviewResult>> {
     const data = await this.campaignsService.previewRecipients(user.area, body);
+    return { ok: true, data };
+  }
+
+  @Post('send')
+  async send(
+    @CurrentUser() user: AuthUser,
+    @Body() body: Record<string, unknown>,
+  ): Promise<ApiResponse<SendCampaignResult>> {
+    const data = await this.campaignsService.sendCampaign(user.area, body);
     return { ok: true, data };
   }
 
@@ -146,9 +157,9 @@ export class CampaignsController {
   async retryFailed(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
-  ): Promise<ApiResponse<never>> {
-    await this.campaignsService.retryFailed(user.area, id);
-    return { ok: true, data: undefined as never };
+  ): Promise<ApiResponse<CampaignRetryActionResult>> {
+    const data = await this.campaignsService.retryFailed(user.area, id);
+    return { ok: true, data };
   }
 
   @Get(':id')

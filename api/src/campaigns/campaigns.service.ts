@@ -5,7 +5,6 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
-  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { AuthUser } from '../auth/auth.types';
@@ -54,13 +53,22 @@ import {
   fetchRecipientsUnion,
   readMaxExcludeContactIds,
   readRecipientsPreviewMax,
+  validateRecipientsMatchRequest,
 } from './campaign-recipients.util';
 import { RecipientsPreviewDto } from './dto/recipients-preview.dto';
+import { validateCampaignSend } from './campaign-send-validate.util';
+import {
+  CampaignSenderService,
+  type CampaignJobPayload,
+} from './campaign-sender.service';
+import { CampaignRetryService } from './campaign-retry.service';
 import type {
   CampaignDetail,
   CampaignListItem,
+  CampaignRetryActionResult,
   CampaignSummary,
   RecipientsPreviewResult,
+  SendCampaignResult,
 } from './campaigns.types';
 import { formatCampaignSegmentDisplay, parseCampaignPayload } from './campaign-payload.util';
 
@@ -93,7 +101,11 @@ type ListRow = {
 
 @Injectable()
 export class CampaignsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly campaignSender: CampaignSenderService,
+    private readonly campaignRetry: CampaignRetryService,
+  ) {}
 
   private async getSegmentSlugSet(area: AuthUser['area']): Promise<Set<string>> {
     const rows = await this.prisma.segment_definitions.findMany({
@@ -741,10 +753,190 @@ export class CampaignsService {
     };
   }
 
+  async sendCampaign(
+    area: AuthUser['area'],
+    body: Record<string, unknown>,
+  ): Promise<SendCampaignResult> {
+    const segmentSet = await this.getSegmentSlugSet(area);
+    const templateSyncId = parseInt(String(body.templateSyncId || '').trim(), 10);
+
+    let templateRow: {
+      id: number;
+      name: string;
+      language: string;
+      category: string | null;
+      status: string;
+      components_json: unknown;
+      placeholder_aliases_json: unknown;
+    } | null = null;
+
+    if (Number.isInteger(templateSyncId) && templateSyncId > 0) {
+      templateRow = await this.prisma.whatsapp_templates.findFirst({
+        where: { id: templateSyncId, area },
+        select: {
+          id: true,
+          name: true,
+          language: true,
+          category: true,
+          status: true,
+          components_json: true,
+          placeholder_aliases_json: true,
+        },
+      });
+    }
+
+    const validation = validateCampaignSend(body, segmentSet, templateRow);
+    if (!validation.ok) {
+      throw new BadRequestException(validation.message);
+    }
+
+    const {
+      segment,
+      segments,
+      recipientContactIds,
+      excludeContactIds,
+      excludeSegmentSlugs,
+      excludeOpenServiceWindow,
+      audienceMode,
+      templateRow: tRow,
+      values,
+      messageText,
+      imageUrl,
+      batchSize,
+      batchDelayMs,
+      isScheduled,
+      scheduledAt,
+      paramMapping,
+    } = validation.value;
+
+    const uniqueExcludeIds = excludeContactIds || [];
+    const recipientOptions: {
+      excludeContactIds?: number[];
+      excludeSegmentSlugs?: string[];
+      excludeOpenServiceWindow?: boolean;
+      contactIds?: number[];
+    } = {};
+
+    if (uniqueExcludeIds.length > 0) {
+      recipientOptions.excludeContactIds = uniqueExcludeIds;
+    }
+    if (excludeSegmentSlugs.length > 0) {
+      recipientOptions.excludeSegmentSlugs = excludeSegmentSlugs;
+    }
+    if (excludeOpenServiceWindow) {
+      recipientOptions.excludeOpenServiceWindow = true;
+    }
+
+    let recipients;
+    if (
+      audienceMode === 'multi' &&
+      recipientContactIds &&
+      recipientContactIds.length > 0
+    ) {
+      recipients = await fetchRecipientsUnion(this.prisma, area, segments, {
+        ...recipientOptions,
+        contactIds: recipientContactIds,
+      });
+      if (!validateRecipientsMatchRequest(recipients, recipientContactIds)) {
+        const msg = excludeOpenServiceWindow
+          ? 'Destinatarios inválidos, fuera de los segmentos o con ventana de 24 h activa (excluidos por el filtro)'
+          : 'Destinatarios inválidos o no pertenecen a los segmentos seleccionados';
+        throw new BadRequestException(msg);
+      }
+    } else {
+      recipients = await fetchRecipientsUnion(
+        this.prisma,
+        area,
+        segments,
+        recipientOptions,
+      );
+    }
+
+    if (!recipients.length) {
+      throw new BadRequestException('No hay destinatarios con los filtros actuales');
+    }
+
+    const templateSnapshot = {
+      id: tRow.id,
+      name: tRow.name,
+      language: tRow.language,
+      category: tRow.category,
+      components_json: tRow.components_json,
+    };
+
+    const staticParams = {
+      headerParams: values.headerParams,
+      bodyParams: values.bodyParams,
+      buttonParams: values.buttonParams,
+      headerMediaUrl: values.headerMediaUrl,
+    };
+
+    const campaignPayload: CampaignJobPayload = {
+      area,
+      segments,
+      templateSnapshot,
+      staticParams,
+      paramMapping,
+      batchSize,
+      batchDelayMs,
+    };
+
+    if (
+      audienceMode === 'multi' &&
+      recipientContactIds &&
+      recipientContactIds.length > 0
+    ) {
+      campaignPayload.recipientContactIds = recipientContactIds;
+    } else {
+      campaignPayload.segment = segments[0];
+    }
+    if (excludeContactIds.length > 0) {
+      campaignPayload.excludeContactIds = excludeContactIds;
+    }
+    if (excludeSegmentSlugs.length > 0) {
+      campaignPayload.excludeSegmentSlugs = excludeSegmentSlugs;
+    }
+    if (excludeOpenServiceWindow) {
+      campaignPayload.excludeOpenServiceWindow = true;
+    }
+    if (uniqueExcludeIds.length > 0) {
+      campaignPayload.excludeContactIdsMerged = uniqueExcludeIds;
+    }
+
+    const campaignStatus = isScheduled ? 'scheduled' : 'queued';
+
+    const campaign = await this.prisma.campaigns.create({
+      data: {
+        area,
+        segment,
+        template_name: tRow.name,
+        message_text: messageText,
+        image_url: imageUrl,
+        status: campaignStatus,
+        total_recipients: recipients.length,
+        campaign_payload: campaignPayload as object,
+        scheduled_at: isScheduled && scheduledAt ? scheduledAt : null,
+      },
+      select: { id: true },
+    });
+
+    if (!isScheduled) {
+      this.campaignSender.enqueueSendJob(campaign.id, campaignPayload);
+    }
+
+    return {
+      campaignId: campaign.id,
+      redirect: `/campaigns/${campaign.id}`,
+      status: campaignStatus,
+      totalRecipients: recipients.length,
+      isScheduled,
+    };
+  }
+
   async retryFailed(
     area: AuthUser['area'],
     id: number,
-  ): Promise<never> {
+  ): Promise<CampaignRetryActionResult> {
     const campaign = await this.prisma.campaigns.findFirst({
       where: { id, area },
       select: { id: true, status: true, manual_retry_count: true },
@@ -768,8 +960,14 @@ export class CampaignsService {
       );
     }
 
-    throw new ServiceUnavailableException(
-      'El reintento de envíos se habilitará junto con el módulo de envío de campañas (semana 27).',
-    );
+    const result = await this.campaignRetry.runCampaignRetryJob(id, 'manual');
+
+    return {
+      retried: result.retried,
+      recovered: result.recovered,
+      stillFailed: result.stillFailed,
+      skipped: Boolean(result.skipped),
+      error: result.error,
+    };
   }
 }

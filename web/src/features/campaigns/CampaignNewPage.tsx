@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { formatContactName } from '../contacts/contactName'
 import { segmentToneClass } from '../segments/segmentColors'
+import {
+  CampaignTemplateFields,
+  emptyTemplateFormState,
+  type AttributeOption,
+  type CampaignTemplateFormState,
+} from './CampaignTemplateFields'
 
 type SegmentDefinition = {
   id: number
@@ -50,9 +56,55 @@ function fieldLabel(text: string, step?: string) {
   )
 }
 
+function buildSendPayload(input: {
+  segments: string[]
+  selectedIds: number[]
+  excludeSegments: string[]
+  excludeServiceWindow: boolean
+  templateId: string
+  scheduleMode: 'now' | 'scheduled'
+  scheduledAt: string
+  batchSize: number
+  batchDelayMs: number
+  form: CampaignTemplateFormState
+}): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    segments: input.segments,
+    recipientContactIds: input.selectedIds,
+    excludeSegmentSlugs: input.excludeSegments,
+    excludeOpenServiceWindow: input.excludeServiceWindow,
+    templateSyncId: Number(input.templateId),
+    scheduleMode: input.scheduleMode,
+    batchSize: input.batchSize,
+    batchDelayMs: input.batchDelayMs,
+    headerMediaUrl: input.form.headerMediaUrl,
+  }
+  if (input.scheduleMode === 'scheduled' && input.scheduledAt) {
+    const t = new Date(input.scheduledAt)
+    body.scheduledAt = Number.isNaN(t.getTime())
+      ? input.scheduledAt
+      : t.toISOString()
+  }
+  input.form.headerParams.forEach((v, i) => {
+    body[`headerParam_${i}`] = v
+    body[`headerParamSource_${i}`] = input.form.headerParamSources[i] || 'static'
+  })
+  input.form.bodyParams.forEach((v, i) => {
+    body[`bodyParam_${i}`] = v
+    body[`bodyParamSource_${i}`] = input.form.bodyParamSources[i] || 'static'
+  })
+  input.form.buttonParams.forEach((v, i) => {
+    body[`buttonParam_${i}`] = v
+    body[`buttonParamSource_${i}`] = input.form.buttonParamSources[i] || 'static'
+  })
+  return body
+}
+
 export function CampaignNewPage() {
+  const navigate = useNavigate()
   const [segments, setSegments] = useState<SegmentDefinition[]>([])
   const [templates, setTemplates] = useState<TemplateListItem[]>([])
+  const [attrDefs, setAttrDefs] = useState<AttributeOption[]>([])
   const [loadError, setLoadError] = useState('')
   const [actionError, setActionError] = useState('')
   const [busy, setBusy] = useState('')
@@ -67,6 +119,15 @@ export function CampaignNewPage() {
   const [recipientsStatus, setRecipientsStatus] = useState('')
 
   const [templateId, setTemplateId] = useState('')
+  const [templateForm, setTemplateForm] = useState<CampaignTemplateFormState>(
+    emptyTemplateFormState(),
+  )
+  const [templateReady, setTemplateReady] = useState(false)
+
+  const [scheduleMode, setScheduleMode] = useState<'now' | 'scheduled'>('now')
+  const [scheduledAt, setScheduledAt] = useState('')
+  const [batchSize, setBatchSize] = useState(40)
+  const [batchDelayMs, setBatchDelayMs] = useState(1500)
 
   const approvedTemplates = useMemo(
     () =>
@@ -76,11 +137,16 @@ export function CampaignNewPage() {
     [templates],
   )
 
+  const selectedTemplate = approvedTemplates.find(
+    (t) => String(t.id) === templateId,
+  )
+
   async function loadWizardData() {
     setLoadError('')
-    const [segResult, tplResult] = await Promise.all([
+    const [segResult, tplResult, attrResult] = await Promise.all([
       apiClient.get<SegmentDefinition[]>('/api/segments'),
       apiClient.get<TemplateListItem[]>('/api/templates'),
+      apiClient.get<AttributeOption[]>('/api/attribute-definitions'),
     ])
     if (!segResult.ok) {
       setLoadError(segResult.error)
@@ -92,6 +158,11 @@ export function CampaignNewPage() {
     }
     setSegments(segResult.data)
     setTemplates(tplResult.data)
+    if (attrResult.ok) {
+      setAttrDefs(
+        attrResult.data.map((a) => ({ slug: a.slug, label: a.label })),
+      )
+    }
   }
 
   useEffect(() => {
@@ -175,6 +246,61 @@ export function CampaignNewPage() {
     })
   }
 
+  const canSend =
+    includeSegments.size > 0 &&
+    recipientsLoaded &&
+    selectedIds.size > 0 &&
+    templateId &&
+    templateReady &&
+    (scheduleMode === 'now' || Boolean(scheduledAt.trim()))
+
+  async function handleSend() {
+    setActionError('')
+    if (!canSend) return
+
+    const tplLabel = selectedTemplate
+      ? `${selectedTemplate.name} · ${selectedTemplate.language}`
+      : 'plantilla'
+    const when =
+      scheduleMode === 'scheduled'
+        ? `programada para ${scheduledAt}`
+        : 'envío inmediato'
+    const ok = window.confirm(
+      `¿Confirmas la campaña?\n\n` +
+        `${selectedIds.size} destinatarios\n` +
+        `Plantilla: ${tplLabel}\n` +
+        `${when}`,
+    )
+    if (!ok) return
+
+    setBusy('send')
+    const payload = buildSendPayload({
+      segments: [...includeSegments],
+      selectedIds: [...selectedIds].sort((a, b) => a - b),
+      excludeSegments: [...excludeSegments],
+      excludeServiceWindow,
+      templateId,
+      scheduleMode,
+      scheduledAt,
+      batchSize,
+      batchDelayMs,
+      form: templateForm,
+    })
+
+    const result = await apiClient.post<{
+      campaignId: number
+      redirect: string
+    }>('/api/campaigns/send', payload)
+    setBusy('')
+
+    if (!result.ok) {
+      setActionError(result.error)
+      return
+    }
+
+    navigate(`/campaigns/${result.data.campaignId}`)
+  }
+
   const windowOpenCount = recipients.filter((r) => r.service_window_open).length
 
   if (loadError) {
@@ -194,7 +320,7 @@ export function CampaignNewPage() {
       <div>
         <h1 className="text-2xl font-semibold">Nueva campaña</h1>
         <p className="text-sm text-muted">
-          Elige audiencia y plantilla. El envío se habilitará en la semana 27.
+          Elige audiencia, plantilla y parámetros. Puedes enviar ahora o programar.
         </p>
       </div>
 
@@ -240,9 +366,6 @@ export function CampaignNewPage() {
 
             <div className="space-y-2 border-t border-line pt-4">
               <p className="text-sm font-medium">Excluir segmentos (opcional)</p>
-              <p className="text-xs text-muted">
-                No recibirán el mensaje aunque estén en un segmento incluido.
-              </p>
               <div className="flex flex-wrap gap-2">
                 {segments.map((seg) => (
                   <label
@@ -365,18 +488,17 @@ export function CampaignNewPage() {
 
       <section className="space-y-3 rounded-xl border border-line bg-surface-strong p-4">
         {fieldLabel('Plantilla (Meta)', '3')}
-        {approvedTemplates.length === 0 ? (
-          <p className="text-sm text-muted">
-            No hay plantillas aprobadas. Sincroniza desde Meta.
-          </p>
-        ) : null}
         <div className="flex flex-wrap items-end gap-3">
           <label className="min-w-[240px] flex-1 text-sm">
             <span className="text-muted">Seleccionar plantilla</span>
             <select
               className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2"
               value={templateId}
-              onChange={(e) => setTemplateId(e.target.value)}
+              onChange={(e) => {
+                setTemplateId(e.target.value)
+                setTemplateReady(false)
+                setTemplateForm(emptyTemplateFormState())
+              }}
               disabled={approvedTemplates.length === 0}
             >
               <option value="">— Elige una plantilla —</option>
@@ -396,24 +518,96 @@ export function CampaignNewPage() {
             {busy === 'sync' ? 'Sincronizando…' : '↻ Sincronizar'}
           </button>
         </div>
-        <p className="text-xs text-muted">
-          Los parámetros de plantilla y la programación llegan en la semana 26.
-        </p>
+
+        <CampaignTemplateFields
+          templateId={templateId}
+          attrDefs={attrDefs}
+          form={templateForm}
+          onFormChange={setTemplateForm}
+          onReadyChange={setTemplateReady}
+        />
+      </section>
+
+      <section className="space-y-3 rounded-xl border border-line bg-surface-strong p-4">
+        {fieldLabel('Programación y envío', '4')}
+        <div className="flex flex-wrap gap-4 text-sm">
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="scheduleMode"
+              checked={scheduleMode === 'now'}
+              onChange={() => setScheduleMode('now')}
+            />
+            Enviar ahora
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="scheduleMode"
+              checked={scheduleMode === 'scheduled'}
+              onChange={() => setScheduleMode('scheduled')}
+            />
+            Programar
+          </label>
+        </div>
+        {scheduleMode === 'scheduled' ? (
+          <label className="block text-sm">
+            <span className="text-muted">Fecha y hora</span>
+            <input
+              type="datetime-local"
+              className="mt-1 rounded-lg border border-line bg-surface px-3 py-2"
+              value={scheduledAt}
+              onChange={(e) => setScheduledAt(e.target.value)}
+              required
+            />
+          </label>
+        ) : null}
+        <div className="flex flex-wrap gap-4 text-sm">
+          <label>
+            <span className="text-muted">Tamaño de lote</span>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              className="mt-1 block w-24 rounded-lg border border-line bg-surface px-2 py-1"
+              value={batchSize}
+              onChange={(e) => setBatchSize(Number(e.target.value))}
+            />
+          </label>
+          <label>
+            <span className="text-muted">Pausa entre lotes (ms)</span>
+            <input
+              type="number"
+              min={0}
+              max={60000}
+              className="mt-1 block w-28 rounded-lg border border-line bg-surface px-2 py-1"
+              value={batchDelayMs}
+              onChange={(e) => setBatchDelayMs(Number(e.target.value))}
+            />
+          </label>
+        </div>
       </section>
 
       <p className="text-sm text-muted">
         Resumen: {includeSegments.size} segmento(s) ·{' '}
         {recipientsLoaded ? `${selectedIds.size} destinatarios` : 'sin lista'} ·{' '}
-        {templateId ? 'plantilla elegida' : 'sin plantilla'}.
+        {templateId ? selectedTemplate?.name || 'plantilla' : 'sin plantilla'} ·{' '}
+        {scheduleMode === 'scheduled' ? 'programada' : 'envío inmediato'}.
       </p>
 
       <button
         type="button"
-        className="rounded-lg bg-line px-4 py-2 text-sm text-muted"
-        disabled
-        title="Envío disponible en semana 27"
+        className="rounded-lg bg-accent px-4 py-2 text-sm text-white hover:opacity-90 disabled:opacity-50"
+        disabled={!canSend || busy !== ''}
+        onClick={() => handleSend()}
       >
-        Enviar campaña (próximamente)
+        {busy === 'send'
+          ? scheduleMode === 'scheduled'
+            ? 'Programando…'
+            : 'Enviando…'
+          : scheduleMode === 'scheduled'
+            ? 'Programar campaña'
+            : 'Enviar campaña'}
       </button>
     </div>
   )

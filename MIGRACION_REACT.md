@@ -169,11 +169,11 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 
 | Sem | Entregable | DoD |
 |-----|------------|-----|
-| **21–22** | Lista + detalle campañas | KPIs, fallidos, costo |
-| **23–24** | UI lectura + exports/retry | Sin envío aún |
-| **25–26** | Wizard crear + preview destinatarios | |
-| **27** | Envío + confirmación pre-envío | Prueba staging aislado |
-| **28** | BullMQ workers campañas | Sustituye jobs legacy |
+| **21–22** ✓ | Lista + detalle campañas | KPIs, fallidos, costo, exports |
+| **23–24** ✓ | UI lectura + exports/retry stats | Respondedores, vista previa plantilla |
+| **25–26** ✓ | Wizard crear + parámetros + programación | `POST send`, preview destinatarios |
+| **27** ✓ | Envío + confirmación + reintento manual | Meta `sendTemplateWithComponents` |
+| **28** ✓ | Workers en proceso (setImmediate + poller) | BullMQ opcional en iteración futura |
 
 ---
 
@@ -181,8 +181,8 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 
 | Sem | Entregable | DoD |
 |-----|------------|-----|
-| **29–30** | `SettingsModule` + UI | IA, horario, integración |
-| **31–32** | `ReportsModule` | KPIs solo v2 |
+| **29–30** ✓ | `SettingsModule` + UI | IA, horario, integración |
+| **31–32** | `ReportsModule` | KPIs, bitácora, reportería |
 
 ---
 
@@ -244,9 +244,14 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 | 23 | 5 | Lectura: respondedores + filtros | Completada | | embudo, registro, export filtros |
 | 24 | 5 | Vista previa plantilla en detalle | Completada | | preview, parámetros, exclusiones |
 | 25 | 5 | Wizard nueva campaña + preview destinatarios | Completada | | `POST recipients-preview`, `/campaigns/new` |
-| 26–46 | … | Ver etapas arriba | Pendiente | | |
+| 26 | 5 | Parámetros plantilla + programación wizard | Completada | | `CampaignTemplateFields`, definition ampliada |
+| 27 | 5 | Envío + confirmación + reintento manual | Completada | | `POST /api/campaigns/send`, sender Meta |
+| 28 | 5 | Workers en segundo plano | Completada | | `CampaignJobsService` (poller, sin BullMQ aún) |
+| 29 | 6 | Settings API + UI integración/IA/horario | Completada | | `SettingsModule`, `/settings/*` |
+| 30 | 6 | Ajustes: permisos y placeholders bitácora/reportería | Completada | | sidebar por permisos; sem. 31–32 informes |
+| 31–46 | … | Ver etapas arriba | Pendiente | | |
 
-**Próxima semana:** Semana 26 — parámetros plantilla, programación y cierre del wizard.
+**Próxima semana:** Semana 31 — `ReportsModule` (reportería y KPIs v2).
 
 ---
 

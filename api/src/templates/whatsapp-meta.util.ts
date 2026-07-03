@@ -206,8 +206,6 @@ export async function fetchAllMessageTemplates(
   return all;
 }
 
-export { BUSINESS_AREAS };
-
 export type TemplateHeaderFormat = 'IMAGE' | 'VIDEO' | 'DOCUMENT';
 
 const MAX_MEDIA_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -374,5 +372,59 @@ export async function createMessageTemplateOnWaba(input: {
       components: Array.isArray(input.components) ? input.components : [],
     },
   );
+}
+
+export type SendTemplateResult = {
+  messaging_product?: string;
+  contacts?: { input?: string; wa_id?: string }[];
+  messages?: { id?: string }[];
+};
+
+export async function sendTemplateWithComponents(input: {
+  to: string;
+  templateName: string;
+  languageCode: string;
+  components?: Record<string, unknown>[];
+  area: unknown;
+}): Promise<SendTemplateResult> {
+  const { token, phoneNumberId } = getWhatsAppCredentialsForArea(input.area);
+  if (!token || !phoneNumberId) {
+    throw new Error(
+      'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_* y PHONE_NUMBER_ID_*',
+    );
+  }
+
+  const templatePayload: Record<string, unknown> = {
+    name: input.templateName,
+    language: { code: input.languageCode },
+  };
+  if (Array.isArray(input.components) && input.components.length > 0) {
+    templatePayload.components = input.components;
+  }
+
+  try {
+    return await graphPost<SendTemplateResult>(
+      `${phoneNumberId}/messages`,
+      token,
+      {
+        messaging_product: 'whatsapp',
+        to: input.to,
+        type: 'template',
+        template: templatePayload,
+      },
+    );
+  } catch (error) {
+    const err = error as Error & { status?: number };
+    const wrapped = new Error(err.message || 'Error enviando plantilla') as Error & {
+      response?: { data: unknown };
+    };
+    wrapped.response = {
+      data: {
+        error: { message: err.message },
+        httpStatus: err.status,
+      },
+    };
+    throw wrapped;
+  }
 }
 

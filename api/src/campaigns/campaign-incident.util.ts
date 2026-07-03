@@ -1,5 +1,6 @@
 import { summarizeCampaignLogResponse } from './campaign-analytics.util';
 
+const PERMANENT_ERROR_CODES = new Set([131026, 132000, 132001, 131047]);
 const TRANSIENT_ERROR_CODES = new Set([130429]);
 const META_LIMIT_TEXT_HINTS = [
   'rate limit',
@@ -96,6 +97,49 @@ export type CampaignIncident = {
   incidentType: 'undeliverable' | 'meta_limit' | 'experiment';
   incidentLabel: string;
 };
+
+function messageLooksTransient(response: unknown): boolean {
+  const msg = buildSearchableErrorText(response);
+  return (
+    msg.includes('timeout') ||
+    msg.includes('timed out') ||
+    msg.includes('etimedout') ||
+    msg.includes('econnreset') ||
+    msg.includes('network') ||
+    msg.includes('temporarily unavailable')
+  );
+}
+
+export function classifyCampaignSendError(response: unknown): {
+  retryable: boolean;
+  category: 'transient' | 'permanent' | 'unknown';
+} {
+  const code = extractErrorCode(response);
+  const incident = classifyCampaignDeliveryIncident(response);
+
+  if (code != null) {
+    if (PERMANENT_ERROR_CODES.has(code)) {
+      return { retryable: false, category: 'permanent', ...incident };
+    }
+    if (
+      TRANSIENT_ERROR_CODES.has(code) ||
+      code === 429 ||
+      (code >= 500 && code < 600)
+    ) {
+      return { retryable: true, category: 'transient', ...incident };
+    }
+  }
+
+  if (messageLooksTransient(response)) {
+    return { retryable: true, category: 'transient', ...incident };
+  }
+
+  if (code == null) {
+    return { retryable: true, category: 'unknown', ...incident };
+  }
+
+  return { retryable: true, category: 'unknown', ...incident };
+}
 
 export function classifyCampaignDeliveryIncident(
   response: unknown,

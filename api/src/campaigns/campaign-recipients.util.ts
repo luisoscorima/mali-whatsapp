@@ -113,3 +113,19 @@ export function readMaxExcludeContactIds(): number {
   const n = Number(process.env.CAMPAIGN_MAX_RECIPIENT_IDS || 5000);
   return Number.isFinite(n) && n > 0 ? Math.round(n) : 5000;
 }
+
+export function validateRecipientsMatchRequest(
+  rows: { id: number }[],
+  requestedUniqueSortedIds: number[],
+): boolean {
+  if (rows.length !== requestedUniqueSortedIds.length) {
+    return false;
+  }
+  const found = new Set(rows.map((r) => r.id));
+  for (const id of requestedUniqueSortedIds) {
+    if (!found.has(id)) {
+      return false;
+    }
+  }
+  return true;
+}
