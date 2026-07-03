@@ -236,9 +236,17 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 | 15 | 3 | Contactos CRUD | Completada | 8ee094d | POST/PATCH/DELETE + atributos dinámicos |
 | 16 | 3 | Import contactos | Completada | 8ee094d | CSV/XLSX + plantilla Excel |
 | 17 | 4 | Plantillas lista + sync | Completada | 94afc60 | `TemplatesModule` + `/templates` |
-| 18–46 | … | Ver etapas arriba | Pendiente | | |
+| 18 | 4 | Create + sync Meta API | Completada | | `POST/PATCH /api/templates`, `templateBuilder` |
+| 19 | 4 | Builder React + vista previa | Completada | | `TemplateLivePreview`, layout 2 columnas |
+| 20 | 4 | Validación + envío revisión Meta | Completada | | confirmación, `POST /validate`, flash, edición inline |
+| 21 | 5 | Campañas lista + detalle | Completada | | `CampaignsModule` + KPIs, fallidos, costo |
+| 22 | 5 | Detalle: exports + retry stats | Completada | | CSV/XLSX, `sync-cost`, UI acciones |
+| 23 | 5 | Lectura: respondedores + filtros | Completada | | embudo, registro, export filtros |
+| 24 | 5 | Vista previa plantilla en detalle | Completada | | preview, parámetros, exclusiones |
+| 25 | 5 | Wizard nueva campaña + preview destinatarios | Completada | | `POST recipients-preview`, `/campaigns/new` |
+| 26–46 | … | Ver etapas arriba | Pendiente | | |
 
-**Próxima semana:** Semana 18 — crear plantillas en Meta (POST).
+**Próxima semana:** Semana 26 — parámetros plantilla, programación y cierre del wizard.
 
 ---
 

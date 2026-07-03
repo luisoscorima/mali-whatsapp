@@ -152,6 +152,37 @@ export const apiClient = {
     return request<T>(path, { method: 'DELETE' });
   },
 
+  async download(path: string): Promise<{ ok: true } | { ok: false; error: string }> {
+    const headers: HeadersInit = {};
+    const token = getToken();
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const res = await fetch(path, { headers });
+    if (res.status === 401) {
+      notifyUnauthorized();
+      return { ok: false, error: 'No autenticado' };
+    }
+    if (!res.ok) {
+      const text = await res.text();
+      return { ok: false, error: text || `Error ${res.status}` };
+    }
+
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="([^"]+)"/);
+    const filename = match?.[1] || 'descarga';
+
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    return { ok: true };
+  },
+
   getMe(): Promise<ApiResponse<AuthUser>> {
     return request<AuthUser>('/api/me');
   },

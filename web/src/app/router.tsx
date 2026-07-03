@@ -17,6 +17,10 @@ import { ContactNewPage } from '../features/contacts/ContactNewPage'
 import { ContactDetailPage } from '../features/contacts/ContactDetailPage'
 import { TemplatesListPage } from '../features/templates/TemplatesListPage'
 import { TemplateDetailPage } from '../features/templates/TemplateDetailPage'
+import { TemplateNewPage } from '../features/templates/TemplateNewPage'
+import { CampaignsListPage } from '../features/campaigns/CampaignsListPage'
+import { CampaignNewPage } from '../features/campaigns/CampaignNewPage'
+import { CampaignDetailPage } from '../features/campaigns/CampaignDetailPage'
 
 export function AppRouter() {
   return (
@@ -39,7 +43,11 @@ export function AppRouter() {
             <Route path="contacts/new" element={<ContactNewPage />} />
             <Route path="contacts/:id" element={<ContactDetailPage />} />
             <Route path="templates" element={<TemplatesListPage />} />
+            <Route path="templates/new" element={<TemplateNewPage />} />
             <Route path="templates/:id" element={<TemplateDetailPage />} />
+            <Route path="campaigns" element={<CampaignsListPage />} />
+            <Route path="campaigns/new" element={<CampaignNewPage />} />
+            <Route path="campaigns/:id" element={<CampaignDetailPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

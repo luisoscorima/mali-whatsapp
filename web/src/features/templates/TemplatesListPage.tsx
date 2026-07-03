@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
+import { TemplateFlashBanner } from './TemplateFlashBanner'
 import { templateStatusClass } from './templateStatus'
 
 type TemplateListItem = {
@@ -16,10 +17,10 @@ type TemplateListItem = {
 }
 
 export function TemplatesListPage() {
+  const [, setSearchParams] = useSearchParams()
   const [templates, setTemplates] = useState<TemplateListItem[] | null>(null)
   const [error, setError] = useState('')
   const [syncing, setSyncing] = useState(false)
-  const [flash, setFlash] = useState('')
 
   async function load() {
     const result = await apiClient.get<TemplateListItem[]>('/api/templates')
@@ -37,7 +38,6 @@ export function TemplatesListPage() {
 
   async function onSync() {
     setSyncing(true)
-    setFlash('')
     setError('')
     const result = await apiClient.post<{ count: number }>('/api/templates/sync', {})
     setSyncing(false)
@@ -45,7 +45,7 @@ export function TemplatesListPage() {
       setError(result.error)
       return
     }
-    setFlash(`Sincronizadas ${result.data.count} plantillas desde Meta.`)
+    setSearchParams({ flash: 'synced' }, { replace: true })
     await load()
   }
 
@@ -66,17 +66,25 @@ export function TemplatesListPage() {
             Plantillas de WhatsApp sincronizadas desde Meta.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void onSync()}
-          disabled={syncing}
-          className="rounded-lg border border-line px-4 py-2 text-sm hover:bg-accent-soft disabled:opacity-60"
-        >
-          {syncing ? 'Sincronizando…' : 'Sincronizar todo'}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to="/templates/new"
+            className="rounded-lg bg-accent px-4 py-2 text-sm text-white"
+          >
+            Nueva plantilla
+          </Link>
+          <button
+            type="button"
+            onClick={() => void onSync()}
+            disabled={syncing}
+            className="rounded-lg border border-line px-4 py-2 text-sm hover:bg-accent-soft disabled:opacity-60"
+          >
+            {syncing ? 'Sincronizando…' : 'Sincronizar todo'}
+          </button>
+        </div>
       </div>
 
-      {flash ? <p className="text-sm text-accent">{flash}</p> : null}
+      <TemplateFlashBanner />
       {error ? <p className="text-sm text-bad">{error}</p> : null}
 
       <p className="text-sm text-muted">

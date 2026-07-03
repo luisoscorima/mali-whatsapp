@@ -7,6 +7,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { AttributeDefinitionsModule } from './attribute-definitions/attribute-definitions.module';
 import { MetaAdsModule } from './meta-ads/meta-ads.module';
 import { ContactsModule } from './contacts/contacts.module';
+import { CampaignsModule } from './campaigns/campaigns.module';
 import { SegmentsModule } from './segments/segments.module';
 import { TemplatesModule } from './templates/templates.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -21,6 +22,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AttributeDefinitionsModule,
     SegmentsModule,
     ContactsModule,
+    CampaignsModule,
     TemplatesModule,
   ],
   controllers: [AppController],

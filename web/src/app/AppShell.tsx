@@ -51,6 +51,7 @@ export function AppShell() {
             { to: '/segments', label: 'Segmentos' },
             { to: '/contacts', label: 'Contactos' },
             { to: '/templates', label: 'Plantillas' },
+            { to: '/campaigns', label: 'Campañas' },
           ].map((item) => (
             <NavLink
               key={item.to}

@@ -1,4 +1,5 @@
 import type { TemplateDisplayContent } from './template-display.util';
+import type { TemplateBuilderPayload } from './template-builder.util';
 
 export type TemplateListItem = {
   id: number;
@@ -14,8 +15,21 @@ export type TemplateListItem = {
 export type TemplateDetail = TemplateListItem & {
   meta_id: string | null;
   display: TemplateDisplayContent;
+  can_edit: boolean;
+  builder: TemplateBuilderPayload;
 };
 
 export type TemplateSyncResult = {
   count: number;
 };
+
+export type TemplateCreateResult = {
+  id: number;
+  status: string;
+};
+
+export type TemplateValidateResult = {
+  valid: true;
+};
+
+export type { TemplateDefinition } from './template-definition.util';

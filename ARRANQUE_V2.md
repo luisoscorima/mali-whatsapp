@@ -74,4 +74,18 @@ npm run prisma:generate
 
 ## Siguiente etapa
 
-Semana 7: `MetaAdsModule` API. Ver [`MIGRACION_REACT.md`](MIGRACION_REACT.md).
+Etapa 5 — campañas (`CampaignsModule`). Ver [`MIGRACION_REACT.md`](MIGRACION_REACT.md).
+
+## Plantillas WhatsApp (staging)
+
+Requiere credenciales Meta en `.env` (`WHATSAPP_TOKEN_*`, `PHONE_NUMBER_ID_*`, opcional `WABA_ID_*`, `META_APP_ID` para cabeceras media).
+
+1. Inicia sesión en la web v2 y abre **Plantillas**.
+2. **Sincronizar todo** — trae plantillas existentes desde Meta.
+3. **Nueva plantilla** — completa el builder, revisa la vista previa y confirma el envío a Meta.
+4. Tras crear o editar, el estado queda `PENDING` hasta que Meta apruebe o rechace.
+5. Vuelve a sincronizar para actualizar estados y motivos de rechazo.
+
+Validación previa al envío: el formulario valida en cliente y llama `POST /api/templates/validate` antes de crear en Meta.
+
+Definición para campañas (futuro): `GET /api/templates/:id/definition`.
