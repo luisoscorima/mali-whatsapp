@@ -12,12 +12,17 @@ import { ReportsModule } from './reports/reports.module';
 import { SettingsModule } from './settings/settings.module';
 import { SegmentsModule } from './segments/segments.module';
 import { TemplatesModule } from './templates/templates.module';
+import { ConversationsModule } from './conversations/conversations.module';
+import { WebhookModule } from './webhook/webhook.module';
+import { MetaSettingsModule } from './meta-settings/meta-settings.module';
+import { AdminModule } from './admin/admin.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
   imports: [
     AppConfigModule,
     PrismaModule,
+    MetaSettingsModule,
     AuthModule,
     DashboardModule,
     MetaAdsModule,
@@ -28,6 +33,9 @@ import { PrismaModule } from './prisma/prisma.module';
     SettingsModule,
     ReportsModule,
     TemplatesModule,
+    ConversationsModule,
+    WebhookModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],

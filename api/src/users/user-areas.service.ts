@@ -40,6 +40,25 @@ export class UserAreasService {
       .filter((area) => isValidBusinessArea(area));
   }
 
+  async replaceExtraAreasForUser(
+    userId: number,
+    primaryArea: BusinessArea,
+    extraAreas: BusinessArea[],
+  ): Promise<void> {
+    const primary = normalizeArea(primaryArea);
+    const extras = (extraAreas ?? [])
+      .map((area) => normalizeArea(area))
+      .filter((area) => isValidBusinessArea(area) && area !== primary);
+
+    await this.prisma.user_areas.deleteMany({ where: { user_id: userId } });
+    if (extras.length > 0) {
+      await this.prisma.user_areas.createMany({
+        data: extras.map((area) => ({ user_id: userId, area })),
+        skipDuplicates: true,
+      });
+    }
+  }
+
   async fetchAllowedAreasForUser(input: {
     userId: number;
     primaryArea: BusinessArea;

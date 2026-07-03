@@ -7,8 +7,8 @@ import { AppModule } from './app.module';
 config({ path: path.resolve(__dirname, '../../.env') });
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  app.setGlobalPrefix('api', { exclude: ['health'] });
+  const app = await NestFactory.create(AppModule, { rawBody: true });
+  app.setGlobalPrefix('api', { exclude: ['health', 'webhook'] });
   app.enableCors({ origin: true, credentials: true });
   app.useGlobalPipes(
     new ValidationPipe({

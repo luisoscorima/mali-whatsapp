@@ -251,9 +251,17 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 | 30 | 6 | Ajustes: permisos y placeholders bitácora/reportería | Completada | | sidebar por permisos; sem. 31–32 informes |
 | 31 | 6 | ReportsModule bitácora | Completada | | filtros, paginación, export XLSX |
 | 32 | 6 | ReportsModule reportería | Completada | | comunicaciones por contacto + export |
-| 33–46 | … | Ver etapas arriba | Pendiente | | |
+| 33 | 7 | Inbox: lista de conversaciones | Completada | | `ConversationsModule`, filtros segmento/chat/búsqueda |
+| 34 | 7 | Inbox: hilo de lectura | Completada | | `/conversations/:id`, marcar leído, ventana 24h |
+| 35 | 7 | Inbox: envío de texto | Completada | | `POST /api/conversations/:id/reply`, Meta session |
+| 36 | 7 | Inbox: adjuntos + modo bot/asesor | Completada | | media upload, `PATCH /api/conversations/:id/mode` |
+| 37 | 7 | Inbox: polling tiempo casi real | Completada | | `GET /api/conversations/:id/updates`, poll 8s |
+| 38 | 7 | Webhook Meta en Nest | Completada | | `GET/POST /webhook`, firma, inbound + estados |
+| 39 | 8 | Admin: usuarios (master) | Completada | | `AdminModule`, CRUD `/api/admin/users` |
+| 40 | 8 | Admin: credenciales Meta | Completada | | `MetaSettingsModule`, `/api/admin/meta` |
+| 41–46 | … | Ver etapas arriba | Pendiente | | |
 
-**Próxima semana:** Semana 33 — inbox: lista de conversaciones (Etapa 7).
+**Próxima semana:** Semana 41 — cambio de contraseña y bitácora admin (Etapa 8).
 
 ---
 

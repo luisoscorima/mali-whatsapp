@@ -127,3 +127,55 @@ export function validateBusinessHoursInput(
 }
 
 export { WEEKDAY_TO_NUM };
+
+function getZonedDayAndMinutes(
+  date: Date,
+  timezone: string,
+): { day: number; minutes: number } {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(date);
+  const map: Record<string, string> = {};
+  for (const part of parts) {
+    if (part.type !== 'literal') map[part.type] = part.value;
+  }
+  const day = WEEKDAY_TO_NUM[map.weekday ?? 'Sun'] ?? 0;
+  const hour = parseInt(map.hour ?? '0', 10);
+  const minute = parseInt(map.minute ?? '0', 10);
+  return { day, minutes: hour * 60 + minute };
+}
+
+export function isBusinessHoursConfigOperational(
+  config: BusinessHoursConfig | null,
+): boolean {
+  if (!config || !config.enabled) return false;
+  if (!config.outside_hours_message) return false;
+  if (!config.days.length) return false;
+  if (config.fromMinutes == null || config.toMinutes == null) return false;
+  return true;
+}
+
+export function isWithinBusinessHours(
+  config: BusinessHoursConfig | null,
+  now = new Date(),
+): boolean {
+  if (!config || config.fromMinutes == null || config.toMinutes == null) {
+    return false;
+  }
+  if (!config.days.length) return false;
+
+  const { day, minutes } = getZonedDayAndMinutes(now, config.timezone);
+  if (!config.days.includes(day)) return false;
+
+  const from = config.fromMinutes;
+  const to = config.toMinutes;
+  if (from <= to) {
+    return minutes >= from && minutes < to;
+  }
+  return minutes >= from || minutes < to;
+}

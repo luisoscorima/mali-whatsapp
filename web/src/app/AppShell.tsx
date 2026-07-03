@@ -52,7 +52,11 @@ export function AppShell() {
             { to: '/contacts', label: 'Contactos' },
             { to: '/templates', label: 'Plantillas' },
             { to: '/campaigns', label: 'Campañas' },
+            { to: '/conversations', label: 'Conversaciones' },
             { to: '/settings', label: 'Ajustes' },
+            ...(user?.isMaster
+              ? [{ to: '/admin', label: 'Admin' }]
+              : []),
           ].map((item) => (
             <NavLink
               key={item.to}

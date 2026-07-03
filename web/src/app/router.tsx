@@ -28,6 +28,11 @@ import { SettingsAiPage } from '../features/settings/SettingsAiPage'
 import { SettingsBusinessHoursPage } from '../features/settings/SettingsBusinessHoursPage'
 import { SettingsAuditPage } from '../features/settings/SettingsAuditPage'
 import { SettingsReporteriaPage } from '../features/settings/SettingsReporteriaPage'
+import { ConversationsInboxPage } from '../features/conversations/ConversationsInboxPage'
+import { RequireMaster, AdminShell } from '../features/admin/AdminShell'
+import { AdminUsersPage } from '../features/admin/AdminUsersPage'
+import { AdminUserFormPage } from '../features/admin/AdminUserFormPage'
+import { AdminMetaPage } from '../features/admin/AdminMetaPage'
 
 export function AppRouter() {
   return (
@@ -55,6 +60,17 @@ export function AppRouter() {
             <Route path="campaigns" element={<CampaignsListPage />} />
             <Route path="campaigns/new" element={<CampaignNewPage />} />
             <Route path="campaigns/:id" element={<CampaignDetailPage />} />
+            <Route path="conversations" element={<ConversationsInboxPage />} />
+            <Route path="conversations/:id" element={<ConversationsInboxPage />} />
+            <Route element={<RequireMaster />}>
+              <Route path="admin" element={<AdminShell />}>
+                <Route index element={<Navigate to="users" replace />} />
+                <Route path="users" element={<AdminUsersPage />} />
+                <Route path="users/new" element={<AdminUserFormPage />} />
+                <Route path="users/:id" element={<AdminUserFormPage />} />
+                <Route path="meta" element={<AdminMetaPage />} />
+              </Route>
+            </Route>
             <Route path="settings" element={<SettingsShell />}>
               <Route index element={<SettingsIndexPage />} />
               <Route path="integracion" element={<SettingsIntegrationPage />} />
