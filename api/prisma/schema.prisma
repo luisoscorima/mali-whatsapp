@@ -151,6 +151,7 @@ model contact_segments {
 model contacts {
   id                     Int                  @id @default(autoincrement())
   name                   String               @db.VarChar(150)
+  last_name              String               @default("") @db.VarChar(150)
   phone                  String               @db.VarChar(20)
   segment                String?              @db.VarChar(50)
   area                   String               @default("ti") @db.VarChar(20)

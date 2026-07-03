@@ -102,6 +102,56 @@ export const apiClient = {
     return request<T>(path);
   },
 
+  async post<T>(path: string, body: unknown): Promise<ApiResponse<T>> {
+    return request<T>(path, { method: 'POST', body });
+  },
+
+  async patch<T>(path: string, body: unknown): Promise<ApiResponse<T>> {
+    return request<T>(path, { method: 'PATCH', body });
+  },
+
+  async postFormData<T>(path: string, formData: FormData): Promise<ApiResponse<T>> {
+    const headers: HeadersInit = { Accept: 'application/json' };
+    const token = getToken();
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const res = await fetch(path, { method: 'POST', headers, body: formData });
+    let body: unknown = null;
+    const text = await res.text();
+    if (text) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = null;
+      }
+    }
+
+    if (res.status === 401) {
+      notifyUnauthorized();
+      return { ok: false, error: 'No autenticado' };
+    }
+
+    if (body && typeof body === 'object' && 'ok' in body) {
+      const envelope = body as ApiResponse<T>;
+      if (!envelope.ok) {
+        return { ok: false, error: envelope.error || 'Error de solicitud' };
+      }
+      return envelope;
+    }
+
+    if (!res.ok) {
+      return { ok: false, error: parseErrorBody(body, `Error ${res.status}`) };
+    }
+
+    return { ok: true, data: body as T };
+  },
+
+  async delete<T>(path: string): Promise<ApiResponse<T>> {
+    return request<T>(path, { method: 'DELETE' });
+  },
+
   getMe(): Promise<ApiResponse<AuthUser>> {
     return request<AuthUser>('/api/me');
   },

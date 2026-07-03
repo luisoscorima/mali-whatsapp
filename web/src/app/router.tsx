@@ -3,6 +3,18 @@ import { AppShell } from './AppShell'
 import { RequireAuth } from './RequireAuth'
 import { LoginPage } from '../features/auth/LoginPage'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
+import { MetaAdsListPage } from '../features/meta-ads/MetaAdsListPage'
+import { MetaAdDetailPage } from '../features/meta-ads/MetaAdDetailPage'
+import { AttributesListPage } from '../features/attributes/AttributesListPage'
+import { AttributeNewPage } from '../features/attributes/AttributeNewPage'
+import { AttributeDetailPage } from '../features/attributes/AttributeDetailPage'
+import { SegmentsListPage } from '../features/segments/SegmentsListPage'
+import { SegmentNewPage } from '../features/segments/SegmentNewPage'
+import { SegmentDetailPage } from '../features/segments/SegmentDetailPage'
+import { ContactsListPage } from '../features/contacts/ContactsListPage'
+import { ContactImportPage } from '../features/contacts/ContactImportPage'
+import { ContactNewPage } from '../features/contacts/ContactNewPage'
+import { ContactDetailPage } from '../features/contacts/ContactDetailPage'
 
 export function AppRouter() {
   return (
@@ -12,6 +24,18 @@ export function AppRouter() {
         <Route element={<RequireAuth />}>
           <Route element={<AppShell />}>
             <Route index element={<DashboardPage />} />
+            <Route path="anuncios" element={<MetaAdsListPage />} />
+            <Route path="anuncios/:id" element={<MetaAdDetailPage />} />
+            <Route path="attributes" element={<AttributesListPage />} />
+            <Route path="attributes/new" element={<AttributeNewPage />} />
+            <Route path="attributes/:id" element={<AttributeDetailPage />} />
+            <Route path="segments" element={<SegmentsListPage />} />
+            <Route path="segments/new" element={<SegmentNewPage />} />
+            <Route path="segments/:id" element={<SegmentDetailPage />} />
+            <Route path="contacts" element={<ContactsListPage />} />
+            <Route path="contacts/import" element={<ContactImportPage />} />
+            <Route path="contacts/new" element={<ContactNewPage />} />
+            <Route path="contacts/:id" element={<ContactDetailPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

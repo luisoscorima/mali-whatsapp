@@ -92,4 +92,47 @@ export class MetaAdsService {
       })),
     };
   }
+
+  async updateDisplayName(
+    area: AuthUser['area'],
+    adId: number,
+    displayName: string | undefined,
+  ): Promise<MetaCtwaAdDetail> {
+    const existing = await this.prisma.meta_ctwa_ads.findFirst({
+      where: { id: adId, area },
+    });
+    if (!existing) {
+      throw new NotFoundException('Anuncio no encontrado');
+    }
+
+    const name =
+      String(displayName ?? '')
+        .trim()
+        .slice(0, 200) || null;
+
+    const row = await this.prisma.meta_ctwa_ads.update({
+      where: { id: adId },
+      data: { display_name: name, updated_at: new Date() },
+    });
+
+    return {
+      id: row.id,
+      meta_source_id: row.meta_source_id,
+      display_name: row.display_name,
+      ad_platform: row.ad_platform,
+      source_url: row.source_url,
+      source_type: row.source_type,
+      headline: row.headline,
+      body: row.body,
+      media_type: row.media_type,
+      image_url: row.image_url,
+      ctwa_clid: row.ctwa_clid,
+      lead_count: row.lead_count,
+      first_seen_at: row.first_seen_at,
+      last_seen_at: row.last_seen_at,
+      referral_snapshot: row.referral_snapshot,
+      display_label: adDisplayLabel(row),
+      platform_label: formatAdPlatformLabel(row.ad_platform),
+    };
+  }
 }

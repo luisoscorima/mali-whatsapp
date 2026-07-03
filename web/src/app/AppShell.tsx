@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom'
+import { NavLink, Outlet } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { apiClient, onUnauthorized, type AuthUser } from '../shared/api'
 
@@ -42,6 +42,32 @@ export function AppShell() {
           </button>
         </div>
       </header>
+      <nav className="border-b border-line bg-surface-strong/50">
+        <div className="mx-auto flex max-w-6xl gap-1 px-4 py-2">
+          {[
+            { to: '/', label: 'Panel', end: true },
+            { to: '/anuncios', label: 'Anuncios' },
+            { to: '/attributes', label: 'Atributos' },
+            { to: '/segments', label: 'Segmentos' },
+            { to: '/contacts', label: 'Contactos' },
+          ].map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) =>
+                `rounded-lg px-3 py-1.5 text-sm ${
+                  isActive
+                    ? 'bg-accent-soft font-medium text-accent'
+                    : 'text-muted hover:bg-accent-soft'
+                }`
+              }
+            >
+              {item.label}
+            </NavLink>
+          ))}
+        </div>
+      </nav>
       <main className="mx-auto max-w-6xl px-4 py-6">
         <Outlet />
       </main>

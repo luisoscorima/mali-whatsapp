@@ -18,6 +18,7 @@ export class DashboardService {
           select: {
             id: true,
             name: true,
+            last_name: true,
             phone: true,
             opt_in: true,
             active: true,

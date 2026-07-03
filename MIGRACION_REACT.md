@@ -127,8 +127,8 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 |-----|------------|-----|
 | **3** ✓ | `AuthModule` + JWT + `GET /api/me` | Login y sesión en React |
 | **4** ✓ | `apiClient` + `{ ok, data?, error? }` | 401 → login; `/health` desde web |
-| **5** | Tailwind + `AppShell` + React Router | Navegación SPA; rutas `/`, `/login` |
-| **6** | `DashboardModule` + `GET /api/dashboard` | KPIs por área en Prisma; pantalla inicio |
+| **5** ✓ | Tailwind + `AppShell` + React Router | Navegación SPA; rutas `/`, `/login` |
+| **6** ✓ | `DashboardModule` + `GET /api/dashboard` | KPIs por área en Prisma; pantalla inicio |
 
 ---
 
@@ -136,10 +136,10 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 
 | Sem | Entregable | DoD |
 |-----|------------|-----|
-| **7** | `MetaAdsModule` API | Paridad listado/detalle |
-| **8** | UI anuncios + rename | Flujo completo en React |
-| **9** | `AttributeDefinitionsModule` | CRUD API + UI |
-| **10** | `ExclusionListsModule` | Listas operativas |
+| **7** ✓ | `MetaAdsModule` API | Paridad listado/detalle |
+| **8** ✓ | UI anuncios + rename | `PATCH /api/meta-ads/:id`; `/anuncios` |
+| **9** ✓ | `AttributeDefinitionsModule` | CRUD API + UI `/attributes` |
+| **10** | — | **Aplazada:** tablas `exclusion_lists` eliminadas del esquema; exclusiones vía segmentos en campañas |
 
 ---
 
@@ -147,10 +147,11 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 
 | Sem | Entregable | DoD |
 |-----|------------|-----|
-| **11–12** | `SegmentsModule` | API + UI etiquetas |
-| **13–14** | `ContactsModule` lista/filtros | Paginación por área |
-| **15** | Contactos CRUD + atributos dinámicos | Alta/edición |
-| **16** | Import CSV/XLSX | `POST /api/contacts/import` |
+| **11–12** ✓ | `SegmentsModule` | CRUD API + UI `/segments`; miembros y quitar vínculo |
+| **13** ✓ | `ContactsModule` lista/filtros | `GET /api/contacts` paginado; UI `/contacts` |
+| **14** | Contactos lista refinamientos | Bulk segment, export (si aplica) |
+| **15** ✓ | Contactos CRUD + atributos dinámicos | Alta/edición en `/contacts/new`, `/contacts/:id` |
+| **16** ✓ | Import CSV/XLSX | `POST /api/contacts/import` + UI `/contacts/import` |
 
 ---
 
@@ -227,12 +228,16 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 | 5 | 1 | Tailwind + AppShell + Router | Completada | ea5cdce | Rutas `/`, `/login` |
 | 6 | 1 | Dashboard API + UI | Completada | ea5cdce | `GET /api/dashboard` |
 | 7 | 2 | Meta ads API | Completada | bc560dc | `GET /api/meta-ads`, `GET /api/meta-ads/:id` |
-| 8 | 2 | Meta ads UI | Pendiente | | |
-| 9 | 2 | Atributos | Pendiente | | |
-| 10 | 2 | Exclusiones | Pendiente | | |
-| 11–46 | … | Ver etapas arriba | Pendiente | | Plan recortado sin cutover EJS |
+| 8 | 2 | Meta ads UI | Completada | | `PATCH /api/meta-ads/:id`; `/anuncios`, `/anuncios/:id` |
+| 9 | 2 | Atributos | Completada | | `AttributeDefinitionsModule` + `/attributes` |
+| 10 | 2 | Exclusiones | Aplazada | | Sin tablas en BD; ver Etapa 5 campañas |
+| 11–12 | 3 | Segmentos | Completada | | `SegmentsModule` + `/segments` |
+| 13 | 3 | Contactos lista | Completada | | `GET /api/contacts` + filtros + `/contacts` |
+| 15 | 3 | Contactos CRUD | Completada | | POST/PATCH/DELETE + atributos dinámicos |
+| 16 | 3 | Import contactos | Completada | | CSV/XLSX + plantilla Excel |
+| 17–46 | … | Ver etapas arriba | Pendiente | | |
 
-**Próxima semana:** Semana 8 — UI anuncios Meta + `PATCH` rename.
+**Próxima semana:** Semana 17 — `TemplatesModule` listado + sync lectura.
 
 ---
 

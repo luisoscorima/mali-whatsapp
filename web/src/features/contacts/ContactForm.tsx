@@ -1,0 +1,222 @@
+import { type FormEvent, useMemo, useState } from 'react'
+import {
+  getApplicableAttributeDefinitions,
+  inputTypeForField,
+  type AttributeFieldDefinition,
+} from './contactFormUtils'
+
+type SegmentOption = {
+  id: number
+  slug: string
+  label: string
+}
+
+type ContactFormValues = {
+  name: string
+  last_name: string
+  phone: string
+  phone_prefix: string
+  phone_local: string
+  segments: string[]
+  attributes: Record<string, string>
+}
+
+type ContactFormProps = {
+  mode: 'create' | 'edit'
+  segments: SegmentOption[]
+  attributeDefinitions: AttributeFieldDefinition[]
+  initial: ContactFormValues
+  isReplaced?: boolean
+  saving?: boolean
+  onSubmit: (values: ContactFormValues) => void
+}
+
+export function ContactForm({
+  mode,
+  segments,
+  attributeDefinitions,
+  initial,
+  isReplaced = false,
+  saving = false,
+  onSubmit,
+}: ContactFormProps) {
+  const [name, setName] = useState(initial.name)
+  const [lastName, setLastName] = useState(initial.last_name)
+  const [phone, setPhone] = useState(initial.phone)
+  const [phonePrefix, setPhonePrefix] = useState(initial.phone_prefix)
+  const [phoneLocal, setPhoneLocal] = useState(initial.phone_local)
+  const [selectedSegments, setSelectedSegments] = useState<string[]>(
+    initial.segments,
+  )
+  const [attributes, setAttributes] = useState<Record<string, string>>(
+    initial.attributes,
+  )
+
+  const applicableDefs = useMemo(
+    () => getApplicableAttributeDefinitions(attributeDefinitions, selectedSegments),
+    [attributeDefinitions, selectedSegments],
+  )
+
+  const disabled = isReplaced || segments.length === 0
+
+  function toggleSegment(slug: string) {
+    setSelectedSegments((prev) =>
+      prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug],
+    )
+  }
+
+  function setAttribute(slug: string, value: string) {
+    setAttributes((prev) => ({ ...prev, [slug]: value }))
+  }
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    onSubmit({
+      name,
+      last_name: lastName,
+      phone,
+      phone_prefix: phonePrefix,
+      phone_local: phoneLocal,
+      segments: selectedSegments,
+      attributes,
+    })
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="max-w-lg space-y-4">
+      <label className="block text-sm">
+        <span className="text-muted">Nombre</span>
+        <input
+          type="text"
+          required
+          maxLength={120}
+          value={name}
+          disabled={disabled}
+          onChange={(e) => setName(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
+        />
+      </label>
+
+      <label className="block text-sm">
+        <span className="text-muted">Apellido</span>
+        <input
+          type="text"
+          required
+          maxLength={120}
+          value={lastName}
+          disabled={disabled}
+          onChange={(e) => setLastName(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
+        />
+      </label>
+
+      {mode === 'create' ? (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="block text-sm sm:col-span-1">
+            <span className="text-muted">Prefijo país</span>
+            <input
+              type="text"
+              maxLength={4}
+              inputMode="numeric"
+              value={phonePrefix}
+              disabled={disabled}
+              onChange={(e) => setPhonePrefix(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
+            />
+          </label>
+          <label className="block text-sm sm:col-span-2">
+            <span className="text-muted">Número (sin +51)</span>
+            <input
+              type="text"
+              required
+              inputMode="numeric"
+              placeholder="982160981"
+              value={phoneLocal}
+              disabled={disabled}
+              onChange={(e) => setPhoneLocal(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
+            />
+          </label>
+        </div>
+      ) : (
+        <label className="block text-sm">
+          <span className="text-muted">Teléfono (E.164 sin +)</span>
+          <input
+            type="text"
+            required
+            inputMode="numeric"
+            value={phone}
+            disabled={disabled}
+            onChange={(e) => setPhone(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2 font-mono"
+          />
+        </label>
+      )}
+
+      <fieldset className="space-y-2 text-sm" disabled={disabled}>
+        <legend className="font-medium">Segmentos</legend>
+        {segments.length === 0 ? (
+          <p className="text-muted">Define segmentos en Segmentos.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {segments.map((seg) => (
+              <label
+                key={seg.id}
+                className="flex items-center gap-2 rounded-lg border border-line px-3 py-2"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedSegments.includes(seg.slug)}
+                  onChange={() => toggleSegment(seg.slug)}
+                />
+                {seg.label}
+              </label>
+            ))}
+          </div>
+        )}
+        <p className="text-xs text-muted">Marca uno o varios.</p>
+      </fieldset>
+
+      <div className="space-y-3">
+        <p className="text-sm font-medium">
+          Atributos{' '}
+          <span className="font-normal text-muted">(opcional)</span>
+        </p>
+        {applicableDefs.length === 0 ? (
+          <p className="text-sm text-muted">
+            {selectedSegments.length === 0 && mode === 'create'
+              ? 'Selecciona segmentos para ver atributos específicos.'
+              : 'No hay campos definidos.'}
+          </p>
+        ) : (
+          applicableDefs.map((def) => (
+            <label key={`${def.slug}:${def.segment_slug ?? ''}`} className="block text-sm">
+              <span className="text-muted">
+                {def.label}
+                {def.segment_slug ? ` · ${def.segment_slug}` : ''}
+                {def.required ? ' *' : ''}
+              </span>
+              <input
+                type={inputTypeForField(def.field_type)}
+                maxLength={500}
+                required={def.required && !disabled}
+                disabled={disabled}
+                value={attributes[def.slug] ?? ''}
+                onChange={(e) => setAttribute(def.slug, e.target.value)}
+                className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
+              />
+            </label>
+          ))
+        )}
+      </div>
+
+      <button
+        type="submit"
+        disabled={disabled || saving}
+        className="rounded-lg bg-accent px-4 py-2 text-sm text-white disabled:opacity-60"
+      >
+        {saving ? 'Guardando…' : mode === 'create' ? 'Guardar' : 'Guardar cambios'}
+      </button>
+    </form>
+  )
+}
