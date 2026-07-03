@@ -236,15 +236,10 @@ curl -sS -o /dev/null -w "%{http_code}" https://whatsapp.mali.pe/api/me
 ### Operación diaria
 
 ```bash
-# Despliegue de cambios de código
-git pull origin <rama>
-docker compose up -d --build
-
-# Solo variables .env
+./scripts/deploy-production.sh
+# Solo variables .env (sin rebuild):
 docker compose up -d --force-recreate api web
 ```
-
-El script `scripts/deploy-production.sh` sigue orientado al contenedor legacy `app`; actualízalo o usa los comandos anteriores hasta adaptarlo.
 
 ### Usuarios
 
