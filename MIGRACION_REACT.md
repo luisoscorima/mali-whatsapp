@@ -301,7 +301,7 @@ _Actualizar al cierre de cada semana._
 | 1 | 0 | Scaffold api + web | Completada | e1412fa | Rama `migrate/v2` |
 | 2 | 0 | Docker + Prisma introspect | Completada | 9a5d5ad | Ver ARRANQUE_V2.md |
 | 3 | 1 | Auth + `/api/me` | Completada | 99f4524 | JWT + login; ver ARRANQUE_V2.md |
-| 4 | 1 | apiClient + convenciones | Completada | | `web/src/shared/api` |
+| 4 | 1 | apiClient + convenciones | Completada | eeb8c9e | `web/src/shared/api` |
 | 5 | 1 | AppShell + dashboard | Pendiente | | |
 | 6 | 2 | Meta ads API | Pendiente | | |
 | 7 | 2 | Meta ads UI + cutover | Pendiente | | |
