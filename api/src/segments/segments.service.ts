@@ -5,6 +5,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { AuditEvent } from '../audit/audit-events';
+import { auditActor } from '../audit/audit-actor.util';
+import { AuditLogService } from '../audit/audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/auth.types';
 import type { CreateSegmentDto, UpdateSegmentDto } from './dto/segment.dto';
@@ -23,7 +26,10 @@ function firstSegmentForLegacyColumn(segments: string[]): string | null {
 
 @Injectable()
 export class SegmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLog: AuditLogService,
+  ) {}
 
   async list(area: AuthUser['area']): Promise<SegmentDefinition[]> {
     return this.prisma.segment_definitions.findMany({
@@ -104,7 +110,8 @@ export class SegmentsService {
     }));
   }
 
-  async create(area: AuthUser['area'], dto: CreateSegmentDto) {
+  async create(user: AuthUser, dto: CreateSegmentDto) {
+    const area = user.area;
     const slug = String(dto.slug).trim();
     const label = String(dto.label).trim().slice(0, 120);
     const sortOrder = Number(dto.sort_order ?? 0) || 0;
@@ -120,7 +127,7 @@ export class SegmentsService {
     }
 
     try {
-      return await this.prisma.segment_definitions.create({
+      const row = await this.prisma.segment_definitions.create({
         data: { area, slug, label, sort_order: sortOrder, color_key: colorKey },
         select: {
           id: true,
@@ -130,6 +137,13 @@ export class SegmentsService {
           color_key: true,
         },
       });
+      await this.auditLog.write({
+        event_type: AuditEvent.SEGMENT_CREATED,
+        message: `Segmento creado: ${slug} (${area})`,
+        actor: auditActor(user),
+        meta: { slug, label, sort_order: sortOrder, color_key: colorKey },
+      });
+      return row;
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -141,7 +155,8 @@ export class SegmentsService {
     }
   }
 
-  async update(area: AuthUser['area'], id: number, dto: UpdateSegmentDto) {
+  async update(user: AuthUser, id: number, dto: UpdateSegmentDto) {
+    const area = user.area;
     const existing = await this.getById(area, id);
     const newSlug = String(dto.slug).trim();
     const label = String(dto.label).trim().slice(0, 120);
@@ -158,7 +173,7 @@ export class SegmentsService {
     }
 
     if (newSlug === existing.slug) {
-      return this.prisma.segment_definitions.update({
+      const row = await this.prisma.segment_definitions.update({
         where: { id },
         data: { label, sort_order: sortOrder, color_key: colorKey },
         select: {
@@ -169,10 +184,24 @@ export class SegmentsService {
           color_key: true,
         },
       });
+      await this.auditLog.write({
+        event_type: AuditEvent.SEGMENT_UPDATED,
+        message: `Segmento actualizado: ${existing.slug} (id ${id})`,
+        actor: auditActor(user),
+        meta: {
+          segment_id: id,
+          slug: existing.slug,
+          label,
+          sort_order: sortOrder,
+          color_key: colorKey,
+          slug_changed: false,
+        },
+      });
+      return row;
     }
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const row = await this.prisma.$transaction(async (tx) => {
         const updated = await tx.segment_definitions.update({
           where: { id },
           data: {
@@ -205,6 +234,21 @@ export class SegmentsService {
 
         return updated;
       });
+      await this.auditLog.write({
+        event_type: AuditEvent.SEGMENT_UPDATED,
+        message: `Segmento renombrado: ${existing.slug} → ${newSlug} (id ${id})`,
+        actor: auditActor(user),
+        meta: {
+          segment_id: id,
+          old_slug: existing.slug,
+          new_slug: newSlug,
+          label,
+          sort_order: sortOrder,
+          color_key: colorKey,
+          slug_changed: true,
+        },
+      });
+      return row;
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -216,7 +260,8 @@ export class SegmentsService {
     }
   }
 
-  async remove(area: AuthUser['area'], id: number): Promise<void> {
+  async remove(user: AuthUser, id: number): Promise<void> {
+    const area = user.area;
     const existing = await this.getById(area, id);
     await this.prisma.$transaction([
       this.prisma.contact_segments.deleteMany({
@@ -224,6 +269,12 @@ export class SegmentsService {
       }),
       this.prisma.segment_definitions.delete({ where: { id } }),
     ]);
+    await this.auditLog.write({
+      event_type: AuditEvent.SEGMENT_DELETED,
+      message: `Segmento eliminado: ${existing.slug} (${area})`,
+      actor: auditActor(user),
+      meta: { segment_id: id, slug: existing.slug },
+    });
   }
 
   async removeMember(

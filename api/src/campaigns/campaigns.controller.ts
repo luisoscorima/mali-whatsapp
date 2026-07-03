@@ -12,6 +12,7 @@ import {
 import type { Response } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
 import { CampaignsService } from './campaigns.service';
 import { RecipientsPreviewDto } from './dto/recipients-preview.dto';
@@ -25,7 +26,7 @@ import type {
 } from './campaigns.types';
 
 @Controller('campaigns')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, ProvisionedGuard)
 export class CampaignsController {
   constructor(private readonly campaignsService: CampaignsService) {}
 
@@ -59,7 +60,7 @@ export class CampaignsController {
     @CurrentUser() user: AuthUser,
     @Body() body: Record<string, unknown>,
   ): Promise<ApiResponse<SendCampaignResult>> {
-    const data = await this.campaignsService.sendCampaign(user.area, body);
+    const data = await this.campaignsService.sendCampaign(user, body);
     return { ok: true, data };
   }
 
@@ -158,7 +159,7 @@ export class CampaignsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<CampaignRetryActionResult>> {
-    const data = await this.campaignsService.retryFailed(user.area, id);
+    const data = await this.campaignsService.retryFailed(user, id);
     return { ok: true, data };
   }
 

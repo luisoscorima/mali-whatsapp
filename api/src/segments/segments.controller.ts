@@ -11,13 +11,14 @@ import {
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
 import { CreateSegmentDto, UpdateSegmentDto } from './dto/segment.dto';
 import { SegmentsService } from './segments.service';
 import type { SegmentDefinition, SegmentDetail } from './segments.types';
 
 @Controller('segments')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, ProvisionedGuard)
 export class SegmentsController {
   constructor(private readonly segmentsService: SegmentsService) {}
 
@@ -43,7 +44,7 @@ export class SegmentsController {
     @CurrentUser() user: AuthUser,
     @Body() body: CreateSegmentDto,
   ): Promise<ApiResponse<SegmentDefinition>> {
-    const data = await this.segmentsService.create(user.area, body);
+    const data = await this.segmentsService.create(user, body);
     return { ok: true, data };
   }
 
@@ -53,7 +54,7 @@ export class SegmentsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateSegmentDto,
   ): Promise<ApiResponse<SegmentDefinition>> {
-    const data = await this.segmentsService.update(user.area, id, body);
+    const data = await this.segmentsService.update(user, id, body);
     return { ok: true, data };
   }
 
@@ -62,7 +63,7 @@ export class SegmentsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<{ deleted: true }>> {
-    await this.segmentsService.remove(user.area, id);
+    await this.segmentsService.remove(user, id);
     return { ok: true, data: { deleted: true } };
   }
 

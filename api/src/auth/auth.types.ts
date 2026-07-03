@@ -6,6 +6,8 @@ export interface AuthUser {
   area: BusinessArea;
   allowedAreas: BusinessArea[];
   isMaster: boolean;
+  isProvisioned: boolean;
+  isBootstrapAdmin: boolean;
   mustChangePassword: boolean;
   canEditAiPrompt: boolean;
   canViewAuditLogs: boolean;

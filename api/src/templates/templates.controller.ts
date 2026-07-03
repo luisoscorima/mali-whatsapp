@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
 import {
   CreateTemplateDto,
@@ -27,7 +28,7 @@ import type {
 } from './templates.types';
 
 @Controller('templates')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, ProvisionedGuard)
 export class TemplatesController {
   constructor(private readonly templatesService: TemplatesService) {}
 
@@ -43,7 +44,7 @@ export class TemplatesController {
   async sync(
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<TemplateSyncResult>> {
-    const data = await this.templatesService.sync(user.area);
+    const data = await this.templatesService.sync(user);
     return { ok: true, data };
   }
 

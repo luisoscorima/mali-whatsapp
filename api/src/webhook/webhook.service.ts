@@ -3,7 +3,8 @@ import type { Prisma } from '@prisma/client';
 import type { Request, Response } from 'express';
 import type { BusinessArea } from '../config/areas';
 import { sanitizeApiResponse } from '../conversations/api-sanitize.util';
-import { sendSessionTextMessage } from '../conversations/conversation-whatsapp.util';
+import { downloadWhatsAppMediaBuffer, sendSessionTextMessage } from '../conversations/conversation-whatsapp.util';
+import { saveInboundChatMediaFromBuffer } from '../conversations/chat-media.util';
 import {
   E164_NO_PLUS_REGEX,
   normalizePhone,
@@ -14,13 +15,20 @@ import {
   isWithinBusinessHours,
   parseBusinessHoursConfig,
 } from '../settings/business-hours.util';
+import { parseAiConfigValue } from '../settings/ai-config.util';
 import { getWhatsAppCredentialsForArea } from '../templates/whatsapp-meta.util';
 import { processInboundReferral } from './meta-ctwa-referral.util';
 import { resolveInboundArea } from './webhook-area.util';
 import {
   extractInboundMessagePreview,
+  extractInboundMediaRef,
   resolveInboundLinePhoneNumberId,
 } from './webhook-inbound.util';
+import {
+  getAiResponse,
+  TRANSFER_TO_HUMAN_NOTICE,
+  UNAVAILABLE_REPLY_MESSAGE,
+} from './ai-response.util';
 import type {
   MetaWebhookBody,
   MetaWebhookChangeValue,
@@ -291,6 +299,134 @@ export class WebhookService {
     return true;
   }
 
+  private async tryStoreInboundMedia(input: {
+    chatMessageId: number;
+    msg: Record<string, unknown>;
+    area: BusinessArea;
+    conversationId: number;
+  }): Promise<void> {
+    const ref = extractInboundMediaRef(input.msg);
+    if (!ref) return;
+
+    try {
+      const { buffer, mimeType } = await downloadWhatsAppMediaBuffer({
+        mediaId: ref.mediaId,
+        area: input.area,
+      });
+      const localPreview = await saveInboundChatMediaFromBuffer({
+        buffer,
+        conversationId: input.conversationId,
+        mimeType,
+      });
+      await this.prisma.$executeRaw`
+        UPDATE chat_messages
+        SET raw_payload = COALESCE(raw_payload, '{}'::jsonb) || ${JSON.stringify({ local_preview: localPreview })}::jsonb
+        WHERE id = ${input.chatMessageId}
+      `;
+    } catch (error) {
+      this.logger.warn(
+        `Webhook inbound: no se pudo guardar media (${error instanceof Error ? error.message : error})`,
+      );
+    }
+  }
+
+  private async maybeAutoReplyWithAi(input: {
+    area: BusinessArea;
+    conversationId: number;
+    messageType: string;
+    phone: string;
+    chatMessageId: number;
+    userText: string;
+    phoneNumberId: string | null;
+  }): Promise<void> {
+    if (String(input.messageType || '').trim() !== 'text') return;
+    if (!String(process.env.GROQ_API_KEY || '').trim()) return;
+
+    const conv = await this.prisma.conversations.findUnique({
+      where: { id: input.conversationId },
+      select: { status: true },
+    });
+    if (!conv || String(conv.status || '').trim() !== 'bot') return;
+
+    const settingsRow = await this.prisma.app_settings.findFirst({
+      where: { area: input.area, key: 'ai_config' },
+      select: { value: true },
+    });
+    const aiCfg = parseAiConfigValue(settingsRow?.value);
+    if (!aiCfg?.enabled) return;
+
+    const userText = String(input.userText ?? '').trim();
+    if (!userText || userText === '(vacío)') return;
+
+    const histRows = await this.prisma.chat_messages.findMany({
+      where: {
+        conversation_id: input.conversationId,
+        id: { not: input.chatMessageId },
+      },
+      orderBy: { created_at: 'desc' },
+      take: 4,
+      select: { direction: true, body_text: true },
+    });
+
+    const history = histRows.reverse().map((row) => ({
+      role: (String(row.direction) === 'inbound' ? 'user' : 'model') as
+        | 'user'
+        | 'model',
+      text: String(row.body_text || '').slice(0, 8000),
+    }));
+
+    const replyText = await getAiResponse(
+      userText,
+      history,
+      aiCfg,
+      input.area,
+    );
+
+    const iaFallo =
+      replyText == null || replyText === UNAVAILABLE_REPLY_MESSAGE;
+    if (iaFallo) {
+      await this.prisma.conversations.update({
+        where: { id: input.conversationId },
+        data: { status: 'human', updated_at: new Date() },
+      });
+      await this.persistAndSendOutbound({
+        area: input.area,
+        conversationId: input.conversationId,
+        phone: input.phone,
+        text: UNAVAILABLE_REPLY_MESSAGE,
+        isAi: false,
+        phoneNumberId: input.phoneNumberId,
+      });
+      return;
+    }
+
+    const transferKw = String(aiCfg.transfer_keyword || '[TRANSFERIR]').trim();
+    if (transferKw && replyText.includes(transferKw)) {
+      await this.persistAndSendOutbound({
+        area: input.area,
+        conversationId: input.conversationId,
+        phone: input.phone,
+        text: TRANSFER_TO_HUMAN_NOTICE,
+        isAi: true,
+        phoneNumberId: input.phoneNumberId,
+      });
+      await this.prisma.conversations.update({
+        where: { id: input.conversationId },
+        data: { status: 'human', updated_at: new Date() },
+      });
+      return;
+    }
+
+    await this.persistAndSendOutbound({
+      area: input.area,
+      conversationId: input.conversationId,
+      phone: input.phone,
+      text: replyText,
+      isAi: true,
+      phoneNumberId: input.phoneNumberId,
+    });
+  }
+
   private async persistInboundMessages(
     value: MetaWebhookChangeValue,
     context: { wabaEntryId?: string; field?: string },
@@ -401,7 +537,7 @@ export class WebhookService {
       };
 
       try {
-        await this.prisma.chat_messages.create({
+        const chatMessage = await this.prisma.chat_messages.create({
           data: {
             conversation_id: conversation.id,
             direction: 'inbound',
@@ -414,6 +550,13 @@ export class WebhookService {
         });
         saved += 1;
 
+        await this.tryStoreInboundMedia({
+          chatMessageId: chatMessage.id,
+          msg: record,
+          area,
+          conversationId: conversation.id,
+        });
+
         const skipAi = await this.maybeOutsideHoursReply({
           area,
           conversationId: conversation.id,
@@ -421,7 +564,15 @@ export class WebhookService {
           phoneNumberId: linePhoneNumberId,
         });
         if (!skipAi) {
-          // Auto-respuesta IA (Groq): pendiente de portar a v2; semana futura.
+          await this.maybeAutoReplyWithAi({
+            area,
+            conversationId: conversation.id,
+            messageType,
+            phone: from,
+            chatMessageId: chatMessage.id,
+            userText: bodyText,
+            phoneNumberId: linePhoneNumberId,
+          });
         }
       } catch (error) {
         if (

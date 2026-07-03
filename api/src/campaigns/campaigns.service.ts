@@ -8,6 +8,9 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { AuthUser } from '../auth/auth.types';
+import { AuditEvent } from '../audit/audit-events';
+import { auditActor } from '../audit/audit-actor.util';
+import { AuditLogService } from '../audit/audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   buildCampaignDetailAnalytics,
@@ -64,6 +67,7 @@ import {
 import { CampaignRetryService } from './campaign-retry.service';
 import type {
   CampaignDetail,
+  CampaignExcludedContact,
   CampaignListItem,
   CampaignRetryActionResult,
   CampaignSummary,
@@ -105,6 +109,7 @@ export class CampaignsService {
     private readonly prisma: PrismaService,
     private readonly campaignSender: CampaignSenderService,
     private readonly campaignRetry: CampaignRetryService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
   private async getSegmentSlugSet(area: AuthUser['area']): Promise<Set<string>> {
@@ -113,6 +118,30 @@ export class CampaignsService {
       select: { slug: true },
     });
     return new Set(rows.map((row) => row.slug));
+  }
+
+  private async loadExcludedContacts(
+    area: AuthUser['area'],
+    ids: number[],
+  ): Promise<CampaignExcludedContact[]> {
+    if (!ids.length) return [];
+    const rows = await this.prisma.contacts.findMany({
+      where: { area, id: { in: ids } },
+      select: { id: true, name: true, last_name: true, phone: true },
+    });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return ids.map((id) => {
+      const row = byId.get(id);
+      if (!row) {
+        return { id, name: '', last_name: '', phone: '' };
+      }
+      return {
+        id: row.id,
+        name: row.name,
+        last_name: row.last_name,
+        phone: row.phone,
+      };
+    });
   }
 
   async previewRecipients(
@@ -425,6 +454,10 @@ export class CampaignsService {
       buildCampaignDetailPreviewFromRow(campaign, templateRow);
     const paramSummary = buildCampaignParamSummary(campaign);
     const exclusions = readCampaignExclusions(campaign.campaign_payload);
+    const excludeContacts = await this.loadExcludedContacts(
+      area,
+      exclusions.exclude_contact_ids,
+    );
 
     let firstSendAt: string | null = null;
     for (const log of normalizedLogs) {
@@ -462,6 +495,7 @@ export class CampaignsService {
       param_summary: paramSummary,
       exclude_segment_slugs: exclusions.exclude_segment_slugs,
       exclude_contact_ids: exclusions.exclude_contact_ids,
+      exclude_contacts: excludeContacts,
       first_send_at: firstSendAt,
     };
   }
@@ -754,9 +788,10 @@ export class CampaignsService {
   }
 
   async sendCampaign(
-    area: AuthUser['area'],
+    user: AuthUser,
     body: Record<string, unknown>,
   ): Promise<SendCampaignResult> {
+    const area = user.area;
     const segmentSet = await this.getSegmentSlugSet(area);
     const templateSyncId = parseInt(String(body.templateSyncId || '').trim(), 10);
 
@@ -924,6 +959,25 @@ export class CampaignsService {
       this.campaignSender.enqueueSendJob(campaign.id, campaignPayload);
     }
 
+    await this.auditLog.write({
+      event_type: AuditEvent.CAMPAIGN_CREATED,
+      message: isScheduled
+        ? `Campaña programada #${campaign.id} (${tRow.name}, ${recipients.length} destinatarios)`
+        : `Campaña en cola #${campaign.id} (${tRow.name}, ${recipients.length} destinatarios)`,
+      actor: auditActor(user),
+      meta: {
+        campaign_id: campaign.id,
+        status: campaignStatus,
+        template_name: tRow.name,
+        segments,
+        audience_mode: audienceMode,
+        total_recipients: recipients.length,
+        is_scheduled: isScheduled,
+        scheduled_at:
+          isScheduled && scheduledAt ? scheduledAt.toISOString() : null,
+      },
+    });
+
     return {
       campaignId: campaign.id,
       redirect: `/campaigns/${campaign.id}`,
@@ -934,9 +988,10 @@ export class CampaignsService {
   }
 
   async retryFailed(
-    area: AuthUser['area'],
+    user: AuthUser,
     id: number,
   ): Promise<CampaignRetryActionResult> {
+    const area = user.area;
     const campaign = await this.prisma.campaigns.findFirst({
       where: { id, area },
       select: { id: true, status: true, manual_retry_count: true },
@@ -961,6 +1016,18 @@ export class CampaignsService {
     }
 
     const result = await this.campaignRetry.runCampaignRetryJob(id, 'manual');
+
+    await this.auditLog.write({
+      event_type: AuditEvent.CAMPAIGN_RETRY_MANUAL,
+      message: `Reintento manual campaña #${id}: ${result.retried} teléfonos, ${result.recovered} recuperados`,
+      actor: auditActor(user),
+      meta: {
+        campaign_id: id,
+        retried: result.retried,
+        recovered: result.recovered,
+        still_failed: result.stillFailed,
+      },
+    });
 
     return {
       retried: result.retried,

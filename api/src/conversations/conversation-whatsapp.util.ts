@@ -267,4 +267,54 @@ export async function sendSessionMediaMessage(input: {
   );
 }
 
+export async function downloadWhatsAppMediaBuffer(input: {
+  mediaId: string;
+  area: unknown;
+}): Promise<{ buffer: Buffer; mimeType: string }> {
+  const { token } = resolveWhatsAppSendCredentials({ area: input.area });
+  const id = String(input.mediaId || '').trim();
+  if (!id) throw new Error('media id vacío');
+
+  const metaUrl = `${GRAPH_BASE}/${id}?fields=id,mime_type,sha256,file_size,url,messaging_product`;
+  const metaRes = await fetch(metaUrl, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const meta = (await metaRes.json()) as {
+    url?: string;
+    mime_type?: string;
+    file_size?: number;
+    error?: { message?: string };
+  };
+  if (!metaRes.ok) {
+    throw new Error(meta?.error?.message || `Meta media meta error ${metaRes.status}`);
+  }
+
+  const downloadUrl = meta?.url;
+  const mimeFromMeta = meta?.mime_type
+    ? String(meta.mime_type).split(';')[0].trim()
+    : 'application/octet-stream';
+  if (!downloadUrl) {
+    throw new Error('Meta no devolvió URL de descarga para el media');
+  }
+
+  const maxInboundBytes = 100 * 1024 * 1024;
+  if (meta.file_size != null && Number(meta.file_size) > maxInboundBytes) {
+    throw new Error(
+      'Archivo entrante demasiado grande para descargar en el panel',
+    );
+  }
+
+  const fileRes = await fetch(downloadUrl, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!fileRes.ok) {
+    throw new Error(`Error descargando media (${fileRes.status})`);
+  }
+  const arrayBuffer = await fileRes.arrayBuffer();
+  return {
+    buffer: Buffer.from(arrayBuffer),
+    mimeType: mimeFromMeta,
+  };
+}
+
 export { MAX_MEDIA_DOCUMENT_BYTES };

@@ -73,3 +73,23 @@ export function resolveInboundLinePhoneNumberId(
   }
   return null;
 }
+
+/** Referencia a media en payload de webhook (Graph API). */
+export function extractInboundMediaRef(
+  msg: Record<string, unknown>,
+): { mediaId: string } | null {
+  const t = String(msg?.type || '').trim();
+  const image = msg.image as { id?: string } | undefined;
+  const video = msg.video as { id?: string } | undefined;
+  const audio = msg.audio as { id?: string } | undefined;
+  const voice = msg.voice as { id?: string } | undefined;
+  const document = msg.document as { id?: string } | undefined;
+  const sticker = msg.sticker as { id?: string } | undefined;
+  if (t === 'image' && image?.id) return { mediaId: String(image.id) };
+  if (t === 'video' && video?.id) return { mediaId: String(video.id) };
+  if (t === 'audio' && audio?.id) return { mediaId: String(audio.id) };
+  if (t === 'voice' && voice?.id) return { mediaId: String(voice.id) };
+  if (t === 'document' && document?.id) return { mediaId: String(document.id) };
+  if (t === 'sticker' && sticker?.id) return { mediaId: String(sticker.id) };
+  return null;
+}

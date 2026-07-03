@@ -60,6 +60,7 @@ async function request<T>(
   const res = await fetch(path, {
     method: options.method ?? 'GET',
     headers,
+    credentials: 'include',
     body:
       options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
@@ -117,7 +118,7 @@ export const apiClient = {
       headers.Authorization = `Bearer ${token}`;
     }
 
-    const res = await fetch(path, { method: 'POST', headers, body: formData });
+    const res = await fetch(path, { method: 'POST', headers, credentials: 'include', body: formData });
     let body: unknown = null;
     const text = await res.text();
     if (text) {
@@ -159,7 +160,7 @@ export const apiClient = {
       headers.Authorization = `Bearer ${token}`;
     }
 
-    const res = await fetch(path, { headers });
+    const res = await fetch(path, { headers, credentials: 'include' });
     if (res.status === 401) {
       notifyUnauthorized();
       return { ok: false, error: 'No autenticado' };
@@ -187,6 +188,12 @@ export const apiClient = {
     return request<AuthUser>('/api/me');
   },
 
+  getAuthConfig(): Promise<ApiResponse<{ googleEnabled: boolean }>> {
+    return request<{ googleEnabled: boolean }>('/api/auth/config', {
+      skipAuth: true,
+    });
+  },
+
   async login(
     email: string,
     password: string,
@@ -202,7 +209,23 @@ export const apiClient = {
     return result;
   },
 
+  async changePassword(body: {
+    current_password: string;
+    new_password: string;
+    confirm_password: string;
+  }): Promise<ApiResponse<LoginResult>> {
+    const result = await request<LoginResult>('/api/auth/change-password', {
+      method: 'POST',
+      body,
+    });
+    if (result.ok) {
+      setToken(result.data.accessToken);
+    }
+    return result;
+  },
+
   logout(): void {
+    void request<{ ok: true }>('/api/auth/logout', { method: 'POST', skipAuth: true });
     clearToken();
     unauthorizedHandler?.();
   },

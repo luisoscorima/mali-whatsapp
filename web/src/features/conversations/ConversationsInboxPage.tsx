@@ -53,6 +53,7 @@ type InboxMessage = {
   message_type: string
   created_at: string
   is_ai: boolean
+  has_downloadable_media: boolean
 }
 
 type InboxDetail = {
@@ -675,29 +676,44 @@ export function ConversationsInboxPage() {
                   </p>
                 ) : null}
               </div>
-              {detail.ai_area_enabled ? (
-                <div className="flex shrink-0 flex-col gap-1">
-                  <span className="text-[10px] uppercase tracking-wide text-muted">
-                    Modo
-                  </span>
-                  <div className="flex gap-1">
-                    {(['human', 'bot'] as const).map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => void onModeChange(mode)}
-                        className={`rounded-full px-2 py-0.5 text-xs capitalize ${
-                          detail.conversation.status === mode
-                            ? 'bg-accent-soft font-medium text-accent'
-                            : 'border border-line text-muted hover:bg-accent-soft'
-                        }`}
-                      >
-                        {mode === 'human' ? 'Asesor' : 'Bot'}
-                      </button>
-                    ))}
+              <div className="flex shrink-0 flex-col items-end gap-2">
+                {selectedId ? (
+                  <button
+                    type="button"
+                    className="rounded-lg border border-line px-2 py-1 text-xs hover:bg-accent-soft"
+                    onClick={() =>
+                      void apiClient.download(
+                        `/api/conversations/${selectedId}/export`,
+                      )
+                    }
+                  >
+                    Exportar
+                  </button>
+                ) : null}
+                {detail.ai_area_enabled ? (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] uppercase tracking-wide text-muted">
+                      Modo
+                    </span>
+                    <div className="flex gap-1">
+                      {(['human', 'bot'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => void onModeChange(mode)}
+                          className={`rounded-full px-2 py-0.5 text-xs capitalize ${
+                            detail.conversation.status === mode
+                              ? 'bg-accent-soft font-medium text-accent'
+                              : 'border border-line text-muted hover:bg-accent-soft'
+                          }`}
+                        >
+                          {mode === 'human' ? 'Asesor' : 'Bot'}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ) : null}
+                ) : null}
+              </div>
             </header>
 
             <div
@@ -727,6 +743,22 @@ export function ConversationsInboxPage() {
                         <p className="mt-1 text-[10px] text-muted">
                           {formatDateTime(message.created_at)}
                           {message.is_ai ? ' · IA' : ''}
+                          {message.has_downloadable_media && selectedId ? (
+                            <>
+                              {' · '}
+                              <button
+                                type="button"
+                                className="text-accent underline"
+                                onClick={() =>
+                                  void apiClient.download(
+                                    `/api/conversations/${selectedId}/messages/${message.id}/download`,
+                                  )
+                                }
+                              >
+                                Descargar
+                              </button>
+                            </>
+                          ) : null}
                         </p>
                       </div>
                     </div>

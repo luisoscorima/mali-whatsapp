@@ -16,6 +16,8 @@ export type AuthUser = {
   area: string;
   allowedAreas: string[];
   isMaster: boolean;
+  isProvisioned: boolean;
+  isBootstrapAdmin: boolean;
   mustChangePassword: boolean;
   canEditAiPrompt: boolean;
   canViewAuditLogs: boolean;

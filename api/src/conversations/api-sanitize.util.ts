@@ -19,9 +19,17 @@ export function sanitizeApiResponse(data: unknown): Record<string, unknown> {
 export function sanitizeMediaOutboundPayload(
   uploadMediaId: string,
   sendResponse: unknown,
+  localPreview?: { url: string; mime?: string | null } | null,
 ): Record<string, unknown> {
-  return {
+  const payload: Record<string, unknown> = {
     upload_media_id: uploadMediaId,
     ...sanitizeApiResponse(sendResponse),
   };
+  if (localPreview?.url) {
+    payload.local_preview = {
+      url: localPreview.url,
+      ...(localPreview.mime ? { mime: localPreview.mime } : {}),
+    };
+  }
+  return payload;
 }

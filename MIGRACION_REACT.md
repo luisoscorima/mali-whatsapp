@@ -25,7 +25,7 @@ Relacionado con: [Mejoras.md](Mejoras.md) (backlog de producto).
 | Tailwind al final (sem. 47) | **Tailwind desde Semana 5** |
 | Webhook/colas al apagar Express (sem. 43+) | **Webhook y BullMQ en Nest** cuando toque cada módulo |
 
-La rama `main` sigue siendo el sistema en producción actual. La rama **`migrate/v2`** es el producto nuevo; al terminar, se despliega en URL/infra separadas (no se hace swap en caliente sobre prod).
+La rama `main` sigue siendo el sistema en producción actual. La rama **`migrate/v2`** es el producto nuevo; al terminar, **cutover en `whatsapp.mali.pe`** reutilizando la misma BD (ver [`DESPLIEGUE_V2.md`](DESPLIEGUE_V2.md)).
 
 ---
 
@@ -139,7 +139,7 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 | **7** ✓ | `MetaAdsModule` API | Paridad listado/detalle |
 | **8** ✓ | UI anuncios + rename | `PATCH /api/meta-ads/:id`; `/anuncios` |
 | **9** ✓ | `AttributeDefinitionsModule` | CRUD API + UI `/attributes` |
-| **10** | — | **Aplazada:** tablas `exclusion_lists` eliminadas del esquema; exclusiones vía segmentos en campañas |
+| **10** ✓ | — | Exclusiones vía segmentos en wizard campañas (`excludeSegmentSlugs`); sin tablas `exclusion_lists` |
 
 ---
 
@@ -149,7 +149,7 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 |-----|------------|-----|
 | **11–12** ✓ | `SegmentsModule` | CRUD API + UI `/segments`; miembros y quitar vínculo |
 | **13** ✓ | `ContactsModule` lista/filtros | `GET /api/contacts` paginado; UI `/contacts` |
-| **14** | Contactos lista refinamientos | Bulk segment, export (si aplica) |
+| **14** ✓ | Contactos lista refinamientos | Bulk segmento, export Excel con filtros |
 | **15** ✓ | Contactos CRUD + atributos dinámicos | Alta/edición en `/contacts/new`, `/contacts/:id` |
 | **16** ✓ | Import CSV/XLSX | `POST /api/contacts/import` + UI `/contacts/import` |
 
@@ -173,7 +173,7 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 | **23–24** ✓ | UI lectura + exports/retry stats | Respondedores, vista previa plantilla |
 | **25–26** ✓ | Wizard crear + parámetros + programación | `POST send`, preview destinatarios |
 | **27** ✓ | Envío + confirmación + reintento manual | Meta `sendTemplateWithComponents` |
-| **28** ✓ | Workers en proceso (setImmediate + poller) | BullMQ opcional en iteración futura |
+| **28** ✓ | Workers en segundo plano | BullMQ (`QueuesModule`) |
 
 ---
 
@@ -190,10 +190,10 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 
 | Sem | Entregable | DoD |
 |-----|------------|-----|
-| **33–34** | Conversaciones lista + hilo | Lectura |
-| **35–36** | Enviar mensaje + media | Portar lógica chat |
-| **37** | Polling / SSE | Tiempo casi real |
-| **38** | `GET/POST /webhook` en Nest | Firma Meta; smoke 48 h |
+| **33–34** ✓ | Conversaciones lista + hilo | Lectura |
+| **35–36** ✓ | Enviar mensaje + media | Portar lógica chat; descarga adjuntos + export XLSX |
+| **37** ✓ | Polling / SSE | Tiempo casi real |
+| **38** ✓ | `GET/POST /webhook` en Nest | Firma Meta; inbound + auto-respuesta IA (Groq) + media entrante |
 
 ---
 
@@ -202,7 +202,8 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 | Sem | Entregable | DoD |
 |-----|------------|-----|
 | **39–40** | Usuarios + Meta credenciales | Solo master |
-| **41–42** | Audit logs + cambio contraseña | Paridad admin legacy |
+| **41** ✓ | Cambio contraseña + bitácora admin | `POST /auth/change-password`; `/admin/audit-logs` |
+| **42** ✓ | Audit logs refinamientos | Purge automático, más eventos audit |
 
 ---
 
@@ -210,10 +211,10 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 
 | Sem | Entregable | DoD |
 |-----|------------|-----|
-| **43** | Prisma Migrate oficial + seed | Sin `migrations.js` en v2 |
-| **44** | Workers: retry, scheduled, audit purge | Todo en BullMQ |
+| **43** ✓ | Prisma Migrate oficial + seed | Sin `migrations.js` en v2 |
+| **44** ✓ | Workers: retry, scheduled, audit purge | Todo en BullMQ |
 | **45** | QA integral staging | TI valida por área |
-| **46** | Go-live entorno aislado + runbook | Doc en `DESPLIEGUE_V2.md` |
+| **46** | Go-live en `whatsapp.mali.pe` + runbook | Doc en [`DESPLIEGUE_V2.md`](DESPLIEGUE_V2.md) |
 
 ---
 
@@ -246,7 +247,7 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 | 25 | 5 | Wizard nueva campaña + preview destinatarios | Completada | | `POST recipients-preview`, `/campaigns/new` |
 | 26 | 5 | Parámetros plantilla + programación wizard | Completada | | `CampaignTemplateFields`, definition ampliada |
 | 27 | 5 | Envío + confirmación + reintento manual | Completada | | `POST /api/campaigns/send`, sender Meta |
-| 28 | 5 | Workers en segundo plano | Completada | | `CampaignJobsService` (poller, sin BullMQ aún) |
+| 28 | 5 | Workers en segundo plano | Completada | | `QueuesModule` + BullMQ (sem. 44) |
 | 29 | 6 | Settings API + UI integración/IA/horario | Completada | | `SettingsModule`, `/settings/*` |
 | 30 | 6 | Ajustes: permisos y placeholders bitácora/reportería | Completada | | sidebar por permisos; sem. 31–32 informes |
 | 31 | 6 | ReportsModule bitácora | Completada | | filtros, paginación, export XLSX |
@@ -254,14 +255,19 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 | 33 | 7 | Inbox: lista de conversaciones | Completada | | `ConversationsModule`, filtros segmento/chat/búsqueda |
 | 34 | 7 | Inbox: hilo de lectura | Completada | | `/conversations/:id`, marcar leído, ventana 24h |
 | 35 | 7 | Inbox: envío de texto | Completada | | `POST /api/conversations/:id/reply`, Meta session |
-| 36 | 7 | Inbox: adjuntos + modo bot/asesor | Completada | | media upload, `PATCH /api/conversations/:id/mode` |
+| 36 | 7 | Inbox: adjuntos + modo bot/asesor | Completada | | media upload, descarga, export XLSX, `PATCH mode` |
 | 37 | 7 | Inbox: polling tiempo casi real | Completada | | `GET /api/conversations/:id/updates`, poll 8s |
-| 38 | 7 | Webhook Meta en Nest | Completada | | `GET/POST /webhook`, firma, inbound + estados |
+| 38 | 7 | Webhook Meta en Nest | Completada | | `GET/POST /webhook`, firma, inbound, IA Groq, media entrante |
 | 39 | 8 | Admin: usuarios (master) | Completada | | `AdminModule`, CRUD `/api/admin/users` |
 | 40 | 8 | Admin: credenciales Meta | Completada | | `MetaSettingsModule`, `/api/admin/meta` |
-| 41–46 | … | Ver etapas arriba | Pendiente | | |
+| 14 | 3 | Contactos: bulk segmento + export | Completada | | `POST bulk-add-segment`, `GET /export` |
+| 41 | 8 | Cambio contraseña + bitácora admin | Completada | | `POST /api/auth/change-password`, `/admin/audit-logs` |
+| 42 | 8 | Purge bitácora + eventos audit v2 | Completada | | `AuditPurgeService`, eventos en auth/contactos/segmentos/campañas/inbox/settings/plantillas |
+| 43 | 9 | Prisma Migrate + seed | Completada | | `api/prisma/migrations/20260702120000_init`, `prisma/seed.js`, migrate al arrancar API |
+| 44 | 9 | Workers BullMQ | Completada | | `QueuesModule`, colas `campaigns` + `maintenance` |
+| 45–46 | … | Ver etapas arriba | Pendiente | | |
 
-**Próxima semana:** Semana 41 — cambio de contraseña y bitácora admin (Etapa 8).
+**Próxima semana:** Semana 45 — QA integral staging. Runbook de cutover: [`DESPLIEGUE_V2.md`](DESPLIEGUE_V2.md).
 
 ---
 

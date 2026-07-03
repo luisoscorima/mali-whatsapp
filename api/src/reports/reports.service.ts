@@ -59,7 +59,22 @@ export class ReportsService {
     query: Record<string, string | undefined>,
   ): Promise<AuditLogListResult> {
     this.assertAuditAccess(user);
-    const opts = auditLogQueryOptsForUser(user);
+    return this.listAuditLogsWithOpts(query, auditLogQueryOptsForUser(user));
+  }
+
+  async listAuditLogsForAdmin(
+    query: Record<string, string | undefined>,
+  ): Promise<AuditLogListResult> {
+    return this.listAuditLogsWithOpts(query, {
+      areaScope: null,
+      excludeMasterActors: false,
+    });
+  }
+
+  private async listAuditLogsWithOpts(
+    query: Record<string, string | undefined>,
+    opts: import('./audit-log-query.util').AuditLogQueryOpts,
+  ): Promise<AuditLogListResult> {
     const { whereSql, params, filters } = buildAuditLogWhere(query, opts);
     const page = Math.max(1, parseInt(String(query.page || '1'), 10) || 1);
 
@@ -122,7 +137,27 @@ export class ReportsService {
     query: Record<string, string | undefined>,
   ): Promise<{ buffer: Buffer; filename: string }> {
     this.assertAuditAccess(user);
-    const opts = auditLogQueryOptsForUser(user);
+    return this.exportAuditLogsWithOpts(
+      query,
+      auditLogQueryOptsForUser(user),
+      'bitacora-ajustes',
+    );
+  }
+
+  async exportAuditLogsForAdmin(
+    query: Record<string, string | undefined>,
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    return this.exportAuditLogsWithOpts(query, {
+      areaScope: null,
+      excludeMasterActors: false,
+    }, 'bitacora-admin');
+  }
+
+  private async exportAuditLogsWithOpts(
+    query: Record<string, string | undefined>,
+    opts: import('./audit-log-query.util').AuditLogQueryOpts,
+    filenamePrefix: string,
+  ): Promise<{ buffer: Buffer; filename: string }> {
     const { whereSql, params } = buildAuditLogWhere(query, opts);
     const exportParams = [...params, AUDIT_EXPORT_MAX];
     const limIdx = params.length + 1;
@@ -137,7 +172,7 @@ export class ReportsService {
 
     return {
       buffer: buildAuditLogXlsxBuffer(rows),
-      filename: auditLogExportFilename('bitacora-ajustes'),
+      filename: auditLogExportFilename(filenamePrefix),
     };
   }
 

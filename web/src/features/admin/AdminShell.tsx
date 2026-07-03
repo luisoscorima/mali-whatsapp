@@ -55,6 +55,18 @@ export function AdminShell() {
         >
           Credenciales Meta
         </NavLink>
+        <NavLink
+          to="/admin/audit-logs"
+          className={({ isActive }) =>
+            `rounded-lg px-3 py-1.5 text-sm ${
+              isActive
+                ? 'bg-accent-soft font-medium text-accent'
+                : 'text-muted hover:bg-accent-soft'
+            }`
+          }
+        >
+          Bitácora
+        </NavLink>
       </nav>
       <Outlet />
     </div>

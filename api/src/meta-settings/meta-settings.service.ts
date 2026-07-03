@@ -1,4 +1,7 @@
 import { Global, Injectable, OnModuleInit } from '@nestjs/common';
+import type { AuthUser } from '../auth/auth.types';
+import { AuditEvent } from '../audit/audit-events';
+import { AuditLogService } from '../audit/audit-log.service';
 import { BUSINESS_AREAS } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
 import { META_SETTING_KEYS } from './meta-settings.keys';
@@ -6,7 +9,10 @@ import { setMetaSettingsCache, getStoredMetaRows } from './meta-settings.store';
 
 @Injectable()
 export class MetaSettingsService implements OnModuleInit {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLog: AuditLogService,
+  ) {}
 
   async onModuleInit(): Promise<void> {
     await this.refresh();
@@ -37,19 +43,22 @@ export class MetaSettingsService implements OnModuleInit {
     });
   }
 
-  async save(input: {
-    global?: { verify_token?: string; app_secret?: string };
-    areas?: Partial<
-      Record<
-        (typeof BUSINESS_AREAS)[number],
-        {
-          whatsapp_token?: string;
-          phone_number_id?: string;
-          waba_id?: string;
-        }
-      >
-    >;
-  }): Promise<void> {
+  async save(
+    input: {
+      global?: { verify_token?: string; app_secret?: string };
+      areas?: Partial<
+        Record<
+          (typeof BUSINESS_AREAS)[number],
+          {
+            whatsapp_token?: string;
+            phone_number_id?: string;
+            waba_id?: string;
+          }
+        >
+      >;
+    },
+    actor?: AuthUser,
+  ): Promise<void> {
     const global = input.global ?? {};
     await this.upsertSetting(
       'global',
@@ -78,6 +87,19 @@ export class MetaSettingsService implements OnModuleInit {
     }
 
     await this.refresh();
+
+    if (actor) {
+      await this.auditLog.write({
+        event_type: AuditEvent.ADMIN_META_UPDATED,
+        message: 'Credenciales Meta actualizadas',
+        actor: {
+          userId: actor.id,
+          email: actor.email,
+          area: actor.area,
+        },
+        meta: { areas: BUSINESS_AREAS.length },
+      });
+    }
   }
 
   getAdminView(): {

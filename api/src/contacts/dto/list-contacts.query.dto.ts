@@ -39,4 +39,8 @@ export class ListContactsQueryDto {
   @IsOptional()
   @IsString()
   attr_value?: string;
+
+  @IsOptional()
+  @IsString()
+  attrs?: string;
 }

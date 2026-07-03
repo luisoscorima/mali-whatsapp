@@ -7,6 +7,9 @@ import {
 import { Prisma } from '@prisma/client';
 import type { Prisma as PrismaTypes } from '@prisma/client';
 import type { AuthUser } from '../auth/auth.types';
+import { AuditEvent } from '../audit/audit-events';
+import { auditActor, phoneMetaTail } from '../audit/audit-actor.util';
+import { AuditLogService } from '../audit/audit-log.service';
 import { isWithinUserServiceWindow } from '../campaigns/campaign-conversation-window.util';
 import {
   escapeForLikePattern,
@@ -26,6 +29,17 @@ import {
   sendSessionTextMessage,
   uploadMediaToWhatsApp,
 } from './conversation-whatsapp.util';
+import {
+  buildConversationExportRows,
+  buildConversationXlsxBuffer,
+  conversationExportFilename,
+} from './conversation-export.util';
+import {
+  getLocalPreview,
+  hasDownloadableMedia,
+  saveOutboundChatMediaFile,
+  streamMessageMediaDownload,
+} from './chat-media.util';
 import {
   buildContactSegmentSql,
   buildConversationSegmentSql,
@@ -58,7 +72,10 @@ type InboxRow = {
 
 @Injectable()
 export class ConversationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLog: AuditLogService,
+  ) {}
 
   private async getSegmentSlugSet(area: string): Promise<Set<string>> {
     const rows = await this.prisma.segment_definitions.findMany({
@@ -405,17 +422,13 @@ export class ConversationsService {
         message_type: true,
         created_at: true,
         is_ai: true,
+        raw_payload: true,
       },
     });
 
-    const messages: InboxMessage[] = messageRows.map((row) => ({
-      id: row.id,
-      direction: row.direction,
-      body_text: row.body_text,
-      message_type: row.message_type,
-      created_at: row.created_at.toISOString(),
-      is_ai: row.is_ai,
-    }));
+    const messages: InboxMessage[] = messageRows.map((row) =>
+      this.mapMessageRow(row),
+    );
 
     const windowOpen = isWithinUserServiceWindow(
       conversation.last_user_message_at,
@@ -525,6 +538,7 @@ export class ConversationsService {
     message_type: string;
     created_at: Date;
     is_ai: boolean;
+    raw_payload?: unknown;
   }): InboxMessage {
     return {
       id: row.id,
@@ -533,6 +547,7 @@ export class ConversationsService {
       message_type: row.message_type,
       created_at: row.created_at.toISOString(),
       is_ai: row.is_ai,
+      has_downloadable_media: hasDownloadableMedia(row.raw_payload),
     };
   }
 
@@ -655,6 +670,17 @@ export class ConversationsService {
           ? captionForMedia.slice(0, 8000)
           : `[${label}] ${uploadResult.safeFilename}`.slice(0, 8000);
 
+        let localPreview: { url: string; mime: string | null } | null = null;
+        try {
+          localPreview = await saveOutboundChatMediaFile({
+            buffer: file.buffer,
+            conversationId,
+            mimeType: file.mimetype,
+          });
+        } catch {
+          localPreview = null;
+        }
+
         const mediaRow = await this.prisma.chat_messages.create({
           data: {
             conversation_id: conversationId,
@@ -665,6 +691,7 @@ export class ConversationsService {
             raw_payload: sanitizeMediaOutboundPayload(
               uploadResult.mediaId,
               sendResp,
+              localPreview,
             ) as PrismaTypes.InputJsonValue,
             is_ai: false,
           },
@@ -676,6 +703,36 @@ export class ConversationsService {
         where: { id: conversationId },
         data: { last_message_at: new Date(), updated_at: new Date() },
       });
+
+      if (!file) {
+        await this.auditLog.write({
+          event_type: AuditEvent.CONVERSATION_REPLY,
+          message: `Respuesta WhatsApp (texto) en conversación ${conversationId}`,
+          actor: auditActor(user),
+          meta: {
+            conversation_id: conversationId,
+            phone_tail: phoneMetaTail(conversation.phone),
+            text_preview: text.slice(0, 120),
+          },
+        });
+      } else {
+        const { waType } = classifyConversationUpload(
+          file.mimetype,
+          file.buffer.length,
+        );
+        await this.auditLog.write({
+          event_type: AuditEvent.CONVERSATION_REPLY,
+          message: `Respuesta WhatsApp (${waType}) en conversación ${conversationId}`,
+          actor: auditActor(user),
+          meta: {
+            conversation_id: conversationId,
+            phone_tail: phoneMetaTail(conversation.phone),
+            media_type: waType,
+            filename: String(file.originalname || '').slice(0, 200),
+            has_caption: Boolean(text),
+          },
+        });
+      }
 
       return { messages: createdMessages };
     } catch (error) {
@@ -715,6 +772,12 @@ export class ConversationsService {
     if (updated.count === 0) {
       throw new NotFoundException('Conversacion no encontrada');
     }
+    await this.auditLog.write({
+      event_type: AuditEvent.CONVERSATION_MODE,
+      message: `Modo de conversación ${conversationId} → ${status}`,
+      actor: auditActor(user),
+      meta: { conversation_id: conversationId, new_status: status },
+    });
     return { status };
   }
 
@@ -750,6 +813,7 @@ export class ConversationsService {
         message_type: true,
         created_at: true,
         is_ai: true,
+        raw_payload: true,
       },
     });
 
@@ -788,5 +852,105 @@ export class ConversationsService {
       reply_blocked_reason: replyBlockedReason,
       user_service_window_open: windowOpen,
     };
+  }
+
+  async exportConversation(
+    user: AuthUser,
+    conversationId: number,
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    if (!Number.isInteger(conversationId) || conversationId <= 0) {
+      throw new BadRequestException('Id de conversacion invalido');
+    }
+    const area = user.area;
+    const conversation = await this.prisma.conversations.findFirst({
+      where: { id: conversationId, area },
+      select: { id: true, phone: true },
+    });
+    if (!conversation) {
+      throw new NotFoundException('Conversacion no encontrada');
+    }
+
+    const messageRows = await this.prisma.chat_messages.findMany({
+      where: { conversation_id: conversationId },
+      orderBy: { created_at: 'asc' },
+      select: {
+        direction: true,
+        body_text: true,
+        message_type: true,
+        created_at: true,
+        raw_payload: true,
+      },
+    });
+
+    const rows = buildConversationExportRows(messageRows);
+    const buffer = buildConversationXlsxBuffer(rows);
+    await this.auditLog.write({
+      event_type: AuditEvent.CONVERSATION_EXPORT,
+      message: `Exportación de conversación ${conversationId}`,
+      actor: auditActor(user),
+      meta: {
+        conversation_id: conversationId,
+        phone_tail: phoneMetaTail(conversation.phone),
+        message_count: messageRows.length,
+      },
+    });
+    return {
+      buffer,
+      filename: conversationExportFilename(conversation.phone, conversation.id),
+    };
+  }
+
+  async downloadMessageMedia(
+    user: AuthUser,
+    conversationId: number,
+    messageId: number,
+    res: import('express').Response,
+  ): Promise<void> {
+    if (
+      !Number.isInteger(conversationId) ||
+      conversationId <= 0 ||
+      !Number.isInteger(messageId) ||
+      messageId <= 0
+    ) {
+      throw new BadRequestException('Parámetros inválidos');
+    }
+
+    const row = await this.prisma.chat_messages.findFirst({
+      where: {
+        id: messageId,
+        conversation_id: conversationId,
+        conversations: { area: user.area },
+      },
+      select: {
+        message_type: true,
+        raw_payload: true,
+      },
+    });
+    if (!row) {
+      throw new NotFoundException('Mensaje no encontrado');
+    }
+
+    const localPreview = getLocalPreview(row.raw_payload);
+    if (!localPreview) {
+      throw new NotFoundException(
+        'Este mensaje no tiene archivo descargable guardado',
+      );
+    }
+
+    await streamMessageMediaDownload(res, {
+      localPreview,
+      rawPayload: row.raw_payload,
+      messageType: row.message_type,
+    });
+    await this.auditLog.write({
+      event_type: AuditEvent.CONVERSATION_MEDIA_DOWNLOAD,
+      message: `Descarga de media en conversación ${conversationId}, mensaje ${messageId}`,
+      actor: auditActor(user),
+      meta: {
+        conversation_id: conversationId,
+        message_id: messageId,
+        message_type: row.message_type,
+      },
+    });
   }
 }

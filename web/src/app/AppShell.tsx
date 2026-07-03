@@ -18,6 +18,22 @@ export function AppShell() {
     window.location.href = '/login'
   }
 
+  const navItems =
+    user?.isProvisioned || user?.isMaster
+      ? [
+          { to: '/', label: 'Panel', end: true },
+          { to: '/anuncios', label: 'Anuncios' },
+          { to: '/attributes', label: 'Atributos' },
+          { to: '/segments', label: 'Segmentos' },
+          { to: '/contacts', label: 'Contactos' },
+          { to: '/templates', label: 'Plantillas' },
+          { to: '/campaigns', label: 'Campañas' },
+          { to: '/conversations', label: 'Conversaciones' },
+          { to: '/settings', label: 'Ajustes' },
+          ...(user?.isMaster ? [{ to: '/admin', label: 'Admin' }] : []),
+        ]
+      : [{ to: '/', label: 'Panel', end: true }]
+
   return (
     <div className="min-h-screen bg-bg text-ink">
       <header className="border-b border-line bg-surface-strong/80 backdrop-blur">
@@ -44,20 +60,7 @@ export function AppShell() {
       </header>
       <nav className="border-b border-line bg-surface-strong/50">
         <div className="mx-auto flex max-w-6xl gap-1 px-4 py-2">
-          {[
-            { to: '/', label: 'Panel', end: true },
-            { to: '/anuncios', label: 'Anuncios' },
-            { to: '/attributes', label: 'Atributos' },
-            { to: '/segments', label: 'Segmentos' },
-            { to: '/contacts', label: 'Contactos' },
-            { to: '/templates', label: 'Plantillas' },
-            { to: '/campaigns', label: 'Campañas' },
-            { to: '/conversations', label: 'Conversaciones' },
-            { to: '/settings', label: 'Ajustes' },
-            ...(user?.isMaster
-              ? [{ to: '/admin', label: 'Admin' }]
-              : []),
-          ].map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

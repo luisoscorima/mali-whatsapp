@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
+import { formatContactName } from '../contacts/contactName'
 import {
   filterCampaignLogs,
   filterIncidentLogs,
@@ -64,6 +65,13 @@ type ParamSummaryItem = {
   kind: 'static' | 'dynamic'
 }
 
+type ExcludedContact = {
+  id: number
+  name: string
+  last_name: string
+  phone: string
+}
+
 type CampaignDetail = {
   id: number
   segment_display: string
@@ -73,6 +81,7 @@ type CampaignDetail = {
   param_summary: ParamSummaryItem[]
   exclude_segment_slugs: string[]
   exclude_contact_ids: number[]
+  exclude_contacts: ExcludedContact[]
   first_send_at: string | null
   image_url: string | null
   message_text: string
@@ -292,18 +301,40 @@ export function CampaignDetailPage() {
               </dd>
             </div>
             {campaign.exclude_segment_slugs.length > 0 ||
-            campaign.exclude_contact_ids.length > 0 ? (
+            campaign.exclude_contacts.length > 0 ? (
               <div>
                 <dt className="text-muted">Exclusiones</dt>
                 <dd className="space-y-1">
                   {campaign.exclude_segment_slugs.length > 0 ? (
                     <p>Segmentos: {campaign.exclude_segment_slugs.join(', ')}</p>
                   ) : null}
-                  {campaign.exclude_contact_ids.length > 0 ? (
-                    <p>
-                      Contactos (IDs):{' '}
-                      {campaign.exclude_contact_ids.join(', ')}
-                    </p>
+                  {campaign.exclude_contacts.length > 0 ? (
+                    <div>
+                      <p className="mb-1">Contactos:</p>
+                      <ul className="space-y-1">
+                        {campaign.exclude_contacts.map((contact) => {
+                          const label =
+                            formatContactName(contact.name, contact.last_name) ||
+                            `Contacto #${contact.id}`
+                          return (
+                            <li key={contact.id}>
+                              <Link
+                                to={`/contacts/${contact.id}`}
+                                className="text-accent"
+                              >
+                                {label}
+                              </Link>
+                              {contact.phone ? (
+                                <span className="font-mono text-muted">
+                                  {' '}
+                                  · {contact.phone}
+                                </span>
+                              ) : null}
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
                   ) : null}
                 </dd>
               </div>

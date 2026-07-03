@@ -61,6 +61,13 @@ export type CampaignRetryActionResult = {
   error?: string;
 };
 
+export type CampaignExcludedContact = {
+  id: number;
+  name: string;
+  last_name: string;
+  phone: string;
+};
+
 export type CampaignDetail = {
   id: number;
   segment: string;
@@ -88,5 +95,6 @@ export type CampaignDetail = {
   param_summary: CampaignParamSummaryItem[];
   exclude_segment_slugs: string[];
   exclude_contact_ids: number[];
+  exclude_contacts: CampaignExcludedContact[];
   first_send_at: string | null;
 };

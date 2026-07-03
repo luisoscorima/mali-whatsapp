@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { normalizeArea } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
+import { CampaignQueueService } from '../queues/campaign-queue.service';
 import { normalizePhone } from '../contacts/contacts-validation.utils';
 import {
   buildTemplateDefinition,
@@ -89,16 +90,17 @@ export type CampaignRetryResult = {
 export class CampaignRetryService {
   private readonly logger = new Logger(CampaignRetryService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly campaignQueue: CampaignQueueService,
+  ) {}
 
   enqueueRetryJob(campaignId: number, mode: 'auto' | 'manual' = 'auto'): void {
-    setImmediate(() => {
-      this.runCampaignRetryJob(campaignId, mode).catch((error) => {
-        this.logger.error(
-          `Error en reintento campaña #${campaignId}`,
-          error instanceof Error ? error.stack : String(error),
-        );
-      });
+    void this.campaignQueue.enqueueRetry(campaignId, mode).catch((error) => {
+      this.logger.error(
+        `Error encolando reintento campaña #${campaignId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
     });
   }
 

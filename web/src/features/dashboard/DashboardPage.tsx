@@ -12,9 +12,16 @@ export function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [health, setHealth] = useState('')
   const [error, setError] = useState('')
+  const [pending, setPending] = useState(false)
 
   useEffect(() => {
     async function load() {
+      const me = await apiClient.getMe()
+      if (me.ok && !me.data.isProvisioned && !me.data.isMaster) {
+        setPending(true)
+        return
+      }
+
       const [dashboard, healthResult] = await Promise.all([
         apiClient.get<DashboardData>('/api/dashboard'),
         apiClient.getHealth(),
@@ -32,6 +39,18 @@ export function DashboardPage() {
     }
     load()
   }, [])
+
+  if (pending) {
+    return (
+      <div className="space-y-3">
+        <h1 className="text-2xl font-semibold">Panel</h1>
+        <p className="text-sm text-muted">
+          Tu cuenta está activa, pero aún no tiene áreas ni permisos asignados.
+          Un administrador debe configurarte el acceso en Admin → Usuarios.
+        </p>
+      </div>
+    )
+  }
 
   if (error) {
     return <p className="text-bad">{error}</p>

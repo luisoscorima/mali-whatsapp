@@ -22,6 +22,11 @@ import {
   parseContactXlsxBuffer,
   type ImportContactRow,
 } from './contacts-import.utils';
+import {
+  buildContactsExportBuffer,
+  contactsExportFilename,
+  type ContactExportRow,
+} from './contacts-export.util';
 import type { UpsertContactDto } from './dto/upsert-contact.dto';
 import type {
   ContactDetail,
@@ -30,6 +35,9 @@ import type {
   ContactsListResult,
   ListContactsParams,
 } from './contacts.types';
+import { AuditEvent } from '../audit/audit-events';
+import { auditActor, phoneMetaTail } from '../audit/audit-actor.util';
+import { AuditLogService } from '../audit/audit-log.service';
 
 type ContactRow = {
   id: number;
@@ -48,7 +56,10 @@ type ContactRow = {
 
 @Injectable()
 export class ContactsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLog: AuditLogService,
+  ) {}
 
   async getFilterOptions(area: AuthUser['area']): Promise<ContactsFilterOptions> {
     const [segments, attributeRows] = await Promise.all([
@@ -149,6 +160,181 @@ export class ContactsService {
     return rows.map((row) => row.segment_slug);
   }
 
+  private async buildListWhereClause(
+    area: string,
+    params: ListContactsParams,
+    slugSet: Set<string>,
+  ): Promise<Prisma.Sql> {
+    const showReplaced = Boolean(params.show_replaced);
+    const segmentFilter = parseSegmentListFilter(params.segment, slugSet);
+    const conditions: Prisma.Sql[] = [Prisma.sql`c.area = ${area}`];
+
+    if (!showReplaced) {
+      conditions.push(
+        Prisma.sql`c.replacement_reason IS NULL AND c.replaced_by_contact_id IS NULL`,
+      );
+    }
+
+    const segmentClauses: Prisma.Sql[] = [];
+    if (segmentFilter.slugs.length > 0) {
+      segmentClauses.push(Prisma.sql`EXISTS (
+        SELECT 1 FROM contact_segments csf
+        WHERE csf.contact_id = c.id AND csf.segment_slug = ANY(${segmentFilter.slugs}::varchar[])
+      )`);
+    }
+    if (segmentFilter.includeNone) {
+      segmentClauses.push(Prisma.sql`NOT EXISTS (
+        SELECT 1 FROM contact_segments csn
+        WHERE csn.contact_id = c.id
+      )`);
+    }
+    if (segmentClauses.length > 0) {
+      conditions.push(Prisma.sql`(${Prisma.join(segmentClauses, ' OR ')})`);
+    }
+
+    const searchQ = String(params.q ?? '').trim();
+    const qDigits = searchQ.replace(/\D/g, '');
+    if (searchQ) {
+      const searchPat = `%${escapeForLikePattern(searchQ)}%`;
+      if (qDigits) {
+        const digitsPat = `%${qDigits}%`;
+        conditions.push(Prisma.sql`(
+          COALESCE(c.name, '') ILIKE ${searchPat} ESCAPE '!'
+          OR COALESCE(c.last_name, '') ILIKE ${searchPat} ESCAPE '!'
+          OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
+          OR regexp_replace(COALESCE(c.phone, ''), '\\D', '', 'g') LIKE ${digitsPat}
+        )`);
+      } else {
+        conditions.push(Prisma.sql`(
+          COALESCE(c.name, '') ILIKE ${searchPat} ESCAPE '!'
+          OR COALESCE(c.last_name, '') ILIKE ${searchPat} ESCAPE '!'
+          OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
+        )`);
+      }
+    }
+
+    const attrKey = String(params.attr_key ?? '').trim().toLowerCase();
+    const attrValue = String(params.attr_value ?? '').trim();
+    if (attrKey && attrValue) {
+      const attrPat = `%${escapeForLikePattern(attrValue)}%`;
+      conditions.push(Prisma.sql`EXISTS (
+        SELECT 1 FROM contact_attributes ca
+        WHERE ca.contact_id = c.id
+          AND ca.attr_key = ${attrKey}
+          AND ca.attr_value ILIKE ${attrPat} ESCAPE '!'
+      )`);
+    }
+
+    return Prisma.join(conditions, ' AND ');
+  }
+
+  async bulkAddSegment(
+    user: AuthUser,
+    segmentSlug: string,
+    contactIds: number[],
+  ): Promise<{ updated: number }> {
+    const area = user.area;
+    const slug = String(segmentSlug || '').trim();
+    const segmentSet = await this.getSegmentSlugSet(area);
+    if (!segmentSet.has(slug)) {
+      throw new BadRequestException('Segmento invalido');
+    }
+
+    const ids = [
+      ...new Set(
+        contactIds
+          .map((x) => Number(x))
+          .filter((n) => Number.isInteger(n) && n > 0),
+      ),
+    ];
+    if (ids.length === 0) {
+      throw new BadRequestException('Selecciona al menos un contacto');
+    }
+
+    let updated = 0;
+    await this.prisma.$transaction(async (tx) => {
+      for (const cid of ids) {
+        const own = await tx.contacts.findFirst({
+          where: {
+            id: cid,
+            area,
+            replacement_reason: null,
+            replaced_by_contact_id: null,
+          },
+          select: { id: true },
+        });
+        if (!own) continue;
+        await tx.contact_segments.createMany({
+          data: [{ contact_id: cid, area, segment_slug: slug }],
+          skipDuplicates: true,
+        });
+        updated += 1;
+      }
+    });
+
+    await this.auditLog.write({
+      event_type: AuditEvent.CONTACT_BULK_SEGMENT,
+      message: `Asignación masiva al segmento «${slug}» (${ids.length} contactos)`,
+      actor: auditActor(user),
+      meta: { segment_slug: slug, contact_count: updated },
+    });
+
+    return { updated };
+  }
+
+  async exportFiltered(
+    area: AuthUser['area'],
+    params: ListContactsParams,
+    includeAttributes = true,
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    const segments = await this.prisma.segment_definitions.findMany({
+      where: { area },
+      select: { slug: true },
+    });
+    const slugSet = new Set(segments.map((row) => row.slug));
+    const where = await this.buildListWhereClause(area, params, slugSet);
+
+    const rows = await this.prisma.$queryRaw<ContactExportRow[]>(Prisma.sql`
+      SELECT
+        c.id,
+        c.name,
+        c.phone,
+        COALESCE((
+          SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
+          FROM contact_segments cs
+          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+          WHERE cs.contact_id = c.id AND cs.area = ${area}
+        ), '') AS segment_labels
+      FROM contacts c
+      WHERE ${where}
+      ORDER BY COALESCE(NULLIF(c.name, ''), c.phone) ASC, c.id DESC
+      LIMIT ${MAX_CSV_ROWS + 1}
+    `);
+
+    if (rows.length > MAX_CSV_ROWS) {
+      throw new BadRequestException(
+        `Demasiados contactos (${rows.length}). Máximo ${MAX_CSV_ROWS}; acota los filtros.`,
+      );
+    }
+
+    const contactIds = rows.map((r) => r.id);
+    const attrMap = new Map<number, Record<string, string>>();
+    if (includeAttributes && contactIds.length > 0) {
+      const attrRows = await this.prisma.contact_attributes.findMany({
+        where: { contact_id: { in: contactIds } },
+        orderBy: [{ contact_id: 'asc' }, { attr_key: 'asc' }],
+        select: { contact_id: true, attr_key: true, attr_value: true },
+      });
+      for (const row of attrRows) {
+        if (!attrMap.has(row.contact_id)) attrMap.set(row.contact_id, {});
+        attrMap.get(row.contact_id)![row.attr_key] = row.attr_value;
+      }
+    }
+
+    const buffer = buildContactsExportBuffer(rows, attrMap, { includeAttributes });
+    return { buffer, filename: contactsExportFilename() };
+  }
+
   private async replaceContactSegments(
     tx: Prisma.TransactionClient,
     contactId: number,
@@ -231,7 +417,8 @@ export class ContactsService {
     return this.mapContactDetail(area, row, segmentSlugs);
   }
 
-  async create(area: AuthUser['area'], dto: UpsertContactDto): Promise<ContactDetail> {
+  async create(user: AuthUser, dto: UpsertContactDto): Promise<ContactDetail> {
+    const area = user.area;
     const segmentSet = await this.getSegmentSlugSet(area);
     const validation = validateContactInput(dto, segmentSet, { minSegments: 1 });
     if (!validation.ok) {
@@ -275,6 +462,16 @@ export class ContactsService {
         });
         return contact.id;
       });
+      await this.auditLog.write({
+        event_type: AuditEvent.CONTACT_CREATED,
+        message: `Contacto creado (id ${contactId})`,
+        actor: auditActor(user),
+        meta: {
+          contact_id: contactId,
+          phone_tail: phoneMetaTail(phone),
+          segments: validation.value.segments,
+        },
+      });
       return this.getById(area, contactId);
     } catch (error) {
       if (
@@ -290,10 +487,11 @@ export class ContactsService {
   }
 
   async update(
-    area: AuthUser['area'],
+    user: AuthUser,
     id: number,
     dto: UpsertContactDto,
   ): Promise<ContactDetail> {
+    const area = user.area;
     const segmentSet = await this.getSegmentSlugSet(area);
     const validation = validateContactInput(dto, segmentSet, { minSegments: 1 });
     if (!validation.ok) {
@@ -359,6 +557,17 @@ export class ContactsService {
         await this.replaceContactSegments(tx, id, area, segments);
         await this.upsertContactAttributes(tx, id, attrs);
       });
+      await this.auditLog.write({
+        event_type: AuditEvent.CONTACT_UPDATED,
+        message: `Contacto actualizado (id ${id})`,
+        actor: auditActor(user),
+        meta: {
+          contact_id: id,
+          phone_tail: phoneMetaTail(phone),
+          segments,
+          phone_changed: false,
+        },
+      });
       return this.getById(area, id);
     }
 
@@ -393,14 +602,34 @@ export class ContactsService {
       return created.id;
     });
 
+    await this.auditLog.write({
+      event_type: AuditEvent.CONTACT_UPDATED,
+      message: `Contacto actualizado (id ${id}, nuevo id ${newContactId} por cambio de teléfono)`,
+      actor: auditActor(user),
+      meta: {
+        contact_id: id,
+        new_contact_id: newContactId,
+        phone_tail: phoneMetaTail(phone),
+        segments,
+        phone_changed: true,
+      },
+    });
+
     return this.getById(area, newContactId);
   }
 
-  async remove(area: AuthUser['area'], id: number): Promise<void> {
+  async remove(user: AuthUser, id: number): Promise<void> {
+    const area = user.area;
     const result = await this.prisma.contacts.deleteMany({ where: { id, area } });
     if (result.count === 0) {
       throw new NotFoundException('Contacto no encontrado');
     }
+    await this.auditLog.write({
+      event_type: AuditEvent.CONTACT_DELETED,
+      message: `Contacto eliminado (id ${id})`,
+      actor: auditActor(user),
+      meta: { contact_id: id },
+    });
   }
 
   async reactivate(area: AuthUser['area'], id: number): Promise<ContactDetail> {
@@ -428,10 +657,11 @@ export class ContactsService {
   }
 
   async importFromBuffer(
-    area: AuthUser['area'],
+    user: AuthUser,
     buffer: Buffer,
     filename: string,
   ): Promise<ContactsImportResult> {
+    const area = user.area;
     const segmentSet = await this.getSegmentSlugSet(area);
     const lower = String(filename ?? '').toLowerCase();
     const parsed = lower.endsWith('.xlsx')
@@ -455,6 +685,20 @@ export class ContactsService {
       await this.importSingleRow(area, row, allDefs);
       imported += 1;
     }
+
+    await this.auditLog.write({
+      event_type: AuditEvent.CONTACT_IMPORT,
+      message: `Importación de contactos: ${imported} filas guardadas`,
+      actor: auditActor(user),
+      meta: {
+        rows_saved: imported,
+        row_errors_in_file: parsed.errors.length,
+        duplicate_phones_in_file: parsed.duplicate_phones_in_file,
+        duplicate_rows_in_file: parsed.duplicate_rows_in_file,
+        duplicate_phone_examples: parsed.duplicate_phone_examples,
+        filename: String(filename ?? '').slice(0, 200),
+      },
+    });
 
     return {
       imported,
@@ -519,74 +763,13 @@ export class ContactsService {
     const page = Math.max(1, Number(params.page ?? 1) || 1);
     const limit = Math.min(100, Math.max(1, Number(params.limit ?? 50) || 50));
     const offset = (page - 1) * limit;
-    const showReplaced = Boolean(params.show_replaced);
 
     const segments = await this.prisma.segment_definitions.findMany({
       where: { area },
       select: { slug: true },
     });
     const slugSet = new Set(segments.map((row) => row.slug));
-    const segmentFilter = parseSegmentListFilter(params.segment, slugSet);
-
-    const conditions: Prisma.Sql[] = [Prisma.sql`c.area = ${area}`];
-
-    if (!showReplaced) {
-      conditions.push(
-        Prisma.sql`c.replacement_reason IS NULL AND c.replaced_by_contact_id IS NULL`,
-      );
-    }
-
-    const segmentClauses: Prisma.Sql[] = [];
-    if (segmentFilter.slugs.length > 0) {
-      segmentClauses.push(Prisma.sql`EXISTS (
-        SELECT 1 FROM contact_segments csf
-        WHERE csf.contact_id = c.id AND csf.segment_slug = ANY(${segmentFilter.slugs}::varchar[])
-      )`);
-    }
-    if (segmentFilter.includeNone) {
-      segmentClauses.push(Prisma.sql`NOT EXISTS (
-        SELECT 1 FROM contact_segments csn
-        WHERE csn.contact_id = c.id
-      )`);
-    }
-    if (segmentClauses.length > 0) {
-      conditions.push(Prisma.sql`(${Prisma.join(segmentClauses, ' OR ')})`);
-    }
-
-    const searchQ = String(params.q ?? '').trim();
-    const qDigits = searchQ.replace(/\D/g, '');
-    if (searchQ) {
-      const searchPat = `%${escapeForLikePattern(searchQ)}%`;
-      if (qDigits) {
-        const digitsPat = `%${qDigits}%`;
-        conditions.push(Prisma.sql`(
-          COALESCE(c.name, '') ILIKE ${searchPat} ESCAPE '!'
-          OR COALESCE(c.last_name, '') ILIKE ${searchPat} ESCAPE '!'
-          OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
-          OR regexp_replace(COALESCE(c.phone, ''), '\\D', '', 'g') LIKE ${digitsPat}
-        )`);
-      } else {
-        conditions.push(Prisma.sql`(
-          COALESCE(c.name, '') ILIKE ${searchPat} ESCAPE '!'
-          OR COALESCE(c.last_name, '') ILIKE ${searchPat} ESCAPE '!'
-          OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
-        )`);
-      }
-    }
-
-    const attrKey = String(params.attr_key ?? '').trim().toLowerCase();
-    const attrValue = String(params.attr_value ?? '').trim();
-    if (attrKey && attrValue) {
-      const attrPat = `%${escapeForLikePattern(attrValue)}%`;
-      conditions.push(Prisma.sql`EXISTS (
-        SELECT 1 FROM contact_attributes ca
-        WHERE ca.contact_id = c.id
-          AND ca.attr_key = ${attrKey}
-          AND ca.attr_value ILIKE ${attrPat} ESCAPE '!'
-      )`);
-    }
-
-    const where = Prisma.join(conditions, ' AND ');
+    const where = await this.buildListWhereClause(area, params, slugSet);
 
     const rows = await this.prisma.$queryRaw<ContactRow[]>(Prisma.sql`
       SELECT

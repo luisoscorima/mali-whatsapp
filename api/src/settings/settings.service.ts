@@ -4,6 +4,9 @@ import {
   Injectable,
 } from '@nestjs/common';
 import type { AuthUser } from '../auth/auth.types';
+import { AuditEvent } from '../audit/audit-events';
+import { auditActor } from '../audit/audit-actor.util';
+import { AuditLogService } from '../audit/audit-log.service';
 import { isValidBusinessArea, normalizeArea } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -37,7 +40,10 @@ function readPublicAppUrl(): string {
 
 @Injectable()
 export class SettingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLog: AuditLogService,
+  ) {}
 
   assertModuleAccess(user: AuthUser, moduleId: string): void {
     if (!userCanAccessSettingsModule(user, moduleId)) {
@@ -157,6 +163,17 @@ export class SettingsService {
     }
 
     await this.upsertSettingValue(area, 'ai_config', value);
+    await this.auditLog.write({
+      event_type: AuditEvent.SETTINGS_AI_CONFIG,
+      message: `Ajustes de IA guardados (área ${area})`,
+      actor: auditActor(user),
+      meta: {
+        scope: isMaster ? 'full_master' : 'prompt_only',
+        json_keys: isMaster
+          ? ['enabled', 'prompt', 'transfer_keyword']
+          : ['prompt', 'transfer_keyword'],
+      },
+    });
   }
 
   async enableAi(
@@ -192,6 +209,16 @@ export class SettingsService {
         where: { area },
         data: { status: newStatus, updated_at: new Date() },
       });
+    });
+    await this.auditLog.write({
+      event_type: AuditEvent.SETTINGS_AI_ENABLE,
+      message: `IA del área ${area} ${enabled ? 'activada' : 'desactivada'} (conversaciones actualizadas)`,
+      actor: auditActor(user),
+      meta: {
+        area,
+        enabled,
+        conversations_status: enabled ? 'bot' : 'human',
+      },
     });
   }
 
@@ -243,5 +270,15 @@ export class SettingsService {
       'business_hours',
       JSON.stringify(validated.config),
     );
+    await this.auditLog.write({
+      event_type: AuditEvent.SETTINGS_BUSINESS_HOURS,
+      message: `Horario fuera de atención guardado (área ${area})`,
+      actor: auditActor(user),
+      meta: {
+        area,
+        enabled: validated.config.enabled,
+        days_count: validated.config.days.length,
+      },
+    });
   }
 }

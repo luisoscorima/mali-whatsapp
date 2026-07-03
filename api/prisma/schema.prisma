@@ -309,6 +309,7 @@ model users {
   can_view_integration    Boolean      @default(false)
   can_edit_business_hours Boolean      @default(false)
   can_view_reports        Boolean      @default(false)
+  is_provisioned          Boolean      @default(false)
   audit_logs              audit_logs[]
   login_logs              login_logs[]
   user_areas              user_areas[]

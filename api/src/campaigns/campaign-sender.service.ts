@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { normalizeArea } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
+import { CampaignQueueService } from '../queues/campaign-queue.service';
 import { normalizePhone } from '../contacts/contacts-validation.utils';
 import {
   buildTemplateDefinition,
@@ -67,16 +68,17 @@ function sanitizeApiErrorPayload(data: unknown): Record<string, unknown> {
 export class CampaignSenderService {
   private readonly logger = new Logger(CampaignSenderService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly campaignQueue: CampaignQueueService,
+  ) {}
 
   enqueueSendJob(campaignId: number, payload: CampaignJobPayload): void {
-    setImmediate(() => {
-      this.runCampaignSendJob(campaignId, payload).catch((error) => {
-        this.logger.error(
-          `Error en envío async campaña #${campaignId}`,
-          error instanceof Error ? error.stack : String(error),
-        );
-      });
+    void this.campaignQueue.enqueueSend(campaignId, payload).catch((error) => {
+      this.logger.error(
+        `Error encolando envío campaña #${campaignId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
     });
   }
 

@@ -7,13 +7,16 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
 import { MAX_MEDIA_DOCUMENT_BYTES } from './conversation-whatsapp.util';
 import { ConversationsService } from './conversations.service';
@@ -31,7 +34,7 @@ import {
 } from './dto/conversations.dto';
 
 @Controller('conversations')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, ProvisionedGuard)
 export class ConversationsController {
   constructor(private readonly conversationsService: ConversationsService) {}
 
@@ -90,6 +93,37 @@ export class ConversationsController {
       body.status,
     );
     return { ok: true, data };
+  }
+
+  @Get(':id/export')
+  async exportConversation(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { buffer, filename } =
+      await this.conversationsService.exportConversation(user, id);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  }
+
+  @Get(':id/messages/:messageId/download')
+  async downloadMessageMedia(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('messageId', ParseIntPipe) messageId: number,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.conversationsService.downloadMessageMedia(
+      user,
+      id,
+      messageId,
+      res,
+    );
   }
 
   @Get(':id/updates')

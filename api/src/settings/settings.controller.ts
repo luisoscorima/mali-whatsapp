@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
 import {
   EnableAiDto,
@@ -24,7 +25,7 @@ import type {
 } from './settings.types';
 
 @Controller('settings')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, ProvisionedGuard)
 export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 

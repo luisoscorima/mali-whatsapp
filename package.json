@@ -3,10 +3,13 @@
   "private": true,
   "workspaces": ["api", "web"],
   "scripts": {
-    "dev:api": "npm run start:dev -w api",
+    "dev:api": "npm run start:with-migrate -w api",
     "dev:web": "npm run dev -w web",
     "dev:compose": "docker compose -f docker-compose.dev.yml up",
     "prisma:generate": "npm exec prisma generate -w api",
-    "prisma:pull": "npm exec prisma db pull -w api"
+    "prisma:pull": "npm exec prisma db pull -w api",
+    "prisma:migrate": "npm exec prisma migrate deploy -w api",
+    "prisma:migrate:dev": "npm exec prisma migrate dev -w api",
+    "prisma:seed": "npm exec prisma db seed -w api"
   }
 }

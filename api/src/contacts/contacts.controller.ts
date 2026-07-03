@@ -18,6 +18,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
 import { buildContactImportSampleXlsxBuffer, MAX_CSV_BYTES } from './contacts-import.utils';
 import { ContactsService } from './contacts.service';
@@ -28,6 +29,7 @@ import type {
   ContactsListResult,
 } from './contacts.types';
 import { ListContactsQueryDto } from './dto/list-contacts.query.dto';
+import { BulkAddSegmentDto } from './dto/bulk-add-segment.dto';
 import { UpsertContactDto } from './dto/upsert-contact.dto';
 
 function normalizeSegmentParam(
@@ -44,7 +46,7 @@ function isImportFileName(name: string): boolean {
 }
 
 @Controller('contacts')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, ProvisionedGuard)
 export class ContactsController {
   constructor(private readonly contactsService: ContactsService) {}
 
@@ -87,9 +89,50 @@ export class ContactsController {
       throw new BadRequestException('Solo archivos .csv o .xlsx');
     }
     const data = await this.contactsService.importFromBuffer(
-      user.area,
+      user,
       file.buffer,
       file.originalname,
+    );
+    return { ok: true, data };
+  }
+
+  @Get('export')
+  async exportList(
+    @CurrentUser() user: AuthUser,
+    @Query() query: ListContactsQueryDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { buffer, filename } = await this.contactsService.exportFiltered(
+      user.area,
+      {
+        page: query.page,
+        limit: query.limit,
+        q: query.q,
+        segment: normalizeSegmentParam(query.segment),
+        show_replaced:
+          query.show_replaced === '1' || query.show_replaced === 'true',
+        attr_key: query.attr_key,
+        attr_value: query.attr_value,
+      },
+      String(query.attrs ?? '1') !== '0',
+    );
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  }
+
+  @Post('bulk-add-segment')
+  async bulkAddSegment(
+    @CurrentUser() user: AuthUser,
+    @Body() body: BulkAddSegmentDto,
+  ): Promise<ApiResponse<{ updated: number }>> {
+    const data = await this.contactsService.bulkAddSegment(
+      user,
+      body.segment_slug,
+      body.contact_ids,
     );
     return { ok: true, data };
   }
@@ -117,7 +160,7 @@ export class ContactsController {
     @CurrentUser() user: AuthUser,
     @Body() body: UpsertContactDto,
   ): Promise<ApiResponse<ContactDetail>> {
-    const data = await this.contactsService.create(user.area, body);
+    const data = await this.contactsService.create(user, body);
     return { ok: true, data };
   }
 
@@ -136,7 +179,7 @@ export class ContactsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpsertContactDto,
   ): Promise<ApiResponse<ContactDetail>> {
-    const data = await this.contactsService.update(user.area, id, body);
+    const data = await this.contactsService.update(user, id, body);
     return { ok: true, data };
   }
 
@@ -145,7 +188,7 @@ export class ContactsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<{ deleted: true }>> {
-    await this.contactsService.remove(user.area, id);
+    await this.contactsService.remove(user, id);
     return { ok: true, data: { deleted: true } };
   }
 

@@ -1,7 +1,9 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from './AppShell'
 import { RequireAuth } from './RequireAuth'
+import { RequirePasswordChanged } from './RequirePasswordChanged'
 import { LoginPage } from '../features/auth/LoginPage'
+import { ChangePasswordPage } from '../features/auth/ChangePasswordPage'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
 import { MetaAdsListPage } from '../features/meta-ads/MetaAdsListPage'
 import { MetaAdDetailPage } from '../features/meta-ads/MetaAdDetailPage'
@@ -33,6 +35,7 @@ import { RequireMaster, AdminShell } from '../features/admin/AdminShell'
 import { AdminUsersPage } from '../features/admin/AdminUsersPage'
 import { AdminUserFormPage } from '../features/admin/AdminUserFormPage'
 import { AdminMetaPage } from '../features/admin/AdminMetaPage'
+import { AdminAuditPage } from '../features/admin/AdminAuditPage'
 
 export function AppRouter() {
   return (
@@ -40,7 +43,9 @@ export function AppRouter() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<RequireAuth />}>
-          <Route element={<AppShell />}>
+          <Route path="account/change-password" element={<ChangePasswordPage />} />
+          <Route element={<RequirePasswordChanged />}>
+            <Route element={<AppShell />}>
             <Route index element={<DashboardPage />} />
             <Route path="anuncios" element={<MetaAdsListPage />} />
             <Route path="anuncios/:id" element={<MetaAdDetailPage />} />
@@ -69,6 +74,7 @@ export function AppRouter() {
                 <Route path="users/new" element={<AdminUserFormPage />} />
                 <Route path="users/:id" element={<AdminUserFormPage />} />
                 <Route path="meta" element={<AdminMetaPage />} />
+                <Route path="audit-logs" element={<AdminAuditPage />} />
               </Route>
             </Route>
             <Route path="settings" element={<SettingsShell />}>
@@ -81,6 +87,7 @@ export function AppRouter() {
               />
               <Route path="bitacora" element={<SettingsAuditPage />} />
               <Route path="reporteria" element={<SettingsReporteriaPage />} />
+            </Route>
             </Route>
           </Route>
         </Route>

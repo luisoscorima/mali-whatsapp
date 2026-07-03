@@ -32,6 +32,19 @@ type RecipientPreview = {
   service_window_open: boolean
 }
 
+type ContactSearchHit = {
+  id: number
+  name: string
+  last_name: string
+  phone: string
+}
+
+type ExcludedContact = {
+  id: number
+  name: string
+  phone: string
+}
+
 function segmentTileClass(selected: boolean, exclude = false): string {
   const base =
     'flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors'
@@ -60,6 +73,7 @@ function buildSendPayload(input: {
   segments: string[]
   selectedIds: number[]
   excludeSegments: string[]
+  excludeContactIds: number[]
   excludeServiceWindow: boolean
   templateId: string
   scheduleMode: 'now' | 'scheduled'
@@ -78,6 +92,9 @@ function buildSendPayload(input: {
     batchSize: input.batchSize,
     batchDelayMs: input.batchDelayMs,
     headerMediaUrl: input.form.headerMediaUrl,
+  }
+  if (input.excludeContactIds.length > 0) {
+    body.excludeContactIds = input.excludeContactIds
   }
   if (input.scheduleMode === 'scheduled' && input.scheduledAt) {
     const t = new Date(input.scheduledAt)
@@ -111,6 +128,16 @@ export function CampaignNewPage() {
 
   const [includeSegments, setIncludeSegments] = useState<Set<string>>(new Set())
   const [excludeSegments, setExcludeSegments] = useState<Set<string>>(new Set())
+  const [excludeContactIds, setExcludeContactIds] = useState<Set<number>>(
+    new Set(),
+  )
+  const [excludedContacts, setExcludedContacts] = useState<ExcludedContact[]>(
+    [],
+  )
+  const [contactSearchQuery, setContactSearchQuery] = useState('')
+  const [contactSearchResults, setContactSearchResults] = useState<
+    ContactSearchHit[]
+  >([])
   const [excludeServiceWindow, setExcludeServiceWindow] = useState(false)
 
   const [recipients, setRecipients] = useState<RecipientPreview[]>([])
@@ -169,6 +196,13 @@ export function CampaignNewPage() {
     loadWizardData()
   }, [])
 
+  function invalidateRecipients() {
+    setRecipientsLoaded(false)
+    setRecipients([])
+    setSelectedIds(new Set())
+    setRecipientsStatus('')
+  }
+
   function toggleSegment(
     slug: string,
     set: React.Dispatch<React.SetStateAction<Set<string>>>,
@@ -179,10 +213,48 @@ export function CampaignNewPage() {
       else next.add(slug)
       return next
     })
-    setRecipientsLoaded(false)
-    setRecipients([])
-    setSelectedIds(new Set())
-    setRecipientsStatus('')
+    invalidateRecipients()
+  }
+
+  function addExcludeContact(contact: ExcludedContact) {
+    if (excludeContactIds.has(contact.id)) return
+    setExcludeContactIds((prev) => new Set(prev).add(contact.id))
+    setExcludedContacts((prev) => [...prev, contact])
+    setRecipients((prev) => prev.filter((r) => r.id !== contact.id))
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      next.delete(contact.id)
+      return next
+    })
+    setContactSearchResults((prev) => prev.filter((r) => r.id !== contact.id))
+  }
+
+  function removeExcludeContact(id: number) {
+    setExcludeContactIds((prev) => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+    setExcludedContacts((prev) => prev.filter((c) => c.id !== id))
+    invalidateRecipients()
+  }
+
+  async function handleSearchContacts() {
+    const q = contactSearchQuery.trim()
+    if (!q) return
+    setActionError('')
+    setBusy('contact-search')
+    const result = await apiClient.get<{
+      items: ContactSearchHit[]
+    }>(`/api/contacts?q=${encodeURIComponent(q)}&limit=15`)
+    setBusy('')
+    if (!result.ok) {
+      setActionError(result.error)
+      return
+    }
+    setContactSearchResults(
+      result.data.items.filter((row) => !excludeContactIds.has(row.id)),
+    )
   }
 
   async function handleSyncTemplates() {
@@ -213,6 +285,7 @@ export function CampaignNewPage() {
     }>('/api/campaigns/recipients-preview', {
       segments: segmentList,
       excludeSegmentSlugs: [...excludeSegments],
+      excludeContactIds: [...excludeContactIds].sort((a, b) => a - b),
       excludeOpenServiceWindow: excludeServiceWindow,
     })
     setBusy('')
@@ -267,8 +340,11 @@ export function CampaignNewPage() {
         : 'envío inmediato'
     const ok = window.confirm(
       `¿Confirmas la campaña?\n\n` +
-        `${selectedIds.size} destinatarios\n` +
-        `Plantilla: ${tplLabel}\n` +
+        `${selectedIds.size} destinatarios` +
+        (excludedContacts.length > 0
+          ? `\n${excludedContacts.length} contacto(s) excluido(s)`
+          : '') +
+        `\nPlantilla: ${tplLabel}\n` +
         `${when}`,
     )
     if (!ok) return
@@ -278,6 +354,7 @@ export function CampaignNewPage() {
       segments: [...includeSegments],
       selectedIds: [...selectedIds].sort((a, b) => a - b),
       excludeSegments: [...excludeSegments],
+      excludeContactIds: [...excludeContactIds].sort((a, b) => a - b),
       excludeServiceWindow,
       templateId,
       scheduleMode,
@@ -389,13 +466,106 @@ export function CampaignNewPage() {
               </div>
             </div>
 
+            <div className="space-y-2 border-t border-line pt-4">
+              <p className="text-sm font-medium">
+                Excluir contactos concretos (opcional)
+              </p>
+              <p className="text-xs text-muted">
+                Busca por nombre o teléfono. No recibirán la campaña aunque
+                pertenezcan a los segmentos incluidos.
+              </p>
+
+              {excludedContacts.length > 0 ? (
+                <ul className="flex flex-wrap gap-2">
+                  {excludedContacts.map((contact) => (
+                    <li
+                      key={contact.id}
+                      className="flex items-center gap-1 rounded-lg border border-bad/30 bg-bad/10 px-2 py-1 text-xs"
+                    >
+                      <span>
+                        {formatContactName(contact.name, '') || '—'} ·{' '}
+                        <span className="font-mono">{contact.phone}</span>
+                      </span>
+                      <button
+                        type="button"
+                        className="ml-1 text-bad hover:opacity-80"
+                        aria-label="Quitar exclusión"
+                        onClick={() => removeExcludeContact(contact.id)}
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+
+              <div className="flex flex-wrap gap-2">
+                <input
+                  type="search"
+                  className="min-w-[200px] flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+                  placeholder="Nombre o teléfono…"
+                  value={contactSearchQuery}
+                  onChange={(e) => setContactSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      void handleSearchContacts()
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="rounded-lg border border-line px-3 py-2 text-sm hover:bg-surface disabled:opacity-50"
+                  disabled={
+                    busy !== '' || !contactSearchQuery.trim()
+                  }
+                  onClick={() => void handleSearchContacts()}
+                >
+                  {busy === 'contact-search' ? 'Buscando…' : 'Buscar'}
+                </button>
+              </div>
+
+              {contactSearchResults.length > 0 ? (
+                <ul className="divide-y divide-line rounded-lg border border-line text-sm">
+                  {contactSearchResults.map((row) => (
+                    <li
+                      key={row.id}
+                      className="flex items-center justify-between gap-3 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium">
+                          {formatContactName(row.name, row.last_name) || '—'}
+                        </p>
+                        <p className="font-mono text-xs text-muted">
+                          {row.phone}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="shrink-0 text-xs text-bad hover:underline"
+                        onClick={() =>
+                          addExcludeContact({
+                            id: row.id,
+                            name: formatContactName(row.name, row.last_name),
+                            phone: row.phone,
+                          })
+                        }
+                      >
+                        Excluir
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+
             <label className="flex items-start gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={excludeServiceWindow}
                 onChange={(e) => {
                   setExcludeServiceWindow(e.target.checked)
-                  setRecipientsLoaded(false)
+                  invalidateRecipients()
                 }}
                 className="mt-1"
               />
@@ -472,6 +642,19 @@ export function CampaignNewPage() {
                             ) : null}
                           </p>
                         </div>
+                        <button
+                          type="button"
+                          className="shrink-0 text-xs text-bad hover:underline"
+                          onClick={() =>
+                            addExcludeContact({
+                              id: row.id,
+                              name: row.name,
+                              phone: row.phone,
+                            })
+                          }
+                        >
+                          Excluir
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -590,6 +773,9 @@ export function CampaignNewPage() {
 
       <p className="text-sm text-muted">
         Resumen: {includeSegments.size} segmento(s) ·{' '}
+        {excludedContacts.length > 0
+          ? `${excludedContacts.length} excluido(s) · `
+          : ''}
         {recipientsLoaded ? `${selectedIds.size} destinatarios` : 'sin lista'} ·{' '}
         {templateId ? selectedTemplate?.name || 'plantilla' : 'sin plantilla'} ·{' '}
         {scheduleMode === 'scheduled' ? 'programada' : 'envío inmediato'}.

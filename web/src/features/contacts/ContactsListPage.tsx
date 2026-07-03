@@ -53,6 +53,10 @@ export function ContactsListPage() {
   const [result, setResult] = useState<ContactsListResult | null>(null)
   const [error, setError] = useState('')
   const [searchInput, setSearchInput] = useState(searchParams.get('q') ?? '')
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [bulkSegment, setBulkSegment] = useState('')
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [exportBusy, setExportBusy] = useState(false)
 
   const selectedSegments = searchParams.getAll('segment')
   const showReplaced = searchParams.get('show_replaced') === '1'
@@ -74,6 +78,20 @@ export function ContactsListPage() {
     if (attrValue) sp.set('attr_value', attrValue)
     return sp.toString()
   }, [searchParams, page, selectedSegments, showReplaced, attrKey, attrValue])
+
+  const exportQuery = useMemo(() => {
+    const sp = new URLSearchParams()
+    const q = searchParams.get('q')?.trim()
+    if (q) sp.set('q', q)
+    for (const seg of selectedSegments) {
+      sp.append('segment', seg)
+    }
+    if (showReplaced) sp.set('show_replaced', '1')
+    if (attrKey) sp.set('attr_key', attrKey)
+    if (attrValue) sp.set('attr_value', attrValue)
+    const value = sp.toString()
+    return value ? `?${value}` : ''
+  }, [searchParams, selectedSegments, showReplaced, attrKey, attrValue])
 
   useEffect(() => {
     apiClient.get<FilterOptions>('/api/contacts/filter-options').then((res) => {
@@ -139,6 +157,54 @@ export function ContactsListPage() {
     setSearchParams(sp)
   }
 
+  function toggleContactSelection(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function selectAllContacts() {
+    if (!result) return
+    setSelectedIds(new Set(result.items.map((c) => c.id)))
+  }
+
+  function clearContactSelection() {
+    setSelectedIds(new Set())
+  }
+
+  async function handleBulkSegment(e: FormEvent) {
+    e.preventDefault()
+    if (!bulkSegment || selectedIds.size === 0) return
+    setBulkBusy(true)
+    setError('')
+    const res = await apiClient.post<{ updated: number }>(
+      '/api/contacts/bulk-add-segment',
+      {
+        segment_slug: bulkSegment,
+        contact_ids: [...selectedIds],
+      },
+    )
+    setBulkBusy(false)
+    if (!res.ok) {
+      setError(res.error)
+      return
+    }
+    clearContactSelection()
+    const listRes = await apiClient.get<ContactsListResult>(`/api/contacts?${apiQuery}`)
+    if (listRes.ok) setResult(listRes.data)
+  }
+
+  async function handleExport() {
+    setExportBusy(true)
+    setError('')
+    const res = await apiClient.download(`/api/contacts/export${exportQuery}`)
+    setExportBusy(false)
+    if (!res.ok) setError(res.error)
+  }
+
   const segments = options?.segments ?? []
   const hasFilters =
     selectedSegments.length > 0 ||
@@ -155,18 +221,28 @@ export function ContactsListPage() {
             Lista filtrable por segmento, búsqueda y atributos.
           </p>
         </div>
-        <Link
-          to="/contacts/import"
-          className="rounded-lg border border-line px-4 py-2 text-sm hover:bg-accent-soft"
-        >
-          Importar
-        </Link>
-        <Link
-          to="/contacts/new"
-          className="rounded-lg bg-accent px-4 py-2 text-sm text-white"
-        >
-          + Añadir contacto
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={exportBusy}
+            onClick={() => void handleExport()}
+            className="rounded-lg border border-line px-4 py-2 text-sm hover:bg-accent-soft disabled:opacity-50"
+          >
+            {exportBusy ? 'Exportando…' : 'Exportar Excel'}
+          </button>
+          <Link
+            to="/contacts/import"
+            className="rounded-lg border border-line px-4 py-2 text-sm hover:bg-accent-soft"
+          >
+            Importar
+          </Link>
+          <Link
+            to="/contacts/new"
+            className="rounded-lg bg-accent px-4 py-2 text-sm text-white"
+          >
+            + Añadir contacto
+          </Link>
+        </div>
       </div>
 
       <div className="space-y-3 rounded-xl border border-line bg-surface-strong p-4">
@@ -290,6 +366,60 @@ export function ContactsListPage() {
             {result.pages > 1 ? ` · página ${result.page} de ${result.pages}` : ''}
           </p>
 
+          {result.items.length > 0 && segments.length > 0 ? (
+            <div className="space-y-2 rounded-xl border border-line bg-surface-strong p-3 text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-line px-2 py-1 text-xs hover:bg-accent-soft"
+                  onClick={selectAllContacts}
+                >
+                  Seleccionar todos
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-line px-2 py-1 text-xs hover:bg-accent-soft"
+                  onClick={clearContactSelection}
+                >
+                  Quitar selección
+                </button>
+                {selectedIds.size > 0 ? (
+                  <span className="text-muted">{selectedIds.size} seleccionado(s)</span>
+                ) : null}
+              </div>
+              {selectedIds.size > 0 ? (
+                <form
+                  onSubmit={(e) => void handleBulkSegment(e)}
+                  className="flex flex-wrap items-end gap-2"
+                >
+                  <label className="min-w-[200px] flex-1">
+                    <span className="text-muted">Asignar segmento</span>
+                    <select
+                      value={bulkSegment}
+                      onChange={(e) => setBulkSegment(e.target.value)}
+                      required
+                      className="mt-1 w-full rounded-lg border border-line bg-bg px-2 py-1"
+                    >
+                      <option value="">— Segmento —</option>
+                      {segments.map((seg) => (
+                        <option key={seg.slug} value={seg.slug}>
+                          {seg.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={bulkBusy || !bulkSegment}
+                    className="rounded-lg bg-accent px-3 py-1.5 text-sm text-white disabled:opacity-50"
+                  >
+                    {bulkBusy ? 'Aplicando…' : 'Aplicar'}
+                  </button>
+                </form>
+              ) : null}
+            </div>
+          ) : null}
+
           {result.items.length === 0 ? (
             <p className="text-sm text-muted">
               {hasFilters
@@ -299,10 +429,19 @@ export function ContactsListPage() {
           ) : (
             <ul className="divide-y divide-line rounded-xl border border-line bg-surface-strong">
               {result.items.map((contact) => (
-                <li key={contact.id}>
+                <li key={contact.id} className="flex items-stretch">
+                  {segments.length > 0 ? (
+                    <label className="flex items-center px-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(contact.id)}
+                        onChange={() => toggleContactSelection(contact.id)}
+                      />
+                    </label>
+                  ) : null}
                   <Link
                     to={`/contacts/${contact.id}`}
-                    className="block px-4 py-3 hover:bg-accent-soft"
+                    className="block flex-1 px-4 py-3 hover:bg-accent-soft"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>

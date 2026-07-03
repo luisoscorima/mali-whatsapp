@@ -2,12 +2,13 @@ import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
 import { ReportsService } from './reports.service';
 import type { AuditLogListResult, CommunicationReportResult } from './reports.types';
 
 @Controller('reports')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, ProvisionedGuard)
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 

@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import type { AuthUser } from '../auth/auth.types';
+import { AuditEvent } from '../audit/audit-events';
+import { AuditLogService } from '../audit/audit-log.service';
 import {
   isValidBusinessArea,
   isValidMaliEmail,
@@ -52,6 +54,7 @@ export class AdminUsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly userAreas: UserAreasService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
   async list(): Promise<AdminUserListItem[]> {
@@ -96,7 +99,10 @@ export class AdminUsersService {
     return { ...mapUserRow(row), extra_areas: extraAreas };
   }
 
-  async create(dto: CreateAdminUserDto): Promise<AdminUserDetail> {
+  async create(
+    dto: CreateAdminUserDto,
+    actor?: AuthUser,
+  ): Promise<AdminUserDetail> {
     const email = normalizeEmail(dto.email);
     if (!isValidMaliEmail(email)) {
       throw new BadRequestException('Correo invalido (debe ser @mali.pe)');
@@ -114,6 +120,7 @@ export class AdminUsersService {
           password_hash: hash,
           area,
           is_master: Boolean(dto.is_master),
+          is_provisioned: true,
           must_change_password: dto.must_change_password !== false,
           can_edit_ai_prompt: Boolean(dto.can_edit_ai_prompt),
           can_view_audit_logs: Boolean(dto.can_view_audit_logs),
@@ -128,6 +135,20 @@ export class AdminUsersService {
         area,
         (dto.extra_areas ?? []).map((item) => normalizeArea(item)),
       );
+      await this.auditLog.write({
+        event_type: AuditEvent.ADMIN_USER_CREATED,
+        message: `Usuario creado: ${email}`,
+        actor: actor
+          ? { userId: actor.id, email: actor.email, area: actor.area }
+          : undefined,
+        meta: {
+          user_id: created.id,
+          email,
+          area,
+          is_master: Boolean(dto.is_master),
+          must_change_password: dto.must_change_password !== false,
+        },
+      });
       return this.getById(created.id);
     } catch (error) {
       if (
@@ -165,6 +186,7 @@ export class AdminUsersService {
         data: {
           area,
           is_master: Boolean(dto.is_master),
+          is_provisioned: true,
           must_change_password: false,
           password_hash: await bcrypt.hash(dto.password, 10),
           can_edit_ai_prompt: Boolean(dto.can_edit_ai_prompt),
@@ -180,6 +202,7 @@ export class AdminUsersService {
         data: {
           area,
           is_master: Boolean(dto.is_master),
+          is_provisioned: true,
           must_change_password: Boolean(dto.must_change_password),
           can_edit_ai_prompt: Boolean(dto.can_edit_ai_prompt),
           can_view_audit_logs: Boolean(dto.can_view_audit_logs),
@@ -196,6 +219,22 @@ export class AdminUsersService {
       (dto.extra_areas ?? []).map((item) => normalizeArea(item)),
     );
 
+    await this.auditLog.write({
+      event_type: AuditEvent.ADMIN_USER_UPDATED,
+      message: `Usuario actualizado: ${existing.email}`,
+      actor: { userId: actor.id, email: actor.email, area: actor.area },
+      meta: {
+        user_id: id,
+        email: existing.email,
+        area,
+        is_master: Boolean(dto.is_master),
+        password_changed: Boolean(dto.password),
+        must_change_password: dto.password
+          ? false
+          : Boolean(dto.must_change_password),
+      },
+    });
+
     return this.getById(id);
   }
 
@@ -206,5 +245,11 @@ export class AdminUsersService {
     const existing = await this.prisma.users.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Usuario no encontrado');
     await this.prisma.users.delete({ where: { id } });
+    await this.auditLog.write({
+      event_type: AuditEvent.ADMIN_USER_DELETED,
+      message: `Usuario eliminado: ${existing.email}`,
+      actor: { userId: actor.id, email: actor.email, area: actor.area },
+      meta: { user_id: id, email: existing.email },
+    });
   }
 }

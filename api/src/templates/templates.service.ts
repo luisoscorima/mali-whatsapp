@@ -6,6 +6,9 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { AuthUser } from '../auth/auth.types';
+import { AuditEvent } from '../audit/audit-events';
+import { auditActor } from '../audit/audit-actor.util';
+import { AuditLogService } from '../audit/audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTemplateDto, UpdateTemplateDto, ValidateTemplateDto } from './dto/template.dto';
 import {
@@ -42,7 +45,10 @@ function toIso(value: Date | null | undefined): string | null {
 
 @Injectable()
 export class TemplatesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLog: AuditLogService,
+  ) {}
 
   async list(area: AuthUser['area']): Promise<TemplateListItem[]> {
     const rows = await this.prisma.whatsapp_templates.findMany({
@@ -257,7 +263,8 @@ export class TemplatesService {
     return { id: row.id, status: row.status };
   }
 
-  async sync(area: AuthUser['area']): Promise<TemplateSyncResult> {
+  async sync(user: AuthUser): Promise<TemplateSyncResult> {
+    const area = user.area;
     const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
     if (!token) {
       throw new BadRequestException(
@@ -322,6 +329,13 @@ export class TemplatesService {
           },
         });
       }
+    });
+
+    await this.auditLog.write({
+      event_type: AuditEvent.TEMPLATE_SYNC,
+      message: `Sincronización de plantillas Meta (área ${area})`,
+      actor: auditActor(user),
+      meta: { area, count: templates.length },
     });
 
     return { count: templates.length };

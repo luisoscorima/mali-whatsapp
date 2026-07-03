@@ -16,12 +16,16 @@ import { ConversationsModule } from './conversations/conversations.module';
 import { WebhookModule } from './webhook/webhook.module';
 import { MetaSettingsModule } from './meta-settings/meta-settings.module';
 import { AdminModule } from './admin/admin.module';
+import { AuditModule } from './audit/audit.module';
+import { QueuesModule } from './queues/queues.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
   imports: [
     AppConfigModule,
     PrismaModule,
+    AuditModule,
+    QueuesModule,
     MetaSettingsModule,
     AuthModule,
     DashboardModule,

@@ -1,16 +1,9 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CAMPAIGN_SCHEDULE_POLL_MS } from './campaign-config.util';
 import {
   CampaignJobPayload,
   CampaignSenderService,
 } from './campaign-sender.service';
-import { CampaignRetryService } from './campaign-retry.service';
 
 const PROMOTE_SCHEDULED_LIMIT = 50;
 
@@ -27,42 +20,13 @@ function parsePayload(raw: unknown): CampaignJobPayload | null {
 }
 
 @Injectable()
-export class CampaignJobsService implements OnModuleInit, OnModuleDestroy {
+export class CampaignJobsService {
   private readonly logger = new Logger(CampaignJobsService.name);
-  private pollTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly sender: CampaignSenderService,
-    private readonly retry: CampaignRetryService,
   ) {}
-
-  onModuleInit(): void {
-    setImmediate(() => {
-      this.resumeInterruptedCampaigns().catch((error) => {
-        this.logger.error('Error reanudando campañas', error);
-      });
-      this.resumeQueuedCampaigns().catch((error) => {
-        this.logger.error('Error reanudando cola', error);
-      });
-    });
-
-    this.pollTimer = setInterval(() => {
-      this.promoteDueScheduledCampaigns().catch((error) => {
-        this.logger.error('Error promoviendo programadas', error);
-      });
-      this.retry.promoteDueCampaignRetries().catch((error) => {
-        this.logger.error('Error promoviendo reintentos', error);
-      });
-    }, CAMPAIGN_SCHEDULE_POLL_MS);
-  }
-
-  onModuleDestroy(): void {
-    if (this.pollTimer) {
-      clearInterval(this.pollTimer);
-      this.pollTimer = null;
-    }
-  }
 
   async promoteDueScheduledCampaigns(): Promise<void> {
     const rows = await this.prisma.campaigns.findMany({

@@ -61,14 +61,65 @@ JWT_EXPIRES_IN=7d
 
 `docker-compose.yml` levanta **api + web + postgres + redis** (sin contenedor legacy).
 
-Nginx Proxy Manager apunta al servicio `web` (React) y/o `api` según rutas.
+Cutover en **`https://whatsapp.mali.pe`** con la misma BD: ver [`DESPLIEGUE_V2.md`](DESPLIEGUE_V2.md).
+
+Nginx Proxy Manager apunta al servicio **`web`** (`mali-whatsapp-web:80`); nginx interno reenvía `/api`, `/health` y `/webhook` a la API.
+
+## Redis y colas (BullMQ)
+
+La API v2 requiere **Redis** para trabajos en segundo plano:
+
+| Cola | Trabajos |
+|------|----------|
+| `campaigns` | Envío de campañas, reintentos (auto y encolados) |
+| `maintenance` | Promover programadas, reintentos automáticos, purge bitácora, reanudar cola al arrancar |
+
+```env
+REDIS_URL=redis://localhost:6379   # host npm local
+REDIS_URL=redis://redis:6379       # Docker Compose
+```
+
+Con `docker compose -f docker-compose.dev.yml up`, Redis arranca junto a Postgres. Sin Redis la API no procesará campañas ni tareas de mantenimiento.
 
 ## Prisma
 
-Esquema en [`api/prisma/schema.prisma`](api/prisma/schema.prisma). En v2 la fuente de verdad pasará a **Prisma Migrate** (no `app/src/db/migrations.js`).
+Esquema en [`api/prisma/schema.prisma`](api/prisma/schema.prisma). En v2 la fuente de verdad es **Prisma Migrate** (no `app/src/db/migrations.js`).
+
+### BD nueva (v2)
+
+Al arrancar la API (`npm run dev:api` o contenedor producción) se ejecutan automáticamente:
+
+1. `prisma migrate deploy` — aplica `api/prisma/migrations/`
+2. `prisma db seed` — crea usuario master si `MASTER_INITIAL_PASSWORD` está en `.env`
+
+Manual:
 
 ```bash
-DATABASE_URL="postgresql://..." npm run prisma:pull
+export DATABASE_URL="postgresql://mali_user:CLAVE@localhost:5435/mali_whatsapp"
+npm run prisma:migrate
+npm run prisma:seed
+npm run prisma:generate
+```
+
+### BD existente (creada por el panel legacy)
+
+Si la base ya tiene tablas por `migrations.js`, marca la migración inicial como aplicada sin ejecutarla:
+
+```bash
+cd api
+DATABASE_URL="postgresql://..." npx prisma migrate resolve --applied 20260702120000_init
+```
+
+Luego usa `prisma migrate deploy` para migraciones futuras.
+
+### Cambios de esquema (desarrollo)
+
+```bash
+npm run prisma:migrate:dev   # crea migración + aplica en local
+```
+
+```bash
+DATABASE_URL="postgresql://..." npm run prisma:pull   # re-introspect (solo si hace falta)
 npm run prisma:generate
 ```
 

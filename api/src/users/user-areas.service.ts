@@ -99,6 +99,8 @@ export class UserAreasService {
     area: BusinessArea;
     allowedAreas: BusinessArea[];
     isMaster: boolean;
+    isProvisioned: boolean;
+    isBootstrapAdmin: boolean;
     mustChangePassword: boolean;
     canEditAiPrompt: boolean;
     canViewAuditLogs: boolean;
@@ -113,6 +115,8 @@ export class UserAreasService {
       area,
       allowedAreas: [area],
       isMaster: false,
+      isProvisioned: true,
+      isBootstrapAdmin: false,
       mustChangePassword: false,
       canEditAiPrompt: false,
       canViewAuditLogs: false,

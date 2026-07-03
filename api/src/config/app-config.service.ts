@@ -16,6 +16,44 @@ export class AppConfigService {
 
   readonly jwtExpiresIn = String(process.env.JWT_EXPIRES_IN || '7d').trim();
 
+  readonly allowedDomain = String(
+    process.env.ALLOWED_DOMAIN || 'mali.pe',
+  ).trim();
+
+  readonly googleClientId = String(process.env.GOOGLE_CLIENT_ID || '').trim();
+
+  readonly googleClientSecret = String(
+    process.env.GOOGLE_CLIENT_SECRET || '',
+  ).trim();
+
+  readonly googleCallbackUrl = String(
+    process.env.GOOGLE_CALLBACK_URL || '',
+  ).trim();
+
+  readonly cookieDomain = String(process.env.COOKIE_DOMAIN || '').trim();
+
+  readonly appBaseUrl = String(
+    process.env.APP_BASE_URL || 'http://localhost:3000',
+  )
+    .trim()
+    .replace(/\/$/, '');
+
+  readonly authCookieName = 'mali_wa_token';
+
+  readonly bootstrapAdminEmail = String(
+    process.env.BOOTSTRAP_ADMIN_EMAIL || 'loscorima@mali.pe',
+  )
+    .trim()
+    .toLowerCase();
+
+  get googleAuthEnabled(): boolean {
+    return Boolean(
+      this.googleClientId &&
+        this.googleClientSecret &&
+        this.googleCallbackUrl,
+    );
+  }
+
   readonly businessAreas = [...BUSINESS_AREAS];
 
   assertJwtSecret(): void {

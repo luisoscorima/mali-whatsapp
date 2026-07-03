@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
 import { AttributeDefinitionsService } from './attribute-definitions.service';
 import type { AttributeDefinition } from './attribute-definitions.types';
@@ -20,7 +21,7 @@ import {
 } from './dto/attribute-definition.dto';
 
 @Controller('attribute-definitions')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, ProvisionedGuard)
 export class AttributeDefinitionsController {
   constructor(private readonly service: AttributeDefinitionsService) {}
 
