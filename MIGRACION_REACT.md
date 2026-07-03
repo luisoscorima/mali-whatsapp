@@ -301,7 +301,7 @@ _Actualizar al cierre de cada semana._
 | 1 | 0 | Scaffold api + web | Completada | e1412fa | Rama `migrate/v2` |
 | 2 | 0 | Docker + Prisma introspect | Completada | 9a5d5ad | Ver ARRANQUE_V2.md |
 | 3 | 1 | Auth + `/api/me` | Completada | 99f4524 | JWT + login; ver ARRANQUE_V2.md |
-| 4 | 1 | apiClient + convenciones | Pendiente | | |
+| 4 | 1 | apiClient + convenciones | Completada | | `web/src/shared/api` |
 | 5 | 1 | AppShell + dashboard | Pendiente | | |
 | 6 | 2 | Meta ads API | Pendiente | | |
 | 7 | 2 | Meta ads UI + cutover | Pendiente | | |
@@ -349,7 +349,7 @@ _Actualizar al cierre de cada semana._
 | 49 | 10 | Responsive QA | Pendiente | | |
 | 50 | 10 | Cierre EJS/CSS | Pendiente | | |
 
-**Próxima semana:** Semana 4 — `apiClient` en web, convención `{ ok, data?, error? }` y proxy dev.
+**Próxima semana:** Semana 5 — `AppShell` + React Router bajo `/app` y dashboard placeholder.
 
 ---
 
@@ -374,25 +374,6 @@ _Actualizar al cierre de cada semana._
 | `campaignSender`, `webhookInbound` | Portar a Nest providers, no reescribir lógica | 24 / 45 |
 | Jobs `setInterval` | Legacy hasta BullMQ | 43–44 |
 | Envío conversaciones | Legacy hasta inbox API | 34 |
-
----
-
-## Matriz: `Mejoras.md` → semana
-
-| Pendiente | Semanas | Solo v2 |
-|-----------|---------|---------|
-| Confirmación pre-envío campaña | 24 | Sí |
-| Export / whitelist import / preview atributos | 12–15 | Sí |
-| Fecha creación contacto | 12 | Sí |
-| Filtro rango `fecha_pago` | 12 | Sí |
-| Renombrar segmentos → Etiquetas | 10–11 (copy) | Sí |
-| Respuestas predefinidas | 27–28 | Sí |
-| Informes KPIs | 29–30 | Sí |
-| Permisos / equipos | 39–40 | Sí |
-| SIGE | post-30 | Sí |
-| Inversión pauta Ads | post-30 | Sí |
-| Reintento por inactividad | 35+ | Sí |
-| Mejor integración Cloud API | transversal | N/A |
 
 ---
 

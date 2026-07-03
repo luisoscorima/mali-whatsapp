@@ -111,6 +111,15 @@ curl -s -X POST http://localhost:4000/api/auth/login \
   -d '{"email":"tu@mali.pe","password":"..."}'
 ```
 
+## Cliente API en web (Semana 4)
+
+Módulo [`web/src/shared/api/`](web/src/shared/api/):
+
+- `apiClient.getMe()`, `apiClient.login()`, `apiClient.getHealth()`
+- Respuestas con convención `{ ok, data? }` / `{ ok: false, error }`
+- `401` limpia el token y vuelve al formulario de login (`onUnauthorized`)
+- Proxy Vite: `/api` y `/health` → API Nest (`:4000`)
+
 ## Siguiente etapa
 
-Semana 4: `apiClient` en React, proxy dev y convención `{ ok, data?, error? }`. Ver [`MIGRACION_REACT.md`](MIGRACION_REACT.md).
+Semana 5: `AppShell` + React Router bajo `/app` y enlace «Panel clásico» en legacy. Ver [`MIGRACION_REACT.md`](MIGRACION_REACT.md).

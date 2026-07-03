@@ -1,26 +1,6 @@
 import { useEffect, useState } from 'react'
+import { apiClient, onUnauthorized, type AuthUser } from './shared/api'
 import './App.css'
-
-const TOKEN_KEY = 'mali_v2_token'
-
-type AuthUser = {
-  id: number
-  email: string
-  area: string
-  allowedAreas: string[]
-  isMaster: boolean
-}
-
-type MeResponse =
-  | { ok: true; data: AuthUser }
-  | { ok: false; error: string }
-
-async function fetchMe(token?: string): Promise<MeResponse> {
-  const headers: HeadersInit = {}
-  if (token) headers.Authorization = `Bearer ${token}`
-  const res = await fetch('/api/me', { headers })
-  return res.json()
-}
 
 function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -28,44 +8,74 @@ function App() {
   const [error, setError] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [health, setHealth] = useState<string | null>(null)
 
   useEffect(() => {
-    const token = localStorage.getItem(TOKEN_KEY) ?? undefined
-    fetchMe(token)
-      .then((json) => {
-        if (json.ok) setUser(json.data)
-      })
-      .finally(() => setLoading(false))
+    onUnauthorized(() => {
+      setUser(null)
+      setHealth(null)
+    })
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadSession() {
+      const [meResult, healthResult] = await Promise.all([
+        apiClient.getMe(),
+        apiClient.getHealth(),
+      ])
+
+      if (cancelled) return
+
+      if (meResult.ok) {
+        setUser(meResult.data)
+      } else {
+        setUser(null)
+      }
+
+      setHealth(
+        healthResult.ok
+          ? `API ${healthResult.db === 'up' ? 'conectada a BD' : 'activa'}`
+          : healthResult.error || 'API no disponible',
+      )
+      setLoading(false)
+    }
+
+    loadSession()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   async function onLogin(event: React.FormEvent) {
     event.preventDefault()
     setError('')
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    })
-    const json = await res.json()
-    if (!res.ok || !json.ok) {
-      setError(json.error || json.message || 'No se pudo iniciar sesión')
+    const result = await apiClient.login(email, password)
+    if (!result.ok) {
+      setError(result.error)
       return
     }
-    const data = json.data as { accessToken: string; user: AuthUser }
-    if (data.accessToken !== 'dev') {
-      localStorage.setItem(TOKEN_KEY, data.accessToken)
-    }
-    setUser(data.user)
+    setUser(result.data.user)
+    const healthResult = await apiClient.getHealth()
+    setHealth(
+      healthResult.ok
+        ? `API ${healthResult.db === 'up' ? 'conectada a BD' : 'activa'}`
+        : healthResult.error || 'API no disponible',
+    )
   }
 
   function onLogout() {
-    localStorage.removeItem(TOKEN_KEY)
+    apiClient.logout()
     setUser(null)
+    setHealth(null)
   }
 
   return (
     <main className="app">
       <h1>MALI WhatsApp v2</h1>
+
+      {health ? <p className="muted">{health}</p> : null}
 
       {loading ? (
         <p className="muted">Cargando sesión…</p>
