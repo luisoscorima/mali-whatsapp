@@ -235,7 +235,7 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 | 13 | 3 | Contactos lista | Completada | 8ee094d | `GET /api/contacts` + filtros + `/contacts` |
 | 15 | 3 | Contactos CRUD | Completada | 8ee094d | POST/PATCH/DELETE + atributos dinámicos |
 | 16 | 3 | Import contactos | Completada | 8ee094d | CSV/XLSX + plantilla Excel |
-| 17 | 4 | Plantillas lista + sync | Completada | | `TemplatesModule` + `/templates` |
+| 17 | 4 | Plantillas lista + sync | Completada | 94afc60 | `TemplatesModule` + `/templates` |
 | 18–46 | … | Ver etapas arriba | Pendiente | | |
 
 **Próxima semana:** Semana 18 — crear plantillas en Meta (POST).
