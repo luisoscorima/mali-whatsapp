@@ -228,16 +228,17 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 | 5 | 1 | Tailwind + AppShell + Router | Completada | ea5cdce | Rutas `/`, `/login` |
 | 6 | 1 | Dashboard API + UI | Completada | ea5cdce | `GET /api/dashboard` |
 | 7 | 2 | Meta ads API | Completada | bc560dc | `GET /api/meta-ads`, `GET /api/meta-ads/:id` |
-| 8 | 2 | Meta ads UI | Completada | | `PATCH /api/meta-ads/:id`; `/anuncios`, `/anuncios/:id` |
-| 9 | 2 | Atributos | Completada | | `AttributeDefinitionsModule` + `/attributes` |
+| 8 | 2 | Meta ads UI | Completada | 8ee094d | `PATCH /api/meta-ads/:id`; `/anuncios`, `/anuncios/:id` |
+| 9 | 2 | Atributos | Completada | 8ee094d | `AttributeDefinitionsModule` + `/attributes` |
 | 10 | 2 | Exclusiones | Aplazada | | Sin tablas en BD; ver Etapa 5 campañas |
-| 11–12 | 3 | Segmentos | Completada | | `SegmentsModule` + `/segments` |
-| 13 | 3 | Contactos lista | Completada | | `GET /api/contacts` + filtros + `/contacts` |
-| 15 | 3 | Contactos CRUD | Completada | | POST/PATCH/DELETE + atributos dinámicos |
-| 16 | 3 | Import contactos | Completada | | CSV/XLSX + plantilla Excel |
-| 17–46 | … | Ver etapas arriba | Pendiente | | |
+| 11–12 | 3 | Segmentos | Completada | 8ee094d | `SegmentsModule` + `/segments` |
+| 13 | 3 | Contactos lista | Completada | 8ee094d | `GET /api/contacts` + filtros + `/contacts` |
+| 15 | 3 | Contactos CRUD | Completada | 8ee094d | POST/PATCH/DELETE + atributos dinámicos |
+| 16 | 3 | Import contactos | Completada | 8ee094d | CSV/XLSX + plantilla Excel |
+| 17 | 4 | Plantillas lista + sync | Completada | | `TemplatesModule` + `/templates` |
+| 18–46 | … | Ver etapas arriba | Pendiente | | |
 
-**Próxima semana:** Semana 17 — `TemplatesModule` listado + sync lectura.
+**Próxima semana:** Semana 18 — crear plantillas en Meta (POST).
 
 ---
 

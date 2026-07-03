@@ -50,6 +50,7 @@ export function AppShell() {
             { to: '/attributes', label: 'Atributos' },
             { to: '/segments', label: 'Segmentos' },
             { to: '/contacts', label: 'Contactos' },
+            { to: '/templates', label: 'Plantillas' },
           ].map((item) => (
             <NavLink
               key={item.to}

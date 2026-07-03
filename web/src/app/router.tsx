@@ -15,6 +15,8 @@ import { ContactsListPage } from '../features/contacts/ContactsListPage'
 import { ContactImportPage } from '../features/contacts/ContactImportPage'
 import { ContactNewPage } from '../features/contacts/ContactNewPage'
 import { ContactDetailPage } from '../features/contacts/ContactDetailPage'
+import { TemplatesListPage } from '../features/templates/TemplatesListPage'
+import { TemplateDetailPage } from '../features/templates/TemplateDetailPage'
 
 export function AppRouter() {
   return (
@@ -36,6 +38,8 @@ export function AppRouter() {
             <Route path="contacts/import" element={<ContactImportPage />} />
             <Route path="contacts/new" element={<ContactNewPage />} />
             <Route path="contacts/:id" element={<ContactDetailPage />} />
+            <Route path="templates" element={<TemplatesListPage />} />
+            <Route path="templates/:id" element={<TemplateDetailPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

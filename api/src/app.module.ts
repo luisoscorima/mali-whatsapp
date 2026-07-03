@@ -8,6 +8,7 @@ import { AttributeDefinitionsModule } from './attribute-definitions/attribute-de
 import { MetaAdsModule } from './meta-ads/meta-ads.module';
 import { ContactsModule } from './contacts/contacts.module';
 import { SegmentsModule } from './segments/segments.module';
+import { TemplatesModule } from './templates/templates.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -20,6 +21,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AttributeDefinitionsModule,
     SegmentsModule,
     ContactsModule,
+    TemplatesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
