@@ -226,13 +226,13 @@ Usuario ──► Nginx / NPM ──► web (React estático)
 | 4 | 1 | apiClient | Completada | eeb8c9e | |
 | 5 | 1 | Tailwind + AppShell + Router | Completada | ea5cdce | Rutas `/`, `/login` |
 | 6 | 1 | Dashboard API + UI | Completada | ea5cdce | `GET /api/dashboard` |
-| 7 | 2 | Meta ads API | Pendiente | | |
+| 7 | 2 | Meta ads API | Completada | | `GET /api/meta-ads`, `GET /api/meta-ads/:id` |
 | 8 | 2 | Meta ads UI | Pendiente | | |
 | 9 | 2 | Atributos | Pendiente | | |
 | 10 | 2 | Exclusiones | Pendiente | | |
 | 11–46 | … | Ver etapas arriba | Pendiente | | Plan recortado sin cutover EJS |
 
-**Próxima semana:** Semana 7 — `MetaAdsModule` API.
+**Próxima semana:** Semana 8 — UI anuncios Meta + `PATCH` rename.
 
 ---
 
@@ -255,7 +255,7 @@ Solo lectura para portar:
 |---------------|----------------|
 | `app/src/services/campaignSender.js` | Envío campañas (Etapa 5) |
 | `app/src/services/webhookInbound.js` | Webhook (Etapa 7) |
-| `app/src/services/templateBuilder.js` | Plantillas Meta |
+| `app/src/services/metaCtwaAds.js` | Anuncios CTWA (Etapa 2) |
 | `app/src/db/migrations.js` | Esquema ya introspectado en Prisma |
 
 No ejecutar `app/` en Docker ni en despliegue v2.
