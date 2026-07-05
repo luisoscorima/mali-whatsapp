@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY api/package.json ./api/
+COPY api/prisma ./api/prisma
 COPY web/package.json ./web/
 
 RUN npm install

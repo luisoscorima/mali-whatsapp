@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { formatContactName } from './contactName'
 import { segmentToneClass } from '../segments/segmentColors'
+import { WaSpanMainPage } from '@/shared/ui/shell/WaSpanMainPage'
 
 const SEGMENT_NONE = '__none__'
 
@@ -213,6 +214,7 @@ export function ContactsListPage() {
     showReplaced
 
   return (
+    <WaSpanMainPage>
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -509,5 +511,6 @@ export function ContactsListPage() {
         </>
       )}
     </div>
+    </WaSpanMainPage>
   )
 }

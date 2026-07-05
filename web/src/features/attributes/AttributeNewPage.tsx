@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
+import { WaSpanMainPage } from '@/shared/ui/shell/WaSpanMainPage'
 
 type SegmentOption = {
   slug: string
@@ -50,6 +51,7 @@ export function AttributeNewPage() {
   }
 
   return (
+    <WaSpanMainPage>
     <div className="space-y-4">
       <div>
         <Link to="/attributes" className="text-sm text-accent hover:underline">
@@ -172,5 +174,6 @@ export function AttributeNewPage() {
         </button>
       </form>
     </div>
+    </WaSpanMainPage>
   )
 }

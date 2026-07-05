@@ -1,0 +1,33 @@
+# Vista previa UI v2 en local (shell + pantallas; datos vacíos o mínimos).
+# Requiere REQUIRE_AUTH=false en .env (viene así en .env.example).
+#
+# Uso:
+#   cp .env.example .env   # si aún no tienes .env
+#   docker compose -f docker-compose.ui.yml up --build
+#
+# Abre http://localhost:5173 — la API inyecta usuario dev sin login.
+# Listas vacías es normal si la BD está recién creada.
+
+services:
+  api:
+    extends:
+      file: docker-compose.dev.yml
+      service: api
+
+  web:
+    extends:
+      file: docker-compose.dev.yml
+      service: web
+
+  postgres:
+    extends:
+      file: docker-compose.dev.yml
+      service: postgres
+
+  redis:
+    extends:
+      file: docker-compose.dev.yml
+      service: redis
+
+volumes:
+  postgres_data:

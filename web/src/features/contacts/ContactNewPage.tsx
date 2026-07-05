@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { ContactForm } from './ContactForm'
+import { WaSpanMainPage } from '@/shared/ui/shell/WaSpanMainPage'
 
 type FilterOptions = {
   segments: Array<{ id: number; slug: string; label: string }>
@@ -56,14 +57,23 @@ export function ContactNewPage() {
   }
 
   if (error && !options) {
-    return <p className="text-bad">{error}</p>
+    return (
+      <WaSpanMainPage title="Añadir contacto">
+        <p className="text-bad">{error}</p>
+      </WaSpanMainPage>
+    )
   }
 
   if (!options) {
-    return <p className="text-muted">Cargando formulario…</p>
+    return (
+      <WaSpanMainPage title="Añadir contacto">
+        <p className="text-muted">Cargando formulario…</p>
+      </WaSpanMainPage>
+    )
   }
 
   return (
+    <WaSpanMainPage>
     <div className="space-y-4">
       <div>
         <Link to="/contacts" className="text-sm text-accent hover:underline">
@@ -93,5 +103,6 @@ export function ContactNewPage() {
         />
       </div>
     </div>
+    </WaSpanMainPage>
   )
 }

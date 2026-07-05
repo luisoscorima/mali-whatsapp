@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY api/package.json ./api/
+COPY api/prisma ./api/prisma
 COPY web/package.json ./web/
 
 RUN npm install
@@ -12,4 +13,4 @@ COPY web ./web
 
 EXPOSE 5173
 
-CMD ["npm", "run", "dev:web", "--", "--host", "0.0.0.0"]
+CMD ["sh", "-c", "npm run dev -w web -- --host 0.0.0.0"]

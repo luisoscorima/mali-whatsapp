@@ -7,6 +7,7 @@ import {
   SEGMENT_COLOR_LABELS,
   segmentToneClass,
 } from './segmentColors'
+import { WaSpanMainPage } from '@/shared/ui/shell/WaSpanMainPage'
 
 type SegmentDefinition = {
   id: number
@@ -131,16 +132,25 @@ export function SegmentDetailPage() {
   }
 
   if (error && !payload) {
-    return <p className="text-bad">{error}</p>
+    return (
+      <WaSpanMainPage>
+        <p className="text-bad">{error}</p>
+      </WaSpanMainPage>
+    )
   }
 
   if (!payload) {
-    return <p className="text-muted">Cargando segmento…</p>
+    return (
+      <WaSpanMainPage>
+        <p className="text-muted">Cargando segmento…</p>
+      </WaSpanMainPage>
+    )
   }
 
   const { members } = payload
 
   return (
+    <WaSpanMainPage>
     <div className="space-y-6">
       <div>
         <Link to="/segments" className="text-sm text-accent hover:underline">
@@ -288,5 +298,6 @@ export function SegmentDetailPage() {
         )}
       </section>
     </div>
+    </WaSpanMainPage>
   )
 }

@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import { AppShell } from './AppShell'
+import { WaAppShell } from './WaAppShell'
 import { RequireAuth } from './RequireAuth'
 import { RequirePasswordChanged } from './RequirePasswordChanged'
 import { LoginPage } from '../features/auth/LoginPage'
@@ -45,7 +45,7 @@ export function AppRouter() {
         <Route element={<RequireAuth />}>
           <Route path="account/change-password" element={<ChangePasswordPage />} />
           <Route element={<RequirePasswordChanged />}>
-            <Route element={<AppShell />}>
+            <Route element={<WaAppShell />}>
             <Route index element={<DashboardPage />} />
             <Route path="anuncios" element={<MetaAdsListPage />} />
             <Route path="anuncios/:id" element={<MetaAdDetailPage />} />

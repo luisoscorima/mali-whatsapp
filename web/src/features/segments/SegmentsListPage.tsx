@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { segmentToneClass } from './segmentColors'
+import { WaSpanMainPage } from '@/shared/ui/shell/WaSpanMainPage'
 
 type SegmentDefinition = {
   id: number
@@ -26,14 +27,23 @@ export function SegmentsListPage() {
   }, [])
 
   if (error) {
-    return <p className="text-bad">{error}</p>
+    return (
+      <WaSpanMainPage title="Segmentos">
+        <p className="text-bad">{error}</p>
+      </WaSpanMainPage>
+    )
   }
 
   if (!segments) {
-    return <p className="text-muted">Cargando segmentos…</p>
+    return (
+      <WaSpanMainPage title="Segmentos">
+        <p className="text-muted">Cargando segmentos…</p>
+      </WaSpanMainPage>
+    )
   }
 
   return (
+    <WaSpanMainPage>
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -74,5 +84,6 @@ export function SegmentsListPage() {
         </ul>
       )}
     </div>
+    </WaSpanMainPage>
   )
 }

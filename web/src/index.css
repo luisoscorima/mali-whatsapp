@@ -1,4 +1,6 @@
 @import 'tailwindcss';
+@import './styles/wa-shell.css';
+@import './styles/inbox.css';
 
 @theme {
   --color-bg: #eef1f4;
@@ -10,11 +12,73 @@
   --color-accent: #0d6e5c;
   --color-accent-hover: #0a5748;
   --color-accent-soft: rgba(13, 110, 92, 0.12);
+  --color-accent-ink: #063d33;
   --color-bad: #b3261e;
+  --color-wa-shell-bg: #dddbd1;
+  --color-wa-list-bg: #ffffff;
+  --color-wa-chat-bg: #e4dcd4;
+  --color-wa-header-bg: #f0f2f5;
+  --color-wa-compose-bg: #f0f2f5;
   --font-sans: 'Manrope', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
+:root {
+  --bg: #eef1f4;
+  --ink: #121418;
+  --surface: #f4f6f9;
+  --surface-strong: #ffffff;
+  --muted: rgba(18, 20, 24, 0.55);
+  --line: rgba(18, 20, 24, 0.1);
+  --accent: #0d6e5c;
+  --accent-hover: #0a5748;
+  --accent-soft: rgba(13, 110, 92, 0.12);
+  --accent-ink: #063d33;
+  --bad: #b3261e;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(18, 20, 24, 0.06);
+  --wa-shell-bg: #dddbd1;
+  --wa-list-bg: #ffffff;
+  --wa-chat-bg: #e4dcd4;
+  --wa-chat-bg-pattern: rgba(0, 0, 0, 0.04);
+  --wa-header-bg: #f0f2f5;
+  --wa-compose-bg: #f0f2f5;
+  --wa-bubble-out: color-mix(in srgb, var(--accent-soft) 75%, #d4f4e8);
+  --wa-bubble-out-border: color-mix(in srgb, var(--accent) 22%, transparent);
+  --wa-bubble-in: #ffffff;
+  --wa-bubble-in-border: rgba(0, 0, 0, 0.06);
+  --wa-active: color-mix(in srgb, var(--accent) 14%, transparent);
+  --wa-active-border: var(--accent);
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0c0e12;
+  --ink: #e8eaef;
+  --surface: #151922;
+  --surface-strong: #1a1f28;
+  --muted: rgba(232, 234, 239, 0.52);
+  --line: rgba(232, 234, 239, 0.12);
+  --accent: #2dd4bf;
+  --accent-hover: #5eead4;
+  --accent-soft: rgba(45, 212, 191, 0.14);
+  --accent-ink: #ccfbf1;
+  --bad: #f87171;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --wa-shell-bg: #0b141a;
+  --wa-list-bg: #111b21;
+  --wa-chat-bg: #0b141a;
+  --wa-chat-bg-pattern: rgba(255, 255, 255, 0.03);
+  --wa-header-bg: #202c33;
+  --wa-compose-bg: #202c33;
+  --wa-bubble-out: color-mix(in srgb, var(--accent) 45%, #152228);
+  --wa-bubble-out-border: color-mix(in srgb, var(--accent) 25%, rgba(0, 0, 0, 0.35));
+  --wa-bubble-in: #1f2c33;
+  --wa-bubble-in-border: rgba(255, 255, 255, 0.06);
+  --wa-active: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+html[data-theme='dark'] {
   @theme {
     --color-bg: #0c0e12;
     --color-ink: #e8eaef;
@@ -25,18 +89,60 @@
     --color-accent: #2dd4bf;
     --color-accent-hover: #5eead4;
     --color-accent-soft: rgba(45, 212, 191, 0.14);
+    --color-accent-ink: #ccfbf1;
     --color-bad: #f87171;
+    --color-wa-shell-bg: #0b141a;
+    --color-wa-list-bg: #111b21;
+    --color-wa-chat-bg: #0b141a;
+    --color-wa-header-bg: #202c33;
+    --color-wa-compose-bg: #202c33;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) {
+    color-scheme: dark;
+    --bg: #0c0e12;
+    --ink: #e8eaef;
+    --surface: #151922;
+    --surface-strong: #1a1f28;
+    --muted: rgba(232, 234, 239, 0.52);
+    --line: rgba(232, 234, 239, 0.12);
+    --accent: #2dd4bf;
+    --accent-hover: #5eead4;
+    --accent-soft: rgba(45, 212, 191, 0.14);
+    --accent-ink: #ccfbf1;
+    --bad: #f87171;
+    --wa-shell-bg: #0b141a;
+    --wa-list-bg: #111b21;
+    --wa-chat-bg: #0b141a;
+    --wa-chat-bg-pattern: rgba(255, 255, 255, 0.03);
+    --wa-header-bg: #202c33;
+    --wa-compose-bg: #202c33;
+    --wa-bubble-out: color-mix(in srgb, var(--accent) 45%, #152228);
+    --wa-bubble-out-border: color-mix(in srgb, var(--accent) 25%, rgba(0, 0, 0, 0.35));
+    --wa-bubble-in: #1f2c33;
+    --wa-bubble-in-border: rgba(255, 255, 255, 0.06);
+    --wa-active: color-mix(in srgb, var(--accent) 16%, transparent);
   }
 }
 
 body {
   margin: 0;
   font-family: var(--font-sans);
-  background: radial-gradient(
-      1200px 600px at 10% -10%,
-      var(--color-accent-soft),
-      transparent 55%
-    ),
-    var(--color-bg);
-  color: var(--color-ink);
+  background: var(--wa-shell-bg);
+  color: var(--ink);
+}
+
+.page-wa {
+  margin: 0;
+  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  background: var(--wa-shell-bg);
+}
+
+.muted {
+  color: var(--muted);
 }

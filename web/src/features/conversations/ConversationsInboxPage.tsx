@@ -1,9 +1,16 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
+import { WaPageContents } from '@/shared/ui/shell/WaLayout'
+import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
+import {
+  WaMainPane,
+  WaMainHeader,
+  WaMainFooter,
+} from '@/shared/ui/shell/WaMainPane'
+import { ChatEmptyIcon, WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
 import { formatContactName } from '../contacts/contactName'
-import { segmentToneClass } from '../segments/segmentColors'
 
 const SEGMENT_NONE = '__none__'
 const INBOX_POLL_MS = 8000
@@ -134,10 +141,6 @@ function messageBodyLabel(message: InboxMessage): string {
 
 function listPreviewText(preview: string): string {
   return preview.trim() || 'Sin mensajes'
-}
-
-function segmentLabel(slug: string, segments: SegmentOption[]): string {
-  return segments.find((s) => s.slug === slug)?.label ?? slug
 }
 
 function replyBlockedText(reason: InboxDetail['reply_blocked_reason']): string {
@@ -431,409 +434,248 @@ export function ConversationsInboxPage() {
     formatContactName(item.contact_name, null, item.phone)
 
   if (error && !list) {
-    return <p className="text-bad">{error}</p>
+    return <p className="text-bad p-4">{error}</p>
   }
 
-  return (
-    <div className="-mx-4 flex min-h-[calc(100vh-10rem)] border-y border-line">
-      <aside
-        className={`flex w-full max-w-md flex-col border-r border-line bg-surface-strong/40 md:w-[22rem] md:shrink-0 ${
-          selectedId != null ? 'hidden md:flex' : 'flex'
-        }`}
-      >
-        <div className="flex items-center justify-between border-b border-line px-4 py-3">
-          <h1 className="text-lg font-semibold">Chats</h1>
-          <div className="flex items-center gap-2">
-            {lastSyncedAt ? (
-              <span className="hidden text-[10px] text-muted sm:inline" title="Última sincronización">
-                {formatDateTime(lastSyncedAt)}
-              </span>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => void loadList()}
-              className="rounded-lg border border-line px-2 py-1 text-xs hover:bg-accent-soft"
-            >
-              Actualizar
-            </button>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-1 border-b border-line px-3 py-2">
-          {(
-            [
-              { key: 'all', label: 'Todos' },
-              { key: 'unread', label: `No leídos (${list?.unread_count ?? 0})` },
-            ] as const
-          ).map((pill) => (
-            <button
-              key={pill.key}
-              type="button"
-              onClick={() => setChatFilter(pill.key)}
-              className={`rounded-full px-2.5 py-1 text-xs ${
-                chatFilter === pill.key
-                  ? 'bg-accent-soft font-medium text-accent'
-                  : 'text-muted hover:bg-accent-soft'
-              }`}
-            >
-              {pill.label}
-            </button>
-          ))}
-          {list?.ai_area_enabled ? (
-            <>
-              <button
-                type="button"
-                onClick={() => setChatFilter('bot')}
-                className={`rounded-full px-2.5 py-1 text-xs ${
-                  chatFilter === 'bot'
-                    ? 'bg-accent-soft font-medium text-accent'
-                    : 'text-muted hover:bg-accent-soft'
-                }`}
-              >
-                Bot
-              </button>
-              <button
-                type="button"
-                onClick={() => setChatFilter('human')}
-                className={`rounded-full px-2.5 py-1 text-xs ${
-                  chatFilter === 'human'
-                    ? 'bg-accent-soft font-medium text-accent'
-                    : 'text-muted hover:bg-accent-soft'
-                }`}
-              >
-                Asesor
-              </button>
-            </>
-          ) : null}
-        </div>
-
-        <div className="flex flex-wrap gap-1 border-b border-line px-3 py-2">
+  const filterPills = (
+    <>
+      <div className="inbox-chat-filter-pills inbox-chat-filter-pills--row" aria-label="Filtrar lista">
+        {(
+          [
+            { key: 'all', label: 'Todos' },
+            { key: 'unread', label: `No leídos (${list?.unread_count ?? 0})` },
+          ] as const
+        ).map((pill) => (
           <button
+            key={pill.key}
             type="button"
-            onClick={() => toggleSegment(SEGMENT_NONE)}
-            className={`rounded-full px-2 py-0.5 text-xs ${
-              selectedSegments.includes(SEGMENT_NONE)
-                ? segmentToneClass('slate')
-                : 'border border-line text-muted'
-            }`}
+            onClick={() => setChatFilter(pill.key)}
+            className={`inbox-chat-pill ${chatFilter === pill.key ? 'is-active' : ''}`}
           >
-            Sin segmento
+            {pill.label}
           </button>
-          {segments.map((segment) => (
+        ))}
+        {list?.ai_area_enabled ? (
+          <>
             <button
-              key={segment.slug}
               type="button"
-              onClick={() => toggleSegment(segment.slug)}
-              className={`rounded-full px-2 py-0.5 text-xs ${
-                selectedSegments.includes(segment.slug)
-                  ? segmentToneClass(segment.color_key)
-                  : 'border border-line text-muted'
-              }`}
+              onClick={() => setChatFilter('bot')}
+              className={`inbox-chat-pill ${chatFilter === 'bot' ? 'is-active' : ''}`}
             >
-              {segment.label}
+              Bot
             </button>
-          ))}
-        </div>
-
-        <form onSubmit={onSearchSubmit} className="border-b border-line px-3 py-2">
-          <div className="flex gap-2">
-            <input
-              type="search"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Buscar en chats…"
-              className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
-            />
             <button
-              type="submit"
-              className="rounded-lg border border-line px-2 py-1.5 text-sm hover:bg-accent-soft"
+              type="button"
+              onClick={() => setChatFilter('human')}
+              className={`inbox-chat-pill ${chatFilter === 'human' ? 'is-active' : ''}`}
             >
-              Buscar
+              Asesor
             </button>
-          </div>
-        </form>
+          </>
+        ) : null}
+      </div>
+      <div className="inbox-chat-filter-pills">
+        <button
+          type="button"
+          onClick={() => toggleSegment(SEGMENT_NONE)}
+          className={`inbox-chat-pill ${selectedSegments.includes(SEGMENT_NONE) ? 'is-active' : ''}`}
+        >
+          Sin segmento
+        </button>
+        {segments.map((segment) => (
+          <button
+            key={segment.slug}
+            type="button"
+            onClick={() => toggleSegment(segment.slug)}
+            className={`inbox-chat-pill ${selectedSegments.includes(segment.slug) ? 'is-active' : ''}`}
+          >
+            {segment.label}
+          </button>
+        ))}
+      </div>
+      <form onSubmit={onSearchSubmit} className="inbox-filters">
+        <div className="inbox-search-row">
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Buscar en chats…"
+            className="inbox-search-input"
+          />
+          <button type="submit" className="small-btn">
+            Buscar
+          </button>
+        </div>
+      </form>
+    </>
+  )
 
-        <ul className="flex-1 overflow-y-auto">
+  return (
+    <WaPageContents>
+      <WaSidebar
+        title="Chats"
+        onRefresh={() => void loadList()}
+        refreshTitle="Actualizar chats"
+        filters={filterPills}
+        actions={
+          lastSyncedAt ? (
+            <span className="hidden text-[10px] text-muted sm:inline" title="Última sincronización">
+              {formatDateTime(lastSyncedAt)}
+            </span>
+          ) : null
+        }
+      >
+        <ul className="inbox-chat-list">
           {!list ? (
-            <li className="px-4 py-6 text-sm text-muted">Cargando…</li>
+            <li className="inbox-empty-list">Cargando…</li>
           ) : list.items.length === 0 ? (
-            <li className="px-4 py-6 text-sm text-muted">No hay conversaciones.</li>
+            <li className="inbox-empty-list">No hay conversaciones.</li>
           ) : (
             list.items.map((item) => {
               const active = selectedId === item.id
               const name = displayName(item)
               return (
-                <li key={item.id}>
+                <li key={item.id} className={`inbox-chat-item ${active ? 'is-active' : ''}`}>
                   <button
                     type="button"
                     onClick={() => void onSelectItem(item)}
-                    className={`flex w-full gap-3 border-b border-line px-3 py-3 text-left hover:bg-accent-soft/50 ${
-                      active ? 'bg-accent-soft/60' : ''
-                    }`}
+                    className="inbox-chat-item-btn"
                   >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-medium text-accent">
+                    <span className="inbox-chat-avatar">
                       {inboxInitials(item.contact_name, item.phone)}
                     </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-2">
-                        <span className="truncate font-medium">{name}</span>
+                    <span className="inbox-chat-link-main">
+                      <span className="inbox-chat-row-top">
+                        <span className="inbox-chat-title">{name}</span>
                         {item.inbox_unread ? (
-                          <span className="h-2 w-2 shrink-0 rounded-full bg-accent" aria-label="No leído" />
+                          <span className="inbox-unread-dot" aria-label="No leído" />
+                        ) : null}
+                        {item.last_message_at ? (
+                          <span className="inbox-chat-time">
+                            {formatDateTime(item.last_message_at)}
+                          </span>
                         ) : null}
                       </span>
-                      <span className="line-clamp-1 text-xs text-muted">
-                        {listPreviewText(item.preview)}
-                      </span>
-                      {item.contact_segment_slugs.length > 0 ? (
-                        <span className="mt-1 flex flex-wrap gap-1">
-                          {item.contact_segment_slugs.slice(0, 2).map((slug) => (
-                            <span
-                              key={slug}
-                              className={`rounded px-1 text-[10px] ${segmentToneClass(
-                                segments.find((s) => s.slug === slug)?.color_key,
-                              )}`}
-                            >
-                              {segmentLabel(slug, segments)}
-                            </span>
-                          ))}
-                        </span>
-                      ) : null}
+                      <span className="inbox-chat-preview">{listPreviewText(item.preview)}</span>
                     </span>
-                    {item.last_message_at ? (
-                      <span className="shrink-0 text-[10px] text-muted">
-                        {formatDateTime(item.last_message_at)}
-                      </span>
-                    ) : null}
                   </button>
                 </li>
               )
             })
           )}
         </ul>
-      </aside>
+      </WaSidebar>
 
-      <section
-        className={`min-w-0 flex-1 flex-col bg-surface ${
-          selectedId != null ? 'flex' : 'hidden md:flex'
-        }`}
-      >
+      <WaMainPane>
         {selectedId == null ? (
-          <div className="flex flex-1 items-center justify-center p-8 text-muted">
-            Selecciona una conversación
-          </div>
+          <WaEmptyPane
+            icon={<ChatEmptyIcon />}
+            heading="Conversaciones"
+            text="Selecciona un chat para ver los mensajes. Las respuestas del cliente se guardan como mensajes entrantes."
+          />
         ) : loadingDetail && !detail ? (
-          <div className="flex flex-1 items-center justify-center p-8 text-muted">
-            Cargando chat…
-          </div>
+          <WaEmptyPane heading="Cargando chat…" />
         ) : error && !detail ? (
-          <div className="flex flex-1 items-center justify-center p-8 text-bad">{error}</div>
+          <WaEmptyPane heading={error} />
         ) : detail ? (
           <>
-            <header className="flex items-start gap-3 border-b border-line px-4 py-3">
+            <WaMainHeader>
               <button
                 type="button"
-                className="mt-1 rounded-lg border border-line px-2 py-1 text-xs md:hidden"
+                className="inbox-back-mobile"
                 onClick={() => navigate(`/conversations${querySuffix}`)}
               >
                 ← Lista
               </button>
               <div className="min-w-0 flex-1">
-                <h2 className="truncate text-lg font-semibold">
+                <h2 className="inbox-chat-heading">
                   {formatContactName(detail.contact?.name, null, detail.conversation.phone)}
                 </h2>
-                <p className="text-sm text-muted">{detail.conversation.phone}</p>
-                {detail.contact?.segment_slugs?.length ? (
-                  <p className="mt-1 flex flex-wrap gap-1">
-                    {detail.contact.segment_slugs.map((slug) => (
-                      <span
-                        key={slug}
-                        className={`rounded px-1.5 py-0.5 text-xs ${segmentToneClass(
-                          segments.find((s) => s.slug === slug)?.color_key,
-                        )}`}
-                      >
-                        {segmentLabel(slug, segments)}
-                      </span>
-                    ))}
-                  </p>
-                ) : null}
-                {detail.meta_ad?.display_name ? (
-                  <p className="muted mt-1 text-xs">
-                    Anuncio: {detail.meta_ad.display_name}
-                    {detail.meta_ad.source_url ? (
-                      <>
-                        {' '}
-                        ·{' '}
-                        <a
-                          href={detail.meta_ad.source_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-accent underline"
-                        >
-                          Ver
-                        </a>
-                      </>
-                    ) : null}
-                  </p>
-                ) : null}
+                <p className="inbox-chat-sub">{detail.conversation.phone}</p>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-2">
-                {selectedId ? (
-                  <button
-                    type="button"
-                    className="rounded-lg border border-line px-2 py-1 text-xs hover:bg-accent-soft"
-                    onClick={() =>
-                      void apiClient.download(
-                        `/api/conversations/${selectedId}/export`,
-                      )
-                    }
-                  >
-                    Exportar
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  className="small-btn"
+                  onClick={() =>
+                    void apiClient.download(`/api/conversations/${selectedId}/export`)
+                  }
+                >
+                  Exportar
+                </button>
                 {detail.ai_area_enabled ? (
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] uppercase tracking-wide text-muted">
-                      Modo
-                    </span>
-                    <div className="flex gap-1">
-                      {(['human', 'bot'] as const).map((mode) => (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={() => void onModeChange(mode)}
-                          className={`rounded-full px-2 py-0.5 text-xs capitalize ${
-                            detail.conversation.status === mode
-                              ? 'bg-accent-soft font-medium text-accent'
-                              : 'border border-line text-muted hover:bg-accent-soft'
-                          }`}
-                        >
-                          {mode === 'human' ? 'Asesor' : 'Bot'}
-                        </button>
-                      ))}
-                    </div>
+                  <div className="flex gap-1">
+                    {(['human', 'bot'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => void onModeChange(mode)}
+                        className={`inbox-chat-pill ${detail.conversation.status === mode ? 'is-active' : ''}`}
+                      >
+                        {mode === 'human' ? 'Asesor' : 'Bot'}
+                      </button>
+                    ))}
                   </div>
                 ) : null}
               </div>
-            </header>
+            </WaMainHeader>
 
-            <div
-              ref={messagesPaneRef}
-              className="flex-1 space-y-3 overflow-y-auto px-4 py-4"
-            >
-              {detail.messages.length === 0 ? (
-                <p className="text-center text-sm text-muted">Sin mensajes aún.</p>
-              ) : (
-                detail.messages.map((message) => {
-                  const outbound = message.direction === 'outbound'
-                  return (
-                    <div
-                      key={message.id}
-                      className={`flex ${outbound ? 'justify-end' : 'justify-start'}`}
-                    >
+            <div className="inbox-chat-body">
+              <div ref={messagesPaneRef} className="chat-thread--inbox">
+                {detail.messages.length === 0 ? (
+                  <p className="text-center text-sm text-muted">Sin mensajes aún.</p>
+                ) : (
+                  detail.messages.map((message) => {
+                    const outbound = message.direction === 'outbound'
+                    return (
                       <div
-                        className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
-                          outbound
-                            ? 'bg-accent-soft text-ink'
-                            : 'border border-line bg-surface-strong'
-                        }`}
+                        key={message.id}
+                        className={`chat-bubble ${outbound ? 'chat-bubble--out' : 'chat-bubble--in'} ${message.is_ai ? 'chat-bubble--ai' : ''}`}
                       >
-                        <p className="whitespace-pre-wrap break-words">
-                          {messageBodyLabel(message)}
-                        </p>
-                        <p className="mt-1 text-[10px] text-muted">
+                        <p className="chat-bubble__text">{messageBodyLabel(message)}</p>
+                        <p className="chat-bubble__meta">
                           {formatDateTime(message.created_at)}
                           {message.is_ai ? ' · IA' : ''}
-                          {message.has_downloadable_media && selectedId ? (
-                            <>
-                              {' · '}
-                              <button
-                                type="button"
-                                className="text-accent underline"
-                                onClick={() =>
-                                  void apiClient.download(
-                                    `/api/conversations/${selectedId}/messages/${message.id}/download`,
-                                  )
-                                }
-                              >
-                                Descargar
-                              </button>
-                            </>
-                          ) : null}
                         </p>
                       </div>
-                    </div>
-                  )
-                })
-              )}
+                    )
+                  })
+                )}
+              </div>
             </div>
 
-            <footer className="border-t border-line px-4 py-3">
+            <WaMainFooter>
               {detail.can_reply ? (
-                <form onSubmit={(e) => void onSendReply(e)} className="space-y-2">
-                  <textarea
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    rows={3}
-                    placeholder="Escribe un mensaje…"
-                    className="w-full resize-y rounded-lg border border-line bg-surface px-3 py-2 text-sm"
-                  />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <label className="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-accent-soft">
+                <form onSubmit={(e) => void onSendReply(e)} className="inbox-compose-stack">
+                  <div className="inbox-compose-bar">
+                    <label className="inbox-compose-file-btn">
                       Adjuntar
                       <input
                         type="file"
-                        className="sr-only"
                         accept="image/jpeg,image/png,video/mp4,audio/*,application/pdf"
-                        onChange={(e) =>
-                          setReplyFile(e.target.files?.[0] ?? null)
-                        }
+                        onChange={(e) => setReplyFile(e.target.files?.[0] ?? null)}
                       />
                     </label>
-                    {replyFile ? (
-                      <span className="text-xs text-muted">
-                        {replyFile.name}{' '}
-                        <button
-                          type="button"
-                          className="text-accent underline"
-                          onClick={() => setReplyFile(null)}
-                        >
-                          Quitar
-                        </button>
-                      </span>
-                    ) : null}
-                    <button
-                      type="submit"
-                      disabled={sendingReply}
-                      className="ml-auto rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-white disabled:opacity-60"
-                    >
-                      {sendingReply ? 'Enviando…' : 'Enviar'}
+                    <textarea
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      rows={2}
+                      placeholder="Escribe un mensaje…"
+                      className="inbox-compose-textarea inbox-compose-grow"
+                    />
+                    <button type="submit" disabled={sendingReply} className="inbox-compose-send">
+                      {sendingReply ? '…' : 'Enviar'}
                     </button>
                   </div>
-                  {replyError ? (
-                    <p className="text-sm text-bad">{replyError}</p>
-                  ) : null}
+                  {replyError ? <p className="inbox-compose-hint text-bad">{replyError}</p> : null}
                 </form>
               ) : (
-                <p className="muted text-sm">{replyBlockedText(detail.reply_blocked_reason)}</p>
+                <p className="inbox-compose-hint">{replyBlockedText(detail.reply_blocked_reason)}</p>
               )}
-              {detail.contact?.lead_score ? (
-                <p className="muted mt-2 text-xs">
-                  Lead score: {detail.contact.lead_score}/5 ·{' '}
-                  <Link to={`/contacts/${detail.conversation.contact_id}`} className="text-accent">
-                    Ver contacto
-                  </Link>
-                </p>
-              ) : detail.conversation.contact_id ? (
-                <p className="muted mt-2 text-xs">
-                  <Link to={`/contacts/${detail.conversation.contact_id}`} className="text-accent">
-                    Ver contacto
-                  </Link>
-                </p>
-              ) : null}
-            </footer>
+            </WaMainFooter>
           </>
         ) : null}
-      </section>
-    </div>
+      </WaMainPane>
+    </WaPageContents>
   )
 }

@@ -1,7 +1,10 @@
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { apiClient, type AuthUser } from '../../shared/api'
+import { apiClient, type AuthUser } from '@/shared/api'
+import { WaPageContents } from '@/shared/ui/shell/WaLayout'
+import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
+import { WaMainPane, WaMainHeader, WaMainBody } from '@/shared/ui/shell/WaMainPane'
 
 export function RequireMaster() {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -15,7 +18,13 @@ export function RequireMaster() {
   }, [])
 
   if (!ready) {
-    return <p className="text-muted">Cargando…</p>
+    return (
+      <WaPageContents>
+        <WaMainPane spanColumns>
+          <p className="p-4 text-muted">Cargando…</p>
+        </WaMainPane>
+      </WaPageContents>
+    )
   }
   if (!user?.isMaster) {
     return <Navigate to="/" replace />
@@ -23,52 +32,40 @@ export function RequireMaster() {
   return <Outlet />
 }
 
+const ADMIN_LINKS = [
+  { to: '/admin/users', label: 'Usuarios' },
+  { to: '/admin/meta', label: 'Credenciales Meta' },
+  { to: '/admin/audit-logs', label: 'Bitácora' },
+]
+
 export function AdminShell() {
+  const location = useLocation()
+
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Administración</h1>
-        <p className="text-sm text-muted">Solo usuario master</p>
-      </div>
-      <nav className="flex gap-2 border-b border-line pb-2">
-        <NavLink
-          to="/admin/users"
-          className={({ isActive }) =>
-            `rounded-lg px-3 py-1.5 text-sm ${
-              isActive
-                ? 'bg-accent-soft font-medium text-accent'
-                : 'text-muted hover:bg-accent-soft'
-            }`
-          }
-        >
-          Usuarios
-        </NavLink>
-        <NavLink
-          to="/admin/meta"
-          className={({ isActive }) =>
-            `rounded-lg px-3 py-1.5 text-sm ${
-              isActive
-                ? 'bg-accent-soft font-medium text-accent'
-                : 'text-muted hover:bg-accent-soft'
-            }`
-          }
-        >
-          Credenciales Meta
-        </NavLink>
-        <NavLink
-          to="/admin/audit-logs"
-          className={({ isActive }) =>
-            `rounded-lg px-3 py-1.5 text-sm ${
-              isActive
-                ? 'bg-accent-soft font-medium text-accent'
-                : 'text-muted hover:bg-accent-soft'
-            }`
-          }
-        >
-          Bitácora
-        </NavLink>
-      </nav>
-      <Outlet />
-    </div>
+    <WaPageContents>
+      <WaSidebar title="Administración">
+        <ul className="inbox-chat-list">
+          {ADMIN_LINKS.map((link) => {
+            const isActive = location.pathname.startsWith(link.to)
+            return (
+              <li key={link.to} className={`inbox-chat-item ${isActive ? 'is-active' : ''}`}>
+                <NavLink to={link.to} className="inbox-chat-link">
+                  <span className="inbox-chat-title">{link.label}</span>
+                </NavLink>
+              </li>
+            )
+          })}
+        </ul>
+      </WaSidebar>
+      <WaMainPane>
+        <WaMainHeader>
+          <h1 className="inbox-chat-heading">Administración</h1>
+          <p className="inbox-chat-sub">Solo usuario master</p>
+        </WaMainHeader>
+        <WaMainBody variant="form">
+          <Outlet />
+        </WaMainBody>
+      </WaMainPane>
+    </WaPageContents>
   )
 }

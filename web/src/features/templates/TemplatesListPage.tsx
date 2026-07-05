@@ -4,6 +4,7 @@ import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
 import { TemplateFlashBanner } from './TemplateFlashBanner'
 import { templateStatusClass } from './templateStatus'
+import { WaSpanMainPage } from '@/shared/ui/shell/WaSpanMainPage'
 
 type TemplateListItem = {
   id: number
@@ -50,14 +51,23 @@ export function TemplatesListPage() {
   }
 
   if (error && !templates) {
-    return <p className="text-bad">{error}</p>
+    return (
+      <WaSpanMainPage title="Plantillas">
+        <p className="text-bad">{error}</p>
+      </WaSpanMainPage>
+    )
   }
 
   if (!templates) {
-    return <p className="text-muted">Cargando plantillas…</p>
+    return (
+      <WaSpanMainPage title="Plantillas">
+        <p className="text-muted">Cargando plantillas…</p>
+      </WaSpanMainPage>
+    )
   }
 
   return (
+    <WaSpanMainPage>
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -129,5 +139,6 @@ export function TemplatesListPage() {
         </ul>
       )}
     </div>
+    </WaSpanMainPage>
   )
 }

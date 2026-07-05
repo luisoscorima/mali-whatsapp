@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
+import { WaSpanMainPage } from '@/shared/ui/shell/WaSpanMainPage'
 
 type AttributeDefinition = {
   id: number
@@ -44,14 +45,23 @@ export function AttributesListPage() {
   }, [])
 
   if (error) {
-    return <p className="text-bad">{error}</p>
+    return (
+      <WaSpanMainPage title="Atributos de contacto">
+        <p className="text-bad">{error}</p>
+      </WaSpanMainPage>
+    )
   }
 
   if (!definitions) {
-    return <p className="text-muted">Cargando atributos…</p>
+    return (
+      <WaSpanMainPage title="Atributos de contacto">
+        <p className="text-muted">Cargando atributos…</p>
+      </WaSpanMainPage>
+    )
   }
 
   return (
+    <WaSpanMainPage>
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -98,5 +108,6 @@ export function AttributesListPage() {
         </ul>
       )}
     </div>
+    </WaSpanMainPage>
   )
 }

@@ -1,6 +1,9 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { apiClient } from '../../shared/api'
+import { apiClient } from '@/shared/api'
+import { WaPageContents } from '@/shared/ui/shell/WaLayout'
+import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
+import { WaMainPane, WaMainBody } from '@/shared/ui/shell/WaMainPane'
 
 export type SettingsModule = {
   id: string
@@ -35,49 +38,53 @@ export function SettingsShell() {
   }, [])
 
   if (loadError) {
-    return <p className="text-bad">{loadError}</p>
+    return (
+      <WaPageContents>
+        <WaMainPane spanColumns>
+          <p className="p-4 text-bad">{loadError}</p>
+        </WaMainPane>
+      </WaPageContents>
+    )
   }
 
   if (!modules.length) {
     return (
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold">Ajustes</h1>
-        <p className="text-muted">No tienes acceso a ningún módulo de ajustes.</p>
-      </div>
+      <WaPageContents>
+        <WaMainPane spanColumns>
+          <div className="p-6">
+            <h1 className="text-lg font-semibold">Ajustes</h1>
+            <p className="text-muted">No tienes acceso a ningún módulo de ajustes.</p>
+          </div>
+        </WaMainPane>
+      </WaPageContents>
     )
   }
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row">
-      <aside className="w-full shrink-0 lg:w-64">
-        <h1 className="mb-3 text-lg font-semibold">Ajustes</h1>
-        <ul className="space-y-1 rounded-xl border border-line bg-surface-strong p-2">
+    <WaPageContents>
+      <WaSidebar title="Ajustes">
+        <ul className="inbox-chat-list">
           {modules.map((mod) => {
             const modSection = mod.path.replace('/settings/', '')
             const isActive = active === modSection
             return (
-              <li key={mod.id}>
-                <NavLink
-                  to={mod.path}
-                  className={`block rounded-lg px-3 py-2 text-sm ${
-                    isActive
-                      ? 'bg-accent-soft font-medium text-accent'
-                      : 'text-ink hover:bg-surface'
-                  }`}
-                >
-                  <span className="block">{mod.title}</span>
-                  <span className="mt-0.5 block text-xs text-muted">
-                    {mod.preview}
+              <li key={mod.id} className={`inbox-chat-item ${isActive ? 'is-active' : ''}`}>
+                <NavLink to={mod.path} className="inbox-chat-link">
+                  <span className="inbox-chat-link-main">
+                    <span className="inbox-chat-title">{mod.title}</span>
+                    <span className="inbox-chat-preview">{mod.preview}</span>
                   </span>
                 </NavLink>
               </li>
             )
           })}
         </ul>
-      </aside>
-      <div className="min-w-0 flex-1">
-        <Outlet />
-      </div>
-    </div>
+      </WaSidebar>
+      <WaMainPane>
+        <WaMainBody variant="form">
+          <Outlet />
+        </WaMainBody>
+      </WaMainPane>
+    </WaPageContents>
   )
 }

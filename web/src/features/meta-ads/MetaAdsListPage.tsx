@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
+import { WaSpanMainPage } from '@/shared/ui/shell/WaSpanMainPage'
 
 type MetaAdListItem = {
   id: number
@@ -29,14 +30,23 @@ export function MetaAdsListPage() {
   }, [])
 
   if (error) {
-    return <p className="text-bad">{error}</p>
+    return (
+      <WaSpanMainPage title="Anuncios Meta">
+        <p className="text-bad">{error}</p>
+      </WaSpanMainPage>
+    )
   }
 
   if (!ads) {
-    return <p className="text-muted">Cargando anuncios…</p>
+    return (
+      <WaSpanMainPage title="Anuncios Meta">
+        <p className="text-muted">Cargando anuncios…</p>
+      </WaSpanMainPage>
+    )
   }
 
   return (
+    <WaSpanMainPage>
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold">Anuncios Meta</h1>
@@ -91,5 +101,6 @@ export function MetaAdsListPage() {
         </div>
       )}
     </div>
+    </WaSpanMainPage>
   )
 }
