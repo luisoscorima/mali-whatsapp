@@ -195,6 +195,7 @@ type InboxMessage = {
   reaction?: InboxMessageReaction | null
   reply_to?: { message_id: number; preview: string; outbound: boolean } | null
   delivery?: { status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed'; label: string } | null
+  sender_label?: string | null
   media_preview?: { url: string; mime?: string | null } | null
   campaign_preview?: {
     headerText: string

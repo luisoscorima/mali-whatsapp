@@ -78,6 +78,7 @@ import {
   extractReplyWaMessageIdFromRawPayload,
 } from './chat-reply.util';
 import { readMessageDelivery } from './chat-delivery.util';
+import { readMessageSenderLabel, setMessageSender } from './chat-sender.util';
 import {
   advisorLabelFromUserRow,
   collectUserIdsFromAuditRows,
@@ -834,6 +835,10 @@ export class ConversationsService {
         row.direction === 'outbound'
           ? readMessageDelivery(row.raw_payload)
           : null,
+      sender_label:
+        row.direction === 'outbound'
+          ? readMessageSenderLabel(row.raw_payload, row.is_ai, row.message_type)
+          : null,
       media_preview: preview
         ? { url: preview.url, mime: preview.mime ?? null }
         : null,
@@ -1095,11 +1100,13 @@ export class ConversationsService {
       String(conversation.whatsapp_phone_number_id || '').trim() || undefined;
     const createdMessages: InboxMessage[] = [];
     const wasUnassigned = !conversation.assigned_user_id;
-    const actorLabel = formatAdvisorLabel({
-      email: user.email,
-      first_name: null,
-      last_name: null,
+    const senderProfile = await this.prisma.users.findFirst({
+      where: { id: user.id },
+      select: { first_name: true, last_name: true, email: true },
     });
+    const actorLabel = formatAdvisorLabel(
+      senderProfile ?? { email: user.email, first_name: null, last_name: null },
+    );
     let replyToWaMessageId: string | null = null;
     let replyToMeta: {
       message_id: number;
@@ -1150,9 +1157,12 @@ export class ConversationsService {
             wa_message_id: msgId,
             body_text: text.slice(0, 8000),
             message_type: 'text',
-            raw_payload: setMessageReplyTo(
-              sanitizeApiResponse(apiResponse),
-              replyToMeta,
+            raw_payload: setMessageSender(
+              setMessageReplyTo(
+                sanitizeApiResponse(apiResponse),
+                replyToMeta,
+              ),
+              actorLabel,
             ) as PrismaTypes.InputJsonValue,
             is_ai: false,
           },
@@ -1192,7 +1202,10 @@ export class ConversationsService {
               wa_message_id: textMsgId,
               body_text: text.slice(0, 8000),
               message_type: 'text',
-              raw_payload: sanitizeApiResponse(textResp) as PrismaTypes.InputJsonValue,
+              raw_payload: setMessageSender(
+                sanitizeApiResponse(textResp),
+                actorLabel,
+              ) as PrismaTypes.InputJsonValue,
               is_ai: false,
             },
           });
@@ -1242,10 +1255,13 @@ export class ConversationsService {
             wa_message_id: msgId,
             body_text: bodyText,
             message_type: uploadResult.waType,
-            raw_payload: sanitizeMediaOutboundPayload(
-              uploadResult.mediaId,
-              sendResp,
-              localPreview,
+            raw_payload: setMessageSender(
+              sanitizeMediaOutboundPayload(
+                uploadResult.mediaId,
+                sendResp,
+                localPreview,
+              ),
+              actorLabel,
             ) as PrismaTypes.InputJsonValue,
             is_ai: false,
           },

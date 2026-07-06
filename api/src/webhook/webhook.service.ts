@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import type { Request, Response } from 'express';
 import type { BusinessArea } from '../config/areas';
 import { sanitizeApiResponse } from '../conversations/api-sanitize.util';
+import { setMessageSender } from '../conversations/chat-sender.util';
 import { downloadWhatsAppMediaBuffer, sendSessionTextMessage } from '../conversations/conversation-whatsapp.util';
 import { saveInboundChatMediaFromBuffer } from '../conversations/chat-media.util';
 import {
@@ -234,10 +235,11 @@ export class WebhookService {
         phoneNumberId: lineId,
       });
       const msgId = apiResponse.messages?.[0]?.id || null;
-      const payload = sanitizeApiResponse(apiResponse) as Prisma.InputJsonValue;
+      let payload = sanitizeApiResponse(apiResponse) as Record<string, unknown>;
       if (input.outboundSource) {
-        (payload as Record<string, unknown>).source = input.outboundSource;
+        payload.source = input.outboundSource;
       }
+      payload = setMessageSender(payload, input.isAi ? 'IA' : 'Automático');
       await this.prisma.chat_messages.create({
         data: {
           conversation_id: input.conversationId,
@@ -245,7 +247,7 @@ export class WebhookService {
           wa_message_id: msgId,
           body_text: toSend,
           message_type: 'text',
-          raw_payload: payload,
+          raw_payload: payload as Prisma.InputJsonValue,
           is_ai: input.isAi,
         },
       });

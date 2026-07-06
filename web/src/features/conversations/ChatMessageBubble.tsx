@@ -17,6 +17,7 @@ export type ChatMessage = {
   reaction?: { emoji: string; direction: 'inbound' | 'outbound' } | null
   reply_to?: { message_id: number; preview: string; outbound: boolean } | null
   delivery?: { status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed'; label: string } | null
+  sender_label?: string | null
   media_preview?: { url: string; mime?: string | null } | null
   campaign_preview?: CampaignMessagePreviewData | null
   campaign_id?: number | null
@@ -73,14 +74,10 @@ function highlightText(text: string, query: string): ReactNode {
   )
 }
 
-function messageAuthorLabel(message: ChatMessage, outbound: boolean): string | null {
-  if (!outbound) return 'Cliente'
-  if (message.is_ai) return 'IA'
-  const mt = message.message_type.toLowerCase()
-  if (mt === 'campaign' || message.campaign_preview || message.campaign_id) {
-    return 'Campaña'
-  }
-  return 'Asesor'
+function messageAuthorLabel(message: ChatMessage): string | null {
+  if (message.direction !== 'outbound') return null
+  const label = message.sender_label?.trim()
+  return label || null
 }
 
 type ChatMessageBubbleProps = {
@@ -114,7 +111,7 @@ export function ChatMessageBubble({
   const showTypeRow =
     isMediaType(mt) || (mt === 'campaign' && !message.campaign_preview)
   const campPreview = message.campaign_preview
-  const authorLabel = messageAuthorLabel(message, outbound)
+  const authorLabel = messageAuthorLabel(message)
   const copyText = message.body_text?.trim() ?? ''
   const showMenu = canInteract && (onReply || onCopy || onReact)
 

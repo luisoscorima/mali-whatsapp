@@ -79,6 +79,7 @@ export type InboxMessage = {
   reaction?: InboxMessageReaction | null;
   reply_to?: InboxMessageReplyTo | null;
   delivery?: InboxMessageDelivery | null;
+  sender_label?: string | null;
   media_preview?: { url: string; mime?: string | null } | null;
   campaign_preview?: {
     headerText: string;

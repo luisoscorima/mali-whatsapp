@@ -979,10 +979,9 @@ html[data-theme='dark'] .inbox-layout-wa .chat-bubble--out {
   margin-bottom: 4px;
   padding: 1px 6px;
   border-radius: 999px;
-  font-size: 0.62rem;
+  font-size: 0.68rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
   color: var(--muted);
   background: color-mix(in srgb, var(--surface) 55%, transparent);
   border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);

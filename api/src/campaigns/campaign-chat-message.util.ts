@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { normalizeArea } from '../config/areas';
 import { normalizePhone } from '../contacts/contacts-validation.utils';
+import { setMessageSender } from '../conversations/chat-sender.util';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { CampaignMessagePreview } from './campaign-message-preview.util';
 
@@ -52,15 +53,18 @@ export async function persistCampaignChatMessage(
     select: { id: true },
   });
 
-  const rawPayload = {
-    source: 'campaign_send',
-    campaign_id: input.campaignId,
-    ...(input.templateName
-      ? { template_name: String(input.templateName).slice(0, 200) }
-      : {}),
-    preview: input.preview,
-    ...(input.apiResponse ? { api_response: input.apiResponse } : {}),
-  } as Prisma.InputJsonValue;
+  const rawPayload = setMessageSender(
+    {
+      source: 'campaign_send',
+      campaign_id: input.campaignId,
+      ...(input.templateName
+        ? { template_name: String(input.templateName).slice(0, 200) }
+        : {}),
+      preview: input.preview,
+      ...(input.apiResponse ? { api_response: input.apiResponse } : {}),
+    },
+    'Campaña',
+  ) as Prisma.InputJsonValue;
 
   try {
     await prisma.chat_messages.create({
