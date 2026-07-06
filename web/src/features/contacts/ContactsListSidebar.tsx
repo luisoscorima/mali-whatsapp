@@ -221,9 +221,13 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
             disabled={exportBusy}
             onClick={() => void handleExport()}
             className="small-btn"
-            title="Exportar Excel"
+            title={
+              hasFilters
+                ? 'Exportar contactos que coinciden con los filtros actuales'
+                : 'Exportar todos los contactos activos del área'
+            }
           >
-            {exportBusy ? '…' : 'Exportar'}
+            {exportBusy ? '…' : hasFilters ? 'Exportar filtro' : 'Exportar todos'}
           </button>
           <Link to={`/contacts/import${listQuery}`} className="small-btn">
             Importar

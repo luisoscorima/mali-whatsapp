@@ -61,4 +61,23 @@ export class AppConfigService {
       throw new Error('JWT_SECRET is required when REQUIRE_AUTH=true');
     }
   }
+
+  /** Opciones compartidas al crear y borrar la cookie de sesión (Safari exige paridad). */
+  authCookieOptions(): {
+    httpOnly: true;
+    secure: boolean;
+    sameSite: 'lax';
+    path: string;
+    domain?: string;
+  } {
+    const isProduction =
+      String(process.env.NODE_ENV || '').toLowerCase() === 'production';
+    return {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      path: '/',
+      ...(this.cookieDomain ? { domain: this.cookieDomain } : {}),
+    };
+  }
 }

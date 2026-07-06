@@ -7,8 +7,11 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
@@ -28,6 +31,26 @@ export class SegmentsController {
   ): Promise<ApiResponse<SegmentDefinition[]>> {
     const data = await this.segmentsService.list(user.area);
     return { ok: true, data };
+  }
+
+  @Get(':id/export')
+  async exportMembers(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Query('attrs') attrs: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { buffer, filename } = await this.segmentsService.exportMembers(
+      user.area,
+      id,
+      String(attrs ?? '1') !== '0',
+    );
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
   }
 
   @Get(':id')

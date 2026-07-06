@@ -65,6 +65,10 @@ export function contactsExportFilename(prefix = 'contactos'): string {
   return `${prefix}-${exportFilenameDateStamp()}.xlsx`;
 }
 
+export function segmentContactsExportFilename(slug: string): string {
+  return `segmento-${safeFilenamePart(slug)}-${exportFilenameDateStamp()}.xlsx`;
+}
+
 export function safeExportFilenamePart(value: string): string {
   return safeFilenamePart(value);
 }

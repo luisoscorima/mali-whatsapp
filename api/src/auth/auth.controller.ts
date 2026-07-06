@@ -99,16 +99,10 @@ export class AuthController {
       row,
       readClientIp(req),
     );
-    const isProduction =
-      String(process.env.NODE_ENV || '').toLowerCase() === 'production';
 
     res.cookie(this.config.authCookieName, accessToken, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: 'lax',
-      domain: this.config.cookieDomain || undefined,
+      ...this.config.authCookieOptions(),
       maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: '/',
     });
 
     const target = user.mustChangePassword
@@ -119,11 +113,7 @@ export class AuthController {
 
   @Post('auth/logout')
   logout(@Res({ passthrough: true }) res: Response): ApiResponse<{ ok: true }> {
-    res.clearCookie(this.config.authCookieName, {
-      httpOnly: true,
-      path: '/',
-      domain: this.config.cookieDomain || undefined,
-    });
+    res.clearCookie(this.config.authCookieName, this.config.authCookieOptions());
     return { ok: true, data: { ok: true } };
   }
 
@@ -161,15 +151,9 @@ export class AuthController {
       body.area,
       readClientIp(req),
     );
-    const isProduction =
-      String(process.env.NODE_ENV || '').toLowerCase() === 'production';
     res.cookie(this.config.authCookieName, accessToken, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: 'lax',
-      domain: this.config.cookieDomain || undefined,
+      ...this.config.authCookieOptions(),
       maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: '/',
     });
     return { ok: true, data: { user: nextUser } };
   }

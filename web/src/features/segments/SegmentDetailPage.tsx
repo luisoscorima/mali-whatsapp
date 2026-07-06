@@ -41,6 +41,7 @@ export function SegmentDetailPage() {
   const [saveMsg, setSaveMsg] = useState('')
   const [saving, setSaving] = useState(false)
   const [removingId, setRemovingId] = useState<number | null>(null)
+  const [exportBusy, setExportBusy] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -127,6 +128,15 @@ export function SegmentDetailPage() {
       return
     }
     setPayload(result.data)
+  }
+
+  async function onExport() {
+    if (!id) return
+    setExportBusy(true)
+    setError('')
+    const result = await apiClient.download(`/api/segments/${id}/export`)
+    setExportBusy(false)
+    if (!result.ok) setError(result.error)
   }
 
   if (error && !payload) {
@@ -232,9 +242,20 @@ export function SegmentDetailPage() {
               Revisa quién pertenece a este segmento o quita el vínculo.
             </p>
           </div>
-          <span className="rounded-full border border-line px-3 py-1 text-sm text-muted">
-            {members.length} contacto(s)
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-line px-3 py-1 text-sm text-muted">
+              {members.length} contacto(s)
+            </span>
+            <button
+              type="button"
+              disabled={exportBusy || members.length === 0}
+              onClick={() => void onExport()}
+              className="small-btn"
+              title="Descargar Excel con los contactos de este segmento"
+            >
+              {exportBusy ? '…' : 'Exportar Excel'}
+            </button>
+          </div>
         </div>
 
         {members.length === 0 ? (

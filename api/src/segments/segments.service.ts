@@ -12,6 +12,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/auth.types';
 import type { CreateSegmentDto, UpdateSegmentDto } from './dto/segment.dto';
 import {
+  buildContactsExportBuffer,
+  type ContactExportRow,
+  segmentContactsExportFilename,
+} from '../contacts/contacts-export.util';
+import { MAX_CSV_ROWS } from '../contacts/contacts-import.utils';
+import {
   normalizeSegmentColorKey,
   SEGMENT_SLUG_REGEX,
   type SegmentDefinition,
@@ -334,5 +340,65 @@ export class SegmentsService {
     ]);
 
     return this.getDetail(area, segmentId);
+  }
+
+  async exportMembers(
+    area: AuthUser['area'],
+    id: number,
+    includeAttributes = true,
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    const segment = await this.getById(area, id);
+
+    const rows = await this.prisma.$queryRaw<ContactExportRow[]>(Prisma.sql`
+      SELECT
+        c.id,
+        c.name,
+        c.phone,
+        COALESCE((
+          SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
+          FROM contact_segments cs
+          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+          WHERE cs.contact_id = c.id AND cs.area = ${area}
+        ), '') AS segment_labels
+      FROM contacts c
+      WHERE c.area = ${area}
+        AND c.replacement_reason IS NULL
+        AND c.replaced_by_contact_id IS NULL
+        AND EXISTS (
+          SELECT 1
+          FROM contact_segments csf
+          WHERE csf.contact_id = c.id
+            AND csf.area = c.area
+            AND csf.segment_slug = ${segment.slug}
+        )
+      ORDER BY COALESCE(NULLIF(c.name, ''), c.phone) ASC, c.id DESC
+      LIMIT ${MAX_CSV_ROWS + 1}
+    `);
+
+    if (rows.length > MAX_CSV_ROWS) {
+      throw new BadRequestException(
+        `Demasiados contactos (${rows.length}). Máximo ${MAX_CSV_ROWS}; contacta al administrador.`,
+      );
+    }
+
+    const contactIds = rows.map((r) => r.id);
+    const attrMap = new Map<number, Record<string, string>>();
+    if (includeAttributes && contactIds.length > 0) {
+      const attrRows = await this.prisma.contact_attributes.findMany({
+        where: { contact_id: { in: contactIds } },
+        orderBy: [{ contact_id: 'asc' }, { attr_key: 'asc' }],
+        select: { contact_id: true, attr_key: true, attr_value: true },
+      });
+      for (const row of attrRows) {
+        if (!attrMap.has(row.contact_id)) attrMap.set(row.contact_id, {});
+        attrMap.get(row.contact_id)![row.attr_key] = row.attr_value;
+      }
+    }
+
+    const buffer = buildContactsExportBuffer(rows, attrMap, { includeAttributes });
+    return {
+      buffer,
+      filename: segmentContactsExportFilename(segment.slug),
+    };
   }
 }

@@ -33,9 +33,10 @@ export function WaAccountMenu({ user, onUserUpdate }: WaAccountMenuProps) {
     }
   }
 
-  function onLogout() {
-    apiClient.logout()
-    window.location.href = '/login'
+  async function onLogout() {
+    setOpen(false)
+    await apiClient.logout()
+    window.location.assign('/login')
   }
 
   return (
@@ -60,7 +61,12 @@ export function WaAccountMenu({ user, onUserUpdate }: WaAccountMenuProps) {
           </span>
         </button>
       </PopoverTrigger>
-      <PopoverContent side="right" align="end" className="wa-rail__account-popover w-64 p-0">
+      <PopoverContent
+        side="right"
+        align="end"
+        className="wa-rail__account-popover w-64 p-0"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <div className="border-b border-line px-4 py-3">
           <p className="truncate text-sm font-medium">{user.email}</p>
           <p className="mt-1 flex flex-wrap gap-1">
@@ -118,7 +124,11 @@ export function WaAccountMenu({ user, onUserUpdate }: WaAccountMenuProps) {
         </div>
 
         <div className="border-t border-line p-2">
-          <button type="button" className="wa-rail__logout-btn w-full" onClick={onLogout}>
+          <button
+            type="button"
+            className="wa-rail__logout-btn w-full"
+            onClick={() => void onLogout()}
+          >
             Cerrar sesión
           </button>
         </div>

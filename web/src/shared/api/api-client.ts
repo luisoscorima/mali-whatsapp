@@ -239,8 +239,15 @@ export const apiClient = {
     return result;
   },
 
-  logout(): void {
-    void request<{ ok: true }>('/api/auth/logout', { method: 'POST', skipAuth: true });
+  async logout(): Promise<void> {
+    try {
+      await request<{ ok: true }>('/api/auth/logout', {
+        method: 'POST',
+        skipAuth: true,
+      });
+    } catch {
+      /* red de fondo: igual limpiamos cliente */
+    }
     clearToken();
     unauthorizedHandler?.();
   },

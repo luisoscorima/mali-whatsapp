@@ -408,6 +408,8 @@
   font: inherit;
   font-size: 0.88rem;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .wa-rail__logout-btn:hover {

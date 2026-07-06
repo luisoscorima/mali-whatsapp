@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import type { AuthUser } from '@/shared/api'
 import { MALI_LOGO_URL } from '@/shared/brand'
@@ -124,8 +125,23 @@ type WaRailProps = {
 export function WaRail({ user, onUserUpdate }: WaRailProps) {
   const location = useLocation()
   const { toggleTheme } = useTheme()
+  const moreRef = useRef<HTMLDetailsElement>(null)
   const nav = navFromPath(location.pathname)
   const mobileMoreActive = MORE_NAV.includes(nav as (typeof MORE_NAV)[number])
+
+  useEffect(() => {
+    function onDocClick(ev: MouseEvent) {
+      const el = moreRef.current
+      if (!el?.open) return
+      if (!el.contains(ev.target as Node)) el.open = false
+    }
+    document.addEventListener('click', onDocClick)
+    return () => document.removeEventListener('click', onDocClick)
+  }, [])
+
+  useEffect(() => {
+    if (moreRef.current) moreRef.current.open = false
+  }, [location.pathname])
 
   const visibleItems =
     user?.isProvisioned || user?.isMaster
@@ -158,7 +174,7 @@ export function WaRail({ user, onUserUpdate }: WaRailProps) {
           </Link>
         ))}
 
-        <details className={`wa-rail__more ${mobileMoreActive ? 'is-active' : ''}`}>
+        <details ref={moreRef} className={`wa-rail__more ${mobileMoreActive ? 'is-active' : ''}`}>
           <summary className="wa-rail__item wa-rail__item--more" aria-label="Más secciones" title="Más">
             <span className="wa-rail__icon" aria-hidden="true">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -178,6 +194,9 @@ export function WaRail({ user, onUserUpdate }: WaRailProps) {
                   to={item.to}
                   className={nav === item.key ? 'is-active' : ''}
                   role="menuitem"
+                  onClick={() => {
+                    if (moreRef.current) moreRef.current.open = false
+                  }}
                 >
                   {item.label}
                 </Link>
