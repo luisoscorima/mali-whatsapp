@@ -148,6 +148,66 @@ export function hasDownloadableMedia(rawPayload: unknown): boolean {
   return getLocalPreview(rawPayload) != null;
 }
 
+export type InboxCampaignPreview = {
+  headerText: string;
+  headerMediaType: string | null;
+  headerMediaUrl: string | null;
+  bodyText: string;
+  footerText: string;
+  buttons: { type: string; text: string; url: string }[];
+};
+
+export function extractCampaignPreview(rawPayload: unknown): {
+  campaign_preview: InboxCampaignPreview | null;
+  campaign_id: number | null;
+} {
+  const p = parseRawPayload(rawPayload);
+  if (!p) return { campaign_preview: null, campaign_id: null };
+
+  const campaign_id =
+    p.campaign_id != null && Number.isFinite(Number(p.campaign_id))
+      ? Number(p.campaign_id)
+      : null;
+
+  const prev = p.preview;
+  if (!prev || typeof prev !== 'object') {
+    return { campaign_preview: null, campaign_id };
+  }
+
+  const row = prev as Record<string, unknown>;
+  const buttons = Array.isArray(row.buttons)
+    ? row.buttons.map((item) => {
+        const btn = item as Record<string, unknown>;
+        return {
+          type: String(btn.type ?? 'URL'),
+          text: String(btn.text ?? ''),
+          url: String(btn.url ?? ''),
+        };
+      })
+    : [];
+
+  const campaign_preview: InboxCampaignPreview = {
+    headerText: String(row.headerText ?? ''),
+    headerMediaType: row.headerMediaType ? String(row.headerMediaType) : null,
+    headerMediaUrl: row.headerMediaUrl ? String(row.headerMediaUrl) : null,
+    bodyText: String(row.bodyText ?? ''),
+    footerText: String(row.footerText ?? ''),
+    buttons,
+  };
+
+  const hasContent =
+    campaign_preview.bodyText.trim() ||
+    campaign_preview.headerText.trim() ||
+    campaign_preview.footerText.trim() ||
+    campaign_preview.headerMediaUrl ||
+    campaign_preview.buttons.length > 0;
+
+  return {
+    campaign_preview: hasContent ? campaign_preview : null,
+    campaign_id,
+  };
+}
+
 function s3KeyFromPreviewUrl(url: string): string | null {
   if (!isChatMediaS3Configured()) return null;
   const u = String(url || '').trim();

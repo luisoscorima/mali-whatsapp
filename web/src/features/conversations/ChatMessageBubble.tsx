@@ -3,6 +3,8 @@ import { Badge } from '@/shared/ui/shadcn/badge'
 import { Bubble, BubbleContent } from '@/shared/ui/shadcn/bubble'
 import { Message, MessageContent, MessageFooter } from '@/shared/ui/shadcn/message'
 import { cn } from '@/lib/utils'
+import type { CampaignMessagePreviewData } from '../campaigns/CampaignMessagePreview'
+import { ChatCampaignPreview } from './ChatCampaignPreview'
 
 export type ChatMessage = {
   id: number
@@ -13,6 +15,8 @@ export type ChatMessage = {
   is_ai: boolean
   has_downloadable_media: boolean
   media_preview?: { url: string; mime?: string | null } | null
+  campaign_preview?: CampaignMessagePreviewData | null
+  campaign_id?: number | null
 }
 
 function mediaIcon(type: string): string {
@@ -21,6 +25,7 @@ function mediaIcon(type: string): string {
   if (type === 'audio' || type === 'voice') return '🎵'
   if (type === 'document') return '📎'
   if (type === 'sticker') return '🎭'
+  if (type === 'campaign') return '📢'
   return '📎'
 }
 
@@ -31,6 +36,7 @@ function mediaLabel(type: string): string {
   if (type === 'voice') return 'Nota de voz'
   if (type === 'document') return 'Documento'
   if (type === 'sticker') return 'Sticker'
+  if (type === 'campaign') return 'Campaña'
   return type
 }
 
@@ -59,12 +65,13 @@ export function ChatMessageBubble({ message, conversationId }: ChatMessageBubble
     : ''
   const mime = message.media_preview?.mime ?? ''
   const downloadHref = `/api/conversations/${conversationId}/messages/${message.id}/download`
-  const showTypeRow = isMediaType(mt)
+  const showTypeRow = isMediaType(mt) || (mt === 'campaign' && !message.campaign_preview)
+  const campPreview = message.campaign_preview
 
   return (
     <Message align={align}>
-      <MessageContent>
-        <Bubble variant={variant} align={align} dashed={message.is_ai}>
+      <MessageContent align={align}>
+        <Bubble variant={variant} dashed={message.is_ai}>
           {outbound && message.is_ai ? (
             <Badge variant="secondary" className="mb-1 normal-case">
               ✨ IA
@@ -76,6 +83,10 @@ export function ChatMessageBubble({ message, conversationId }: ChatMessageBubble
               <span aria-hidden="true">{mediaIcon(mt)}</span>
               {mediaLabel(mt)}
             </p>
+          ) : null}
+
+          {campPreview ? (
+            <ChatCampaignPreview preview={campPreview} campaignId={message.campaign_id} />
           ) : null}
 
           {mediaUrl && (mt === 'image' || mt === 'sticker') ? (
@@ -147,13 +158,13 @@ export function ChatMessageBubble({ message, conversationId }: ChatMessageBubble
             </p>
           ) : null}
 
-          {message.body_text?.trim() ? (
+          {!campPreview && message.body_text?.trim() ? (
             <BubbleContent className="whitespace-pre-wrap text-[0.92rem] leading-relaxed">
               {message.body_text}
             </BubbleContent>
           ) : null}
         </Bubble>
-        <MessageFooter>
+        <MessageFooter align={align}>
           {formatDateTime(message.created_at)}
           {message.is_ai ? ' · IA' : ''}
         </MessageFooter>

@@ -172,6 +172,15 @@ type InboxMessage = {
   is_ai: boolean
   has_downloadable_media: boolean
   media_preview?: { url: string; mime?: string | null } | null
+  campaign_preview?: {
+    headerText: string
+    headerMediaType: string | null
+    headerMediaUrl: string | null
+    bodyText: string
+    footerText: string
+    buttons: { type: string; text: string; url: string }[]
+  } | null
+  campaign_id?: number | null
 }
 
 type InboxDetail = {

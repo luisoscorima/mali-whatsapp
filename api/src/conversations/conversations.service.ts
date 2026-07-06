@@ -35,6 +35,7 @@ import {
   conversationExportFilename,
 } from './conversation-export.util';
 import {
+  extractCampaignPreview,
   getLocalPreview,
   hasDownloadableMedia,
   saveOutboundChatMediaFile,
@@ -541,6 +542,9 @@ export class ConversationsService {
     raw_payload?: unknown;
   }): InboxMessage {
     const preview = getLocalPreview(row.raw_payload);
+    const { campaign_preview, campaign_id } = extractCampaignPreview(
+      row.raw_payload,
+    );
     return {
       id: row.id,
       direction: row.direction,
@@ -552,6 +556,8 @@ export class ConversationsService {
       media_preview: preview
         ? { url: preview.url, mime: preview.mime ?? null }
         : null,
+      campaign_preview,
+      campaign_id,
     };
   }
 

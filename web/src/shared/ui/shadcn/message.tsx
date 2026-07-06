@@ -18,14 +18,35 @@ function Message({ className, align = 'start', ...props }: MessageProps) {
   )
 }
 
-function MessageContent({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div className={cn('min-w-0 max-w-full', className)} {...props} />
-}
-
-function MessageFooter({ className, ...props }: React.ComponentProps<'div'>) {
+function MessageContent({
+  className,
+  align = 'start',
+  ...props
+}: React.ComponentProps<'div'> & { align?: 'start' | 'end' }) {
   return (
     <div
-      className={cn('mt-0.5 px-1 text-[0.68rem] text-muted', className)}
+      className={cn(
+        'flex min-w-0 max-w-[min(85%,32rem)] flex-col',
+        align === 'end' ? 'items-end' : 'items-start',
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+
+function MessageFooter({
+  className,
+  align = 'start',
+  ...props
+}: React.ComponentProps<'div'> & { align?: 'start' | 'end' }) {
+  return (
+    <div
+      className={cn(
+        'mt-0.5 px-1 text-[0.68rem] text-muted',
+        align === 'end' ? 'text-right' : 'text-left',
+        className,
+      )}
       {...props}
     />
   )

@@ -90,7 +90,7 @@ export function WaAccountMenu({ user, onUserUpdate }: WaAccountMenuProps) {
               onClick={() => void onConfirmAreaChange()}
               className="small-btn primary mt-2 w-full"
             >
-              {switching ? 'Cambiando…' : 'Aplicar área'}
+              {switching ? 'Cambiando…' : 'Cambiar área'}
             </button>
           </div>
         ) : null}

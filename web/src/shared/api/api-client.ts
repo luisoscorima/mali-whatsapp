@@ -248,7 +248,7 @@ export const apiClient = {
   switchArea(area: string): Promise<ApiResponse<{ user: AuthUser }>> {
     return request<{ user: AuthUser }>('/api/account/switch-area', {
       method: 'POST',
-      body: JSON.stringify({ area }),
+      body: { area },
     });
   },
 
