@@ -29,7 +29,6 @@ html[data-theme='dark'] .inbox-layout-wa {
   overflow-y: hidden;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  max-height: 2.5rem;
   align-items: center;
 }
 
@@ -37,25 +36,25 @@ html[data-theme='dark'] .inbox-layout-wa {
   display: none;
 }
 
-/* Segmentos en conversaciones: scroll horizontal con barra en color de acento */
-.conversation-segment-pills.inbox-chat-filter-pills--row {
+/* Chips de segmento: scroll horizontal con barra en color de acento (contactos + conversaciones) */
+.segment-filter-chips.inbox-chat-filter-pills--row {
   max-height: none;
   padding-bottom: 6px;
   scrollbar-width: thin;
   scrollbar-color: var(--accent) transparent;
 }
 
-.conversation-segment-pills.inbox-chat-filter-pills--row::-webkit-scrollbar {
+.segment-filter-chips.inbox-chat-filter-pills--row::-webkit-scrollbar {
   display: block;
   height: 4px;
 }
 
-.conversation-segment-pills.inbox-chat-filter-pills--row::-webkit-scrollbar-thumb {
+.segment-filter-chips.inbox-chat-filter-pills--row::-webkit-scrollbar-thumb {
   background: var(--accent);
   border-radius: 999px;
 }
 
-.conversation-segment-pills.inbox-chat-filter-pills--row::-webkit-scrollbar-track {
+.segment-filter-chips.inbox-chat-filter-pills--row::-webkit-scrollbar-track {
   background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
   border-radius: 999px;
 }
