@@ -85,54 +85,61 @@ export function LoginPage() {
       </button>
 
       <div className="login-page">
-        <div className="login-card login-card-enter login-card-interactive">
-          <div className="brand-logo-wrap" aria-hidden>
-            <img
-              className="brand-logo-img"
-              src={MALI_LOGO_URL}
-              alt=""
-              width={160}
-              height={48}
-              decoding="async"
-            />
+        <div className="login-stack">
+          <div className="login-brand login-fade-up login-stagger-1">
+            <div className="login-brand__logo-box">
+              <img
+                className="login-brand__logo-img"
+                src={MALI_LOGO_URL}
+                alt=""
+                width={120}
+                height={36}
+                decoding="async"
+              />
+            </div>
+            <div className="login-brand__text">
+              <span className="login-brand__title">Whatsapp MALI</span>
+              <span className="login-brand__subtitle">Museo de Arte de Lima</span>
+            </div>
           </div>
-          <span className="brand-mark">WhatsApp</span>
-          <h1 className="login-title">Ingresar</h1>
-          <p className="login-lead">
-            Inicia sesión con tu cuenta <strong>@mali.pe</strong>. Si ya usabas MALI
-            WhatsApp, entras directo a tu panel.
-          </p>
 
-          {error ? (
-            <p className="login-error" role="alert">
-              {error}
+          <div className="login-card login-card-enter login-card-interactive login-stagger-2">
+            <h1 className="login-title">Bienvenido</h1>
+            <p className="login-lead">
+              Inicia sesión con tu cuenta <strong>@mali.pe</strong>
             </p>
-          ) : null}
 
-          {googleEnabled ? (
-            <button
-              type="button"
-              className="login-google-btn"
-              onClick={handleGoogleLogin}
-              disabled={redirecting}
-            >
-              <span className="login-google-btn__shine" aria-hidden />
-              {redirecting ? (
-                <span className="login-google-spinner" aria-hidden />
-              ) : (
-                <GoogleLogoIcon className="login-google-icon" />
-              )}
-              {redirecting ? 'Conectando con Google…' : 'Continuar con Google'}
-            </button>
-          ) : (
-            <p className="login-error" role="alert">
-              Google OAuth no está configurado en el servidor.
+            {error ? (
+              <p className="login-error" role="alert">
+                {error}
+              </p>
+            ) : null}
+
+            {googleEnabled ? (
+              <button
+                type="button"
+                className="login-google-btn"
+                onClick={handleGoogleLogin}
+                disabled={redirecting}
+              >
+                <span className="login-google-btn__shine" aria-hidden />
+                {redirecting ? (
+                  <span className="login-google-spinner" aria-hidden />
+                ) : (
+                  <GoogleLogoIcon className="login-google-icon" />
+                )}
+                {redirecting ? 'Conectando con Google…' : 'Continuar con Google'}
+              </button>
+            ) : (
+              <p className="login-error" role="alert">
+                Google OAuth no está configurado en el servidor.
+              </p>
+            )}
+
+            <p className="login-footnote">
+              Acceso exclusivo para el equipo del Museo de Arte de Lima
             </p>
-          )}
-
-          <p className="login-footnote">
-            Acceso exclusivo para el equipo del Museo de Arte de Lima
-          </p>
+          </div>
         </div>
       </div>
     </div>
