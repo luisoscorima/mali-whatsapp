@@ -1,15 +1,20 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { MALI_LOGO_URL } from '@/shared/brand'
+import { useTheme } from '@/shared/theme/useTheme'
 import { apiClient } from '../../shared/api'
+import { GoogleLogoIcon } from './GoogleLogoIcon'
+import { WaveBackground } from './WaveBackground'
 
 export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
+  const { toggleTheme } = useTheme()
   const [error, setError] = useState('')
   const [checking, setChecking] = useState(true)
   const [googleEnabled, setGoogleEnabled] = useState(false)
+  const [redirecting, setRedirecting] = useState(false)
 
   const from =
     (location.state as { from?: string } | null)?.from?.toString() || '/'
@@ -36,49 +41,99 @@ export function LoginPage() {
     })
   }, [from, navigate])
 
+  function handleGoogleLogin() {
+    if (redirecting) return
+    setRedirecting(true)
+    window.setTimeout(() => {
+      window.location.href = '/api/auth/google'
+    }, 600)
+  }
+
   if (checking) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-muted">
-        Cargando…
+      <div className="login-shell">
+        <WaveBackground />
+        <p className="login-loading">Cargando…</p>
       </div>
     )
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg px-4">
-      <div className="w-full max-w-sm space-y-4 rounded-xl border border-line bg-surface-strong p-6 shadow-sm">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <img
-            src={MALI_LOGO_URL}
-            alt="MALI"
-            className="h-10 w-auto object-contain"
-            width={120}
-            height={40}
-            decoding="async"
-          />
-          <div>
-            <h1 className="text-xl font-semibold">MALI WhatsApp</h1>
-            <p className="text-sm text-muted">
-              Acceso exclusivo para cuentas <strong>@mali.pe</strong>
-            </p>
-          </div>
+    <div className="login-shell">
+      {redirecting ? (
+        <div
+          className="login-progress-track"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Conectando con Google"
+        >
+          <div className="login-progress-fill" />
         </div>
-        {googleEnabled ? (
-          <button
-            type="button"
-            onClick={() => {
-              window.location.href = '/api/auth/google'
-            }}
-            className="w-full rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent-hover"
-          >
-            Continuar con Google
-          </button>
-        ) : (
-          <p className="text-sm text-bad">
-            Google OAuth no está configurado en el servidor.
+      ) : null}
+
+      <WaveBackground />
+
+      <button
+        type="button"
+        className="theme-toggle login-theme-toggle"
+        onClick={toggleTheme}
+        title="Modo claro / oscuro"
+        aria-label="Cambiar tema"
+      >
+        ◐
+      </button>
+
+      <div className="login-page">
+        <div className="login-card login-card-enter login-card-interactive">
+          <div className="brand-logo-wrap" aria-hidden>
+            <img
+              className="brand-logo-img"
+              src={MALI_LOGO_URL}
+              alt=""
+              width={160}
+              height={48}
+              decoding="async"
+            />
+          </div>
+          <span className="brand-mark">WhatsApp</span>
+          <h1 className="login-title">Ingresar</h1>
+          <p className="login-lead">
+            Inicia sesión con tu cuenta <strong>@mali.pe</strong>. Si ya usabas MALI
+            WhatsApp, entras directo a tu panel.
           </p>
-        )}
-        {error ? <p className="text-sm text-bad">{error}</p> : null}
+
+          {error ? (
+            <p className="login-error" role="alert">
+              {error}
+            </p>
+          ) : null}
+
+          {googleEnabled ? (
+            <button
+              type="button"
+              className="login-google-btn"
+              onClick={handleGoogleLogin}
+              disabled={redirecting}
+            >
+              <span className="login-google-btn__shine" aria-hidden />
+              {redirecting ? (
+                <span className="login-google-spinner" aria-hidden />
+              ) : (
+                <GoogleLogoIcon className="login-google-icon" />
+              )}
+              {redirecting ? 'Conectando con Google…' : 'Continuar con Google'}
+            </button>
+          ) : (
+            <p className="login-error" role="alert">
+              Google OAuth no está configurado en el servidor.
+            </p>
+          )}
+
+          <p className="login-footnote">
+            Acceso exclusivo para el equipo del Museo de Arte de Lima
+          </p>
+        </div>
       </div>
     </div>
   )
