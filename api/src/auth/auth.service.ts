@@ -108,11 +108,11 @@ export class AuthService {
     const hd = profile._json?.hd;
     const allowedDomain = this.config.allowedDomain;
 
-    if (
-      !email ||
-      !email.endsWith(`@${allowedDomain}`) ||
-      hd !== allowedDomain
-    ) {
+    if (!email || !email.endsWith(`@${allowedDomain}`)) {
+      throw new ForbiddenException(`Solo cuentas @${allowedDomain}`);
+    }
+    // hd puede omitirse en algunos tokens; si viene, debe coincidir con Workspace
+    if (hd && hd !== allowedDomain) {
       throw new ForbiddenException(`Solo cuentas @${allowedDomain}`);
     }
 

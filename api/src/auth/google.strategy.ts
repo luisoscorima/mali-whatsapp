@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { Strategy, VerifyCallback } from 'passport-google-oauth20';
+import { Strategy } from 'passport-google-oauth20';
 import { AppConfigService } from '../config/app-config.service';
 import { AuthService } from './auth.service';
 
@@ -24,20 +24,16 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       callbackURL:
         config.googleCallbackUrl || 'http://127.0.0.1/api/auth/google/callback',
       scope: ['email', 'profile'],
+      // Workspace: restringe selector de cuenta a @mali.pe
+      ...(config.allowedDomain ? { hd: config.allowedDomain } : {}),
     });
   }
 
-  async validate(
+  validate(
     _accessToken: string,
     _refreshToken: string,
     profile: GoogleProfile,
-    done: VerifyCallback,
   ) {
-    try {
-      const user = await this.authService.validateGoogleProfile(profile);
-      done(null, user);
-    } catch (error) {
-      done(error as Error, undefined);
-    }
+    return this.authService.validateGoogleProfile(profile);
   }
 }

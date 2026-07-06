@@ -27,8 +27,15 @@ export class GoogleAuthGuard extends AuthGuard('google') {
   ): TUser {
     const res = context.switchToHttp().getResponse<{ redirect: (url: string) => void }>();
     if (err || !user) {
+      const infoMessage =
+        typeof info === 'object' &&
+        info !== null &&
+        'message' in info &&
+        typeof (info as { message: unknown }).message === 'string'
+          ? (info as { message: string }).message
+          : '';
       const message = encodeURIComponent(
-        err?.message || 'No se pudo iniciar sesión con Google',
+        err?.message || infoMessage || 'No se pudo iniciar sesión con Google',
       );
       res.redirect(`${this.config.appBaseUrl}/login?error=${message}`);
       return null as TUser;
