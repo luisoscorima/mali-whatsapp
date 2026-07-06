@@ -163,47 +163,65 @@ html[data-theme='dark'] .inbox-layout-wa {
 }
 
 .inbox-layout-wa .inbox-chat-item {
+  display: flex;
+  align-items: flex-start;
   max-width: 100%;
   overflow: hidden;
 }
 
-.inbox-layout-wa .inbox-chat-item-row {
-  display: flex;
-  align-items: stretch;
-  max-width: 100%;
-}
-
-.inbox-layout-wa .inbox-chat-item-row .inbox-chat-item-btn {
+.inbox-layout-wa .inbox-chat-item-btn {
   flex: 1;
   min-width: 0;
 }
 
-.inbox-chat-item-more {
+.inbox-chat-side {
   flex-shrink: 0;
-  align-self: stretch;
-  width: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 10px 12px 10px 0;
+}
+
+.inbox-chat-item-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  padding: 0;
   border: none;
-  border-left: 1px solid var(--line);
   background: transparent;
   color: var(--muted);
-  font-size: 1.1rem;
+  font-size: 0.9rem;
   line-height: 1;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.inbox-layout-wa .inbox-chat-item:hover .inbox-chat-item-more,
+.inbox-layout-wa .inbox-chat-item:focus-within .inbox-chat-item-more {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .inbox-chat-item-more:hover {
-  background: color-mix(in srgb, var(--surface-strong) 60%, transparent);
   color: var(--ink);
-}
-
-.inbox-layout-wa .inbox-chat-item.is-active .inbox-chat-item-more {
-  border-left-color: color-mix(in srgb, var(--line) 70%, transparent);
 }
 
 .chat-bubble-wrap {
   position: relative;
   max-width: min(85%, 520px);
+}
+
+.inbox-layout-wa .chat-bubble-wrap--in {
+  align-self: flex-start;
+}
+
+.inbox-layout-wa .chat-bubble-wrap--out {
+  align-self: flex-end;
 }
 
 .chat-bubble-wrap .chat-bubble {
@@ -280,8 +298,12 @@ html[data-theme='dark'] .inbox-layout-wa {
 }
 
 .inbox-layout-wa .inbox-chat-link:hover,
-.inbox-layout-wa .inbox-chat-item-btn:hover {
+.inbox-layout-wa .inbox-chat-item:hover {
   background: color-mix(in srgb, var(--surface-strong) 60%, transparent);
+}
+
+.inbox-layout-wa .inbox-chat-item-btn:hover {
+  background: transparent;
 }
 
 .inbox-layout-wa .inbox-chat-item.is-active {
@@ -317,11 +339,11 @@ html[data-theme='dark'] .inbox-layout-wa {
 }
 
 .inbox-chat-row-top {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
+  min-width: 0;
 }
 
 .inbox-chat-title-group {
@@ -416,6 +438,7 @@ html[data-theme='dark'] .inbox-layout-wa {
   gap: 6px;
   flex-shrink: 0;
   white-space: nowrap;
+  min-height: 1.1rem;
 }
 
 .inbox-chat-time {

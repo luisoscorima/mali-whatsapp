@@ -217,6 +217,7 @@ export function ChatMessageBubble({
 
   return (
     <ChatMessageBubbleMenu
+      outbound={outbound}
       canInteract
       hasCopyText={Boolean(copyText)}
       onReply={() => onReply?.(message)}

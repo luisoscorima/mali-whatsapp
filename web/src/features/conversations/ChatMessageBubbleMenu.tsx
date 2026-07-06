@@ -1,4 +1,5 @@
 import { useState, type MouseEvent, type ReactNode } from 'react'
+import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/shadcn/popo
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const
 
 type ChatMessageBubbleMenuProps = {
+  outbound: boolean
   canInteract: boolean
   hasCopyText: boolean
   onReply: () => void
@@ -20,6 +22,7 @@ type ChatMessageBubbleMenuProps = {
 }
 
 export function ChatMessageBubbleMenu({
+  outbound,
   canInteract,
   hasCopyText,
   onReply,
@@ -41,7 +44,13 @@ export function ChatMessageBubbleMenu({
 
   return (
     <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-      <div className="chat-bubble-wrap" onContextMenu={openFromContext}>
+      <div
+        className={cn(
+          'chat-bubble-wrap',
+          outbound ? 'chat-bubble-wrap--out' : 'chat-bubble-wrap--in',
+        )}
+        onContextMenu={openFromContext}
+      >
         {children}
         <div className="chat-bubble__actions">
           <DropdownMenuTrigger

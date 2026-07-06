@@ -880,12 +880,11 @@ export function ConversationsInboxPage() {
                     )
                   }}
                 >
-                  <div className="inbox-chat-item-row">
-                    <button
-                      type="button"
-                      onClick={() => void onSelectItem(item)}
-                      className="inbox-chat-item-btn"
-                    >
+                  <button
+                    type="button"
+                    onClick={() => void onSelectItem(item)}
+                    className="inbox-chat-item-btn"
+                  >
                     <span className="inbox-chat-avatar" aria-hidden>
                       {inboxInitials(item.contact_name, item.phone)}
                     </span>
@@ -901,14 +900,6 @@ export function ConversationsInboxPage() {
                             assignedUserLabel={item.assigned_user_label}
                             automationTouchedAt={item.automation_touched_at}
                           />
-                        </span>
-                        <span className="inbox-chat-time-wrap">
-                          {item.inbox_unread ? (
-                            <span className="inbox-unread-dot" title="No leído" aria-label="No leído" />
-                          ) : null}
-                          <span className="inbox-chat-time">
-                            {formatChatListTime(item.last_message_at)}
-                          </span>
                         </span>
                       </span>
                       {hasContactName ? (
@@ -934,7 +925,16 @@ export function ConversationsInboxPage() {
                         </span>
                       ) : null}
                     </span>
-                    </button>
+                  </button>
+                  <div className="inbox-chat-side">
+                    <span className="inbox-chat-time-wrap">
+                      {item.inbox_unread ? (
+                        <span className="inbox-unread-dot" title="No leído" aria-label="No leído" />
+                      ) : null}
+                      <span className="inbox-chat-time">
+                        {formatChatListTime(item.last_message_at)}
+                      </span>
+                    </span>
                     <button
                       type="button"
                       className="inbox-chat-item-more"
@@ -947,7 +947,7 @@ export function ConversationsInboxPage() {
                         )
                       }}
                     >
-                      ›
+                      <span aria-hidden>▾</span>
                     </button>
                   </div>
                 </li>
