@@ -78,7 +78,11 @@ import {
   extractReplyWaMessageIdFromRawPayload,
 } from './chat-reply.util';
 import { readMessageDelivery } from './chat-delivery.util';
-import { readMessageSenderLabel, setMessageSender } from './chat-sender.util';
+import {
+  matchAuditSenderLabel,
+  readMessageSenderLabel,
+  setMessageSender,
+} from './chat-sender.util';
 import {
   advisorLabelFromUserRow,
   collectUserIdsFromAuditRows,
@@ -569,9 +573,10 @@ export class ConversationsService {
       },
     });
 
-    const messages = await this.mapMessageRowsWithReplyTo(
+    const messages = await this.enrichMessagesSenderFromAudit(
+      area,
       conversationId,
-      messageRows,
+      await this.mapMessageRowsWithReplyTo(conversationId, messageRows),
     );
     const events = await this.loadConversationTimelineEvents(
       area,
@@ -988,6 +993,47 @@ export class ConversationsService {
       const legacyReply = legacy.get(row.id);
       if (legacyReply) message.reply_to = legacyReply;
       return message;
+    });
+  }
+
+  private async enrichMessagesSenderFromAudit(
+    area: string,
+    conversationId: number,
+    messages: InboxMessage[],
+  ): Promise<InboxMessage[]> {
+    const needsLabel = messages.some(
+      (message) =>
+        message.direction === 'outbound' &&
+        !message.sender_label &&
+        !message.is_ai &&
+        message.message_type.toLowerCase() !== 'campaign',
+    );
+    if (!needsLabel) return messages;
+
+    const audits = await this.prisma.$queryRaw<
+      { actor_email: string | null; created_at: Date; meta: unknown }[]
+    >(Prisma.sql`
+      SELECT actor_email, created_at, meta
+      FROM audit_logs
+      WHERE area = ${area}
+        AND event_type = ${AuditEvent.CONVERSATION_REPLY}
+        AND (meta->>'conversation_id')::int = ${conversationId}
+      ORDER BY created_at ASC
+    `);
+
+    if (!audits.length) return messages;
+
+    return messages.map((message) => {
+      if (
+        message.sender_label ||
+        message.direction !== 'outbound' ||
+        message.is_ai ||
+        message.message_type.toLowerCase() === 'campaign'
+      ) {
+        return message;
+      }
+      const label = matchAuditSenderLabel(message, audits);
+      return label ? { ...message, sender_label: label } : message;
     });
   }
 
@@ -1594,7 +1640,11 @@ export class ConversationsService {
       : null;
 
     const [messages, events] = await Promise.all([
-      this.mapMessageRowsWithReplyTo(conversationId, messageRows),
+      this.enrichMessagesSenderFromAudit(
+        area,
+        conversationId,
+        await this.mapMessageRowsWithReplyTo(conversationId, messageRows),
+      ),
       this.loadConversationTimelineEvents(
         area,
         conversationId,
