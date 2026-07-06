@@ -92,8 +92,8 @@ export function LoginPage() {
                 className="login-brand__logo-img"
                 src={MALI_LOGO_URL}
                 alt=""
-                width={120}
-                height={36}
+                width={150}
+                height={44}
                 decoding="async"
               />
             </div>
