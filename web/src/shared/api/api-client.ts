@@ -12,6 +12,8 @@ type RequestOptions = {
   method?: RequestMethod;
   body?: unknown;
   skipAuth?: boolean;
+  /** 401 esperado (p. ej. comprobar sesión en login); no dispara logout global */
+  sessionProbe?: boolean;
 };
 
 let unauthorizedHandler: (() => void) | null = null;
@@ -75,8 +77,12 @@ async function request<T>(
     }
   }
 
-  if (res.status === 401 && !options.skipAuth) {
+  if (res.status === 401 && !options.skipAuth && !options.sessionProbe) {
     notifyUnauthorized();
+    return { ok: false, error: 'No autenticado' };
+  }
+
+  if (res.status === 401 && options.sessionProbe) {
     return { ok: false, error: 'No autenticado' };
   }
 
@@ -184,8 +190,8 @@ export const apiClient = {
     return { ok: true };
   },
 
-  getMe(): Promise<ApiResponse<AuthUser>> {
-    return request<AuthUser>('/api/me');
+  getMe(options?: { sessionProbe?: boolean }): Promise<ApiResponse<AuthUser>> {
+    return request<AuthUser>('/api/me', options);
   },
 
   getAuthConfig(): Promise<ApiResponse<{ googleEnabled: boolean }>> {

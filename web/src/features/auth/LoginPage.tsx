@@ -26,7 +26,7 @@ export function LoginPage() {
         setGoogleEnabled(config.data.googleEnabled)
       }
     })
-    apiClient.getMe().then((result) => {
+    apiClient.getMe({ sessionProbe: true }).then((result) => {
       if (result.ok) {
         navigate(from, { replace: true })
       } else {
