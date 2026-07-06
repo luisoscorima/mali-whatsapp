@@ -1,7 +1,4 @@
 import { formatDateTime } from '@/shared/format'
-import { Badge } from '@/shared/ui/shadcn/badge'
-import { Bubble, BubbleContent } from '@/shared/ui/shadcn/bubble'
-import { Message, MessageContent, MessageFooter } from '@/shared/ui/shadcn/message'
 import { cn } from '@/lib/utils'
 import type { CampaignMessagePreviewData } from '../campaigns/CampaignMessagePreview'
 import { ChatCampaignPreview } from './ChatCampaignPreview'
@@ -57,8 +54,6 @@ type ChatMessageBubbleProps = {
 
 export function ChatMessageBubble({ message, conversationId }: ChatMessageBubbleProps) {
   const outbound = message.direction === 'outbound'
-  const align = outbound ? 'end' : 'start'
-  const variant = outbound ? 'default' : 'secondary'
   const mt = message.message_type.toLowerCase()
   const mediaUrl = message.media_preview?.url
     ? resolveMediaUrl(message.media_preview.url)
@@ -69,106 +64,109 @@ export function ChatMessageBubble({ message, conversationId }: ChatMessageBubble
   const campPreview = message.campaign_preview
 
   return (
-    <Message align={align}>
-      <MessageContent align={align}>
-        <Bubble variant={variant} dashed={message.is_ai}>
-          {outbound && message.is_ai ? (
-            <Badge variant="secondary" className="mb-1 normal-case">
-              ✨ IA
-            </Badge>
-          ) : null}
+    <div
+      className={cn(
+        'chat-bubble',
+        outbound ? 'chat-bubble--out' : 'chat-bubble--in',
+        outbound && message.is_ai && 'chat-bubble--ai',
+      )}
+    >
+      {outbound && message.is_ai ? (
+        <span className="chat-bubble__ai-tag" title="Respuesta automática (IA)">
+          <span aria-hidden="true">✨</span> IA
+        </span>
+      ) : null}
 
-          {showTypeRow ? (
-            <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted">
-              <span aria-hidden="true">{mediaIcon(mt)}</span>
-              {mediaLabel(mt)}
-            </p>
-          ) : null}
+      {showTypeRow ? (
+        <div className="chat-bubble__type" title={mediaLabel(mt) || mt}>
+          <span className="chat-msg-type-icon" aria-hidden="true">
+            {mediaIcon(mt)}
+          </span>
+          <span className="chat-msg-type-label">{mediaLabel(mt) || mt}</span>
+        </div>
+      ) : null}
 
-          {campPreview ? (
-            <ChatCampaignPreview preview={campPreview} campaignId={message.campaign_id} />
-          ) : null}
+      {campPreview ? (
+        <ChatCampaignPreview preview={campPreview} campaignId={message.campaign_id} />
+      ) : null}
 
-          {mediaUrl && (mt === 'image' || mt === 'sticker') ? (
-            <div className="mb-2 overflow-hidden rounded-lg border border-line">
-              <img
-                className="chat-msg-media chat-msg-media--img"
-                src={mediaUrl}
-                alt=""
-                loading="lazy"
-                decoding="async"
-              />
-              <div className="border-t border-line px-2 py-1">
-                <a href={downloadHref} className={cn('text-xs font-medium text-accent hover:underline')}>
-                  Descargar
-                </a>
-              </div>
-            </div>
-          ) : null}
+      {mediaUrl && (mt === 'image' || mt === 'sticker') ? (
+        <div className="chat-bubble__media">
+          <img
+            className="chat-msg-media chat-msg-media--img"
+            src={mediaUrl}
+            alt=""
+            loading="lazy"
+            decoding="async"
+          />
+          <a className="chat-msg-download-link" href={downloadHref}>
+            Descargar
+          </a>
+        </div>
+      ) : null}
 
-          {mediaUrl && mt === 'video' ? (
-            <video
-              className="chat-msg-media chat-msg-media--video mb-2 rounded-lg"
-              controls
-              playsInline
-              preload="metadata"
+      {mediaUrl && mt === 'video' ? (
+        <div className="chat-bubble__media">
+          <video
+            className="chat-msg-media chat-msg-media--video"
+            controls
+            playsInline
+            preload="metadata"
+            src={mediaUrl}
+          />
+        </div>
+      ) : null}
+
+      {mediaUrl && (mt === 'audio' || mt === 'voice') ? (
+        <div className="chat-bubble__media">
+          <audio
+            className="chat-msg-media chat-msg-media--audio"
+            controls
+            preload="metadata"
+            src={mediaUrl}
+          />
+        </div>
+      ) : null}
+
+      {mediaUrl && mt === 'document' ? (
+        <div className="chat-bubble__media chat-bubble__media--doc">
+          {mime.includes('pdf') ? (
+            <iframe
+              className="chat-msg-media chat-msg-media--pdf"
+              title="Vista PDF"
               src={mediaUrl}
             />
           ) : null}
+          <a className="chat-msg-download-link" href={downloadHref}>
+            Descargar
+          </a>
+          <a
+            className="chat-msg-doc-link"
+            href={mediaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Abrir
+          </a>
+        </div>
+      ) : null}
 
-          {mediaUrl && (mt === 'audio' || mt === 'voice') ? (
-            <audio
-              className="chat-msg-media chat-msg-media--audio mb-2 w-full"
-              controls
-              preload="metadata"
-              src={mediaUrl}
-            />
-          ) : null}
+      {isMediaType(mt) && !mediaUrl ? (
+        <p className="chat-msg-fallback">
+          {outbound
+            ? 'Adjunto enviado (vista previa no disponible).'
+            : 'No se pudo cargar la vista previa del archivo.'}
+        </p>
+      ) : null}
 
-          {mediaUrl && mt === 'document' ? (
-            <div className="mb-2 space-y-1 rounded-lg border border-line p-2">
-              {mime.includes('pdf') ? (
-                <iframe
-                  className="chat-msg-media chat-msg-media--pdf w-full rounded"
-                  title="Vista PDF"
-                  src={mediaUrl}
-                />
-              ) : null}
-              <div className="flex flex-wrap gap-2">
-                <a href={downloadHref} className="text-xs font-medium text-accent hover:underline">
-                  Descargar
-                </a>
-                <a
-                  href={mediaUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs font-medium text-accent hover:underline"
-                >
-                  Abrir
-                </a>
-              </div>
-            </div>
-          ) : null}
+      {!campPreview && message.body_text?.trim() ? (
+        <div className="chat-bubble__text">{message.body_text}</div>
+      ) : null}
 
-          {isMediaType(mt) && !mediaUrl ? (
-            <p className="mb-1 text-xs text-muted">
-              {outbound
-                ? 'Adjunto enviado (vista previa no disponible).'
-                : 'No se pudo cargar la vista previa del archivo.'}
-            </p>
-          ) : null}
-
-          {!campPreview && message.body_text?.trim() ? (
-            <BubbleContent className="whitespace-pre-wrap text-[0.92rem] leading-relaxed">
-              {message.body_text}
-            </BubbleContent>
-          ) : null}
-        </Bubble>
-        <MessageFooter align={align}>
-          {formatDateTime(message.created_at)}
-          {message.is_ai ? ' · IA' : ''}
-        </MessageFooter>
-      </MessageContent>
-    </Message>
+      <div className="chat-meta">
+        {formatDateTime(message.created_at)}
+        {message.is_ai ? ' · IA' : ''}
+      </div>
+    </div>
   )
 }

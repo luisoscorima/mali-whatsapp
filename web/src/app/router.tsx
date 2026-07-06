@@ -84,7 +84,6 @@ export function AppRouter() {
               <Route path="admin" element={<AdminShell />}>
                 <Route index element={<Navigate to="users" replace />} />
                 <Route path="users" element={<AdminUsersPage />} />
-                <Route path="users/new" element={<AdminUserFormPage />} />
                 <Route path="users/:id" element={<AdminUserFormPage />} />
                 <Route path="areas" element={<AdminAreasPage />} />
                 <Route path="meta" element={<AdminMetaPage />} />
