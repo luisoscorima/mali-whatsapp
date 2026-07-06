@@ -1,5 +1,10 @@
 /* Shell tipo WhatsApp Web — subset portado del legacy */
 
+:root {
+  --wa-rail-width: 72px;
+  --wa-sidebar-width: 380px;
+}
+
 .wa-layout {
   display: grid;
   max-width: 100%;
@@ -9,7 +14,7 @@
 }
 
 .wa-layout--inbox {
-  grid-template-columns: 72px minmax(280px, 380px) minmax(0, 1fr);
+  grid-template-columns: var(--wa-rail-width) var(--wa-sidebar-width) minmax(0, 1fr);
   grid-template-rows: 1fr;
   align-items: stretch;
   overflow: hidden;
@@ -450,8 +455,10 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  min-width: 0;
   height: 100%;
+  width: var(--wa-sidebar-width);
+  min-width: var(--wa-sidebar-width);
+  max-width: var(--wa-sidebar-width);
   background: var(--wa-list-bg);
   border-right: 1px solid var(--line);
 }
@@ -691,6 +698,12 @@
     grid-row: 1;
     grid-column: 1;
     min-height: 0;
+  }
+
+  .wa-layout--inbox .inbox-sidebar {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
   }
 
   .wa-layout--inbox.conversations-inbox:not(.conversations-inbox--detail) .inbox-main {

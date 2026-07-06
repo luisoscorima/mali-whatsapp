@@ -1074,9 +1074,18 @@ html[data-theme='dark'] .inbox-layout-wa .chat-bubble--out {
 }
 
 .inbox-layout-wa .inbox-chat-body--form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 16px 20px;
   overflow-y: auto;
   background-image: none;
+}
+
+.inbox-layout-wa .inbox-chat-body--form > .inbox-empty-pane {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .small-btn {
