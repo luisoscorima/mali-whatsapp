@@ -15,11 +15,16 @@ export async function persistCampaignChatMessage(
     waMessageId: string | null;
     preview: CampaignMessagePreview;
     apiResponse?: unknown;
+    /** Fecha real del envío (backfill histórico). */
+    sentAt?: Date;
   },
 ): Promise<void> {
   const area = normalizeArea(input.area);
   const phone = normalizePhone(input.phone);
   if (!phone) return;
+
+  const at = input.sentAt ?? new Date();
+  const isHistorical = Boolean(input.sentAt);
 
   const bodyText =
     input.preview.bodyText.trim() ||
@@ -32,14 +37,18 @@ export async function persistCampaignChatMessage(
       area,
       phone,
       contact_id: input.contactId,
-      last_message_at: new Date(),
+      last_message_at: at,
       status: 'bot',
     },
-    update: {
-      ...(input.contactId ? { contact_id: input.contactId } : {}),
-      last_message_at: new Date(),
-      updated_at: new Date(),
-    },
+    update: isHistorical
+      ? {
+          ...(input.contactId ? { contact_id: input.contactId } : {}),
+        }
+      : {
+          ...(input.contactId ? { contact_id: input.contactId } : {}),
+          last_message_at: at,
+          updated_at: new Date(),
+        },
     select: { id: true },
   });
 
@@ -63,6 +72,7 @@ export async function persistCampaignChatMessage(
         message_type: 'campaign',
         is_ai: false,
         raw_payload: rawPayload,
+        created_at: at,
       },
     });
   } catch (error) {

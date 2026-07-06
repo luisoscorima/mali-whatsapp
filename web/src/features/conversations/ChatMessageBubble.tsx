@@ -3,6 +3,7 @@ import { formatDateTime } from '@/shared/format'
 import { cn } from '@/lib/utils'
 import type { CampaignMessagePreviewData } from '../campaigns/CampaignMessagePreview'
 import { ChatCampaignPreview } from './ChatCampaignPreview'
+import { ChatDeliveryStatus } from './ChatDeliveryStatus'
 import { ChatMessageBubbleMenu } from './ChatMessageBubbleMenu'
 
 export type ChatMessage = {
@@ -15,6 +16,7 @@ export type ChatMessage = {
   has_downloadable_media: boolean
   reaction?: { emoji: string; direction: 'inbound' | 'outbound' } | null
   reply_to?: { message_id: number; preview: string; outbound: boolean } | null
+  delivery?: { status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed'; label: string } | null
   media_preview?: { url: string; mime?: string | null } | null
   campaign_preview?: CampaignMessagePreviewData | null
   campaign_id?: number | null
@@ -135,11 +137,18 @@ export function ChatMessageBubble({
       ) : null}
 
       {message.reply_to ? (
-        <div className="chat-bubble__reply-to">
-          <span className="chat-bubble__reply-to-label">
+        <div
+          className={cn(
+            'chat-bubble__reply-to',
+            message.reply_to.outbound
+              ? 'chat-bubble__reply-to--ref-out'
+              : 'chat-bubble__reply-to--ref-in',
+          )}
+        >
+          <span className="chat-bubble__reply-to-name">
             {message.reply_to.outbound ? 'Tú' : 'Cliente'}
           </span>
-          <span className="chat-bubble__reply-to-text">{message.reply_to.preview}</span>
+          <span className="chat-bubble__reply-to-preview">{message.reply_to.preview}</span>
         </div>
       ) : null}
 
@@ -234,6 +243,10 @@ export function ChatMessageBubble({
       <div className="chat-bubble__meta">
         {formatDateTime(message.created_at)}
       </div>
+
+      {outbound && message.delivery ? (
+        <ChatDeliveryStatus delivery={message.delivery} />
+      ) : null}
 
       {message.reaction?.emoji ? (
         <span

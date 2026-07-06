@@ -57,6 +57,11 @@ export type InboxMessageReplyTo = {
   outbound: boolean;
 };
 
+export type InboxMessageDelivery = {
+  status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
+  label: string;
+};
+
 export type InboxTimelineEvent = {
   id: string;
   created_at: string;
@@ -73,6 +78,7 @@ export type InboxMessage = {
   has_downloadable_media: boolean;
   reaction?: InboxMessageReaction | null;
   reply_to?: InboxMessageReplyTo | null;
+  delivery?: InboxMessageDelivery | null;
   media_preview?: { url: string; mime?: string | null } | null;
   campaign_preview?: {
     headerText: string;
@@ -167,6 +173,7 @@ export type MessageReactionResult = {
 export type InboxConversationUpdates = {
   messages: InboxMessage[];
   message_reactions: { id: number; reaction: InboxMessageReaction | null }[];
+  message_deliveries: { id: number; delivery: InboxMessageDelivery | null }[];
   events: InboxTimelineEvent[];
   conversation: {
     last_message_at: string | null;

@@ -62,6 +62,7 @@ import type {
   InboxListResult,
   InboxMessage,
   InboxMessageReaction,
+  InboxMessageDelivery,
   ReplyResult,
   UpdateConversationModeResult,
   InboxConversationUpdates,
@@ -76,6 +77,7 @@ import {
   setMessageReplyTo,
   extractReplyWaMessageIdFromRawPayload,
 } from './chat-reply.util';
+import { readMessageDelivery } from './chat-delivery.util';
 import {
   advisorLabelFromUserRow,
   collectUserIdsFromAuditRows,
@@ -828,6 +830,10 @@ export class ConversationsService {
             outbound: storedReply.outbound,
           }
         : null,
+      delivery:
+        row.direction === 'outbound'
+          ? readMessageDelivery(row.raw_payload)
+          : null,
       media_preview: preview
         ? { url: preview.url, mime: preview.mime ?? null }
         : null,
@@ -1002,6 +1008,21 @@ export class ConversationsService {
         };
       })
       .filter((row) => row.reaction != null);
+  }
+
+  private async loadMessageDeliveries(
+    conversationId: number,
+  ): Promise<{ id: number; delivery: InboxMessageDelivery | null }[]> {
+    const rows = await this.prisma.chat_messages.findMany({
+      where: { conversation_id: conversationId, direction: 'outbound' },
+      select: { id: true, raw_payload: true },
+      orderBy: { id: 'desc' },
+      take: 300,
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      delivery: readMessageDelivery(row.raw_payload),
+    }));
   }
 
   private async applyMessageReaction(
@@ -1528,6 +1549,7 @@ export class ConversationsService {
       },
     });
     const messageReactions = await this.loadMessageReactions(conversationId);
+    const messageDeliveries = await this.loadMessageDeliveries(conversationId);
 
     if (messageRows.length > 0) {
       await this.prisma.conversations.updateMany({
@@ -1568,6 +1590,7 @@ export class ConversationsService {
     return {
       messages,
       message_reactions: messageReactions,
+      message_deliveries: messageDeliveries,
       events,
       conversation: {
         last_message_at: conversation.last_message_at?.toISOString() ?? null,

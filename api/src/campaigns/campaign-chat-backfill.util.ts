@@ -19,6 +19,7 @@ const BATCH_SIZE = 200;
 const LOGS_BACKFILL_FLAG = 'migration.campaign_chat_from_logs_v1';
 const PREVIEW_BACKFILL_FLAG = 'migration.campaign_chat_preview_backfill_v1';
 const MEDIA_BACKFILL_FLAG = 'migration.campaign_chat_preview_media_v1';
+const TIMESTAMPS_REPAIR_FLAG = 'migration.campaign_chat_timestamps_repair_v1';
 
 type BackfillStats = {
   scanned: number;
@@ -187,9 +188,10 @@ export async function backfillCampaignChatFromLogs(
         contact_id: number | null;
         phone: string;
         whatsapp_message_id: string;
+        created_at: Date;
       }[]
     >`
-      SELECT cl.id, cl.campaign_id, cl.contact_id, cl.phone, cl.whatsapp_message_id
+      SELECT cl.id, cl.campaign_id, cl.contact_id, cl.phone, cl.whatsapp_message_id, cl.created_at
       FROM campaign_logs cl
       WHERE cl.status = 'sent'
         AND cl.whatsapp_message_id IS NOT NULL
@@ -276,6 +278,7 @@ export async function backfillCampaignChatFromLogs(
           phone: row.phone,
           waMessageId: row.whatsapp_message_id,
           preview,
+          sentAt: row.created_at,
         });
         stats.updated += 1;
       } catch {
@@ -548,10 +551,51 @@ export async function backfillCampaignChatPreviewMedia(
   return { updated };
 }
 
+/**
+ * Corrige created_at inflado por backfill y last_message_at de conversaciones afectadas.
+ */
+export async function repairCampaignChatTimestampsFromLogs(
+  prisma: PrismaService,
+): Promise<{ messagesFixed: number; conversationsFixed: number } | { skipped: true; reason: string }> {
+  if (await isBackfillDone(prisma, TIMESTAMPS_REPAIR_FLAG)) {
+    return { skipped: true, reason: 'already_done' };
+  }
+
+  const messagesFixed = await prisma.$executeRaw`
+    UPDATE chat_messages cm
+    SET created_at = cl.created_at
+    FROM campaign_logs cl
+    WHERE cm.wa_message_id = cl.whatsapp_message_id
+      AND cm.message_type = 'campaign'
+      AND cl.status = 'sent'
+      AND cm.created_at > cl.created_at
+  `;
+
+  const conversationsFixed = await prisma.$executeRaw`
+    UPDATE conversations c
+    SET last_message_at = sub.max_at
+    FROM (
+      SELECT conversation_id, MAX(created_at) AS max_at
+      FROM chat_messages
+      GROUP BY conversation_id
+    ) sub
+    WHERE c.id = sub.conversation_id
+      AND c.last_message_at > sub.max_at
+  `;
+
+  const stats = {
+    messagesFixed: Number(messagesFixed),
+    conversationsFixed: Number(conversationsFixed),
+  };
+  await markBackfillDone(prisma, TIMESTAMPS_REPAIR_FLAG, stats);
+  return stats;
+}
+
 export async function runCampaignChatBackfills(
   prisma: PrismaService,
 ): Promise<void> {
   await backfillCampaignChatFromLogs(prisma);
   await backfillCampaignChatPreviews(prisma);
   await backfillCampaignChatPreviewMedia(prisma);
+  await repairCampaignChatTimestampsFromLogs(prisma);
 }

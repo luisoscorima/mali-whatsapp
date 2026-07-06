@@ -5,6 +5,8 @@
   --wa-bubble-out-border: color-mix(in srgb, var(--accent) 22%, transparent);
   --wa-bubble-in: color-mix(in srgb, var(--accent-soft) 8%, var(--surface-strong));
   --wa-bubble-in-border: rgba(0, 0, 0, 0.06);
+  --wa-quote-ref-out: #e879a6;
+  --wa-quote-ref-in: #53bdeb;
 }
 
 html[data-theme='dark'] .inbox-layout-wa {
@@ -986,11 +988,89 @@ html[data-theme='dark'] .inbox-layout-wa .chat-bubble--out {
   border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
 }
 
+.chat-bubble__reply-to {
+  display: grid;
+  gap: 1px;
+  margin-bottom: 5px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  border-left: 3px solid var(--wa-quote-ref-in);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chat-bubble__reply-to--ref-out {
+  border-left-color: var(--wa-quote-ref-out);
+}
+
+.chat-bubble__reply-to--ref-in {
+  border-left-color: var(--wa-quote-ref-in);
+}
+
+.chat-bubble__reply-to-name {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.chat-bubble__reply-to--ref-out .chat-bubble__reply-to-name {
+  color: var(--wa-quote-ref-out);
+}
+
+.chat-bubble__reply-to--ref-in .chat-bubble__reply-to-name {
+  color: var(--wa-quote-ref-in);
+}
+
+.chat-bubble__reply-to-preview {
+  display: block;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-theme='dark'] .chat-bubble__reply-to {
+  background: color-mix(in srgb, #000 30%, transparent);
+}
+
 .inbox-layout-wa .chat-bubble__meta {
   font-size: 0.68rem;
   margin-top: 4px;
   color: var(--muted);
   opacity: 0.85;
+}
+
+.chat-delivery-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.chat-delivery-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.chat-delivery-label {
+  line-height: 1.2;
+}
+
+.chat-delivery--read .chat-delivery-icon,
+.chat-delivery--read .chat-delivery-label {
+  color: var(--wa-quote-ref-in);
+}
+
+.chat-delivery--failed .chat-delivery-icon,
+.chat-delivery--failed .chat-delivery-label {
+  color: var(--danger, #dc2626);
 }
 
 .chat-msg-fallback {

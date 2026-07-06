@@ -194,6 +194,7 @@ type InboxMessage = {
   has_downloadable_media: boolean
   reaction?: InboxMessageReaction | null
   reply_to?: { message_id: number; preview: string; outbound: boolean } | null
+  delivery?: { status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed'; label: string } | null
   media_preview?: { url: string; mime?: string | null } | null
   campaign_preview?: {
     headerText: string
@@ -245,6 +246,7 @@ type InboxDetail = {
 type InboxConversationUpdates = {
   messages: InboxMessage[]
   message_reactions: { id: number; reaction: InboxMessageReaction | null }[]
+  message_deliveries: { id: number; delivery: InboxMessage['delivery'] }[]
   events: InboxTimelineEvent[]
   conversation: {
     last_message_at: string | null
@@ -298,6 +300,19 @@ function mergeMessageReactions(
   return messages.map((message) =>
     patchMap.has(message.id)
       ? { ...message, reaction: patchMap.get(message.id) ?? null }
+      : message,
+  )
+}
+
+function mergeMessageDeliveries(
+  messages: InboxMessage[],
+  patches: { id: number; delivery: InboxMessage['delivery'] }[],
+): InboxMessage[] {
+  if (!patches.length) return messages
+  const patchMap = new Map(patches.map((patch) => [patch.id, patch.delivery]))
+  return messages.map((message) =>
+    patchMap.has(message.id)
+      ? { ...message, delivery: patchMap.get(message.id) ?? null }
       : message,
   )
 }
@@ -445,6 +460,7 @@ export function ConversationsInboxPage() {
       const shouldScroll = scrollerRef.current?.isNearBottom() ?? true
       const incoming = result.data.messages
       const reactionPatches = result.data.message_reactions ?? []
+      const deliveryPatches = result.data.message_deliveries ?? []
       const incomingEvents = result.data.events ?? []
 
       setDetail((prev) => {
@@ -457,7 +473,10 @@ export function ConversationsInboxPage() {
         merged.sort((a, b) => a.id - b.id)
         return {
           ...prev,
-          messages: mergeMessageReactions(merged, reactionPatches),
+          messages: mergeMessageDeliveries(
+            mergeMessageReactions(merged, reactionPatches),
+            deliveryPatches,
+          ),
           events: mergeTimelineEvents(prev.events ?? [], incomingEvents),
           conversation: {
             ...prev.conversation,
