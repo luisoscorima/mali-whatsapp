@@ -7,6 +7,7 @@ import { auditActor } from '../audit/audit-actor.util';
 import { AuditLogService } from '../audit/audit-log.service';
 import { AppConfigService } from '../config/app-config.service';
 import {
+  isValidBusinessArea,
   isValidMaliEmail,
   normalizeArea,
   normalizeEmail,
@@ -117,6 +118,7 @@ export class AuthService {
   async validateGoogleProfile(profile: {
     id: string;
     emails?: { value: string }[];
+    photos?: { value: string }[];
     _json?: { hd?: string };
   }): Promise<{
     id: number;
@@ -130,6 +132,7 @@ export class AuthService {
     can_view_integration: boolean;
     can_edit_business_hours: boolean;
     can_view_reports: boolean;
+    picture?: string;
   }> {
     this.config.assertJwtSecret();
 
@@ -153,12 +156,16 @@ export class AuthService {
 
     if (existing) {
       if (isBootstrap) {
-        return this.prisma.users.update({
+        const updated = await this.prisma.users.update({
           where: { email },
           data: bootstrapAdminUserData(),
         });
+        return {
+          ...updated,
+          picture: profile.photos?.[0]?.value,
+        };
       }
-      return existing;
+      return { ...existing, picture: profile.photos?.[0]?.value };
     }
 
     const passwordHash = await bcrypt.hash(
@@ -166,13 +173,14 @@ export class AuthService {
       10,
     );
 
-    return this.prisma.users.create({
+    const created = await this.prisma.users.create({
       data: {
         email,
         ...newGoogleUserData(passwordHash),
         ...(isBootstrap ? bootstrapAdminUserData() : {}),
       },
     });
+    return { ...created, picture: profile.photos?.[0]?.value };
   }
 
   async loginWithGoogle(
@@ -188,10 +196,11 @@ export class AuthService {
       can_view_integration: boolean;
       can_edit_business_hours: boolean;
       can_view_reports: boolean;
+      picture?: string;
     },
     clientIp?: string | null,
   ): Promise<{ accessToken: string; user: AuthUser }> {
-    const authUser = await this.buildAuthUser(row, row.area);
+    const authUser = await this.buildAuthUser(row, row.area, row.picture);
     const accessToken = await this.signToken(authUser);
     await this.auditLog.write({
       event_type: AuditEvent.AUTH_LOGIN,
@@ -207,6 +216,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       area: user.area,
+      ...(user.picture ? { picture: user.picture } : {}),
     };
     return this.jwtService.sign(payload);
   }
@@ -219,7 +229,45 @@ export class AuthService {
       throw new UnauthorizedException('Usuario no encontrado');
     }
 
-    return this.buildAuthUser(user, payload.area);
+    return this.buildAuthUser(user, payload.area, payload.picture);
+  }
+
+  async switchArea(
+    user: AuthUser,
+    areaInput: string,
+    clientIp?: string | null,
+  ): Promise<{ accessToken: string; user: AuthUser }> {
+    const area = normalizeArea(areaInput);
+    if (!isValidBusinessArea(area)) {
+      throw new BadRequestException('Área no válida');
+    }
+    if (!this.userAreas.canAccessArea(user, area)) {
+      throw new ForbiddenException('No tienes acceso a esa área');
+    }
+
+    if (user.isMaster) {
+      await this.prisma.users.update({
+        where: { id: user.id },
+        data: { area },
+      });
+    }
+
+    const authUser = await this.buildAuthUser(
+      await this.prisma.users.findUniqueOrThrow({ where: { id: user.id } }),
+      area,
+      user.picture,
+    );
+    const accessToken = await this.signToken(authUser);
+
+    await this.auditLog.write({
+      event_type: AuditEvent.ADMIN_SWITCH_AREA,
+      message: `Cambió el área de trabajo a ${area}`,
+      actor: auditActor(user),
+      clientIp,
+      meta: { new_area: area },
+    });
+
+    return { accessToken, user: authUser };
   }
 
   async changePassword(
@@ -311,6 +359,7 @@ export class AuthService {
       can_view_reports: boolean;
     },
     sessionArea: unknown,
+    picture?: string,
   ): Promise<AuthUser> {
     const primaryArea = normalizeArea(row.area);
     const isBootstrapAdmin = isBootstrapAdminEmail(
@@ -359,6 +408,7 @@ export class AuthService {
         isBootstrapAdmin || isMaster || Boolean(row.can_edit_business_hours),
       canViewReports:
         isBootstrapAdmin || isMaster || Boolean(row.can_view_reports),
+      ...(picture ? { picture } : {}),
     };
   }
 }

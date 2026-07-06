@@ -14,12 +14,14 @@ export interface AuthUser {
   canViewIntegration: boolean;
   canEditBusinessHours: boolean;
   canViewReports: boolean;
+  picture?: string;
 }
 
 export interface JwtPayload {
   sub: number;
   email: string;
   area: BusinessArea;
+  picture?: string;
 }
 
 export interface ApiSuccess<T> {

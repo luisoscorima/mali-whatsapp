@@ -152,9 +152,48 @@ html[data-theme='dark'] .inbox-layout-wa {
 
 .inbox-chat-row-top {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: 8px;
+}
+
+.inbox-chat-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.inbox-chat-title-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.inbox-layout-wa .inbox-chat-title {
+  display: block;
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+}
+
+.inbox-layout-wa .inbox-chat-title-line .inbox-chat-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.inbox-chat-time-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .inbox-chat-title {
@@ -182,11 +221,150 @@ html[data-theme='dark'] .inbox-layout-wa {
 }
 
 .inbox-unread-dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: var(--accent);
+  background: #25d366;
   flex-shrink: 0;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--wa-list-bg) 40%, #000);
+}
+
+.inbox-chat-item--unread .inbox-chat-title {
+  font-weight: 700;
+}
+
+.inbox-layout-wa .inbox-chat-item--unread .inbox-chat-preview {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.inbox-chat-phone-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-width: 0;
+}
+
+.inbox-layout-wa .inbox-chat-phone {
+  display: inline;
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.inbox-chat-row-mid {
+  min-width: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.inbox-chat-mode-badge {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
+.inbox-chat-mode-badge--human {
+  background: color-mix(in srgb, var(--muted) 25%, transparent);
+  color: var(--muted);
+}
+
+.inbox-chat-lead-stars {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  line-height: 1;
+  letter-spacing: -0.06em;
+  user-select: none;
+}
+
+.inbox-chat-lead-star {
+  color: color-mix(in srgb, var(--muted) 45%, var(--line));
+}
+
+.inbox-chat-lead-star.is-on {
+  color: #ca8a04;
+}
+
+html[data-theme='dark'] .inbox-chat-lead-star.is-on {
+  color: #fbbf24;
+}
+
+.contact-segment-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.inbox-layout-wa .inbox-chat-segment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  width: fit-content;
+  max-width: 100%;
+  align-self: flex-start;
+  margin-top: 2px;
+  min-height: 1.45rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.25;
+  padding: 3px 10px;
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.inbox-layout-wa .inbox-chat-segment[data-seg-tone='teal'] {
+  background: rgba(13, 148, 136, 0.14);
+  border-color: rgba(13, 148, 136, 0.32);
+  color: rgb(15 118 110);
+}
+
+.inbox-layout-wa .inbox-chat-segment[data-seg-tone='emerald'] {
+  background: rgba(5, 150, 105, 0.14);
+  border-color: rgba(5, 150, 105, 0.32);
+  color: rgb(4 120 87);
+}
+
+.inbox-layout-wa .inbox-chat-segment[data-seg-tone='blue'] {
+  background: rgba(37, 99, 235, 0.12);
+  border-color: rgba(37, 99, 235, 0.28);
+  color: rgb(29 78 216);
+}
+
+.inbox-layout-wa .inbox-chat-segment[data-seg-tone='violet'] {
+  background: rgba(124, 58, 237, 0.12);
+  border-color: rgba(124, 58, 237, 0.28);
+  color: rgb(109 40 217);
+}
+
+.inbox-layout-wa .inbox-chat-segment[data-seg-tone='amber'] {
+  background: rgba(217, 119, 6, 0.14);
+  border-color: rgba(217, 119, 6, 0.3);
+  color: rgb(180 83 9);
+}
+
+.inbox-layout-wa .inbox-chat-segment[data-seg-tone='rose'] {
+  background: rgba(225, 29, 72, 0.1);
+  border-color: rgba(225, 29, 72, 0.28);
+  color: rgb(190 18 60);
+}
+
+.inbox-layout-wa .inbox-chat-segment[data-seg-tone='slate'] {
+  background: rgba(71, 85, 105, 0.1);
+  border-color: rgba(71, 85, 105, 0.28);
+  color: rgb(71 85 105);
 }
 
 .inbox-empty-list {
@@ -219,6 +397,211 @@ html[data-theme='dark'] .inbox-layout-wa {
   margin: 0;
   font-size: 0.85rem;
   color: var(--muted);
+}
+
+.inbox-chat-header-profile {
+  flex: 1 1 200px;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.inbox-chat-header-profile--link:hover,
+.inbox-chat-header-profile--link:focus-visible {
+  opacity: 0.92;
+}
+
+.inbox-chat-header-identity {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.inbox-chat-header-identity .inbox-window-meta {
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.inbox-chat-avatar--header {
+  width: 40px;
+  height: 40px;
+  font-size: 0.85rem;
+}
+
+.contact-segment-chips--header {
+  margin-top: 0.35rem;
+}
+
+.inbox-layout-wa .inbox-chat-segment--header {
+  margin-top: 4px;
+  font-size: 0.72rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.badge.sent {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
+.badge.neutral {
+  background: color-mix(in srgb, var(--muted) 20%, transparent);
+  color: var(--muted);
+}
+
+.inbox-chat-header-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.inbox-header-more {
+  position: relative;
+}
+
+.inbox-header-more-trigger {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 8px;
+  font-weight: 600;
+  user-select: none;
+}
+
+.inbox-header-more-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.inbox-header-more-icon {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.inbox-header-more-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  min-width: 252px;
+  max-width: min(calc(100vw - 24px), 340px);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--wa-header-bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+}
+
+html[data-theme='dark'] .inbox-header-more-panel {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.inbox-mode-toggle--in-more .inbox-mode-toggle-label {
+  display: block;
+  width: 100%;
+  margin-bottom: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.inbox-mode-toggle-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.inbox-mode-btn {
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.inbox-mode-btn.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.inbox-lead-score-form--in-more {
+  margin-top: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.inbox-lead-score-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.inbox-lead-score-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.inbox-lead-stars-input {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+.inbox-lead-star-btn {
+  border: none;
+  background: transparent;
+  padding: 2px 3px;
+  margin: 0;
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+  color: color-mix(in srgb, var(--muted) 55%, var(--line));
+}
+
+.inbox-lead-star-btn.is-on,
+.inbox-lead-star-btn:hover {
+  color: #ca8a04;
+}
+
+html[data-theme='dark'] .inbox-lead-star-btn.is-on,
+html[data-theme='dark'] .inbox-lead-star-btn:hover {
+  color: #fbbf24;
+}
+
+.small-btn.secondary {
+  background: var(--surface-strong);
+  color: var(--ink);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .inbox-layout-wa .inbox-chat-body {
@@ -416,4 +799,156 @@ html[data-theme='dark'] .inbox-layout-wa .chat-bubble--out {
 
 .small-btn.primary:hover {
   background: var(--accent-hover);
+}
+
+/* Chips de segmento — filtros contactos y conversaciones */
+.contact-filter-pills,
+.segment-filter-chips {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.conversation-segment-pills {
+  border-bottom: none;
+  padding-top: 0;
+}
+
+.contact-filter-pill[data-seg-tone='teal'] {
+  color: rgb(15 118 110);
+  border-color: rgba(13, 148, 136, 0.26);
+  background: rgba(13, 148, 136, 0.08);
+}
+
+.contact-filter-pill[data-seg-tone='emerald'] {
+  color: rgb(4 120 87);
+  border-color: rgba(5, 150, 105, 0.26);
+  background: rgba(5, 150, 105, 0.08);
+}
+
+.contact-filter-pill[data-seg-tone='blue'] {
+  color: rgb(29 78 216);
+  border-color: rgba(37, 99, 235, 0.22);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.contact-filter-pill[data-seg-tone='violet'] {
+  color: rgb(109 40 217);
+  border-color: rgba(124, 58, 237, 0.22);
+  background: rgba(124, 58, 237, 0.08);
+}
+
+.contact-filter-pill[data-seg-tone='amber'] {
+  color: rgb(180 83 9);
+  border-color: rgba(217, 119, 6, 0.24);
+  background: rgba(217, 119, 6, 0.08);
+}
+
+.contact-filter-pill[data-seg-tone='rose'] {
+  color: rgb(190 18 60);
+  border-color: rgba(225, 29, 72, 0.22);
+  background: rgba(225, 29, 72, 0.08);
+}
+
+.contact-filter-pill[data-seg-tone='slate'] {
+  color: rgb(71 85 105);
+  border-color: rgba(71, 85, 105, 0.25);
+  background: rgba(71, 85, 105, 0.08);
+}
+
+.contact-filter-pill.is-active {
+  font-weight: 700;
+  border-width: 1.5px;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, currentColor 28%, transparent),
+    0 2px 10px color-mix(in srgb, currentColor 22%, transparent);
+}
+
+.contact-filter-pill.is-active:not([data-seg-tone]) {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--wa-list-bg));
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+
+.contact-filter-pill.is-active[data-seg-tone='teal'] {
+  background: rgba(13, 148, 136, 0.24);
+  border-color: rgba(13, 148, 136, 0.58);
+  color: rgb(13 116 106);
+}
+
+.contact-filter-pill.is-active[data-seg-tone='emerald'] {
+  background: rgba(5, 150, 105, 0.24);
+  border-color: rgba(5, 150, 105, 0.58);
+  color: rgb(4 100 74);
+}
+
+.contact-filter-pill.is-active[data-seg-tone='blue'] {
+  background: rgba(37, 99, 235, 0.22);
+  border-color: rgba(37, 99, 235, 0.55);
+  color: rgb(29 78 216);
+}
+
+.contact-filter-pill.is-active[data-seg-tone='violet'] {
+  background: rgba(124, 58, 237, 0.22);
+  border-color: rgba(124, 58, 237, 0.55);
+  color: rgb(91 33 182);
+}
+
+.contact-filter-pill.is-active[data-seg-tone='amber'] {
+  background: rgba(217, 119, 6, 0.24);
+  border-color: rgba(217, 119, 6, 0.58);
+  color: rgb(161 72 8);
+}
+
+.contact-filter-pill.is-active[data-seg-tone='rose'] {
+  background: rgba(225, 29, 72, 0.22);
+  border-color: rgba(225, 29, 72, 0.55);
+  color: rgb(190 18 60);
+}
+
+.contact-filter-pill.is-active[data-seg-tone='slate'] {
+  background: rgba(71, 85, 105, 0.22);
+  border-color: rgba(71, 85, 105, 0.52);
+  color: rgb(51 65 85);
+}
+
+html[data-theme='dark'] .contact-filter-pill[data-seg-tone='teal'] {
+  color: rgb(153 246 228);
+  background: rgba(45, 212, 191, 0.14);
+  border-color: rgba(45, 212, 191, 0.32);
+}
+
+html[data-theme='dark'] .contact-filter-pill[data-seg-tone='emerald'] {
+  color: rgb(167 243 208);
+  background: rgba(52, 211, 153, 0.14);
+  border-color: rgba(52, 211, 153, 0.32);
+}
+
+html[data-theme='dark'] .contact-filter-pill[data-seg-tone='blue'] {
+  color: rgb(191 219 254);
+  background: rgba(96, 165, 250, 0.14);
+  border-color: rgba(96, 165, 250, 0.3);
+}
+
+html[data-theme='dark'] .contact-filter-pill[data-seg-tone='violet'] {
+  color: rgb(221 214 254);
+  background: rgba(167, 139, 250, 0.14);
+  border-color: rgba(167, 139, 250, 0.3);
+}
+
+html[data-theme='dark'] .contact-filter-pill[data-seg-tone='amber'] {
+  color: rgb(253 230 138);
+  background: rgba(251, 191, 36, 0.14);
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+html[data-theme='dark'] .contact-filter-pill[data-seg-tone='rose'] {
+  color: rgb(254 205 211);
+  background: rgba(251, 113, 133, 0.14);
+  border-color: rgba(251, 113, 133, 0.3);
+}
+
+html[data-theme='dark'] .contact-filter-pill[data-seg-tone='slate'] {
+  color: rgb(203 213 225);
+  background: rgba(148, 163, 184, 0.14);
+  border-color: rgba(148, 163, 184, 0.26);
 }

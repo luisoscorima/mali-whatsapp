@@ -5,7 +5,6 @@ import { ContactForm } from './ContactForm'
 import { splitPhoneForForm } from './phoneUtils'
 
 import { formatContactName } from './contactName'
-import { WaSpanMainPage } from '@/shared/ui/shell/WaSpanMainPage'
 
 type ContactDetail = {
   id: number
@@ -123,25 +122,16 @@ export function ContactDetailPage() {
   }
 
   if (error && !contact) {
-    return (
-      <WaSpanMainPage>
-        <p className="text-bad">{error}</p>
-      </WaSpanMainPage>
-    )
+    return <p className="text-bad">{error}</p>
   }
 
   if (!contact) {
-    return (
-      <WaSpanMainPage>
-        <p className="text-muted">Cargando contacto…</p>
-      </WaSpanMainPage>
-    )
+    return <p className="text-muted">Cargando contacto…</p>
   }
 
   const phoneParts = splitPhoneForForm(contact.phone)
 
   return (
-    <WaSpanMainPage>
     <div className="space-y-4">
       <div>
         <Link to="/contacts" className="text-sm text-accent hover:underline">
@@ -202,6 +192,5 @@ export function ContactDetailPage() {
         </div>
       </div>
     </div>
-    </WaSpanMainPage>
   )
 }

@@ -13,6 +13,7 @@ import { readClientIp } from '../audit/audit-log.service';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
+import { SwitchAreaDto } from './dto/switch-area.dto';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthService } from './auth.service';
@@ -145,5 +146,31 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: AuthUser): ApiResponse<AuthUser> {
     return { ok: true, data: user };
+  }
+
+  @Post('account/switch-area')
+  @UseGuards(JwtAuthGuard)
+  async switchArea(
+    @CurrentUser() user: AuthUser,
+    @Body() body: SwitchAreaDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<ApiResponse<{ user: AuthUser }>> {
+    const { accessToken, user: nextUser } = await this.authService.switchArea(
+      user,
+      body.area,
+      readClientIp(req),
+    );
+    const isProduction =
+      String(process.env.NODE_ENV || '').toLowerCase() === 'production';
+    res.cookie(this.config.authCookieName, accessToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      domain: this.config.cookieDomain || undefined,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+    return { ok: true, data: { user: nextUser } };
   }
 }

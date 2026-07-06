@@ -13,3 +13,13 @@ export class UpdateConversationModeDto {
   @IsIn(['bot', 'human'])
   status!: 'bot' | 'human';
 }
+
+export class LeadScoreDto {
+  @IsOptional()
+  @IsString()
+  lead_score?: string;
+
+  @IsOptional()
+  @IsString()
+  lead_score_clear?: string;
+}

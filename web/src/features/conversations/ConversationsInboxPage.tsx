@@ -1,7 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
-import { formatDateTime } from '../../shared/format'
+import { formatChatListTime, formatDateTime } from '../../shared/format'
 import { WaPageContents } from '@/shared/ui/shell/WaLayout'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import {
@@ -11,9 +11,109 @@ import {
 } from '@/shared/ui/shell/WaMainPane'
 import { ChatEmptyIcon, WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
 import { formatContactName } from '../contacts/contactName'
-
-const SEGMENT_NONE = '__none__'
+import { SegmentFilterChips } from '../segments/SegmentFilterChips'
 const INBOX_POLL_MS = 8000
+
+function segmentLabel(slug: string, segments: SegmentOption[]): string {
+  return segments.find((s) => s.slug === slug)?.label ?? slug
+}
+
+function segmentColorKey(slug: string, segments: SegmentOption[]): string {
+  return segments.find((s) => s.slug === slug)?.color_key ?? 'slate'
+}
+
+function LeadStars({ score }: { score: number }) {
+  return (
+    <span className="inbox-chat-lead-stars" aria-label={`Calificación ${score} de 5`} title="Calificación del lead">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <span key={i} className={`inbox-chat-lead-star ${i <= score ? 'is-on' : ''}`}>
+          ★
+        </span>
+      ))}
+    </span>
+  )
+}
+
+function conversationModeBadge(status: string | null) {
+  const st = String(status ?? '').toLowerCase()
+  if (st === 'bot') {
+    return (
+      <span className="inbox-chat-mode-badge" title="Modo Bot">
+        Bot
+      </span>
+    )
+  }
+  if (st === 'human') {
+    return (
+      <span className="inbox-chat-mode-badge inbox-chat-mode-badge--human" title="Modo Asesor">
+        Asesor
+      </span>
+    )
+  }
+  return null
+}
+
+function ProfileBlock({
+  detail,
+  segments,
+}: {
+  detail: InboxDetail
+  segments: SegmentOption[]
+}) {
+  const contactId = detail.conversation.contact_id
+  const heading = formatContactName(
+    detail.contact?.name,
+    null,
+    detail.conversation.phone,
+  )
+  return (
+    <>
+      <span className="inbox-chat-avatar inbox-chat-avatar--header" aria-hidden>
+        {inboxInitials(detail.contact?.name ?? '', detail.conversation.phone)}
+      </span>
+      <div className="inbox-chat-header-identity">
+        <h1 className="inbox-chat-heading">{heading}</h1>
+        <p className="inbox-chat-sub">
+          {detail.conversation.phone}
+          {contactId ? ' · Perfil' : ''}
+        </p>
+        {detail.meta_ad ? (
+          <p className="inbox-chat-sub muted">
+            Anuncio:{' '}
+            <Link to={`/anuncios/${detail.meta_ad.id}`}>
+              {detail.meta_ad.display_name ?? 'Anuncio'}
+            </Link>
+          </p>
+        ) : null}
+        {detail.contact?.segment_slugs && detail.contact.segment_slugs.length > 0 ? (
+          <span
+            className="contact-segment-chips contact-segment-chips--header"
+            role="group"
+            aria-label="Segmentos"
+          >
+            {detail.contact.segment_slugs.map((slug) => (
+              <span
+                key={slug}
+                className="inbox-chat-segment inbox-chat-segment--header"
+                data-seg-tone={segmentColorKey(slug, segments)}
+              >
+                {segmentLabel(slug, segments)}
+              </span>
+            ))}
+          </span>
+        ) : null}
+        <p className="inbox-window-meta">
+          Ventana 24 h:{' '}
+          {detail.user_service_window_open ? (
+            <span className="badge sent">Abierta</span>
+          ) : (
+            <span className="badge neutral">Cerrada</span>
+          )}
+        </p>
+      </div>
+    </>
+  )
+}
 
 function isNearBottom(element: HTMLElement): boolean {
   return element.scrollHeight - element.scrollTop - element.clientHeight < 120
@@ -80,6 +180,7 @@ type InboxDetail = {
     segment_slugs: string[]
   } | null
   meta_ad: {
+    id: number
     display_name: string | null
     headline: string | null
     source_url: string | null
@@ -395,6 +496,36 @@ export function ConversationsInboxPage() {
     void loadDetail(selectedId)
   }
 
+  async function onMarkUnread() {
+    if (!selectedId || selectedId <= 0) return
+    const result = await apiClient.post<{ ok: true }>(
+      `/api/conversations/${selectedId}/mark-unread`,
+      {},
+    )
+    if (!result.ok) {
+      setReplyError(result.error)
+      return
+    }
+    navigate(`/conversations${querySuffix}`)
+    void loadList()
+  }
+
+  async function onLeadScore(score: number | null) {
+    if (!selectedId || selectedId <= 0) return
+    const result = await apiClient.post<{ lead_score: number | null }>(
+      `/api/conversations/${selectedId}/lead-score`,
+      score == null
+        ? { lead_score_clear: '1' }
+        : { lead_score: String(score) },
+    )
+    if (!result.ok) {
+      setReplyError(result.error)
+      return
+    }
+    void loadDetail(selectedId)
+    void loadList()
+  }
+
   async function onSendReply(event: FormEvent) {
     event.preventDefault()
     if (!selectedId || selectedId <= 0 || !detail?.can_reply) return
@@ -474,25 +605,17 @@ export function ConversationsInboxPage() {
           </>
         ) : null}
       </div>
-      <div className="inbox-chat-filter-pills">
-        <button
-          type="button"
-          onClick={() => toggleSegment(SEGMENT_NONE)}
-          className={`inbox-chat-pill ${selectedSegments.includes(SEGMENT_NONE) ? 'is-active' : ''}`}
-        >
-          Sin segmento
-        </button>
-        {segments.map((segment) => (
-          <button
-            key={segment.slug}
-            type="button"
-            onClick={() => toggleSegment(segment.slug)}
-            className={`inbox-chat-pill ${selectedSegments.includes(segment.slug) ? 'is-active' : ''}`}
-          >
-            {segment.label}
-          </button>
-        ))}
-      </div>
+      <SegmentFilterChips
+        segments={segments}
+        selectedSlugs={selectedSegments}
+        onToggle={toggleSegment}
+        onClearAll={() => {
+          const next = new URLSearchParams(searchParams)
+          next.delete('segment')
+          setSearchParams(next)
+        }}
+        className="conversation-segment-pills"
+      />
       <form onSubmit={onSearchSubmit} className="inbox-filters">
         <div className="inbox-search-row">
           <input
@@ -534,29 +657,61 @@ export function ConversationsInboxPage() {
             list.items.map((item) => {
               const active = selectedId === item.id
               const name = displayName(item)
+              const hasContactName = Boolean(item.contact_name?.trim())
+              const leadScore = item.contact_lead_score
               return (
-                <li key={item.id} className={`inbox-chat-item ${active ? 'is-active' : ''}`}>
+                <li
+                  key={item.id}
+                  className={`inbox-chat-item ${item.inbox_unread ? 'inbox-chat-item--unread' : ''} ${active ? 'is-active' : ''}`}
+                >
                   <button
                     type="button"
                     onClick={() => void onSelectItem(item)}
                     className="inbox-chat-item-btn"
                   >
-                    <span className="inbox-chat-avatar">
+                    <span className="inbox-chat-avatar" aria-hidden>
                       {inboxInitials(item.contact_name, item.phone)}
                     </span>
                     <span className="inbox-chat-link-main">
                       <span className="inbox-chat-row-top">
-                        <span className="inbox-chat-title">{name}</span>
-                        {item.inbox_unread ? (
-                          <span className="inbox-unread-dot" aria-label="No leído" />
-                        ) : null}
-                        {item.last_message_at ? (
-                          <span className="inbox-chat-time">
-                            {formatDateTime(item.last_message_at)}
+                        <span className="inbox-chat-title-group">
+                          <span className="inbox-chat-title-line">
+                            <span className="inbox-chat-title">{name}</span>
+                            {!hasContactName && leadScore ? <LeadStars score={leadScore} /> : null}
                           </span>
-                        ) : null}
+                          {conversationModeBadge(item.conversation_status)}
+                        </span>
+                        <span className="inbox-chat-time-wrap">
+                          {item.inbox_unread ? (
+                            <span className="inbox-unread-dot" title="No leído" aria-label="No leído" />
+                          ) : null}
+                          <span className="inbox-chat-time">
+                            {formatChatListTime(item.last_message_at)}
+                          </span>
+                        </span>
                       </span>
-                      <span className="inbox-chat-preview">{listPreviewText(item.preview)}</span>
+                      {hasContactName ? (
+                        <span className="inbox-chat-phone-row">
+                          <span className="inbox-chat-phone">{item.phone}</span>
+                          {leadScore ? <LeadStars score={leadScore} /> : null}
+                        </span>
+                      ) : null}
+                      <span className="inbox-chat-row-mid">
+                        <span className="inbox-chat-preview">{listPreviewText(item.preview)}</span>
+                      </span>
+                      {item.contact_segment_slugs.length > 0 ? (
+                        <span className="contact-segment-chips" role="group" aria-label="Segmentos">
+                          {item.contact_segment_slugs.map((slug) => (
+                            <span
+                              key={slug}
+                              className="inbox-chat-segment"
+                              data-seg-tone={segmentColorKey(slug, segments)}
+                            >
+                              {segmentLabel(slug, segments)}
+                            </span>
+                          ))}
+                        </span>
+                      ) : null}
                     </span>
                   </button>
                 </li>
@@ -585,38 +740,112 @@ export function ConversationsInboxPage() {
                 className="inbox-back-mobile"
                 onClick={() => navigate(`/conversations${querySuffix}`)}
               >
-                ← Lista
+                ← Chats
               </button>
-              <div className="min-w-0 flex-1">
-                <h2 className="inbox-chat-heading">
-                  {formatContactName(detail.contact?.name, null, detail.conversation.phone)}
-                </h2>
-                <p className="inbox-chat-sub">{detail.conversation.phone}</p>
-              </div>
-              <div className="flex shrink-0 flex-col items-end gap-2">
+              {detail.conversation.contact_id ? (
+                <Link
+                  to={`/contacts/${detail.conversation.contact_id}`}
+                  className="inbox-chat-header-profile inbox-chat-header-profile--link"
+                  title="Ver perfil del contacto"
+                >
+                  <ProfileBlock detail={detail} segments={segments} />
+                </Link>
+              ) : (
+                <div className="inbox-chat-header-profile">
+                  <ProfileBlock detail={detail} segments={segments} />
+                </div>
+              )}
+              <div className="inbox-chat-header-toolbar">
                 <button
                   type="button"
-                  className="small-btn"
+                  className="small-btn secondary inbox-export-btn"
+                  title="Descargar Excel"
+                  aria-label="Descargar conversación en Excel"
                   onClick={() =>
                     void apiClient.download(`/api/conversations/${selectedId}/export`)
                   }
                 >
-                  Exportar
+                  ↓
                 </button>
-                {detail.ai_area_enabled ? (
-                  <div className="flex gap-1">
-                    {(['human', 'bot'] as const).map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => void onModeChange(mode)}
-                        className={`inbox-chat-pill ${detail.conversation.status === mode ? 'is-active' : ''}`}
+                <details className="inbox-header-more">
+                  <summary
+                    className="inbox-header-more-trigger small-btn secondary"
+                    title="Más"
+                    aria-label="Más opciones"
+                  >
+                    <span className="inbox-header-more-icon" aria-hidden>
+                      +
+                    </span>
+                  </summary>
+                  <div className="inbox-header-more-panel">
+                    <button
+                      type="button"
+                      className="small-btn secondary"
+                      onClick={() => void onMarkUnread()}
+                    >
+                      Marcar como no leído
+                    </button>
+                    {!detail.contact ? (
+                      <Link
+                        to={`/contacts/new?prefill_phone=${encodeURIComponent(detail.conversation.phone.replace(/\D/g, ''))}`}
+                        className="small-btn secondary"
                       >
-                        {mode === 'human' ? 'Asesor' : 'Bot'}
-                      </button>
-                    ))}
+                        Guardar contacto
+                      </Link>
+                    ) : null}
+                    {detail.ai_area_enabled ? (
+                      <div className="inbox-mode-toggle inbox-mode-toggle--in-more" role="group" aria-label="Modo del chat">
+                        <span className="inbox-mode-toggle-label">Modo</span>
+                        <div className="inbox-mode-toggle-btns">
+                          {(['bot', 'human'] as const).map((mode) => (
+                            <button
+                              key={mode}
+                              type="button"
+                              className={`inbox-mode-btn inbox-mode-btn--icon-only ${detail.conversation.status === mode ? 'is-active' : ''}`}
+                              onClick={() => void onModeChange(mode)}
+                              title={mode === 'bot' ? 'Bot' : 'Asesor'}
+                              aria-label={mode === 'bot' ? 'Modo Bot' : 'Modo Asesor'}
+                            >
+                              <span aria-hidden>{mode === 'bot' ? '🤖' : '👤'}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    {detail.contact ? (
+                      <div className="inbox-lead-score-form inbox-lead-score-form--in-more">
+                        <div className="inbox-lead-score-row">
+                          <span className="inbox-lead-score-label" id="lead-score-label">
+                            Calificación del lead
+                          </span>
+                          <div className="inbox-lead-stars-input" role="group" aria-labelledby="lead-score-label">
+                            {[1, 2, 3, 4, 5].map((n) => {
+                              const current = detail.contact?.lead_score ?? 0
+                              return (
+                                <button
+                                  key={n}
+                                  type="button"
+                                  className={`inbox-lead-star-btn ${n <= current ? 'is-on' : ''}`}
+                                  onClick={() => void onLeadScore(n)}
+                                  aria-label={`${n} estrella${n > 1 ? 's' : ''}`}
+                                >
+                                  ★
+                                </button>
+                              )
+                            })}
+                            <button
+                              type="button"
+                              className="small-btn secondary"
+                              onClick={() => void onLeadScore(null)}
+                            >
+                              Borrar
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
+                </details>
               </div>
             </WaMainHeader>
 

@@ -1,8 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
-import { WaSpanMainPage } from '@/shared/ui/shell/WaSpanMainPage'
-
 type AttributeDefinition = {
   id: number
   segment_slug: string | null
@@ -102,23 +100,14 @@ export function AttributeDetailPage() {
   }
 
   if (error && !def) {
-    return (
-      <WaSpanMainPage>
-        <p className="text-bad">{error}</p>
-      </WaSpanMainPage>
-    )
+    return <p className="text-bad">{error}</p>
   }
 
   if (!def) {
-    return (
-      <WaSpanMainPage>
-        <p className="text-muted">Cargando atributo…</p>
-      </WaSpanMainPage>
-    )
+    return <p className="text-muted">Cargando atributo…</p>
   }
 
   return (
-    <WaSpanMainPage>
     <div className="space-y-4">
       <div>
         <Link to="/attributes" className="text-sm text-accent hover:underline">
@@ -213,6 +202,5 @@ export function AttributeDetailPage() {
         </div>
       </form>
     </div>
-    </WaSpanMainPage>
   )
 }

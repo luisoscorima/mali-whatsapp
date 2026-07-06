@@ -31,6 +31,7 @@ import type {
 import {
   ReplyConversationDto,
   UpdateConversationModeDto,
+  LeadScoreDto,
 } from './dto/conversations.dto';
 
 @Controller('conversations')
@@ -91,6 +92,31 @@ export class ConversationsController {
       user,
       id,
       body.status,
+    );
+    return { ok: true, data };
+  }
+
+  @Post(':id/mark-unread')
+  async markUnread(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<ApiResponse<{ ok: true }>> {
+    const data = await this.conversationsService.markUnread(user, id);
+    return { ok: true, data };
+  }
+
+  @Post(':id/lead-score')
+  async leadScore(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: LeadScoreDto,
+  ): Promise<ApiResponse<{ lead_score: number | null }>> {
+    const clear = String(body.lead_score_clear ?? '').trim() === '1';
+    const data = await this.conversationsService.setLeadScore(
+      user,
+      id,
+      clear,
+      body.lead_score,
     );
     return { ok: true, data };
   }

@@ -2,8 +2,6 @@ import { type FormEvent, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { SEGMENT_COLOR_KEYS, SEGMENT_COLOR_LABELS } from './segmentColors'
-import { WaSpanMainPage } from '@/shared/ui/shell/WaSpanMainPage'
-
 export function SegmentNewPage() {
   const navigate = useNavigate()
   const [slug, setSlug] = useState('')
@@ -32,7 +30,6 @@ export function SegmentNewPage() {
   }
 
   return (
-    <WaSpanMainPage>
     <div className="space-y-4">
       <div>
         <Link to="/segments" className="text-sm text-accent hover:underline">
@@ -107,6 +104,5 @@ export function SegmentNewPage() {
         </button>
       </form>
     </div>
-    </WaSpanMainPage>
   )
 }

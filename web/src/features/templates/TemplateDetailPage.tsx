@@ -7,8 +7,6 @@ import { TemplateForm } from './TemplateForm'
 import { TemplateLivePreview } from './TemplateLivePreview'
 import { templateStatusClass } from './templateStatus'
 import type { TemplateBuilderState } from './templateFormUtils'
-import { WaSpanMainPage } from '@/shared/ui/shell/WaSpanMainPage'
-
 type TemplateDetail = {
   id: number
   meta_id: string | null
@@ -54,27 +52,20 @@ export function TemplateDetailPage() {
 
   if (error) {
     return (
-      <WaSpanMainPage>
       <div className="space-y-3">
         <Link to="/templates" className="text-sm text-accent">
           ← Plantillas
         </Link>
         <p className="text-bad">{error}</p>
       </div>
-      </WaSpanMainPage>
     )
   }
 
   if (!template) {
-    return (
-      <WaSpanMainPage>
-        <p className="text-muted">Cargando plantilla…</p>
-      </WaSpanMainPage>
-    )
+    return <p className="text-muted">Cargando plantilla…</p>
   }
 
   return (
-    <WaSpanMainPage>
     <div className="space-y-4">
       <Link to="/templates" className="text-sm text-accent">
         ← Plantillas
@@ -166,6 +157,5 @@ export function TemplateDetailPage() {
         </div>
       ) : null}
     </div>
-    </WaSpanMainPage>
   )
 }

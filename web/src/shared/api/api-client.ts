@@ -245,6 +245,13 @@ export const apiClient = {
     unauthorizedHandler?.();
   },
 
+  switchArea(area: string): Promise<ApiResponse<{ user: AuthUser }>> {
+    return request<{ user: AuthUser }>('/api/account/switch-area', {
+      method: 'POST',
+      body: JSON.stringify({ area }),
+    });
+  },
+
   async getHealth(): Promise<HealthResult> {
     const res = await fetch('/health');
     const body = (await res.json()) as HealthResult;

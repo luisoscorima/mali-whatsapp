@@ -9,8 +9,13 @@ export function WaAppShell() {
   const [user, setUser] = useState<AuthUser | null>(null)
   const location = useLocation()
   const isConversations = location.pathname.startsWith('/conversations')
-  const hasConversationDetail =
-    isConversations && /^\/conversations\/\d+/.test(location.pathname)
+  const hasInboxDetail =
+    /^\/conversations\/\d+/.test(location.pathname) ||
+    /^\/contacts\/(\d+|new|import)/.test(location.pathname) ||
+    /^\/segments\/(\d+|new)/.test(location.pathname) ||
+    /^\/templates\/(\d+|new)/.test(location.pathname) ||
+    /^\/attributes\/(\d+|new)/.test(location.pathname) ||
+    /^\/campaigns\/(\d+|new)/.test(location.pathname)
 
   useEffect(() => {
     onUnauthorized(() => setUser(null))
@@ -21,7 +26,7 @@ export function WaAppShell() {
 
   const layoutClass = [
     isConversations ? 'conversations-page' : '',
-    hasConversationDetail ? 'conversations-inbox--detail' : '',
+    hasInboxDetail ? 'conversations-inbox--detail' : '',
   ]
     .filter(Boolean)
     .join(' ')
@@ -30,7 +35,7 @@ export function WaAppShell() {
     <TooltipProvider>
       <div className="page-wa page-conversations text-ink">
         <WaLayout className={layoutClass}>
-          <WaRail user={user} />
+          <WaRail user={user} onUserUpdate={setUser} />
           <Outlet />
         </WaLayout>
       </div>

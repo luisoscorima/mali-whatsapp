@@ -15,15 +15,14 @@ import {
   type CampaignMessagePreviewData,
 } from './CampaignMessagePreview'
 import { MetricsGrid } from './MetricsGrid'
+import { CampaignDrilldownDialog } from './CampaignDrilldownDialog'
+import {
+  attachMetricActions,
+  type MetricAction,
+  type MetricCard,
+} from './campaignMetricActions'
+import { resolveMetricAction } from './metricAction'
 import { campaignStatusClass } from './campaignStatus'
-
-type MetricCard = {
-  label: string
-  display: string
-  displayLines?: string[] | null
-  tone?: string
-  tooltip?: string
-}
 
 type CampaignLog = {
   id: number
@@ -137,6 +136,15 @@ export function CampaignDetailPage() {
   const [incidentsFilter, setIncidentsFilter] = useState('all')
   const [logsViewFilter, setLogsViewFilter] = useState('all_current')
   const [showResponders, setShowResponders] = useState(false)
+  const [drilldownAction, setDrilldownAction] = useState<MetricAction | null>(null)
+  const [drilldownOpen, setDrilldownOpen] = useState(false)
+
+  function onMetricClick(metric: MetricCard) {
+    const action = resolveMetricAction(metric)
+    if (!action) return
+    setDrilldownAction(action)
+    setDrilldownOpen(true)
+  }
 
   async function reload() {
     if (!id) return
@@ -225,7 +233,13 @@ export function CampaignDetailPage() {
     )
   }
 
-  const a = campaign.analytics
+  const a = {
+    ...campaign.analytics,
+    globalResult: attachMetricActions(campaign.analytics.globalResult),
+    performance: attachMetricActions(campaign.analytics.performance),
+    funnel: attachMetricActions(campaign.analytics.funnel),
+    incidents: attachMetricActions(campaign.analytics.incidents),
+  }
   const rs = campaign.retry_stats
   const rm = campaign.responder_metrics
   const campaignId = campaign.id
@@ -487,16 +501,28 @@ export function CampaignDetailPage() {
           {a.cost.sourceLabel}: {a.cost.amountDisplay} ·{' '}
           {a.cost.perDeliveredDisplay} por entregado. {a.cost.hint}
         </p>
-        <MetricsGrid title="Resultado" metrics={a.globalResult} />
-        <MetricsGrid title="Rendimiento" metrics={a.performance} />
-        <p className="text-xs text-muted">{a.performanceNote}</p>
+        <MetricsGrid title="Resultado" metrics={a.globalResult} onMetricClick={onMetricClick} />
+        <MetricsGrid title="Rendimiento" metrics={a.performance} onMetricClick={onMetricClick} />
+        <p className="text-xs text-muted">
+          {a.performanceNote}{' '}
+          <button
+            type="button"
+            className="text-accent underline"
+            onClick={() => {
+              setDrilldownAction({ type: 'concepts' })
+              setDrilldownOpen(true)
+            }}
+          >
+            Leyenda de conceptos
+          </button>
+        </p>
         <details className="text-sm">
           <summary className="cursor-pointer font-medium">Embudo Meta</summary>
           <div className="mt-3">
-            <MetricsGrid title="" metrics={a.funnel} />
+            <MetricsGrid title="" metrics={a.funnel} onMetricClick={onMetricClick} />
           </div>
         </details>
-        <MetricsGrid title="Incidencias" metrics={a.incidents} />
+        <MetricsGrid title="Incidencias" metrics={a.incidents} onMetricClick={onMetricClick} />
         {a.incidentsNote ? (
           <p className="text-xs text-muted">{a.incidentsNote}</p>
         ) : null}
@@ -700,6 +726,16 @@ export function CampaignDetailPage() {
           </ul>
         )}
       </section>
+
+      <CampaignDrilldownDialog
+        open={drilldownOpen}
+        onOpenChange={setDrilldownOpen}
+        action={drilldownAction}
+        campaignId={campaignId}
+        logs={campaign.logs}
+        failedLogs={campaign.failed_logs}
+        responders={campaign.responder_metrics.responders}
+      />
     </div>
     </CampaignShell>
   )

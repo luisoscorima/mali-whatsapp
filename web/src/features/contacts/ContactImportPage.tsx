@@ -1,7 +1,6 @@
 import { type FormEvent, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
-import { WaSpanMainPage } from '@/shared/ui/shell/WaSpanMainPage'
 
 type ImportResult = {
   imported: number
@@ -46,7 +45,6 @@ export function ContactImportPage() {
   }
 
   return (
-    <WaSpanMainPage>
     <div className="space-y-4">
       <div>
         <Link to="/contacts" className="text-sm text-accent hover:underline">
@@ -130,6 +128,5 @@ export function ContactImportPage() {
         (slugs definidos en Atributos). Varios segmentos separados por ; o ,.
       </p>
     </div>
-    </WaSpanMainPage>
   )
 }

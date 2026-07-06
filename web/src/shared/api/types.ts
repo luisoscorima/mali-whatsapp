@@ -24,6 +24,7 @@ export type AuthUser = {
   canViewIntegration: boolean;
   canEditBusinessHours: boolean;
   canViewReports: boolean;
+  picture?: string;
 };
 
 export type LoginResult = {

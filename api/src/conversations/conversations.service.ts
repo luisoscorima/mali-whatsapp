@@ -781,6 +781,77 @@ export class ConversationsService {
     return { status };
   }
 
+  async markUnread(user: AuthUser, conversationId: number): Promise<{ ok: true }> {
+    if (!Number.isInteger(conversationId) || conversationId <= 0) {
+      throw new BadRequestException('Id invalido');
+    }
+    const area = user.area;
+    const updated = await this.prisma.conversations.updateMany({
+      where: { id: conversationId, area },
+      data: { inbox_unread: true, updated_at: new Date() },
+    });
+    if (updated.count === 0) {
+      throw new NotFoundException('Conversacion no encontrada');
+    }
+    await this.auditLog.write({
+      event_type: AuditEvent.CONVERSATION_MARK_UNREAD,
+      message: `Conversación ${conversationId} marcada como no leída`,
+      actor: auditActor(user),
+      meta: { conversation_id: conversationId },
+    });
+    return { ok: true };
+  }
+
+  async setLeadScore(
+    user: AuthUser,
+    conversationId: number,
+    clear: boolean,
+    scoreInput?: string,
+  ): Promise<{ lead_score: number | null }> {
+    if (!Number.isInteger(conversationId) || conversationId <= 0) {
+      throw new BadRequestException('Id invalido');
+    }
+    const area = user.area;
+    let score: number | null = null;
+    if (!clear) {
+      const n = parseInt(String(scoreInput ?? '').trim(), 10);
+      if (!Number.isInteger(n) || n < 1 || n > 5) {
+        throw new BadRequestException('Calificacion invalida (1 a 5)');
+      }
+      score = n;
+    }
+    const conv = await this.prisma.conversations.findFirst({
+      where: { id: conversationId, area },
+      select: { contact_id: true },
+    });
+    if (!conv) {
+      throw new NotFoundException('Conversacion no encontrada');
+    }
+    if (!conv.contact_id) {
+      throw new BadRequestException(
+        'No hay contacto vinculado; crea o vincula el contacto para poder calificar el lead.',
+      );
+    }
+    await this.prisma.contacts.updateMany({
+      where: { id: conv.contact_id, area },
+      data: { lead_score: clear ? null : score, updated_at: new Date() },
+    });
+    await this.auditLog.write({
+      event_type: AuditEvent.CONTACT_LEAD_SCORE,
+      message: clear
+        ? `Lead score borrado (conversación ${conversationId})`
+        : `Lead score ${score}/5 (conversación ${conversationId})`,
+      actor: auditActor(user),
+      meta: {
+        conversation_id: conversationId,
+        contact_id: conv.contact_id,
+        cleared: clear,
+        score: clear ? null : score,
+      },
+    });
+    return { lead_score: clear ? null : score };
+  }
+
   async getUpdates(
     user: AuthUser,
     conversationId: number,
