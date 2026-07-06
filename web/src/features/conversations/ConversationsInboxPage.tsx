@@ -22,6 +22,7 @@ import {
 } from '@/shared/ui/shadcn/dropdown-menu'
 import { formatContactName } from '../contacts/contactName'
 import { SegmentFilterChips } from '../segments/SegmentFilterChips'
+import { SegmentBadge } from '../segments/SegmentBadge'
 import { ChatMessageBubble } from './ChatMessageBubble'
 import { InboxComposeBar } from './InboxComposeBar'
 import { InboxMessageScroller, type InboxMessageScrollerHandle } from './InboxMessageScroller'
@@ -105,13 +106,13 @@ function ProfileBlock({
             aria-label="Segmentos"
           >
             {detail.contact.segment_slugs.map((slug) => (
-              <span
+              <SegmentBadge
                 key={slug}
+                colorKey={segmentColorKey(slug, segments)}
                 className="inbox-chat-segment inbox-chat-segment--header"
-                data-seg-tone={segmentColorKey(slug, segments)}
               >
                 {segmentLabel(slug, segments)}
-              </span>
+              </SegmentBadge>
             ))}
           </span>
         ) : null}
@@ -700,13 +701,13 @@ export function ConversationsInboxPage() {
                       {item.contact_segment_slugs.length > 0 ? (
                         <span className="contact-segment-chips" role="group" aria-label="Segmentos">
                           {item.contact_segment_slugs.map((slug) => (
-                            <span
+                            <SegmentBadge
                               key={slug}
+                              colorKey={segmentColorKey(slug, segments)}
                               className="inbox-chat-segment"
-                              data-seg-tone={segmentColorKey(slug, segments)}
                             >
                               {segmentLabel(slug, segments)}
-                            </span>
+                            </SegmentBadge>
                           ))}
                         </span>
                       ) : null}

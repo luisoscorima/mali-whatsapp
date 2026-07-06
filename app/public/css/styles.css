@@ -1704,6 +1704,30 @@ html[data-theme='dark'] .segment-color-ring {
 .segment-color-ring[data-seg-tone='slate'] {
   background: rgb(71, 85, 105);
 }
+.segment-color-ring[data-seg-tone='cyan'] {
+  background: rgb(8, 145, 178);
+}
+.segment-color-ring[data-seg-tone='sky'] {
+  background: rgb(2, 132, 199);
+}
+.segment-color-ring[data-seg-tone='indigo'] {
+  background: rgb(79, 70, 229);
+}
+.segment-color-ring[data-seg-tone='fuchsia'] {
+  background: rgb(192, 38, 211);
+}
+.segment-color-ring[data-seg-tone='pink'] {
+  background: rgb(219, 39, 119);
+}
+.segment-color-ring[data-seg-tone='red'] {
+  background: rgb(220, 38, 38);
+}
+.segment-color-ring[data-seg-tone='orange'] {
+  background: rgb(234, 88, 12);
+}
+.segment-color-ring[data-seg-tone='lime'] {
+  background: rgb(101, 163, 13);
+}
 
 .segment-slug-input {
   width: 100%;

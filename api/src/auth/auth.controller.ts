@@ -107,7 +107,7 @@ export class AuthController {
 
     const target = user.mustChangePassword
       ? `${this.config.appBaseUrl}/account/change-password`
-      : `${this.config.appBaseUrl}/`;
+      : `${this.config.appBaseUrl}/conversations`;
     res.redirect(target);
   }
 

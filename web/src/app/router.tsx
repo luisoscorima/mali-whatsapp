@@ -4,8 +4,8 @@ import { RequireAuth } from './RequireAuth'
 import { RequirePasswordChanged } from './RequirePasswordChanged'
 import { LoginPage } from '../features/auth/LoginPage'
 import { ChangePasswordPage } from '../features/auth/ChangePasswordPage'
-import { DashboardPage } from '../features/dashboard/DashboardPage'
-import { MetaAdsListPage } from '../features/meta-ads/MetaAdsListPage'
+import { MetaAdsShell } from '../features/meta-ads/MetaAdsShell'
+import { MetaAdsEmptyPane } from '../features/meta-ads/MetaAdsEmptyPane'
 import { MetaAdDetailPage } from '../features/meta-ads/MetaAdDetailPage'
 import { AttributesShell } from '../features/attributes/AttributesShell'
 import { AttributesEmptyPane } from '../features/attributes/AttributesEmptyPane'
@@ -52,9 +52,11 @@ export function AppRouter() {
           <Route path="account/change-password" element={<ChangePasswordPage />} />
           <Route element={<RequirePasswordChanged />}>
             <Route element={<WaAppShell />}>
-            <Route index element={<DashboardPage />} />
-            <Route path="anuncios" element={<MetaAdsListPage />} />
-            <Route path="anuncios/:id" element={<MetaAdDetailPage />} />
+            <Route index element={<Navigate to="/conversations" replace />} />
+            <Route path="anuncios" element={<MetaAdsShell />}>
+              <Route index element={<MetaAdsEmptyPane />} />
+              <Route path=":id" element={<MetaAdDetailPage />} />
+            </Route>
             <Route path="attributes" element={<AttributesShell />}>
               <Route index element={<AttributesEmptyPane />} />
               <Route path="new" element={<AttributeNewPage />} />
@@ -105,7 +107,7 @@ export function AppRouter() {
             </Route>
           </Route>
         </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/conversations" replace />} />
       </Routes>
     </BrowserRouter>
   )

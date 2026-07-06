@@ -3,7 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="https://mali-assets.s3.us-east-1.amazonaws.com/assets-web-mali/Logo_MALI_Whatsapp_Texto.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="apple-touch-icon" href="https://mali-assets.s3.us-east-1.amazonaws.com/assets-web-mali/Logo_MALI_Whatsapp_Texto.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#e5ede9" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="MALI" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="format-detection" content="telephone=no" />
     <title>MALI WhatsApp</title>
     <script>
       try {
@@ -12,6 +20,15 @@
         var _p = localStorage.getItem('mali-palette');
         if (_p) document.documentElement.setAttribute('data-palette', _p);
         else document.documentElement.setAttribute('data-palette', 'teal');
+        if (_t === 'dark') {
+          var _tc = document.querySelector('meta[name="theme-color"]');
+          if (_tc) _tc.setAttribute('content', '#0b141a');
+          var _as = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+          if (_as) _as.setAttribute('content', 'black-translucent');
+        }
+        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
+          document.documentElement.classList.add('is-standalone');
+        }
       } catch (e) {}
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />

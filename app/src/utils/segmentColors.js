@@ -1,5 +1,21 @@
 /** Claves de color por segmento (UI conversaciones / panel). */
-const SEGMENT_COLOR_KEYS = ['teal', 'blue', 'violet', 'amber', 'rose', 'slate', 'emerald'];
+const SEGMENT_COLOR_KEYS = [
+  'teal',
+  'emerald',
+  'cyan',
+  'sky',
+  'blue',
+  'indigo',
+  'violet',
+  'fuchsia',
+  'rose',
+  'pink',
+  'red',
+  'orange',
+  'amber',
+  'lime',
+  'slate',
+];
 
 function normalizeSegmentColorKey(raw) {
   const s = String(raw || '')

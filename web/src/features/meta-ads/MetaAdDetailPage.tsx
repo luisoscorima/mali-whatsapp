@@ -2,7 +2,6 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
-import { WaSpanMainPage } from '@/shared/ui/shell/WaSpanMainPage'
 
 type MetaAdDetail = {
   id: number
@@ -73,28 +72,22 @@ export function MetaAdDetailPage() {
   }
 
   if (error) {
-    return (
-      <WaSpanMainPage>
-        <p className="text-bad">{error}</p>
-      </WaSpanMainPage>
-    )
+    return <p className="text-bad">{error}</p>
   }
 
   if (!payload) {
-    return (
-      <WaSpanMainPage>
-        <p className="text-muted">Cargando anuncio…</p>
-      </WaSpanMainPage>
-    )
+    return <p className="text-muted">Cargando anuncio…</p>
   }
 
   const { ad, leads } = payload
 
   return (
-    <WaSpanMainPage>
     <div className="space-y-6">
       <div>
-        <Link to="/anuncios" className="text-sm text-accent hover:underline">
+        <Link to="/anuncios" className="inbox-back-mobile">
+          ← Anuncios
+        </Link>
+        <Link to="/anuncios" className="text-sm text-accent hover:underline max-md:hidden">
           ← Anuncios
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">{ad.display_label}</h1>
@@ -209,6 +202,5 @@ export function MetaAdDetailPage() {
         )}
       </section>
     </div>
-    </WaSpanMainPage>
   )
 }

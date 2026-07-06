@@ -1260,3 +1260,15 @@ html[data-theme='dark'] .contact-filter-pill[data-seg-tone='slate'] {
   background: rgba(148, 163, 184, 0.14);
   border-color: rgba(148, 163, 184, 0.26);
 }
+
+@media (max-width: 768px) {
+  .inbox-layout-wa .inbox-chat-header {
+    padding-top: max(10px, env(safe-area-inset-top, 0px));
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  .inbox-layout-wa .inbox-compose {
+    padding-bottom: max(0px, env(safe-area-inset-bottom, 0px));
+  }
+}

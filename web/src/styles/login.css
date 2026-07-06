@@ -68,6 +68,8 @@
 .login-shell {
   position: relative;
   min-height: 100vh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
   background: linear-gradient(to top, #0d4a1c 0%, #116726 45%, #1a5c28 100%);
 }
 
@@ -80,6 +82,8 @@
   position: relative;
   z-index: 1;
   min-height: 100vh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -162,8 +166,8 @@
 
 .login-theme-toggle {
   position: absolute;
-  top: 20px;
-  right: 20px;
+  top: max(20px, env(safe-area-inset-top, 0px));
+  right: max(20px, env(safe-area-inset-right, 0px));
   z-index: 2;
 }
 
@@ -370,6 +374,8 @@
   position: relative;
   z-index: 1;
   min-height: 100vh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
   display: flex;
   align-items: center;
   justify-content: center;

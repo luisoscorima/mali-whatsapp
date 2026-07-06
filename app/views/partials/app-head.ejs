@@ -1,12 +1,28 @@
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <link rel="icon" type="image/png" href="<%= maliLogoUrl %>" />
 <link rel="apple-touch-icon" href="<%= maliLogoUrl %>" />
+<link rel="manifest" href="<%= basePath %>/manifest.webmanifest" />
+<meta name="theme-color" content="#e5ede9" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="MALI" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="format-detection" content="telephone=no" />
 <title><%= typeof pageTitle !== 'undefined' ? pageTitle : 'MALI WhatsApp' %></title>
 <script>
   try {
     var _t = localStorage.getItem('mali-theme');
     if (_t === 'dark' || _t === 'light') document.documentElement.setAttribute('data-theme', _t);
+    if (_t === 'dark') {
+      var _tc = document.querySelector('meta[name="theme-color"]');
+      if (_tc) _tc.setAttribute('content', '#0b141a');
+      var _as = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+      if (_as) _as.setAttribute('content', 'black-translucent');
+    }
+    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
+      document.documentElement.classList.add('is-standalone');
+    }
   } catch (e) {}
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />

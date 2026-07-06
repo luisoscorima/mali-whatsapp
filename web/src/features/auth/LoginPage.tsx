@@ -17,7 +17,7 @@ export function LoginPage() {
   const [redirecting, setRedirecting] = useState(false)
 
   const from =
-    (location.state as { from?: string } | null)?.from?.toString() || '/'
+    (location.state as { from?: string } | null)?.from?.toString() || '/conversations'
 
   useEffect(() => {
     const oauthError = searchParams.get('error')

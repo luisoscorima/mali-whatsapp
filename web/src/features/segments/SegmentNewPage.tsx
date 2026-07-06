@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
-import { SEGMENT_COLOR_KEYS, SEGMENT_COLOR_LABELS } from './segmentColors'
+import { SegmentColorPicker } from './SegmentColorPicker'
 export function SegmentNewPage() {
   const navigate = useNavigate()
   const [slug, setSlug] = useState('')
@@ -80,20 +80,11 @@ export function SegmentNewPage() {
           />
         </label>
 
-        <label className="block text-sm">
-          <span className="text-muted">Color en conversaciones</span>
-          <select
-            value={colorKey}
-            onChange={(e) => setColorKey(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
-          >
-            {SEGMENT_COLOR_KEYS.map((key) => (
-              <option key={key} value={key}>
-                {SEGMENT_COLOR_LABELS[key]}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SegmentColorPicker
+          label="Color en conversaciones"
+          value={colorKey}
+          onChange={setColorKey}
+        />
 
         <button
           type="submit"

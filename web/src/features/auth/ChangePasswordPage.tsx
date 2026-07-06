@@ -18,7 +18,7 @@ export function ChangePasswordPage() {
         return
       }
       if (!result.data.mustChangePassword) {
-        navigate('/', { replace: true })
+        navigate('/conversations', { replace: true })
         return
       }
       setChecking(false)
@@ -39,7 +39,7 @@ export function ChangePasswordPage() {
       setError(result.error)
       return
     }
-    navigate('/', { replace: true })
+    navigate('/conversations', { replace: true })
   }
 
   if (checking) {

@@ -2,11 +2,8 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { formatContactName } from '../contacts/contactName'
-import {
-  SEGMENT_COLOR_KEYS,
-  SEGMENT_COLOR_LABELS,
-  segmentToneClass,
-} from './segmentColors'
+import { segmentToneClass } from './segmentColors'
+import { SegmentColorPicker } from './SegmentColorPicker'
 type SegmentDefinition = {
   id: number
   slug: string
@@ -201,20 +198,11 @@ export function SegmentDetailPage() {
               className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
             />
           </label>
-          <label className="block text-sm sm:col-span-1">
-            <span className="text-muted">Color</span>
-            <select
-              value={colorKey}
-              onChange={(e) => setColorKey(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
-            >
-              {SEGMENT_COLOR_KEYS.map((key) => (
-                <option key={key} value={key}>
-                  {SEGMENT_COLOR_LABELS[key]}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SegmentColorPicker
+            className="sm:col-span-2"
+            value={colorKey}
+            onChange={setColorKey}
+          />
           <div className="flex flex-wrap gap-3 sm:col-span-2">
             <button
               type="submit"

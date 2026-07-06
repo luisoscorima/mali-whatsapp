@@ -3,10 +3,18 @@ export const SEGMENT_SLUG_REGEX = /^[a-z0-9_]{1,50}$/;
 export const SEGMENT_COLOR_KEYS = [
   'teal',
   'emerald',
+  'cyan',
+  'sky',
   'blue',
+  'indigo',
   'violet',
-  'amber',
+  'fuchsia',
   'rose',
+  'pink',
+  'red',
+  'orange',
+  'amber',
+  'lime',
   'slate',
 ] as const;
 

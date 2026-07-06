@@ -1,4 +1,5 @@
-export const SEGMENT_NONE = '__none__'
+import { useTheme } from '@/shared/theme/useTheme'
+import { segmentFilterPillStyle } from './segmentColors'
 
 export type SegmentFilterOption = {
   slug: string
@@ -15,12 +16,7 @@ type SegmentFilterChipsProps = {
   className?: string
 }
 
-function segmentToneKey(colorKey: string | null | undefined): string {
-  const key = colorKey ?? 'slate'
-  return ['teal', 'emerald', 'blue', 'violet', 'amber', 'rose', 'slate'].includes(key)
-    ? key
-    : 'slate'
-}
+export const SEGMENT_NONE = '__none__'
 
 export function SegmentFilterChips({
   segments,
@@ -30,6 +26,7 @@ export function SegmentFilterChips({
   showNoneChip = true,
   className = '',
 }: SegmentFilterChipsProps) {
+  const { theme } = useTheme()
   const hasFilter = selectedSlugs.length > 0
   const activeSlugs = selectedSlugs.filter((s) => s !== SEGMENT_NONE)
   const noneActive = selectedSlugs.includes(SEGMENT_NONE)
@@ -56,7 +53,7 @@ export function SegmentFilterChips({
           type="button"
           onClick={() => onToggle(seg.slug)}
           className="inbox-chat-pill contact-filter-pill is-active"
-          data-seg-tone={segmentToneKey(seg.color_key)}
+          style={segmentFilterPillStyle(seg.color_key, theme, true)}
           aria-current="true"
           title={`Quitar ${seg.label}`}
         >
@@ -68,7 +65,7 @@ export function SegmentFilterChips({
           type="button"
           onClick={() => onToggle(SEGMENT_NONE)}
           className="inbox-chat-pill contact-filter-pill is-active"
-          data-seg-tone="slate"
+          style={segmentFilterPillStyle('slate', theme, true)}
           aria-current="true"
           title="Quitar filtro sin segmento"
         >
@@ -80,7 +77,7 @@ export function SegmentFilterChips({
           type="button"
           onClick={() => onToggle(SEGMENT_NONE)}
           className="inbox-chat-pill contact-filter-pill"
-          data-seg-tone="slate"
+          style={segmentFilterPillStyle('slate', theme, false)}
           title="Añadir filtro sin segmento"
         >
           Sin segmento
@@ -92,7 +89,7 @@ export function SegmentFilterChips({
           type="button"
           onClick={() => onToggle(seg.slug)}
           className="inbox-chat-pill contact-filter-pill"
-          data-seg-tone={segmentToneKey(seg.color_key)}
+          style={segmentFilterPillStyle(seg.color_key, theme, false)}
           title={`Añadir ${seg.label}`}
         >
           {seg.label}
