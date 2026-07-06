@@ -47,32 +47,21 @@ Plataforma web para **operar WhatsApp Business (Cloud API)** en MALI: **varios n
 
 ```txt
 mali-whatsapp-mvp/
-  app/
-    src/
-      routes/          # auth, inbox, campañas, contactos, anuncios Meta, plantillas, webhook…
-      services/        # envío campaña, reintento, costo, respondientes, metaCtwaAds, atributos…
-      db/migrations.js # Esquema PostgreSQL idempotente (fuente de verdad al arrancar)
-    public/
-    views/
-    server.js
-  db/
-    init.sql         # Nota: el esquema real lo aplica migrations.js al iniciar la app
-  docker-compose.yml
-  Mejoras.md         # Seguimiento observaciones usuarios ↔ implementación
-  README.md
+  api/                 # NestJS + Prisma + BullMQ
+  web/                 # React + Vite + Tailwind (SPA)
+  docker-compose.yml   # Producción: api + web + postgres + redis
+  scripts/             # deploy-production.sh, backup-postgres.sh
+  ARRANQUE_V2.md
+  DESPLIEGUE_V2.md
 ```
 
-## Estado actual del demo
+## Estado actual
 
-- `app/` es la aplicación principal.
-- Al **arrancar** el servidor se ejecutan las migraciones PostgreSQL (`app/src/db/migrations.js`): en una BD vacía se crean tablas e índices; no hace falta importar `db/init.sql` en Docker.
-- Importación masiva de contactos por **CSV/Excel**; columnas adicionales (p. ej. `sede`, `monto`, `fecha_pago`) se guardan como **atributos** para campañas personalizadas.
-- En **Conversaciones**, búsqueda por hilo, nombre o número; descarga de imágenes del hilo; globo de anuncio FB/IG en mensajes con `referral`; segmentos y enlace al anuncio en cabecera.
-- En **Campañas**, detalle con fallidos, respondieron (7d), costo WABA, reintento y exclusiones (segmentos, IDs, listas).
-- La capa de vistas usa `wa-rail` + `inbox-sidebar` + `inbox-main`.
-- Navegación por rutas reales (sin dashboard multipestaña por hash).
-
-Detalle de requisitos y checklist: **[Mejoras.md](Mejoras.md)**.
+- **Runtime:** NestJS (`api/`) + React (`web/`). Sin Express/EJS.
+- **Base de datos:** Prisma Migrate (`api/prisma/migrations/`).
+- **Auth:** Google OAuth `@mali.pe` + JWT; aprovisionamiento de permisos por admin.
+- **UI:** SPA con layout master–detail (lista + detalle en la misma vista) en contactos, segmentos, plantillas, campañas, admin usuarios, etc.
+- Arranque local: ver [ARRANQUE_V2.md](ARRANQUE_V2.md). Producción: [DESPLIEGUE_V2.md](DESPLIEGUE_V2.md).
 
 ## Primer arranque
 
@@ -96,41 +85,15 @@ cp .env.example .env
 - credenciales de PostgreSQL
 - Opcional campañas: `CAMPAIGN_AUTO_RETRY_DELAY_MINUTES` (default 10), `CAMPAIGN_MAX_RETRY_ATTEMPTS`, `CAMPAIGN_MAX_MANUAL_RETRIES`, `CAMPAIGN_RESPONSE_WINDOW_DAYS` (default 7), `CAMPAIGN_COST_PER_MESSAGE_USD` (fallback si Meta no devuelve costo)
 
-3. Levanta entorno local con Docker (modo deploy):
-
-```bash
-docker compose up -d --build
-```
-
-4. Usuarios del panel (correos **@mali.pe**; áreas **TI (dev)** `ti`, **PAM** `pam`, **Patronato** `patronato`, **Educación** `educacion`):
-
-Las dependencias Node se instalan **solo al construir la imagen Docker** (`Dockerfile` + `npm install` dentro del contenedor). No hace falta ejecutar `npm` en tu sistema operativo.
-
-- **Usuario master inicial:** si en `.env` defines `MASTER_INITIAL_PASSWORD` (y opcionalmente `MASTER_USER_EMAIL`, por defecto `loscorima@mali.pe`), al arrancar el contenedor se crea **una sola vez** ese usuario con área `ti` y rol master. Entra al panel, cambia la contraseña si quieres y **elimina `MASTER_INITIAL_PASSWORD`** del entorno.
-- **Más usuarios** (desde el host, contra el contenedor `app`):
-
-```bash
-docker compose exec app sh -c 'cd /usr/src/app && node scripts/create-user.js "otro@mali.pe" "tu_clave" educacion'
-docker compose exec app sh -c 'cd /usr/src/app && node scripts/create-user.js "otro@mali.pe" "tu_clave" pam master'
-```
-
-Tercer argumento: `ti`, `pam`, `patronato` o `educacion`. El último argumento opcional `master` marca usuario master (insignia en el panel). Cada usuario normal solo ve datos de su área; los envíos usan `WHATSAPP_TOKEN_*` / `PHONE_NUMBER_ID_*` de esa área.
-
-5. Abre el panel:
-
-```txt
-http://localhost:3000
-```
-
-## Modo desarrollo (hot reload)
-
-Usa el compose de desarrollo para cambios en vivo:
+3. Levanta entorno local:
 
 ```bash
 docker compose -f docker-compose.dev.yml up --build
 ```
 
-Si aparece `Cannot find module` tras añadir dependencias en `package.json`, el volumen de `node_modules` del contenedor puede estar desactualizado: `docker compose -f docker-compose.dev.yml build --no-cache app`, luego `docker compose -f docker-compose.dev.yml run --rm app npm install`, y vuelve a levantar el compose (o revisa el comentario en `docker-compose.dev.yml`).
+4. **Usuarios:** login con Google (`@mali.pe`). El bootstrap admin (`BOOTSTRAP_ADMIN_EMAIL` en `.env`) tiene acceso master. El resto se aprovisiona en **Admin → Usuarios**.
+
+5. Panel web: `http://localhost:5173` (dev) o `https://whatsapp.mali.pe` (prod).
 
 ## Rutas principales del panel
 

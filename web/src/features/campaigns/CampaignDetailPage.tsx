@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { apiClient } from '../../shared/api'
-import { CampaignShell } from './CampaignShell'
+import { apiClient } from '@/shared/api'
 import { formatDateTime } from '../../shared/format'
 import { formatContactName } from '../contacts/contactName'
 import {
@@ -218,19 +217,11 @@ export function CampaignDetailPage() {
   }
 
   if (error) {
-    return (
-      <CampaignShell>
-        <p className="text-bad">{error}</p>
-      </CampaignShell>
-    )
+    return <p className="text-bad">{error}</p>
   }
 
   if (!campaign) {
-    return (
-      <CampaignShell>
-        <p className="text-muted">Cargando campaña…</p>
-      </CampaignShell>
-    )
+    return <p className="text-muted">Cargando campaña…</p>
   }
 
   const a = {
@@ -267,7 +258,6 @@ export function CampaignDetailPage() {
   }
 
   return (
-    <CampaignShell selectedId={campaign.id}>
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold">Campaña #{campaign.id}</h1>
@@ -737,6 +727,5 @@ export function CampaignDetailPage() {
         responders={campaign.responder_metrics.responders}
       />
     </div>
-    </CampaignShell>
   )
 }

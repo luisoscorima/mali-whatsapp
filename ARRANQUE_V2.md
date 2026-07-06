@@ -1,8 +1,8 @@
 # Arranque v2 — MALI WhatsApp
 
-Plataforma **aislada** (NestJS + React + Prisma). No usa el panel legacy `app/` en runtime.
+Plataforma **v2** (NestJS + React + Prisma). El panel legacy Express/EJS fue retirado del repositorio.
 
-Ver [`app/DEPRECATED.md`](app/DEPRECATED.md) y [`MIGRACION_REACT.md`](MIGRACION_REACT.md).
+Ver [`MIGRACION_REACT.md`](MIGRACION_REACT.md).
 
 ## Requisitos
 

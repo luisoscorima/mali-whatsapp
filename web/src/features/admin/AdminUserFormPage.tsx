@@ -104,7 +104,18 @@ export function AdminUserFormPage() {
       setError(result.error)
       return
     }
-    navigate('/admin/users')
+    navigate('/admin/users', { replace: true })
+  }
+
+  async function onDelete() {
+    if (isNew || !userId || !email) return
+    if (!window.confirm(`¿Eliminar ${email}?`)) return
+    const result = await apiClient.delete(`/api/admin/users/${userId}`)
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+    navigate('/admin/users', { replace: true })
   }
 
   if (loading) return <p className="text-muted">Cargando…</p>
@@ -220,12 +231,23 @@ export function AdminUserFormPage() {
 
       {error ? <p className="text-bad">{error}</p> : null}
 
-      <button
-        type="submit"
-        className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white"
-      >
-        Guardar
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="submit"
+          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white"
+        >
+          Guardar
+        </button>
+        {!isNew ? (
+          <button
+            type="button"
+            onClick={() => void onDelete()}
+            className="rounded-lg border border-line px-4 py-2 text-sm text-bad hover:bg-bad/10"
+          >
+            Eliminar
+          </button>
+        ) : null}
+      </div>
     </form>
   )
 }

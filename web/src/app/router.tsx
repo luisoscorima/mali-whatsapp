@@ -24,7 +24,8 @@ import { TemplatesShell } from '../features/templates/TemplatesShell'
 import { TemplatesEmptyPane } from '../features/templates/TemplatesEmptyPane'
 import { TemplateDetailPage } from '../features/templates/TemplateDetailPage'
 import { TemplateNewPage } from '../features/templates/TemplateNewPage'
-import { CampaignsListPage } from '../features/campaigns/CampaignsListPage'
+import { CampaignsShell } from '../features/campaigns/CampaignsShell'
+import { CampaignsSummaryPane } from '../features/campaigns/CampaignsSummaryPane'
 import { CampaignNewPage } from '../features/campaigns/CampaignNewPage'
 import { CampaignDetailPage } from '../features/campaigns/CampaignDetailPage'
 import { SettingsShell } from '../features/settings/SettingsShell'
@@ -36,7 +37,8 @@ import { SettingsAuditPage } from '../features/settings/SettingsAuditPage'
 import { SettingsReporteriaPage } from '../features/settings/SettingsReporteriaPage'
 import { ConversationsInboxPage } from '../features/conversations/ConversationsInboxPage'
 import { RequireMaster, AdminShell } from '../features/admin/AdminShell'
-import { AdminUsersPage } from '../features/admin/AdminUsersPage'
+import { AdminUsersShell } from '../features/admin/AdminUsersShell'
+import { AdminUsersEmptyPane } from '../features/admin/AdminUsersEmptyPane'
 import { AdminUserFormPage } from '../features/admin/AdminUserFormPage'
 import { AdminIndexPage } from '../features/admin/AdminIndexPage'
 import { AdminMetaPage } from '../features/admin/AdminMetaPage'
@@ -78,16 +80,21 @@ export function AppRouter() {
               <Route path="new" element={<TemplateNewPage />} />
               <Route path=":id" element={<TemplateDetailPage />} />
             </Route>
-            <Route path="campaigns" element={<CampaignsListPage />} />
-            <Route path="campaigns/new" element={<CampaignNewPage />} />
-            <Route path="campaigns/:id" element={<CampaignDetailPage />} />
+            <Route path="campaigns" element={<CampaignsShell />}>
+              <Route index element={<CampaignsSummaryPane />} />
+              <Route path="new" element={<CampaignNewPage />} />
+              <Route path=":id" element={<CampaignDetailPage />} />
+            </Route>
             <Route path="conversations" element={<ConversationsInboxPage />} />
             <Route path="conversations/:id" element={<ConversationsInboxPage />} />
             <Route element={<RequireMaster />}>
               <Route path="admin" element={<AdminShell />}>
                 <Route index element={<AdminIndexPage />} />
-                <Route path="users" element={<AdminUsersPage />} />
-                <Route path="users/:id" element={<AdminUserFormPage />} />
+                <Route path="users" element={<AdminUsersShell />}>
+                  <Route index element={<AdminUsersEmptyPane />} />
+                  <Route path="new" element={<AdminUserFormPage />} />
+                  <Route path=":id" element={<AdminUserFormPage />} />
+                </Route>
                 <Route path="areas" element={<AdminAreasPage />} />
                 <Route path="meta" element={<AdminMetaPage />} />
                 <Route path="audit-logs" element={<AdminAuditPage />} />

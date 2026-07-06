@@ -9,7 +9,6 @@ import {
   type AttributeOption,
   type CampaignTemplateFormState,
 } from './CampaignTemplateFields'
-import { CampaignShell } from './CampaignShell'
 
 type SegmentDefinition = {
   id: number
@@ -346,15 +345,10 @@ export function CampaignNewPage() {
   }
 
   if (!segments.length && !templates.length) {
-    return (
-      <CampaignShell>
-        <p className="text-muted">Cargando wizard…</p>
-      </CampaignShell>
-    )
+    return <p className="text-muted">Cargando wizard…</p>
   }
 
   return (
-    <CampaignShell>
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Nueva campaña</h1>
@@ -665,6 +659,5 @@ export function CampaignNewPage() {
             : 'Enviar campaña'}
       </button>
     </div>
-    </CampaignShell>
   )
 }

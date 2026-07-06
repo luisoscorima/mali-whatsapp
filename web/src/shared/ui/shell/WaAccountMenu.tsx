@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { apiClient, type AuthUser } from '@/shared/api'
 import { areaLabel } from '@/features/admin/areaLabels'
 import { PalettePicker } from '@/shared/theme/PalettePicker'
@@ -11,6 +11,7 @@ type WaAccountMenuProps = {
 }
 
 export function WaAccountMenu({ user, onUserUpdate }: WaAccountMenuProps) {
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [pendingArea, setPendingArea] = useState(user.area)
   const [switching, setSwitching] = useState(false)
@@ -29,14 +30,14 @@ export function WaAccountMenu({ user, onUserUpdate }: WaAccountMenuProps) {
     if (result.ok) {
       onUserUpdate?.(result.data.user)
       setOpen(false)
-      window.location.assign('/campaigns')
+      navigate('/campaigns', { replace: true })
     }
   }
 
   async function onLogout() {
     setOpen(false)
     await apiClient.logout()
-    window.location.assign('/login')
+    navigate('/login', { replace: true })
   }
 
   return (

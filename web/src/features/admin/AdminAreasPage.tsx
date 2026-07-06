@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { apiClient } from '@/shared/api'
 import { areaLabel } from './areaLabels'
 
@@ -12,6 +13,7 @@ type AdminAreaSummary = {
 }
 
 export function AdminAreasPage() {
+  const navigate = useNavigate()
   const [areas, setAreas] = useState<AdminAreaSummary[] | null>(null)
   const [currentArea, setCurrentArea] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -45,7 +47,7 @@ export function AdminAreasPage() {
       return
     }
     setCurrentArea(slug)
-    window.location.assign('/campaigns')
+    navigate('/campaigns', { replace: true })
   }
 
   if (error && !areas) {

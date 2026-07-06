@@ -244,7 +244,7 @@ docker compose up -d --force-recreate api web
 ### Usuarios
 
 - Los usuarios en tabla `users` **siguen igual** (email, área, permisos, `password_hash`).
-- Alta/edición: panel **Admin → Usuarios** (master) o script legacy `app/scripts/create-user.js` contra la misma BD.
+- Alta/edición: panel **Admin → Usuarios** (master).
 - Google OAuth: solo cuentas `@mali.pe` **ya registradas** en `users`.
 
 ### Campañas en curso
@@ -342,4 +342,4 @@ Tras cutover exitoso en `whatsapp.mali.pe`:
 
 1. Marcar semana 46 completada en [MIGRACION_REACT.md](./MIGRACION_REACT.md).
 2. Comunicar al equipo: nuevo login (JWT / Google), misma URL.
-3. Mantener `app/` en repo solo como referencia; no volver a levantar en prod salvo rollback planificado.
+3. Mantener historial Git del panel legacy; el directorio `app/` fue eliminado del árbol activo.
