@@ -7,7 +7,9 @@ export function RequireAuth() {
   const [allowed, setAllowed] = useState<boolean | null>(null)
 
   useEffect(() => {
-    apiClient.getMe({ sessionProbe: true }).then((result) => setAllowed(result.ok))
+    apiClient.getSession().then((result) =>
+      setAllowed(Boolean(result.ok && result.data.authenticated)),
+    )
   }, [])
 
   if (allowed === null) {

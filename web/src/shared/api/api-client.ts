@@ -190,6 +190,15 @@ export const apiClient = {
     return { ok: true };
   },
 
+  getSession(): Promise<
+    ApiResponse<{ authenticated: boolean; user?: AuthUser }>
+  > {
+    return request<{ authenticated: boolean; user?: AuthUser }>(
+      '/api/auth/session',
+      { skipAuth: true },
+    );
+  },
+
   getMe(options?: { sessionProbe?: boolean }): Promise<ApiResponse<AuthUser>> {
     return request<AuthUser>('/api/me', options);
   },

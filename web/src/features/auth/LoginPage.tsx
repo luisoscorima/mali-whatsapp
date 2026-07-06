@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { MALI_LOGO_URL } from '@/shared/brand'
 import { apiClient } from '../../shared/api'
 
 export function LoginPage() {
@@ -26,8 +27,8 @@ export function LoginPage() {
         setGoogleEnabled(config.data.googleEnabled)
       }
     })
-    apiClient.getMe({ sessionProbe: true }).then((result) => {
-      if (result.ok) {
+    apiClient.getSession().then((result) => {
+      if (result.ok && result.data.authenticated) {
         navigate(from, { replace: true })
       } else {
         setChecking(false)
@@ -46,11 +47,21 @@ export function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-bg px-4">
       <div className="w-full max-w-sm space-y-4 rounded-xl border border-line bg-surface-strong p-6 shadow-sm">
-        <div>
-          <h1 className="text-xl font-semibold">MALI WhatsApp</h1>
-          <p className="text-sm text-muted">
-            Acceso exclusivo para cuentas <strong>@mali.pe</strong>
-          </p>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <img
+            src={MALI_LOGO_URL}
+            alt="MALI"
+            className="h-10 w-auto object-contain"
+            width={120}
+            height={40}
+            decoding="async"
+          />
+          <div>
+            <h1 className="text-xl font-semibold">MALI WhatsApp</h1>
+            <p className="text-sm text-muted">
+              Acceso exclusivo para cuentas <strong>@mali.pe</strong>
+            </p>
+          </div>
         </div>
         {googleEnabled ? (
           <button

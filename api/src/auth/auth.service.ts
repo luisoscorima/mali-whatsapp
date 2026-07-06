@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import type { Request } from 'express';
 import * as bcrypt from 'bcryptjs';
 import { AuditEvent } from '../audit/audit-events';
 import { auditActor } from '../audit/audit-actor.util';
@@ -31,6 +32,34 @@ export class AuthService {
 
   getDevUser(): AuthUser {
     return this.userAreas.getDevUser();
+  }
+
+  async resolveSession(
+    req: Request,
+  ): Promise<{ authenticated: boolean; user?: AuthUser }> {
+    if (!this.config.requireAuth) {
+      return { authenticated: true, user: this.getDevUser() };
+    }
+
+    const cookieToken = req.cookies?.[this.config.authCookieName];
+    const authHeader = req.headers.authorization;
+    const bearer =
+      typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+        ? authHeader.slice(7).trim()
+        : '';
+    const token =
+      (typeof cookieToken === 'string' ? cookieToken.trim() : '') || bearer;
+    if (!token) {
+      return { authenticated: false };
+    }
+
+    try {
+      const payload = this.jwtService.verify<JwtPayload>(token);
+      const user = await this.validateJwtPayload(payload);
+      return { authenticated: true, user };
+    } catch {
+      return { authenticated: false };
+    }
   }
 
   async login(

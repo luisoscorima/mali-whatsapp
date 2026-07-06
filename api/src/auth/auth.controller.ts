@@ -54,6 +54,14 @@ export class AuthController {
     };
   }
 
+  @Get('auth/session')
+  async session(
+    @Req() req: Request,
+  ): Promise<ApiResponse<{ authenticated: boolean; user?: AuthUser }>> {
+    const data = await this.authService.resolveSession(req);
+    return { ok: true, data };
+  }
+
   @Get('auth/google')
   @UseGuards(GoogleAuthGuard)
   googleAuth() {
