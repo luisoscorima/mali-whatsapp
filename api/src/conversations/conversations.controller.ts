@@ -27,11 +27,15 @@ import type {
   ReplyResult,
   UpdateConversationModeResult,
   InboxConversationUpdates,
+  ConversationAssigneesResult,
+  AssignConversationResult,
 } from './conversations.types';
 import {
   ReplyConversationDto,
   UpdateConversationModeDto,
   LeadScoreDto,
+  AssignConversationDto,
+  MessageReactionDto,
 } from './dto/conversations.dto';
 
 @Controller('conversations')
@@ -45,6 +49,14 @@ export class ConversationsController {
     @Query() query: Record<string, string | string[] | undefined>,
   ): Promise<ApiResponse<InboxListResult>> {
     const data = await this.conversationsService.list(user, query);
+    return { ok: true, data };
+  }
+
+  @Get('assignees')
+  async listAssignees(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<ConversationAssigneesResult>> {
+    const data = await this.conversationsService.listAssignees(user);
     return { ok: true, data };
   }
 
@@ -73,11 +85,33 @@ export class ConversationsController {
     @UploadedFile()
     file?: { buffer: Buffer; mimetype: string; originalname: string },
   ): Promise<ApiResponse<ReplyResult>> {
+    const replyToId =
+      body.reply_to_message_id != null && body.reply_to_message_id !== ''
+        ? Number(body.reply_to_message_id)
+        : undefined;
     const data = await this.conversationsService.reply(
       user,
       id,
       body.message ?? '',
       file,
+      Number.isInteger(replyToId) && replyToId! > 0 ? replyToId : undefined,
+    );
+    return { ok: true, data };
+  }
+
+  @Patch(':id/assign')
+  async assign(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: AssignConversationDto,
+  ): Promise<ApiResponse<AssignConversationResult>> {
+    const raw = body.assigned_user_id;
+    const assignedUserId =
+      raw === null || raw === undefined ? null : Number(raw);
+    const data = await this.conversationsService.assignConversation(
+      user,
+      id,
+      assignedUserId,
     );
     return { ok: true, data };
   }
@@ -135,6 +169,22 @@ export class ConversationsController {
     );
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(buffer);
+  }
+
+  @Post(':id/messages/:messageId/react')
+  async reactToMessage(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('messageId', ParseIntPipe) messageId: number,
+    @Body() body: MessageReactionDto,
+  ): Promise<ApiResponse<{ ok: true }>> {
+    const data = await this.conversationsService.reactToMessage(
+      user,
+      id,
+      messageId,
+      body.emoji,
+    );
+    return { ok: true, data };
   }
 
   @Get(':id/messages/:messageId/download')

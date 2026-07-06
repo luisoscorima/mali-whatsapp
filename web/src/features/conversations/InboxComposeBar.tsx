@@ -21,6 +21,12 @@ const ATTACH_OPTIONS = [
   { key: 'pdf', label: 'PDF', accept: 'application/pdf' },
 ] as const
 
+export type ReplyToMessage = {
+  id: number
+  preview: string
+  outbound: boolean
+}
+
 type InboxComposeBarProps = {
   replyText: string
   onReplyTextChange: (value: string) => void
@@ -29,6 +35,8 @@ type InboxComposeBarProps = {
   sendingReply: boolean
   onSubmit: (e: FormEvent) => void
   replyError?: string
+  replyTo?: ReplyToMessage | null
+  onClearReplyTo?: () => void
 }
 
 export function InboxComposeBar({
@@ -39,6 +47,8 @@ export function InboxComposeBar({
   sendingReply,
   onSubmit,
   replyError,
+  replyTo,
+  onClearReplyTo,
 }: InboxComposeBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [fileAccept, setFileAccept] = useState<string>(ATTACH_OPTIONS[0].accept)
@@ -56,6 +66,26 @@ export function InboxComposeBar({
 
   return (
     <form onSubmit={onSubmit} className="inbox-compose-stack inbox-compose-stack--with-emoji">
+      {replyTo ? (
+        <div className="inbox-compose-reply-to">
+          <div className="inbox-compose-reply-to__body">
+            <span className="inbox-compose-reply-to__label">
+              Respondiendo a {replyTo.outbound ? 'ti' : 'cliente'}
+            </span>
+            <span className="inbox-compose-reply-to__text">{replyTo.preview}</span>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Cancelar respuesta"
+            title="Cancelar respuesta"
+            onClick={() => onClearReplyTo?.()}
+          >
+            ×
+          </Button>
+        </div>
+      ) : null}
       {replyFile ? (
         <InboxAttachment filename={replyFile.name} onRemove={() => onReplyFileChange(null)} />
       ) : null}

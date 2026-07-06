@@ -107,6 +107,7 @@ export class UserAreasService {
     canViewIntegration: boolean;
     canEditBusinessHours: boolean;
     canViewReports: boolean;
+    canAssignConversations: boolean;
   } {
     const area = normalizeArea(this.config.devArea);
     return {
@@ -123,6 +124,7 @@ export class UserAreasService {
       canViewIntegration: false,
       canEditBusinessHours: false,
       canViewReports: false,
+      canAssignConversations: true,
     };
   }
 }

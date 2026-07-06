@@ -4,6 +4,7 @@ export type AdminUserPermissions = {
   can_view_integration: boolean;
   can_edit_business_hours: boolean;
   can_view_reports: boolean;
+  can_assign_conversations: boolean;
 };
 
 export type AdminUserListItem = {

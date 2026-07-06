@@ -19,6 +19,7 @@ import {
   bootstrapAdminUserData,
   isBootstrapAdminEmail,
   newGoogleUserData,
+  parseGoogleProfileNames,
 } from './user-access.util';
 
 @Injectable()
@@ -118,8 +119,10 @@ export class AuthService {
   async validateGoogleProfile(profile: {
     id: string;
     emails?: { value: string }[];
+    displayName?: string;
+    name?: { givenName?: string; familyName?: string };
     photos?: { value: string }[];
-    _json?: { hd?: string };
+    _json?: { hd?: string; given_name?: string; family_name?: string; name?: string };
   }): Promise<{
     id: number;
     email: string;
@@ -132,6 +135,7 @@ export class AuthService {
     can_view_integration: boolean;
     can_edit_business_hours: boolean;
     can_view_reports: boolean;
+    can_assign_conversations: boolean;
     picture?: string;
   }> {
     this.config.assertJwtSecret();
@@ -152,20 +156,29 @@ export class AuthService {
       this.config.bootstrapAdminEmail,
       email,
     );
+    const profileNames = parseGoogleProfileNames(profile);
     const existing = await this.prisma.users.findUnique({ where: { email } });
 
     if (existing) {
+      const nameData = {
+        first_name: profileNames.first_name,
+        last_name: profileNames.last_name,
+      };
       if (isBootstrap) {
         const updated = await this.prisma.users.update({
           where: { email },
-          data: bootstrapAdminUserData(),
+          data: { ...bootstrapAdminUserData(), ...nameData },
         });
         return {
           ...updated,
           picture: profile.photos?.[0]?.value,
         };
       }
-      return { ...existing, picture: profile.photos?.[0]?.value };
+      const updated = await this.prisma.users.update({
+        where: { email },
+        data: nameData,
+      });
+      return { ...updated, picture: profile.photos?.[0]?.value };
     }
 
     const passwordHash = await bcrypt.hash(
@@ -177,6 +190,7 @@ export class AuthService {
       data: {
         email,
         ...newGoogleUserData(passwordHash),
+        ...profileNames,
         ...(isBootstrap ? bootstrapAdminUserData() : {}),
       },
     });
@@ -196,6 +210,7 @@ export class AuthService {
       can_view_integration: boolean;
       can_edit_business_hours: boolean;
       can_view_reports: boolean;
+      can_assign_conversations?: boolean;
       picture?: string;
     },
     clientIp?: string | null,
@@ -357,6 +372,7 @@ export class AuthService {
       can_view_integration: boolean;
       can_edit_business_hours: boolean;
       can_view_reports: boolean;
+      can_assign_conversations?: boolean;
     },
     sessionArea: unknown,
     picture?: string,
@@ -408,6 +424,8 @@ export class AuthService {
         isBootstrapAdmin || isMaster || Boolean(row.can_edit_business_hours),
       canViewReports:
         isBootstrapAdmin || isMaster || Boolean(row.can_view_reports),
+      canAssignConversations:
+        isBootstrapAdmin || isMaster || Boolean(row.can_assign_conversations),
       ...(picture ? { picture } : {}),
     };
   }

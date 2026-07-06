@@ -23,6 +23,7 @@ export const AuditEvent = {
   CONVERSATION_MODE: 'conversation.mode',
   CONVERSATION_MARK_UNREAD: 'conversation.mark_unread',
   CONVERSATION_REPLY: 'conversation.reply',
+  CONVERSATION_ASSIGN: 'conversation.assign',
   CONVERSATION_EXPORT: 'conversation.export',
   CONVERSATION_MEDIA_DOWNLOAD: 'conversation.media_download',
   SETTINGS_AI_CONFIG: 'settings.ai_config',

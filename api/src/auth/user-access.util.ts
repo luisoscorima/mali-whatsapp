@@ -26,6 +26,7 @@ export function bootstrapAdminUserData() {
     can_view_integration: true,
     can_edit_business_hours: true,
     can_view_reports: true,
+    can_assign_conversations: true,
   };
 }
 
@@ -41,5 +42,26 @@ export function newGoogleUserData(passwordHash: string) {
     can_view_integration: false,
     can_edit_business_hours: false,
     can_view_reports: false,
+    can_assign_conversations: false,
+  };
+}
+
+export function parseGoogleProfileNames(profile: {
+  displayName?: string;
+  name?: { givenName?: string; familyName?: string };
+  _json?: { given_name?: string; family_name?: string; name?: string };
+}): { first_name: string | null; last_name: string | null } {
+  let firstName =
+    profile.name?.givenName ?? profile._json?.given_name ?? null;
+  let lastName =
+    profile.name?.familyName ?? profile._json?.family_name ?? null;
+  if ((!firstName || !lastName) && profile.displayName?.trim()) {
+    const parts = profile.displayName.trim().split(/\s+/).filter(Boolean);
+    if (!firstName && parts[0]) firstName = parts[0];
+    if (!lastName && parts.length > 1) lastName = parts.slice(1).join(' ');
+  }
+  return {
+    first_name: firstName ? String(firstName).trim().slice(0, 80) : null,
+    last_name: lastName ? String(lastName).trim().slice(0, 80) : null,
   };
 }

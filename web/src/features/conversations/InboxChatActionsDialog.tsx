@@ -14,34 +14,42 @@ import {
 type InboxChatActionsDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  conversationId: number | null
   heading: string
   phone: string
   contactId: number | null
   leadScore: number | null
   aiAreaEnabled: boolean
-  conversationStatus: string
+  conversationStatus: string | null
+  canAssign: boolean
   onLeadScore: (score: number | null) => void
   onMarkUnread: () => void
   onModeChange: (status: 'bot' | 'human') => void
   onExport: () => void
+  onAssign: () => void
 }
 
 export function InboxChatActionsDialog({
   open,
   onOpenChange,
+  conversationId,
   heading,
   phone,
   contactId,
   leadScore,
   aiAreaEnabled,
   conversationStatus,
+  canAssign,
   onLeadScore,
   onMarkUnread,
   onModeChange,
   onExport,
+  onAssign,
 }: InboxChatActionsDialogProps) {
   const current = leadScore ?? 0
   const prefillPhone = phone.replace(/\D/g, '')
+  const hasConversation = conversationId != null && conversationId > 0
+  const status = String(conversationStatus ?? '').toLowerCase()
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -53,7 +61,13 @@ export function InboxChatActionsDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="flex flex-col gap-4">
-          {contactId ? (
+          {!hasConversation ? (
+            <p className="muted text-sm">
+              Este contacto aún no tiene conversación. Abre el chat para escribir o guarda el contacto.
+            </p>
+          ) : null}
+
+          {hasConversation && contactId ? (
             <div className="inbox-lead-score-form">
               <div className="inbox-lead-score-row">
                 <span className="inbox-lead-score-label" id="inbox-actions-lead-label">
@@ -88,7 +102,7 @@ export function InboxChatActionsDialog({
             </div>
           ) : null}
 
-          {aiAreaEnabled ? (
+          {hasConversation && aiAreaEnabled ? (
             <div className="inbox-mode-toggle" role="group" aria-label="Modo del chat">
               <span className="inbox-mode-toggle-label">Modo</span>
               <div className="inbox-mode-toggle-btns">
@@ -96,7 +110,7 @@ export function InboxChatActionsDialog({
                   <Button
                     key={mode}
                     type="button"
-                    variant={conversationStatus === mode ? 'default' : 'outline'}
+                    variant={status === mode ? 'default' : 'outline'}
                     size="icon-sm"
                     className="inbox-mode-btn inbox-mode-btn--icon-only"
                     onClick={() => void onModeChange(mode)}
@@ -111,6 +125,19 @@ export function InboxChatActionsDialog({
           ) : null}
 
           <div className="flex flex-col gap-2">
+            {hasConversation && canAssign ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full justify-start"
+                onClick={() => {
+                  onAssign()
+                  onOpenChange(false)
+                }}
+              >
+                Asignar chat
+              </Button>
+            ) : null}
             {contactId ? (
               <Link
                 to={`/contacts/${contactId}`}
@@ -132,6 +159,7 @@ export function InboxChatActionsDialog({
               type="button"
               variant="secondary"
               className="w-full justify-start"
+              disabled={!hasConversation}
               onClick={() => {
                 onExport()
                 onOpenChange(false)
@@ -143,6 +171,7 @@ export function InboxChatActionsDialog({
               type="button"
               variant="secondary"
               className="w-full justify-start"
+              disabled={!hasConversation}
               onClick={() => {
                 onMarkUnread()
                 onOpenChange(false)

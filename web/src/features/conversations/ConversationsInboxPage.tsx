@@ -17,9 +17,23 @@ import { formatContactName } from '../contacts/contactName'
 import { SegmentFilterChips } from '../segments/SegmentFilterChips'
 import { SegmentBadge } from '../segments/SegmentBadge'
 import { ChatMessageBubble } from './ChatMessageBubble'
+import { ConversationBadges } from './ConversationBadges'
+import { InboxAssignDialog, type ConversationAssignee } from './InboxAssignDialog'
 import { InboxChatActionsDialog } from './InboxChatActionsDialog'
-import { InboxComposeBar } from './InboxComposeBar'
+import { InboxComposeBar, type ReplyToMessage } from './InboxComposeBar'
 import { InboxMessageScroller, type InboxMessageScrollerHandle } from './InboxMessageScroller'
+import {
+  chatActionsFromDetail,
+  chatActionsFromListItem,
+  type ChatActionsContext,
+} from './inboxChatActions'
+
+type AssignContext = {
+  conversationId: number
+  heading: string
+  phone: string
+  assignedUserId: number | null
+}
 const INBOX_POLL_MS = 8000
 const SEARCH_DEBOUNCE_MS = 300
 
@@ -43,25 +57,6 @@ function LeadStars({ score }: { score: number }) {
   )
 }
 
-function conversationModeBadge(status: string | null) {
-  const st = String(status ?? '').toLowerCase()
-  if (st === 'bot') {
-    return (
-      <Badge variant="default" title="Modo Bot">
-        Bot
-      </Badge>
-    )
-  }
-  if (st === 'human') {
-    return (
-      <Badge variant="success" title="Modo Asesor">
-        Asesor
-      </Badge>
-    )
-  }
-  return null
-}
-
 function ProfileBlock({
   detail,
   segments,
@@ -83,6 +78,11 @@ function ProfileBlock({
       </span>
       <div className="inbox-chat-header-identity">
         <h1 className="inbox-chat-heading">{heading}</h1>
+        <ConversationBadges
+          status={detail.conversation.status}
+          assignedUserLabel={detail.conversation.assigned_user_label}
+          automationTouchedAt={detail.conversation.automation_touched_at}
+        />
         <p className="inbox-chat-sub">
           {detail.conversation.phone}
           {contactId ? ' · Perfil' : ''}
@@ -144,6 +144,9 @@ type InboxListItem = {
   last_message_at: string | null
   inbox_unread: boolean
   conversation_status: string | null
+  assigned_user_id: number | null
+  assigned_user_label: string | null
+  automation_touched_at: string | null
   contact_name: string
   contact_lead_score: number | null
   contact_segment_slugs: string[]
@@ -158,10 +161,11 @@ type InboxListResult = {
   items: InboxListItem[]
   unread_count: number
   ai_area_enabled: boolean
+  can_assign_conversations: boolean
   segments: SegmentOption[]
   filters: {
     q: string
-    chat: 'all' | 'unread' | 'bot' | 'human'
+    chat: 'all' | 'unread' | 'bot' | 'human' | 'mine' | 'unassigned' | 'new'
     segment_slugs: string[]
     include_none: boolean
   }
@@ -196,6 +200,9 @@ type InboxDetail = {
     last_user_message_at?: string | null
     inbox_unread: boolean
     contact_id: number | null
+    assigned_user_id: number | null
+    assigned_user_label: string | null
+    automation_touched_at: string | null
   }
   contact: {
     name: string | null
@@ -216,6 +223,7 @@ type InboxDetail = {
   reply_blocked_reason: '24h' | 'bot_mode' | null
   user_service_window_open: boolean
   ai_area_enabled: boolean
+  can_assign_conversations: boolean
 }
 
 type InboxConversationUpdates = {
@@ -225,6 +233,9 @@ type InboxConversationUpdates = {
     last_user_message_at: string | null
     status: string
     inbox_unread: boolean
+    assigned_user_id: number | null
+    assigned_user_label: string | null
+    automation_touched_at: string | null
   }
   can_reply: boolean
   reply_blocked_reason: '24h' | 'bot_mode' | null
@@ -260,6 +271,18 @@ function listPreviewText(preview: string): string {
   return preview.trim() || 'Sin mensajes'
 }
 
+function messageReplyPreview(message: InboxMessage): string {
+  const text = message.body_text?.trim()
+  if (text) return text.length > 120 ? `${text.slice(0, 120)}…` : text
+  const mt = message.message_type.toLowerCase()
+  if (mt === 'image') return 'Imagen'
+  if (mt === 'video') return 'Video'
+  if (mt === 'audio' || mt === 'voice') return 'Audio'
+  if (mt === 'document') return 'Documento'
+  if (mt === 'campaign') return 'Campaña'
+  return 'Mensaje'
+}
+
 function replyBlockedText(reason: InboxDetail['reply_blocked_reason']): string {
   if (reason === '24h') {
     return 'La ventana de 24 h para responder al cliente está cerrada. Solo puedes enviar plantillas aprobadas (próximamente en este módulo).'
@@ -284,6 +307,13 @@ export function ConversationsInboxPage() {
   const [searchInput, setSearchInput] = useState(searchParams.get('q') ?? '')
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
+  const [actionsContext, setActionsContext] = useState<ChatActionsContext | null>(null)
+  const [replyToMessage, setReplyToMessage] = useState<ReplyToMessage | null>(null)
+  const [assignContext, setAssignContext] = useState<AssignContext | null>(null)
+  const [assignees, setAssignees] = useState<ConversationAssignee[]>([])
+  const [assigneesLoading, setAssigneesLoading] = useState(false)
+  const [assignSaving, setAssignSaving] = useState(false)
+  const [assignError, setAssignError] = useState('')
   const lastMessageIdRef = useRef(0)
   const scrollerRef = useRef<InboxMessageScrollerHandle | null>(null)
   const sendingReplyRef = useRef(false)
@@ -368,6 +398,9 @@ export function ConversationsInboxPage() {
             last_message_at: result.data.conversation.last_message_at,
             last_user_message_at: result.data.conversation.last_user_message_at,
             inbox_unread: result.data.conversation.inbox_unread,
+            assigned_user_id: result.data.conversation.assigned_user_id,
+            assigned_user_label: result.data.conversation.assigned_user_label,
+            automation_touched_at: result.data.conversation.automation_touched_at,
           },
           can_reply: result.data.can_reply,
           reply_blocked_reason: result.data.reply_blocked_reason,
@@ -478,7 +511,29 @@ export function ConversationsInboxPage() {
     setReplyText('')
     setReplyFile(null)
     setReplyError('')
+    setReplyToMessage(null)
   }, [selectedId])
+
+  function openChatActions(ctx: ChatActionsContext) {
+    setActionsContext(ctx)
+    setActionsOpen(true)
+  }
+
+  function openAssignDialog(source: AssignContext) {
+    setAssignContext(source)
+  }
+
+  function openAssignFromActions(ctx: ChatActionsContext) {
+    if (!ctx.conversationId || ctx.conversationId <= 0) return
+    openAssignDialog({
+      conversationId: ctx.conversationId,
+      heading: ctx.heading,
+      phone: ctx.phone,
+      assignedUserId: ctx.assignedUserId,
+    })
+  }
+
+  const actionsConversationId = actionsContext?.conversationId ?? null
 
   const urlQ = searchParams.get('q') ?? ''
   useEffect(() => {
@@ -549,37 +604,43 @@ export function ConversationsInboxPage() {
   }
 
   async function onModeChange(status: 'bot' | 'human') {
-    if (!selectedId || selectedId <= 0) return
+    const convId = actionsConversationId ?? selectedId
+    if (!convId || convId <= 0) return
     setReplyError('')
     const result = await apiClient.patch<{ status: 'bot' | 'human' }>(
-      `/api/conversations/${selectedId}/mode`,
+      `/api/conversations/${convId}/mode`,
       { status },
     )
     if (!result.ok) {
       setReplyError(result.error)
       return
     }
-    void loadDetail(selectedId)
+    if (selectedId === convId) void loadDetail(convId)
+    void loadList()
   }
 
   async function onMarkUnread() {
-    if (!selectedId || selectedId <= 0) return
+    const convId = actionsConversationId ?? selectedId
+    if (!convId || convId <= 0) return
     const result = await apiClient.post<{ ok: true }>(
-      `/api/conversations/${selectedId}/mark-unread`,
+      `/api/conversations/${convId}/mark-unread`,
       {},
     )
     if (!result.ok) {
       setReplyError(result.error)
       return
     }
-    navigate(`/conversations${filterQuerySuffix}`)
+    if (selectedId === convId) {
+      navigate(`/conversations${filterQuerySuffix}`)
+    }
     void loadList()
   }
 
   async function onLeadScore(score: number | null) {
-    if (!selectedId || selectedId <= 0) return
+    const convId = actionsConversationId ?? selectedId
+    if (!convId || convId <= 0) return
     const result = await apiClient.post<{ lead_score: number | null }>(
-      `/api/conversations/${selectedId}/lead-score`,
+      `/api/conversations/${convId}/lead-score`,
       score == null
         ? { lead_score_clear: '1' }
         : { lead_score: String(score) },
@@ -588,8 +649,37 @@ export function ConversationsInboxPage() {
       setReplyError(result.error)
       return
     }
-    void loadDetail(selectedId)
+    if (selectedId === convId) void loadDetail(convId)
     void loadList()
+  }
+
+  function onMessageCopy(message: InboxMessage) {
+    const text = message.body_text?.trim()
+    if (!text) return
+    void navigator.clipboard.writeText(text)
+  }
+
+  function onMessageReply(message: InboxMessage) {
+    setReplyToMessage({
+      id: message.id,
+      preview: messageReplyPreview(message),
+      outbound: message.direction === 'outbound',
+    })
+  }
+
+  async function onMessageReact(message: InboxMessage, emoji: string) {
+    if (!selectedId || selectedId <= 0 || !detail?.can_reply) {
+      setReplyError('No puedes reaccionar en este momento')
+      return
+    }
+    setReplyError('')
+    const result = await apiClient.post<{ ok: true }>(
+      `/api/conversations/${selectedId}/messages/${message.id}/react`,
+      { emoji },
+    )
+    if (!result.ok) {
+      setReplyError(result.error)
+    }
   }
 
   async function onSendReply(event: FormEvent) {
@@ -602,11 +692,17 @@ export function ConversationsInboxPage() {
     }
     setSendingReply(true)
     setReplyError('')
+    const replyPayload = replyToMessage
+      ? { message: text, reply_to_message_id: replyToMessage.id }
+      : { message: text }
     const result = replyFile
       ? await (() => {
           const formData = new FormData()
           if (text) formData.append('message', text)
           formData.append('file', replyFile)
+          if (replyToMessage) {
+            formData.append('reply_to_message_id', String(replyToMessage.id))
+          }
           return apiClient.postFormData<{ messages: InboxMessage[] }>(
             `/api/conversations/${selectedId}/reply`,
             formData,
@@ -614,7 +710,7 @@ export function ConversationsInboxPage() {
         })()
       : await apiClient.post<{ messages: InboxMessage[] }>(
           `/api/conversations/${selectedId}/reply`,
-          { message: text },
+          replyPayload,
         )
     setSendingReply(false)
     if (!result.ok) {
@@ -623,7 +719,47 @@ export function ConversationsInboxPage() {
     }
     setReplyText('')
     setReplyFile(null)
+    setReplyToMessage(null)
     void loadDetail(selectedId)
+    void loadList()
+  }
+
+  const canAssign =
+    detail?.can_assign_conversations ?? list?.can_assign_conversations ?? false
+
+  useEffect(() => {
+    if (!assignContext || !canAssign) return
+    setAssignError('')
+    setAssigneesLoading(true)
+    void apiClient
+      .get<{ assignees: ConversationAssignee[] }>('/api/conversations/assignees')
+      .then((result) => {
+        setAssigneesLoading(false)
+        if (!result.ok) {
+          setAssignError(result.error)
+          return
+        }
+        setAssignees(result.data.assignees)
+      })
+  }, [assignContext, canAssign])
+
+  async function onAssign(assignedUserId: number | null) {
+    const convId = assignContext?.conversationId
+    if (!convId || convId <= 0) return
+    setAssignSaving(true)
+    setAssignError('')
+    const result = await apiClient.patch<{
+      assigned_user_id: number | null
+      assigned_user_label: string | null
+    }>(`/api/conversations/${convId}/assign`, { assigned_user_id: assignedUserId })
+    setAssignSaving(false)
+    if (!result.ok) {
+      setAssignError(result.error)
+      return
+    }
+    setAssignContext(null)
+    if (selectedId === convId) void loadDetail(convId)
+    void loadList()
   }
 
   const segments = list?.segments ?? []
@@ -655,27 +791,34 @@ export function ConversationsInboxPage() {
           </Button>
         ))}
         {list?.ai_area_enabled ? (
-          <>
-            <Button
-              type="button"
-              size="sm"
-              variant={chatFilter === 'bot' ? 'default' : 'outline'}
-              className="rounded-full"
-              onClick={() => setChatFilter('bot')}
-            >
-              Bot
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={chatFilter === 'human' ? 'default' : 'outline'}
-              className="rounded-full"
-              onClick={() => setChatFilter('human')}
-            >
-              Asesor
-            </Button>
-          </>
+          <Button
+            type="button"
+            size="sm"
+            variant={chatFilter === 'bot' ? 'default' : 'outline'}
+            className="rounded-full"
+            onClick={() => setChatFilter('bot')}
+          >
+            Bot
+          </Button>
         ) : null}
+        {(
+          [
+            { key: 'mine', label: 'Mis chats' },
+            { key: 'unassigned', label: 'Sin asignar' },
+            { key: 'new', label: 'Nuevos' },
+          ] as const
+        ).map((pill) => (
+          <Button
+            key={pill.key}
+            type="button"
+            size="sm"
+            variant={chatFilter === pill.key ? 'default' : 'outline'}
+            className="rounded-full"
+            onClick={() => setChatFilter(pill.key)}
+          >
+            {pill.label}
+          </Button>
+        ))}
       </div>
       <SegmentFilterChips
         segments={segments}
@@ -730,12 +873,19 @@ export function ConversationsInboxPage() {
                 <li
                   key={item.id}
                   className={`inbox-chat-item ${item.inbox_unread ? 'inbox-chat-item--unread' : ''} ${active ? 'is-active' : ''}`}
+                  onContextMenu={(event) => {
+                    event.preventDefault()
+                    openChatActions(
+                      chatActionsFromListItem(item, list.ai_area_enabled, name),
+                    )
+                  }}
                 >
-                  <button
-                    type="button"
-                    onClick={() => void onSelectItem(item)}
-                    className="inbox-chat-item-btn"
-                  >
+                  <div className="inbox-chat-item-row">
+                    <button
+                      type="button"
+                      onClick={() => void onSelectItem(item)}
+                      className="inbox-chat-item-btn"
+                    >
                     <span className="inbox-chat-avatar" aria-hidden>
                       {inboxInitials(item.contact_name, item.phone)}
                     </span>
@@ -746,7 +896,11 @@ export function ConversationsInboxPage() {
                             <span className="inbox-chat-title">{name}</span>
                             {!hasContactName && leadScore ? <LeadStars score={leadScore} /> : null}
                           </span>
-                          {conversationModeBadge(item.conversation_status)}
+                          <ConversationBadges
+                            status={item.conversation_status}
+                            assignedUserLabel={item.assigned_user_label}
+                            automationTouchedAt={item.automation_touched_at}
+                          />
                         </span>
                         <span className="inbox-chat-time-wrap">
                           {item.inbox_unread ? (
@@ -780,7 +934,22 @@ export function ConversationsInboxPage() {
                         </span>
                       ) : null}
                     </span>
-                  </button>
+                    </button>
+                    <button
+                      type="button"
+                      className="inbox-chat-item-more"
+                      aria-label="Opciones del chat"
+                      title="Opciones del chat"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        openChatActions(
+                          chatActionsFromListItem(item, list.ai_area_enabled, name),
+                        )
+                      }}
+                    >
+                      ›
+                    </button>
+                  </div>
                 </li>
               )
             })
@@ -823,34 +992,39 @@ export function ConversationsInboxPage() {
                 </div>
               )}
               <div className="inbox-chat-header-toolbar">
+                {canAssign ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      openAssignDialog({
+                        conversationId: detail.conversation.id,
+                        heading: detailHeading,
+                        phone: detail.conversation.phone,
+                        assignedUserId: detail.conversation.assigned_user_id,
+                      })
+                    }
+                  >
+                    Asignar
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant="secondary"
                   size="icon-sm"
                   title="Opciones del chat"
                   aria-label="Opciones del chat"
-                  onClick={() => setActionsOpen(true)}
+                  onClick={() =>
+                    openChatActions(
+                      chatActionsFromDetail(detail, detailHeading, detail.ai_area_enabled),
+                    )
+                  }
                 >
                   <span className="inbox-header-more-icon" aria-hidden>
                     ⋮
                   </span>
                 </Button>
-                <InboxChatActionsDialog
-                  open={actionsOpen}
-                  onOpenChange={setActionsOpen}
-                  heading={detailHeading}
-                  phone={detail.conversation.phone}
-                  contactId={detail.conversation.contact_id}
-                  leadScore={detail.contact?.lead_score ?? null}
-                  aiAreaEnabled={detail.ai_area_enabled}
-                  conversationStatus={detail.conversation.status}
-                  onLeadScore={onLeadScore}
-                  onMarkUnread={onMarkUnread}
-                  onModeChange={onModeChange}
-                  onExport={() =>
-                    void apiClient.download(`/api/conversations/${selectedId}/export`)
-                  }
-                />
               </div>
             </WaMainHeader>
 
@@ -870,6 +1044,10 @@ export function ConversationsInboxPage() {
                       conversationId={detail.conversation.id}
                       highlightQuery={searchQuery}
                       isHighlighted={resolvedHighlightMsgId === message.id}
+                      canInteract={detail.can_reply}
+                      onReply={onMessageReply}
+                      onCopy={onMessageCopy}
+                      onReact={(msg, emoji) => void onMessageReact(msg, emoji)}
                     />
                   ))
                 )}
@@ -886,6 +1064,8 @@ export function ConversationsInboxPage() {
                   sendingReply={sendingReply}
                   onSubmit={(e) => void onSendReply(e)}
                   replyError={replyError}
+                  replyTo={replyToMessage}
+                  onClearReplyTo={() => setReplyToMessage(null)}
                 />
               ) : (
                 <Alert>
@@ -896,6 +1076,50 @@ export function ConversationsInboxPage() {
           </>
         ) : null}
       </WaMainPane>
+
+      {actionsContext ? (
+        <InboxChatActionsDialog
+          open={actionsOpen}
+          onOpenChange={(open) => {
+            setActionsOpen(open)
+            if (!open) setActionsContext(null)
+          }}
+          conversationId={actionsContext.conversationId}
+          heading={actionsContext.heading}
+          phone={actionsContext.phone}
+          contactId={actionsContext.contactId}
+          leadScore={actionsContext.leadScore}
+          aiAreaEnabled={actionsContext.aiAreaEnabled}
+          conversationStatus={actionsContext.conversationStatus}
+          canAssign={canAssign}
+          onLeadScore={onLeadScore}
+          onMarkUnread={onMarkUnread}
+          onModeChange={onModeChange}
+          onAssign={() => openAssignFromActions(actionsContext)}
+          onExport={() => {
+            const convId = actionsContext.conversationId
+            if (!convId) return
+            void apiClient.download(`/api/conversations/${convId}/export`)
+          }}
+        />
+      ) : null}
+
+      {assignContext ? (
+        <InboxAssignDialog
+          open={Boolean(assignContext)}
+          onOpenChange={(open) => {
+            if (!open) setAssignContext(null)
+          }}
+          heading={assignContext.heading}
+          phone={assignContext.phone}
+          currentAssigneeId={assignContext.assignedUserId}
+          assignees={assignees}
+          loading={assigneesLoading}
+          saving={assignSaving}
+          error={assignError}
+          onSave={(assignedUserId) => void onAssign(assignedUserId)}
+        />
+      ) : null}
     </WaPageContents>
   )
 }

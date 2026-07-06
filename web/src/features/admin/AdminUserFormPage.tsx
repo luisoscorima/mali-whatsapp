@@ -14,6 +14,7 @@ type AdminUserDetail = {
   can_view_integration: boolean
   can_edit_business_hours: boolean
   can_view_reports: boolean
+  can_assign_conversations: boolean
   extra_areas: string[]
 }
 
@@ -23,6 +24,7 @@ const PERM_FIELDS = [
   { key: 'can_edit_business_hours', label: 'Editar horario' },
   { key: 'can_view_audit_logs', label: 'Ver bitácora' },
   { key: 'can_view_reports', label: 'Ver reportería' },
+  { key: 'can_assign_conversations', label: 'Asignar conversaciones' },
 ] as const
 
 export function AdminUserFormPage() {
@@ -45,6 +47,7 @@ export function AdminUserFormPage() {
     can_edit_business_hours: false,
     can_view_audit_logs: false,
     can_view_reports: false,
+    can_assign_conversations: false,
   })
 
   useEffect(() => {
@@ -67,6 +70,7 @@ export function AdminUserFormPage() {
         can_edit_business_hours: user.can_edit_business_hours,
         can_view_audit_logs: user.can_view_audit_logs,
         can_view_reports: user.can_view_reports,
+        can_assign_conversations: user.can_assign_conversations,
       })
     })
   }, [isNew, userId])

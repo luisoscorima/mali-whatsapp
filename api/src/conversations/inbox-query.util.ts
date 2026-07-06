@@ -4,7 +4,16 @@ import type { InboxChatFilter } from './conversations.types';
 
 export function parseInboxChatFilter(raw?: string): InboxChatFilter {
   const value = String(raw ?? '').trim().toLowerCase();
-  if (value === 'unread' || value === 'bot' || value === 'human') return value;
+  if (
+    value === 'unread' ||
+    value === 'bot' ||
+    value === 'human' ||
+    value === 'mine' ||
+    value === 'unassigned' ||
+    value === 'new'
+  ) {
+    return value;
+  }
   return 'all';
 }
 

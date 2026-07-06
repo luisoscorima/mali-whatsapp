@@ -206,14 +206,19 @@ model conversations {
   meta_ctwa_ad_id              Int?
   whatsapp_phone_number_id     String?              @db.VarChar(32)
   outside_hours_notice_sent_at DateTime?            @db.Timestamptz(6)
+  assigned_user_id             Int?
+  assigned_at                  DateTime?            @db.Timestamptz(6)
+  automation_touched_at        DateTime?            @db.Timestamptz(6)
   chat_messages                chat_messages[]
   conversation_tags            conversation_tags[]
   contacts                     contacts?            @relation(fields: [contact_id], references: [id], onUpdate: NoAction)
   meta_ctwa_ads                meta_ctwa_ads?       @relation(fields: [meta_ctwa_ad_id], references: [id], onUpdate: NoAction)
   meta_ctwa_ad_leads           meta_ctwa_ad_leads[]
+  assigned_user                users?               @relation("conversation_assignee", fields: [assigned_user_id], references: [id], onUpdate: NoAction)
 
   @@unique([area, phone])
   @@index([area, last_message_at(sort: Desc)], map: "idx_conversations_area_last_msg")
+  @@index([area, assigned_user_id], map: "idx_conversations_area_assignee")
 }
 
 model login_logs {
@@ -308,11 +313,15 @@ model users {
   can_view_audit_logs     Boolean      @default(false)
   can_view_integration    Boolean      @default(false)
   can_edit_business_hours Boolean      @default(false)
-  can_view_reports        Boolean      @default(false)
-  is_provisioned          Boolean      @default(false)
-  audit_logs              audit_logs[]
-  login_logs              login_logs[]
-  user_areas              user_areas[]
+  can_view_reports             Boolean      @default(false)
+  is_provisioned               Boolean      @default(false)
+  can_assign_conversations     Boolean      @default(false)
+  first_name                   String?      @db.VarChar(80)
+  last_name                    String?      @db.VarChar(80)
+  audit_logs                   audit_logs[]
+  login_logs                   login_logs[]
+  user_areas                   user_areas[]
+  assigned_conversations       conversations[] @relation("conversation_assignee")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.

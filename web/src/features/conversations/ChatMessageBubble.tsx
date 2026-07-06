@@ -3,6 +3,7 @@ import { formatDateTime } from '@/shared/format'
 import { cn } from '@/lib/utils'
 import type { CampaignMessagePreviewData } from '../campaigns/CampaignMessagePreview'
 import { ChatCampaignPreview } from './ChatCampaignPreview'
+import { ChatMessageBubbleMenu } from './ChatMessageBubbleMenu'
 
 export type ChatMessage = {
   id: number
@@ -73,6 +74,10 @@ type ChatMessageBubbleProps = {
   conversationId: number
   highlightQuery?: string
   isHighlighted?: boolean
+  canInteract?: boolean
+  onReply?: (message: ChatMessage) => void
+  onCopy?: (message: ChatMessage) => void
+  onReact?: (message: ChatMessage, emoji: string) => void
 }
 
 export function ChatMessageBubble({
@@ -80,6 +85,10 @@ export function ChatMessageBubble({
   conversationId,
   highlightQuery = '',
   isHighlighted = false,
+  canInteract = false,
+  onReply,
+  onCopy,
+  onReact,
 }: ChatMessageBubbleProps) {
   const outbound = message.direction === 'outbound'
   const mt = message.message_type.toLowerCase()
@@ -90,8 +99,10 @@ export function ChatMessageBubble({
   const downloadHref = `/api/conversations/${conversationId}/messages/${message.id}/download`
   const showTypeRow = isMediaType(mt) || (mt === 'campaign' && !message.campaign_preview)
   const campPreview = message.campaign_preview
+  const copyText = message.body_text?.trim() ?? ''
+  const showMenu = canInteract && (onReply || onCopy || onReact)
 
-  return (
+  const bubble = (
     <div
       id={`chat-msg-${message.id}`}
       className={cn(
@@ -200,5 +211,19 @@ export function ChatMessageBubble({
         {message.is_ai ? ' · IA' : ''}
       </div>
     </div>
+  )
+
+  if (!showMenu) return bubble
+
+  return (
+    <ChatMessageBubbleMenu
+      canInteract
+      hasCopyText={Boolean(copyText)}
+      onReply={() => onReply?.(message)}
+      onCopy={() => onCopy?.(message)}
+      onReact={(emoji) => onReact?.(message, emoji)}
+    >
+      {bubble}
+    </ChatMessageBubbleMenu>
   )
 }

@@ -24,6 +24,7 @@ export type AuthUser = {
   canViewIntegration: boolean;
   canEditBusinessHours: boolean;
   canViewReports: boolean;
+  canAssignConversations: boolean;
   picture?: string;
 };
 

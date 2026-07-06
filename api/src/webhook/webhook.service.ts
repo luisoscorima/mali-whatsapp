@@ -387,7 +387,11 @@ export class WebhookService {
     if (iaFallo) {
       await this.prisma.conversations.update({
         where: { id: input.conversationId },
-        data: { status: 'human', updated_at: new Date() },
+        data: {
+          status: 'human',
+          automation_touched_at: new Date(),
+          updated_at: new Date(),
+        },
       });
       await this.persistAndSendOutbound({
         area: input.area,
@@ -412,7 +416,11 @@ export class WebhookService {
       });
       await this.prisma.conversations.update({
         where: { id: input.conversationId },
-        data: { status: 'human', updated_at: new Date() },
+        data: {
+          status: 'human',
+          automation_touched_at: new Date(),
+          updated_at: new Date(),
+        },
       });
       return;
     }
@@ -424,6 +432,10 @@ export class WebhookService {
       text: replyText,
       isAi: true,
       phoneNumberId: input.phoneNumberId,
+    });
+    await this.prisma.conversations.update({
+      where: { id: input.conversationId },
+      data: { automation_touched_at: new Date(), updated_at: new Date() },
     });
   }
 

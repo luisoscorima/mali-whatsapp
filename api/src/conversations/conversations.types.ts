@@ -1,4 +1,11 @@
-export type InboxChatFilter = 'all' | 'unread' | 'bot' | 'human';
+export type InboxChatFilter =
+  | 'all'
+  | 'unread'
+  | 'bot'
+  | 'human'
+  | 'mine'
+  | 'unassigned'
+  | 'new';
 
 export type InboxSegmentOption = {
   slug: string;
@@ -12,6 +19,9 @@ export type InboxListItem = {
   last_message_at: string | null;
   inbox_unread: boolean;
   conversation_status: string | null;
+  assigned_user_id: number | null;
+  assigned_user_label: string | null;
+  automation_touched_at: string | null;
   contact_name: string;
   contact_lead_score: number | null;
   contact_segment_slugs: string[];
@@ -26,6 +36,7 @@ export type InboxListResult = {
   items: InboxListItem[];
   unread_count: number;
   ai_area_enabled: boolean;
+  can_assign_conversations: boolean;
   segments: InboxSegmentOption[];
   filters: {
     q: string;
@@ -82,6 +93,9 @@ export type InboxConversation = {
   inbox_unread: boolean;
   contact_id: number | null;
   meta_ctwa_ad_id: number | null;
+  assigned_user_id: number | null;
+  assigned_user_label: string | null;
+  automation_touched_at: string | null;
 };
 
 export type InboxDetail = {
@@ -94,6 +108,7 @@ export type InboxDetail = {
   reply_blocked_reason: '24h' | 'bot_mode' | null;
   user_service_window_open: boolean;
   ai_area_enabled: boolean;
+  can_assign_conversations: boolean;
 };
 
 export type EnsureConversationResult = {
@@ -108,6 +123,21 @@ export type UpdateConversationModeResult = {
   status: 'bot' | 'human';
 };
 
+export type ConversationAssignee = {
+  id: number;
+  label: string;
+  email: string;
+};
+
+export type ConversationAssigneesResult = {
+  assignees: ConversationAssignee[];
+};
+
+export type AssignConversationResult = {
+  assigned_user_id: number | null;
+  assigned_user_label: string | null;
+};
+
 export type InboxConversationUpdates = {
   messages: InboxMessage[];
   conversation: {
@@ -115,6 +145,9 @@ export type InboxConversationUpdates = {
     last_user_message_at: string | null;
     status: string;
     inbox_unread: boolean;
+    assigned_user_id: number | null;
+    assigned_user_label: string | null;
+    automation_touched_at: string | null;
   };
   can_reply: boolean;
   reply_blocked_reason: '24h' | 'bot_mode' | null;

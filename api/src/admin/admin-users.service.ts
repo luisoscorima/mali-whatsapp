@@ -40,6 +40,7 @@ function mapUserRow(row: {
   can_view_integration: boolean;
   can_edit_business_hours: boolean;
   can_view_reports: boolean;
+  can_assign_conversations: boolean;
 }): AdminUserListItem {
   return {
     id: row.id,
@@ -53,6 +54,7 @@ function mapUserRow(row: {
     can_view_integration: row.can_view_integration,
     can_edit_business_hours: row.can_edit_business_hours,
     can_view_reports: row.can_view_reports,
+    can_assign_conversations: row.can_assign_conversations,
   };
 }
 
@@ -94,6 +96,7 @@ export class AdminUsersService {
         can_view_integration: true,
         can_edit_business_hours: true,
         can_view_reports: true,
+        can_assign_conversations: true,
       },
     });
     return rows.map(mapUserRow);
@@ -114,6 +117,7 @@ export class AdminUsersService {
         can_view_integration: true,
         can_edit_business_hours: true,
         can_view_reports: true,
+        can_assign_conversations: true,
       },
     });
     if (!row) throw new NotFoundException('Usuario no encontrado');
@@ -149,6 +153,7 @@ export class AdminUsersService {
           can_view_integration: Boolean(dto.can_view_integration),
           can_edit_business_hours: Boolean(dto.can_edit_business_hours),
           can_view_reports: Boolean(dto.can_view_reports),
+          can_assign_conversations: Boolean(dto.can_assign_conversations),
         },
         select: { id: true },
       });
@@ -216,6 +221,7 @@ export class AdminUsersService {
           can_view_integration: Boolean(dto.can_view_integration),
           can_edit_business_hours: Boolean(dto.can_edit_business_hours),
           can_view_reports: Boolean(dto.can_view_reports),
+          can_assign_conversations: Boolean(dto.can_assign_conversations),
         },
       });
     } else {
@@ -231,6 +237,7 @@ export class AdminUsersService {
           can_view_integration: Boolean(dto.can_view_integration),
           can_edit_business_hours: Boolean(dto.can_edit_business_hours),
           can_view_reports: Boolean(dto.can_view_reports),
+          can_assign_conversations: Boolean(dto.can_assign_conversations),
         },
       });
     }

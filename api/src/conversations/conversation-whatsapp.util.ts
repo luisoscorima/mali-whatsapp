@@ -151,6 +151,7 @@ export async function sendSessionTextMessage(input: {
   text: string;
   area: unknown;
   phoneNumberId?: string | null;
+  replyToWaMessageId?: string | null;
 }): Promise<SessionMessageResult> {
   const { token, phoneNumberId } = resolveWhatsAppSendCredentials({
     area: input.area,
@@ -161,11 +162,41 @@ export async function sendSessionTextMessage(input: {
   if (safe.length > MAX_SESSION_TEXT_LEN) {
     throw new Error(`Mensaje demasiado largo (max ${MAX_SESSION_TEXT_LEN})`);
   }
-  return graphPostJson<SessionMessageResult>(`${phoneNumberId}/messages`, token, {
+  const replyTo = String(input.replyToWaMessageId ?? '').trim();
+  const payload: Record<string, unknown> = {
     messaging_product: 'whatsapp',
     to: input.to,
     type: 'text',
     text: { body: safe, preview_url: false },
+  };
+  if (replyTo) {
+    payload.context = { message_id: replyTo };
+  }
+  return graphPostJson<SessionMessageResult>(`${phoneNumberId}/messages`, token, payload);
+}
+
+export async function sendMessageReaction(input: {
+  to: string;
+  waMessageId: string;
+  emoji: string;
+  area: unknown;
+  phoneNumberId?: string | null;
+}): Promise<SessionMessageResult> {
+  const { token, phoneNumberId } = resolveWhatsAppSendCredentials({
+    area: input.area,
+    phoneNumberId: input.phoneNumberId,
+  });
+  const waMessageId = String(input.waMessageId || '').trim();
+  if (!waMessageId) throw new Error('Mensaje de WhatsApp no disponible');
+  const emoji = String(input.emoji || '').trim();
+  return graphPostJson<SessionMessageResult>(`${phoneNumberId}/messages`, token, {
+    messaging_product: 'whatsapp',
+    to: input.to,
+    type: 'reaction',
+    reaction: {
+      message_id: waMessageId,
+      emoji,
+    },
   });
 }
 

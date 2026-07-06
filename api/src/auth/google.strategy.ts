@@ -8,8 +8,9 @@ type GoogleProfile = {
   id: string;
   emails?: { value: string }[];
   displayName?: string;
+  name?: { givenName?: string; familyName?: string };
   photos?: { value: string }[];
-  _json?: { hd?: string };
+  _json?: { hd?: string; given_name?: string; family_name?: string; name?: string };
 };
 
 @Injectable()

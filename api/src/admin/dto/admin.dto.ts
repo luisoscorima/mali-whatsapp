@@ -50,6 +50,10 @@ export class CreateAdminUserDto {
   can_view_reports?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  can_assign_conversations?: boolean;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   extra_areas?: string[];
@@ -92,6 +96,10 @@ export class UpdateAdminUserDto {
   @IsOptional()
   @IsBoolean()
   can_view_reports?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  can_assign_conversations?: boolean;
 
   @IsOptional()
   @IsArray()
