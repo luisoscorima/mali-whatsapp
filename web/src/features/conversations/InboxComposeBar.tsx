@@ -148,7 +148,7 @@ export function InboxComposeBar({
       </div>
 
       <p className="inbox-compose-hint-inline">
-        JPEG/PNG (5 MB), MP4 (16 MB), audio (16 MB), PDF (100 MB). Con audio, el texto se envía aparte si lo escribes.
+        JPEG/PNG (5 MB), MP4 (16 MB), audio (16 MB), PDF (25 MB). Con audio, el texto se envía aparte si lo escribes.
       </p>
       {replyError ? <p className="inbox-compose-hint text-bad">{replyError}</p> : null}
     </form>

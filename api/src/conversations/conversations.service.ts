@@ -83,6 +83,7 @@ import {
   readMessageSenderLabel,
   setMessageSender,
 } from './chat-sender.util';
+import { autoAssignConversationIfUnassigned } from './conversation-assignment.util';
 import {
   advisorLabelFromUserRow,
   collectUserIdsFromAuditRows,
@@ -472,15 +473,37 @@ export class ConversationsService {
       throw new NotFoundException('Conversacion no encontrada');
     }
 
+    let activeConversation = conversation;
+    if (!activeConversation.assigned_user_id) {
+      const assigned = await autoAssignConversationIfUnassigned(
+        this.prisma,
+        this.auditLog,
+        area,
+        conversationId,
+        'auto_last_sender',
+      );
+      if (assigned) {
+        const refreshed = await this.prisma.conversations.findFirst({
+          where: { id: conversationId, area },
+          include: {
+            assigned_user: {
+              select: { first_name: true, last_name: true, email: true },
+            },
+          },
+        });
+        if (refreshed) activeConversation = refreshed;
+      }
+    }
+
     const [tags, metaAd, aiAreaEnabled] = await Promise.all([
       this.prisma.conversation_tags.findMany({
         where: { conversation_id: conversationId },
         orderBy: { label: 'asc' },
         select: { label: true },
       }),
-      conversation.meta_ctwa_ad_id
+      activeConversation.meta_ctwa_ad_id
         ? this.prisma.meta_ctwa_ads.findFirst({
-            where: { id: conversation.meta_ctwa_ad_id, area },
+            where: { id: activeConversation.meta_ctwa_ad_id, area },
             select: {
               id: true,
               meta_source_id: true,
@@ -505,7 +528,7 @@ export class ConversationsService {
     });
 
     let contact: InboxDetail['contact'] = null;
-    if (conversation.contact_id) {
+    if (activeConversation.contact_id) {
       const rows = await this.prisma.$queryRaw<
         {
           name: string | null;
@@ -527,10 +550,10 @@ export class ConversationsService {
             WHERE cs.contact_id = c.id
           ), ARRAY[]::varchar[]) AS segment_slugs
         FROM contacts c
-        WHERE c.id = ${conversation.contact_id}
+        WHERE c.id = ${activeConversation.contact_id}
       `);
       contact = rows[0] ?? null;
-    } else if (conversation.phone) {
+    } else if (activeConversation.phone) {
       const rows = await this.prisma.$queryRaw<
         {
           name: string | null;
@@ -552,7 +575,7 @@ export class ConversationsService {
             WHERE cs.contact_id = c.id
           ), ARRAY[]::varchar[]) AS segment_slugs
         FROM contacts c
-        WHERE c.phone = ${conversation.phone}
+        WHERE c.phone = ${activeConversation.phone}
         ORDER BY CASE WHEN c.area = ${area} THEN 0 ELSE 1 END, c.updated_at DESC NULLS LAST
         LIMIT 1
       `);
@@ -581,37 +604,37 @@ export class ConversationsService {
     const events = await this.loadConversationTimelineEvents(
       area,
       conversationId,
-      conversation.contact_id,
+      activeConversation.contact_id,
     );
 
     const windowOpen = isWithinUserServiceWindow(
-      conversation.last_user_message_at,
+      activeConversation.last_user_message_at,
     );
-    const status = String(conversation.status ?? '').trim().toLowerCase();
+    const status = String(activeConversation.status ?? '').trim().toLowerCase();
     const botModeBlock = aiAreaEnabled && status === 'bot';
     let replyBlockedReason: InboxDetail['reply_blocked_reason'] = null;
     if (!windowOpen) replyBlockedReason = '24h';
     else if (botModeBlock) replyBlockedReason = 'bot_mode';
 
-    const assignedUserLabel = conversation.assigned_user
-      ? formatAdvisorLabel(conversation.assigned_user)
+    const assignedUserLabel = activeConversation.assigned_user
+      ? formatAdvisorLabel(activeConversation.assigned_user)
       : null;
 
     return {
       conversation: {
-        id: conversation.id,
-        phone: conversation.phone,
-        status: conversation.status,
-        last_message_at: conversation.last_message_at?.toISOString() ?? null,
+        id: activeConversation.id,
+        phone: activeConversation.phone,
+        status: activeConversation.status,
+        last_message_at: activeConversation.last_message_at?.toISOString() ?? null,
         last_user_message_at:
-          conversation.last_user_message_at?.toISOString() ?? null,
+          activeConversation.last_user_message_at?.toISOString() ?? null,
         inbox_unread: false,
-        contact_id: conversation.contact_id,
-        meta_ctwa_ad_id: conversation.meta_ctwa_ad_id,
-        assigned_user_id: conversation.assigned_user_id,
+        contact_id: activeConversation.contact_id,
+        meta_ctwa_ad_id: activeConversation.meta_ctwa_ad_id,
+        assigned_user_id: activeConversation.assigned_user_id,
         assigned_user_label: assignedUserLabel,
         automation_touched_at:
-          conversation.automation_touched_at?.toISOString() ?? null,
+          activeConversation.automation_touched_at?.toISOString() ?? null,
       },
       contact,
       meta_ad: metaAd,
@@ -1209,6 +1232,7 @@ export class ConversationsService {
                 replyToMeta,
               ),
               actorLabel,
+              user.id,
             ) as PrismaTypes.InputJsonValue,
             is_ai: false,
           },
@@ -1251,6 +1275,7 @@ export class ConversationsService {
               raw_payload: setMessageSender(
                 sanitizeApiResponse(textResp),
                 actorLabel,
+                user.id,
               ) as PrismaTypes.InputJsonValue,
               is_ai: false,
             },
@@ -1308,6 +1333,7 @@ export class ConversationsService {
                 localPreview,
               ),
               actorLabel,
+              user.id,
             ) as PrismaTypes.InputJsonValue,
             is_ai: false,
           },

@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { AuditLogService } from '../audit/audit-log.service';
 import { runCampaignChatBackfills } from '../campaigns/campaign-chat-backfill.util';
+import { backfillUnassignedConversationAssignments } from '../conversations/conversation-assignment.util';
 import { CampaignJobsService } from '../campaigns/campaign-jobs.service';
 import { CampaignRetryService } from '../campaigns/campaign-retry.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -52,6 +53,23 @@ export class MaintenanceQueueProcessor extends WorkerHost {
         } catch (error) {
           this.logger.warn(
             `Backfill campañas en chat: ${
+              error instanceof Error ? error.message : error
+            }`,
+          );
+        }
+        try {
+          const assignStats = await backfillUnassignedConversationAssignments(
+            this.prisma,
+            this.auditLog,
+          );
+          if (assignStats.assigned > 0) {
+            this.logger.log(
+              `Autoasignación: ${assignStats.assigned} conversación(es) asignada(s)`,
+            );
+          }
+        } catch (error) {
+          this.logger.warn(
+            `Backfill autoasignación: ${
               error instanceof Error ? error.message : error
             }`,
           );

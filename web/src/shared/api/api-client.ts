@@ -148,6 +148,14 @@ export const apiClient = {
       return envelope;
     }
 
+    if (res.status === 413) {
+      return {
+        ok: false,
+        error:
+          'Archivo demasiado grande (PDF hasta 25 MB). Si persiste, revisa el límite en Nginx Proxy Manager.',
+      };
+    }
+
     if (!res.ok) {
       return { ok: false, error: parseErrorBody(body, `Error ${res.status}`) };
     }

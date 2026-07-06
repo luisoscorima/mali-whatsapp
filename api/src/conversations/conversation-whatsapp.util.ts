@@ -11,7 +11,7 @@ export const MAX_MEDIA_CAPTION_LEN = 1024;
 const MAX_MEDIA_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_MEDIA_VIDEO_BYTES = 16 * 1024 * 1024;
 const MAX_MEDIA_AUDIO_BYTES = 16 * 1024 * 1024;
-const MAX_MEDIA_DOCUMENT_BYTES = 100 * 1024 * 1024;
+const MAX_MEDIA_DOCUMENT_BYTES = 25 * 1024 * 1024;
 
 const ALLOWED_MEDIA_MIMES = new Set([
   'image/jpeg',
@@ -227,7 +227,7 @@ export async function uploadMediaToWhatsApp(input: {
 
   const form = new FormData();
   form.append('messaging_product', 'whatsapp');
-  form.append('type', waType);
+  form.append('type', mime);
   form.append('file', new Blob([new Uint8Array(input.buffer)], { type: mime }), safeName);
 
   const response = await fetch(`${GRAPH_BASE}/${phoneNumberId}/media`, {

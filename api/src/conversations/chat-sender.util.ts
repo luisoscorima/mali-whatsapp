@@ -2,6 +2,13 @@ import { formatAdvisorLabel } from '../users/advisor-label.util';
 
 const SENDER_KEY = '_mali_sender';
 
+const NON_ADVISOR_LABELS = new Set([
+  'ia',
+  'campaña',
+  'automatico',
+  'automático',
+]);
+
 function actorLabelFromEmail(email: string | null | undefined): string | null {
   const raw = String(email ?? '').trim();
   if (!raw) return null;
@@ -34,9 +41,37 @@ export function readMessageSenderLabel(
   return null;
 }
 
+export function readMessageSenderUserId(rawPayload: unknown): number | null {
+  if (!rawPayload || typeof rawPayload !== 'object' || Array.isArray(rawPayload)) {
+    return null;
+  }
+  const stored = (rawPayload as Record<string, unknown>)[SENDER_KEY];
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return null;
+  const id = Number((stored as Record<string, unknown>).user_id);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+export function isHumanAdvisorOutboundMessage(
+  rawPayload: unknown,
+  isAi: boolean,
+  messageType: string,
+): boolean {
+  if (isAi) return false;
+  const mt = String(messageType || '').trim().toLowerCase();
+  if (mt === 'campaign') return false;
+  if (rawPayload && typeof rawPayload === 'object' && !Array.isArray(rawPayload)) {
+    const record = rawPayload as Record<string, unknown>;
+    if (String(record.source ?? '').trim() === 'campaign_send') return false;
+  }
+  const label = readMessageSenderLabel(rawPayload, isAi, messageType);
+  if (!label) return true;
+  return !NON_ADVISOR_LABELS.has(label.trim().toLowerCase());
+}
+
 export function setMessageSender(
   rawPayload: unknown,
   label: string,
+  userId?: number | null,
 ): Record<string, unknown> {
   const base =
     rawPayload && typeof rawPayload === 'object' && !Array.isArray(rawPayload)
@@ -47,7 +82,11 @@ export function setMessageSender(
     delete base[SENDER_KEY];
     return base;
   }
-  base[SENDER_KEY] = { label: safe.slice(0, 120) };
+  const sender: Record<string, unknown> = { label: safe.slice(0, 120) };
+  if (userId != null && Number.isInteger(userId) && userId > 0) {
+    sender.user_id = userId;
+  }
+  base[SENDER_KEY] = sender;
   return base;
 }
 
@@ -57,20 +96,25 @@ type AuditReplyRow = {
   meta: unknown;
 };
 
-export function matchAuditSenderLabel(
+type AuditSenderMatch = {
+  label: string;
+  actorEmail: string;
+};
+
+function matchMessageToAudit(
   message: {
     body_text: string | null;
     created_at: string;
     message_type: string;
   },
   audits: AuditReplyRow[],
-): string | null {
+): AuditSenderMatch | null {
   const at = new Date(message.created_at).getTime();
   if (Number.isNaN(at)) return null;
   const body = String(message.body_text ?? '').trim();
   const mt = String(message.message_type || '').trim().toLowerCase();
 
-  let best: { label: string; delta: number } | null = null;
+  let best: { match: AuditSenderMatch; delta: number } | null = null;
   for (const audit of audits) {
     const auditAt = audit.created_at.getTime();
     const delta = Math.abs(auditAt - at);
@@ -93,9 +137,34 @@ export function matchAuditSenderLabel(
     }
     if (!matches) continue;
 
-    const label = actorLabelFromEmail(audit.actor_email);
-    if (!label) continue;
-    if (!best || delta < best.delta) best = { label, delta };
+    const email = String(audit.actor_email ?? '').trim();
+    const label = actorLabelFromEmail(email);
+    if (!email || !label) continue;
+    if (!best || delta < best.delta) {
+      best = { match: { label, actorEmail: email }, delta };
+    }
   }
-  return best?.label ?? null;
+  return best?.match ?? null;
+}
+
+export function matchAuditSenderActor(
+  message: {
+    body_text: string | null;
+    created_at: string;
+    message_type: string;
+  },
+  audits: AuditReplyRow[],
+): AuditSenderMatch | null {
+  return matchMessageToAudit(message, audits);
+}
+
+export function matchAuditSenderLabel(
+  message: {
+    body_text: string | null;
+    created_at: string;
+    message_type: string;
+  },
+  audits: AuditReplyRow[],
+): string | null {
+  return matchMessageToAudit(message, audits)?.label ?? null;
 }
