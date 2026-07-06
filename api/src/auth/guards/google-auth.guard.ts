@@ -2,6 +2,7 @@ import {
   ExecutionContext,
   Injectable,
   ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AppConfigService } from '../../config/app-config.service';
@@ -22,10 +23,13 @@ export class GoogleAuthGuard extends AuthGuard('google') {
   handleRequest<TUser>(
     err: Error | null,
     user: TUser | false,
-    _info: unknown,
+    info: unknown,
     context: ExecutionContext,
   ): TUser {
-    const res = context.switchToHttp().getResponse<{ redirect: (url: string) => void }>();
+    const res = context.switchToHttp().getResponse<{
+      headersSent: boolean;
+      redirect: (url: string) => void;
+    }>();
     if (err || !user) {
       const infoMessage =
         typeof info === 'object' &&
@@ -37,8 +41,10 @@ export class GoogleAuthGuard extends AuthGuard('google') {
       const message = encodeURIComponent(
         err?.message || infoMessage || 'No se pudo iniciar sesión con Google',
       );
-      res.redirect(`${this.config.appBaseUrl}/login?error=${message}`);
-      return null as TUser;
+      if (!res.headersSent) {
+        res.redirect(`${this.config.appBaseUrl}/login?error=${message}`);
+      }
+      throw new UnauthorizedException('Google OAuth');
     }
     return user;
   }

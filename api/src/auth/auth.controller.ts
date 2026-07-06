@@ -82,6 +82,9 @@ export class AuthController {
     if (!row) {
       return;
     }
+    if (res.headersSent) {
+      return;
+    }
 
     const { accessToken, user } = await this.authService.loginWithGoogle(
       row,
