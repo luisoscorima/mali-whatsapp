@@ -67,7 +67,7 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
                       <span className="inbox-chat-title">{seg.label}</span>
                     </span>
                     <span
-                      className={`inline-block rounded px-1.5 py-0.5 font-mono text-[10px] ${segmentToneClass(seg.color_key)}`}
+                      className={`block max-w-full truncate rounded px-1.5 py-0.5 font-mono text-[10px] ${segmentToneClass(seg.color_key)}`}
                     >
                       {seg.slug}
                     </span>

@@ -28,7 +28,7 @@ export function WaSidebar({
         {actions ? <div className="inbox-sidebar-toolbar">{actions}</div> : null}
       </div>
       {filters}
-      <ScrollArea className="min-h-0 flex-1">{children}</ScrollArea>
+      <ScrollArea className="inbox-sidebar-scroll min-h-0 flex-1">{children}</ScrollArea>
     </aside>
   )
 }

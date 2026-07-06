@@ -7,34 +7,46 @@
 
 .wa-layout {
   display: grid;
+  width: 100%;
   max-width: 100%;
   margin: 0;
   min-height: 0;
+  min-width: 0;
   height: 100%;
+  overflow: hidden;
 }
 
 .wa-layout--inbox {
-  grid-template-columns: var(--wa-rail-width) var(--wa-sidebar-width) minmax(0, 1fr);
-  grid-template-rows: 1fr;
+  grid-template-columns: var(--wa-rail-width) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   align-items: stretch;
   overflow: hidden;
   background: var(--wa-list-bg);
 }
 
 .wa-layout--simple {
-  grid-template-columns: 72px minmax(0, 1fr);
-  grid-template-rows: 1fr;
+  grid-template-columns: var(--wa-rail-width) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   align-items: stretch;
   overflow: hidden;
   background: var(--wa-list-bg);
 }
 
 .wa-layout--span-main {
-  grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-columns: var(--wa-rail-width) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .wa-contents {
-  display: contents;
+  display: grid;
+  grid-column: 2;
+  grid-template-columns: var(--wa-sidebar-width) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 /* --- Rail --- */
@@ -42,7 +54,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 72px;
+  grid-column: 1;
+  width: var(--wa-rail-width);
+  min-width: var(--wa-rail-width);
+  max-width: var(--wa-rail-width);
   flex-shrink: 0;
   padding: 10px 0 12px;
   background: var(--wa-list-bg);
@@ -455,10 +470,11 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   height: 100%;
-  width: var(--wa-sidebar-width);
-  min-width: var(--wa-sidebar-width);
-  max-width: var(--wa-sidebar-width);
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
   background: var(--wa-list-bg);
   border-right: 1px solid var(--line);
 }
@@ -494,6 +510,22 @@
   gap: 8px;
 }
 
+.inbox-sidebar-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.inbox-sidebar-scroll [data-radix-scroll-area-viewport] {
+  height: 100%;
+}
+
+.inbox-sidebar .inbox-chat-list {
+  flex: none;
+  min-height: 0;
+  overflow: visible;
+}
+
 /* Main pane */
 .inbox-main {
   display: flex;
@@ -507,7 +539,7 @@
 }
 
 .inbox-main--span {
-  grid-column: 2 / -1;
+  grid-column: 1 / -1;
 }
 
 .inbox-empty-pane {
@@ -583,11 +615,20 @@
   .wa-layout--simple,
   .wa-layout--span-main {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
+    grid-template-rows: minmax(0, 1fr) auto;
     height: 100%;
     max-height: 100%;
     min-height: 0;
     overflow: hidden;
+  }
+
+  .wa-layout--inbox .wa-contents,
+  .wa-layout--simple .wa-contents,
+  .wa-layout--span-main .wa-contents {
+    grid-row: 1;
+    grid-column: 1;
+    grid-template-columns: 1fr;
+    min-width: 0;
   }
 
   .inbox-sidebar-header {
@@ -602,6 +643,8 @@
     grid-row: 2;
     grid-column: 1;
     width: 100%;
+    min-width: 0;
+    max-width: none;
     height: auto;
     min-height: 52px;
     display: grid;
