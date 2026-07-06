@@ -4,6 +4,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY web/package.json ./web/
 COPY api/package.json ./api/
+COPY api/prisma ./api/prisma
+ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
 RUN npm ci
 
 COPY web ./web
