@@ -40,6 +40,7 @@ import { AdminUsersPage } from '../features/admin/AdminUsersPage'
 import { AdminUserFormPage } from '../features/admin/AdminUserFormPage'
 import { AdminMetaPage } from '../features/admin/AdminMetaPage'
 import { AdminAuditPage } from '../features/admin/AdminAuditPage'
+import { AdminAreasPage } from '../features/admin/AdminAreasPage'
 
 export function AppRouter() {
   return (
@@ -85,6 +86,7 @@ export function AppRouter() {
                 <Route path="users" element={<AdminUsersPage />} />
                 <Route path="users/new" element={<AdminUserFormPage />} />
                 <Route path="users/:id" element={<AdminUserFormPage />} />
+                <Route path="areas" element={<AdminAreasPage />} />
                 <Route path="meta" element={<AdminMetaPage />} />
                 <Route path="audit-logs" element={<AdminAuditPage />} />
               </Route>

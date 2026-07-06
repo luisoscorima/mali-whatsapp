@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
+import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { templateStatusClass } from './templateStatus'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
+
+const LIST_POLL_MS = 15000
 
 type TemplateListItem = {
   id: number
@@ -40,6 +43,8 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
     void load()
   }, [location.search])
 
+  useIntervalWhenVisible(() => void load(), LIST_POLL_MS)
+
   async function onSync() {
     setSyncing(true)
     setError('')
@@ -55,8 +60,6 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
   return (
     <WaSidebar
       title="Plantillas"
-      onRefresh={() => void load()}
-      refreshTitle="Actualizar lista"
       actions={
         <>
           <button

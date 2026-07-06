@@ -1,9 +1,9 @@
 import { Link, useLocation } from 'react-router-dom'
-import { apiClient, type AuthUser } from '@/shared/api'
+import type { AuthUser } from '@/shared/api'
 import { MALI_LOGO_URL } from '@/shared/brand'
 import { useTheme } from '@/shared/theme/useTheme'
 
-import { areaLabel } from '@/features/admin/areaLabels'
+import { WaAccountMenu } from '@/shared/ui/shell/WaAccountMenu'
 
 const MORE_NAV = ['segments', 'templates', 'attributes', 'anuncios'] as const
 
@@ -126,30 +126,11 @@ export function WaRail({ user, onUserUpdate }: WaRailProps) {
   const { toggleTheme } = useTheme()
   const nav = navFromPath(location.pathname)
   const mobileMoreActive = MORE_NAV.includes(nav as (typeof MORE_NAV)[number])
-  const railInitial =
-    user?.email ? user.email.charAt(0).toUpperCase() : '?'
 
   const visibleItems =
     user?.isProvisioned || user?.isMaster
       ? NAV_ITEMS
       : NAV_ITEMS.filter((item) => item.key === 'campaigns' || item.key === 'conversations')
-
-  const showAreaSwitch =
-    user && (user.isMaster || user.allowedAreas.length > 1)
-
-  async function onAreaChange(nextArea: string) {
-    if (!nextArea || nextArea === user?.area) return
-    const result = await apiClient.switchArea(nextArea)
-    if (result.ok) {
-      onUserUpdate?.(result.data.user)
-      window.location.assign('/campaigns')
-    }
-  }
-
-  function onLogout() {
-    apiClient.logout()
-    window.location.href = '/login'
-  }
 
   return (
     <aside className="wa-rail" aria-label="Navegación principal">
@@ -218,64 +199,7 @@ export function WaRail({ user, onUserUpdate }: WaRailProps) {
           </span>
         </button>
 
-        {user ? (
-          <details className="wa-rail__profile">
-            <summary className="wa-rail__profile-trigger" aria-label="Menú de cuenta">
-              <span className="wa-rail__avatar" aria-hidden="true">
-                {user.picture ? (
-                  <img
-                    src={user.picture}
-                    alt=""
-                    className="wa-rail__avatar-img"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  railInitial
-                )}
-              </span>
-            </summary>
-            <div className="wa-rail__dropdown">
-              <p className="wa-rail__dropdown-name">{user.email}</p>
-              <p className="wa-rail__dropdown-meta">
-                <span className="area-pill area-pill--menu">{areaLabel(user.area)}</span>
-                {user.isMaster ? (
-                  <span className="area-pill area-pill--master area-pill--menu">Master</span>
-                ) : null}
-              </p>
-              {showAreaSwitch ? (
-                <label className="wa-rail__area-form">
-                  <span className="sr-only">Cambiar área</span>
-                  <select
-                    value={user.area}
-                    onChange={(e) => void onAreaChange(e.target.value)}
-                    className="wa-rail__area-select"
-                  >
-                    {user.allowedAreas.map((area) => (
-                      <option key={area} value={area}>
-                        {areaLabel(area)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              <div className="wa-rail__dropdown-links">
-                <Link to="/settings">Ajustes</Link>
-                {user.isMaster ? <Link to="/admin/users">Admin</Link> : null}
-              </div>
-              <form
-                className="wa-rail__logout"
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  onLogout()
-                }}
-              >
-                <button type="submit" className="wa-rail__logout-btn">
-                  Cerrar sesión
-                </button>
-              </form>
-            </div>
-          </details>
-        ) : null}
+        {user ? <WaAccountMenu user={user} onUserUpdate={onUserUpdate} /> : null}
       </div>
     </aside>
   )

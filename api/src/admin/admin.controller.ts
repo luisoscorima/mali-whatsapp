@@ -19,6 +19,8 @@ import { MetaSettingsService } from '../meta-settings/meta-settings.service';
 import { ReportsService } from '../reports/reports.service';
 import type { AuditLogListResult } from '../reports/reports.types';
 import { AdminUsersService } from './admin-users.service';
+import { AdminAreasService } from './admin-areas.service';
+import type { AdminAreaSummary } from './admin-areas.service';
 import type { AdminMetaSettingsView, AdminUserDetail, AdminUserListItem } from './admin.types';
 import {
   CreateAdminUserDto,
@@ -32,9 +34,16 @@ import { MasterGuard } from './guards/master.guard';
 export class AdminController {
   constructor(
     private readonly adminUsersService: AdminUsersService,
+    private readonly adminAreasService: AdminAreasService,
     private readonly metaSettingsService: MetaSettingsService,
     private readonly reportsService: ReportsService,
   ) {}
+
+  @Get('areas')
+  async listAreas(): Promise<ApiResponse<AdminAreaSummary[]>> {
+    const data = await this.adminAreasService.listSummaries();
+    return { ok: true, data };
+  }
 
   @Get('users')
   async listUsers(): Promise<ApiResponse<AdminUserListItem[]>> {

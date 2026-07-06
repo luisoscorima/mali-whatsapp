@@ -1,7 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
-import { formatChatListTime, formatDateTime } from '../../shared/format'
+import { formatChatListTime } from '../../shared/format'
 import { WaPageContents } from '@/shared/ui/shell/WaLayout'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import {
@@ -10,8 +10,21 @@ import {
   WaMainFooter,
 } from '@/shared/ui/shell/WaMainPane'
 import { ChatEmptyIcon, WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
+import { Alert, AlertDescription } from '@/shared/ui/shadcn/alert'
+import { Badge } from '@/shared/ui/shadcn/badge'
+import { Button } from '@/shared/ui/shadcn/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/shared/ui/shadcn/dropdown-menu'
 import { formatContactName } from '../contacts/contactName'
 import { SegmentFilterChips } from '../segments/SegmentFilterChips'
+import { ChatMessageBubble } from './ChatMessageBubble'
+import { InboxComposeBar } from './InboxComposeBar'
+import { InboxMessageScroller, type InboxMessageScrollerHandle } from './InboxMessageScroller'
 const INBOX_POLL_MS = 8000
 
 function segmentLabel(slug: string, segments: SegmentOption[]): string {
@@ -38,16 +51,16 @@ function conversationModeBadge(status: string | null) {
   const st = String(status ?? '').toLowerCase()
   if (st === 'bot') {
     return (
-      <span className="inbox-chat-mode-badge" title="Modo Bot">
+      <Badge variant="default" title="Modo Bot">
         Bot
-      </span>
+      </Badge>
     )
   }
   if (st === 'human') {
     return (
-      <span className="inbox-chat-mode-badge inbox-chat-mode-badge--human" title="Modo Asesor">
+      <Badge variant="success" title="Modo Asesor">
         Asesor
-      </span>
+      </Badge>
     )
   }
   return null
@@ -105,9 +118,9 @@ function ProfileBlock({
         <p className="inbox-window-meta">
           Ventana 24 h:{' '}
           {detail.user_service_window_open ? (
-            <span className="badge sent">Abierta</span>
+            <Badge variant="success">Abierta</Badge>
           ) : (
-            <span className="badge neutral">Cerrada</span>
+            <Badge variant="secondary">Cerrada</Badge>
           )}
         </p>
       </div>
@@ -115,9 +128,6 @@ function ProfileBlock({
   )
 }
 
-function isNearBottom(element: HTMLElement): boolean {
-  return element.scrollHeight - element.scrollTop - element.clientHeight < 120
-}
 
 type SegmentOption = {
   slug: string
@@ -161,6 +171,7 @@ type InboxMessage = {
   created_at: string
   is_ai: boolean
   has_downloadable_media: boolean
+  media_preview?: { url: string; mime?: string | null } | null
 }
 
 type InboxDetail = {
@@ -230,16 +241,6 @@ function inboxInitials(contactName: string, phone: string): string {
   return digits.slice(-2) || '?'
 }
 
-function messageBodyLabel(message: InboxMessage): string {
-  const type = message.message_type.toLowerCase()
-  if (type === 'image') return 'Imagen'
-  if (type === 'video') return 'Video'
-  if (type === 'audio') return 'Audio'
-  if (type === 'document') return 'Documento'
-  if (type === 'sticker') return 'Sticker'
-  return message.body_text?.trim() || '(sin texto)'
-}
-
 function listPreviewText(preview: string): string {
   return preview.trim() || 'Sin mensajes'
 }
@@ -267,9 +268,8 @@ export function ConversationsInboxPage() {
   const [sendingReply, setSendingReply] = useState(false)
   const [searchInput, setSearchInput] = useState(searchParams.get('q') ?? '')
   const [loadingDetail, setLoadingDetail] = useState(false)
-  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null)
   const lastMessageIdRef = useRef(0)
-  const messagesPaneRef = useRef<HTMLDivElement | null>(null)
+  const scrollerRef = useRef<InboxMessageScrollerHandle | null>(null)
   const sendingReplyRef = useRef(false)
 
   const selectedId = idParam ? Number(idParam) : null
@@ -286,7 +286,6 @@ export function ConversationsInboxPage() {
           return
         }
         setList(result.data)
-        setLastSyncedAt(new Date())
       })
   }, [querySuffix])
 
@@ -318,8 +317,7 @@ export function ConversationsInboxPage() {
       )
       if (!result.ok) return
 
-      const pane = messagesPaneRef.current
-      const shouldScroll = pane ? isNearBottom(pane) : true
+      const shouldScroll = scrollerRef.current?.isNearBottom() ?? true
       const incoming = result.data.messages
 
       setDetail((prev) => {
@@ -351,13 +349,10 @@ export function ConversationsInboxPage() {
           afterId,
           ...incoming.map((message) => message.id),
         )
-        if (shouldScroll && pane) {
-          requestAnimationFrame(() => {
-            pane.scrollTop = pane.scrollHeight
-          })
+        if (shouldScroll) {
+          requestAnimationFrame(() => scrollerRef.current?.scrollToBottom('auto'))
         }
       }
-      setLastSyncedAt(new Date())
     },
     [],
   )
@@ -577,31 +572,37 @@ export function ConversationsInboxPage() {
             { key: 'unread', label: `No leídos (${list?.unread_count ?? 0})` },
           ] as const
         ).map((pill) => (
-          <button
+          <Button
             key={pill.key}
             type="button"
+            size="sm"
+            variant={chatFilter === pill.key ? 'default' : 'outline'}
+            className="rounded-full"
             onClick={() => setChatFilter(pill.key)}
-            className={`inbox-chat-pill ${chatFilter === pill.key ? 'is-active' : ''}`}
           >
             {pill.label}
-          </button>
+          </Button>
         ))}
         {list?.ai_area_enabled ? (
           <>
-            <button
+            <Button
               type="button"
+              size="sm"
+              variant={chatFilter === 'bot' ? 'default' : 'outline'}
+              className="rounded-full"
               onClick={() => setChatFilter('bot')}
-              className={`inbox-chat-pill ${chatFilter === 'bot' ? 'is-active' : ''}`}
             >
               Bot
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              size="sm"
+              variant={chatFilter === 'human' ? 'default' : 'outline'}
+              className="rounded-full"
               onClick={() => setChatFilter('human')}
-              className={`inbox-chat-pill ${chatFilter === 'human' ? 'is-active' : ''}`}
             >
               Asesor
-            </button>
+            </Button>
           </>
         ) : null}
       </div>
@@ -625,9 +626,9 @@ export function ConversationsInboxPage() {
             placeholder="Buscar en chats…"
             className="inbox-search-input"
           />
-          <button type="submit" className="small-btn">
+          <Button type="submit" size="sm" variant="secondary">
             Buscar
-          </button>
+          </Button>
         </div>
       </form>
     </>
@@ -635,19 +636,7 @@ export function ConversationsInboxPage() {
 
   return (
     <WaPageContents>
-      <WaSidebar
-        title="Chats"
-        onRefresh={() => void loadList()}
-        refreshTitle="Actualizar chats"
-        filters={filterPills}
-        actions={
-          lastSyncedAt ? (
-            <span className="hidden text-[10px] text-muted sm:inline" title="Última sincronización">
-              {formatDateTime(lastSyncedAt)}
-            </span>
-          ) : null
-        }
-      >
+      <WaSidebar title="Chats" filters={filterPills}>
         <ul className="inbox-chat-list">
           {!list ? (
             <li className="inbox-empty-list">Cargando…</li>
@@ -756,9 +745,11 @@ export function ConversationsInboxPage() {
                 </div>
               )}
               <div className="inbox-chat-header-toolbar">
-                <button
+                <Button
                   type="button"
-                  className="small-btn secondary inbox-export-btn"
+                  variant="secondary"
+                  size="icon-sm"
+                  className="inbox-export-btn"
                   title="Descargar Excel"
                   aria-label="Descargar conversación en Excel"
                   onClick={() =>
@@ -766,140 +757,133 @@ export function ConversationsInboxPage() {
                   }
                 >
                   ↓
-                </button>
-                <details className="inbox-header-more">
-                  <summary
-                    className="inbox-header-more-trigger small-btn secondary"
-                    title="Más"
-                    aria-label="Más opciones"
-                  >
-                    <span className="inbox-header-more-icon" aria-hidden>
-                      +
-                    </span>
-                  </summary>
-                  <div className="inbox-header-more-panel">
-                    <button
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
                       type="button"
-                      className="small-btn secondary"
-                      onClick={() => void onMarkUnread()}
+                      variant="secondary"
+                      size="icon-sm"
+                      title="Más"
+                      aria-label="Más opciones"
                     >
+                      <span className="inbox-header-more-icon" aria-hidden>
+                        +
+                      </span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuItem onSelect={() => void onMarkUnread()}>
                       Marcar como no leído
-                    </button>
+                    </DropdownMenuItem>
                     {!detail.contact ? (
-                      <Link
-                        to={`/contacts/new?prefill_phone=${encodeURIComponent(detail.conversation.phone.replace(/\D/g, ''))}`}
-                        className="small-btn secondary"
-                      >
-                        Guardar contacto
-                      </Link>
+                      <DropdownMenuItem asChild>
+                        <Link
+                          to={`/contacts/new?prefill_phone=${encodeURIComponent(detail.conversation.phone.replace(/\D/g, ''))}`}
+                        >
+                          Guardar contacto
+                        </Link>
+                      </DropdownMenuItem>
                     ) : null}
                     {detail.ai_area_enabled ? (
-                      <div className="inbox-mode-toggle inbox-mode-toggle--in-more" role="group" aria-label="Modo del chat">
-                        <span className="inbox-mode-toggle-label">Modo</span>
-                        <div className="inbox-mode-toggle-btns">
-                          {(['bot', 'human'] as const).map((mode) => (
-                            <button
-                              key={mode}
-                              type="button"
-                              className={`inbox-mode-btn inbox-mode-btn--icon-only ${detail.conversation.status === mode ? 'is-active' : ''}`}
-                              onClick={() => void onModeChange(mode)}
-                              title={mode === 'bot' ? 'Bot' : 'Asesor'}
-                              aria-label={mode === 'bot' ? 'Modo Bot' : 'Modo Asesor'}
-                            >
-                              <span aria-hidden>{mode === 'bot' ? '🤖' : '👤'}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-                    {detail.contact ? (
-                      <div className="inbox-lead-score-form inbox-lead-score-form--in-more">
-                        <div className="inbox-lead-score-row">
-                          <span className="inbox-lead-score-label" id="lead-score-label">
-                            Calificación del lead
-                          </span>
-                          <div className="inbox-lead-stars-input" role="group" aria-labelledby="lead-score-label">
-                            {[1, 2, 3, 4, 5].map((n) => {
-                              const current = detail.contact?.lead_score ?? 0
-                              return (
-                                <button
-                                  key={n}
-                                  type="button"
-                                  className={`inbox-lead-star-btn ${n <= current ? 'is-on' : ''}`}
-                                  onClick={() => void onLeadScore(n)}
-                                  aria-label={`${n} estrella${n > 1 ? 's' : ''}`}
-                                >
-                                  ★
-                                </button>
-                              )
-                            })}
-                            <button
-                              type="button"
-                              className="small-btn secondary"
-                              onClick={() => void onLeadScore(null)}
-                            >
-                              Borrar
-                            </button>
+                      <>
+                        <DropdownMenuSeparator />
+                        <div className="inbox-mode-toggle inbox-mode-toggle--in-more px-2 py-1.5" role="group" aria-label="Modo del chat">
+                          <span className="inbox-mode-toggle-label">Modo</span>
+                          <div className="inbox-mode-toggle-btns">
+                            {(['bot', 'human'] as const).map((mode) => (
+                              <Button
+                                key={mode}
+                                type="button"
+                                variant={detail.conversation.status === mode ? 'default' : 'outline'}
+                                size="icon-sm"
+                                className="inbox-mode-btn inbox-mode-btn--icon-only"
+                                onClick={() => void onModeChange(mode)}
+                                title={mode === 'bot' ? 'Bot' : 'Asesor'}
+                                aria-label={mode === 'bot' ? 'Modo Bot' : 'Modo Asesor'}
+                              >
+                                <span aria-hidden>{mode === 'bot' ? '🤖' : '👤'}</span>
+                              </Button>
+                            ))}
                           </div>
                         </div>
-                      </div>
+                      </>
                     ) : null}
-                  </div>
-                </details>
+                    {detail.contact ? (
+                      <>
+                        <DropdownMenuSeparator />
+                        <div className="inbox-lead-score-form inbox-lead-score-form--in-more px-2 py-1.5">
+                          <div className="inbox-lead-score-row">
+                            <span className="inbox-lead-score-label" id="lead-score-label">
+                              Calificación del lead
+                            </span>
+                            <div className="inbox-lead-stars-input" role="group" aria-labelledby="lead-score-label">
+                              {[1, 2, 3, 4, 5].map((n) => {
+                                const current = detail.contact?.lead_score ?? 0
+                                return (
+                                  <button
+                                    key={n}
+                                    type="button"
+                                    className={`inbox-lead-star-btn ${n <= current ? 'is-on' : ''}`}
+                                    onClick={() => void onLeadScore(n)}
+                                    aria-label={`${n} estrella${n > 1 ? 's' : ''}`}
+                                  >
+                                    ★
+                                  </button>
+                                )
+                              })}
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => void onLeadScore(null)}
+                              >
+                                Borrar
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    ) : null}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </WaMainHeader>
 
             <div className="inbox-chat-body">
-              <div ref={messagesPaneRef} className="chat-thread--inbox">
+              <InboxMessageScroller
+                ref={scrollerRef}
+                conversationId={detail.conversation.id}
+              >
                 {detail.messages.length === 0 ? (
                   <p className="text-center text-sm text-muted">Sin mensajes aún.</p>
                 ) : (
-                  detail.messages.map((message) => {
-                    const outbound = message.direction === 'outbound'
-                    return (
-                      <div
-                        key={message.id}
-                        className={`chat-bubble ${outbound ? 'chat-bubble--out' : 'chat-bubble--in'} ${message.is_ai ? 'chat-bubble--ai' : ''}`}
-                      >
-                        <p className="chat-bubble__text">{messageBodyLabel(message)}</p>
-                        <p className="chat-bubble__meta">
-                          {formatDateTime(message.created_at)}
-                          {message.is_ai ? ' · IA' : ''}
-                        </p>
-                      </div>
-                    )
-                  })
+                  detail.messages.map((message) => (
+                    <ChatMessageBubble
+                      key={message.id}
+                      message={message}
+                      conversationId={detail.conversation.id}
+                    />
+                  ))
                 )}
-              </div>
+              </InboxMessageScroller>
             </div>
 
             <WaMainFooter>
               {detail.can_reply ? (
-                <form onSubmit={(e) => void onSendReply(e)} className="inbox-compose-stack">
-                  <div className="inbox-compose-bar">
-                    <label className="inbox-compose-file-btn">
-                      Adjuntar
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,video/mp4,audio/*,application/pdf"
-                        onChange={(e) => setReplyFile(e.target.files?.[0] ?? null)}
-                      />
-                    </label>
-                    <textarea
-                      value={replyText}
-                      onChange={(e) => setReplyText(e.target.value)}
-                      rows={2}
-                      placeholder="Escribe un mensaje…"
-                      className="inbox-compose-textarea inbox-compose-grow"
-                    />
-                    <button type="submit" disabled={sendingReply} className="inbox-compose-send">
-                      {sendingReply ? '…' : 'Enviar'}
-                    </button>
-                  </div>
-                  {replyError ? <p className="inbox-compose-hint text-bad">{replyError}</p> : null}
-                </form>
+                <InboxComposeBar
+                  replyText={replyText}
+                  onReplyTextChange={setReplyText}
+                  replyFile={replyFile}
+                  onReplyFileChange={setReplyFile}
+                  sendingReply={sendingReply}
+                  onSubmit={(e) => void onSendReply(e)}
+                  replyError={replyError}
+                />
               ) : (
-                <p className="inbox-compose-hint">{replyBlockedText(detail.reply_blocked_reason)}</p>
+                <Alert>
+                  <AlertDescription>{replyBlockedText(detail.reply_blocked_reason)}</AlertDescription>
+                </Alert>
               )}
             </WaMainFooter>
           </>

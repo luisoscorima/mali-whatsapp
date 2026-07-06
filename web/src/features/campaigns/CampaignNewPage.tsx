@@ -33,13 +33,6 @@ type RecipientPreview = {
   service_window_open: boolean
 }
 
-type ContactSearchHit = {
-  id: number
-  name: string
-  last_name: string
-  phone: string
-}
-
 type ExcludedContact = {
   id: number
   name: string
@@ -135,10 +128,6 @@ export function CampaignNewPage() {
   const [excludedContacts, setExcludedContacts] = useState<ExcludedContact[]>(
     [],
   )
-  const [contactSearchQuery, setContactSearchQuery] = useState('')
-  const [contactSearchResults, setContactSearchResults] = useState<
-    ContactSearchHit[]
-  >([])
   const [excludeServiceWindow, setExcludeServiceWindow] = useState(false)
 
   const [recipients, setRecipients] = useState<RecipientPreview[]>([])
@@ -227,35 +216,6 @@ export function CampaignNewPage() {
       next.delete(contact.id)
       return next
     })
-    setContactSearchResults((prev) => prev.filter((r) => r.id !== contact.id))
-  }
-
-  function removeExcludeContact(id: number) {
-    setExcludeContactIds((prev) => {
-      const next = new Set(prev)
-      next.delete(id)
-      return next
-    })
-    setExcludedContacts((prev) => prev.filter((c) => c.id !== id))
-    invalidateRecipients()
-  }
-
-  async function handleSearchContacts() {
-    const q = contactSearchQuery.trim()
-    if (!q) return
-    setActionError('')
-    setBusy('contact-search')
-    const result = await apiClient.get<{
-      items: ContactSearchHit[]
-    }>(`/api/contacts?q=${encodeURIComponent(q)}&limit=15`)
-    setBusy('')
-    if (!result.ok) {
-      setActionError(result.error)
-      return
-    }
-    setContactSearchResults(
-      result.data.items.filter((row) => !excludeContactIds.has(row.id)),
-    )
   }
 
   async function handleSyncTemplates() {
@@ -466,99 +426,6 @@ export function CampaignNewPage() {
                   </label>
                 ))}
               </div>
-            </div>
-
-            <div className="space-y-2 border-t border-line pt-4">
-              <p className="text-sm font-medium">
-                Excluir contactos concretos (opcional)
-              </p>
-              <p className="text-xs text-muted">
-                Busca por nombre o teléfono. No recibirán la campaña aunque
-                pertenezcan a los segmentos incluidos.
-              </p>
-
-              {excludedContacts.length > 0 ? (
-                <ul className="flex flex-wrap gap-2">
-                  {excludedContacts.map((contact) => (
-                    <li
-                      key={contact.id}
-                      className="flex items-center gap-1 rounded-lg border border-bad/30 bg-bad/10 px-2 py-1 text-xs"
-                    >
-                      <span>
-                        {formatContactName(contact.name, '') || '—'} ·{' '}
-                        <span className="font-mono">{contact.phone}</span>
-                      </span>
-                      <button
-                        type="button"
-                        className="ml-1 text-bad hover:opacity-80"
-                        aria-label="Quitar exclusión"
-                        onClick={() => removeExcludeContact(contact.id)}
-                      >
-                        ×
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-
-              <div className="flex flex-wrap gap-2">
-                <input
-                  type="search"
-                  className="min-w-[200px] flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm"
-                  placeholder="Nombre o teléfono…"
-                  value={contactSearchQuery}
-                  onChange={(e) => setContactSearchQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      void handleSearchContacts()
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  className="rounded-lg border border-line px-3 py-2 text-sm hover:bg-surface disabled:opacity-50"
-                  disabled={
-                    busy !== '' || !contactSearchQuery.trim()
-                  }
-                  onClick={() => void handleSearchContacts()}
-                >
-                  {busy === 'contact-search' ? 'Buscando…' : 'Buscar'}
-                </button>
-              </div>
-
-              {contactSearchResults.length > 0 ? (
-                <ul className="divide-y divide-line rounded-lg border border-line text-sm">
-                  {contactSearchResults.map((row) => (
-                    <li
-                      key={row.id}
-                      className="flex items-center justify-between gap-3 px-3 py-2"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-medium">
-                          {formatContactName(row.name, row.last_name) || '—'}
-                        </p>
-                        <p className="font-mono text-xs text-muted">
-                          {row.phone}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        className="shrink-0 text-xs text-bad hover:underline"
-                        onClick={() =>
-                          addExcludeContact({
-                            id: row.id,
-                            name: formatContactName(row.name, row.last_name),
-                            phone: row.phone,
-                          })
-                        }
-                      >
-                        Excluir
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
             </div>
 
             <label className="flex items-start gap-2 text-sm">

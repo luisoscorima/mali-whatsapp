@@ -42,6 +42,7 @@ export type InboxMessage = {
   created_at: string;
   is_ai: boolean;
   has_downloadable_media: boolean;
+  media_preview?: { url: string; mime?: string | null } | null;
 };
 
 export type InboxContact = {

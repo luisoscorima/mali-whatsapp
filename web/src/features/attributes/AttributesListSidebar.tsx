@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
+import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
+
+const LIST_POLL_MS = 15000
 
 type AttributeDefinition = {
   id: number
@@ -54,11 +57,11 @@ export function AttributesListSidebar({ selectedId }: AttributesListSidebarProps
     refresh()
   }, [location.search])
 
+  useIntervalWhenVisible(refresh, LIST_POLL_MS)
+
   return (
     <WaSidebar
       title="Atributos"
-      onRefresh={refresh}
-      refreshTitle="Actualizar lista"
       actions={
         <Link to="/attributes/new" className="small-btn primary">
           +

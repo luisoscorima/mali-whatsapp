@@ -2,8 +2,11 @@ import { Link, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { apiClient } from '@/shared/api'
 import { formatDateTime } from '@/shared/format'
+import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import { campaignStatusClass } from './campaignStatus'
+
+const LIST_POLL_MS = 15000
 
 export type CampaignListItem = {
   id: number
@@ -27,12 +30,6 @@ export function CampaignListSidebar({ selectedId, onRefresh }: CampaignListSideb
   const [campaigns, setCampaigns] = useState<CampaignListItem[] | null>(null)
   const listQuery = location.search
 
-  useEffect(() => {
-    apiClient.get<CampaignListItem[]>('/api/campaigns').then((result) => {
-      if (result.ok) setCampaigns(result.data)
-    })
-  }, [listQuery])
-
   function refresh() {
     void apiClient.get<CampaignListItem[]>('/api/campaigns').then((result) => {
       if (result.ok) setCampaigns(result.data)
@@ -40,11 +37,15 @@ export function CampaignListSidebar({ selectedId, onRefresh }: CampaignListSideb
     onRefresh?.()
   }
 
+  useEffect(() => {
+    refresh()
+  }, [listQuery])
+
+  useIntervalWhenVisible(refresh, LIST_POLL_MS)
+
   return (
     <WaSidebar
       title="Campañas"
-      onRefresh={refresh}
-      refreshTitle="Actualizar lista"
       actions={
         <Link to="/campaigns/new" className="small-btn primary">
           Nueva

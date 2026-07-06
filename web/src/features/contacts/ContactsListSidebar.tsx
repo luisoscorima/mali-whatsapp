@@ -1,9 +1,12 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
+import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { formatContactName } from './contactName'
 import { SegmentFilterChips } from '../segments/SegmentFilterChips'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
+
+const LIST_POLL_MS = 15000
 
 type SegmentOption = {
   id: number
@@ -103,16 +106,19 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
     })
   }, [])
 
-  useEffect(() => {
+  function refresh() {
     setError('')
-    apiClient.get<ContactsListResult>(`/api/contacts?${apiQuery}`).then((res) => {
-      if (!res.ok) {
-        setError(res.error)
-        return
-      }
-      setResult(res.data)
+    void apiClient.get<ContactsListResult>(`/api/contacts?${apiQuery}`).then((res) => {
+      if (!res.ok) setError(res.error)
+      else setResult(res.data)
     })
+  }
+
+  useEffect(() => {
+    refresh()
   }, [apiQuery])
+
+  useIntervalWhenVisible(refresh, LIST_POLL_MS)
 
   function updateParams(mutator: (sp: URLSearchParams) => void) {
     const sp = new URLSearchParams(searchParams)
@@ -197,14 +203,6 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
     if (!res.ok) setError(res.error)
   }
 
-  function refresh() {
-    setError('')
-    void apiClient.get<ContactsListResult>(`/api/contacts?${apiQuery}`).then((res) => {
-      if (!res.ok) setError(res.error)
-      else setResult(res.data)
-    })
-  }
-
   const segments = options?.segments ?? []
   const listQuery = location.search
   const hasFilters =
@@ -216,8 +214,6 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
   return (
     <WaSidebar
       title="Contactos"
-      onRefresh={refresh}
-      refreshTitle="Actualizar lista"
       actions={
         <>
           <button

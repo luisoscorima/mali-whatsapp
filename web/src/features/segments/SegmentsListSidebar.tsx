@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
+import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { segmentToneClass } from './segmentColors'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
+
+const LIST_POLL_MS = 15000
 
 type SegmentDefinition = {
   id: number
@@ -36,11 +39,11 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
     refresh()
   }, [location.search])
 
+  useIntervalWhenVisible(refresh, LIST_POLL_MS)
+
   return (
     <WaSidebar
       title="Segmentos"
-      onRefresh={refresh}
-      refreshTitle="Actualizar lista"
       actions={
         <Link to="/segments/new" className="small-btn primary">
           +

@@ -540,6 +540,7 @@ export class ConversationsService {
     is_ai: boolean;
     raw_payload?: unknown;
   }): InboxMessage {
+    const preview = getLocalPreview(row.raw_payload);
     return {
       id: row.id,
       direction: row.direction,
@@ -548,6 +549,9 @@ export class ConversationsService {
       created_at: row.created_at.toISOString(),
       is_ai: row.is_ai,
       has_downloadable_media: hasDownloadableMedia(row.raw_payload),
+      media_preview: preview
+        ? { url: preview.url, mime: preview.mime ?? null }
+        : null,
     };
   }
 
