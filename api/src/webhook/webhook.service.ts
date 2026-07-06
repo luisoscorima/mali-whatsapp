@@ -25,6 +25,10 @@ import {
   resolveInboundLinePhoneNumberId,
 } from './webhook-inbound.util';
 import {
+  extractInboundReaction,
+  setMessageReaction,
+} from '../conversations/chat-reaction.util';
+import {
   getAiResponse,
   TRANSFER_TO_HUMAN_NOTICE,
   UNAVAILABLE_REPLY_MESSAGE,
@@ -524,6 +528,11 @@ export class WebhookService {
         select: { id: true },
       });
 
+      if (messageType === 'reaction') {
+        await this.applyInboundReaction(area, conversation.id, record);
+        continue;
+      }
+
       try {
         await processInboundReferral(this.prisma, {
           area,
@@ -605,5 +614,33 @@ export class WebhookService {
         `Webhook inbound: ningun mensaje insertado (area=${area}, count=${messages.length})`,
       );
     }
+  }
+
+  private async applyInboundReaction(
+    area: string,
+    conversationId: number,
+    record: Record<string, unknown>,
+  ): Promise<void> {
+    const parsed = extractInboundReaction(record);
+    if (!parsed) return;
+
+    const target = await this.prisma.chat_messages.findFirst({
+      where: {
+        wa_message_id: parsed.targetWaMessageId,
+        conversation_id: conversationId,
+        conversations: { area },
+      },
+      select: { id: true, raw_payload: true },
+    });
+    if (!target) return;
+
+    const nextPayload = setMessageReaction(target.raw_payload, {
+      emoji: parsed.emoji,
+      direction: 'inbound',
+    });
+    await this.prisma.chat_messages.update({
+      where: { id: target.id },
+      data: { raw_payload: nextPayload as Prisma.InputJsonValue },
+    });
   }
 }

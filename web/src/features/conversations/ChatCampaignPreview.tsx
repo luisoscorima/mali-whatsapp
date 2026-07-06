@@ -52,11 +52,12 @@ export function ChatCampaignPreview({ preview, campaignId }: ChatCampaignPreview
       ) : null}
 
       {campaignId ? (
-        <p className="text-xs text-muted">
-          <Link to={`/campaigns/${campaignId}`} className="text-accent hover:underline">
-            Campaña #{campaignId}
-          </Link>
-        </p>
+        <Link
+          to={`/campaigns/${campaignId}`}
+          className="chat-campaign-preview__campaign-link"
+        >
+          Ver campaña #{campaignId}
+        </Link>
       ) : null}
     </div>
   )

@@ -46,6 +46,23 @@ export type InboxListResult = {
   };
 };
 
+export type InboxMessageReaction = {
+  emoji: string;
+  direction: 'inbound' | 'outbound';
+};
+
+export type InboxMessageReplyTo = {
+  message_id: number;
+  preview: string;
+  outbound: boolean;
+};
+
+export type InboxTimelineEvent = {
+  id: string;
+  created_at: string;
+  label: string;
+};
+
 export type InboxMessage = {
   id: number;
   direction: string;
@@ -54,6 +71,8 @@ export type InboxMessage = {
   created_at: string;
   is_ai: boolean;
   has_downloadable_media: boolean;
+  reaction?: InboxMessageReaction | null;
+  reply_to?: InboxMessageReplyTo | null;
   media_preview?: { url: string; mime?: string | null } | null;
   campaign_preview?: {
     headerText: string;
@@ -103,6 +122,7 @@ export type InboxDetail = {
   contact: InboxContact | null;
   meta_ad: InboxMetaAd | null;
   messages: InboxMessage[];
+  events: InboxTimelineEvent[];
   tags: string[];
   can_reply: boolean;
   reply_blocked_reason: '24h' | 'bot_mode' | null;
@@ -138,8 +158,16 @@ export type AssignConversationResult = {
   assigned_user_label: string | null;
 };
 
+export type MessageReactionResult = {
+  ok: true;
+  target_message_id: number;
+  reaction: InboxMessageReaction | null;
+};
+
 export type InboxConversationUpdates = {
   messages: InboxMessage[];
+  message_reactions: { id: number; reaction: InboxMessageReaction | null }[];
+  events: InboxTimelineEvent[];
   conversation: {
     last_message_at: string | null;
     last_user_message_at: string | null;

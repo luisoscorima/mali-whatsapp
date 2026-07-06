@@ -2,8 +2,10 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { AuditLogService } from '../audit/audit-log.service';
+import { runCampaignChatBackfills } from '../campaigns/campaign-chat-backfill.util';
 import { CampaignJobsService } from '../campaigns/campaign-jobs.service';
 import { CampaignRetryService } from '../campaigns/campaign-retry.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { CAMPAIGN_SCHEDULE_POLL_MS } from '../campaigns/campaign-config.util';
 import {
   AUDIT_PURGE_MS,
@@ -20,6 +22,7 @@ export class MaintenanceQueueProcessor extends WorkerHost {
     private readonly campaignJobs: CampaignJobsService,
     private readonly retry: CampaignRetryService,
     private readonly auditLog: AuditLogService,
+    private readonly prisma: PrismaService,
   ) {
     super();
   }
@@ -44,6 +47,15 @@ export class MaintenanceQueueProcessor extends WorkerHost {
       }
 
       case MaintenanceJobName.STARTUP_CAMPAIGNS:
+        try {
+          await runCampaignChatBackfills(this.prisma);
+        } catch (error) {
+          this.logger.warn(
+            `Backfill campañas en chat: ${
+              error instanceof Error ? error.message : error
+            }`,
+          );
+        }
         await this.campaignJobs.resumeInterruptedCampaigns();
         await this.campaignJobs.resumeQueuedCampaigns();
         return;

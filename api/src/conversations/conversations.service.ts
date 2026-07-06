@@ -44,6 +44,11 @@ import {
   streamMessageMediaDownload,
 } from './chat-media.util';
 import {
+  isReactionMessageType,
+  readMessageReaction,
+  setMessageReaction,
+} from './chat-reaction.util';
+import {
   buildContactSegmentSql,
   buildConversationSegmentSql,
   parseInboxChatFilter,
@@ -56,12 +61,27 @@ import type {
   InboxListItem,
   InboxListResult,
   InboxMessage,
+  InboxMessageReaction,
   ReplyResult,
   UpdateConversationModeResult,
   InboxConversationUpdates,
   ConversationAssigneesResult,
   AssignConversationResult,
+  MessageReactionResult,
+  InboxTimelineEvent,
 } from './conversations.types';
+import {
+  buildMessageReplyPreview,
+  readMessageReplyTo,
+  setMessageReplyTo,
+  extractReplyWaMessageIdFromRawPayload,
+} from './chat-reply.util';
+import {
+  advisorLabelFromUserRow,
+  collectUserIdsFromAuditRows,
+  INBOX_TIMELINE_EVENT_TYPES,
+  mapAuditRowsToTimelineEvents,
+} from './inbox-timeline.util';
 
 type InboxRow = {
   id: number;
@@ -218,9 +238,14 @@ export class ConversationsService {
       return Prisma.sql` AND c.assigned_user_id = ${userId}`;
     }
     if (chat === 'unassigned') {
-      return Prisma.sql` AND LOWER(TRIM(COALESCE(c.status, ''))) = 'human'
-        AND c.assigned_user_id IS NULL
-        AND c.automation_touched_at IS NOT NULL`;
+      return Prisma.sql` AND c.assigned_user_id IS NULL
+        AND (
+          LOWER(TRIM(COALESCE(c.status, ''))) = 'bot'
+          OR (
+            LOWER(TRIM(COALESCE(c.status, ''))) = 'human'
+            AND c.automation_touched_at IS NOT NULL
+          )
+        )`;
     }
     if (chat === 'new') {
       return Prisma.sql` AND LOWER(TRIM(COALESCE(c.status, ''))) = 'human'
@@ -541,8 +566,14 @@ export class ConversationsService {
       },
     });
 
-    const messages: InboxMessage[] = messageRows.map((row) =>
-      this.mapMessageRow(row),
+    const messages = await this.mapMessageRowsWithReplyTo(
+      conversationId,
+      messageRows,
+    );
+    const events = await this.loadConversationTimelineEvents(
+      area,
+      conversationId,
+      conversation.contact_id,
     );
 
     const windowOpen = isWithinUserServiceWindow(
@@ -577,6 +608,7 @@ export class ConversationsService {
       contact,
       meta_ad: metaAd,
       messages,
+      events,
       tags: tags.map((row) => row.label),
       can_reply: windowOpen && !botModeBlock,
       reply_blocked_reason: replyBlockedReason,
@@ -684,6 +716,7 @@ export class ConversationsService {
         conversation_id: conversationId,
         from_user_id: conversation.assigned_user_id,
         to_user_id: assignedUserId,
+        to_user_label: assigneeLabel,
       },
     });
 
@@ -775,6 +808,8 @@ export class ConversationsService {
     const { campaign_preview, campaign_id } = extractCampaignPreview(
       row.raw_payload,
     );
+    const storedReaction = readMessageReaction(row.raw_payload);
+    const storedReply = readMessageReplyTo(row.raw_payload);
     return {
       id: row.id,
       direction: row.direction,
@@ -783,12 +818,222 @@ export class ConversationsService {
       created_at: row.created_at.toISOString(),
       is_ai: row.is_ai,
       has_downloadable_media: hasDownloadableMedia(row.raw_payload),
+      reaction: storedReaction
+        ? { emoji: storedReaction.emoji, direction: storedReaction.direction }
+        : null,
+      reply_to: storedReply
+        ? {
+            message_id: storedReply.message_id,
+            preview: storedReply.preview,
+            outbound: storedReply.outbound,
+          }
+        : null,
       media_preview: preview
         ? { url: preview.url, mime: preview.mime ?? null }
         : null,
       campaign_preview,
       campaign_id,
     };
+  }
+
+  private async loadConversationTimelineEvents(
+    area: string,
+    conversationId: number,
+    contactId: number | null,
+    afterAuditId = BigInt(0),
+  ): Promise<InboxTimelineEvent[]> {
+    const contactEventTypes = [
+      AuditEvent.CONTACT_LEAD_SCORE,
+      AuditEvent.CONTACT_UPDATED,
+    ];
+    const rows = contactId
+      ? await this.prisma.$queryRaw<
+          {
+            id: bigint;
+            created_at: Date;
+            event_type: string;
+            actor_email: string | null;
+            meta: unknown;
+          }[]
+        >(Prisma.sql`
+          SELECT id, created_at, event_type, actor_email, meta
+          FROM audit_logs
+          WHERE area = ${area}
+            AND id > ${afterAuditId}
+            AND event_type IN (${Prisma.join(INBOX_TIMELINE_EVENT_TYPES)})
+            AND (
+              (meta->>'conversation_id')::int = ${conversationId}
+              OR (
+                (meta->>'contact_id')::int = ${contactId}
+                AND event_type IN (${Prisma.join(contactEventTypes)})
+              )
+            )
+          ORDER BY created_at ASC, id ASC
+        `)
+      : await this.prisma.$queryRaw<
+          {
+            id: bigint;
+            created_at: Date;
+            event_type: string;
+            actor_email: string | null;
+            meta: unknown;
+          }[]
+        >(Prisma.sql`
+          SELECT id, created_at, event_type, actor_email, meta
+          FROM audit_logs
+          WHERE area = ${area}
+            AND id > ${afterAuditId}
+            AND event_type IN (${Prisma.join(INBOX_TIMELINE_EVENT_TYPES)})
+            AND (meta->>'conversation_id')::int = ${conversationId}
+          ORDER BY created_at ASC, id ASC
+        `);
+
+    if (!rows.length) return [];
+
+    const [segmentRows, userRows] = await Promise.all([
+      this.prisma.segment_definitions.findMany({
+        where: { area },
+        select: { slug: true, label: true },
+      }),
+      this.prisma.users.findMany({
+        where: { id: { in: collectUserIdsFromAuditRows(rows) } },
+        select: { id: true, email: true, first_name: true, last_name: true },
+      }),
+    ]);
+
+    const segmentLabelBySlug = new Map(
+      segmentRows.map((row) => [row.slug, row.label]),
+    );
+    const userLabelById = new Map(userRows.map(advisorLabelFromUserRow));
+
+    return mapAuditRowsToTimelineEvents(
+      rows,
+      userLabelById,
+      segmentLabelBySlug,
+    );
+  }
+
+  private async resolveLegacyReplyTos(
+    conversationId: number,
+    rows: { id: number; raw_payload?: unknown }[],
+  ): Promise<Map<number, NonNullable<InboxMessage['reply_to']>>> {
+    const pending: { messageId: number; waReplyId: string }[] = [];
+    for (const row of rows) {
+      if (readMessageReplyTo(row.raw_payload)) continue;
+      const waId = extractReplyWaMessageIdFromRawPayload(row.raw_payload);
+      if (waId) pending.push({ messageId: row.id, waReplyId: waId });
+    }
+    if (!pending.length) return new Map();
+
+    const waIds = [...new Set(pending.map((item) => item.waReplyId))];
+    const targets = await this.prisma.chat_messages.findMany({
+      where: {
+        conversation_id: conversationId,
+        wa_message_id: { in: waIds },
+      },
+      select: {
+        id: true,
+        wa_message_id: true,
+        direction: true,
+        body_text: true,
+        message_type: true,
+      },
+    });
+    const byWa = new Map(
+      targets.map((target) => [String(target.wa_message_id), target]),
+    );
+    const result = new Map<number, NonNullable<InboxMessage['reply_to']>>();
+    for (const item of pending) {
+      const target = byWa.get(item.waReplyId);
+      if (!target) continue;
+      result.set(item.messageId, {
+        message_id: target.id,
+        preview: buildMessageReplyPreview(target.body_text, target.message_type),
+        outbound: target.direction === 'outbound',
+      });
+    }
+    return result;
+  }
+
+  private async mapMessageRowsWithReplyTo(
+    conversationId: number,
+    rows: {
+      id: number;
+      direction: string;
+      body_text: string | null;
+      message_type: string;
+      created_at: Date;
+      is_ai: boolean;
+      raw_payload?: unknown;
+    }[],
+  ): Promise<InboxMessage[]> {
+    const filtered = rows.filter(
+      (row) => !isReactionMessageType(row.message_type),
+    );
+    const legacy = await this.resolveLegacyReplyTos(conversationId, filtered);
+    return filtered.map((row) => {
+      const message = this.mapMessageRow(row);
+      if (message.reply_to) return message;
+      const legacyReply = legacy.get(row.id);
+      if (legacyReply) message.reply_to = legacyReply;
+      return message;
+    });
+  }
+
+  private async loadMessageReactions(
+    conversationId: number,
+  ): Promise<{ id: number; reaction: InboxMessageReaction | null }[]> {
+    const rows = await this.prisma.$queryRaw<
+      { id: number; raw_payload: unknown }[]
+    >(Prisma.sql`
+      SELECT id, raw_payload
+      FROM chat_messages
+      WHERE conversation_id = ${conversationId}
+        AND raw_payload->'_mali_reaction' IS NOT NULL
+    `);
+    return rows
+      .map((row) => {
+        const stored = readMessageReaction(row.raw_payload);
+        return {
+          id: Number(row.id),
+          reaction: stored
+            ? { emoji: stored.emoji, direction: stored.direction }
+            : null,
+        };
+      })
+      .filter((row) => row.reaction != null);
+  }
+
+  private async applyMessageReaction(
+    messageId: number,
+    conversationId: number,
+    area: string,
+    emoji: string,
+    direction: 'inbound' | 'outbound',
+  ): Promise<InboxMessageReaction | null> {
+    const target = await this.prisma.chat_messages.findFirst({
+      where: {
+        id: messageId,
+        conversation_id: conversationId,
+        conversations: { area },
+      },
+      select: { raw_payload: true },
+    });
+    if (!target) {
+      throw new NotFoundException('Mensaje no encontrado');
+    }
+    const nextPayload = setMessageReaction(target.raw_payload, {
+      emoji,
+      direction,
+    });
+    await this.prisma.chat_messages.update({
+      where: { id: messageId },
+      data: { raw_payload: nextPayload as PrismaTypes.InputJsonValue },
+    });
+    const stored = readMessageReaction(nextPayload);
+    return stored
+      ? { emoji: stored.emoji, direction: stored.direction }
+      : null;
   }
 
   async reply(
@@ -828,7 +1073,18 @@ export class ConversationsService {
     const linePhoneNumberId =
       String(conversation.whatsapp_phone_number_id || '').trim() || undefined;
     const createdMessages: InboxMessage[] = [];
+    const wasUnassigned = !conversation.assigned_user_id;
+    const actorLabel = formatAdvisorLabel({
+      email: user.email,
+      first_name: null,
+      last_name: null,
+    });
     let replyToWaMessageId: string | null = null;
+    let replyToMeta: {
+      message_id: number;
+      preview: string;
+      outbound: boolean;
+    } | null = null;
     if (replyToMessageId != null && Number.isInteger(replyToMessageId) && replyToMessageId > 0) {
       const quoted = await this.prisma.chat_messages.findFirst({
         where: {
@@ -836,11 +1092,24 @@ export class ConversationsService {
           conversation_id: conversationId,
           conversations: { area },
         },
-        select: { wa_message_id: true },
+        select: {
+          id: true,
+          wa_message_id: true,
+          direction: true,
+          body_text: true,
+          message_type: true,
+        },
       });
       replyToWaMessageId = quoted?.wa_message_id
         ? String(quoted.wa_message_id).trim()
         : null;
+      if (quoted) {
+        replyToMeta = {
+          message_id: quoted.id,
+          preview: buildMessageReplyPreview(quoted.body_text, quoted.message_type),
+          outbound: quoted.direction === 'outbound',
+        };
+      }
     }
 
     try {
@@ -860,7 +1129,10 @@ export class ConversationsService {
             wa_message_id: msgId,
             body_text: text.slice(0, 8000),
             message_type: 'text',
-            raw_payload: sanitizeApiResponse(apiResponse) as PrismaTypes.InputJsonValue,
+            raw_payload: setMessageReplyTo(
+              sanitizeApiResponse(apiResponse),
+              replyToMeta,
+            ) as PrismaTypes.InputJsonValue,
             is_ai: false,
           },
         });
@@ -971,6 +1243,21 @@ export class ConversationsService {
         },
       });
 
+      if (wasUnassigned) {
+        await this.auditLog.write({
+          event_type: AuditEvent.CONVERSATION_ASSIGN,
+          message: `Conversación ${conversationId} autoasignada a ${actorLabel}`,
+          actor: auditActor(user),
+          meta: {
+            conversation_id: conversationId,
+            from_user_id: null,
+            to_user_id: user.id,
+            to_user_label: actorLabel,
+            source: 'auto_reply',
+          },
+        });
+      }
+
       if (!file) {
         await this.auditLog.write({
           event_type: AuditEvent.CONVERSATION_REPLY,
@@ -1022,7 +1309,7 @@ export class ConversationsService {
     conversationId: number,
     messageId: number,
     emoji: string,
-  ): Promise<{ ok: true }> {
+  ): Promise<MessageReactionResult> {
     if (!Number.isInteger(conversationId) || conversationId <= 0) {
       throw new BadRequestException('Id de conversacion invalido');
     }
@@ -1049,7 +1336,7 @@ export class ConversationsService {
         conversation_id: conversationId,
         conversations: { area },
       },
-      select: { wa_message_id: true },
+      select: { wa_message_id: true, raw_payload: true },
     });
     if (!row?.wa_message_id) {
       throw new BadRequestException(
@@ -1078,7 +1365,18 @@ export class ConversationsService {
           emoji: safeEmoji,
         },
       });
-      return { ok: true };
+      const reaction = await this.applyMessageReaction(
+        messageId,
+        conversationId,
+        area,
+        safeEmoji,
+        'outbound',
+      );
+      return {
+        ok: true,
+        target_message_id: messageId,
+        reaction,
+      };
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'No se pudo reaccionar';
@@ -1192,6 +1490,7 @@ export class ConversationsService {
     user: AuthUser,
     conversationId: number,
     afterMessageId: number,
+    afterAuditId = BigInt(0),
   ): Promise<InboxConversationUpdates> {
     if (!Number.isInteger(conversationId) || conversationId <= 0) {
       throw new BadRequestException('Id de conversacion invalido');
@@ -1228,6 +1527,7 @@ export class ConversationsService {
         raw_payload: true,
       },
     });
+    const messageReactions = await this.loadMessageReactions(conversationId);
 
     if (messageRows.length > 0) {
       await this.prisma.conversations.updateMany({
@@ -1255,8 +1555,20 @@ export class ConversationsService {
       ? formatAdvisorLabel(conversation.assigned_user)
       : null;
 
+    const [messages, events] = await Promise.all([
+      this.mapMessageRowsWithReplyTo(conversationId, messageRows),
+      this.loadConversationTimelineEvents(
+        area,
+        conversationId,
+        conversation.contact_id,
+        afterAuditId,
+      ),
+    ]);
+
     return {
-      messages: messageRows.map((row) => this.mapMessageRow(row)),
+      messages,
+      message_reactions: messageReactions,
+      events,
       conversation: {
         last_message_at: conversation.last_message_at?.toISOString() ?? null,
         last_user_message_at:

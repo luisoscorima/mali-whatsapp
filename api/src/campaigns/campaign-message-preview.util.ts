@@ -217,7 +217,7 @@ export function parseStaticParamsFromMessageText(
   return { headerParams, bodyParams, buttonParams, headerMediaUrl };
 }
 
-function applyCampaignImageFallback(
+export function applyCampaignImageFallback(
   preview: CampaignMessagePreview,
   imageUrl: string | null | undefined,
 ): CampaignMessagePreview {
@@ -237,7 +237,7 @@ type TemplateRow = {
   components_json: unknown;
 };
 
-function buildSendContextFromCampaign(
+export function buildSendContextFromCampaign(
   campaignRow: {
     template_name: string;
     message_text: string | null;

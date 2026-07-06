@@ -21,6 +21,11 @@ import {
 } from './contact-template-params.util';
 import type { CampaignJobPayload } from './campaign-sender.service';
 import {
+  applyCampaignImageFallback,
+  buildCampaignMessagePreview,
+} from './campaign-message-preview.util';
+import { persistCampaignChatMessage } from './campaign-chat-message.util';
+import {
   campaignLogStatusColumnSql,
   SALIDA_OK_STATUSES,
   sqlCampaignLogIsError,
@@ -161,6 +166,7 @@ export class CampaignRetryService {
         id: true,
         area: true,
         status: true,
+        image_url: true,
         campaign_payload: true,
         auto_retry_done: true,
         manual_retry_count: true,
@@ -302,6 +308,14 @@ export class CampaignRetryService {
         });
 
         const messageId = apiResponse.messages?.[0]?.id || null;
+        const preview = applyCampaignImageFallback(
+          buildCampaignMessagePreview(
+            sendCtx.def,
+            sendCtx.templateSnapshot.components_json,
+            resolvedParams,
+          ),
+          campaign.image_url,
+        );
 
         await this.prisma.campaign_logs.update({
           where: { id: row.id },
@@ -314,6 +328,27 @@ export class CampaignRetryService {
             last_retry_at: new Date(),
           },
         });
+
+        try {
+          await persistCampaignChatMessage(this.prisma, {
+            area: sendCtx.area,
+            campaignId,
+            templateName: String(sendCtx.templateSnapshot.name || ''),
+            contactId: row.contact_id,
+            phone: phoneNorm,
+            waMessageId: messageId,
+            preview,
+            apiResponse: sanitizeApiResponse(apiResponse),
+          });
+        } catch (persistError) {
+          this.logger.warn(
+            `Reintento campaña #${campaignId}: no se pudo guardar mensaje en conversación (${phoneNorm}): ${
+              persistError instanceof Error
+                ? persistError.message
+                : persistError
+            }`,
+          );
+        }
         recovered += 1;
       } catch (error) {
         const err = error as Error & { response?: { data?: unknown } };

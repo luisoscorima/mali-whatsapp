@@ -16,35 +16,43 @@ export function ConversationBadges({
   const hasAssignee = Boolean(assignee)
   const isBot = mode === 'bot'
   const isHuman = mode === 'human'
-  const queueLabel =
-    isHuman && !hasAssignee
-      ? automationTouchedAt
-        ? 'Sin asignar'
-        : 'Nuevo'
-      : null
 
-  if (!isBot && !isHuman && !hasAssignee) return null
+  if (hasAssignee) {
+    return (
+      <span className="inbox-chat-badges">
+        <Badge variant="success" title={`Asignado a ${assignee}`}>
+          {assignee}
+        </Badge>
+      </span>
+    )
+  }
 
-  return (
-    <span className="inbox-chat-badges">
-      {isBot ? (
+  if (isBot) {
+    return (
+      <span className="inbox-chat-badges">
         <Badge variant="default" title="Modo Bot">
           Bot
         </Badge>
-      ) : null}
-      {queueLabel ? (
+        <Badge variant="secondary" title="Sin asignar">
+          Sin asignar
+        </Badge>
+      </span>
+    )
+  }
+
+  if (isHuman) {
+    const queueLabel = automationTouchedAt ? 'Sin asignar' : 'Nuevo'
+    return (
+      <span className="inbox-chat-badges">
         <Badge
           variant={automationTouchedAt ? 'secondary' : 'outline'}
           title={queueLabel}
         >
           {queueLabel}
         </Badge>
-      ) : null}
-      {hasAssignee ? (
-        <Badge variant="success" title={`Asignado a ${assignee}`}>
-          {assignee}
-        </Badge>
-      ) : null}
-    </span>
-  )
+      </span>
+    )
+  }
+
+  return null
 }

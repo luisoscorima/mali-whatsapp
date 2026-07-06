@@ -13,6 +13,8 @@ export type ChatMessage = {
   created_at: string
   is_ai: boolean
   has_downloadable_media: boolean
+  reaction?: { emoji: string; direction: 'inbound' | 'outbound' } | null
+  reply_to?: { message_id: number; preview: string; outbound: boolean } | null
   media_preview?: { url: string; mime?: string | null } | null
   campaign_preview?: CampaignMessagePreviewData | null
   campaign_id?: number | null
@@ -69,6 +71,16 @@ function highlightText(text: string, query: string): ReactNode {
   )
 }
 
+function messageAuthorLabel(message: ChatMessage, outbound: boolean): string | null {
+  if (!outbound) return 'Cliente'
+  if (message.is_ai) return 'IA'
+  const mt = message.message_type.toLowerCase()
+  if (mt === 'campaign' || message.campaign_preview || message.campaign_id) {
+    return 'Campaña'
+  }
+  return 'Asesor'
+}
+
 type ChatMessageBubbleProps = {
   message: ChatMessage
   conversationId: number
@@ -97,8 +109,10 @@ export function ChatMessageBubble({
     : ''
   const mime = message.media_preview?.mime ?? ''
   const downloadHref = `/api/conversations/${conversationId}/messages/${message.id}/download`
-  const showTypeRow = isMediaType(mt) || (mt === 'campaign' && !message.campaign_preview)
+  const showTypeRow =
+    isMediaType(mt) || (mt === 'campaign' && !message.campaign_preview)
   const campPreview = message.campaign_preview
+  const authorLabel = messageAuthorLabel(message, outbound)
   const copyText = message.body_text?.trim() ?? ''
   const showMenu = canInteract && (onReply || onCopy || onReact)
 
@@ -110,12 +124,23 @@ export function ChatMessageBubble({
         outbound ? 'chat-bubble--out' : 'chat-bubble--in',
         outbound && message.is_ai && 'chat-bubble--ai',
         isHighlighted && 'chat-bubble--search-hit',
+        message.reaction?.emoji && 'chat-bubble--has-reaction',
       )}
     >
-      {outbound && message.is_ai ? (
-        <span className="chat-bubble__ai-tag" title="Respuesta automática (IA)">
-          <span aria-hidden="true">✨</span> IA
+      {authorLabel ? (
+        <span className="chat-bubble__author-tag" title={`Enviado por ${authorLabel}`}>
+          {authorLabel === 'IA' ? <span aria-hidden="true">✨ </span> : null}
+          {authorLabel}
         </span>
+      ) : null}
+
+      {message.reply_to ? (
+        <div className="chat-bubble__reply-to">
+          <span className="chat-bubble__reply-to-label">
+            {message.reply_to.outbound ? 'Tú' : 'Cliente'}
+          </span>
+          <span className="chat-bubble__reply-to-text">{message.reply_to.preview}</span>
+        </div>
       ) : null}
 
       {showTypeRow ? (
@@ -206,10 +231,25 @@ export function ChatMessageBubble({
         </div>
       ) : null}
 
-      <div className="chat-meta">
+      <div className="chat-bubble__meta">
         {formatDateTime(message.created_at)}
-        {message.is_ai ? ' · IA' : ''}
       </div>
+
+      {message.reaction?.emoji ? (
+        <span
+          className={cn(
+            'chat-bubble__reaction',
+            outbound ? 'chat-bubble__reaction--out' : 'chat-bubble__reaction--in',
+          )}
+          title={
+            message.reaction.direction === 'outbound'
+              ? 'Tu reacción'
+              : 'Reacción del cliente'
+          }
+        >
+          {message.reaction.emoji}
+        </span>
+      ) : null}
     </div>
   )
 

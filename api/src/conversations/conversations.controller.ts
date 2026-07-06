@@ -29,6 +29,7 @@ import type {
   InboxConversationUpdates,
   ConversationAssigneesResult,
   AssignConversationResult,
+  MessageReactionResult,
 } from './conversations.types';
 import {
   ReplyConversationDto,
@@ -177,7 +178,7 @@ export class ConversationsController {
     @Param('id', ParseIntPipe) id: number,
     @Param('messageId', ParseIntPipe) messageId: number,
     @Body() body: MessageReactionDto,
-  ): Promise<ApiResponse<{ ok: true }>> {
+  ): Promise<ApiResponse<MessageReactionResult>> {
     const data = await this.conversationsService.reactToMessage(
       user,
       id,
@@ -207,9 +208,16 @@ export class ConversationsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
     @Query('after_message_id') afterMessageId?: string,
+    @Query('after_audit_id') afterAuditId?: string,
   ): Promise<ApiResponse<InboxConversationUpdates>> {
     const afterId = Number(afterMessageId ?? 0) || 0;
-    const data = await this.conversationsService.getUpdates(user, id, afterId);
+    const auditAfter = BigInt(afterAuditId ?? 0) || BigInt(0);
+    const data = await this.conversationsService.getUpdates(
+      user,
+      id,
+      afterId,
+      auditAfter,
+    );
     return { ok: true, data };
   }
 

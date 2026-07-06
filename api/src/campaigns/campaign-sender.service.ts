@@ -20,6 +20,11 @@ import {
   fetchRecipientsUnion,
   type RecipientRow,
 } from './campaign-recipients.util';
+import {
+  applyCampaignImageFallback,
+  buildCampaignMessagePreview,
+} from './campaign-message-preview.util';
+import { persistCampaignChatMessage } from './campaign-chat-message.util';
 
 export type CampaignTemplateSnapshot = {
   id: number;
@@ -196,6 +201,12 @@ export class CampaignSenderService {
         return;
       }
 
+      const campaignMeta = await this.prisma.campaigns.findUnique({
+        where: { id: campaignId },
+        select: { image_url: true },
+      });
+      const campaignImageUrl = campaignMeta?.image_url ?? null;
+
       const allRecipients = await this.buildCampaignRecipients(area, ctx);
       await this.prisma.campaigns.update({
         where: { id: campaignId },
@@ -254,6 +265,14 @@ export class CampaignSenderService {
             });
 
             const messageId = apiResponse.messages?.[0]?.id || null;
+            const preview = applyCampaignImageFallback(
+              buildCampaignMessagePreview(
+                def,
+                templateSnapshot.components_json,
+                resolvedParams,
+              ),
+              campaignImageUrl,
+            );
 
             await this.prisma.campaign_logs.create({
               data: {
@@ -265,6 +284,27 @@ export class CampaignSenderService {
                 response: sanitizeApiResponse(apiResponse) as object,
               },
             });
+
+            try {
+              await persistCampaignChatMessage(this.prisma, {
+                area,
+                campaignId,
+                templateName: templateSnapshot.name,
+                contactId: contact.id,
+                phone: phoneNorm,
+                waMessageId: messageId,
+                preview,
+                apiResponse: sanitizeApiResponse(apiResponse),
+              });
+            } catch (persistError) {
+              this.logger.warn(
+                `Campaña #${campaignId}: no se pudo guardar mensaje en conversación (${phoneNorm}): ${
+                  persistError instanceof Error
+                    ? persistError.message
+                    : persistError
+                }`,
+              );
+            }
           } catch (error) {
             const err = error as Error & { response?: { data?: unknown } };
             const payload = sanitizeApiErrorPayload(

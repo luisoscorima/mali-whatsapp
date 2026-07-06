@@ -57,6 +57,9 @@ export function extractInboundMessagePreview(msg: Record<string, unknown>): {
     }
     return { messageType: 'interactive', bodyText: '[Interactivo]' };
   }
+  if (type === 'reaction') {
+    return { messageType: 'reaction', bodyText: '' };
+  }
   return { messageType: type || 'unknown', bodyText: `[${type || 'mensaje'}]` };
 }
 

@@ -17,6 +17,8 @@ import { formatContactName } from '../contacts/contactName'
 import { SegmentFilterChips } from '../segments/SegmentFilterChips'
 import { SegmentBadge } from '../segments/SegmentBadge'
 import { ChatMessageBubble } from './ChatMessageBubble'
+import { ChatTimelineDateMarker, ChatTimelineEventMarker } from './ChatTimelineMarker'
+import { buildChatTimeline } from './buildChatTimeline'
 import { ConversationBadges } from './ConversationBadges'
 import { InboxAssignDialog, type ConversationAssignee } from './InboxAssignDialog'
 import { InboxChatActionsDialog } from './InboxChatActionsDialog'
@@ -171,6 +173,17 @@ type InboxListResult = {
   }
 }
 
+type InboxMessageReaction = {
+  emoji: string
+  direction: 'inbound' | 'outbound'
+}
+
+type InboxTimelineEvent = {
+  id: string
+  created_at: string
+  label: string
+}
+
 type InboxMessage = {
   id: number
   direction: string
@@ -179,6 +192,8 @@ type InboxMessage = {
   created_at: string
   is_ai: boolean
   has_downloadable_media: boolean
+  reaction?: InboxMessageReaction | null
+  reply_to?: { message_id: number; preview: string; outbound: boolean } | null
   media_preview?: { url: string; mime?: string | null } | null
   campaign_preview?: {
     headerText: string
@@ -218,6 +233,7 @@ type InboxDetail = {
     source_url: string | null
   } | null
   messages: InboxMessage[]
+  events: InboxTimelineEvent[]
   tags: string[]
   can_reply: boolean
   reply_blocked_reason: '24h' | 'bot_mode' | null
@@ -228,6 +244,8 @@ type InboxDetail = {
 
 type InboxConversationUpdates = {
   messages: InboxMessage[]
+  message_reactions: { id: number; reaction: InboxMessageReaction | null }[]
+  events: InboxTimelineEvent[]
   conversation: {
     last_message_at: string | null
     last_user_message_at: string | null
@@ -269,6 +287,50 @@ function inboxInitials(contactName: string, phone: string): string {
 
 function listPreviewText(preview: string): string {
   return preview.trim() || 'Sin mensajes'
+}
+
+function mergeMessageReactions(
+  messages: InboxMessage[],
+  patches: { id: number; reaction: InboxMessageReaction | null }[],
+): InboxMessage[] {
+  if (!patches.length) return messages
+  const patchMap = new Map(patches.map((patch) => [patch.id, patch.reaction]))
+  return messages.map((message) =>
+    patchMap.has(message.id)
+      ? { ...message, reaction: patchMap.get(message.id) ?? null }
+      : message,
+  )
+}
+
+function mergeTimelineEvents(
+  prev: InboxTimelineEvent[],
+  incoming: InboxTimelineEvent[],
+): InboxTimelineEvent[] {
+  if (!incoming.length) return prev
+  const known = new Set(prev.map((event) => event.id))
+  const merged = [...prev]
+  for (const event of incoming) {
+    if (!known.has(event.id)) merged.push(event)
+  }
+  merged.sort((a, b) => {
+    const at = new Date(a.created_at).getTime()
+    const bt = new Date(b.created_at).getTime()
+    return at - bt || a.id.localeCompare(b.id)
+  })
+  return merged
+}
+
+function maxAuditId(events: InboxTimelineEvent[]): bigint {
+  let max = BigInt(0)
+  for (const event of events) {
+    try {
+      const id = BigInt(event.id)
+      if (id > max) max = id
+    } catch {
+      // ignore malformed ids
+    }
+  }
+  return max
 }
 
 function messageReplyPreview(message: InboxMessage): string {
@@ -315,6 +377,7 @@ export function ConversationsInboxPage() {
   const [assignSaving, setAssignSaving] = useState(false)
   const [assignError, setAssignError] = useState('')
   const lastMessageIdRef = useRef(0)
+  const lastAuditIdRef = useRef<bigint>(BigInt(0))
   const scrollerRef = useRef<InboxMessageScrollerHandle | null>(null)
   const sendingReplyRef = useRef(false)
 
@@ -373,13 +436,16 @@ export function ConversationsInboxPage() {
   const pollConversationUpdates = useCallback(
     async (conversationId: number) => {
       const afterId = lastMessageIdRef.current
+      const afterAuditId = lastAuditIdRef.current
       const result = await apiClient.get<InboxConversationUpdates>(
-        `/api/conversations/${conversationId}/updates?after_message_id=${afterId}`,
+        `/api/conversations/${conversationId}/updates?after_message_id=${afterId}&after_audit_id=${afterAuditId.toString()}`,
       )
       if (!result.ok) return
 
       const shouldScroll = scrollerRef.current?.isNearBottom() ?? true
       const incoming = result.data.messages
+      const reactionPatches = result.data.message_reactions ?? []
+      const incomingEvents = result.data.events ?? []
 
       setDetail((prev) => {
         if (!prev) return prev
@@ -391,7 +457,8 @@ export function ConversationsInboxPage() {
         merged.sort((a, b) => a.id - b.id)
         return {
           ...prev,
-          messages: merged,
+          messages: mergeMessageReactions(merged, reactionPatches),
+          events: mergeTimelineEvents(prev.events ?? [], incomingEvents),
           conversation: {
             ...prev.conversation,
             status: result.data.conversation.status,
@@ -416,6 +483,15 @@ export function ConversationsInboxPage() {
         if (shouldScroll) {
           requestAnimationFrame(() => scrollerRef.current?.scrollToBottom('auto'))
         }
+      } else if ((reactionPatches.length > 0 || incomingEvents.length > 0) && shouldScroll) {
+        requestAnimationFrame(() => scrollerRef.current?.scrollToBottom('auto'))
+      }
+
+      if (incomingEvents.length > 0) {
+        const nextAudit = maxAuditId(incomingEvents)
+        if (nextAudit > lastAuditIdRef.current) {
+          lastAuditIdRef.current = nextAudit
+        }
       }
     },
     [],
@@ -424,10 +500,11 @@ export function ConversationsInboxPage() {
   useEffect(() => {
     if (!detail?.messages.length) {
       lastMessageIdRef.current = 0
-      return
+    } else {
+      lastMessageIdRef.current = Math.max(...detail.messages.map((message) => message.id))
     }
-    lastMessageIdRef.current = Math.max(...detail.messages.map((message) => message.id))
-  }, [detail?.conversation.id, detail?.messages])
+    lastAuditIdRef.current = maxAuditId(detail?.events ?? [])
+  }, [detail?.conversation.id, detail?.messages, detail?.events])
 
   useEffect(() => {
     sendingReplyRef.current = sendingReply
@@ -498,6 +575,16 @@ export function ConversationsInboxPage() {
     )
     return match?.id ?? null
   }, [highlightMsgId, searchQuery, detail?.messages])
+
+  const messageById = useMemo(
+    () => new Map((detail?.messages ?? []).map((message) => [message.id, message])),
+    [detail?.messages],
+  )
+
+  const timelineItems = useMemo(
+    () => buildChatTimeline(detail?.messages ?? [], detail?.events ?? []),
+    [detail?.messages, detail?.events],
+  )
 
   const detailHeading = detail
     ? formatContactName(
@@ -673,13 +760,24 @@ export function ConversationsInboxPage() {
       return
     }
     setReplyError('')
-    const result = await apiClient.post<{ ok: true }>(
-      `/api/conversations/${selectedId}/messages/${message.id}/react`,
-      { emoji },
-    )
+    const result = await apiClient.post<{
+      ok: true
+      target_message_id: number
+      reaction: InboxMessageReaction | null
+    }>(`/api/conversations/${selectedId}/messages/${message.id}/react`, { emoji })
     if (!result.ok) {
       setReplyError(result.error)
+      return
     }
+    setDetail((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        messages: mergeMessageReactions(prev.messages, [
+          { id: result.data.target_message_id, reaction: result.data.reaction },
+        ]),
+      }
+    })
   }
 
   async function onSendReply(event: FormEvent) {
@@ -772,11 +870,14 @@ export function ConversationsInboxPage() {
 
   const filterPills = (
     <>
-      <div className="inbox-chat-filter-pills inbox-chat-filter-pills--row" aria-label="Filtrar lista">
+      <div
+        className="inbox-chat-filter-pills inbox-chat-filter-pills--row inbox-chat-filter-pills--compact"
+        aria-label="Filtrar lista"
+      >
         {(
           [
             { key: 'all', label: 'Todos' },
-            { key: 'unread', label: `No leídos (${list?.unread_count ?? 0})` },
+            { key: 'unread', label: list?.unread_count ? `Sin leer (${list.unread_count})` : 'Sin leer' },
           ] as const
         ).map((pill) => (
           <Button
@@ -805,7 +906,7 @@ export function ConversationsInboxPage() {
           [
             { key: 'mine', label: 'Mis chats' },
             { key: 'unassigned', label: 'Sin asignar' },
-            { key: 'new', label: 'Nuevos' },
+            { key: 'new', label: 'Nuevo' },
           ] as const
         ).map((pill) => (
           <Button
@@ -1034,22 +1135,34 @@ export function ConversationsInboxPage() {
                 conversationId={detail.conversation.id}
                 scrollToMessageId={resolvedHighlightMsgId}
               >
-                {detail.messages.length === 0 ? (
+                {timelineItems.length === 0 ? (
                   <p className="text-center text-sm text-muted">Sin mensajes aún.</p>
                 ) : (
-                  detail.messages.map((message) => (
-                    <ChatMessageBubble
-                      key={message.id}
-                      message={message}
-                      conversationId={detail.conversation.id}
-                      highlightQuery={searchQuery}
-                      isHighlighted={resolvedHighlightMsgId === message.id}
-                      canInteract={detail.can_reply}
-                      onReply={onMessageReply}
-                      onCopy={onMessageCopy}
-                      onReact={(msg, emoji) => void onMessageReact(msg, emoji)}
-                    />
-                  ))
+                  timelineItems.map((item) => {
+                    if (item.type === 'date') {
+                      return <ChatTimelineDateMarker key={item.key} label={item.label} />
+                    }
+                    if (item.type === 'event') {
+                      return (
+                        <ChatTimelineEventMarker key={item.key} label={item.event.label} />
+                      )
+                    }
+                    const message = messageById.get(item.messageId)
+                    if (!message) return null
+                    return (
+                      <ChatMessageBubble
+                        key={item.key}
+                        message={message}
+                        conversationId={detail.conversation.id}
+                        highlightQuery={searchQuery}
+                        isHighlighted={resolvedHighlightMsgId === message.id}
+                        canInteract={detail.can_reply}
+                        onReply={onMessageReply}
+                        onCopy={onMessageCopy}
+                        onReact={(msg, emoji) => void onMessageReact(msg, emoji)}
+                      />
+                    )
+                  })
                 )}
               </InboxMessageScroller>
             </div>
