@@ -38,6 +38,7 @@ import { ConversationsInboxPage } from '../features/conversations/ConversationsI
 import { RequireMaster, AdminShell } from '../features/admin/AdminShell'
 import { AdminUsersPage } from '../features/admin/AdminUsersPage'
 import { AdminUserFormPage } from '../features/admin/AdminUserFormPage'
+import { AdminIndexPage } from '../features/admin/AdminIndexPage'
 import { AdminMetaPage } from '../features/admin/AdminMetaPage'
 import { AdminAuditPage } from '../features/admin/AdminAuditPage'
 import { AdminAreasPage } from '../features/admin/AdminAreasPage'
@@ -82,7 +83,7 @@ export function AppRouter() {
             <Route path="conversations/:id" element={<ConversationsInboxPage />} />
             <Route element={<RequireMaster />}>
               <Route path="admin" element={<AdminShell />}>
-                <Route index element={<Navigate to="users" replace />} />
+                <Route index element={<AdminIndexPage />} />
                 <Route path="users" element={<AdminUsersPage />} />
                 <Route path="users/:id" element={<AdminUserFormPage />} />
                 <Route path="areas" element={<AdminAreasPage />} />

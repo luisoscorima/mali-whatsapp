@@ -1,9 +1,10 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { apiClient } from '@/shared/api'
+import { hasInboxDetailRoute } from '@/shared/layout/inboxDetailRoute'
 import { WaPageContents } from '@/shared/ui/shell/WaLayout'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
-import { WaMainPane, WaMainBody } from '@/shared/ui/shell/WaMainPane'
+import { WaMainPane, WaMainHeader, WaMainBody } from '@/shared/ui/shell/WaMainPane'
 
 export type SettingsModule = {
   id: string
@@ -81,6 +82,13 @@ export function SettingsShell() {
         </ul>
       </WaSidebar>
       <WaMainPane>
+        {hasInboxDetailRoute(location.pathname) ? (
+          <WaMainHeader>
+            <Link to="/settings" className="inbox-back-mobile">
+              ← Ajustes
+            </Link>
+          </WaMainHeader>
+        ) : null}
         <WaMainBody variant="form">
           <Outlet />
         </WaMainBody>
