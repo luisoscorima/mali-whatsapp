@@ -718,3 +718,45 @@
     display: none !important;
   }
 }
+
+/* Admin: usuarios en línea */
+.admin-online-status {
+  font-size: 0.85rem;
+}
+
+.admin-online-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-online-list__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+
+.admin-online-list__item:last-child {
+  border-bottom: none;
+}
+
+.admin-online-dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #22c55e 35%, transparent);
+}
+
+html[data-theme='dark'] .admin-online-dot {
+  background: #4ade80;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #4ade80 35%, transparent);
+}
+
+.admin-online-list__email {
+  word-break: break-all;
+}

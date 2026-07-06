@@ -37,6 +37,51 @@ html[data-theme='dark'] .inbox-layout-wa {
   display: none;
 }
 
+/* Segmentos en conversaciones: scroll horizontal con barra en color de acento */
+.conversation-segment-pills.inbox-chat-filter-pills--row {
+  max-height: none;
+  padding-bottom: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+}
+
+.conversation-segment-pills.inbox-chat-filter-pills--row::-webkit-scrollbar {
+  display: block;
+  height: 4px;
+}
+
+.conversation-segment-pills.inbox-chat-filter-pills--row::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.conversation-segment-pills.inbox-chat-filter-pills--row::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
+  border-radius: 999px;
+}
+
+.inbox-layout-wa .contact-segment-chips {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+}
+
+.inbox-layout-wa .contact-segment-chips::-webkit-scrollbar {
+  height: 3px;
+}
+
+.inbox-layout-wa .contact-segment-chips::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.inbox-layout-wa .contact-segment-chips::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
+  border-radius: 999px;
+}
+
 .inbox-chat-pill {
   display: inline-flex;
   align-items: center;
@@ -344,7 +389,6 @@ html[data-theme='dark'] .inbox-chat-lead-star.is-on {
   gap: 0.35rem;
   align-items: center;
   max-width: 100%;
-  overflow: hidden;
 }
 
 .inbox-layout-wa .inbox-chat-segment {
@@ -353,7 +397,8 @@ html[data-theme='dark'] .inbox-chat-lead-star.is-on {
   justify-content: center;
   border-radius: 999px;
   width: fit-content;
-  max-width: 100%;
+  max-width: none;
+  flex-shrink: 0;
   align-self: flex-start;
   margin-top: 2px;
   min-height: 1.45rem;

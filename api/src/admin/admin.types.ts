@@ -19,6 +19,15 @@ export type AdminUserDetail = AdminUserListItem & {
   extra_areas: string[];
 };
 
+export type AdminOnlineUser = {
+  email: string;
+};
+
+export type AdminOnlineUsersResult = {
+  users: AdminOnlineUser[];
+  idle_minutes: number;
+};
+
 export type AdminMetaSettingsView = {
   global: { verify_token: string; app_secret: string };
   areas: Record<

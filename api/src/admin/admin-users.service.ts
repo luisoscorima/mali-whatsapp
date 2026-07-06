@@ -18,8 +18,15 @@ import {
 } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserAreasService } from '../users/user-areas.service';
-import type { AdminUserDetail, AdminUserListItem } from './admin.types';
+import type {
+  AdminOnlineUsersResult,
+  AdminUserDetail,
+  AdminUserListItem,
+} from './admin.types';
 import type { CreateAdminUserDto, UpdateAdminUserDto } from './dto/admin.dto';
+
+/** Misma ventana que login_logs / middleware last_seen (legacy). */
+const ONLINE_USER_IDLE_MINUTES = 5;
 
 function mapUserRow(row: {
   id: number;
@@ -56,6 +63,21 @@ export class AdminUsersService {
     private readonly userAreas: UserAreasService,
     private readonly auditLog: AuditLogService,
   ) {}
+
+  async listOnlineUsers(): Promise<AdminOnlineUsersResult> {
+    const rows = await this.prisma.$queryRaw<{ email: string }[]>`
+      SELECT email
+      FROM login_logs
+      WHERE logged_out_at IS NULL
+        AND COALESCE(last_seen_at, logged_at) >= NOW() - (${ONLINE_USER_IDLE_MINUTES}::int * INTERVAL '1 minute')
+      GROUP BY email
+      ORDER BY email ASC
+    `;
+    return {
+      users: rows,
+      idle_minutes: ONLINE_USER_IDLE_MINUTES,
+    };
+  }
 
   async list(): Promise<AdminUserListItem[]> {
     const rows = await this.prisma.users.findMany({

@@ -21,7 +21,12 @@ import type { AuditLogListResult } from '../reports/reports.types';
 import { AdminUsersService } from './admin-users.service';
 import { AdminAreasService } from './admin-areas.service';
 import type { AdminAreaSummary } from './admin-areas.service';
-import type { AdminMetaSettingsView, AdminUserDetail, AdminUserListItem } from './admin.types';
+import type {
+  AdminMetaSettingsView,
+  AdminOnlineUsersResult,
+  AdminUserDetail,
+  AdminUserListItem,
+} from './admin.types';
 import {
   CreateAdminUserDto,
   UpdateAdminMetaDto,
@@ -48,6 +53,12 @@ export class AdminController {
   @Get('users')
   async listUsers(): Promise<ApiResponse<AdminUserListItem[]>> {
     const data = await this.adminUsersService.list();
+    return { ok: true, data };
+  }
+
+  @Get('online-users')
+  async listOnlineUsers(): Promise<ApiResponse<AdminOnlineUsersResult>> {
+    const data = await this.adminUsersService.listOnlineUsers();
     return { ok: true, data };
   }
 
