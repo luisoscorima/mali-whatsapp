@@ -23,10 +23,7 @@ ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
 RUN npm ci --omit=dev -w api
 
 COPY --from=build /app/api/dist ./api/dist
-COPY --from=build /app/api/prisma ./api/prisma
 COPY --from=build /app/api/scripts ./api/scripts
-COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
 
 WORKDIR /app/api
 RUN chmod +x scripts/docker-entrypoint.sh
