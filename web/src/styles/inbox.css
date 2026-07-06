@@ -136,14 +136,6 @@ html[data-theme='dark'] .inbox-layout-wa {
   color: var(--ink);
 }
 
-.inbox-layout-wa .inbox-chat-link-main > span:not(.inbox-chat-row-top) {
-  display: block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .inbox-layout-wa .inbox-chat-list {
   flex: 1;
   min-height: 0;

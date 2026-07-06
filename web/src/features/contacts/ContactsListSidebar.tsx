@@ -3,6 +3,7 @@ import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { formatContactName } from './contactName'
+import { SegmentBadge } from '../segments/SegmentBadge'
 import { SegmentFilterChips } from '../segments/SegmentFilterChips'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 
@@ -47,6 +48,10 @@ type FilterOptions = {
 
 function segmentLabel(slug: string, segments: SegmentOption[]): string {
   return segments.find((s) => s.slug === slug)?.label ?? slug
+}
+
+function segmentColorKey(slug: string, segments: SegmentOption[]): string {
+  return segments.find((s) => s.slug === slug)?.color_key ?? 'slate'
 }
 
 type ContactsListSidebarProps = {
@@ -410,15 +415,32 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
                         {formatContactName(contact.name, contact.last_name) ? (
                           <span className="inbox-chat-preview font-mono">{contact.phone}</span>
                         ) : null}
-                        <span className="inbox-chat-preview">
-                          {contact.segment_slugs.length === 0
-                            ? 'Sin segmento'
-                            : contact.segment_slugs
-                                .map((slug) => segmentLabel(slug, segments))
-                                .join(' · ')}
-                          {contact.replaced_by_contact_id ? ' · reemplazado' : ''}
-                          {!contact.active ? ' · inactivo' : ''}
-                        </span>
+                        {contact.segment_slugs.length > 0 ? (
+                          <span
+                            className="contact-segment-chips"
+                            role="group"
+                            aria-label="Segmentos"
+                          >
+                            {contact.segment_slugs.map((slug) => (
+                              <SegmentBadge
+                                key={slug}
+                                colorKey={segmentColorKey(slug, segments)}
+                                className="inbox-chat-segment"
+                              >
+                                {segmentLabel(slug, segments)}
+                              </SegmentBadge>
+                            ))}
+                          </span>
+                        ) : (
+                          <span className="inbox-chat-preview">Sin segmento</span>
+                        )}
+                        {contact.replaced_by_contact_id || !contact.active ? (
+                          <span className="inbox-chat-preview">
+                            {contact.replaced_by_contact_id ? 'Reemplazado' : ''}
+                            {contact.replaced_by_contact_id && !contact.active ? ' · ' : ''}
+                            {!contact.active ? 'Inactivo' : ''}
+                          </span>
+                        ) : null}
                       </span>
                     </Link>
                   </div>

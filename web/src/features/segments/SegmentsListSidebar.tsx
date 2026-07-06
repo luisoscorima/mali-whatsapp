@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
-import { segmentToneClass } from './segmentColors'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
+import { SegmentBadge } from './SegmentBadge'
 
 const LIST_POLL_MS = 15000
 
@@ -66,11 +66,12 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
                     <span className="inbox-chat-row-top">
                       <span className="inbox-chat-title">{seg.label}</span>
                     </span>
-                    <span
-                      className={`block max-w-full truncate rounded px-1.5 py-0.5 font-mono text-[10px] ${segmentToneClass(seg.color_key)}`}
+                    <SegmentBadge
+                      colorKey={seg.color_key}
+                      className="inbox-chat-segment font-mono text-[10px]"
                     >
                       {seg.slug}
-                    </span>
+                    </SegmentBadge>
                   </span>
                 </Link>
               </li>
