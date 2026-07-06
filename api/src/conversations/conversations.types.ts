@@ -19,6 +19,7 @@ export type InboxListItem = {
   conversation_tags: string[];
   is_virtual: boolean;
   contact_id: number | null;
+  matched_message_id: number | null;
 };
 
 export type InboxListResult = {
@@ -56,6 +57,7 @@ export type InboxMessage = {
 
 export type InboxContact = {
   name: string | null;
+  last_name: string | null;
   phone: string;
   lead_score: number | null;
   segment_slugs: string[];

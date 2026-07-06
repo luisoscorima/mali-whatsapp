@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { formatChatListTime } from '../../shared/format'
@@ -13,20 +13,15 @@ import { ChatEmptyIcon, WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
 import { Alert, AlertDescription } from '@/shared/ui/shadcn/alert'
 import { Badge } from '@/shared/ui/shadcn/badge'
 import { Button } from '@/shared/ui/shadcn/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/shared/ui/shadcn/dropdown-menu'
 import { formatContactName } from '../contacts/contactName'
 import { SegmentFilterChips } from '../segments/SegmentFilterChips'
 import { SegmentBadge } from '../segments/SegmentBadge'
 import { ChatMessageBubble } from './ChatMessageBubble'
+import { InboxChatActionsDialog } from './InboxChatActionsDialog'
 import { InboxComposeBar } from './InboxComposeBar'
 import { InboxMessageScroller, type InboxMessageScrollerHandle } from './InboxMessageScroller'
 const INBOX_POLL_MS = 8000
+const SEARCH_DEBOUNCE_MS = 300
 
 function segmentLabel(slug: string, segments: SegmentOption[]): string {
   return segments.find((s) => s.slug === slug)?.label ?? slug
@@ -77,19 +72,26 @@ function ProfileBlock({
   const contactId = detail.conversation.contact_id
   const heading = formatContactName(
     detail.contact?.name,
-    null,
+    detail.contact?.last_name,
     detail.conversation.phone,
   )
+  const leadScore = detail.contact?.lead_score
   return (
     <>
       <span className="inbox-chat-avatar inbox-chat-avatar--header" aria-hidden>
-        {inboxInitials(detail.contact?.name ?? '', detail.conversation.phone)}
+        {inboxInitials(heading, detail.conversation.phone)}
       </span>
       <div className="inbox-chat-header-identity">
         <h1 className="inbox-chat-heading">{heading}</h1>
         <p className="inbox-chat-sub">
           {detail.conversation.phone}
           {contactId ? ' · Perfil' : ''}
+          {leadScore ? (
+            <>
+              {' '}
+              <LeadStars score={leadScore} />
+            </>
+          ) : null}
         </p>
         {detail.meta_ad ? (
           <p className="inbox-chat-sub muted">
@@ -149,6 +151,7 @@ type InboxListItem = {
   conversation_tags: string[]
   is_virtual: boolean
   contact_id: number | null
+  matched_message_id: number | null
 }
 
 type InboxListResult = {
@@ -196,6 +199,7 @@ type InboxDetail = {
   }
   contact: {
     name: string | null
+    last_name: string | null
     phone: string
     lead_score: number | null
     segment_slugs: string[]
@@ -227,13 +231,14 @@ type InboxConversationUpdates = {
   user_service_window_open: boolean
 }
 
-function inboxApiQuery(searchParams: URLSearchParams): string {
+function inboxApiQuery(searchParams: URLSearchParams, extra?: { msg?: number }): string {
   const qs = new URLSearchParams()
   const q = searchParams.get('q')
   if (q) qs.set('q', q)
   const chat = searchParams.get('chat')
   if (chat && chat !== 'all') qs.set('chat', chat)
   searchParams.getAll('segment').forEach((slug) => qs.append('segment', slug))
+  if (extra?.msg) qs.set('msg', String(extra.msg))
   const value = qs.toString()
   return value ? `?${value}` : ''
 }
@@ -278,18 +283,25 @@ export function ConversationsInboxPage() {
   const [sendingReply, setSendingReply] = useState(false)
   const [searchInput, setSearchInput] = useState(searchParams.get('q') ?? '')
   const [loadingDetail, setLoadingDetail] = useState(false)
+  const [actionsOpen, setActionsOpen] = useState(false)
   const lastMessageIdRef = useRef(0)
   const scrollerRef = useRef<InboxMessageScrollerHandle | null>(null)
   const sendingReplyRef = useRef(false)
 
   const selectedId = idParam ? Number(idParam) : null
-  const querySuffix = useMemo(() => inboxApiQuery(searchParams), [searchParams])
+  const filterQuerySuffix = useMemo(() => {
+    const sp = new URLSearchParams(searchParams)
+    sp.delete('msg')
+    return inboxApiQuery(sp)
+  }, [searchParams])
+  const searchQuery = (searchParams.get('q') ?? '').trim()
+  const highlightMsgId = Number(searchParams.get('msg') || '') || null
   const chatFilter = (searchParams.get('chat') || 'all') as InboxListResult['filters']['chat']
   const selectedSegments = searchParams.getAll('segment')
 
   const loadList = useCallback((opts?: { silent?: boolean }) => {
     return apiClient
-      .get<InboxListResult>(`/api/conversations${querySuffix}`)
+      .get<InboxListResult>(`/api/conversations${filterQuerySuffix}`)
       .then((result) => {
         if (!result.ok) {
           if (!opts?.silent) setError(result.error)
@@ -297,7 +309,7 @@ export function ConversationsInboxPage() {
         }
         setList(result.data)
       })
-  }, [querySuffix])
+  }, [filterQuerySuffix])
 
   const loadDetail = useCallback(
     (conversationId: number) => {
@@ -317,6 +329,15 @@ export function ConversationsInboxPage() {
         })
     },
     [loadList],
+  )
+
+  const conversationPath = useCallback(
+    (conversationId: number, item?: InboxListItem): string => {
+      return `/conversations/${conversationId}${inboxApiQuery(searchParams, {
+        msg: item?.matched_message_id ?? undefined,
+      })}`
+    },
+    [searchParams],
   )
 
   const pollConversationUpdates = useCallback(
@@ -425,7 +446,7 @@ export function ConversationsInboxPage() {
             setLoadingDetail(false)
             return
           }
-          navigate(`/conversations/${result.data.id}${querySuffix}`, { replace: true })
+          navigate(conversationPath(result.data.id), { replace: true })
         })
       return
     }
@@ -433,13 +454,50 @@ export function ConversationsInboxPage() {
     setLoadingDetail(true)
     setError('')
     void loadDetail(selectedId)
-  }, [selectedId, navigate, querySuffix, loadDetail])
+  }, [selectedId, navigate, loadDetail, conversationPath])
+
+  const resolvedHighlightMsgId = useMemo(() => {
+    if (highlightMsgId) return highlightMsgId
+    if (!searchQuery || !detail?.messages.length) return null
+    const q = searchQuery.toLowerCase()
+    const match = detail.messages.find((message) =>
+      message.body_text?.toLowerCase().includes(q),
+    )
+    return match?.id ?? null
+  }, [highlightMsgId, searchQuery, detail?.messages])
+
+  const detailHeading = detail
+    ? formatContactName(
+        detail.contact?.name,
+        detail.contact?.last_name,
+        detail.conversation.phone,
+      )
+    : ''
 
   useEffect(() => {
     setReplyText('')
     setReplyFile(null)
     setReplyError('')
   }, [selectedId])
+
+  const urlQ = searchParams.get('q') ?? ''
+  useEffect(() => {
+    setSearchInput(urlQ)
+  }, [urlQ])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const q = searchInput.trim()
+      const next = new URLSearchParams(searchParams)
+      next.delete('msg')
+      const currentQ = (next.get('q') ?? '').trim()
+      if (q === currentQ) return
+      if (q) next.set('q', q)
+      else next.delete('q')
+      setSearchParams(next)
+    }, SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [searchInput, searchParams, setSearchParams])
 
   function setChatFilter(chat: InboxListResult['filters']['chat']) {
     const next = new URLSearchParams(searchParams)
@@ -460,13 +518,16 @@ export function ConversationsInboxPage() {
     setSearchParams(next)
   }
 
-  function onSearchSubmit(event: FormEvent) {
-    event.preventDefault()
-    const next = new URLSearchParams(searchParams)
-    const q = searchInput.trim()
-    if (q) next.set('q', q)
-    else next.delete('q')
-    setSearchParams(next)
+  function onSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      const q = searchInput.trim()
+      const next = new URLSearchParams(searchParams)
+      next.delete('msg')
+      if (q) next.set('q', q)
+      else next.delete('q')
+      setSearchParams(next)
+    }
   }
 
   async function onSelectItem(item: InboxListItem) {
@@ -481,10 +542,10 @@ export function ConversationsInboxPage() {
         setError(result.error)
         return
       }
-      navigate(`/conversations/${result.data.id}${querySuffix}`)
+      navigate(conversationPath(result.data.id, item))
       return
     }
-    navigate(`/conversations/${item.id}${querySuffix}`)
+    navigate(conversationPath(item.id, item))
   }
 
   async function onModeChange(status: 'bot' | 'human') {
@@ -511,7 +572,7 @@ export function ConversationsInboxPage() {
       setReplyError(result.error)
       return
     }
-    navigate(`/conversations${querySuffix}`)
+    navigate(`/conversations${filterQuerySuffix}`)
     void loadList()
   }
 
@@ -627,26 +688,33 @@ export function ConversationsInboxPage() {
         }}
         className="conversation-segment-pills"
       />
-      <form onSubmit={onSearchSubmit} className="inbox-filters">
+      <div className="inbox-filters">
         <div className="inbox-search-row">
           <input
             type="search"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={onSearchKeyDown}
             placeholder="Buscar en chats…"
             className="inbox-search-input"
+            aria-label="Buscar en chats"
           />
-          <Button type="submit" size="sm" variant="secondary">
-            Buscar
-          </Button>
         </div>
-      </form>
+      </div>
+      {list ? (
+        <p className="text-xs text-muted">
+          {list.items.length} chat{list.items.length === 1 ? '' : 's'}
+        </p>
+      ) : null}
     </>
   )
 
   return (
     <WaPageContents>
-      <WaSidebar title="Chats" filters={filterPills}>
+      <WaSidebar
+        title={list ? `Chats (${list.items.length})` : 'Chats'}
+        filters={filterPills}
+      >
         <ul className="inbox-chat-list">
           {!list ? (
             <li className="inbox-empty-list">Cargando…</li>
@@ -737,7 +805,7 @@ export function ConversationsInboxPage() {
               <button
                 type="button"
                 className="inbox-back-mobile"
-                onClick={() => navigate(`/conversations${querySuffix}`)}
+                onClick={() => navigate(`/conversations${filterQuerySuffix}`)}
               >
                 ← Chats
               </button>
@@ -759,104 +827,30 @@ export function ConversationsInboxPage() {
                   type="button"
                   variant="secondary"
                   size="icon-sm"
-                  className="inbox-export-btn"
-                  title="Descargar Excel"
-                  aria-label="Descargar conversación en Excel"
-                  onClick={() =>
+                  title="Opciones del chat"
+                  aria-label="Opciones del chat"
+                  onClick={() => setActionsOpen(true)}
+                >
+                  <span className="inbox-header-more-icon" aria-hidden>
+                    ⋮
+                  </span>
+                </Button>
+                <InboxChatActionsDialog
+                  open={actionsOpen}
+                  onOpenChange={setActionsOpen}
+                  heading={detailHeading}
+                  phone={detail.conversation.phone}
+                  contactId={detail.conversation.contact_id}
+                  leadScore={detail.contact?.lead_score ?? null}
+                  aiAreaEnabled={detail.ai_area_enabled}
+                  conversationStatus={detail.conversation.status}
+                  onLeadScore={onLeadScore}
+                  onMarkUnread={onMarkUnread}
+                  onModeChange={onModeChange}
+                  onExport={() =>
                     void apiClient.download(`/api/conversations/${selectedId}/export`)
                   }
-                >
-                  ↓
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="icon-sm"
-                      title="Más"
-                      aria-label="Más opciones"
-                    >
-                      <span className="inbox-header-more-icon" aria-hidden>
-                        +
-                      </span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-64">
-                    <DropdownMenuItem onSelect={() => void onMarkUnread()}>
-                      Marcar como no leído
-                    </DropdownMenuItem>
-                    {!detail.contact ? (
-                      <DropdownMenuItem asChild>
-                        <Link
-                          to={`/contacts/new?prefill_phone=${encodeURIComponent(detail.conversation.phone.replace(/\D/g, ''))}`}
-                        >
-                          Guardar contacto
-                        </Link>
-                      </DropdownMenuItem>
-                    ) : null}
-                    {detail.ai_area_enabled ? (
-                      <>
-                        <DropdownMenuSeparator />
-                        <div className="inbox-mode-toggle inbox-mode-toggle--in-more px-2 py-1.5" role="group" aria-label="Modo del chat">
-                          <span className="inbox-mode-toggle-label">Modo</span>
-                          <div className="inbox-mode-toggle-btns">
-                            {(['bot', 'human'] as const).map((mode) => (
-                              <Button
-                                key={mode}
-                                type="button"
-                                variant={detail.conversation.status === mode ? 'default' : 'outline'}
-                                size="icon-sm"
-                                className="inbox-mode-btn inbox-mode-btn--icon-only"
-                                onClick={() => void onModeChange(mode)}
-                                title={mode === 'bot' ? 'Bot' : 'Asesor'}
-                                aria-label={mode === 'bot' ? 'Modo Bot' : 'Modo Asesor'}
-                              >
-                                <span aria-hidden>{mode === 'bot' ? '🤖' : '👤'}</span>
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
-                      </>
-                    ) : null}
-                    {detail.contact ? (
-                      <>
-                        <DropdownMenuSeparator />
-                        <div className="inbox-lead-score-form inbox-lead-score-form--in-more px-2 py-1.5">
-                          <div className="inbox-lead-score-row">
-                            <span className="inbox-lead-score-label" id="lead-score-label">
-                              Calificación del lead
-                            </span>
-                            <div className="inbox-lead-stars-input" role="group" aria-labelledby="lead-score-label">
-                              {[1, 2, 3, 4, 5].map((n) => {
-                                const current = detail.contact?.lead_score ?? 0
-                                return (
-                                  <button
-                                    key={n}
-                                    type="button"
-                                    className={`inbox-lead-star-btn ${n <= current ? 'is-on' : ''}`}
-                                    onClick={() => void onLeadScore(n)}
-                                    aria-label={`${n} estrella${n > 1 ? 's' : ''}`}
-                                  >
-                                    ★
-                                  </button>
-                                )
-                              })}
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => void onLeadScore(null)}
-                              >
-                                Borrar
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </>
-                    ) : null}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                />
               </div>
             </WaMainHeader>
 
@@ -864,6 +858,7 @@ export function ConversationsInboxPage() {
               <InboxMessageScroller
                 ref={scrollerRef}
                 conversationId={detail.conversation.id}
+                scrollToMessageId={resolvedHighlightMsgId}
               >
                 {detail.messages.length === 0 ? (
                   <p className="text-center text-sm text-muted">Sin mensajes aún.</p>
@@ -873,6 +868,8 @@ export function ConversationsInboxPage() {
                       key={message.id}
                       message={message}
                       conversationId={detail.conversation.id}
+                      highlightQuery={searchQuery}
+                      isHighlighted={resolvedHighlightMsgId === message.id}
                     />
                   ))
                 )}

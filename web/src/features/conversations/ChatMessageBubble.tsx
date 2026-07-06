@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { formatDateTime } from '@/shared/format'
 import { cn } from '@/lib/utils'
 import type { CampaignMessagePreviewData } from '../campaigns/CampaignMessagePreview'
@@ -47,12 +48,39 @@ function resolveMediaUrl(url: string): string {
   return u.startsWith('/') ? u : `/${u}`
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function highlightText(text: string, query: string): ReactNode {
+  const q = query.trim()
+  if (!q) return text
+  const parts = text.split(new RegExp(`(${escapeRegExp(q)})`, 'gi'))
+  if (parts.length === 1) return text
+  return parts.map((part, index) =>
+    part.toLowerCase() === q.toLowerCase() ? (
+      <mark key={index} className="chat-bubble__highlight">
+        {part}
+      </mark>
+    ) : (
+      part
+    ),
+  )
+}
+
 type ChatMessageBubbleProps = {
   message: ChatMessage
   conversationId: number
+  highlightQuery?: string
+  isHighlighted?: boolean
 }
 
-export function ChatMessageBubble({ message, conversationId }: ChatMessageBubbleProps) {
+export function ChatMessageBubble({
+  message,
+  conversationId,
+  highlightQuery = '',
+  isHighlighted = false,
+}: ChatMessageBubbleProps) {
   const outbound = message.direction === 'outbound'
   const mt = message.message_type.toLowerCase()
   const mediaUrl = message.media_preview?.url
@@ -65,10 +93,12 @@ export function ChatMessageBubble({ message, conversationId }: ChatMessageBubble
 
   return (
     <div
+      id={`chat-msg-${message.id}`}
       className={cn(
         'chat-bubble',
         outbound ? 'chat-bubble--out' : 'chat-bubble--in',
         outbound && message.is_ai && 'chat-bubble--ai',
+        isHighlighted && 'chat-bubble--search-hit',
       )}
     >
       {outbound && message.is_ai ? (
@@ -160,7 +190,9 @@ export function ChatMessageBubble({ message, conversationId }: ChatMessageBubble
       ) : null}
 
       {!campPreview && message.body_text?.trim() ? (
-        <div className="chat-bubble__text">{message.body_text}</div>
+        <div className="chat-bubble__text">
+          {highlightText(message.body_text, highlightQuery)}
+        </div>
       ) : null}
 
       <div className="chat-meta">

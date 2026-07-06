@@ -12,11 +12,13 @@ import { cn } from '@/lib/utils'
 
 export type InboxMessageScrollerHandle = {
   scrollToBottom: (behavior?: ScrollBehavior) => void
+  scrollToMessage: (messageId: number, behavior?: ScrollBehavior) => void
   isNearBottom: () => boolean
 }
 
 type InboxMessageScrollerProps = {
   conversationId: number
+  scrollToMessageId?: number | null
   children: ReactNode
   className?: string
 }
@@ -28,7 +30,10 @@ function nearBottom(element: HTMLElement, threshold = 120): boolean {
 export const InboxMessageScroller = forwardRef<
   InboxMessageScrollerHandle,
   InboxMessageScrollerProps
->(function InboxMessageScroller({ conversationId, children, className }, ref) {
+>(function InboxMessageScroller(
+  { conversationId, scrollToMessageId, children, className },
+  ref,
+) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const [showJump, setShowJump] = useState(false)
 
@@ -39,21 +44,36 @@ export const InboxMessageScroller = forwardRef<
     setShowJump(false)
   }, [])
 
+  const scrollToMessage = useCallback((messageId: number, behavior: ScrollBehavior = 'smooth') => {
+    const el = viewportRef.current?.querySelector(`#chat-msg-${messageId}`)
+    if (el instanceof HTMLElement) {
+      el.scrollIntoView({ behavior, block: 'center' })
+      setShowJump(!nearBottom(viewportRef.current!))
+    }
+  }, [])
+
   useImperativeHandle(
     ref,
     () => ({
       scrollToBottom,
+      scrollToMessage,
       isNearBottom: () => {
         const el = viewportRef.current
         return el ? nearBottom(el) : true
       },
     }),
-    [scrollToBottom],
+    [scrollToBottom, scrollToMessage],
   )
 
   useEffect(() => {
-    requestAnimationFrame(() => scrollToBottom('auto'))
-  }, [conversationId, scrollToBottom])
+    requestAnimationFrame(() => {
+      if (scrollToMessageId) {
+        scrollToMessage(scrollToMessageId, 'auto')
+        return
+      }
+      scrollToBottom('auto')
+    })
+  }, [conversationId, scrollToMessageId, scrollToBottom, scrollToMessage])
 
   useEffect(() => {
     const el = viewportRef.current

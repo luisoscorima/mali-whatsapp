@@ -69,6 +69,7 @@ type InboxRow = {
   contact_segment_slugs: string[];
   preview: string | null;
   conversation_tags: string[];
+  matched_message_id: number | null;
 };
 
 @Injectable()
@@ -120,11 +121,28 @@ export class ConversationsService {
       conversation_tags: row.conversation_tags ?? [],
       is_virtual: id < 0,
       contact_id: id < 0 ? -id : null,
+      matched_message_id: row.matched_message_id
+        ? Number(row.matched_message_id)
+        : null,
     };
+  }
+
+  private inboxContactNameSql(alias: string): Prisma.Sql {
+    return Prisma.sql`NULLIF(TRIM(CONCAT(COALESCE(${Prisma.raw(alias)}.name, ''), ' ', COALESCE(${Prisma.raw(alias)}.last_name, ''))), '')`;
+  }
+
+  private buildInboxSegmentSearchSql(searchPat: string): Prisma.Sql {
+    return Prisma.sql` OR EXISTS (
+      SELECT 1 FROM contact_segments cs
+      JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+      WHERE cs.contact_id = ct.id
+      AND (sd.label ILIKE ${searchPat} ESCAPE '!' OR sd.slug ILIKE ${searchPat} ESCAPE '!')
+    )`;
   }
 
   private buildInboxSearchSql(searchQ: string): Prisma.Sql {
     const searchPat = `%${escapeForLikePattern(searchQ)}%`;
+    const segmentSql = this.buildInboxSegmentSearchSql(searchPat);
     const digitsOnly = searchQ.replace(/\D/g, '');
     if (digitsOnly) {
       const digitsPat = `%${digitsOnly}%`;
@@ -135,10 +153,12 @@ export class ConversationsService {
           AND m.body_text ILIKE ${searchPat} ESCAPE '!'
         )
         OR COALESCE(ct.name, '') ILIKE ${searchPat} ESCAPE '!'
+        OR COALESCE(ct.last_name, '') ILIKE ${searchPat} ESCAPE '!'
         OR COALESCE(ct.phone, '') ILIKE ${searchPat} ESCAPE '!'
         OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
         OR regexp_replace(COALESCE(ct.phone, ''), '\\D', '', 'g') LIKE ${digitsPat}
         OR regexp_replace(COALESCE(c.phone, ''), '\\D', '', 'g') LIKE ${digitsPat}
+        ${segmentSql}
       )`;
     }
     return Prisma.sql` AND (
@@ -148,8 +168,10 @@ export class ConversationsService {
         AND m.body_text ILIKE ${searchPat} ESCAPE '!'
       )
       OR COALESCE(ct.name, '') ILIKE ${searchPat} ESCAPE '!'
+      OR COALESCE(ct.last_name, '') ILIKE ${searchPat} ESCAPE '!'
       OR COALESCE(ct.phone, '') ILIKE ${searchPat} ESCAPE '!'
       OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
+      ${segmentSql}
     )`;
   }
 
@@ -173,6 +195,18 @@ export class ConversationsService {
     const segmentSql = buildConversationSegmentSql(segmentFilter);
     const searchSql = searchQ ? this.buildInboxSearchSql(searchQ) : Prisma.empty;
     const chatSql = this.buildChatFilterSql(chatFilter);
+    const searchPat = searchQ
+      ? `%${escapeForLikePattern(searchQ)}%`
+      : null;
+    const matchedMessageSql = searchPat
+      ? Prisma.sql`(
+          SELECT m.id FROM chat_messages m
+          WHERE m.conversation_id = c.id
+          AND m.body_text ILIKE ${searchPat} ESCAPE '!'
+          ORDER BY m.created_at DESC
+          LIMIT 1
+        )`
+      : Prisma.sql`NULL::int`;
 
     const rows = await this.prisma.$queryRaw<InboxRow[]>(Prisma.sql`
       SELECT
@@ -183,9 +217,9 @@ export class ConversationsService {
         c.status AS conversation_status,
         ct.lead_score AS contact_lead_score,
         COALESCE(
-          ct.name,
+          ${this.inboxContactNameSql('ct')},
           (
-            SELECT ct_alt.name
+            SELECT ${this.inboxContactNameSql('ct_alt')}
             FROM contacts ct_alt
             WHERE ct_alt.phone = c.phone AND (ct.id IS NULL OR ct_alt.id <> ct.id)
             ORDER BY ct_alt.updated_at DESC NULLS LAST
@@ -206,7 +240,8 @@ export class ConversationsService {
           SELECT array_agg(tg.label ORDER BY tg.label)
           FROM conversation_tags tg
           WHERE tg.conversation_id = c.id
-        ), ARRAY[]::varchar[]) AS conversation_tags
+        ), ARRAY[]::varchar[]) AS conversation_tags,
+        ${matchedMessageSql} AS matched_message_id
       FROM conversations c
       LEFT JOIN contacts ct ON ct.id = c.contact_id
       WHERE c.area = ${area}
@@ -223,16 +258,21 @@ export class ConversationsService {
 
     const contactSegmentSql = buildContactSegmentSql(segmentFilter);
     const contactPat = `%${escapeForLikePattern(searchQ)}%`;
+    const contactSegmentSearchSql = this.buildInboxSegmentSearchSql(contactPat);
     const contactDigits = searchQ.replace(/\D/g, '');
     const contactSearchSql = contactDigits
       ? Prisma.sql` AND (
           COALESCE(ct.name, '') ILIKE ${contactPat} ESCAPE '!'
+          OR COALESCE(ct.last_name, '') ILIKE ${contactPat} ESCAPE '!'
           OR COALESCE(ct.phone, '') ILIKE ${contactPat} ESCAPE '!'
           OR regexp_replace(COALESCE(ct.phone, ''), '\\D', '', 'g') LIKE ${`%${contactDigits}%`}
+          ${contactSegmentSearchSql}
         )`
       : Prisma.sql` AND (
           COALESCE(ct.name, '') ILIKE ${contactPat} ESCAPE '!'
+          OR COALESCE(ct.last_name, '') ILIKE ${contactPat} ESCAPE '!'
           OR COALESCE(ct.phone, '') ILIKE ${contactPat} ESCAPE '!'
+          ${contactSegmentSearchSql}
         )`;
 
     const virtualRows = await this.prisma.$queryRaw<InboxRow[]>(Prisma.sql`
@@ -243,7 +283,7 @@ export class ConversationsService {
         FALSE AS inbox_unread,
         NULL::text AS conversation_status,
         ct.lead_score AS contact_lead_score,
-        ct.name AS contact_name,
+        ${this.inboxContactNameSql('ct')} AS contact_name,
         COALESCE((
           SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
           FROM contact_segments cs
@@ -251,7 +291,8 @@ export class ConversationsService {
           WHERE cs.contact_id = ct.id
         ), ARRAY[]::varchar[]) AS contact_segment_slugs,
         ''::text AS preview,
-        ARRAY[]::varchar[] AS conversation_tags
+        ARRAY[]::varchar[] AS conversation_tags,
+        NULL::int AS matched_message_id
       FROM contacts ct
       WHERE ct.area = ${area}
       ${contactSegmentSql}
@@ -367,6 +408,7 @@ export class ConversationsService {
       const rows = await this.prisma.$queryRaw<
         {
           name: string | null;
+          last_name: string | null;
           phone: string;
           lead_score: number | null;
           segment_slugs: string[];
@@ -374,6 +416,7 @@ export class ConversationsService {
       >(Prisma.sql`
         SELECT
           c.name,
+          c.last_name,
           c.phone,
           c.lead_score,
           COALESCE((
@@ -390,6 +433,7 @@ export class ConversationsService {
       const rows = await this.prisma.$queryRaw<
         {
           name: string | null;
+          last_name: string | null;
           phone: string;
           lead_score: number | null;
           segment_slugs: string[];
@@ -397,6 +441,7 @@ export class ConversationsService {
       >(Prisma.sql`
         SELECT
           c.name,
+          c.last_name,
           c.phone,
           c.lead_score,
           COALESCE((

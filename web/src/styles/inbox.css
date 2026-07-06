@@ -845,6 +845,18 @@ html[data-theme='dark'] .inbox-layout-wa .chat-bubble--out {
   line-height: 1.45;
 }
 
+.chat-bubble__highlight {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.inbox-layout-wa .chat-bubble--search-hit {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
+}
+
 .chat-bubble__meta {
   margin: 4px 0 0;
   font-size: 0.68rem;
