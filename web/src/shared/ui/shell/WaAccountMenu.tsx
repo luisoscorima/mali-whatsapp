@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { apiClient, type AuthUser } from '@/shared/api'
 import { areaLabel } from '@/features/admin/areaLabels'
+import { PalettePicker } from '@/shared/theme/PalettePicker'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/shadcn/popover'
 
 type WaAccountMenuProps = {
@@ -70,13 +71,15 @@ export function WaAccountMenu({ user, onUserUpdate }: WaAccountMenuProps) {
           </p>
         </div>
 
+        <PalettePicker />
+
         {showAreaSwitch ? (
           <div className="border-b border-line px-4 py-3">
             <label className="block text-xs font-medium text-muted">Cambiar área</label>
             <select
               value={pendingArea}
               onChange={(e) => setPendingArea(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
+              className="mt-1.5 w-full rounded-lg border border-line bg-input px-2 py-1.5 text-sm"
             >
               {user.allowedAreas.map((area) => (
                 <option key={area} value={area}>

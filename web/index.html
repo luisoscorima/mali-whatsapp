@@ -9,6 +9,9 @@
       try {
         var _t = localStorage.getItem('mali-theme');
         if (_t === 'dark' || _t === 'light') document.documentElement.setAttribute('data-theme', _t);
+        var _p = localStorage.getItem('mali-palette');
+        if (_p) document.documentElement.setAttribute('data-palette', _p);
+        else document.documentElement.setAttribute('data-palette', 'teal');
       } catch (e) {}
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />

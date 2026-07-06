@@ -3,7 +3,7 @@
 .inbox-layout-wa {
   --wa-bubble-out: color-mix(in srgb, var(--accent-soft) 75%, #d4f4e8);
   --wa-bubble-out-border: color-mix(in srgb, var(--accent) 22%, transparent);
-  --wa-bubble-in: #ffffff;
+  --wa-bubble-in: color-mix(in srgb, var(--accent-soft) 8%, var(--surface-strong));
   --wa-bubble-in-border: rgba(0, 0, 0, 0.06);
 }
 
@@ -88,7 +88,7 @@ html[data-theme='dark'] .inbox-layout-wa {
   padding: 8px 10px;
   border-radius: 8px;
   border: 1px solid var(--line);
-  background: var(--surface-strong);
+  background: var(--input-bg);
   color: var(--ink);
 }
 
