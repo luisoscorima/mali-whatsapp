@@ -73,6 +73,58 @@ export function summarizeMetaForAuditRow(meta: unknown): string {
   }
 }
 
+function readAuditMetaRecord(meta: unknown): Record<string, unknown> {
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return {};
+  return meta as Record<string, unknown>;
+}
+
+export function collectAuditPhoneLookups(rows: { meta: unknown }[]): {
+  contactIds: number[];
+  conversationIds: number[];
+} {
+  const contactIds = new Set<number>();
+  const conversationIds = new Set<number>();
+  for (const row of rows) {
+    const meta = readAuditMetaRecord(row.meta);
+    if (String(meta.phone ?? '').trim()) continue;
+    const contactId = Number(meta.contact_id);
+    if (Number.isFinite(contactId) && contactId > 0) contactIds.add(contactId);
+    const conversationId = Number(meta.conversation_id);
+    if (Number.isFinite(conversationId) && conversationId > 0) {
+      conversationIds.add(conversationId);
+    }
+  }
+  return {
+    contactIds: [...contactIds],
+    conversationIds: [...conversationIds],
+  };
+}
+
+export function resolveAuditPhone(
+  meta: unknown,
+  contactPhones: ReadonlyMap<number, string>,
+  conversationPhones: ReadonlyMap<number, string>,
+): string | null {
+  const record = readAuditMetaRecord(meta);
+  const direct = String(record.phone ?? '').trim();
+  if (direct) return direct;
+
+  const contactId = Number(record.contact_id);
+  if (Number.isFinite(contactId) && contactId > 0) {
+    const phone = contactPhones.get(contactId);
+    if (phone) return phone;
+  }
+
+  const conversationId = Number(record.conversation_id);
+  if (Number.isFinite(conversationId) && conversationId > 0) {
+    const phone = conversationPhones.get(conversationId);
+    if (phone) return phone;
+  }
+
+  const tail = String(record.phone_tail ?? '').trim();
+  return tail || null;
+}
+
 export function buildAuditLogWhere(
   q: Record<string, string | undefined>,
   opts: AuditLogQueryOpts = { areaScope: null, excludeMasterActors: false },

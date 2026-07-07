@@ -10,6 +10,7 @@ export type AuditLogListItem = {
   area: string | null;
   client_ip: string | null;
   request_id: string | null;
+  phone: string | null;
   meta_summary: string;
 };
 

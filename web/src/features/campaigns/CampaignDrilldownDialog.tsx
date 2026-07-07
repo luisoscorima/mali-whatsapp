@@ -46,6 +46,8 @@ type CampaignDrilldownDialogProps = {
   logs: CampaignLog[]
   failedLogs: CampaignLog[]
   responders: ResponderRow[]
+  responseTypeSummary?: { label: string; count: number }[]
+  responseWindowDays?: number
 }
 
 function ChatLinkButton({ contactId }: { contactId?: number | null }) {
@@ -80,6 +82,8 @@ export function CampaignDrilldownDialog({
   logs,
   failedLogs,
   responders,
+  responseTypeSummary = [],
+  responseWindowDays,
 }: CampaignDrilldownDialogProps) {
   if (!action) return null
 
@@ -129,11 +133,20 @@ export function CampaignDrilldownDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{action.title}</DialogTitle>
-          {action.type !== 'responders' && 'note' in action && action.note ? (
+          {action.type === 'responders' && responseWindowDays ? (
+            <DialogDescription>
+              Ventana de {responseWindowDays} días tras el envío.
+            </DialogDescription>
+          ) : action.type !== 'responders' && 'note' in action && action.note ? (
             <DialogDescription>{action.note}</DialogDescription>
           ) : null}
         </DialogHeader>
         <DialogBody>
+          {action.type === 'responders' && responseTypeSummary.length > 0 ? (
+            <p className="muted campaign-drilldown-dialog__note mb-3 text-sm">
+              {responseTypeSummary.map((item) => `${item.label}: ${item.count}`).join(' · ')}
+            </p>
+          ) : null}
           {rows.length === 0 ? (
             <p className="text-sm text-muted">Sin registros para este filtro.</p>
           ) : action.type === 'responders' ? (

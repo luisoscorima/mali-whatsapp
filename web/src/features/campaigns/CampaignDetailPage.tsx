@@ -4,7 +4,6 @@ import { apiClient } from '@/shared/api'
 import { formatDateTime } from '../../shared/format'
 import { formatContactName } from '../contacts/contactName'
 import {
-  filterCampaignLogs,
   filterIncidentLogs,
   INCIDENT_EXPORT_FILTERS,
   LOG_EXPORT_FILTERS,
@@ -134,8 +133,6 @@ export function CampaignDetailPage() {
   const [busy, setBusy] = useState('')
   const [logsFilter, setLogsFilter] = useState('all_current')
   const [incidentsFilter, setIncidentsFilter] = useState('all')
-  const [logsViewFilter, setLogsViewFilter] = useState('all_current')
-  const [showResponders, setShowResponders] = useState(false)
   const [drilldownAction, setDrilldownAction] = useState<MetricAction | null>(null)
   const [drilldownOpen, setDrilldownOpen] = useState(false)
 
@@ -159,11 +156,6 @@ export function CampaignDetailPage() {
   useEffect(() => {
     reload()
   }, [id])
-
-  const filteredLogs = useMemo(() => {
-    if (!campaign) return []
-    return filterCampaignLogs(campaign.logs, logsViewFilter).slice(0, 80)
-  }, [campaign, logsViewFilter])
 
   const filteredFailed = useMemo(() => {
     if (!campaign) return []
@@ -233,7 +225,6 @@ export function CampaignDetailPage() {
     incidents: attachMetricActions(campaign.analytics.incidents),
   }
   const rs = campaign.retry_stats
-  const rm = campaign.responder_metrics
   const campaignId = campaign.id
 
   const retryHintParts: string[] = []
@@ -522,115 +513,6 @@ export function CampaignDetailPage() {
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">
-            Respuestas ({rm.responded_count})
-          </h2>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className={actionButtonClass(true)}
-              disabled={rm.responded_count === 0}
-              onClick={() => setShowResponders((v) => !v)}
-            >
-              {showResponders ? 'Ocultar' : 'Ver teléfonos'}
-            </button>
-            <button
-              type="button"
-              className={actionButtonClass(true)}
-              disabled={busy !== '' || rm.responded_count === 0}
-              onClick={() =>
-                handleDownload(
-                  `/api/campaigns/${campaignId}/responders-export`,
-                  'responders',
-                )
-              }
-            >
-              {busy === 'responders' ? 'Exportando…' : 'Exportar Excel'}
-            </button>
-          </div>
-        </div>
-        <p className="text-xs text-muted">
-          Ventana de {rm.window_days} días tras el envío.
-          {a.responseWindowDays
-            ? ` Métrica «Respuestas únicas» usa la misma ventana.`
-            : ''}
-        </p>
-        {rm.response_type_summary.length > 0 ? (
-          <p className="campaign-drilldown-dialog__note text-sm font-medium">
-            {rm.response_type_summary
-              .map((item) => `${item.label}: ${item.count}`)
-              .join(' · ')}
-          </p>
-        ) : null}
-        {showResponders && rm.responders.length > 0 ? (
-          <ul className="divide-y divide-line rounded-xl border border-line bg-surface-strong text-sm">
-            {rm.responders.map((row) => (
-              <li key={row.phone} className="space-y-1 px-4 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-mono">{row.phone}</span>
-                  <span className="text-xs text-muted">
-                    {formatDateTime(row.first_response_at)}
-                  </span>
-                </div>
-                <p>
-                  {row.contact_name || '—'}
-                  {row.segment_labels ? ` · ${row.segment_labels}` : ''}
-                </p>
-                {row.interactive_response_text ? (
-                  <p className="text-accent">{row.interactive_response_text}</p>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </section>
-
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Registro de envíos</h2>
-          <label className="text-sm text-muted">
-            Filtro
-            <select
-              className={`${selectClass()} ml-2`}
-              value={logsViewFilter}
-              onChange={(e) => setLogsViewFilter(e.target.value)}
-            >
-              {LOG_EXPORT_FILTERS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        {filteredLogs.length === 0 ? (
-          <p className="text-sm text-muted">Sin registros para este filtro.</p>
-        ) : (
-          <ul className="divide-y divide-line rounded-xl border border-line bg-surface-strong text-sm">
-            {filteredLogs.map((log) => (
-              <li key={log.id} className="space-y-1 px-4 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-mono">{log.phone}</span>
-                  <span className="text-xs">{log.status}</span>
-                </div>
-                <p>
-                  {log.contact_name || '—'}
-                  {log.segment_labels ? ` · ${log.segment_labels}` : ''}
-                </p>
-                <p className="text-xs text-muted">
-                  {formatDateTime(log.created_at)}
-                  {log.whatsapp_message_id
-                    ? ` · ${log.whatsapp_message_id}`
-                    : ''}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">
             Fallidos ({filteredFailed.length}
             {incidentsFilter !== 'all'
               ? ` / ${campaign.failed_logs.length}`
@@ -726,6 +608,8 @@ export function CampaignDetailPage() {
         logs={campaign.logs}
         failedLogs={campaign.failed_logs}
         responders={campaign.responder_metrics.responders}
+        responseTypeSummary={campaign.responder_metrics.response_type_summary}
+        responseWindowDays={campaign.responder_metrics.window_days}
       />
     </div>
   )

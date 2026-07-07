@@ -298,6 +298,7 @@ export class ContactsService {
       SELECT
         c.id,
         c.name,
+        c.last_name,
         c.phone,
         COALESCE((
           SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
@@ -468,6 +469,7 @@ export class ContactsService {
         actor: auditActor(user),
         meta: {
           contact_id: contactId,
+          phone,
           phone_tail: phoneMetaTail(phone),
           segments: validation.value.segments,
         },
@@ -563,6 +565,7 @@ export class ContactsService {
         actor: auditActor(user),
         meta: {
           contact_id: id,
+          phone,
           phone_tail: phoneMetaTail(phone),
           segments,
           phone_changed: false,
@@ -606,10 +609,11 @@ export class ContactsService {
       event_type: AuditEvent.CONTACT_UPDATED,
       message: `Contacto actualizado (id ${id}, nuevo id ${newContactId} por cambio de teléfono)`,
       actor: auditActor(user),
-      meta: {
-        contact_id: id,
-        new_contact_id: newContactId,
-        phone_tail: phoneMetaTail(phone),
+        meta: {
+          contact_id: id,
+          new_contact_id: newContactId,
+          phone,
+          phone_tail: phoneMetaTail(phone),
         segments,
         phone_changed: true,
       },

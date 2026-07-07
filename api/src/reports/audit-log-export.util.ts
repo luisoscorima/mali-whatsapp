@@ -10,6 +10,7 @@ const AUDIT_LOG_EXPORT_HEADERS = [
   'Nivel',
   'Tipo',
   'Mensaje',
+  'Teléfono',
   'Actor ID',
   'Actor email',
   'Área',
@@ -23,6 +24,7 @@ export type AuditLogExportRow = {
   level: string;
   event_type: string;
   message: string;
+  phone?: string | null;
   actor_user_id: number | null;
   actor_email: string | null;
   area: string | null;
@@ -39,6 +41,7 @@ export function buildAuditLogXlsxBuffer(rows: AuditLogExportRow[]): Buffer {
       row.level,
       row.event_type,
       String(row.message || ''),
+      row.phone != null ? String(row.phone) : '',
       row.actor_user_id != null ? row.actor_user_id : '',
       row.actor_email != null ? String(row.actor_email) : '',
       row.area != null ? String(row.area) : '',
@@ -53,6 +56,7 @@ export function buildAuditLogXlsxBuffer(rows: AuditLogExportRow[]): Buffer {
     { wch: 8 },
     { wch: 24 },
     { wch: 48 },
+    { wch: 16 },
     { wch: 10 },
     { wch: 28 },
     { wch: 12 },

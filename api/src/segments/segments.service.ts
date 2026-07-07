@@ -425,6 +425,7 @@ export class SegmentsService {
       SELECT
         c.id,
         c.name,
+        c.last_name,
         c.phone,
         COALESCE((
           SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)

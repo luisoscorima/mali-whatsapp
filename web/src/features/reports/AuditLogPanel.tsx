@@ -15,6 +15,7 @@ export type AuditRow = {
   area: string | null
   client_ip: string | null
   meta_summary: string
+  phone: string | null
 }
 
 export type AuditResult = {
@@ -226,6 +227,7 @@ export function AuditLogPanel({
                   <th className="px-3 py-2">Nivel</th>
                   <th className="px-3 py-2">Tipo</th>
                   <th className="px-3 py-2">Mensaje</th>
+                  <th className="px-3 py-2">Teléfono</th>
                   <th className="px-3 py-2">Actor</th>
                   <th className="px-3 py-2">Área</th>
                   <th className="px-3 py-2">Detalle</th>
@@ -234,7 +236,7 @@ export function AuditLogPanel({
               <tbody className="divide-y divide-line">
                 {data.rows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-3 py-4 text-muted">
+                    <td colSpan={8} className="px-3 py-4 text-muted">
                       No hay eventos con los filtros actuales.
                     </td>
                   </tr>
@@ -249,6 +251,9 @@ export function AuditLogPanel({
                       </td>
                       <td className="px-3 py-2 text-xs">{row.event_type}</td>
                       <td className="max-w-xs px-3 py-2">{row.message}</td>
+                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">
+                        {row.phone || '—'}
+                      </td>
                       <td className="px-3 py-2 text-xs text-muted">
                         {row.actor_email ||
                           (row.actor_user_id != null ? `#${row.actor_user_id}` : '—')}

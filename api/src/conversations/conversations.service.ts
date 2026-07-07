@@ -1575,6 +1575,7 @@ export class ConversationsService {
           actor: auditActor(user),
           meta: {
             conversation_id: conversationId,
+            phone: conversation.phone,
             phone_tail: phoneMetaTail(conversation.phone),
             text_preview: text.slice(0, 120),
           },
@@ -1590,6 +1591,7 @@ export class ConversationsService {
           actor: auditActor(user),
           meta: {
             conversation_id: conversationId,
+            phone: conversation.phone,
             phone_tail: phoneMetaTail(conversation.phone),
             media_type: waType,
             filename: String(file.originalname || '').slice(0, 200),
@@ -1938,6 +1940,7 @@ export class ConversationsService {
       actor: auditActor(user),
       meta: {
         conversation_id: conversationId,
+        phone: conversation.phone,
         phone_tail: phoneMetaTail(conversation.phone),
         message_count: messageRows.length,
       },

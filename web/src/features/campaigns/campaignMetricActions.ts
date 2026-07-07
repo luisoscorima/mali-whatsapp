@@ -41,7 +41,7 @@ const ACTION_BY_LABEL: Record<string, MetricAction> = {
   },
   'Respuestas únicas': {
     type: 'responders',
-    title: 'Respondientes únicos',
+    title: 'Respuestas únicas',
   },
   'Pendientes de entrega': {
     type: 'logs',

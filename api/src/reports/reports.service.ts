@@ -14,8 +14,10 @@ import {
   AUDIT_LEVEL_OPTIONS,
   auditLogQueryOptsForUser,
   buildAuditLogWhere,
+  collectAuditPhoneLookups,
   getAuditDisplayTimeZone,
   readAuditRetentionDays,
+  resolveAuditPhone,
   summarizeMetaForAuditRow,
 } from './audit-log-query.util';
 import {
@@ -99,6 +101,8 @@ export class ReportsService {
       ...listParams,
     );
 
+    const { contactPhones, conversationPhones } = await this.loadAuditPhoneMaps(rows);
+
     const areaScope = opts.areaScope;
     const areaLabel = areaScope
       ? AREA_LABELS[areaScope as keyof typeof AREA_LABELS] || areaScope
@@ -117,6 +121,7 @@ export class ReportsService {
         area: row.area,
         client_ip: row.client_ip,
         request_id: row.request_id,
+        phone: resolveAuditPhone(row.meta, contactPhones, conversationPhones),
         meta_summary: summarizeMetaForAuditRow(row.meta),
       })),
       filters,
@@ -170,10 +175,47 @@ export class ReportsService {
       ...exportParams,
     );
 
+    const { contactPhones, conversationPhones } = await this.loadAuditPhoneMaps(rows);
+    const enrichedRows = rows.map((row) => ({
+      ...row,
+      phone: resolveAuditPhone(row.meta, contactPhones, conversationPhones),
+    }));
+
     return {
-      buffer: buildAuditLogXlsxBuffer(rows),
+      buffer: buildAuditLogXlsxBuffer(enrichedRows),
       filename: auditLogExportFilename(filenamePrefix),
     };
+  }
+
+  private async loadAuditPhoneMaps(rows: { meta: unknown }[]): Promise<{
+    contactPhones: Map<number, string>;
+    conversationPhones: Map<number, string>;
+  }> {
+    const { contactIds, conversationIds } = collectAuditPhoneLookups(rows);
+    const contactPhones = new Map<number, string>();
+    const conversationPhones = new Map<number, string>();
+
+    if (contactIds.length > 0) {
+      const contacts = await this.prisma.contacts.findMany({
+        where: { id: { in: contactIds } },
+        select: { id: true, phone: true },
+      });
+      for (const contact of contacts) {
+        contactPhones.set(contact.id, contact.phone);
+      }
+    }
+
+    if (conversationIds.length > 0) {
+      const conversations = await this.prisma.conversations.findMany({
+        where: { id: { in: conversationIds } },
+        select: { id: true, phone: true },
+      });
+      for (const conversation of conversations) {
+        conversationPhones.set(conversation.id, conversation.phone);
+      }
+    }
+
+    return { contactPhones, conversationPhones };
   }
 
   async listCommunications(

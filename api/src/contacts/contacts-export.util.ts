@@ -2,11 +2,12 @@ import * as XLSX from 'xlsx';
 import { exportFilenameDateStamp } from '../campaigns/campaign-format.util';
 import { safeFilenamePart } from '../conversations/conversation-export.util';
 
-const BASE_HEADERS = ['Nombre', 'Teléfono', 'Segmentos'];
+const BASE_HEADERS = ['Nombre', 'Apellidos', 'Teléfono', 'Segmentos'];
 
 export type ContactExportRow = {
   id: number;
   name: string;
+  last_name: string;
   phone: string;
   segment_labels: string;
 };
@@ -39,6 +40,7 @@ export function buildContactsExportBuffer(
     ...contacts.map((c) => {
       const row = [
         String(c.name || ''),
+        String(c.last_name || ''),
         String(c.phone || ''),
         String(c.segment_labels || ''),
       ];
@@ -51,6 +53,7 @@ export function buildContactsExportBuffer(
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols'] = [
+    { wch: 28 },
     { wch: 28 },
     { wch: 18 },
     { wch: 36 },
