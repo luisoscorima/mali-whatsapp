@@ -282,6 +282,72 @@ export class ContactsService {
     return { updated };
   }
 
+  async setAssignableSegment(
+    user: AuthUser,
+    contactId: number,
+    segmentSlug: string,
+  ): Promise<{ segment_slugs: string[] }> {
+    const area = user.area;
+    const slug = String(segmentSlug || '').trim();
+    if (!slug) {
+      throw new BadRequestException('Segmento invalido');
+    }
+
+    const assignableRows = await this.prisma.segment_definitions.findMany({
+      where: { area, active: true, assignable: true },
+      select: { slug: true },
+    });
+    const assignableSet = new Set(assignableRows.map((row) => row.slug));
+    if (!assignableSet.has(slug)) {
+      throw new BadRequestException('Segmento no asignable desde chat');
+    }
+
+    const contact = await this.prisma.contacts.findFirst({
+      where: {
+        id: contactId,
+        area,
+        replacement_reason: null,
+        replaced_by_contact_id: null,
+      },
+      select: { id: true },
+    });
+    if (!contact) {
+      throw new NotFoundException('Contacto no encontrado');
+    }
+
+    const currentSlugs = await this.loadContactSegmentSlugs(contactId);
+    const otherSlugs = currentSlugs.filter((s) => !assignableSet.has(s));
+    const activeAssignable = currentSlugs.find((s) => assignableSet.has(s));
+    const nextAssignable =
+      activeAssignable === slug ? [] : [slug];
+    const nextSlugs = [...otherSlugs, ...nextAssignable];
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.contacts.update({
+        where: { id: contactId },
+        data: {
+          segment: firstSegmentForLegacyColumn(nextSlugs),
+          updated_at: new Date(),
+        },
+      });
+      await this.replaceContactSegments(tx, contactId, area, nextSlugs);
+    });
+
+    await this.auditLog.write({
+      event_type: AuditEvent.CONTACT_UPDATED,
+      message: `Segmento asignable en chat (contacto ${contactId})`,
+      actor: auditActor(user),
+      meta: {
+        contact_id: contactId,
+        segment_slug: slug,
+        segments: nextSlugs,
+        toggled_off: activeAssignable === slug,
+      },
+    });
+
+    return { segment_slugs: nextSlugs };
+  }
+
   async exportFiltered(
     area: AuthUser['area'],
     params: ListContactsParams,

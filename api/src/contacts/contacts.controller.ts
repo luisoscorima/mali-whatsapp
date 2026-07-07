@@ -30,6 +30,7 @@ import type {
 } from './contacts.types';
 import { ListContactsQueryDto } from './dto/list-contacts.query.dto';
 import { BulkAddSegmentDto } from './dto/bulk-add-segment.dto';
+import { SetAssignableSegmentDto } from './dto/set-assignable-segment.dto';
 import { UpsertContactDto } from './dto/upsert-contact.dto';
 
 function normalizeSegmentParam(
@@ -170,6 +171,20 @@ export class ContactsController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<ContactDetail>> {
     const data = await this.contactsService.getById(user.area, id);
+    return { ok: true, data };
+  }
+
+  @Patch(':id/assignable-segment')
+  async setAssignableSegment(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: SetAssignableSegmentDto,
+  ): Promise<ApiResponse<{ segment_slugs: string[] }>> {
+    const data = await this.contactsService.setAssignableSegment(
+      user,
+      id,
+      body.segment_slug,
+    );
     return { ok: true, data };
   }
 
