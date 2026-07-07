@@ -10,6 +10,7 @@ import {
 } from 'recharts'
 import { useSearchParams } from 'react-router-dom'
 import { apiClient } from '@/shared/api'
+import { WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
 import { MetricsGrid } from '../campaigns/MetricsGrid'
 import type { MetricCard } from '../campaigns/campaignMetricActions'
 
@@ -31,16 +32,11 @@ const KPI_FILTER_MAP: Record<string, { chat?: string }> = {
   'Modo Asesor': { chat: 'human' },
 }
 
-type ConversationsSummaryPaneProps = {
-  collapsed?: boolean
-}
-
-export function ConversationsSummaryPane({ collapsed = false }: ConversationsSummaryPaneProps) {
+export function ConversationsSummaryPane() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [summary, setSummary] = useState<ConversationSummary | null>(null)
   const [assignees, setAssignees] = useState<Assignee[]>([])
   const [error, setError] = useState('')
-  const [open, setOpen] = useState(!collapsed)
 
   const days = Number(searchParams.get('kpi_days') ?? 30) || 30
   const advisorId = searchParams.get('kpi_advisor') ?? ''
@@ -83,101 +79,97 @@ export function ConversationsSummaryPane({ collapsed = false }: ConversationsSum
     })
   }
 
-  if (!open) {
-    return (
-      <div className="border-b border-line px-3 py-2">
-        <button type="button" className="small-btn w-full" onClick={() => setOpen(true)}>
-          Ver KPIs
-        </button>
-      </div>
-    )
+  if (error) {
+    return <WaEmptyPane heading={error} />
+  }
+
+  if (!summary) {
+    return <WaEmptyPane heading="Cargando resumen…" />
   }
 
   return (
-    <div className="border-b border-line px-3 py-2 space-y-2 max-h-[42vh] overflow-y-auto">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs font-medium text-muted">KPIs conversaciones</span>
-        <button type="button" className="small-btn text-xs" onClick={() => setOpen(false)}>
-          Ocultar
-        </button>
-      </div>
-      <div className="flex flex-wrap gap-1 text-xs">
-        {[7, 14, 30].map((n) => (
-          <button
-            key={n}
-            type="button"
-            className={`inbox-chat-pill contact-filter-pill ${days === n ? 'is-active' : ''}`}
-            onClick={() =>
+    <WaEmptyPane variant="history">
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Conversaciones</h2>
+          <p className="text-sm text-muted">
+            Selecciona un chat de la lista o usa un KPI para filtrar el inbox.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          {[7, 14, 30].map((n) => (
+            <button
+              key={n}
+              type="button"
+              className={`inbox-chat-pill contact-filter-pill ${days === n ? 'is-active' : ''}`}
+              onClick={() =>
+                setSearchParams((sp) => {
+                  const next = new URLSearchParams(sp)
+                  next.set('kpi_days', String(n))
+                  return next
+                })
+              }
+            >
+              {n} días
+            </button>
+          ))}
+          <select
+            value={advisorId}
+            onChange={(e) =>
               setSearchParams((sp) => {
                 const next = new URLSearchParams(sp)
-                next.set('kpi_days', String(n))
+                const v = e.target.value
+                if (v) next.set('kpi_advisor', v)
+                else next.delete('kpi_advisor')
                 return next
               })
             }
+            className="rounded-lg border border-line bg-bg px-2 py-1"
           >
-            {n}d
-          </button>
-        ))}
-        <select
-          value={advisorId}
-          onChange={(e) =>
-            setSearchParams((sp) => {
-              const next = new URLSearchParams(sp)
-              const v = e.target.value
-              if (v) next.set('kpi_advisor', v)
-              else next.delete('kpi_advisor')
-              return next
-            })
-          }
-          className="rounded border border-line bg-bg px-1 py-0.5"
-        >
-          <option value="">Todos los asesores</option>
-          {assignees.map((a) => (
-            <option key={a.id} value={String(a.id)}>
-              {a.label}
-            </option>
-          ))}
-        </select>
+            <option value="">Todos los asesores</option>
+            {assignees.map((a) => (
+              <option key={a.id} value={String(a.id)}>
+                {a.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <MetricsGrid
+          title="Resumen"
+          metrics={summary.kpis}
+          onMetricClick={(metric) => applyKpiFilter(metric)}
+        />
+
+        {chartData.length > 0 ? (
+          <div className="h-56 w-full rounded-xl border border-line bg-surface-strong p-4">
+            <p className="mb-2 text-sm font-medium text-muted">Actividad diaria</p>
+            <ResponsiveContainer width="100%" height="85%">
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="var(--muted)" />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="var(--muted)" />
+                <Tooltip />
+                <Line
+                  type="monotone"
+                  dataKey="count"
+                  stroke="var(--accent)"
+                  strokeWidth={2}
+                  dot={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ) : null}
+
+        {summary.top_advisors.length > 0 ? (
+          <p className="text-sm text-muted">
+            Top asesores:{' '}
+            {summary.top_advisors.map((row) => `${row.label} (${row.count})`).join(' · ')}
+          </p>
+        ) : null}
       </div>
-      {error ? <p className="text-xs text-bad">{error}</p> : null}
-      {!summary ? (
-        <p className="text-xs text-muted">Cargando KPIs…</p>
-      ) : (
-        <>
-          <MetricsGrid
-            title=""
-            metrics={summary.kpis}
-            onMetricClick={(metric) => applyKpiFilter(metric)}
-          />
-          {chartData.length > 0 ? (
-            <div className="h-36 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />
-                  <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="var(--muted)" />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 10 }} stroke="var(--muted)" />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="count"
-                    stroke="var(--accent)"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          ) : null}
-          {summary.top_advisors.length > 0 ? (
-            <p className="text-xs text-muted">
-              Top asesores:{' '}
-              {summary.top_advisors
-                .map((row) => `${row.label} (${row.count})`)
-                .join(' · ')}
-            </p>
-          ) : null}
-        </>
-      )}
-    </div>
+    </WaEmptyPane>
   )
 }

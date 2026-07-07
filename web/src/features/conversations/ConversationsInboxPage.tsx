@@ -9,7 +9,7 @@ import {
   WaMainHeader,
   WaMainFooter,
 } from '@/shared/ui/shell/WaMainPane'
-import { ChatEmptyIcon, WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
+import { WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
 import { Alert, AlertDescription } from '@/shared/ui/shadcn/alert'
 import { Badge } from '@/shared/ui/shadcn/badge'
 import { Button } from '@/shared/ui/shadcn/button'
@@ -984,7 +984,6 @@ export function ConversationsInboxPage() {
         title={list ? `Chats (${list.items.length})` : 'Chats'}
         filters={filterPills}
       >
-        <ConversationsSummaryPane />
         <ul className="inbox-chat-list">
           {!list ? (
             <li className="inbox-empty-list">Cargando…</li>
@@ -1099,11 +1098,7 @@ export function ConversationsInboxPage() {
 
       <WaMainPane>
         {selectedId == null ? (
-          <WaEmptyPane
-            icon={<ChatEmptyIcon />}
-            heading="Conversaciones"
-            text="Selecciona un chat para ver los mensajes. Las respuestas del cliente se guardan como mensajes entrantes."
-          />
+          <ConversationsSummaryPane />
         ) : loadingDetail && !detail ? (
           <WaEmptyPane heading="Cargando chat…" />
         ) : error && !detail ? (
