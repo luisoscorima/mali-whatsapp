@@ -99,7 +99,6 @@ export async function fetchConversationSummary(
       SELECT
         u.id AS user_id,
         COALESCE(
-          NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''),
           NULLIF(SPLIT_PART(COALESCE(u.email, ''), '@', 1), ''),
           u.email
         ) AS label,

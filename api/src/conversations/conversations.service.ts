@@ -204,7 +204,7 @@ export class ConversationsService {
   }
 
   private inboxAssignedUserLabelSql(): Prisma.Sql {
-    return Prisma.sql`NULLIF(TRIM(CONCAT(COALESCE(au.first_name, ''), ' ', COALESCE(au.last_name, ''))), '')`;
+    return Prisma.sql`NULLIF(SPLIT_PART(COALESCE(au.email, ''), '@', 1), '')`;
   }
 
   private inboxContactNameSql(alias: string): Prisma.Sql {
@@ -320,10 +320,7 @@ export class ConversationsService {
         c.status AS conversation_status,
         c.assigned_user_id,
         c.automation_touched_at,
-        COALESCE(
-          ${this.inboxAssignedUserLabelSql()},
-          NULLIF(SPLIT_PART(COALESCE(au.email, ''), '@', 1), '')
-        ) AS assigned_user_label,
+        ${this.inboxAssignedUserLabelSql()} AS assigned_user_label,
         ct.lead_score AS contact_lead_score,
         COALESCE(
           ${this.inboxContactNameSql('ct')},
