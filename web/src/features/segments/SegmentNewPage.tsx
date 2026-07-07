@@ -6,7 +6,6 @@ export function SegmentNewPage() {
   const navigate = useNavigate()
   const [slug, setSlug] = useState('')
   const [label, setLabel] = useState('')
-  const [sortOrder, setSortOrder] = useState(0)
   const [colorKey, setColorKey] = useState('teal')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -18,7 +17,6 @@ export function SegmentNewPage() {
     const result = await apiClient.post<{ id: number }>('/api/segments', {
       slug,
       label,
-      sort_order: sortOrder,
       color_key: colorKey,
     })
     setSaving(false)
@@ -66,16 +64,6 @@ export function SegmentNewPage() {
             maxLength={120}
             value={label}
             onChange={(e) => setLabel(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
-          />
-        </label>
-
-        <label className="block text-sm">
-          <span className="text-muted">Orden</span>
-          <input
-            type="number"
-            value={sortOrder}
-            onChange={(e) => setSortOrder(Number(e.target.value))}
             className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
           />
         </label>

@@ -14,7 +14,6 @@ export function AttributeNewPage() {
   const [slug, setSlug] = useState('')
   const [label, setLabel] = useState('')
   const [fieldType, setFieldType] = useState('text')
-  const [sortOrder, setSortOrder] = useState(0)
   const [required, setRequired] = useState(false)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -37,7 +36,6 @@ export function AttributeNewPage() {
       slug,
       label,
       field_type: fieldType,
-      sort_order: sortOrder,
       required,
     })
     setSaving(false)
@@ -141,16 +139,6 @@ export function AttributeNewPage() {
             <option value="number">Número</option>
             <option value="date">Fecha</option>
           </select>
-        </label>
-
-        <label className="block text-sm">
-          <span className="text-muted">Orden</span>
-          <input
-            type="number"
-            value={sortOrder}
-            onChange={(e) => setSortOrder(Number(e.target.value))}
-            className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
-          />
         </label>
 
         <label className="flex items-center gap-2 text-sm">

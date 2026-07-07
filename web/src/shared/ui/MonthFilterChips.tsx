@@ -14,7 +14,7 @@ export function MonthFilterChips({
   const options = buildMonthFilterOptions()
   return (
     <div
-      className={`inbox-chat-filter-pills inbox-chat-filter-pills--row contact-filter-pills flex flex-wrap gap-1 ${className}`.trim()}
+      className={`inbox-chat-filter-pills inbox-chat-filter-pills--row contact-filter-pills segment-filter-chips ${className}`.trim()}
     >
       {options.map((opt) => (
         <button

@@ -519,6 +519,30 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.inbox-sidebar-filters .inbox-chat-filter-pills--row {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+}
+
+.inbox-sidebar-filters .inbox-chat-filter-pills--row::-webkit-scrollbar {
+  display: block;
+  height: 4px;
+}
+
+.inbox-sidebar-filters .inbox-chat-filter-pills--row::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.inbox-sidebar-filters .inbox-chat-filter-pills--row::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
+  border-radius: 999px;
 }
 
 .inbox-sidebar-scroll {

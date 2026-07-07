@@ -36,11 +36,10 @@ export function SegmentDetailPage() {
   const [allSegments, setAllSegments] = useState<SegmentDefinition[]>([])
   const [slug, setSlug] = useState('')
   const [label, setLabel] = useState('')
-  const [sortOrder, setSortOrder] = useState(0)
   const [colorKey, setColorKey] = useState('teal')
   const [active, setActive] = useState(true)
   const [showInFilter, setShowInFilter] = useState(true)
-  const [assignable, setAssignable] = useState(true)
+  const [assignable, setAssignable] = useState(false)
   const [error, setError] = useState('')
   const [saveMsg, setSaveMsg] = useState('')
   const [saving, setSaving] = useState(false)
@@ -61,7 +60,6 @@ export function SegmentDetailPage() {
       const seg = detail.data.segment
       setSlug(seg.slug)
       setLabel(seg.label)
-      setSortOrder(seg.sort_order)
       setColorKey(seg.color_key)
       setActive(seg.active)
       setShowInFilter(seg.show_in_filter)
@@ -87,7 +85,7 @@ export function SegmentDetailPage() {
     const result = await apiClient.patch<SegmentDefinition>(`/api/segments/${id}`, {
       slug,
       label,
-      sort_order: sortOrder,
+      sort_order: payload?.segment.sort_order ?? 0,
       color_key: colorKey,
       active,
       show_in_filter: showInFilter,
@@ -199,15 +197,6 @@ export function SegmentDetailPage() {
               maxLength={120}
               value={label}
               onChange={(e) => setLabel(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
-            />
-          </label>
-          <label className="block text-sm sm:col-span-1">
-            <span className="text-muted">Orden</span>
-            <input
-              type="number"
-              value={sortOrder}
-              onChange={(e) => setSortOrder(Number(e.target.value))}
               className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
             />
           </label>

@@ -73,7 +73,7 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
         </Link>
       }
       filters={
-        <div className="space-y-2 px-3 pb-2">
+        <>
           <MonthFilterChips
             selectedMonthKey={month}
             onChange={(key) =>
@@ -85,8 +85,8 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
               })
             }
           />
-          {error ? <p className="text-xs text-bad">{error}</p> : null}
-        </div>
+          {error ? <p className="px-3 pb-2 text-xs text-bad">{error}</p> : null}
+        </>
       }
     >
       {!segments ? (

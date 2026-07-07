@@ -288,7 +288,7 @@ model segment_definitions {
   color_key      String   @default("teal") @db.VarChar(16)
   active         Boolean  @default(true)
   show_in_filter Boolean  @default(true)
-  assignable     Boolean  @default(true)
+  assignable     Boolean  @default(false)
   created_at     DateTime @default(now()) @db.Timestamp(6)
 
   @@unique([area, slug])

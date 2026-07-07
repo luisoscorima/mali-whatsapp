@@ -171,7 +171,7 @@ export class SegmentsService {
     const colorKey = normalizeSegmentColorKey(dto.color_key);
     const active = dto.active !== false;
     const showInFilter = dto.show_in_filter !== false;
-    const assignable = dto.assignable !== false;
+    const assignable = dto.assignable === true;
 
     if (!SEGMENT_SLUG_REGEX.test(slug)) {
       throw new BadRequestException(

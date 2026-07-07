@@ -57,19 +57,17 @@ export function CampaignListSidebar({ selectedId, onRefresh }: CampaignListSideb
         </Link>
       }
       filters={
-        <div className="px-3 pb-2">
-          <MonthFilterChips
-            selectedMonthKey={month}
-            onChange={(key) =>
-              setSearchParams((sp) => {
-                const next = new URLSearchParams(sp)
-                if (key) next.set('month', key)
-                else next.delete('month')
-                return next
-              })
-            }
-          />
-        </div>
+        <MonthFilterChips
+          selectedMonthKey={month}
+          onChange={(key) =>
+            setSearchParams((sp) => {
+              const next = new URLSearchParams(sp)
+              if (key) next.set('month', key)
+              else next.delete('month')
+              return next
+            })
+          }
+        />
       }
     >
       {!campaigns ? (

@@ -30,7 +30,6 @@ export function AttributeDetailPage() {
   const [segments, setSegments] = useState<SegmentOption[]>([])
   const [label, setLabel] = useState('')
   const [fieldType, setFieldType] = useState('text')
-  const [sortOrder, setSortOrder] = useState(0)
   const [required, setRequired] = useState(false)
   const [active, setActive] = useState(true)
   const [error, setError] = useState('')
@@ -50,7 +49,6 @@ export function AttributeDetailPage() {
       setDef(detail.data)
       setLabel(detail.data.label)
       setFieldType(detail.data.field_type)
-      setSortOrder(detail.data.sort_order)
       setRequired(detail.data.required)
       setActive(detail.data.active)
       if (segs.ok) setSegments(segs.data)
@@ -59,7 +57,7 @@ export function AttributeDetailPage() {
 
   async function onSave(e: FormEvent) {
     e.preventDefault()
-    if (!id) return
+    if (!id || !def) return
     setSaving(true)
     setSaveMsg('')
     setError('')
@@ -68,7 +66,7 @@ export function AttributeDetailPage() {
       {
         label,
         field_type: fieldType,
-        sort_order: sortOrder,
+        sort_order: def.sort_order,
         required,
         active,
       },
@@ -154,16 +152,6 @@ export function AttributeDetailPage() {
             <option value="number">Número</option>
             <option value="date">Fecha</option>
           </select>
-        </label>
-
-        <label className="block text-sm">
-          <span className="text-muted">Orden</span>
-          <input
-            type="number"
-            value={sortOrder}
-            onChange={(e) => setSortOrder(Number(e.target.value))}
-            className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
-          />
         </label>
 
         <label className="flex items-center gap-2 text-sm">
