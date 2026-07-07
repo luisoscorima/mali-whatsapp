@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import { formatDateTime } from '@/shared/format'
-import { cn } from '@/lib/utils'
+import { formatDateTime } from '../../shared/format'
+import { cn } from '../../lib/utils'
 import type { CampaignMessagePreviewData } from '../campaigns/CampaignMessagePreview'
 import { ChatCampaignPreview } from './ChatCampaignPreview'
 import { ChatDeliveryStatus } from './ChatDeliveryStatus'
@@ -209,7 +209,7 @@ export function ChatMessageBubble({
 
       {mediaUrl && mt === 'document' ? (
         <div className="chat-bubble__media chat-bubble__media--doc">
-          {isPdf ? <ChatPdfPreview url={mediaUrl} /> : null}
+          {isPdf ? <ChatPdfPreview downloadUrl={downloadHref} /> : null}
           <a className="chat-msg-download-link" href={downloadHref}>
             Descargar
           </a>

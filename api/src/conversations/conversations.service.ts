@@ -105,6 +105,8 @@ import {
 } from './inbox-timeline.util';
 import { fetchConversationSummary } from './conversation-analytics.util';
 
+const INBOX_LIST_PAGE_SIZE = 200;
+
 type InboxRow = {
   id: number;
   phone: string;
@@ -293,10 +295,13 @@ export class ConversationsService {
     searchQ: string,
     chatFilter: ReturnType<typeof parseInboxChatFilter>,
     userId: number,
+    page: number,
+    limit: number,
   ): Promise<InboxRow[]> {
     const segmentSql = buildConversationSegmentSql(segmentFilter);
     const searchSql = searchQ ? this.buildInboxSearchSql(searchQ) : Prisma.empty;
     const chatSql = this.buildChatFilterSql(chatFilter, userId);
+    const offset = (page - 1) * limit;
     const searchPat = searchQ
       ? `%${escapeForLikePattern(searchQ)}%`
       : null;
@@ -357,10 +362,10 @@ export class ConversationsService {
       ${searchSql}
       ${chatSql}
       ORDER BY c.last_message_at DESC
-      LIMIT 200
+      LIMIT ${limit} OFFSET ${offset}
     `);
 
-    if (!searchQ || chatFilter !== 'all') {
+    if (!searchQ || chatFilter !== 'all' || page !== 1) {
       return rows;
     }
 
@@ -422,6 +427,67 @@ export class ConversationsService {
     return rows.concat(virtualRows);
   }
 
+  private async countInboxConversations(
+    area: string,
+    segmentFilter: ReturnType<typeof parseSegmentListFilter>,
+    searchQ: string,
+    chatFilter: ReturnType<typeof parseInboxChatFilter>,
+    userId: number,
+  ): Promise<number> {
+    const segmentSql = buildConversationSegmentSql(segmentFilter);
+    const searchSql = searchQ ? this.buildInboxSearchSql(searchQ) : Prisma.empty;
+    const chatSql = this.buildChatFilterSql(chatFilter, userId);
+
+    const rows = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
+      SELECT COUNT(*)::int AS n
+      FROM conversations c
+      LEFT JOIN contacts ct ON ct.id = c.contact_id
+      WHERE c.area = ${area}
+      ${segmentSql}
+      ${searchSql}
+      ${chatSql}
+    `);
+    let total = rows[0]?.n ?? 0;
+
+    if (!searchQ || chatFilter !== 'all') {
+      return total;
+    }
+
+    const contactSegmentSql = buildContactSegmentSql(segmentFilter);
+    const contactPat = `%${escapeForLikePattern(searchQ)}%`;
+    const contactSegmentSearchSql = this.buildInboxSegmentSearchSql(contactPat);
+    const contactDigits = searchQ.replace(/\D/g, '');
+    const contactSearchSql = contactDigits
+      ? Prisma.sql` AND (
+          COALESCE(ct.name, '') ILIKE ${contactPat} ESCAPE '!'
+          OR COALESCE(ct.last_name, '') ILIKE ${contactPat} ESCAPE '!'
+          OR COALESCE(ct.phone, '') ILIKE ${contactPat} ESCAPE '!'
+          OR regexp_replace(COALESCE(ct.phone, ''), '\\D', '', 'g') LIKE ${`%${contactDigits}%`}
+          ${contactSegmentSearchSql}
+        )`
+      : Prisma.sql` AND (
+          COALESCE(ct.name, '') ILIKE ${contactPat} ESCAPE '!'
+          OR COALESCE(ct.last_name, '') ILIKE ${contactPat} ESCAPE '!'
+          OR COALESCE(ct.phone, '') ILIKE ${contactPat} ESCAPE '!'
+          ${contactSegmentSearchSql}
+        )`;
+
+    const virtualRows = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
+      SELECT COUNT(*)::int AS n
+      FROM contacts ct
+      WHERE ct.area = ${area}
+      ${contactSegmentSql}
+      ${contactSearchSql}
+      AND NOT EXISTS (
+        SELECT 1
+        FROM conversations c
+        WHERE c.area = ${area} AND (c.contact_id = ct.id OR c.phone = ct.phone)
+      )
+    `);
+    total += virtualRows[0]?.n ?? 0;
+    return total;
+  }
+
   private async countInboxUnread(
     area: string,
     segmentFilter: ReturnType<typeof parseSegmentListFilter>,
@@ -449,12 +515,15 @@ export class ConversationsService {
     const segmentRaw = parseSegmentQueryParam(query.segment);
     const slugSet = await this.getSegmentSlugSet(area);
     const segmentFilter = parseSegmentListFilter(segmentRaw, slugSet);
+    const pageRaw = Array.isArray(query.page) ? query.page[0] : query.page;
+    const page = Math.max(1, Number(pageRaw) || 1);
+    const limit = INBOX_LIST_PAGE_SIZE;
 
-    const [segments, assignableSegments, listRows, aiAreaEnabled, unreadCount] =
+    const [segments, assignableSegments, totalCount, aiAreaEnabled, unreadCount] =
       await Promise.all([
       this.loadSegmentOptions(area),
       this.loadAssignableSegmentOptions(area),
-      this.fetchInboxConversations(
+      this.countInboxConversations(
         area,
         segmentFilter,
         searchQ,
@@ -465,8 +534,23 @@ export class ConversationsService {
       this.countInboxUnread(area, segmentFilter),
     ]);
 
+    const pages = totalCount > 0 ? Math.ceil(totalCount / limit) : 0;
+    const pageClamped = pages > 0 ? Math.min(page, pages) : 1;
+    const listRows = await this.fetchInboxConversations(
+      area,
+      segmentFilter,
+      searchQ,
+      chat,
+      user.id,
+      pageClamped,
+      limit,
+    );
+
     return {
       items: listRows.map((row) => this.mapListRow(row)),
+      total_count: totalCount,
+      page: pageClamped,
+      pages,
       unread_count: unreadCount,
       ai_area_enabled: aiAreaEnabled,
       can_assign_conversations: this.canAssignConversations(user),

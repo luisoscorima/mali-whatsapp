@@ -164,6 +164,9 @@ type InboxListItem = {
 
 type InboxListResult = {
   items: InboxListItem[]
+  total_count: number
+  page: number
+  pages: number
   unread_count: number
   ai_area_enabled: boolean
   can_assign_conversations: boolean
@@ -274,9 +277,24 @@ function inboxApiQuery(searchParams: URLSearchParams, extra?: { msg?: number }):
   const chat = searchParams.get('chat')
   if (chat && chat !== 'all') qs.set('chat', chat)
   searchParams.getAll('segment').forEach((slug) => qs.append('segment', slug))
+  const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1)
+  if (page > 1) qs.set('page', String(page))
   if (extra?.msg) qs.set('msg', String(extra.msg))
   const value = qs.toString()
   return value ? `?${value}` : ''
+}
+
+function inboxFilterKeyFromParams(searchParams: URLSearchParams): string {
+  const q = (searchParams.get('q') ?? '').trim()
+  const chat = searchParams.get('chat') || 'all'
+  const segments = searchParams.getAll('segment').sort().join('\0')
+  return `${q}\n${chat}\n${segments}`
+}
+
+function inboxFilterKeyFromResult(filters: InboxListResult['filters']): string {
+  const segments = [...filters.segment_slugs]
+  if (filters.include_none) segments.push('__none__')
+  return `${filters.q}\n${filters.chat}\n${segments.sort().join('\0')}`
 }
 
 function inboxInitials(contactName: string, phone: string): string {
@@ -399,6 +417,7 @@ export function ConversationsInboxPage() {
   const [assignError, setAssignError] = useState('')
   const lastMessageIdRef = useRef(0)
   const lastAuditIdRef = useRef<bigint>(BigInt(0))
+  const listRequestIdRef = useRef(0)
   const scrollerRef = useRef<InboxMessageScrollerHandle | null>(null)
   const sendingReplyRef = useRef(false)
 
@@ -412,11 +431,18 @@ export function ConversationsInboxPage() {
   const highlightMsgId = Number(searchParams.get('msg') || '') || null
   const chatFilter = (searchParams.get('chat') || 'all') as InboxListResult['filters']['chat']
   const selectedSegments = searchParams.getAll('segment')
+  const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1)
+  const activeFilterKey = useMemo(
+    () => inboxFilterKeyFromParams(searchParams),
+    [searchParams],
+  )
 
   const loadList = useCallback((opts?: { silent?: boolean }) => {
+    const requestId = ++listRequestIdRef.current
     return apiClient
       .get<InboxListResult>(`/api/conversations${filterQuerySuffix}`)
       .then((result) => {
+        if (requestId !== listRequestIdRef.current) return
         if (!result.ok) {
           if (!opts?.silent) setError(result.error)
           return
@@ -424,6 +450,21 @@ export function ConversationsInboxPage() {
         setList(result.data)
       })
   }, [filterQuerySuffix])
+
+  const listCount = useMemo(() => {
+    if (!list) return null
+    if (inboxFilterKeyFromResult(list.filters) !== activeFilterKey) return null
+    return list.total_count ?? list.items.length
+  }, [list, activeFilterKey])
+
+  const listPages = useMemo(() => {
+    if (!list) return 0
+    if (inboxFilterKeyFromResult(list.filters) !== activeFilterKey) return 0
+    return list.pages
+  }, [list, activeFilterKey])
+
+  const listPage =
+    list && inboxFilterKeyFromResult(list.filters) === activeFilterKey ? list.page : page
 
   const loadDetail = useCallback(
     (conversationId: number) => {
@@ -659,6 +700,7 @@ export function ConversationsInboxPage() {
       next.delete('msg')
       const currentQ = (next.get('q') ?? '').trim()
       if (q === currentQ) return
+      next.delete('page')
       if (q) next.set('q', q)
       else next.delete('q')
       setSearchParams(next)
@@ -668,6 +710,7 @@ export function ConversationsInboxPage() {
 
   function setChatFilter(chat: InboxListResult['filters']['chat']) {
     const next = new URLSearchParams(searchParams)
+    next.delete('page')
     if (chat === 'all') next.delete('chat')
     else next.set('chat', chat)
     setSearchParams(next)
@@ -675,6 +718,7 @@ export function ConversationsInboxPage() {
 
   function toggleSegment(slug: string) {
     const next = new URLSearchParams(searchParams)
+    next.delete('page')
     const current = next.getAll('segment')
     if (current.includes(slug)) {
       next.delete('segment')
@@ -691,10 +735,18 @@ export function ConversationsInboxPage() {
       const q = searchInput.trim()
       const next = new URLSearchParams(searchParams)
       next.delete('msg')
+      next.delete('page')
       if (q) next.set('q', q)
       else next.delete('q')
       setSearchParams(next)
     }
+  }
+
+  function goToPage(nextPage: number) {
+    const next = new URLSearchParams(searchParams)
+    if (nextPage <= 1) next.delete('page')
+    else next.set('page', String(nextPage))
+    setSearchParams(next)
   }
 
   async function onSelectItem(item: InboxListItem) {
@@ -953,6 +1005,7 @@ export function ConversationsInboxPage() {
         onClearAll={() => {
           const next = new URLSearchParams(searchParams)
           next.delete('segment')
+          next.delete('page')
           setSearchParams(next)
         }}
         className="conversation-segment-pills"
@@ -970,9 +1023,9 @@ export function ConversationsInboxPage() {
           />
         </div>
       </div>
-      {list ? (
+      {listCount != null ? (
         <p className="text-xs text-muted">
-          {list.items.length} chat{list.items.length === 1 ? '' : 's'}
+          {listCount} chat{listCount === 1 ? '' : 's'}
         </p>
       ) : null}
     </>
@@ -981,7 +1034,7 @@ export function ConversationsInboxPage() {
   return (
     <WaPageContents>
       <WaSidebar
-        title={list ? `Chats (${list.items.length})` : 'Chats'}
+        title={listCount != null ? `Chats (${listCount})` : 'Chats'}
         filters={filterPills}
       >
         <ul className="inbox-chat-list">
@@ -1101,6 +1154,29 @@ export function ConversationsInboxPage() {
               )
             })
           )}
+          {listPages > 1 ? (
+            <li className="inbox-chat-list-pager">
+              <span className="inbox-chat-list-pager-label muted">
+                Pág. {listPage}/{listPages}
+              </span>
+              <button
+                type="button"
+                disabled={listPage <= 1}
+                onClick={() => goToPage(listPage - 1)}
+                className="small-btn"
+              >
+                Anterior
+              </button>
+              <button
+                type="button"
+                disabled={listPage >= listPages}
+                onClick={() => goToPage(listPage + 1)}
+                className="small-btn"
+              >
+                Siguiente
+              </button>
+            </li>
+          ) : null}
         </ul>
       </WaSidebar>
 

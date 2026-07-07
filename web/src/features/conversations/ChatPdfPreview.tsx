@@ -1,18 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { getToken } from '../../shared/api/token'
 
-GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString()
+GlobalWorkerOptions.workerSrc = pdfWorker
 
 const PREVIEW_MAX_HEIGHT = 180
 
 type ChatPdfPreviewProps = {
-  url: string
+  downloadUrl: string
 }
 
-export function ChatPdfPreview({ url }: ChatPdfPreviewProps) {
+export function ChatPdfPreview({ downloadUrl }: ChatPdfPreviewProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [visible, setVisible] = useState(false)
@@ -42,7 +41,17 @@ export function ChatPdfPreview({ url }: ChatPdfPreviewProps) {
     let cancelled = false
     void (async () => {
       try {
-        const pdf = await getDocument({ url, withCredentials: true }).promise
+        const headers: HeadersInit = {}
+        const token = getToken()
+        if (token) headers.Authorization = `Bearer ${token}`
+
+        const res = await fetch(downloadUrl, { headers, credentials: 'include' })
+        if (!res.ok || cancelled) return
+
+        const data = await res.arrayBuffer()
+        if (cancelled) return
+
+        const pdf = await getDocument({ data }).promise
         if (cancelled) return
 
         const page = await pdf.getPage(1)
@@ -71,7 +80,7 @@ export function ChatPdfPreview({ url }: ChatPdfPreviewProps) {
     return () => {
       cancelled = true
     }
-  }, [visible, url])
+  }, [visible, downloadUrl])
 
   return (
     <div ref={hostRef} className="chat-pdf-preview" aria-hidden="true">

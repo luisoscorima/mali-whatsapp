@@ -35,6 +35,9 @@ export type InboxListItem = {
 
 export type InboxListResult = {
   items: InboxListItem[];
+  total_count: number;
+  page: number;
+  pages: number;
   unread_count: number;
   ai_area_enabled: boolean;
   can_assign_conversations: boolean;
