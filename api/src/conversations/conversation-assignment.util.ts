@@ -85,29 +85,19 @@ async function findUserByEmailInArea(
   });
 }
 
-export async function resolveLastHumanAdvisorUserId(
+type HumanOutboundMessage = {
+  body_text: string | null;
+  message_type: string;
+  created_at: Date;
+  raw_payload: unknown;
+};
+
+async function resolveAssigneeFromHumanMessage(
   prisma: PrismaService,
   area: string,
   conversationId: number,
+  humanMessage: HumanOutboundMessage,
 ): Promise<{ userId: number; label: string } | null> {
-  const messageRows = await prisma.chat_messages.findMany({
-    where: { conversation_id: conversationId, direction: 'outbound' },
-    orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-    take: 100,
-    select: {
-      body_text: true,
-      message_type: true,
-      created_at: true,
-      is_ai: true,
-      raw_payload: true,
-    },
-  });
-
-  const humanMessage = messageRows.find((row) =>
-    isHumanAdvisorOutboundMessage(row.raw_payload, row.is_ai, row.message_type),
-  );
-  if (!humanMessage) return null;
-
   const storedUserId = readMessageSenderUserId(humanMessage.raw_payload);
   if (storedUserId) {
     const assignee = await findAssigneeInArea(prisma, area, storedUserId);
@@ -143,12 +133,53 @@ export async function resolveLastHumanAdvisorUserId(
   return { userId: assignee.id, label: formatAdvisorLabel(assignee) };
 }
 
+export async function resolveFirstHumanAdvisorUserId(
+  prisma: PrismaService,
+  area: string,
+  conversationId: number,
+): Promise<{ userId: number; label: string } | null> {
+  const batchSize = 100;
+  let skip = 0;
+
+  while (true) {
+    const messageRows = await prisma.chat_messages.findMany({
+      where: { conversation_id: conversationId, direction: 'outbound' },
+      orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+      skip,
+      take: batchSize,
+      select: {
+        body_text: true,
+        message_type: true,
+        created_at: true,
+        is_ai: true,
+        raw_payload: true,
+      },
+    });
+    if (!messageRows.length) return null;
+
+    const humanMessage = messageRows.find((row) =>
+      isHumanAdvisorOutboundMessage(row.raw_payload, row.is_ai, row.message_type),
+    );
+    if (humanMessage) {
+      return resolveAssigneeFromHumanMessage(
+        prisma,
+        area,
+        conversationId,
+        humanMessage,
+      );
+    }
+
+    if (messageRows.length < batchSize) return null;
+    skip += batchSize;
+  }
+}
+
 export async function autoAssignConversationIfUnassigned(
   prisma: PrismaService,
   auditLog: AuditLogService,
   area: string,
   conversationId: number,
-  source: 'auto_reply' | 'auto_last_sender',
+  source: 'auto_reply' | 'auto_first_sender',
   explicit?: { userId: number; label: string },
 ): Promise<boolean> {
   const conversation = await prisma.conversations.findFirst({
@@ -158,7 +189,7 @@ export async function autoAssignConversationIfUnassigned(
   if (!conversation || conversation.assigned_user_id) return false;
 
   const assignee =
-    explicit ?? (await resolveLastHumanAdvisorUserId(prisma, area, conversationId));
+    explicit ?? (await resolveFirstHumanAdvisorUserId(prisma, area, conversationId));
   if (!assignee) return false;
 
   const valid = await findAssigneeInArea(prisma, area, assignee.userId);
@@ -218,7 +249,7 @@ export async function backfillUnassignedConversationAssignments(
           auditLog,
           row.area,
           row.id,
-          'auto_last_sender',
+          'auto_first_sender',
         );
         if (ok) stats.assigned++;
         else stats.skipped++;

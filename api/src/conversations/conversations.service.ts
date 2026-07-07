@@ -678,7 +678,7 @@ export class ConversationsService {
         this.auditLog,
         area,
         conversationId,
-        'auto_last_sender',
+        'auto_first_sender',
       );
       if (assigned) {
         const refreshed = await this.prisma.conversations.findFirst({

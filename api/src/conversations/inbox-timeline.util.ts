@@ -84,8 +84,8 @@ export function formatInboxTimelineEventLabel(
     if (source === 'auto_reply') {
       return `Asignado a ${assignee} (autoasignación al responder)`;
     }
-    if (source === 'auto_last_sender') {
-      return `Asignado a ${assignee} (último asesor que escribió)`;
+    if (source === 'auto_first_sender' || source === 'auto_last_sender') {
+      return `Asignado a ${assignee} (primer asesor que escribió)`;
     }
     return `${actor} asignó a ${assignee}`;
   }
