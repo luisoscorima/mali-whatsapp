@@ -24,10 +24,8 @@ export function buildMonthFilterOptions(count = 6): MonthFilterOption[] {
   for (let i = 0; i < count; i += 1) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    let label: string
-    if (i === 0) label = 'Este mes'
-    else if (i === 1) label = 'Mes anterior'
-    else label = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`
+    const year = String(d.getFullYear()).slice(-2)
+    const label = `${MONTH_NAMES[d.getMonth()]} ${year}`
     options.push({ key, label })
   }
   return options
