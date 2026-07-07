@@ -10,11 +10,21 @@ import {
 } from './chat-sender.util';
 
 const BACKFILL_FLAG = 'migration.conversation_auto_assign_v1';
+const FIRST_SENDER_REASSIGN_FLAG = 'migration.conversation_first_sender_reassign_v1';
 const BATCH_SIZE = 100;
 
 type BackfillStats = {
   scanned: number;
   assigned: number;
+  skipped: number;
+  errors: number;
+  already_done?: boolean;
+};
+
+type FirstSenderReassignBackfillStats = {
+  scanned: number;
+  updated: number;
+  unchanged: number;
   skipped: number;
   errors: number;
   already_done?: boolean;
@@ -260,5 +270,151 @@ export async function backfillUnassignedConversationAssignments(
   }
 
   await markBackfillDone(prisma, BACKFILL_FLAG, stats);
+  return stats;
+}
+
+type AutoLastSenderCandidate = {
+  conversation_id: number;
+  area: string;
+  to_user_id: number;
+  audit_id: bigint;
+};
+
+async function loadAutoLastSenderReassignCandidates(
+  prisma: PrismaService,
+): Promise<AutoLastSenderCandidate[]> {
+  return prisma.$queryRaw<AutoLastSenderCandidate[]>(Prisma.sql`
+    WITH last_sender_assigns AS (
+      SELECT DISTINCT ON ((meta->>'conversation_id')::int)
+        (meta->>'conversation_id')::int AS conversation_id,
+        area,
+        (meta->>'to_user_id')::int AS to_user_id,
+        id AS audit_id
+      FROM audit_logs
+      WHERE event_type = ${AuditEvent.CONVERSATION_ASSIGN}
+        AND meta->>'source' = 'auto_last_sender'
+        AND (meta->>'conversation_id')::int IS NOT NULL
+        AND (meta->>'to_user_id')::int IS NOT NULL
+      ORDER BY (meta->>'conversation_id')::int, created_at DESC, id DESC
+    ),
+    later_overrides AS (
+      SELECT DISTINCT (a.meta->>'conversation_id')::int AS conversation_id
+      FROM audit_logs a
+      INNER JOIN last_sender_assigns l
+        ON l.conversation_id = (a.meta->>'conversation_id')::int
+      WHERE a.event_type = ${AuditEvent.CONVERSATION_ASSIGN}
+        AND a.id > l.audit_id
+        AND (
+          a.meta->>'source' = 'auto_reply'
+          OR (
+            COALESCE(a.meta->>'source', '') = ''
+            AND COALESCE(a.actor_email, '') <> 'system@mali'
+          )
+        )
+    )
+    SELECT l.conversation_id, l.area, l.to_user_id, l.audit_id
+    FROM last_sender_assigns l
+    INNER JOIN conversations c
+      ON c.id = l.conversation_id
+      AND c.area = l.area
+    LEFT JOIN later_overrides o ON o.conversation_id = l.conversation_id
+    WHERE o.conversation_id IS NULL
+      AND c.assigned_user_id IS NOT NULL
+      AND c.assigned_user_id = l.to_user_id
+    ORDER BY l.conversation_id ASC
+  `);
+}
+
+export async function backfillFirstSenderHistoricalAssignments(
+  prisma: PrismaService,
+  auditLog: AuditLogService,
+): Promise<FirstSenderReassignBackfillStats> {
+  if (await isBackfillDone(prisma, FIRST_SENDER_REASSIGN_FLAG)) {
+    return {
+      scanned: 0,
+      updated: 0,
+      unchanged: 0,
+      skipped: 0,
+      errors: 0,
+      already_done: true,
+    };
+  }
+
+  const stats: FirstSenderReassignBackfillStats = {
+    scanned: 0,
+    updated: 0,
+    unchanged: 0,
+    skipped: 0,
+    errors: 0,
+  };
+
+  const candidates = await loadAutoLastSenderReassignCandidates(prisma);
+
+  for (const row of candidates) {
+    stats.scanned++;
+    try {
+      const firstAssignee = await resolveFirstHumanAdvisorUserId(
+        prisma,
+        row.area,
+        row.conversation_id,
+      );
+      if (!firstAssignee) {
+        stats.skipped++;
+        continue;
+      }
+
+      if (firstAssignee.userId === row.to_user_id) {
+        stats.unchanged++;
+        continue;
+      }
+
+      const valid = await findAssigneeInArea(prisma, row.area, firstAssignee.userId);
+      if (!valid) {
+        stats.skipped++;
+        continue;
+      }
+
+      const stillAssigned = await prisma.conversations.findFirst({
+        where: {
+          id: row.conversation_id,
+          area: row.area,
+          assigned_user_id: row.to_user_id,
+        },
+        select: { id: true },
+      });
+      if (!stillAssigned) {
+        stats.skipped++;
+        continue;
+      }
+
+      await prisma.conversations.update({
+        where: { id: row.conversation_id },
+        data: {
+          assigned_user_id: firstAssignee.userId,
+          assigned_at: new Date(),
+          updated_at: new Date(),
+        },
+      });
+
+      await auditLog.write({
+        event_type: AuditEvent.CONVERSATION_ASSIGN,
+        message: `Conversación ${row.conversation_id} reasignada a ${firstAssignee.label} (migración primer asesor)`,
+        actor: { area: row.area, email: 'system@mali' },
+        meta: {
+          conversation_id: row.conversation_id,
+          from_user_id: row.to_user_id,
+          to_user_id: firstAssignee.userId,
+          to_user_label: firstAssignee.label,
+          source: 'migration_first_sender',
+        },
+      });
+
+      stats.updated++;
+    } catch {
+      stats.errors++;
+    }
+  }
+
+  await markBackfillDone(prisma, FIRST_SENDER_REASSIGN_FLAG, stats);
   return stats;
 }

@@ -3,7 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { AuditLogService } from '../audit/audit-log.service';
 import { runCampaignChatBackfills } from '../campaigns/campaign-chat-backfill.util';
-import { backfillUnassignedConversationAssignments } from '../conversations/conversation-assignment.util';
+import { backfillUnassignedConversationAssignments, backfillFirstSenderHistoricalAssignments } from '../conversations/conversation-assignment.util';
 import { CampaignJobsService } from '../campaigns/campaign-jobs.service';
 import { CampaignRetryService } from '../campaigns/campaign-retry.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -70,6 +70,23 @@ export class MaintenanceQueueProcessor extends WorkerHost {
         } catch (error) {
           this.logger.warn(
             `Backfill autoasignación: ${
+              error instanceof Error ? error.message : error
+            }`,
+          );
+        }
+        try {
+          const reassignStats = await backfillFirstSenderHistoricalAssignments(
+            this.prisma,
+            this.auditLog,
+          );
+          if (reassignStats.updated > 0) {
+            this.logger.log(
+              `Migración primer asesor: ${reassignStats.updated} conversación(es) reasignada(s)`,
+            );
+          }
+        } catch (error) {
+          this.logger.warn(
+            `Backfill primer asesor: ${
               error instanceof Error ? error.message : error
             }`,
           );

@@ -87,6 +87,9 @@ export function formatInboxTimelineEventLabel(
     if (source === 'auto_first_sender' || source === 'auto_last_sender') {
       return `Asignado a ${assignee} (primer asesor que escribió)`;
     }
+    if (source === 'migration_first_sender') {
+      return `Reasignado a ${assignee} (primer asesor que escribió)`;
+    }
     return `${actor} asignó a ${assignee}`;
   }
 

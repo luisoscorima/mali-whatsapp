@@ -349,6 +349,7 @@ html[data-theme='dark'] .inbox-layout-wa {
   position: relative;
 }
 
+.inbox-chat-avatar--window-open::after,
 .inbox-chat-avatar--window-closed::after {
   content: '';
   position: absolute;
@@ -357,8 +358,15 @@ html[data-theme='dark'] .inbox-layout-wa {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #d97706;
   border: 1px solid var(--surface-strong);
+}
+
+.inbox-chat-avatar--window-open::after {
+  background: var(--accent);
+}
+
+.inbox-chat-avatar--window-closed::after {
+  background: #d97706;
 }
 
 .inbox-chat-avatar-lock {
@@ -1268,9 +1276,18 @@ html[data-theme='dark'] .chat-bubble__reply-to {
   width: 100%;
 }
 
+.chat-pdf-preview {
+  overflow: hidden;
+  max-height: 180px;
+  border-radius: 6px;
+  background: var(--surface);
+  pointer-events: none;
+}
+
 .chat-msg-media--pdf {
+  display: block;
   width: 100%;
-  min-height: 200px;
+  height: auto;
   border: none;
 }
 

@@ -1012,11 +1012,19 @@ export function ConversationsInboxPage() {
                     className="inbox-chat-item-btn"
                   >
                     <span
-                      className={`inbox-chat-avatar ${!item.is_virtual && !item.user_service_window_open ? 'inbox-chat-avatar--window-closed' : ''}`}
+                      className={`inbox-chat-avatar ${
+                        !item.is_virtual
+                          ? item.user_service_window_open
+                            ? 'inbox-chat-avatar--window-open'
+                            : 'inbox-chat-avatar--window-closed'
+                          : ''
+                      }`}
                       aria-hidden
                       title={
-                        !item.is_virtual && !item.user_service_window_open
-                          ? 'Ventana 24h cerrada'
+                        !item.is_virtual
+                          ? item.user_service_window_open
+                            ? 'Ventana 24h abierta'
+                            : 'Ventana 24h cerrada'
                           : undefined
                       }
                     >

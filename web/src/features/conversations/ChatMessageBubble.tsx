@@ -5,6 +5,7 @@ import type { CampaignMessagePreviewData } from '../campaigns/CampaignMessagePre
 import { ChatCampaignPreview } from './ChatCampaignPreview'
 import { ChatDeliveryStatus } from './ChatDeliveryStatus'
 import { ChatMessageBubbleMenu } from './ChatMessageBubbleMenu'
+import { ChatPdfPreview } from './ChatPdfPreview'
 
 export type ChatMessage = {
   id: number
@@ -52,6 +53,11 @@ function resolveMediaUrl(url: string): string {
   const u = url.trim()
   if (/^https?:\/\//i.test(u)) return u
   return u.startsWith('/') ? u : `/${u}`
+}
+
+function isPdfDocument(mime: string | null | undefined, url: string): boolean {
+  if (mime?.toLowerCase().includes('pdf')) return true
+  return /\.pdf(?:$|[?#])/i.test(url)
 }
 
 function escapeRegExp(value: string): string {
@@ -107,6 +113,7 @@ export function ChatMessageBubble({
     ? resolveMediaUrl(message.media_preview.url)
     : ''
   const mime = message.media_preview?.mime ?? ''
+  const isPdf = isPdfDocument(mime, mediaUrl)
   const downloadHref = `/api/conversations/${conversationId}/messages/${message.id}/download`
   const showTypeRow =
     isMediaType(mt) || (mt === 'campaign' && !message.campaign_preview)
@@ -202,13 +209,7 @@ export function ChatMessageBubble({
 
       {mediaUrl && mt === 'document' ? (
         <div className="chat-bubble__media chat-bubble__media--doc">
-          {mime.includes('pdf') ? (
-            <iframe
-              className="chat-msg-media chat-msg-media--pdf"
-              title="Vista PDF"
-              src={mediaUrl}
-            />
-          ) : null}
+          {isPdf ? <ChatPdfPreview url={mediaUrl} /> : null}
           <a className="chat-msg-download-link" href={downloadHref}>
             Descargar
           </a>
