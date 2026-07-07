@@ -1,13 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { apiClient } from '@/shared/api'
 import { formatDateTime } from '../../shared/format'
 import { formatContactName } from '../contacts/contactName'
-import {
-  filterIncidentLogs,
-  INCIDENT_EXPORT_FILTERS,
-  LOG_EXPORT_FILTERS,
-} from './campaignLogFilters'
+import { LOG_EXPORT_FILTERS } from './campaignLogFilters'
 import {
   CampaignMessagePreview,
   type CampaignMessagePreviewData,
@@ -132,7 +128,6 @@ export function CampaignDetailPage() {
   const [actionError, setActionError] = useState('')
   const [busy, setBusy] = useState('')
   const [logsFilter, setLogsFilter] = useState('all_current')
-  const [incidentsFilter, setIncidentsFilter] = useState('all')
   const [drilldownAction, setDrilldownAction] = useState<MetricAction | null>(null)
   const [drilldownOpen, setDrilldownOpen] = useState(false)
 
@@ -156,11 +151,6 @@ export function CampaignDetailPage() {
   useEffect(() => {
     reload()
   }, [id])
-
-  const filteredFailed = useMemo(() => {
-    if (!campaign) return []
-    return filterIncidentLogs(campaign.failed_logs, incidentsFilter)
-  }, [campaign, incidentsFilter])
 
   async function handleDownload(path: string, label: string) {
     setActionError('')
@@ -224,30 +214,7 @@ export function CampaignDetailPage() {
     funnel: attachMetricActions(campaign.analytics.funnel),
     incidents: attachMetricActions(campaign.analytics.incidents),
   }
-  const rs = campaign.retry_stats
   const campaignId = campaign.id
-
-  const retryHintParts: string[] = []
-  if (rs.recoveredCount > 0) {
-    retryHintParts.push(`${rs.recoveredCount} recuperados tras reintento`)
-  }
-  if (rs.autoRetryPending) {
-    retryHintParts.push(
-      `Reintento automático pendiente (~${rs.autoRetryDelayMinutes} min)`,
-    )
-  } else {
-    retryHintParts.push(
-      `Reintento automático ~${rs.autoRetryDelayMinutes} min después del envío.`,
-    )
-  }
-  if (rs.manualRetryCount > 0) {
-    retryHintParts.push(
-      `Reintentos manuales: ${rs.manualRetryCount}/${rs.maxManualRetries}`,
-    )
-  }
-  if (rs.canManualRetry) {
-    retryHintParts.push('Puedes reintentar fallidos manualmente.')
-  }
 
   return (
     <div className="space-y-6">
@@ -510,96 +477,6 @@ export function CampaignDetailPage() {
         ) : null}
       </div>
 
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">
-            Fallidos ({filteredFailed.length}
-            {incidentsFilter !== 'all'
-              ? ` / ${campaign.failed_logs.length}`
-              : ''}
-            )
-          </h2>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="text-sm text-muted">
-              Exportar
-              <select
-                className={`${selectClass()} ml-2`}
-                value={incidentsFilter}
-                onChange={(e) => setIncidentsFilter(e.target.value)}
-              >
-                {INCIDENT_EXPORT_FILTERS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              className={actionButtonClass(true)}
-              disabled={busy !== '' || campaign.failed_logs.length === 0}
-              onClick={() =>
-                handleDownload(
-                  `/api/campaigns/${campaignId}/failed-export`,
-                  'failed',
-                )
-              }
-            >
-              {busy === 'failed' ? '…' : 'CSV'}
-            </button>
-            <button
-              type="button"
-              className={actionButtonClass(true)}
-              disabled={busy !== '' || campaign.failed_logs.length === 0}
-              onClick={() =>
-                handleDownload(
-                  `/api/campaigns/${campaignId}/incidents-export?filter=${encodeURIComponent(incidentsFilter)}`,
-                  'incidents',
-                )
-              }
-            >
-              {busy === 'incidents' ? '…' : 'Excel'}
-            </button>
-          </div>
-        </div>
-
-        <p className="text-xs text-muted">{retryHintParts.join(' · ')}</p>
-        {rs.canManualRetry ? (
-          <button
-            type="button"
-            className={actionButtonClass()}
-            disabled={busy !== ''}
-            onClick={() => handleRetryFailed()}
-          >
-            {busy === 'retry' ? 'Reintentando…' : 'Reintentar fallidos'}
-          </button>
-        ) : null}
-
-        {filteredFailed.length === 0 ? (
-          <p className="text-sm text-muted">Sin incidencias para este filtro.</p>
-        ) : (
-          <ul className="divide-y divide-line rounded-xl border border-line bg-surface-strong text-sm">
-            {filteredFailed.map((log) => (
-              <li key={log.id} className="space-y-1 px-4 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-mono">{log.phone}</span>
-                  <span className="text-xs text-bad">{log.status}</span>
-                </div>
-                <p>
-                  {log.contact_name || '—'}
-                  {log.segment_labels ? ` · ${log.segment_labels}` : ''}
-                  {log.incident_label ? ` · ${log.incident_label}` : ''}
-                </p>
-                <p className="text-bad">{log.error_summary}</p>
-                <p className="text-xs text-muted">
-                  {formatDateTime(log.created_at)}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
       <CampaignDrilldownDialog
         open={drilldownOpen}
         onOpenChange={setDrilldownOpen}
@@ -610,6 +487,9 @@ export function CampaignDetailPage() {
         responders={campaign.responder_metrics.responders}
         responseTypeSummary={campaign.responder_metrics.response_type_summary}
         responseWindowDays={campaign.responder_metrics.window_days}
+        retryStats={campaign.retry_stats}
+        onRetryFailed={handleRetryFailed}
+        retryBusy={busy === 'retry'}
       />
     </div>
   )

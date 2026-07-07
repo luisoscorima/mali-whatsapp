@@ -38,6 +38,17 @@ type ResponderRow = {
   interactive_response_text: string
 }
 
+type RetryStats = {
+  recoveredCount: number
+  failedCount: number
+  canManualRetry: boolean
+  manualRetryCount: number
+  maxManualRetries: number
+  autoRetryDelayMinutes: number
+  autoRetryPending: boolean
+  autoRetryDone: boolean
+}
+
 type CampaignDrilldownDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -48,6 +59,28 @@ type CampaignDrilldownDialogProps = {
   responders: ResponderRow[]
   responseTypeSummary?: { label: string; count: number }[]
   responseWindowDays?: number
+  retryStats?: RetryStats | null
+  onRetryFailed?: () => void | Promise<void>
+  retryBusy?: boolean
+}
+
+function buildRetryHint(rs: RetryStats): string {
+  const parts: string[] = []
+  if (rs.recoveredCount > 0) {
+    parts.push(`${rs.recoveredCount} recuperados tras reintento`)
+  }
+  if (rs.autoRetryPending) {
+    parts.push(`Reintento automático pendiente (~${rs.autoRetryDelayMinutes} min)`)
+  } else {
+    parts.push(`Reintento automático ~${rs.autoRetryDelayMinutes} min después del envío.`)
+  }
+  if (rs.manualRetryCount > 0) {
+    parts.push(`Reintentos manuales: ${rs.manualRetryCount}/${rs.maxManualRetries}`)
+  }
+  if (rs.canManualRetry) {
+    parts.push('Puedes reintentar fallidos manualmente.')
+  }
+  return parts.join(' · ')
 }
 
 function ChatLinkButton({ contactId }: { contactId?: number | null }) {
@@ -84,6 +117,9 @@ export function CampaignDrilldownDialog({
   responders,
   responseTypeSummary = [],
   responseWindowDays,
+  retryStats,
+  onRetryFailed,
+  retryBusy = false,
 }: CampaignDrilldownDialogProps) {
   if (!action) return null
 
@@ -147,6 +183,21 @@ export function CampaignDrilldownDialog({
               {responseTypeSummary.map((item) => `${item.label}: ${item.count}`).join(' · ')}
             </p>
           ) : null}
+          {action.type === 'incidents' && retryStats ? (
+            <div className="mb-3 space-y-2">
+              <p className="muted text-xs">{buildRetryHint(retryStats)}</p>
+              {retryStats.canManualRetry && onRetryFailed ? (
+                <button
+                  type="button"
+                  className="rounded-lg bg-accent px-3 py-1.5 text-sm text-white hover:opacity-90 disabled:opacity-50"
+                  disabled={retryBusy}
+                  onClick={() => void onRetryFailed()}
+                >
+                  {retryBusy ? 'Reintentando…' : 'Reintentar fallidos'}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {rows.length === 0 ? (
             <p className="text-sm text-muted">Sin registros para este filtro.</p>
           ) : action.type === 'responders' ? (
@@ -178,7 +229,8 @@ export function CampaignDrilldownDialog({
                 <tr className="border-b border-line text-left text-muted">
                   <th className="py-2 pr-2">Teléfono</th>
                   <th className="py-2 pr-2">Tipo</th>
-                  <th className="py-2">Detalle</th>
+                  <th className="py-2 pr-2">Detalle</th>
+                  <th className="py-2">Fecha</th>
                 </tr>
               </thead>
               <tbody>
@@ -189,7 +241,8 @@ export function CampaignDrilldownDialog({
                       <ChatLinkButton contactId={row.contact_id} />
                     </td>
                     <td className="py-2 pr-2">{row.incident_label ?? row.incident_type ?? '—'}</td>
-                    <td className="py-2">{row.error_summary ?? '—'}</td>
+                    <td className="py-2 pr-2">{row.error_summary ?? '—'}</td>
+                    <td className="py-2 whitespace-nowrap">{formatDateTime(row.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -220,13 +273,34 @@ export function CampaignDrilldownDialog({
           )}
         </DialogBody>
         <DialogFooter>
-          <button
-            type="button"
-            className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm hover:bg-accent-soft"
-            onClick={() => void apiClient.download(exportUrl)}
-          >
-            Exportar Excel
-          </button>
+          {action.type === 'incidents' ? (
+            <>
+              <button
+                type="button"
+                className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm hover:bg-accent-soft"
+                onClick={() =>
+                  void apiClient.download(`/api/campaigns/${campaignId}/failed-export`)
+                }
+              >
+                CSV
+              </button>
+              <button
+                type="button"
+                className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm hover:bg-accent-soft"
+                onClick={() => void apiClient.download(exportUrl)}
+              >
+                Exportar Excel
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm hover:bg-accent-soft"
+              onClick={() => void apiClient.download(exportUrl)}
+            >
+              Exportar Excel
+            </button>
+          )}
           <DialogClose>Cerrar</DialogClose>
         </DialogFooter>
       </DialogContent>
