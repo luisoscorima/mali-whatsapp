@@ -23,9 +23,18 @@ export function ContactNewPage() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    apiClient.get<FilterOptions>('/api/contacts/filter-options').then((res) => {
-      if (res.ok) setOptions(res.data)
-      else setError(res.error)
+    Promise.all([
+      apiClient.get<FilterOptions>('/api/contacts/filter-options'),
+      apiClient.get<FilterOptions['segments']>('/api/segments'),
+    ]).then(([opts, segs]) => {
+      if (!opts.ok) {
+        setError(opts.error)
+        return
+      }
+      setOptions({
+        ...opts.data,
+        segments: segs.ok ? segs.data.map((s) => ({ id: s.id, slug: s.slug, label: s.label })) : opts.data.segments,
+      })
     })
   }, [])
 

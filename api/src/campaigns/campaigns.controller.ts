@@ -33,8 +33,9 @@ export class CampaignsController {
   @Get()
   async list(
     @CurrentUser() user: AuthUser,
+    @Query('month') month?: string,
   ): Promise<ApiResponse<CampaignListItem[]>> {
-    const data = await this.campaignsService.list(user.area);
+    const data = await this.campaignsService.list(user.area, month);
     return { ok: true, data };
   }
 

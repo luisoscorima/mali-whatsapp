@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -26,6 +27,18 @@ export class CreateSegmentDto {
   @IsOptional()
   @IsIn(SEGMENT_COLOR_KEYS)
   color_key?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  show_in_filter?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  assignable?: boolean;
 }
 
 export class UpdateSegmentDto {
@@ -46,4 +59,16 @@ export class UpdateSegmentDto {
   @IsOptional()
   @IsIn(SEGMENT_COLOR_KEYS)
   color_key?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  show_in_filter?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  assignable?: boolean;
 }

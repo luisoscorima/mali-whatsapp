@@ -1,4 +1,5 @@
-import { Link } from 'react-router-dom'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { apiClient } from '@/shared/api'
 import { formatDateTime } from '@/shared/format'
 import { formatContactName } from '../contacts/contactName'
@@ -19,6 +20,7 @@ type CampaignLog = {
   id: number
   phone: string
   status: string
+  contact_id?: number | null
   contact_name?: string
   segment_labels?: string
   created_at: string
@@ -29,6 +31,7 @@ type CampaignLog = {
 
 type ResponderRow = {
   phone: string
+  contact_id?: number | null
   contact_name: string
   segment_labels: string
   first_response_at: string
@@ -43,6 +46,30 @@ type CampaignDrilldownDialogProps = {
   logs: CampaignLog[]
   failedLogs: CampaignLog[]
   responders: ResponderRow[]
+}
+
+function ChatLinkButton({ contactId }: { contactId?: number | null }) {
+  const navigate = useNavigate()
+  const [busy, setBusy] = useState(false)
+  if (!contactId) return null
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      className="mt-1 text-xs text-accent hover:underline disabled:opacity-60"
+      onClick={() => {
+        setBusy(true)
+        void apiClient
+          .post<{ id: number }>(`/api/conversations/from-contact/${contactId}`, {})
+          .then((res) => {
+            setBusy(false)
+            if (res.ok) navigate(`/conversations/${res.data.id}`)
+          })
+      }}
+    >
+      {busy ? 'Abriendo…' : 'Ir al chat'}
+    </button>
+  )
 }
 
 export function CampaignDrilldownDialog({
@@ -124,6 +151,7 @@ export function CampaignDrilldownDialog({
                     <td className="py-2 pr-2">
                       <div>{formatContactName(row.contact_name, null, row.phone)}</div>
                       <div className="text-xs text-muted">{row.phone}</div>
+                      <ChatLinkButton contactId={row.contact_id} />
                     </td>
                     <td className="py-2 pr-2">{row.interactive_response_text || '—'}</td>
                     <td className="py-2 whitespace-nowrap">{formatDateTime(row.first_response_at)}</td>
@@ -143,7 +171,10 @@ export function CampaignDrilldownDialog({
               <tbody>
                 {(rows as CampaignLog[]).map((row) => (
                   <tr key={row.id} className="border-b border-line/60">
-                    <td className="py-2 pr-2">{row.phone}</td>
+                    <td className="py-2 pr-2">
+                      <div>{row.phone}</div>
+                      <ChatLinkButton contactId={row.contact_id} />
+                    </td>
                     <td className="py-2 pr-2">{row.incident_label ?? row.incident_type ?? '—'}</td>
                     <td className="py-2">{row.error_summary ?? '—'}</td>
                   </tr>
@@ -165,6 +196,7 @@ export function CampaignDrilldownDialog({
                     <td className="py-2 pr-2">
                       <div>{formatContactName(row.contact_name, null, row.phone)}</div>
                       <div className="text-xs text-muted">{row.phone}</div>
+                      <ChatLinkButton contactId={row.contact_id} />
                     </td>
                     <td className="py-2 pr-2">{row.status}</td>
                     <td className="py-2 whitespace-nowrap">{formatDateTime(row.created_at)}</td>
@@ -182,11 +214,6 @@ export function CampaignDrilldownDialog({
           >
             Exportar Excel
           </button>
-          {action.type === 'responders' ? (
-            <Link to="/conversations" className="rounded-lg bg-accent px-3 py-1.5 text-sm text-white">
-              Ir a chats
-            </Link>
-          ) : null}
           <DialogClose>Cerrar</DialogClose>
         </DialogFooter>
       </DialogContent>

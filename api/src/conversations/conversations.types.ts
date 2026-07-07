@@ -30,6 +30,7 @@ export type InboxListItem = {
   is_virtual: boolean;
   contact_id: number | null;
   matched_message_id: number | null;
+  user_service_window_open: boolean;
 };
 
 export type InboxListResult = {
@@ -38,6 +39,7 @@ export type InboxListResult = {
   ai_area_enabled: boolean;
   can_assign_conversations: boolean;
   segments: InboxSegmentOption[];
+  assignable_segments: InboxSegmentOption[];
   filters: {
     q: string;
     chat: InboxChatFilter;

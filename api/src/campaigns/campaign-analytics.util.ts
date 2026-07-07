@@ -39,6 +39,7 @@ export type CampaignLogRow = {
   response: unknown;
   created_at: Date | string;
   whatsapp_message_id?: string | null;
+  contact_id?: number | null;
   contact_name?: string;
   segment_labels?: string;
 };

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
+import { SortableSidebarList } from '@/shared/ui/SortableSidebarList'
 
 const LIST_POLL_MS = 15000
 
@@ -38,7 +39,7 @@ export function AttributesListSidebar({ selectedId }: AttributesListSidebarProps
   const [segments, setSegments] = useState<SegmentOption[]>([])
   const [error, setError] = useState('')
 
-  function refresh() {
+  const refresh = useCallback(() => {
     void Promise.all([
       apiClient.get<AttributeDefinition[]>('/api/attribute-definitions'),
       apiClient.get<SegmentOption[]>('/api/attribute-definitions/segments'),
@@ -51,13 +52,24 @@ export function AttributesListSidebar({ selectedId }: AttributesListSidebarProps
       if (segs.ok) setSegments(segs.data)
       setError('')
     })
-  }
+  }, [])
 
   useEffect(() => {
     refresh()
-  }, [location.search])
+  }, [location.search, refresh])
 
   useIntervalWhenVisible(refresh, LIST_POLL_MS)
+
+  async function handleReorder(orderedIds: number[]) {
+    const res = await apiClient.patch('/api/attribute-definitions/reorder', {
+      orderedIds,
+    })
+    if (!res.ok) {
+      setError(res.error)
+      return
+    }
+    refresh()
+  }
 
   return (
     <WaSidebar
@@ -74,12 +86,17 @@ export function AttributesListSidebar({ selectedId }: AttributesListSidebarProps
       ) : definitions.length === 0 ? (
         <p className="inbox-empty-list">Sin definiciones. Crea atributos del área o por segmento.</p>
       ) : (
-        <ul className="inbox-chat-list">
-          {definitions.map((def) => {
+        <SortableSidebarList
+          items={definitions}
+          onReorder={handleReorder}
+          renderItem={(def, dragHandle) => {
             const active = selectedId === def.id
             return (
-              <li key={def.id} className={`inbox-chat-item ${active ? 'is-active' : ''}`}>
-                <Link to={`/attributes/${def.id}`} className="inbox-chat-link">
+              <div
+                className={`inbox-chat-item flex items-stretch ${active ? 'is-active' : ''}`}
+              >
+                {dragHandle}
+                <Link to={`/attributes/${def.id}`} className="inbox-chat-link flex-1">
                   <span className="inbox-chat-link-main">
                     <span className="inbox-chat-row-top">
                       <span className="inbox-chat-title">
@@ -95,10 +112,10 @@ export function AttributesListSidebar({ selectedId }: AttributesListSidebarProps
                     </span>
                   </span>
                 </Link>
-              </li>
+              </div>
             )
-          })}
-        </ul>
+          }}
+        />
       )}
     </WaSidebar>
   )

@@ -346,6 +346,29 @@ html[data-theme='dark'] .inbox-layout-wa {
   font-weight: 600;
   background: var(--accent-soft);
   color: var(--accent);
+  position: relative;
+}
+
+.inbox-chat-avatar--window-closed::after {
+  content: '';
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d97706;
+  border: 1px solid var(--surface-strong);
+}
+
+.inbox-chat-avatar-lock {
+  position: absolute;
+  left: 1px;
+  top: 0;
+  font-size: 0.55rem;
+  line-height: 1;
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .inbox-chat-link-main {

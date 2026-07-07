@@ -64,7 +64,7 @@ export class ContactsService {
   async getFilterOptions(area: AuthUser['area']): Promise<ContactsFilterOptions> {
     const [segments, attributeRows] = await Promise.all([
       this.prisma.segment_definitions.findMany({
-        where: { area },
+        where: { area, active: true, show_in_filter: true },
         orderBy: [{ sort_order: 'asc' }, { slug: 'asc' }],
         select: { id: true, slug: true, label: true, color_key: true },
       }),

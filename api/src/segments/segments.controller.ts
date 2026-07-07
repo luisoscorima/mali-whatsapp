@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
 import { CreateSegmentDto, UpdateSegmentDto } from './dto/segment.dto';
+import { ReorderSegmentsDto } from './dto/reorder-segments.dto';
 import { SegmentsService } from './segments.service';
 import type { SegmentDefinition, SegmentDetail } from './segments.types';
 
@@ -28,8 +29,26 @@ export class SegmentsController {
   @Get()
   async list(
     @CurrentUser() user: AuthUser,
+    @Query('month') month?: string,
   ): Promise<ApiResponse<SegmentDefinition[]>> {
-    const data = await this.segmentsService.list(user.area);
+    const data = await this.segmentsService.list(user.area, month);
+    return { ok: true, data };
+  }
+
+  @Patch('reorder')
+  async reorder(
+    @CurrentUser() user: AuthUser,
+    @Body() body: ReorderSegmentsDto,
+  ): Promise<ApiResponse<{ ok: true }>> {
+    await this.segmentsService.reorder(user.area, body.orderedIds);
+    return { ok: true, data: { ok: true } };
+  }
+
+  @Get('assignable')
+  async listAssignable(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<SegmentDefinition[]>> {
+    const data = await this.segmentsService.listAssignable(user.area);
     return { ok: true, data };
   }
 

@@ -12,6 +12,7 @@ import { AuditEvent } from '../audit/audit-events';
 import { auditActor } from '../audit/audit-actor.util';
 import { AuditLogService } from '../audit/audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { parseMonthKey } from '../shared/month-filter.util';
 import {
   buildCampaignDetailAnalytics,
   buildCampaignIndexSummary,
@@ -96,6 +97,7 @@ type ListRow = {
   created_at: Date;
   scheduled_at: Date | null;
   first_send_at: Date | null;
+  send_mode: string;
   log_count: number;
   salida_ok: number;
   delivered_count: number;
@@ -114,7 +116,7 @@ export class CampaignsService {
 
   private async getSegmentSlugSet(area: AuthUser['area']): Promise<Set<string>> {
     const rows = await this.prisma.segment_definitions.findMany({
-      where: { area },
+      where: { area, active: true },
       select: { slug: true },
     });
     return new Set(rows.map((row) => row.slug));
@@ -242,7 +244,7 @@ export class CampaignsService {
     };
   }
 
-  async list(area: AuthUser['area']): Promise<CampaignListItem[]> {
+  async list(area: AuthUser['area'], month?: string): Promise<CampaignListItem[]> {
     const rows = await this.prisma.$queryRaw<ListRow[]>(Prisma.sql`
       WITH latest_logs AS (
         SELECT DISTINCT ON (cl.campaign_id, cl.phone)
@@ -265,6 +267,7 @@ export class CampaignsService {
         c.total_recipients,
         c.created_at,
         c.scheduled_at,
+        c.send_mode,
         MIN(cl.created_at) AS first_send_at,
         COALESCE(COUNT(cl.phone), 0)::int AS log_count,
         COALESCE(SUM(CASE WHEN ${Prisma.raw(LOG_STATUS)} IN ${Prisma.raw(SALIDA_OK_IN)} THEN 1 ELSE 0 END), 0)::int AS salida_ok,
@@ -279,7 +282,8 @@ export class CampaignsService {
       LIMIT 200
     `);
 
-    return rows.map((row) => {
+    const range = parseMonthKey(month);
+    const mapped = rows.map((row) => {
       const denom =
         row.total_recipients > 0 ? row.total_recipients : row.log_count;
       const sentPercent =
@@ -302,7 +306,15 @@ export class CampaignsService {
         failed_count: row.failed_count,
         sent_percent: sentPercent,
         sent_ratio: denom > 0 ? `${row.salida_ok}/${denom}` : '—',
+        send_mode: String(row.send_mode ?? 'mass'),
       };
+    });
+    if (!range) return mapped;
+    return mapped.filter((item) => {
+      const ts =
+        item.first_send_at ?? item.scheduled_at ?? item.created_at;
+      const d = new Date(ts);
+      return d >= range.start && d < range.end;
     });
   }
 
@@ -400,7 +412,7 @@ export class CampaignsService {
     }
 
     const logs = await this.prisma.$queryRaw<CampaignLogRow[]>(Prisma.sql`
-      SELECT cl.id, cl.phone, cl.whatsapp_message_id, cl.status, cl.response, cl.created_at,
+      SELECT cl.id, cl.phone, cl.contact_id, cl.whatsapp_message_id, cl.status, cl.response, cl.created_at,
              COALESCE(ct.name, '') AS contact_name,
              COALESCE((
                SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)

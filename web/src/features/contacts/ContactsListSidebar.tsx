@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
-import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { formatContactName } from './contactName'
@@ -60,6 +60,7 @@ type ContactsListSidebarProps = {
 
 export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
   const location = useLocation()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [options, setOptions] = useState<FilterOptions | null>(null)
   const [result, setResult] = useState<ContactsListResult | null>(null)
@@ -392,22 +393,32 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
               return (
                 <li
                   key={contact.id}
-                  className={`inbox-chat-item ${active ? 'is-active' : ''}`}
+                  role="link"
+                  tabIndex={0}
+                  className={`inbox-chat-item cursor-pointer ${active ? 'is-active' : ''}`}
+                  onClick={() => navigate(`/contacts/${contact.id}${listQuery}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      navigate(`/contacts/${contact.id}${listQuery}`)
+                    }
+                  }}
                 >
-                  <div className="flex items-stretch">
+                  <div className="flex min-h-full w-full items-stretch">
                     {segments.length > 0 ? (
-                      <label className="flex items-center pl-2">
+                      <label
+                        className="flex items-center pl-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <input
                           type="checkbox"
                           checked={selectedIds.has(contact.id)}
                           onChange={() => toggleContactSelection(contact.id)}
+                          onClick={(e) => e.stopPropagation()}
                         />
                       </label>
                     ) : null}
-                    <Link
-                      to={`/contacts/${contact.id}${listQuery}`}
-                      className="inbox-chat-link flex-1"
-                    >
+                    <div className="inbox-chat-link flex-1 pointer-events-none">
                       <span className="inbox-chat-link-main">
                         <span className="inbox-chat-row-top">
                           <span className="inbox-chat-title">{displayName}</span>
@@ -442,7 +453,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
                           </span>
                         ) : null}
                       </span>
-                    </Link>
+                    </div>
                   </div>
                 </li>
               )

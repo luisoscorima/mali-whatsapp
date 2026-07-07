@@ -41,6 +41,7 @@ type FailedLog = CampaignLog & {
 
 type ResponderRow = {
   phone: string
+  contact_id?: number | null
   contact_name: string
   segment_labels: string
   first_response_at: string
@@ -416,7 +417,7 @@ export function CampaignDetailPage() {
 
         {campaign.message_preview ? (
           <section className="rounded-xl border border-line bg-surface-strong p-4">
-            <details open>
+            <details>
               <summary className="cursor-pointer text-lg font-semibold">
                 Vista previa
               </summary>
@@ -554,7 +555,7 @@ export function CampaignDetailPage() {
             : ''}
         </p>
         {rm.response_type_summary.length > 0 ? (
-          <p className="text-sm text-muted">
+          <p className="campaign-drilldown-dialog__note text-sm font-medium">
             {rm.response_type_summary
               .map((item) => `${item.label}: ${item.count}`)
               .join(' · ')}

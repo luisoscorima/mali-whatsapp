@@ -42,21 +42,29 @@ export function ContactDetailPage() {
   const [error, setError] = useState('')
   const [saveMsg, setSaveMsg] = useState('')
   const [saving, setSaving] = useState(false)
+  const [chatBusy, setChatBusy] = useState(false)
 
   useEffect(() => {
     if (!id) return
     Promise.all([
       apiClient.get<ContactDetail>(`/api/contacts/${id}`),
       apiClient.get<FilterOptions>('/api/contacts/filter-options'),
-    ]).then(([detail, opts]) => {
+      apiClient.get<FilterOptions['segments']>('/api/segments'),
+    ]).then(([detail, opts, allSegs]) => {
       if (!detail.ok) {
         setError(detail.error)
         return
       }
       setContact(detail.data)
       if (opts.ok) {
-        setSegments(opts.data.segments)
         setAllAttributeDefs(opts.data.attribute_definitions)
+      }
+      if (allSegs.ok) {
+        setSegments(
+          allSegs.data.map((s) => ({ id: s.id, slug: s.slug, label: s.label })),
+        )
+      } else if (opts.ok) {
+        setSegments(opts.data.segments)
       }
     })
   }, [id])
@@ -121,6 +129,22 @@ export function ContactDetailPage() {
     setSaveMsg('Contacto reactivado.')
   }
 
+  async function onOpenChat() {
+    if (!id) return
+    setChatBusy(true)
+    setError('')
+    const result = await apiClient.post<{ id: number }>(
+      `/api/conversations/from-contact/${id}`,
+      {},
+    )
+    setChatBusy(false)
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+    navigate(`/conversations/${result.data.id}`)
+  }
+
   if (error && !contact) {
     return <p className="text-bad">{error}</p>
   }
@@ -173,6 +197,14 @@ export function ContactDetailPage() {
         />
 
         <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            type="button"
+            disabled={chatBusy || isReplaced}
+            onClick={() => void onOpenChat()}
+            className="rounded-lg bg-accent px-4 py-2 text-sm text-white disabled:opacity-60"
+          >
+            {chatBusy ? 'Abriendo…' : 'Ir al chat'}
+          </button>
           {isReplaced ? (
             <button
               type="button"

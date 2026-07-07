@@ -10,6 +10,10 @@ type SegmentDefinition = {
   label: string
   sort_order: number
   color_key: string
+  active: boolean
+  show_in_filter: boolean
+  assignable: boolean
+  created_at: string
 }
 
 type SegmentMember = {
@@ -34,6 +38,9 @@ export function SegmentDetailPage() {
   const [label, setLabel] = useState('')
   const [sortOrder, setSortOrder] = useState(0)
   const [colorKey, setColorKey] = useState('teal')
+  const [active, setActive] = useState(true)
+  const [showInFilter, setShowInFilter] = useState(true)
+  const [assignable, setAssignable] = useState(true)
   const [error, setError] = useState('')
   const [saveMsg, setSaveMsg] = useState('')
   const [saving, setSaving] = useState(false)
@@ -56,6 +63,9 @@ export function SegmentDetailPage() {
       setLabel(seg.label)
       setSortOrder(seg.sort_order)
       setColorKey(seg.color_key)
+      setActive(seg.active)
+      setShowInFilter(seg.show_in_filter)
+      setAssignable(seg.assignable)
       if (list.ok) setAllSegments(list.data)
     })
   }, [id])
@@ -79,6 +89,9 @@ export function SegmentDetailPage() {
       label,
       sort_order: sortOrder,
       color_key: colorKey,
+      active,
+      show_in_filter: showInFilter,
+      assignable,
     })
     setSaving(false)
     if (!result.ok) {
@@ -203,6 +216,30 @@ export function SegmentDetailPage() {
             value={colorKey}
             onChange={setColorKey}
           />
+          <label className="flex items-center gap-2 text-sm sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={active}
+              onChange={(e) => setActive(e.target.checked)}
+            />
+            Activo
+          </label>
+          <label className="flex items-center gap-2 text-sm sm:col-span-1">
+            <input
+              type="checkbox"
+              checked={showInFilter}
+              onChange={(e) => setShowInFilter(e.target.checked)}
+            />
+            Mostrar en filtros
+          </label>
+          <label className="flex items-center gap-2 text-sm sm:col-span-1">
+            <input
+              type="checkbox"
+              checked={assignable}
+              onChange={(e) => setAssignable(e.target.checked)}
+            />
+            Asignable desde chat
+          </label>
           <div className="flex flex-wrap gap-3 sm:col-span-2">
             <button
               type="submit"

@@ -23,6 +23,7 @@ export type CampaignListItem = {
   failed_count: number;
   sent_percent: number | null;
   sent_ratio: string;
+  send_mode: string;
 };
 
 export type CampaignSummary = {

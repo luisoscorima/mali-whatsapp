@@ -192,4 +192,26 @@ export class AttributeDefinitionsService {
     await this.getById(area, id);
     await this.prisma.contact_attribute_definitions.delete({ where: { id } });
   }
+
+  async reorder(area: AuthUser['area'], orderedIds: number[]): Promise<void> {
+    const ids = [...new Set(orderedIds.map((id) => Number(id)).filter((id) => id > 0))];
+    if (!ids.length) {
+      throw new BadRequestException('Lista de ids inválida');
+    }
+    const existing = await this.prisma.contact_attribute_definitions.findMany({
+      where: { area, id: { in: ids } },
+      select: { id: true },
+    });
+    if (existing.length !== ids.length) {
+      throw new BadRequestException('Hay atributos que no pertenecen al área');
+    }
+    await this.prisma.$transaction(
+      ids.map((id, index) =>
+        this.prisma.contact_attribute_definitions.update({
+          where: { id },
+          data: { sort_order: index, updated_at: new Date() },
+        }),
+      ),
+    );
+  }
 }

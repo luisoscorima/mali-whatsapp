@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { apiClient } from '@/shared/api'
 import { Button } from '@/shared/ui/shadcn/button'
 import {
   Dialog,
@@ -10,6 +12,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/ui/shadcn/dialog'
+import { SegmentBadge } from '../segments/SegmentBadge'
+
+type SegmentOption = {
+  slug: string
+  label: string
+  color_key?: string
+}
 
 type InboxChatActionsDialogProps = {
   open: boolean
@@ -22,11 +31,14 @@ type InboxChatActionsDialogProps = {
   aiAreaEnabled: boolean
   conversationStatus: string | null
   canAssign: boolean
+  assignableSegments: SegmentOption[]
+  currentSegmentSlugs: string[]
   onLeadScore: (score: number | null) => void
   onMarkUnread: () => void
   onModeChange: (status: 'bot' | 'human') => void
   onExport: () => void
   onAssign: () => void
+  onSegmentAdded?: () => void
 }
 
 export function InboxChatActionsDialog({
@@ -40,16 +52,38 @@ export function InboxChatActionsDialog({
   aiAreaEnabled,
   conversationStatus,
   canAssign,
+  assignableSegments,
+  currentSegmentSlugs,
   onLeadScore,
   onMarkUnread,
   onModeChange,
   onExport,
   onAssign,
+  onSegmentAdded,
 }: InboxChatActionsDialogProps) {
+  const [segmentBusy, setSegmentBusy] = useState('')
+  const [segmentError, setSegmentError] = useState('')
   const current = leadScore ?? 0
   const prefillPhone = phone.replace(/\D/g, '')
   const hasConversation = conversationId != null && conversationId > 0
   const status = String(conversationStatus ?? '').toLowerCase()
+  const ownedSlugs = new Set(currentSegmentSlugs)
+
+  async function addSegment(slug: string) {
+    if (!contactId || ownedSlugs.has(slug)) return
+    setSegmentBusy(slug)
+    setSegmentError('')
+    const res = await apiClient.post<{ updated: number }>(
+      '/api/contacts/bulk-add-segment',
+      { segment_slug: slug, contact_ids: [contactId] },
+    )
+    setSegmentBusy('')
+    if (!res.ok) {
+      setSegmentError(res.error)
+      return
+    }
+    onSegmentAdded?.()
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -65,6 +99,32 @@ export function InboxChatActionsDialog({
             <p className="muted text-sm">
               Este contacto aún no tiene conversación. Abre el chat para escribir o guarda el contacto.
             </p>
+          ) : null}
+
+          {hasConversation && contactId && assignableSegments.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Asignar a:</p>
+              <div className="flex flex-wrap gap-1">
+                {assignableSegments.map((seg) => {
+                  const owned = ownedSlugs.has(seg.slug)
+                  return (
+                    <button
+                      key={seg.slug}
+                      type="button"
+                      disabled={owned || segmentBusy === seg.slug}
+                      onClick={() => void addSegment(seg.slug)}
+                      className="disabled:opacity-60"
+                    >
+                      <SegmentBadge colorKey={seg.color_key ?? 'slate'}>
+                        {owned ? `✓ ${seg.label}` : seg.label}
+                      </SegmentBadge>
+                    </button>
+                  )
+                })}
+              </div>
+              {segmentError ? <p className="text-xs text-bad">{segmentError}</p> : null}
+              <p className="muted text-xs">Solo añade segmentos; no quita los actuales.</p>
+            </div>
           ) : null}
 
           {hasConversation && contactId ? (

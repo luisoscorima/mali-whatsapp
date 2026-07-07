@@ -19,6 +19,7 @@ import {
   CreateAttributeDefinitionDto,
   UpdateAttributeDefinitionDto,
 } from './dto/attribute-definition.dto';
+import { ReorderAttributeDefinitionsDto } from './dto/reorder-attribute-definitions.dto';
 
 @Controller('attribute-definitions')
 @UseGuards(JwtAuthGuard, ProvisionedGuard)
@@ -37,6 +38,15 @@ export class AttributeDefinitionsController {
   async segments(@CurrentUser() user: AuthUser) {
     const data = await this.service.listSegments(user.area);
     return { ok: true, data };
+  }
+
+  @Patch('reorder')
+  async reorder(
+    @CurrentUser() user: AuthUser,
+    @Body() body: ReorderAttributeDefinitionsDto,
+  ): Promise<ApiResponse<{ ok: true }>> {
+    await this.service.reorder(user.area, body.orderedIds);
+    return { ok: true, data: { ok: true } };
   }
 
   @Get(':id')

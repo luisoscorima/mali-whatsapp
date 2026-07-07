@@ -1,0 +1,8 @@
+ALTER TABLE "segment_definitions"
+  ADD COLUMN "active" BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN "show_in_filter" BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN "assignable" BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+ALTER TABLE "campaigns"
+  ADD COLUMN "send_mode" VARCHAR(16) NOT NULL DEFAULT 'mass';

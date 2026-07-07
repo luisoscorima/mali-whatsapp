@@ -22,6 +22,8 @@ import { buildChatTimeline } from './buildChatTimeline'
 import { ConversationBadges } from './ConversationBadges'
 import { InboxAssignDialog, type ConversationAssignee } from './InboxAssignDialog'
 import { InboxChatActionsDialog } from './InboxChatActionsDialog'
+import { InboxSendTemplateDialog } from './InboxSendTemplateDialog'
+import { ConversationsSummaryPane } from './ConversationsSummaryPane'
 import { InboxComposeBar, type ReplyToMessage } from './InboxComposeBar'
 import { InboxMessageScroller, type InboxMessageScrollerHandle } from './InboxMessageScroller'
 import {
@@ -157,6 +159,7 @@ type InboxListItem = {
   is_virtual: boolean
   contact_id: number | null
   matched_message_id: number | null
+  user_service_window_open: boolean
 }
 
 type InboxListResult = {
@@ -165,6 +168,7 @@ type InboxListResult = {
   ai_area_enabled: boolean
   can_assign_conversations: boolean
   segments: SegmentOption[]
+  assignable_segments: SegmentOption[]
   filters: {
     q: string
     chat: 'all' | 'unread' | 'bot' | 'human' | 'mine' | 'unassigned' | 'new'
@@ -385,6 +389,7 @@ export function ConversationsInboxPage() {
   const [searchInput, setSearchInput] = useState(searchParams.get('q') ?? '')
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
+  const [templateOpen, setTemplateOpen] = useState(false)
   const [actionsContext, setActionsContext] = useState<ChatActionsContext | null>(null)
   const [replyToMessage, setReplyToMessage] = useState<ReplyToMessage | null>(null)
   const [assignContext, setAssignContext] = useState<AssignContext | null>(null)
@@ -979,6 +984,7 @@ export function ConversationsInboxPage() {
         title={list ? `Chats (${list.items.length})` : 'Chats'}
         filters={filterPills}
       >
+        <ConversationsSummaryPane />
         <ul className="inbox-chat-list">
           {!list ? (
             <li className="inbox-empty-list">Cargando…</li>
@@ -1006,8 +1012,21 @@ export function ConversationsInboxPage() {
                     onClick={() => void onSelectItem(item)}
                     className="inbox-chat-item-btn"
                   >
-                    <span className="inbox-chat-avatar" aria-hidden>
+                    <span
+                      className={`inbox-chat-avatar ${!item.is_virtual && !item.user_service_window_open ? 'inbox-chat-avatar--window-closed' : ''}`}
+                      aria-hidden
+                      title={
+                        !item.is_virtual && !item.user_service_window_open
+                          ? 'Ventana 24h cerrada'
+                          : undefined
+                      }
+                    >
                       {inboxInitials(item.contact_name, item.phone)}
+                      {!item.is_virtual && !item.user_service_window_open ? (
+                        <span className="inbox-chat-avatar-lock" aria-hidden>
+                          🔒
+                        </span>
+                      ) : null}
                     </span>
                     <span className="inbox-chat-link-main">
                       <span className="inbox-chat-row-top">
@@ -1113,6 +1132,16 @@ export function ConversationsInboxPage() {
                 </div>
               )}
               <div className="inbox-chat-header-toolbar">
+                {!detail.user_service_window_open ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setTemplateOpen(true)}
+                  >
+                    Enviar plantilla
+                  </Button>
+                ) : null}
                 {canAssign ? (
                   <Button
                     type="button"
@@ -1225,14 +1254,37 @@ export function ConversationsInboxPage() {
           aiAreaEnabled={actionsContext.aiAreaEnabled}
           conversationStatus={actionsContext.conversationStatus}
           canAssign={canAssign}
+          assignableSegments={list?.assignable_segments ?? []}
+          currentSegmentSlugs={
+            detail?.contact?.segment_slugs ??
+            list?.items.find((i) => i.id === actionsContext.conversationId)
+              ?.contact_segment_slugs ??
+            []
+          }
           onLeadScore={onLeadScore}
           onMarkUnread={onMarkUnread}
           onModeChange={onModeChange}
           onAssign={() => openAssignFromActions(actionsContext)}
+          onSegmentAdded={() => {
+            void loadList()
+            if (selectedId) void loadDetail(selectedId)
+          }}
           onExport={() => {
             const convId = actionsContext.conversationId
             if (!convId) return
             void apiClient.download(`/api/conversations/${convId}/export`)
+          }}
+        />
+      ) : null}
+
+      {detail && selectedId ? (
+        <InboxSendTemplateDialog
+          open={templateOpen}
+          onOpenChange={setTemplateOpen}
+          conversationId={selectedId}
+          onSent={() => {
+            void loadDetail(selectedId)
+            void loadList()
           }}
         />
       ) : null}

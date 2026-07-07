@@ -12,10 +12,23 @@ import { AuditEvent } from '../audit/audit-events';
 import { auditActor, phoneMetaTail } from '../audit/audit-actor.util';
 import { AuditLogService } from '../audit/audit-log.service';
 import { isWithinUserServiceWindow } from '../campaigns/campaign-conversation-window.util';
+import { persistCampaignChatMessage } from '../campaigns/campaign-chat-message.util';
+import { buildCampaignMessagePreview } from '../campaigns/campaign-message-preview.util';
+import {
+  buildParamsForContact,
+  fetchContactAttributesMap,
+} from '../campaigns/contact-template-params.util';
 import {
   escapeForLikePattern,
   parseSegmentListFilter,
 } from '../contacts/contacts-filter.utils';
+import { normalizePhone } from '../contacts/contacts-validation.utils';
+import {
+  buildTemplateDefinition,
+  buildWhatsappGraphComponents,
+  parseParamMappingFromBody,
+} from '../templates/template-definition.util';
+import { sendTemplateWithComponents } from '../templates/whatsapp-meta.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { MAX_SESSION_TEXT_LEN } from '../settings/business-hours.util';
 import { parseAiConfigValue } from '../settings/ai-config.util';
@@ -90,6 +103,7 @@ import {
   INBOX_TIMELINE_EVENT_TYPES,
   mapAuditRowsToTimelineEvents,
 } from './inbox-timeline.util';
+import { fetchConversationSummary } from './conversation-analytics.util';
 
 type InboxRow = {
   id: number;
@@ -107,6 +121,7 @@ type InboxRow = {
   conversation_tags: string[];
   matched_message_id: number | null;
   contact_id: number | null;
+  last_user_message_at: Date | null;
 };
 
 @Injectable()
@@ -143,7 +158,15 @@ export class ConversationsService {
 
   private async loadSegmentOptions(area: string) {
     return this.prisma.segment_definitions.findMany({
-      where: { area },
+      where: { area, active: true, show_in_filter: true },
+      orderBy: [{ sort_order: 'asc' }, { slug: 'asc' }],
+      select: { slug: true, label: true, color_key: true },
+    });
+  }
+
+  private async loadAssignableSegmentOptions(area: string) {
+    return this.prisma.segment_definitions.findMany({
+      where: { area, active: true, assignable: true },
       orderBy: [{ sort_order: 'asc' }, { slug: 'asc' }],
       select: { slug: true, label: true, color_key: true },
     });
@@ -176,6 +199,7 @@ export class ConversationsService {
       matched_message_id: row.matched_message_id
         ? Number(row.matched_message_id)
         : null,
+      user_service_window_open: isWithinUserServiceWindow(row.last_user_message_at),
     };
   }
 
@@ -291,6 +315,7 @@ export class ConversationsService {
         c.id,
         c.phone,
         c.last_message_at,
+        c.last_user_message_at,
         c.inbox_unread,
         c.status AS conversation_status,
         c.assigned_user_id,
@@ -366,6 +391,7 @@ export class ConversationsService {
         (-ct.id) AS id,
         ct.phone,
         NULL::timestamptz AS last_message_at,
+        NULL::timestamptz AS last_user_message_at,
         FALSE AS inbox_unread,
         NULL::text AS conversation_status,
         NULL::int AS assigned_user_id,
@@ -427,8 +453,10 @@ export class ConversationsService {
     const slugSet = await this.getSegmentSlugSet(area);
     const segmentFilter = parseSegmentListFilter(segmentRaw, slugSet);
 
-    const [segments, listRows, aiAreaEnabled, unreadCount] = await Promise.all([
+    const [segments, assignableSegments, listRows, aiAreaEnabled, unreadCount] =
+      await Promise.all([
       this.loadSegmentOptions(area),
+      this.loadAssignableSegmentOptions(area),
       this.fetchInboxConversations(
         area,
         segmentFilter,
@@ -446,6 +474,7 @@ export class ConversationsService {
       ai_area_enabled: aiAreaEnabled,
       can_assign_conversations: this.canAssignConversations(user),
       segments,
+      assignable_segments: assignableSegments,
       filters: {
         q: searchQ,
         chat,
@@ -453,6 +482,178 @@ export class ConversationsService {
         include_none: segmentFilter.includeNone,
       },
     };
+  }
+
+  async getSummary(
+    user: AuthUser,
+    daysRaw?: string,
+    advisorIdRaw?: string,
+  ) {
+    const days = Number(daysRaw ?? 30) || 30;
+    const advisorId = Number(advisorIdRaw ?? 0) || null;
+    return fetchConversationSummary(
+      this.prisma,
+      user.area,
+      days,
+      advisorId && advisorId > 0 ? advisorId : null,
+    );
+  }
+
+  async sendDirectTemplate(
+    user: AuthUser,
+    conversationId: number,
+    body: Record<string, unknown>,
+  ): Promise<{ campaign_id: number; message_id: string | null }> {
+    const area = user.area;
+    const conversation = await this.prisma.conversations.findFirst({
+      where: { id: conversationId, area },
+      include: {
+        contacts: {
+          select: { id: true, name: true, last_name: true, phone: true },
+        },
+      },
+    });
+    if (!conversation) {
+      throw new NotFoundException('Conversación no encontrada');
+    }
+    if (isWithinUserServiceWindow(conversation.last_user_message_at)) {
+      throw new BadRequestException(
+        'La ventana de 24 h está abierta: responde con un mensaje normal.',
+      );
+    }
+
+    const templateSyncId = Number(body.templateSyncId ?? body.template_sync_id ?? 0);
+    if (!Number.isInteger(templateSyncId) || templateSyncId <= 0) {
+      throw new BadRequestException('Plantilla inválida');
+    }
+
+    const templateRow = await this.prisma.whatsapp_templates.findFirst({
+      where: { id: templateSyncId, area, status: 'APPROVED' },
+      select: {
+        id: true,
+        name: true,
+        language: true,
+        category: true,
+        status: true,
+        components_json: true,
+        placeholder_aliases_json: true,
+      },
+    });
+    if (!templateRow) {
+      throw new BadRequestException('Plantilla no encontrada o no aprobada');
+    }
+
+    const def = buildTemplateDefinition(templateRow);
+    const staticParams = {
+      headerParams: Array.isArray(body.headerParams)
+        ? (body.headerParams as string[])
+        : [],
+      bodyParams: Array.isArray(body.bodyParams) ? (body.bodyParams as string[]) : [],
+      buttonParams: Array.isArray(body.buttonParams)
+        ? (body.buttonParams as string[])
+        : [],
+      headerMediaUrl:
+        typeof body.headerMediaUrl === 'string' ? body.headerMediaUrl : '',
+    };
+    const paramMapping = parseParamMappingFromBody(def, body);
+    const contact = conversation.contacts;
+    const attrsMap = contact
+      ? await fetchContactAttributesMap(this.prisma, [contact.id])
+      : new Map();
+    const resolvedParams = paramMapping
+      ? buildParamsForContact(
+          staticParams,
+          paramMapping,
+          contact || { name: '', phone: conversation.phone },
+          contact ? attrsMap.get(contact.id) : undefined,
+        )
+      : staticParams;
+    const components = buildWhatsappGraphComponents(def, resolvedParams);
+    const phoneNorm = normalizePhone(conversation.phone);
+    const preview = buildCampaignMessagePreview(
+      def,
+      templateRow.components_json,
+      resolvedParams,
+    );
+
+    const campaign = await this.prisma.campaigns.create({
+      data: {
+        area,
+        segment: 'direct',
+        template_name: templateRow.name,
+        message_text: preview.bodyText || preview.headerText || templateRow.name,
+        status: 'sending',
+        total_recipients: 1,
+        send_mode: 'direct',
+        campaign_payload: {
+          source: 'inbox_direct',
+          conversation_id: conversationId,
+          contact_id: contact?.id ?? null,
+          template_sync_id: templateSyncId,
+          staticParams,
+          paramMapping,
+        },
+      },
+      select: { id: true },
+    });
+
+    let messageId: string | null = null;
+    let logStatus = 'failed';
+    let apiResponse: unknown = null;
+
+    try {
+      const result = await sendTemplateWithComponents({
+        to: phoneNorm,
+        templateName: templateRow.name,
+        languageCode: templateRow.language,
+        components,
+        area,
+      });
+      messageId = result.messages?.[0]?.id ?? null;
+      logStatus = messageId ? 'sent' : 'failed';
+      apiResponse = result;
+    } catch (error) {
+      apiResponse = {
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+
+    await this.prisma.campaign_logs.create({
+      data: {
+        campaign_id: campaign.id,
+        contact_id: contact?.id ?? null,
+        phone: phoneNorm,
+        whatsapp_message_id: messageId,
+        status: logStatus,
+        response: apiResponse as PrismaTypes.InputJsonValue,
+      },
+    });
+
+    await this.prisma.campaigns.update({
+      where: { id: campaign.id },
+      data: {
+        status: logStatus === 'sent' ? 'completed' : 'failed',
+      },
+    });
+
+    if (logStatus === 'sent') {
+      await persistCampaignChatMessage(this.prisma, {
+        area,
+        campaignId: campaign.id,
+        templateName: templateRow.name,
+        contactId: contact?.id ?? null,
+        phone: phoneNorm,
+        waMessageId: messageId,
+        preview,
+        apiResponse,
+      });
+    } else {
+      throw new BadRequestException(
+        'No se pudo enviar la plantilla. Revisa la configuración de WhatsApp.',
+      );
+    }
+
+    return { campaign_id: campaign.id, message_id: messageId };
   }
 
   async getDetail(user: AuthUser, conversationId: number): Promise<InboxDetail> {

@@ -44,6 +44,16 @@ import {
 export class ConversationsController {
   constructor(private readonly conversationsService: ConversationsService) {}
 
+  @Get('summary')
+  async summary(
+    @CurrentUser() user: AuthUser,
+    @Query('days') days?: string,
+    @Query('advisor_id') advisorId?: string,
+  ) {
+    const data = await this.conversationsService.getSummary(user, days, advisorId);
+    return { ok: true, data };
+  }
+
   @Get()
   async list(
     @CurrentUser() user: AuthUser,
@@ -70,6 +80,16 @@ export class ConversationsController {
       user,
       contactId,
     );
+    return { ok: true, data };
+  }
+
+  @Post(':id/send-template')
+  async sendTemplate(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: Record<string, unknown>,
+  ) {
+    const data = await this.conversationsService.sendDirectTemplate(user, id, body);
     return { ok: true, data };
   }
 

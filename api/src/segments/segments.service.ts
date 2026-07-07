@@ -20,10 +20,13 @@ import { MAX_CSV_ROWS } from '../contacts/contacts-import.utils';
 import {
   normalizeSegmentColorKey,
   SEGMENT_SLUG_REGEX,
+  SEGMENT_SELECT,
+  mapSegmentRow,
   type SegmentDefinition,
   type SegmentDetail,
   type SegmentMember,
 } from './segments.types';
+import { parseMonthKey } from '../shared/month-filter.util';
 
 function firstSegmentForLegacyColumn(segments: string[]): string | null {
   if (!segments.length) return null;
@@ -37,35 +40,79 @@ export class SegmentsService {
     private readonly auditLog: AuditLogService,
   ) {}
 
-  async list(area: AuthUser['area']): Promise<SegmentDefinition[]> {
-    return this.prisma.segment_definitions.findMany({
-      where: { area },
-      orderBy: [{ sort_order: 'asc' }, { slug: 'asc' }],
-      select: {
-        id: true,
-        slug: true,
-        label: true,
-        sort_order: true,
-        color_key: true,
+  async list(area: AuthUser['area'], month?: string): Promise<SegmentDefinition[]> {
+    const range = parseMonthKey(month);
+    const rows = await this.prisma.segment_definitions.findMany({
+      where: {
+        area,
+        ...(range
+          ? { created_at: { gte: range.start, lt: range.end } }
+          : {}),
       },
+      orderBy: [{ sort_order: 'asc' }, { slug: 'asc' }],
+      select: SEGMENT_SELECT,
     });
+    return rows.map(mapSegmentRow);
+  }
+
+  async listForFilters(area: AuthUser['area']): Promise<SegmentDefinition[]> {
+    const rows = await this.prisma.segment_definitions.findMany({
+      where: { area, active: true, show_in_filter: true },
+      orderBy: [{ sort_order: 'asc' }, { slug: 'asc' }],
+      select: SEGMENT_SELECT,
+    });
+    return rows.map(mapSegmentRow);
+  }
+
+  async listAssignable(area: AuthUser['area']): Promise<SegmentDefinition[]> {
+    const rows = await this.prisma.segment_definitions.findMany({
+      where: { area, active: true, assignable: true },
+      orderBy: [{ sort_order: 'asc' }, { slug: 'asc' }],
+      select: SEGMENT_SELECT,
+    });
+    return rows.map(mapSegmentRow);
+  }
+
+  async listActiveForAudience(area: AuthUser['area']): Promise<SegmentDefinition[]> {
+    const rows = await this.prisma.segment_definitions.findMany({
+      where: { area, active: true },
+      orderBy: [{ sort_order: 'asc' }, { slug: 'asc' }],
+      select: SEGMENT_SELECT,
+    });
+    return rows.map(mapSegmentRow);
+  }
+
+  async reorder(area: AuthUser['area'], orderedIds: number[]): Promise<void> {
+    const ids = [...new Set(orderedIds.map((id) => Number(id)).filter((id) => id > 0))];
+    if (!ids.length) {
+      throw new BadRequestException('Lista de ids inválida');
+    }
+    const existing = await this.prisma.segment_definitions.findMany({
+      where: { area, id: { in: ids } },
+      select: { id: true },
+    });
+    if (existing.length !== ids.length) {
+      throw new BadRequestException('Hay segmentos que no pertenecen al área');
+    }
+    await this.prisma.$transaction(
+      ids.map((id, index) =>
+        this.prisma.segment_definitions.update({
+          where: { id },
+          data: { sort_order: index },
+        }),
+      ),
+    );
   }
 
   async getById(area: AuthUser['area'], id: number): Promise<SegmentDefinition> {
     const row = await this.prisma.segment_definitions.findFirst({
       where: { id, area },
-      select: {
-        id: true,
-        slug: true,
-        label: true,
-        sort_order: true,
-        color_key: true,
-      },
+      select: SEGMENT_SELECT,
     });
     if (!row) {
       throw new NotFoundException('Segmento no encontrado');
     }
-    return row;
+    return mapSegmentRow(row);
   }
 
   async getDetail(area: AuthUser['area'], id: number): Promise<SegmentDetail> {
@@ -122,6 +169,9 @@ export class SegmentsService {
     const label = String(dto.label).trim().slice(0, 120);
     const sortOrder = Number(dto.sort_order ?? 0) || 0;
     const colorKey = normalizeSegmentColorKey(dto.color_key);
+    const active = dto.active !== false;
+    const showInFilter = dto.show_in_filter !== false;
+    const assignable = dto.assignable !== false;
 
     if (!SEGMENT_SLUG_REGEX.test(slug)) {
       throw new BadRequestException(
@@ -134,22 +184,33 @@ export class SegmentsService {
 
     try {
       const row = await this.prisma.segment_definitions.create({
-        data: { area, slug, label, sort_order: sortOrder, color_key: colorKey },
-        select: {
-          id: true,
-          slug: true,
-          label: true,
-          sort_order: true,
-          color_key: true,
+        data: {
+          area,
+          slug,
+          label,
+          sort_order: sortOrder,
+          color_key: colorKey,
+          active,
+          show_in_filter: showInFilter,
+          assignable,
         },
+        select: SEGMENT_SELECT,
       });
       await this.auditLog.write({
         event_type: AuditEvent.SEGMENT_CREATED,
         message: `Segmento creado: ${slug} (${area})`,
         actor: auditActor(user),
-        meta: { slug, label, sort_order: sortOrder, color_key: colorKey },
+        meta: {
+          slug,
+          label,
+          sort_order: sortOrder,
+          color_key: colorKey,
+          active,
+          show_in_filter: showInFilter,
+          assignable,
+        },
       });
-      return row;
+      return mapSegmentRow(row);
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -168,6 +229,13 @@ export class SegmentsService {
     const label = String(dto.label).trim().slice(0, 120);
     const sortOrder = Number(dto.sort_order ?? 0) || 0;
     const colorKey = normalizeSegmentColorKey(dto.color_key);
+    const active = dto.active !== undefined ? Boolean(dto.active) : existing.active;
+    const showInFilter =
+      dto.show_in_filter !== undefined
+        ? Boolean(dto.show_in_filter)
+        : existing.show_in_filter;
+    const assignable =
+      dto.assignable !== undefined ? Boolean(dto.assignable) : existing.assignable;
 
     if (!label) {
       throw new BadRequestException('Etiqueta inválida');
@@ -181,14 +249,15 @@ export class SegmentsService {
     if (newSlug === existing.slug) {
       const row = await this.prisma.segment_definitions.update({
         where: { id },
-        data: { label, sort_order: sortOrder, color_key: colorKey },
-        select: {
-          id: true,
-          slug: true,
-          label: true,
-          sort_order: true,
-          color_key: true,
+        data: {
+          label,
+          sort_order: sortOrder,
+          color_key: colorKey,
+          active,
+          show_in_filter: showInFilter,
+          assignable,
         },
+        select: SEGMENT_SELECT,
       });
       await this.auditLog.write({
         event_type: AuditEvent.SEGMENT_UPDATED,
@@ -200,10 +269,13 @@ export class SegmentsService {
           label,
           sort_order: sortOrder,
           color_key: colorKey,
+          active,
+          show_in_filter: showInFilter,
+          assignable,
           slug_changed: false,
         },
       });
-      return row;
+      return mapSegmentRow(row);
     }
 
     try {
@@ -215,14 +287,11 @@ export class SegmentsService {
             label,
             sort_order: sortOrder,
             color_key: colorKey,
+            active,
+            show_in_filter: showInFilter,
+            assignable,
           },
-          select: {
-            id: true,
-            slug: true,
-            label: true,
-            sort_order: true,
-            color_key: true,
-          },
+          select: SEGMENT_SELECT,
         });
 
         await tx.contact_segments.updateMany({
@@ -251,10 +320,13 @@ export class SegmentsService {
           label,
           sort_order: sortOrder,
           color_key: colorKey,
+          active,
+          show_in_filter: showInFilter,
+          assignable,
           slug_changed: true,
         },
       });
-      return row;
+      return mapSegmentRow(row);
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
