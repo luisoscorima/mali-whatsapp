@@ -14,6 +14,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
+import { assertCanViewCampaignStats } from '../auth/permission.util';
 import { CampaignsService } from './campaigns.service';
 import { RecipientsPreviewDto } from './dto/recipients-preview.dto';
 import type {
@@ -43,6 +44,7 @@ export class CampaignsController {
   async summary(
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<CampaignSummary>> {
+    assertCanViewCampaignStats(user);
     const data = await this.campaignsService.getSummary(user.area);
     return { ok: true, data };
   }
@@ -71,6 +73,7 @@ export class CampaignsController {
     @Param('id', ParseIntPipe) id: number,
     @Res() res: Response,
   ): Promise<void> {
+    assertCanViewCampaignStats(user);
     const { buffer, filename } = await this.campaignsService.exportFailedCsv(
       user.area,
       id,
@@ -87,6 +90,7 @@ export class CampaignsController {
     @Query('filter') filter: string | undefined,
     @Res() res: Response,
   ): Promise<void> {
+    assertCanViewCampaignStats(user);
     const { buffer, filename } = await this.campaignsService.exportLogsXlsx(
       user.area,
       id,
@@ -107,6 +111,7 @@ export class CampaignsController {
     @Query('filter') filter: string | undefined,
     @Res() res: Response,
   ): Promise<void> {
+    assertCanViewCampaignStats(user);
     const { buffer, filename } = await this.campaignsService.exportIncidentsXlsx(
       user.area,
       id,
@@ -126,6 +131,7 @@ export class CampaignsController {
     @Param('id', ParseIntPipe) id: number,
     @Res() res: Response,
   ): Promise<void> {
+    assertCanViewCampaignStats(user);
     const { buffer, filename } = await this.campaignsService.exportRespondersXlsx(
       user.area,
       id,
@@ -151,6 +157,7 @@ export class CampaignsController {
       deliveredCount: number;
     }>
   > {
+    assertCanViewCampaignStats(user);
     const data = await this.campaignsService.syncCost(user.area, id);
     return { ok: true, data };
   }

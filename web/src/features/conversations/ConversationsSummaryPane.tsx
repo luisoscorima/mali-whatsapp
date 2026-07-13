@@ -9,6 +9,7 @@ import {
   YAxis,
 } from 'recharts'
 import { useSearchParams } from 'react-router-dom'
+import { useAppUser } from '@/app/appOutletContext'
 import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
 import { WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
@@ -34,23 +35,30 @@ const KPI_FILTER_MAP: Record<string, { chat?: string }> = {
 }
 
 export function ConversationsSummaryPane() {
+  const user = useAppUser()
+  const canViewGlobal = Boolean(user?.canViewConversationStats)
   const [searchParams, setSearchParams] = useSearchParams()
   const [summary, setSummary] = useState<ConversationSummary | null>(null)
   const [assignees, setAssignees] = useState<Assignee[]>([])
   const [error, setError] = useState('')
 
   const days = Number(searchParams.get('kpi_days') ?? 30) || 30
-  const advisorId = searchParams.get('kpi_advisor') ?? ''
+  const advisorId = canViewGlobal ? (searchParams.get('kpi_advisor') ?? '') : ''
 
   useEffect(() => {
+    if (!canViewGlobal) {
+      setAssignees([])
+      return
+    }
     void apiClient.get<{ assignees: Assignee[] }>('/api/conversations/assignees').then((res) => {
       if (res.ok) setAssignees(res.data.assignees)
     })
-  }, [])
+  }, [canViewGlobal])
 
   useEffect(() => {
+    if (!user) return
     const qs = new URLSearchParams({ days: String(days) })
-    if (advisorId) qs.set('advisor_id', advisorId)
+    if (canViewGlobal && advisorId) qs.set('advisor_id', advisorId)
     void apiClient.get<ConversationSummary>(`/api/conversations/summary?${qs}`).then((res) => {
       if (!res.ok) {
         notify.error(res.error)
@@ -60,7 +68,7 @@ export function ConversationsSummaryPane() {
         setError('')
       }
     })
-  }, [days, advisorId])
+  }, [days, advisorId, canViewGlobal, user])
 
   const chartData = useMemo(
     () =>
@@ -86,7 +94,7 @@ export function ConversationsSummaryPane() {
     return <WaEmptyPane heading="No se pudo cargar" />
   }
 
-  if (!summary) {
+  if (!user || !summary) {
     return <WaEmptyPane heading="Cargando resumen…" />
   }
 
@@ -96,7 +104,9 @@ export function ConversationsSummaryPane() {
         <div>
           <h2 className="text-lg font-semibold">Conversaciones</h2>
           <p className="text-sm text-muted">
-            Selecciona un chat de la lista o usa un KPI para filtrar el inbox.
+            {canViewGlobal
+              ? 'Selecciona un chat de la lista o usa un KPI para filtrar el inbox.'
+              : 'Resumen de tus conversaciones asignadas. Selecciona un chat de la lista.'}
           </p>
         </div>
 
@@ -117,30 +127,32 @@ export function ConversationsSummaryPane() {
               {n} días
             </button>
           ))}
-          <select
-            value={advisorId}
-            onChange={(e) =>
-              setSearchParams((sp) => {
-                const next = new URLSearchParams(sp)
-                const v = e.target.value
-                if (v) next.set('kpi_advisor', v)
-                else next.delete('kpi_advisor')
-                return next
-              })
-            }
-            className="rounded-lg border border-line bg-bg px-2 py-1"
-          >
-            <option value="">Todos los asesores</option>
-            {assignees.map((a) => (
-              <option key={a.id} value={String(a.id)}>
-                {a.label}
-              </option>
-            ))}
-          </select>
+          {canViewGlobal ? (
+            <select
+              value={advisorId}
+              onChange={(e) =>
+                setSearchParams((sp) => {
+                  const next = new URLSearchParams(sp)
+                  const v = e.target.value
+                  if (v) next.set('kpi_advisor', v)
+                  else next.delete('kpi_advisor')
+                  return next
+                })
+              }
+              className="rounded-lg border border-line bg-bg px-2 py-1"
+            >
+              <option value="">Todos los asesores</option>
+              {assignees.map((a) => (
+                <option key={a.id} value={String(a.id)}>
+                  {a.label}
+                </option>
+              ))}
+            </select>
+          ) : null}
         </div>
 
         <MetricsGrid
-          title="Resumen"
+          title={canViewGlobal ? 'Resumen' : 'Mi resumen'}
           metrics={summary.kpis}
           onMetricClick={(metric) => applyKpiFilter(metric)}
         />
@@ -166,7 +178,7 @@ export function ConversationsSummaryPane() {
           </div>
         ) : null}
 
-        {summary.top_advisors.length > 0 ? (
+        {canViewGlobal && summary.top_advisors.length > 0 ? (
           <p className="text-sm text-muted">
             Top asesores:{' '}
             {summary.top_advisors.map((row) => `${row.label} (${row.count})`).join(' · ')}

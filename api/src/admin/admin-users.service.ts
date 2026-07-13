@@ -41,6 +41,10 @@ function mapUserRow(row: {
   can_edit_business_hours: boolean;
   can_view_reports: boolean;
   can_assign_conversations: boolean;
+  can_manage_attributes: boolean;
+  can_manage_segments: boolean;
+  can_view_conversation_stats: boolean;
+  can_view_campaign_stats: boolean;
 }): AdminUserListItem {
   return {
     id: row.id,
@@ -55,6 +59,10 @@ function mapUserRow(row: {
     can_edit_business_hours: row.can_edit_business_hours,
     can_view_reports: row.can_view_reports,
     can_assign_conversations: row.can_assign_conversations,
+    can_manage_attributes: row.can_manage_attributes,
+    can_manage_segments: row.can_manage_segments,
+    can_view_conversation_stats: row.can_view_conversation_stats,
+    can_view_campaign_stats: row.can_view_campaign_stats,
   };
 }
 
@@ -97,6 +105,10 @@ export class AdminUsersService {
         can_edit_business_hours: true,
         can_view_reports: true,
         can_assign_conversations: true,
+        can_manage_attributes: true,
+        can_manage_segments: true,
+        can_view_conversation_stats: true,
+        can_view_campaign_stats: true,
       },
     });
     return rows.map(mapUserRow);
@@ -118,6 +130,10 @@ export class AdminUsersService {
         can_edit_business_hours: true,
         can_view_reports: true,
         can_assign_conversations: true,
+        can_manage_attributes: true,
+        can_manage_segments: true,
+        can_view_conversation_stats: true,
+        can_view_campaign_stats: true,
       },
     });
     if (!row) throw new NotFoundException('Usuario no encontrado');
@@ -154,6 +170,10 @@ export class AdminUsersService {
           can_edit_business_hours: Boolean(dto.can_edit_business_hours),
           can_view_reports: Boolean(dto.can_view_reports),
           can_assign_conversations: Boolean(dto.can_assign_conversations),
+          can_manage_attributes: Boolean(dto.can_manage_attributes),
+          can_manage_segments: Boolean(dto.can_manage_segments),
+          can_view_conversation_stats: Boolean(dto.can_view_conversation_stats),
+          can_view_campaign_stats: Boolean(dto.can_view_campaign_stats),
         },
         select: { id: true },
       });
@@ -222,6 +242,10 @@ export class AdminUsersService {
           can_edit_business_hours: Boolean(dto.can_edit_business_hours),
           can_view_reports: Boolean(dto.can_view_reports),
           can_assign_conversations: Boolean(dto.can_assign_conversations),
+          can_manage_attributes: Boolean(dto.can_manage_attributes),
+          can_manage_segments: Boolean(dto.can_manage_segments),
+          can_view_conversation_stats: Boolean(dto.can_view_conversation_stats),
+          can_view_campaign_stats: Boolean(dto.can_view_campaign_stats),
         },
       });
     } else {
@@ -238,6 +262,10 @@ export class AdminUsersService {
           can_edit_business_hours: Boolean(dto.can_edit_business_hours),
           can_view_reports: Boolean(dto.can_view_reports),
           can_assign_conversations: Boolean(dto.can_assign_conversations),
+          can_manage_attributes: Boolean(dto.can_manage_attributes),
+          can_manage_segments: Boolean(dto.can_manage_segments),
+          can_view_conversation_stats: Boolean(dto.can_view_conversation_stats),
+          can_view_campaign_stats: Boolean(dto.can_view_campaign_stats),
         },
       });
     }

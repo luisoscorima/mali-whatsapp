@@ -227,9 +227,21 @@ export class ConversationsService {
     )`;
   }
 
+  private buildInboxAttributeSearchSql(searchPat: string): Prisma.Sql {
+    return Prisma.sql` OR EXISTS (
+      SELECT 1 FROM contact_attributes ca
+      WHERE ca.contact_id = ct.id
+      AND (
+        ca.attr_key ILIKE ${searchPat} ESCAPE '!'
+        OR ca.attr_value ILIKE ${searchPat} ESCAPE '!'
+      )
+    )`;
+  }
+
   private buildInboxSearchSql(searchQ: string): Prisma.Sql {
     const searchPat = `%${escapeForLikePattern(searchQ)}%`;
     const segmentSql = this.buildInboxSegmentSearchSql(searchPat);
+    const attributeSql = this.buildInboxAttributeSearchSql(searchPat);
     const digitsOnly = searchQ.replace(/\D/g, '');
     if (digitsOnly) {
       const digitsPat = `%${digitsOnly}%`;
@@ -246,6 +258,7 @@ export class ConversationsService {
         OR regexp_replace(COALESCE(ct.phone, ''), '\\D', '', 'g') LIKE ${digitsPat}
         OR regexp_replace(COALESCE(c.phone, ''), '\\D', '', 'g') LIKE ${digitsPat}
         ${segmentSql}
+        ${attributeSql}
       )`;
     }
     return Prisma.sql` AND (
@@ -259,6 +272,7 @@ export class ConversationsService {
       OR COALESCE(ct.phone, '') ILIKE ${searchPat} ESCAPE '!'
       OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
       ${segmentSql}
+      ${attributeSql}
     )`;
   }
 
@@ -377,6 +391,8 @@ export class ConversationsService {
     const contactSegmentSql = buildContactSegmentSql(segmentFilter);
     const contactPat = `%${escapeForLikePattern(searchQ)}%`;
     const contactSegmentSearchSql = this.buildInboxSegmentSearchSql(contactPat);
+    const contactAttributeSearchSql =
+      this.buildInboxAttributeSearchSql(contactPat);
     const contactDigits = searchQ.replace(/\D/g, '');
     const contactSearchSql = contactDigits
       ? Prisma.sql` AND (
@@ -385,12 +401,14 @@ export class ConversationsService {
           OR COALESCE(ct.phone, '') ILIKE ${contactPat} ESCAPE '!'
           OR regexp_replace(COALESCE(ct.phone, ''), '\\D', '', 'g') LIKE ${`%${contactDigits}%`}
           ${contactSegmentSearchSql}
+          ${contactAttributeSearchSql}
         )`
       : Prisma.sql` AND (
           COALESCE(ct.name, '') ILIKE ${contactPat} ESCAPE '!'
           OR COALESCE(ct.last_name, '') ILIKE ${contactPat} ESCAPE '!'
           OR COALESCE(ct.phone, '') ILIKE ${contactPat} ESCAPE '!'
           ${contactSegmentSearchSql}
+          ${contactAttributeSearchSql}
         )`;
 
     const virtualRows = await this.prisma.$queryRaw<InboxRow[]>(Prisma.sql`
@@ -461,6 +479,8 @@ export class ConversationsService {
     const contactSegmentSql = buildContactSegmentSql(segmentFilter);
     const contactPat = `%${escapeForLikePattern(searchQ)}%`;
     const contactSegmentSearchSql = this.buildInboxSegmentSearchSql(contactPat);
+    const contactAttributeSearchSql =
+      this.buildInboxAttributeSearchSql(contactPat);
     const contactDigits = searchQ.replace(/\D/g, '');
     const contactSearchSql = contactDigits
       ? Prisma.sql` AND (
@@ -469,12 +489,14 @@ export class ConversationsService {
           OR COALESCE(ct.phone, '') ILIKE ${contactPat} ESCAPE '!'
           OR regexp_replace(COALESCE(ct.phone, ''), '\\D', '', 'g') LIKE ${`%${contactDigits}%`}
           ${contactSegmentSearchSql}
+          ${contactAttributeSearchSql}
         )`
       : Prisma.sql` AND (
           COALESCE(ct.name, '') ILIKE ${contactPat} ESCAPE '!'
           OR COALESCE(ct.last_name, '') ILIKE ${contactPat} ESCAPE '!'
           OR COALESCE(ct.phone, '') ILIKE ${contactPat} ESCAPE '!'
           ${contactSegmentSearchSql}
+          ${contactAttributeSearchSql}
         )`;
 
     const virtualRows = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
@@ -576,13 +598,18 @@ export class ConversationsService {
     advisorIdRaw?: string,
   ) {
     const days = Number(daysRaw ?? 30) || 30;
-    const advisorId = Number(advisorIdRaw ?? 0) || null;
-    return fetchConversationSummary(
-      this.prisma,
-      user.area,
-      days,
-      advisorId && advisorId > 0 ? advisorId : null,
-    );
+    const requestedAdvisorId = Number(advisorIdRaw ?? 0) || null;
+    // Sin flag: solo stats propias. Con flag: global del área o filtro por asesor.
+    const canViewGlobal = user.canViewConversationStats;
+    const advisorId = canViewGlobal
+      ? requestedAdvisorId && requestedAdvisorId > 0
+        ? requestedAdvisorId
+        : null
+      : user.id > 0
+        ? user.id
+        : null;
+
+    return fetchConversationSummary(this.prisma, user.area, days, advisorId);
   }
 
   async sendDirectTemplate(

@@ -13,6 +13,9 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
+import {
+  assertCanManageAttributes,
+} from '../auth/permission.util';
 import { AttributeDefinitionsService } from './attribute-definitions.service';
 import type { AttributeDefinition } from './attribute-definitions.types';
 import {
@@ -45,6 +48,7 @@ export class AttributeDefinitionsController {
     @CurrentUser() user: AuthUser,
     @Body() body: ReorderAttributeDefinitionsDto,
   ): Promise<ApiResponse<{ ok: true }>> {
+    assertCanManageAttributes(user);
     await this.service.reorder(user.area, body.orderedIds);
     return { ok: true, data: { ok: true } };
   }
@@ -54,6 +58,7 @@ export class AttributeDefinitionsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<AttributeDefinition>> {
+    assertCanManageAttributes(user);
     const data = await this.service.getById(user.area, id);
     return { ok: true, data };
   }
@@ -63,6 +68,7 @@ export class AttributeDefinitionsController {
     @CurrentUser() user: AuthUser,
     @Body() body: CreateAttributeDefinitionDto,
   ): Promise<ApiResponse<AttributeDefinition>> {
+    assertCanManageAttributes(user);
     const data = await this.service.create(user.area, body);
     return { ok: true, data };
   }
@@ -73,6 +79,7 @@ export class AttributeDefinitionsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateAttributeDefinitionDto,
   ): Promise<ApiResponse<AttributeDefinition>> {
+    assertCanManageAttributes(user);
     const data = await this.service.update(user.area, id, body);
     return { ok: true, data };
   }
@@ -82,6 +89,7 @@ export class AttributeDefinitionsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<{ deleted: true }>> {
+    assertCanManageAttributes(user);
     await this.service.remove(user.area, id);
     return { ok: true, data: { deleted: true } };
   }

@@ -134,6 +134,7 @@ export class ContactsController {
       user,
       body.segment_slug,
       body.contact_ids,
+      Boolean(body.assignable_only),
     );
     return { ok: true, data };
   }

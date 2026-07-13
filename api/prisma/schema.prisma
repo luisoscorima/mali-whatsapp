@@ -321,6 +321,10 @@ model users {
   can_view_reports             Boolean      @default(false)
   is_provisioned               Boolean      @default(false)
   can_assign_conversations     Boolean      @default(false)
+  can_manage_attributes        Boolean      @default(false)
+  can_manage_segments          Boolean      @default(false)
+  can_view_conversation_stats  Boolean      @default(false)
+  can_view_campaign_stats      Boolean      @default(false)
   first_name                   String?      @db.VarChar(80)
   last_name                    String?      @db.VarChar(80)
   audit_logs                   audit_logs[]

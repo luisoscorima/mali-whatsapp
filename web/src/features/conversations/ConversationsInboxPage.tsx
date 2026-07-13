@@ -406,6 +406,9 @@ export function ConversationsInboxPage() {
   const [sendingReply, setSendingReply] = useState(false)
   const [searchInput, setSearchInput] = useState(searchParams.get('q') ?? '')
   const [loadingDetail, setLoadingDetail] = useState(false)
+  const [selectedContactIds, setSelectedContactIds] = useState<Set<number>>(new Set())
+  const [bulkSegment, setBulkSegment] = useState('')
+  const [bulkBusy, setBulkBusy] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
   const [actionsContext, setActionsContext] = useState<ChatActionsContext | null>(null)
@@ -451,6 +454,11 @@ export function ConversationsInboxPage() {
         }
         setList(result.data)
       })
+  }, [filterQuerySuffix])
+
+  useEffect(() => {
+    setSelectedContactIds(new Set())
+    setBulkSegment('')
   }, [filterQuerySuffix])
 
   const listCount = useMemo(() => {
@@ -937,6 +945,56 @@ export function ConversationsInboxPage() {
   }
 
   const segments = list?.segments ?? []
+  const assignableSegments = list?.assignable_segments ?? []
+
+  function contactIdForBulk(item: InboxListItem): number | null {
+    if (item.contact_id && item.contact_id > 0) return item.contact_id
+    return null
+  }
+
+  function toggleContactSelection(contactId: number) {
+    setSelectedContactIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(contactId)) next.delete(contactId)
+      else next.add(contactId)
+      return next
+    })
+  }
+
+  function selectAllVisibleContacts() {
+    if (!list) return
+    const ids = list.items
+      .map((item) => contactIdForBulk(item))
+      .filter((id): id is number => id != null)
+    setSelectedContactIds(new Set(ids))
+  }
+
+  function clearContactSelection() {
+    setSelectedContactIds(new Set())
+  }
+
+  async function handleBulkAssignableSegment(e: FormEvent) {
+    e.preventDefault()
+    if (!bulkSegment || selectedContactIds.size === 0) return
+    setBulkBusy(true)
+    const res = await apiClient.post<{ updated: number }>(
+      '/api/contacts/bulk-add-segment',
+      {
+        segment_slug: bulkSegment,
+        contact_ids: [...selectedContactIds],
+        assignable_only: true,
+      },
+    )
+    setBulkBusy(false)
+    if (!res.ok) {
+      notify.error(res.error)
+      return
+    }
+    notify.success(`Segmento aplicado a ${res.data.updated} contacto(s)`)
+    clearContactSelection()
+    setBulkSegment('')
+    void loadList({ silent: true })
+  }
   const displayName = (item: InboxListItem) =>
     formatContactName(item.contact_name, null, item.phone)
 
@@ -1016,7 +1074,7 @@ export function ConversationsInboxPage() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={onSearchKeyDown}
-            placeholder="Buscar en chats…"
+            placeholder="Buscar nombre, teléfono, mensaje, segmento o atributo…"
             className="inbox-search-input"
             aria-label="Buscar en chats"
           />
@@ -1026,6 +1084,43 @@ export function ConversationsInboxPage() {
         <p className="text-xs text-muted">
           {listCount} chat{listCount === 1 ? '' : 's'}
         </p>
+      ) : null}
+      {assignableSegments.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1 text-xs">
+          <button type="button" className="small-btn" onClick={selectAllVisibleContacts}>
+            Todos
+          </button>
+          <button type="button" className="small-btn" onClick={clearContactSelection}>
+            Ninguno
+          </button>
+          {selectedContactIds.size > 0 ? (
+            <form
+              onSubmit={(e) => void handleBulkAssignableSegment(e)}
+              className="flex min-w-0 flex-1 flex-wrap items-end gap-1"
+            >
+              <select
+                value={bulkSegment}
+                onChange={(e) => setBulkSegment(e.target.value)}
+                required
+                className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5"
+              >
+                <option value="">Segmento asignable</option>
+                {assignableSegments.map((seg) => (
+                  <option key={seg.slug} value={seg.slug}>
+                    {seg.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="submit"
+                disabled={bulkBusy || !bulkSegment}
+                className="small-btn primary"
+              >
+                {bulkBusy ? '…' : `Aplicar (${selectedContactIds.size})`}
+              </button>
+            </form>
+          ) : null}
+        </div>
       ) : null}
     </>
   )
@@ -1058,6 +1153,20 @@ export function ConversationsInboxPage() {
                     )
                   }}
                 >
+                  {assignableSegments.length > 0 && contactIdForBulk(item) != null ? (
+                    <label
+                      className="flex items-center self-stretch pl-2"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedContactIds.has(contactIdForBulk(item)!)}
+                        onChange={() => toggleContactSelection(contactIdForBulk(item)!)}
+                        onClick={(event) => event.stopPropagation()}
+                        aria-label={`Seleccionar ${name}`}
+                      />
+                    </label>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => void onSelectItem(item)}

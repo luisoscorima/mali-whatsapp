@@ -211,6 +211,10 @@ export class AuthService {
     can_edit_business_hours: boolean;
     can_view_reports: boolean;
     can_assign_conversations: boolean;
+    can_manage_attributes: boolean;
+    can_manage_segments: boolean;
+    can_view_conversation_stats: boolean;
+    can_view_campaign_stats: boolean;
     picture?: string;
   }> {
     this.config.assertJwtSecret();
@@ -286,6 +290,10 @@ export class AuthService {
       can_edit_business_hours: boolean;
       can_view_reports: boolean;
       can_assign_conversations?: boolean;
+      can_manage_attributes?: boolean;
+      can_manage_segments?: boolean;
+      can_view_conversation_stats?: boolean;
+      can_view_campaign_stats?: boolean;
       picture?: string;
     },
     clientIp?: string | null,
@@ -461,6 +469,10 @@ export class AuthService {
       can_edit_business_hours: boolean;
       can_view_reports: boolean;
       can_assign_conversations?: boolean;
+      can_manage_attributes?: boolean;
+      can_manage_segments?: boolean;
+      can_view_conversation_stats?: boolean;
+      can_view_campaign_stats?: boolean;
     },
     sessionArea: unknown,
     picture?: string,
@@ -514,6 +526,16 @@ export class AuthService {
         isBootstrapAdmin || isMaster || Boolean(row.can_view_reports),
       canAssignConversations:
         isBootstrapAdmin || isMaster || Boolean(row.can_assign_conversations),
+      canManageAttributes:
+        isBootstrapAdmin || isMaster || Boolean(row.can_manage_attributes),
+      canManageSegments:
+        isBootstrapAdmin || isMaster || Boolean(row.can_manage_segments),
+      canViewConversationStats:
+        isBootstrapAdmin ||
+        isMaster ||
+        Boolean(row.can_view_conversation_stats),
+      canViewCampaignStats:
+        isBootstrapAdmin || isMaster || Boolean(row.can_view_campaign_stats),
       ...(picture ? { picture } : {}),
     };
   }

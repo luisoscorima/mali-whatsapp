@@ -54,6 +54,22 @@ export class CreateAdminUserDto {
   can_assign_conversations?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  can_manage_attributes?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  can_manage_segments?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  can_view_conversation_stats?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  can_view_campaign_stats?: boolean;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   extra_areas?: string[];
@@ -100,6 +116,22 @@ export class UpdateAdminUserDto {
   @IsOptional()
   @IsBoolean()
   can_assign_conversations?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  can_manage_attributes?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  can_manage_segments?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  can_view_conversation_stats?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  can_view_campaign_stats?: boolean;
 
   @IsOptional()
   @IsArray()

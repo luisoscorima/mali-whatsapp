@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { WaAppShell } from './WaAppShell'
 import { RequireAuth } from './RequireAuth'
 import { RequirePasswordChanged } from './RequirePasswordChanged'
+import { RequireUserPermission } from './appOutletContext'
 import { LoginPage } from '../features/auth/LoginPage'
 import { ChangePasswordPage } from '../features/auth/ChangePasswordPage'
 import { MetaAdsShell } from '../features/meta-ads/MetaAdsShell'
@@ -59,12 +60,26 @@ export function AppRouter() {
               <Route index element={<MetaAdsEmptyPane />} />
               <Route path=":id" element={<MetaAdDetailPage />} />
             </Route>
-            <Route path="attributes" element={<AttributesShell />}>
+            <Route
+              path="attributes"
+              element={
+                <RequireUserPermission allowed={(u) => u.canManageAttributes}>
+                  <AttributesShell />
+                </RequireUserPermission>
+              }
+            >
               <Route index element={<AttributesEmptyPane />} />
               <Route path="new" element={<AttributeNewPage />} />
               <Route path=":id" element={<AttributeDetailPage />} />
             </Route>
-            <Route path="segments" element={<SegmentsShell />}>
+            <Route
+              path="segments"
+              element={
+                <RequireUserPermission allowed={(u) => u.canManageSegments}>
+                  <SegmentsShell />
+                </RequireUserPermission>
+              }
+            >
               <Route index element={<SegmentsEmptyPane />} />
               <Route path="new" element={<SegmentNewPage />} />
               <Route path=":id" element={<SegmentDetailPage />} />

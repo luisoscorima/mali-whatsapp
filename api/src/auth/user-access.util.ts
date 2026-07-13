@@ -27,6 +27,10 @@ export function bootstrapAdminUserData() {
     can_edit_business_hours: true,
     can_view_reports: true,
     can_assign_conversations: true,
+    can_manage_attributes: true,
+    can_manage_segments: true,
+    can_view_conversation_stats: true,
+    can_view_campaign_stats: true,
   };
 }
 
@@ -43,6 +47,10 @@ export function newGoogleUserData(passwordHash: string) {
     can_edit_business_hours: false,
     can_view_reports: false,
     can_assign_conversations: false,
+    can_manage_attributes: false,
+    can_manage_segments: false,
+    can_view_conversation_stats: false,
+    can_view_campaign_stats: false,
   };
 }
 

@@ -143,10 +143,16 @@ export function WaRail({ user, onUserUpdate }: WaRailProps) {
     if (moreRef.current) moreRef.current.open = false
   }, [location.pathname])
 
-  const visibleItems =
+  const provisionedItems =
     user?.isProvisioned || user?.isMaster
       ? NAV_ITEMS
       : NAV_ITEMS.filter((item) => item.key === 'campaigns' || item.key === 'conversations')
+
+  const visibleItems = provisionedItems.filter((item) => {
+    if (item.key === 'attributes') return Boolean(user?.canManageAttributes)
+    if (item.key === 'segments') return Boolean(user?.canManageSegments)
+    return true
+  })
 
   return (
     <aside className="wa-rail" aria-label="Navegación principal">

@@ -5,6 +5,10 @@ export type AdminUserPermissions = {
   can_edit_business_hours: boolean;
   can_view_reports: boolean;
   can_assign_conversations: boolean;
+  can_manage_attributes: boolean;
+  can_manage_segments: boolean;
+  can_view_conversation_stats: boolean;
+  can_view_campaign_stats: boolean;
 };
 
 export type AdminUserListItem = {

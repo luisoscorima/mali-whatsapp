@@ -16,6 +16,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
+import { assertCanManageSegments } from '../auth/permission.util';
 import { CreateSegmentDto, UpdateSegmentDto } from './dto/segment.dto';
 import { ReorderSegmentsDto } from './dto/reorder-segments.dto';
 import { SegmentsService } from './segments.service';
@@ -40,6 +41,7 @@ export class SegmentsController {
     @CurrentUser() user: AuthUser,
     @Body() body: ReorderSegmentsDto,
   ): Promise<ApiResponse<{ ok: true }>> {
+    assertCanManageSegments(user);
     await this.segmentsService.reorder(user.area, body.orderedIds);
     return { ok: true, data: { ok: true } };
   }
@@ -59,6 +61,7 @@ export class SegmentsController {
     @Query('attrs') attrs: string | undefined,
     @Res() res: Response,
   ): Promise<void> {
+    assertCanManageSegments(user);
     const { buffer, filename } = await this.segmentsService.exportMembers(
       user.area,
       id,
@@ -77,6 +80,7 @@ export class SegmentsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<SegmentDetail>> {
+    assertCanManageSegments(user);
     const data = await this.segmentsService.getDetail(user.area, id);
     return { ok: true, data };
   }
@@ -86,6 +90,7 @@ export class SegmentsController {
     @CurrentUser() user: AuthUser,
     @Body() body: CreateSegmentDto,
   ): Promise<ApiResponse<SegmentDefinition>> {
+    assertCanManageSegments(user);
     const data = await this.segmentsService.create(user, body);
     return { ok: true, data };
   }
@@ -96,6 +101,7 @@ export class SegmentsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateSegmentDto,
   ): Promise<ApiResponse<SegmentDefinition>> {
+    assertCanManageSegments(user);
     const data = await this.segmentsService.update(user, id, body);
     return { ok: true, data };
   }
@@ -105,6 +111,7 @@ export class SegmentsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<{ deleted: true }>> {
+    assertCanManageSegments(user);
     await this.segmentsService.remove(user, id);
     return { ok: true, data: { deleted: true } };
   }
@@ -115,6 +122,7 @@ export class SegmentsController {
     @Param('id', ParseIntPipe) id: number,
     @Param('contactId', ParseIntPipe) contactId: number,
   ): Promise<ApiResponse<SegmentDetail>> {
+    assertCanManageSegments(user);
     const data = await this.segmentsService.removeMember(
       user.area,
       id,

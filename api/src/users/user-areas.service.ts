@@ -108,6 +108,10 @@ export class UserAreasService {
     canEditBusinessHours: boolean;
     canViewReports: boolean;
     canAssignConversations: boolean;
+    canManageAttributes: boolean;
+    canManageSegments: boolean;
+    canViewConversationStats: boolean;
+    canViewCampaignStats: boolean;
   } {
     const area = normalizeArea(this.config.devArea);
     return {
@@ -125,6 +129,10 @@ export class UserAreasService {
       canEditBusinessHours: false,
       canViewReports: false,
       canAssignConversations: true,
+      canManageAttributes: true,
+      canManageSegments: true,
+      canViewConversationStats: true,
+      canViewCampaignStats: true,
     };
   }
 }

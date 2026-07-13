@@ -25,6 +25,10 @@ export type AuthUser = {
   canEditBusinessHours: boolean;
   canViewReports: boolean;
   canAssignConversations: boolean;
+  canManageAttributes: boolean;
+  canManageSegments: boolean;
+  canViewConversationStats: boolean;
+  canViewCampaignStats: boolean;
   picture?: string;
 };
 

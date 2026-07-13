@@ -232,13 +232,35 @@ export class ContactsService {
     user: AuthUser,
     segmentSlug: string,
     contactIds: number[],
+    assignableOnly = false,
   ): Promise<{ updated: number }> {
     const area = user.area;
     const slug = String(segmentSlug || '').trim();
-    const segmentSet = await this.getSegmentSlugSet(area);
-    if (!segmentSet.has(slug)) {
-      throw new BadRequestException('Segmento invalido');
+    if (assignableOnly) {
+      const assignable = await this.prisma.segment_definitions.findFirst({
+        where: { area, active: true, assignable: true, slug },
+        select: { slug: true },
+      });
+      if (!assignable) {
+        throw new BadRequestException('Segmento no asignable');
+      }
+    } else {
+      const segmentSet = await this.getSegmentSlugSet(area);
+      if (!segmentSet.has(slug)) {
+        throw new BadRequestException('Segmento invalido');
+      }
     }
+
+    const assignableSlugs = assignableOnly
+      ? new Set(
+          (
+            await this.prisma.segment_definitions.findMany({
+              where: { area, active: true, assignable: true },
+              select: { slug: true },
+            })
+          ).map((row) => row.slug),
+        )
+      : null;
 
     const ids = [
       ...new Set(
@@ -264,6 +286,23 @@ export class ContactsService {
           select: { id: true },
         });
         if (!own) continue;
+
+        if (assignableSlugs) {
+          const current = await tx.contact_segments.findMany({
+            where: { contact_id: cid, area },
+            select: { segment_slug: true },
+          });
+          const currentAssignable = current
+            .map((row) => row.segment_slug)
+            .filter((s) => assignableSlugs.has(s));
+          if (
+            !currentAssignable.includes(slug) &&
+            currentAssignable.length >= 3
+          ) {
+            continue;
+          }
+        }
+
         await tx.contact_segments.createMany({
           data: [{ contact_id: cid, area, segment_slug: slug }],
           skipDuplicates: true,
@@ -276,7 +315,11 @@ export class ContactsService {
       event_type: AuditEvent.CONTACT_BULK_SEGMENT,
       message: `Asignación masiva al segmento «${slug}» (${ids.length} contactos)`,
       actor: auditActor(user),
-      meta: { segment_slug: slug, contact_count: updated },
+      meta: {
+        segment_slug: slug,
+        contact_count: updated,
+        assignable_only: assignableOnly,
+      },
     });
 
     return { updated };

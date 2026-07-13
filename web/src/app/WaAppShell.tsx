@@ -5,6 +5,7 @@ import { hasInboxDetailRoute } from '@/shared/layout/inboxDetailRoute'
 import { TooltipProvider } from '@/shared/ui/shadcn/tooltip'
 import { WaLayout } from '@/shared/ui/shell/WaLayout'
 import { WaRail } from '@/shared/ui/shell/WaRail'
+import type { AppShellOutletContext } from './appOutletContext'
 
 export function WaAppShell() {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -26,12 +27,14 @@ export function WaAppShell() {
     .filter(Boolean)
     .join(' ')
 
+  const outletContext: AppShellOutletContext = { user }
+
   return (
     <TooltipProvider>
       <div className="page-wa page-conversations text-ink">
         <WaLayout className={layoutClass}>
           <WaRail user={user} onUserUpdate={setUser} />
-          <Outlet />
+          <Outlet context={outletContext} />
         </WaLayout>
       </div>
     </TooltipProvider>

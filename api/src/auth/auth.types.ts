@@ -15,6 +15,10 @@ export interface AuthUser {
   canEditBusinessHours: boolean;
   canViewReports: boolean;
   canAssignConversations: boolean;
+  canManageAttributes: boolean;
+  canManageSegments: boolean;
+  canViewConversationStats: boolean;
+  canViewCampaignStats: boolean;
   picture?: string;
   /** Id de login_logs de esta sesión (presencia “en línea”). */
   loginLogId?: number;

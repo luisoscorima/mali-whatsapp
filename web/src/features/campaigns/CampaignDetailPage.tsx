@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { useAppUser } from '@/app/appOutletContext'
 import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
 import { formatDateTime } from '../../shared/format'
@@ -124,6 +125,8 @@ function selectClass(): string {
 
 export function CampaignDetailPage() {
   const { id } = useParams()
+  const user = useAppUser()
+  const canViewStats = Boolean(user?.canViewCampaignStats)
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
   const [busy, setBusy] = useState('')
@@ -403,6 +406,8 @@ export function CampaignDetailPage() {
         ) : null}
       </dl>
 
+      {canViewStats ? (
+        <>
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-sm text-muted">
           Exportar registro
@@ -488,6 +493,8 @@ export function CampaignDetailPage() {
         onRetryFailed={handleRetryFailed}
         retryBusy={busy === 'retry'}
       />
+        </>
+      ) : null}
     </div>
   )
 }

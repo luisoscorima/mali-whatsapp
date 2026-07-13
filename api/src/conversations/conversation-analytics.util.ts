@@ -86,12 +86,14 @@ export async function fetchConversationSummary(
       FROM conversations c
       WHERE c.area = ${area}
         AND c.last_message_at >= ${since}
+        ${advisorFilter}
     `),
     prisma.$queryRaw<{ day: Date; count: number }[]>(Prisma.sql`
       SELECT date_trunc('day', c.last_message_at)::date AS day, COUNT(*)::int AS count
       FROM conversations c
       WHERE c.area = ${area}
         AND c.last_message_at >= ${since}
+        ${advisorFilter}
       GROUP BY 1
       ORDER BY 1 ASC
     `),
@@ -111,6 +113,7 @@ export async function fetchConversationSummary(
       WHERE c.area = ${area}
         AND c.last_message_at >= ${since}
         AND c.assigned_user_id IS NOT NULL
+        ${advisorFilter}
       GROUP BY u.id, label
       ORDER BY count DESC, label ASC
       LIMIT 5

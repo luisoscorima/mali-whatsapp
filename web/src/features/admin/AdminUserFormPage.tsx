@@ -16,6 +16,10 @@ type AdminUserDetail = {
   can_edit_business_hours: boolean
   can_view_reports: boolean
   can_assign_conversations: boolean
+  can_manage_attributes: boolean
+  can_manage_segments: boolean
+  can_view_conversation_stats: boolean
+  can_view_campaign_stats: boolean
   extra_areas: string[]
 }
 
@@ -26,6 +30,10 @@ const PERM_FIELDS = [
   { key: 'can_view_audit_logs', label: 'Ver bitácora' },
   { key: 'can_view_reports', label: 'Ver reportería' },
   { key: 'can_assign_conversations', label: 'Asignar conversaciones' },
+  { key: 'can_manage_attributes', label: 'Gestionar atributos' },
+  { key: 'can_manage_segments', label: 'Gestionar segmentos' },
+  { key: 'can_view_conversation_stats', label: 'Ver stats globales de conversaciones' },
+  { key: 'can_view_campaign_stats', label: 'Ver stats de campañas' },
 ] as const
 
 export function AdminUserFormPage() {
@@ -49,6 +57,10 @@ export function AdminUserFormPage() {
     can_view_audit_logs: false,
     can_view_reports: false,
     can_assign_conversations: false,
+    can_manage_attributes: false,
+    can_manage_segments: false,
+    can_view_conversation_stats: false,
+    can_view_campaign_stats: false,
   })
 
   useEffect(() => {
@@ -72,6 +84,10 @@ export function AdminUserFormPage() {
         can_view_audit_logs: user.can_view_audit_logs,
         can_view_reports: user.can_view_reports,
         can_assign_conversations: user.can_assign_conversations,
+        can_manage_attributes: user.can_manage_attributes,
+        can_manage_segments: user.can_manage_segments,
+        can_view_conversation_stats: user.can_view_conversation_stats,
+        can_view_campaign_stats: user.can_view_campaign_stats,
       })
     })
   }, [isNew, userId])
