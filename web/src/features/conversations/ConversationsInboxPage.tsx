@@ -26,6 +26,7 @@ import { InboxSendTemplateDialog } from './InboxSendTemplateDialog'
 import { ConversationsSummaryPane } from './ConversationsSummaryPane'
 import { InboxComposeBar, type ReplyToMessage } from './InboxComposeBar'
 import { InboxMessageScroller, type InboxMessageScrollerHandle } from './InboxMessageScroller'
+import { Alert, AlertDescription } from '@/shared/ui/shadcn/alert'
 import {
   chatActionsFromDetail,
   chatActionsFromListItem,
@@ -669,12 +670,6 @@ export function ConversationsInboxPage() {
     setReplyToMessage(null)
   }, [selectedId])
 
-  useEffect(() => {
-    if (!detail || detail.can_reply) return
-    const text = replyBlockedText(detail.reply_blocked_reason)
-    if (text) notify.info(text)
-  }, [detail?.conversation.id, detail?.can_reply, detail?.reply_blocked_reason])
-
   function openChatActions(ctx: ChatActionsContext) {
     setActionsContext(ctx)
     setActionsOpen(true)
@@ -1311,7 +1306,14 @@ export function ConversationsInboxPage() {
                   replyTo={replyToMessage}
                   onClearReplyTo={() => setReplyToMessage(null)}
                 />
-              ) : null}
+              ) : (
+                <Alert>
+                  <AlertDescription>
+                    {replyBlockedText(detail.reply_blocked_reason) ||
+                      'No puedes responder en este momento.'}
+                  </AlertDescription>
+                </Alert>
+              )}
             </WaMainFooter>
           </>
         ) : null}
