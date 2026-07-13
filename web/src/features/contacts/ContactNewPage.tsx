@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { ContactForm } from './ContactForm'
+import { splitPhoneForForm } from './phoneUtils'
 
 type FilterOptions = {
   segments: Array<{ id: number; slug: string; label: string }>
@@ -17,11 +18,29 @@ type FilterOptions = {
   }>
 }
 
+function safeReturnTo(raw: string | null): string | null {
+  if (!raw) return null
+  const path = raw.trim()
+  if (!path.startsWith('/') || path.startsWith('//')) return null
+  if (!path.startsWith('/conversations')) return null
+  return path
+}
+
 export function ContactNewPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [options, setOptions] = useState<FilterOptions | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  const phoneParts = useMemo(
+    () => splitPhoneForForm(searchParams.get('prefill_phone') ?? ''),
+    [searchParams],
+  )
+  const returnTo = useMemo(
+    () => safeReturnTo(searchParams.get('return_to')),
+    [searchParams],
+  )
 
   useEffect(() => {
     Promise.all([
@@ -62,6 +81,11 @@ export function ContactNewPage() {
       notify.error(result.error)
       return
     }
+    if (returnTo) {
+      notify.success('Contacto guardado.')
+      navigate(returnTo)
+      return
+    }
     navigate(`/contacts/${result.data.id}`)
   }
 
@@ -76,8 +100,11 @@ export function ContactNewPage() {
   return (
     <div className="space-y-4">
       <div>
-        <Link to="/contacts" className="text-sm text-accent hover:underline">
-          ← Contactos
+        <Link
+          to={returnTo ?? '/contacts'}
+          className="text-sm text-accent hover:underline"
+        >
+          {returnTo ? '← Volver al chat' : '← Contactos'}
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">Añadir contacto</h1>
       </div>
@@ -91,8 +118,8 @@ export function ContactNewPage() {
             name: '',
             last_name: '',
             phone: '',
-            phone_prefix: '51',
-            phone_local: '',
+            phone_prefix: phoneParts.prefix,
+            phone_local: phoneParts.local,
             segments: [],
             attributes: {},
           }}

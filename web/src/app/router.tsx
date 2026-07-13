@@ -56,7 +56,14 @@ export function AppRouter() {
           <Route element={<RequirePasswordChanged />}>
             <Route element={<WaAppShell />}>
             <Route index element={<Navigate to="/conversations" replace />} />
-            <Route path="anuncios" element={<MetaAdsShell />}>
+            <Route
+              path="anuncios"
+              element={
+                <RequireUserPermission allowed={(u) => u.canManageAnuncios}>
+                  <MetaAdsShell />
+                </RequireUserPermission>
+              }
+            >
               <Route index element={<MetaAdsEmptyPane />} />
               <Route path=":id" element={<MetaAdDetailPage />} />
             </Route>

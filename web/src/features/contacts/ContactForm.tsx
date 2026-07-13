@@ -51,6 +51,7 @@ export function ContactForm({
   const [attributes, setAttributes] = useState<Record<string, string>>(
     initial.attributes,
   )
+  const [segmentsError, setSegmentsError] = useState('')
 
   const applicableDefs = useMemo(
     () => getApplicableAttributeDefinitions(attributeDefinitions, selectedSegments),
@@ -60,9 +61,13 @@ export function ContactForm({
   const disabled = isReplaced || segments.length === 0
 
   function toggleSegment(slug: string) {
-    setSelectedSegments((prev) =>
-      prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug],
-    )
+    setSelectedSegments((prev) => {
+      const next = prev.includes(slug)
+        ? prev.filter((s) => s !== slug)
+        : [...prev, slug]
+      if (next.length > 0) setSegmentsError('')
+      return next
+    })
   }
 
   function setAttribute(slug: string, value: string) {
@@ -71,6 +76,11 @@ export function ContactForm({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    if (selectedSegments.length < 1) {
+      setSegmentsError('Indica al menos un segmento')
+      return
+    }
+    setSegmentsError('')
     onSubmit({
       name,
       last_name: lastName,
@@ -173,7 +183,10 @@ export function ContactForm({
             ))}
           </div>
         )}
-        <p className="text-xs text-muted">Marca uno o varios.</p>
+        <p className="text-xs text-muted">Obligatorio: marca uno o varios.</p>
+        {segmentsError ? (
+          <p className="text-xs text-bad">{segmentsError}</p>
+        ) : null}
       </fieldset>
 
       <div className="space-y-3">

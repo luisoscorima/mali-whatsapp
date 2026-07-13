@@ -13,6 +13,12 @@ export function assertCanManageSegments(user: AuthUser): void {
   }
 }
 
+export function assertCanManageAnuncios(user: AuthUser): void {
+  if (!user.canManageAnuncios) {
+    throw new ForbiddenException('No tienes permiso para gestionar anuncios');
+  }
+}
+
 export function assertCanViewCampaignStats(user: AuthUser): void {
   if (!user.canViewCampaignStats) {
     throw new ForbiddenException(

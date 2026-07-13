@@ -29,6 +29,7 @@ export type AuthUser = {
   canManageSegments: boolean;
   canViewConversationStats: boolean;
   canViewCampaignStats: boolean;
+  canManageAnuncios: boolean;
   picture?: string;
 };
 

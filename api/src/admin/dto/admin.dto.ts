@@ -70,6 +70,10 @@ export class CreateAdminUserDto {
   can_view_campaign_stats?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  can_manage_anuncios?: boolean;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   extra_areas?: string[];
@@ -132,6 +136,10 @@ export class UpdateAdminUserDto {
   @IsOptional()
   @IsBoolean()
   can_view_campaign_stats?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  can_manage_anuncios?: boolean;
 
   @IsOptional()
   @IsArray()

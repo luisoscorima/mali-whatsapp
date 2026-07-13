@@ -45,6 +45,7 @@ function mapUserRow(row: {
   can_manage_segments: boolean;
   can_view_conversation_stats: boolean;
   can_view_campaign_stats: boolean;
+  can_manage_anuncios: boolean;
 }): AdminUserListItem {
   return {
     id: row.id,
@@ -63,6 +64,7 @@ function mapUserRow(row: {
     can_manage_segments: row.can_manage_segments,
     can_view_conversation_stats: row.can_view_conversation_stats,
     can_view_campaign_stats: row.can_view_campaign_stats,
+    can_manage_anuncios: row.can_manage_anuncios,
   };
 }
 
@@ -109,6 +111,7 @@ export class AdminUsersService {
         can_manage_segments: true,
         can_view_conversation_stats: true,
         can_view_campaign_stats: true,
+        can_manage_anuncios: true,
       },
     });
     return rows.map(mapUserRow);
@@ -134,6 +137,7 @@ export class AdminUsersService {
         can_manage_segments: true,
         can_view_conversation_stats: true,
         can_view_campaign_stats: true,
+        can_manage_anuncios: true,
       },
     });
     if (!row) throw new NotFoundException('Usuario no encontrado');
@@ -174,6 +178,7 @@ export class AdminUsersService {
           can_manage_segments: Boolean(dto.can_manage_segments),
           can_view_conversation_stats: Boolean(dto.can_view_conversation_stats),
           can_view_campaign_stats: Boolean(dto.can_view_campaign_stats),
+          can_manage_anuncios: Boolean(dto.can_manage_anuncios),
         },
         select: { id: true },
       });
@@ -246,6 +251,7 @@ export class AdminUsersService {
           can_manage_segments: Boolean(dto.can_manage_segments),
           can_view_conversation_stats: Boolean(dto.can_view_conversation_stats),
           can_view_campaign_stats: Boolean(dto.can_view_campaign_stats),
+          can_manage_anuncios: Boolean(dto.can_manage_anuncios),
         },
       });
     } else {
@@ -266,6 +272,7 @@ export class AdminUsersService {
           can_manage_segments: Boolean(dto.can_manage_segments),
           can_view_conversation_stats: Boolean(dto.can_view_conversation_stats),
           can_view_campaign_stats: Boolean(dto.can_view_campaign_stats),
+          can_manage_anuncios: Boolean(dto.can_manage_anuncios),
         },
       });
     }

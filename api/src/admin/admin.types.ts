@@ -9,6 +9,7 @@ export type AdminUserPermissions = {
   can_manage_segments: boolean;
   can_view_conversation_stats: boolean;
   can_view_campaign_stats: boolean;
+  can_manage_anuncios: boolean;
 };
 
 export type AdminUserListItem = {

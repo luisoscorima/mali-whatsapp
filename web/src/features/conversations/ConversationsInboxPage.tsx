@@ -1,5 +1,6 @@
 import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
+import { useAppUser } from '@/app/appOutletContext'
 import { apiClient } from '../../shared/api'
 import { formatChatListTime } from '../../shared/format'
 import { notify } from '@/shared/notify'
@@ -69,6 +70,8 @@ function ProfileBlock({
   detail: InboxDetail
   segments: SegmentOption[]
 }) {
+  const user = useAppUser()
+  const canManageAnuncios = Boolean(user?.canManageAnuncios)
   const contactId = detail.conversation.contact_id
   const heading = formatContactName(
     detail.contact?.name,
@@ -101,9 +104,13 @@ function ProfileBlock({
         {detail.meta_ad ? (
           <p className="inbox-chat-sub muted">
             Anuncio:{' '}
-            <Link to={`/anuncios/${detail.meta_ad.id}`}>
-              {detail.meta_ad.display_name ?? 'Anuncio'}
-            </Link>
+            {canManageAnuncios ? (
+              <Link to={`/anuncios/${detail.meta_ad.id}`}>
+                {detail.meta_ad.display_name ?? 'Anuncio'}
+              </Link>
+            ) : (
+              (detail.meta_ad.display_name ?? 'Anuncio')
+            )}
           </p>
         ) : null}
         {detail.contact?.segment_slugs && detail.contact.segment_slugs.length > 0 ? (

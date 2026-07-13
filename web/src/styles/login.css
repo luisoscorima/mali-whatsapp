@@ -67,6 +67,10 @@
 
 .login-shell {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   min-height: 100vh;
   min-height: 100dvh;
   min-height: -webkit-fill-available;
@@ -81,9 +85,7 @@
 .login-page {
   position: relative;
   z-index: 1;
-  min-height: 100vh;
-  min-height: 100dvh;
-  min-height: -webkit-fill-available;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -373,12 +375,6 @@
 .login-loading {
   position: relative;
   z-index: 1;
-  min-height: 100vh;
-  min-height: 100dvh;
-  min-height: -webkit-fill-available;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   color: rgb(255 255 255 / 0.85);
   font-size: 0.95rem;
 }

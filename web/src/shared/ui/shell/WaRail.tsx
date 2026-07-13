@@ -151,6 +151,7 @@ export function WaRail({ user, onUserUpdate }: WaRailProps) {
   const visibleItems = provisionedItems.filter((item) => {
     if (item.key === 'attributes') return Boolean(user?.canManageAttributes)
     if (item.key === 'segments') return Boolean(user?.canManageSegments)
+    if (item.key === 'anuncios') return Boolean(user?.canManageAnuncios)
     return true
   })
 

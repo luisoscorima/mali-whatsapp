@@ -225,7 +225,11 @@ export function InboxChatActionsDialog({
               </Link>
             ) : (
               <Link
-                to={`/contacts/new?prefill_phone=${encodeURIComponent(prefillPhone)}`}
+                to={`/contacts/new?prefill_phone=${encodeURIComponent(prefillPhone)}${
+                  hasConversation
+                    ? `&return_to=${encodeURIComponent(`/conversations/${conversationId}`)}`
+                    : ''
+                }`}
                 className="inline-flex w-full items-center justify-start rounded-md border border-line bg-surface px-3 py-2 text-sm hover:bg-accent-soft"
                 onClick={() => onOpenChange(false)}
               >
