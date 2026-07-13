@@ -47,7 +47,7 @@ export function AdminAreasPage() {
       return
     }
     setCurrentArea(slug)
-    navigate('/campaigns', { replace: true })
+    navigate('/conversations', { replace: true })
   }
 
   if (error && !areas) {

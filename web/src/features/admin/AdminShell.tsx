@@ -28,7 +28,7 @@ export function RequireMaster() {
     )
   }
   if (!user?.isMaster) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/conversations" replace />
   }
   return <Outlet />
 }

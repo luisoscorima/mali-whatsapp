@@ -30,7 +30,7 @@ export function WaAccountMenu({ user, onUserUpdate }: WaAccountMenuProps) {
     if (result.ok) {
       onUserUpdate?.(result.data.user)
       setOpen(false)
-      navigate('/campaigns', { replace: true })
+      navigate('/conversations', { replace: true })
     }
   }
 

@@ -18,7 +18,7 @@ export function navFromPath(pathname: string): string {
   if (pathname.startsWith('/anuncios')) return 'anuncios'
   if (pathname.startsWith('/settings')) return 'settings'
   if (pathname.startsWith('/admin')) return 'admin'
-  if (pathname === '/') return 'dashboard'
+  if (pathname === '/') return 'conversations'
   return ''
 }
 
@@ -151,7 +151,7 @@ export function WaRail({ user, onUserUpdate }: WaRailProps) {
   return (
     <aside className="wa-rail" aria-label="Navegación principal">
       <div className="wa-rail__brand">
-        <Link to="/campaigns" className="wa-rail__logo-link" title="MALI WhatsApp" aria-label="Inicio">
+        <Link to="/conversations" className="wa-rail__logo-link" title="MALI WhatsApp" aria-label="Inicio">
           <span className="wa-rail__logo-wrap" aria-hidden="true">
             <img className="wa-rail__logo" src={MALI_LOGO_URL} alt="MALI" width="40" height="40" decoding="async" />
           </span>
