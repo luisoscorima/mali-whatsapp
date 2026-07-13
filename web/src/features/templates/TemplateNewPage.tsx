@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
+import { notify } from '@/shared/notify'
 import { TemplateForm } from './TemplateForm'
 import { EMPTY_BUILDER, type TemplateBuilderState } from './templateFormUtils'
 type TemplateDetail = {
@@ -16,13 +17,14 @@ export function TemplateNewPage() {
   const [searchParams] = useSearchParams()
   const duplicateFrom = Number(searchParams.get('duplicate_from') || '')
   const [source, setSource] = useState<TemplateDetail | null>(null)
-  const [error, setError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
 
   useEffect(() => {
     if (!Number.isInteger(duplicateFrom) || duplicateFrom <= 0) return
     apiClient.get<TemplateDetail>(`/api/templates/${duplicateFrom}`).then((result) => {
       if (!result.ok) {
-        setError(result.error)
+        notify.error(result.error)
+        setLoadFailed(true)
         return
       }
       setSource(result.data)
@@ -34,13 +36,13 @@ export function TemplateNewPage() {
   const initialCategory = source?.category || 'MARKETING'
   const initialBuilder = source?.builder || EMPTY_BUILDER
 
-  if (error) {
+  if (loadFailed) {
     return (
       <div className="space-y-3">
         <Link to="/templates" className="text-sm text-accent">
           ← Plantillas
         </Link>
-        <p className="text-bad">{error}</p>
+        <p className="text-muted">No se pudo cargar la plantilla origen.</p>
       </div>
     )
   }

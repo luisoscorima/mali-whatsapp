@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { renderWhatsAppText } from '@/shared/whatsappFormat'
 import type { TemplateBuilderState } from './templateFormUtils'
 import {
   applyPreviewMode,
@@ -40,7 +41,7 @@ function PreviewText({
                 {part.value}
               </span>
             ) : (
-              <span key={partIdx}>{part.value}</span>
+              <span key={partIdx}>{renderWhatsAppText(part.value)}</span>
             ),
           )}
         </span>

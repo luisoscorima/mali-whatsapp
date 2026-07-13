@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
+import { notify } from '@/shared/notify'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import { MonthFilterChips } from '@/shared/ui/MonthFilterChips'
@@ -29,7 +30,6 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const [segments, setSegments] = useState<SegmentDefinition[] | null>(null)
-  const [error, setError] = useState('')
   const month = searchParams.get('month') ?? ''
 
   const listQuery = useMemo(() => {
@@ -41,11 +41,10 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
     const qs = month ? `?month=${encodeURIComponent(month)}` : ''
     void apiClient.get<SegmentDefinition[]>(`/api/segments${qs}`).then((result) => {
       if (!result.ok) {
-        setError(result.error)
+        notify.error(result.error)
         return
       }
       setSegments(result.data)
-      setError('')
     })
   }, [month])
 
@@ -58,7 +57,7 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
   async function handleReorder(orderedIds: number[]) {
     const res = await apiClient.patch('/api/segments/reorder', { orderedIds })
     if (!res.ok) {
-      setError(res.error)
+      notify.error(res.error)
       return
     }
     refresh()
@@ -73,20 +72,17 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
         </Link>
       }
       filters={
-        <>
-          <MonthFilterChips
-            selectedMonthKey={month}
-            onChange={(key) =>
-              setSearchParams((sp) => {
-                const next = new URLSearchParams(sp)
-                if (key) next.set('month', key)
-                else next.delete('month')
-                return next
-              })
-            }
-          />
-          {error ? <p className="px-3 pb-2 text-xs text-bad">{error}</p> : null}
-        </>
+        <MonthFilterChips
+          selectedMonthKey={month}
+          onChange={(key) =>
+            setSearchParams((sp) => {
+              const next = new URLSearchParams(sp)
+              if (key) next.set('month', key)
+              else next.delete('month')
+              return next
+            })
+          }
+        />
       }
     >
       {!segments ? (

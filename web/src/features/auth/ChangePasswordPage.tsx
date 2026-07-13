@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { notify } from '@/shared/notify'
 import { apiClient } from '../../shared/api'
 
 export function ChangePasswordPage() {
@@ -7,7 +8,6 @@ export function ChangePasswordPage() {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [checking, setChecking] = useState(true)
 
@@ -27,7 +27,6 @@ export function ChangePasswordPage() {
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault()
-    setError('')
     setBusy(true)
     const result = await apiClient.changePassword({
       current_password: currentPassword,
@@ -36,7 +35,7 @@ export function ChangePasswordPage() {
     })
     setBusy(false)
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
     navigate('/conversations', { replace: true })
@@ -98,7 +97,6 @@ export function ChangePasswordPage() {
             minLength={6}
           />
         </label>
-        {error ? <p className="text-sm text-bad">{error}</p> : null}
         <button
           type="submit"
           disabled={busy}

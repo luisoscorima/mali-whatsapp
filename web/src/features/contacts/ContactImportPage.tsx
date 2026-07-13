@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
+import { notify } from '@/shared/notify'
 
 type ImportResult = {
   imported: number
@@ -14,18 +15,16 @@ type ImportResult = {
 export function ContactImportPage() {
   const [file, setFile] = useState<File | null>(null)
   const [result, setResult] = useState<ImportResult | null>(null)
-  const [error, setError] = useState('')
   const [importing, setImporting] = useState(false)
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     if (!file) {
-      setError('Selecciona un archivo CSV o Excel')
+      notify.error('Selecciona un archivo CSV o Excel')
       return
     }
 
     setImporting(true)
-    setError('')
     setResult(null)
 
     const formData = new FormData()
@@ -38,7 +37,7 @@ export function ContactImportPage() {
     setImporting(false)
 
     if (!response.ok) {
-      setError(response.error)
+      notify.error(response.error)
       return
     }
     setResult(response.data)
@@ -53,8 +52,6 @@ export function ContactImportPage() {
         <h1 className="mt-2 text-2xl font-semibold">Importar contactos</h1>
         <p className="text-sm text-muted">CSV o Excel (.xlsx) masivo</p>
       </div>
-
-      {error ? <p className="text-bad">{error}</p> : null}
 
       {result ? (
         <div className="rounded-xl border border-line bg-surface-strong p-4 text-sm">
@@ -122,7 +119,7 @@ export function ContactImportPage() {
 
       <p className="max-w-lg text-sm text-muted">
         Columnas: <code className="font-mono">name</code>,{' '}
-        <code className="font-mono">last_name</code> (o apellido),{' '}
+        <code className="font-mono">last_name</code> (o apellido, opcional),{' '}
         <code className="font-mono">phone</code>, <code className="font-mono">segment</code>.
         Opcional: <code className="font-mono">prefix</code> y columnas extra como atributos
         (slugs definidos en Atributos). Varios segmentos separados por ; o ,.

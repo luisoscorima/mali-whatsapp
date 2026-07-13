@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
+import { notify } from '@/shared/notify'
 
 type ReportRow = {
   phone: string
@@ -28,19 +29,20 @@ type ReportResult = {
 export function SettingsReporteriaPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [data, setData] = useState<ReportResult | null>(null)
-  const [error, setError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
   const [busy, setBusy] = useState('')
 
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1)
 
   useEffect(() => {
-    setError('')
+    setLoadFailed(false)
     const qs = page > 1 ? `?page=${page}` : ''
     apiClient
       .get<ReportResult>(`/api/reports/communications${qs}`)
       .then((result) => {
         if (!result.ok) {
-          setError(result.error)
+          notify.error(result.error)
+          setLoadFailed(true)
           return
         }
         setData(result.data)
@@ -51,11 +53,11 @@ export function SettingsReporteriaPage() {
     setBusy('export')
     const result = await apiClient.download('/api/reports/communications/export')
     setBusy('')
-    if (!result.ok) setError(result.error)
+    if (!result.ok) notify.error(result.error)
   }
 
-  if (error && !data) {
-    return <p className="text-bad">{error}</p>
+  if (loadFailed && !data) {
+    return <p className="text-muted">No se pudo cargar la reportería.</p>
   }
 
   return (
@@ -77,8 +79,6 @@ export function SettingsReporteriaPage() {
       >
         {busy === 'export' ? 'Exportando…' : 'Descargar Excel'}
       </button>
-
-      {error ? <p className="text-sm text-bad">{error}</p> : null}
 
       {!data ? (
         <p className="text-muted">Cargando…</p>

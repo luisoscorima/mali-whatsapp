@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { apiClient } from '../../shared/api'
+import { notify } from '@/shared/notify'
 
 type IntegrationData = {
   app_base_url: string
@@ -10,20 +11,21 @@ type IntegrationData = {
 
 export function SettingsIntegrationPage() {
   const [data, setData] = useState<IntegrationData | null>(null)
-  const [error, setError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
 
   useEffect(() => {
     apiClient.get<IntegrationData>('/api/settings/integration').then((result) => {
       if (!result.ok) {
-        setError(result.error)
+        notify.error(result.error)
+        setLoadFailed(true)
         return
       }
       setData(result.data)
     })
   }, [])
 
-  if (error) {
-    return <p className="text-bad">{error}</p>
+  if (loadFailed) {
+    return <p className="text-muted">No se pudieron cargar los datos de integración.</p>
   }
 
   if (!data) {

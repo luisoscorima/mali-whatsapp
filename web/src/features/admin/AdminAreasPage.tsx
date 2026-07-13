@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiClient } from '@/shared/api'
+import { notify } from '@/shared/notify'
 import { areaLabel } from './areaLabels'
 
 type AdminAreaSummary = {
@@ -16,7 +17,7 @@ export function AdminAreasPage() {
   const navigate = useNavigate()
   const [areas, setAreas] = useState<AdminAreaSummary[] | null>(null)
   const [currentArea, setCurrentArea] = useState<string | null>(null)
-  const [error, setError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
   const [switching, setSwitching] = useState<string | null>(null)
 
   function load() {
@@ -25,7 +26,8 @@ export function AdminAreasPage() {
       apiClient.getMe(),
     ]).then(([areasRes, meRes]) => {
       if (!areasRes.ok) {
-        setError(areasRes.error)
+        notify.error(areasRes.error)
+        setLoadFailed(true)
         return
       }
       setAreas(areasRes.data)
@@ -39,19 +41,18 @@ export function AdminAreasPage() {
 
   async function onActivate(slug: string) {
     setSwitching(slug)
-    setError('')
     const result = await apiClient.switchArea(slug)
     setSwitching(null)
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
     setCurrentArea(slug)
     navigate('/conversations', { replace: true })
   }
 
-  if (error && !areas) {
-    return <p className="text-bad">{error}</p>
+  if (loadFailed) {
+    return <p className="text-muted">No se pudo cargar</p>
   }
 
   if (!areas) {
@@ -63,7 +64,6 @@ export function AdminAreasPage() {
       <p className="text-sm text-muted">
         Resumen por área y cambio rápido de área activa para el usuario master.
       </p>
-      {error ? <p className="text-bad">{error}</p> : null}
       <div className="overflow-x-auto rounded-xl border border-line">
         <table className="w-full text-sm">
           <thead className="border-b border-line bg-surface-strong text-left">

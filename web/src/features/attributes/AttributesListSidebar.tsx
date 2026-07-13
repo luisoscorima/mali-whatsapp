@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
+import { notify } from '@/shared/notify'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import { SortableSidebarList } from '@/shared/ui/SortableSidebarList'
@@ -37,7 +38,6 @@ export function AttributesListSidebar({ selectedId }: AttributesListSidebarProps
   const location = useLocation()
   const [definitions, setDefinitions] = useState<AttributeDefinition[] | null>(null)
   const [segments, setSegments] = useState<SegmentOption[]>([])
-  const [error, setError] = useState('')
 
   const refresh = useCallback(() => {
     void Promise.all([
@@ -45,12 +45,11 @@ export function AttributesListSidebar({ selectedId }: AttributesListSidebarProps
       apiClient.get<SegmentOption[]>('/api/attribute-definitions/segments'),
     ]).then(([defs, segs]) => {
       if (!defs.ok) {
-        setError(defs.error)
+        notify.error(defs.error)
         return
       }
       setDefinitions(defs.data)
       if (segs.ok) setSegments(segs.data)
-      setError('')
     })
   }, [])
 
@@ -65,7 +64,7 @@ export function AttributesListSidebar({ selectedId }: AttributesListSidebarProps
       orderedIds,
     })
     if (!res.ok) {
-      setError(res.error)
+      notify.error(res.error)
       return
     }
     refresh()
@@ -79,7 +78,6 @@ export function AttributesListSidebar({ selectedId }: AttributesListSidebarProps
           +
         </Link>
       }
-      filters={error ? <p className="px-3 text-xs text-bad">{error}</p> : null}
     >
       {!definitions ? (
         <p className="inbox-empty-list">Cargando atributos…</p>

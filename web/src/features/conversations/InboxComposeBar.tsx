@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react'
+import { insertAtSelection, wrapSelection } from '@/shared/textSelection'
 import { Button } from '@/shared/ui/shadcn/button'
 import {
   DropdownMenu,
@@ -34,7 +35,6 @@ type InboxComposeBarProps = {
   onReplyFileChange: (file: File | null) => void
   sendingReply: boolean
   onSubmit: (e: FormEvent) => void
-  replyError?: string
   replyTo?: ReplyToMessage | null
   onClearReplyTo?: () => void
 }
@@ -46,11 +46,11 @@ export function InboxComposeBar({
   onReplyFileChange,
   sendingReply,
   onSubmit,
-  replyError,
   replyTo,
   onClearReplyTo,
 }: InboxComposeBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [fileAccept, setFileAccept] = useState<string>(ATTACH_OPTIONS[0].accept)
   const [emojiOpen, setEmojiOpen] = useState(false)
 
@@ -60,8 +60,12 @@ export function InboxComposeBar({
   }
 
   function insertEmoji(emoji: string) {
-    onReplyTextChange(replyText + emoji)
+    insertAtSelection(textareaRef.current, emoji, replyText, onReplyTextChange)
     setEmojiOpen(false)
+  }
+
+  function applyFormat(marker: string) {
+    wrapSelection(textareaRef.current, marker, replyText, onReplyTextChange)
   }
 
   return (
@@ -135,7 +139,29 @@ export function InboxComposeBar({
           </PopoverContent>
         </Popover>
 
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          title="Negrita"
+          aria-label="Negrita"
+          onClick={() => applyFormat('*')}
+        >
+          <strong>B</strong>
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          title="Cursiva"
+          aria-label="Cursiva"
+          onClick={() => applyFormat('_')}
+        >
+          <em>I</em>
+        </Button>
+
         <textarea
+          ref={textareaRef}
           value={replyText}
           onChange={(e) => onReplyTextChange(e.target.value)}
           rows={2}
@@ -147,10 +173,9 @@ export function InboxComposeBar({
         </Button>
       </div>
 
-      <p className="inbox-compose-hint-inline">
-        JPEG/PNG (5 MB), MP4 (16 MB), audio (16 MB), PDF (25 MB). Con audio, el texto se envía aparte si lo escribes.
+      <p className="inbox-compose-hint-inline muted">
+        WhatsApp: *negrita*, _cursiva_. JPEG/PNG (5 MB), MP4 (16 MB), audio (16 MB), PDF (25 MB).
       </p>
-      {replyError ? <p className="inbox-compose-hint text-bad">{replyError}</p> : null}
     </form>
   )
 }

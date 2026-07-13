@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useState } from 'react'
+import { notify } from '@/shared/notify'
 import { apiClient } from '../../shared/api'
 import { AREA_OPTIONS } from './areaLabels'
 
@@ -12,15 +13,15 @@ type MetaView = {
 
 export function AdminMetaPage() {
   const [data, setData] = useState<MetaView | null>(null)
-  const [error, setError] = useState('')
-  const [saved, setSaved] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [selectedArea, setSelectedArea] = useState('ti')
   const [showSecrets, setShowSecrets] = useState(false)
 
   function load() {
     apiClient.get<MetaView>('/api/admin/meta').then((result) => {
       if (!result.ok) {
-        setError(result.error)
+        notify.error(result.error)
+        setLoadFailed(true)
         return
       }
       setData(result.data)
@@ -59,18 +60,16 @@ export function AdminMetaPage() {
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
     if (!data) return
-    setError('')
-    setSaved(false)
     const result = await apiClient.patch<MetaView>('/api/admin/meta', data)
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
     setData(result.data)
-    setSaved(true)
+    notify.success('Configuración guardada.')
   }
 
-  if (error && !data) return <p className="text-bad">{error}</p>
+  if (loadFailed) return <p className="text-muted">No se pudo cargar</p>
   if (!data) return <p className="text-muted">Cargando credenciales…</p>
 
   const areaRow = data.areas[selectedArea] ?? {
@@ -86,7 +85,6 @@ export function AdminMetaPage() {
         Los valores guardados tienen prioridad sobre <code>.env</code>. Deja un campo
         vacío y guarda para usar solo el entorno.
       </p>
-      {saved ? <p className="text-sm text-accent">Configuración guardada.</p> : null}
 
       <fieldset className="space-y-3 rounded-xl border border-line p-4">
         <legend className="px-1 text-sm font-medium">Webhook (global)</legend>
@@ -170,8 +168,6 @@ export function AdminMetaPage() {
           />
         </label>
       </fieldset>
-
-      {error ? <p className="text-bad">{error}</p> : null}
 
       <button
         type="submit"

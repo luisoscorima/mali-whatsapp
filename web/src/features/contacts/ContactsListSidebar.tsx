@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
+import { notify } from '@/shared/notify'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { formatContactName } from './contactName'
 import { SegmentBadge } from '../segments/SegmentBadge'
@@ -64,7 +65,6 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
   const [searchParams, setSearchParams] = useSearchParams()
   const [options, setOptions] = useState<FilterOptions | null>(null)
   const [result, setResult] = useState<ContactsListResult | null>(null)
-  const [error, setError] = useState('')
   const [searchInput, setSearchInput] = useState(searchParams.get('q') ?? '')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [bulkSegment, setBulkSegment] = useState('')
@@ -113,9 +113,8 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
   }, [])
 
   function refresh() {
-    setError('')
     void apiClient.get<ContactsListResult>(`/api/contacts?${apiQuery}`).then((res) => {
-      if (!res.ok) setError(res.error)
+      if (!res.ok) notify.error(res.error)
       else setResult(res.data)
     })
   }
@@ -183,7 +182,6 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
     e.preventDefault()
     if (!bulkSegment || selectedIds.size === 0) return
     setBulkBusy(true)
-    setError('')
     const res = await apiClient.post<{ updated: number }>(
       '/api/contacts/bulk-add-segment',
       {
@@ -193,7 +191,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
     )
     setBulkBusy(false)
     if (!res.ok) {
-      setError(res.error)
+      notify.error(res.error)
       return
     }
     clearContactSelection()
@@ -203,10 +201,9 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
 
   async function handleExport() {
     setExportBusy(true)
-    setError('')
     const res = await apiClient.download(`/api/contacts/export${exportQuery}`)
     setExportBusy(false)
-    if (!res.ok) setError(res.error)
+    if (!res.ok) notify.error(res.error)
   }
 
   const segments = options?.segments ?? []
@@ -322,8 +319,6 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
               />
             ) : null}
           </div>
-
-          {error ? <p className="text-bad text-xs">{error}</p> : null}
 
           {result ? (
             <p className="text-xs text-muted">

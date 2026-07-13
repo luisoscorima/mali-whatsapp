@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { apiClient } from '../../shared/api'
+import { notify } from '@/shared/notify'
 
 export type TemplateParamDef = {
   index: number
@@ -165,6 +166,7 @@ export function CampaignTemplateFields({
         if (cancelled) return
         setLoading(false)
         if (!result.ok) {
+          notify.error(result.error)
           setLoadError(result.error)
           setDef(null)
           onReadyChange(false)
@@ -189,7 +191,7 @@ export function CampaignTemplateFields({
   }
 
   if (loadError) {
-    return <p className="text-sm text-bad">{loadError}</p>
+    return <p className="text-sm text-muted">No se pudo cargar</p>
   }
 
   if (!def) {

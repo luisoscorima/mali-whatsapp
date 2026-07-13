@@ -13,10 +13,10 @@ export class UpsertContactDto {
   @MaxLength(120)
   name!: string;
 
+  @IsOptional()
   @IsString()
-  @MinLength(1)
   @MaxLength(120)
-  last_name!: string;
+  last_name?: string;
 
   @IsOptional()
   @IsString()

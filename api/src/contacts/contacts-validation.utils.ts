@@ -60,10 +60,10 @@ export function validateContactCore(
       message: `Nombre inválido (1-${MAX_CONTACT_NAME_LEN} caracteres)`,
     };
   }
-  if (!normalizedLastName || normalizedLastName.length > MAX_CONTACT_NAME_LEN) {
+  if (normalizedLastName.length > MAX_CONTACT_NAME_LEN) {
     return {
       ok: false,
-      message: `Apellido inválido (1-${MAX_CONTACT_NAME_LEN} caracteres)`,
+      message: `Apellido inválido (máx. ${MAX_CONTACT_NAME_LEN} caracteres)`,
     };
   }
   if (!E164_NO_PLUS_REGEX.test(normalizedPhone)) {

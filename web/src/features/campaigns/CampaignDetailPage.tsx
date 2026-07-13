@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { apiClient } from '@/shared/api'
+import { notify } from '@/shared/notify'
 import { formatDateTime } from '../../shared/format'
 import { formatContactName } from '../contacts/contactName'
 import { LOG_EXPORT_FILTERS } from './campaignLogFilters'
@@ -124,8 +125,7 @@ function selectClass(): string {
 export function CampaignDetailPage() {
   const { id } = useParams()
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null)
-  const [error, setError] = useState('')
-  const [actionError, setActionError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
   const [busy, setBusy] = useState('')
   const [logsFilter, setLogsFilter] = useState('all_current')
   const [drilldownAction, setDrilldownAction] = useState<MetricAction | null>(null)
@@ -142,9 +142,11 @@ export function CampaignDetailPage() {
     if (!id) return
     const result = await apiClient.get<CampaignDetail>(`/api/campaigns/${id}`)
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
+      setLoadFailed(true)
       return
     }
+    setLoadFailed(false)
     setCampaign(result.data)
   }
 
@@ -153,23 +155,21 @@ export function CampaignDetailPage() {
   }, [id])
 
   async function handleDownload(path: string, label: string) {
-    setActionError('')
     setBusy(label)
     const result = await apiClient.download(path)
     setBusy('')
     if (!result.ok) {
-      setActionError(result.error)
+      notify.error(result.error)
     }
   }
 
   async function handleSyncCost() {
     if (!id) return
-    setActionError('')
     setBusy('sync')
     const result = await apiClient.post(`/api/campaigns/${id}/sync-cost`, {})
     setBusy('')
     if (!result.ok) {
-      setActionError(result.error)
+      notify.error(result.error)
       return
     }
     await reload()
@@ -184,7 +184,6 @@ export function CampaignDetailPage() {
     ) {
       return
     }
-    setActionError('')
     setBusy('retry')
     const result = await apiClient.post<{
       retried: number
@@ -193,14 +192,14 @@ export function CampaignDetailPage() {
     }>(`/api/campaigns/${id}/retry-failed`, {})
     setBusy('')
     if (!result.ok) {
-      setActionError(result.error)
+      notify.error(result.error)
       return
     }
     await reload()
   }
 
-  if (error) {
-    return <p className="text-bad">{error}</p>
+  if (loadFailed) {
+    return <p className="text-muted">No se pudo cargar</p>
   }
 
   if (!campaign) {
@@ -441,8 +440,6 @@ export function CampaignDetailPage() {
           {busy === 'sync' ? 'Sincronizando…' : 'Sincronizar costo'}
         </button>
       </div>
-
-      {actionError ? <p className="text-sm text-bad">{actionError}</p> : null}
 
       <div className="space-y-4 rounded-xl border border-line bg-surface-strong p-4">
         <MetricsGrid title="Negocio" metrics={a.business} />

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
+import { notify } from '@/shared/notify'
 import { ContactForm } from './ContactForm'
 import { splitPhoneForForm } from './phoneUtils'
 
@@ -39,8 +40,7 @@ export function ContactDetailPage() {
   const [allAttributeDefs, setAllAttributeDefs] = useState<
     ContactDetail['attribute_definitions']
   >([])
-  const [error, setError] = useState('')
-  const [saveMsg, setSaveMsg] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
   const [saving, setSaving] = useState(false)
   const [chatBusy, setChatBusy] = useState(false)
 
@@ -52,7 +52,8 @@ export function ContactDetailPage() {
       apiClient.get<FilterOptions['segments']>('/api/segments'),
     ]).then(([detail, opts, allSegs]) => {
       if (!detail.ok) {
-        setError(detail.error)
+        notify.error(detail.error)
+        setLoadFailed(true)
         return
       }
       setContact(detail.data)
@@ -82,8 +83,6 @@ export function ContactDetailPage() {
   }) {
     if (!id) return
     setSaving(true)
-    setSaveMsg('')
-    setError('')
     const result = await apiClient.patch<ContactDetail>(`/api/contacts/${id}`, {
       name: values.name,
       last_name: values.last_name,
@@ -93,10 +92,10 @@ export function ContactDetailPage() {
     })
     setSaving(false)
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
-    setSaveMsg('Contacto actualizado.')
+    notify.success('Contacto actualizado.')
     setContact(result.data)
     if (result.data.id !== Number(id)) {
       navigate(`/contacts/${result.data.id}`, { replace: true })
@@ -108,7 +107,7 @@ export function ContactDetailPage() {
     if (!window.confirm('¿Eliminar este contacto?')) return
     const result = await apiClient.delete(`/api/contacts/${id}`)
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
     navigate('/contacts')
@@ -122,31 +121,30 @@ export function ContactDetailPage() {
       {},
     )
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
     setContact(result.data)
-    setSaveMsg('Contacto reactivado.')
+    notify.success('Contacto reactivado.')
   }
 
   async function onOpenChat() {
     if (!id) return
     setChatBusy(true)
-    setError('')
     const result = await apiClient.post<{ id: number }>(
       `/api/conversations/from-contact/${id}`,
       {},
     )
     setChatBusy(false)
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
     navigate(`/conversations/${result.data.id}`)
   }
 
-  if (error && !contact) {
-    return <p className="text-bad">{error}</p>
+  if (loadFailed) {
+    return <p className="text-muted">No se pudo cargar</p>
   }
 
   if (!contact) {
@@ -166,9 +164,6 @@ export function ContactDetailPage() {
         </h1>
         <p className="font-mono text-sm text-muted">{contact.phone}</p>
       </div>
-
-      {saveMsg ? <p className="text-sm text-accent">{saveMsg}</p> : null}
-      {error ? <p className="text-bad">{error}</p> : null}
 
       {isReplaced ? (
         <p className="text-sm text-bad">

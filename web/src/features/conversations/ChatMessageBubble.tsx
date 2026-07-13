@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
 import { formatDateTime } from '../../shared/format'
+import { renderWhatsAppText } from '../../shared/whatsappFormat'
 import { cn } from '../../lib/utils'
 import type { CampaignMessagePreviewData } from '../campaigns/CampaignMessagePreview'
 import { ChatCampaignPreview } from './ChatCampaignPreview'
@@ -58,26 +58,6 @@ function resolveMediaUrl(url: string): string {
 function isPdfDocument(mime: string | null | undefined, url: string): boolean {
   if (mime?.toLowerCase().includes('pdf')) return true
   return /\.pdf(?:$|[?#])/i.test(url)
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function highlightText(text: string, query: string): ReactNode {
-  const q = query.trim()
-  if (!q) return text
-  const parts = text.split(new RegExp(`(${escapeRegExp(q)})`, 'gi'))
-  if (parts.length === 1) return text
-  return parts.map((part, index) =>
-    part.toLowerCase() === q.toLowerCase() ? (
-      <mark key={index} className="chat-bubble__highlight">
-        {part}
-      </mark>
-    ) : (
-      part
-    ),
-  )
 }
 
 function messageAuthorLabel(message: ChatMessage): string | null {
@@ -234,7 +214,7 @@ export function ChatMessageBubble({
 
       {!campPreview && message.body_text?.trim() ? (
         <div className="chat-bubble__text">
-          {highlightText(message.body_text, highlightQuery)}
+          {renderWhatsAppText(message.body_text, highlightQuery)}
         </div>
       ) : null}
 

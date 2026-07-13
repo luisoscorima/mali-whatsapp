@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
+import { notify } from '@/shared/notify'
 import { formatContactName } from '../contacts/contactName'
 import { segmentToneClass } from '../segments/segmentColors'
 import {
@@ -115,8 +116,7 @@ export function CampaignNewPage() {
   const [segments, setSegments] = useState<SegmentDefinition[]>([])
   const [templates, setTemplates] = useState<TemplateListItem[]>([])
   const [attrDefs, setAttrDefs] = useState<AttributeOption[]>([])
-  const [loadError, setLoadError] = useState('')
-  const [actionError, setActionError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
   const [busy, setBusy] = useState('')
 
   const [includeSegments, setIncludeSegments] = useState<Set<string>>(new Set())
@@ -158,18 +158,20 @@ export function CampaignNewPage() {
   )
 
   async function loadWizardData() {
-    setLoadError('')
+    setLoadFailed(false)
     const [segResult, tplResult, attrResult] = await Promise.all([
       apiClient.get<SegmentDefinition[]>('/api/segments'),
       apiClient.get<TemplateListItem[]>('/api/templates'),
       apiClient.get<AttributeOption[]>('/api/attribute-definitions'),
     ])
     if (!segResult.ok) {
-      setLoadError(segResult.error)
+      notify.error(segResult.error)
+      setLoadFailed(true)
       return
     }
     if (!tplResult.ok) {
-      setLoadError(tplResult.error)
+      notify.error(tplResult.error)
+      setLoadFailed(true)
       return
     }
     setSegments(segResult.data)
@@ -218,22 +220,20 @@ export function CampaignNewPage() {
   }
 
   async function handleSyncTemplates() {
-    setActionError('')
     setBusy('sync')
     const result = await apiClient.post('/api/templates/sync', {})
     setBusy('')
     if (!result.ok) {
-      setActionError(result.error)
+      notify.error(result.error)
       return
     }
     await loadWizardData()
   }
 
   async function handleLoadRecipients() {
-    setActionError('')
     const segmentList = [...includeSegments]
     if (!segmentList.length) {
-      setActionError('Marca al menos un segmento.')
+      notify.error('Marca al menos un segmento.')
       return
     }
 
@@ -252,7 +252,7 @@ export function CampaignNewPage() {
 
     if (!result.ok) {
       setRecipientsStatus('')
-      setActionError(result.error)
+      notify.error(result.error)
       return
     }
 
@@ -288,7 +288,6 @@ export function CampaignNewPage() {
     (scheduleMode === 'now' || Boolean(scheduledAt.trim()))
 
   async function handleSend() {
-    setActionError('')
     if (!canSend) return
 
     const tplLabel = selectedTemplate
@@ -331,7 +330,7 @@ export function CampaignNewPage() {
     setBusy('')
 
     if (!result.ok) {
-      setActionError(result.error)
+      notify.error(result.error)
       return
     }
 
@@ -340,8 +339,8 @@ export function CampaignNewPage() {
 
   const windowOpenCount = recipients.filter((r) => r.service_window_open).length
 
-  if (loadError) {
-    return <p className="text-bad">{loadError}</p>
+  if (loadFailed) {
+    return <p className="text-muted">No se pudo cargar</p>
   }
 
   if (!segments.length && !templates.length) {
@@ -356,8 +355,6 @@ export function CampaignNewPage() {
           Elige audiencia, plantilla y parámetros. Puedes enviar ahora o programar.
         </p>
       </div>
-
-      {actionError ? <p className="text-sm text-bad">{actionError}</p> : null}
 
       <section className="space-y-4 rounded-xl border border-line bg-surface-strong p-4">
         {fieldLabel('Quién recibe', '1')}

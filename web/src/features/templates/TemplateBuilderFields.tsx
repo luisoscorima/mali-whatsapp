@@ -1,4 +1,5 @@
-import { useRef } from 'react'
+import { useRef, type RefObject } from 'react'
+import { insertAtSelection, wrapSelection } from '@/shared/textSelection'
 import {
   ensureExampleValues,
   type TemplateBuilderState,
@@ -22,23 +23,38 @@ function StepBadge({ n }: { n: number }) {
   )
 }
 
-function insertVariable(
-  el: HTMLInputElement | HTMLTextAreaElement | null,
-  alias: string,
-  current: string,
-  onUpdate: (value: string) => void,
-) {
-  if (!el) return
-  const snippet = `{{${alias}}}`
-  const start = el.selectionStart ?? current.length
-  const end = el.selectionEnd ?? current.length
-  const next = current.slice(0, start) + snippet + current.slice(end)
-  onUpdate(next)
-  requestAnimationFrame(() => {
-    el.focus()
-    const pos = start + snippet.length
-    el.setSelectionRange(pos, pos)
-  })
+function FormatToolbar({
+  inputRef,
+  value,
+  onUpdate,
+}: {
+  inputRef: RefObject<HTMLTextAreaElement | null>
+  value: string
+  onUpdate: (value: string) => void
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      <button
+        type="button"
+        className="rounded-lg border border-line px-2.5 py-1 text-sm font-bold hover:bg-accent-soft"
+        title="Negrita"
+        aria-label="Negrita"
+        onClick={() => wrapSelection(inputRef.current, '*', value, onUpdate)}
+      >
+        B
+      </button>
+      <button
+        type="button"
+        className="rounded-lg border border-line px-2.5 py-1 text-sm italic hover:bg-accent-soft"
+        title="Cursiva"
+        aria-label="Cursiva"
+        onClick={() => wrapSelection(inputRef.current, '_', value, onUpdate)}
+      >
+        I
+      </button>
+      <span className="muted text-xs">WhatsApp: *negrita*, _cursiva_</span>
+    </div>
+  )
 }
 
 function promptAlias(): string | null {
@@ -182,22 +198,29 @@ export function TemplateBuilderFields({
                 required
               />
             </label>
-            <button
-              type="button"
-              className="rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-accent-soft"
-              onClick={() => {
-                const alias = promptAlias()
-                if (!alias) return
-                insertVariable(
-                  headerTextRef.current,
-                  alias,
-                  builder.header.text,
-                  (text) => updateHeader({ text }),
-                )
-              }}
-            >
-              Añadir variable
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <FormatToolbar
+                inputRef={headerTextRef}
+                value={builder.header.text}
+                onUpdate={(text) => updateHeader({ text })}
+              />
+              <button
+                type="button"
+                className="rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-accent-soft"
+                onClick={() => {
+                  const alias = promptAlias()
+                  if (!alias) return
+                  insertAtSelection(
+                    headerTextRef.current,
+                    `{{${alias}}}`,
+                    builder.header.text,
+                    (text) => updateHeader({ text }),
+                  )
+                }}
+              >
+                Añadir variable
+              </button>
+            </div>
             <ExampleFields
               prefix="header"
               text={builder.header.text}
@@ -265,22 +288,29 @@ export function TemplateBuilderFields({
             required
           />
         </label>
-        <button
-          type="button"
-          className="rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-accent-soft"
-          onClick={() => {
-            const alias = promptAlias()
-            if (!alias) return
-            insertVariable(
-              bodyTextRef.current,
-              alias,
-              builder.body.text,
-              (text) => updateBody({ text }),
-            )
-          }}
-        >
-          Añadir variable
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <FormatToolbar
+            inputRef={bodyTextRef}
+            value={builder.body.text}
+            onUpdate={(text) => updateBody({ text })}
+          />
+          <button
+            type="button"
+            className="rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-accent-soft"
+            onClick={() => {
+              const alias = promptAlias()
+              if (!alias) return
+              insertAtSelection(
+                bodyTextRef.current,
+                `{{${alias}}}`,
+                builder.body.text,
+                (text) => updateBody({ text }),
+              )
+            }}
+          >
+            Añadir variable
+          </button>
+        </div>
         <ExampleFields
           prefix="body"
           text={builder.body.text}
@@ -379,9 +409,9 @@ export function TemplateBuilderFields({
                 onClick={() => {
                   const alias = promptAlias()
                   if (!alias) return
-                  insertVariable(
+                  insertAtSelection(
                     buttonUrlRefs.current[index],
-                    alias,
+                    `{{${alias}}}`,
                     btn.url,
                     (url) => updateButton(index, { url }),
                   )

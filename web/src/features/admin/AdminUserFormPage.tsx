@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { notify } from '@/shared/notify'
 import { apiClient } from '../../shared/api'
 import { AREA_OPTIONS } from './areaLabels'
 
@@ -35,7 +36,6 @@ export function AdminUserFormPage() {
   const userId = isNew ? null : Number(id)
 
   const [loading, setLoading] = useState(!isNew)
-  const [error, setError] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [area, setArea] = useState('ti')
@@ -56,7 +56,7 @@ export function AdminUserFormPage() {
     apiClient.get<AdminUserDetail>(`/api/admin/users/${userId}`).then((result) => {
       setLoading(false)
       if (!result.ok) {
-        setError(result.error)
+        notify.error(result.error)
         return
       }
       const user = result.data
@@ -86,7 +86,6 @@ export function AdminUserFormPage() {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
-    setError('')
     const body = {
       email: isNew ? email : undefined,
       password: password || undefined,
@@ -106,7 +105,7 @@ export function AdminUserFormPage() {
       : await apiClient.patch<AdminUserDetail>(`/api/admin/users/${userId}`, body)
 
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
     navigate('/admin/users', { replace: true })
@@ -117,7 +116,7 @@ export function AdminUserFormPage() {
     if (!window.confirm(`¿Eliminar ${email}?`)) return
     const result = await apiClient.delete(`/api/admin/users/${userId}`)
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
     navigate('/admin/users', { replace: true })
@@ -233,8 +232,6 @@ export function AdminUserFormPage() {
           </label>
         ))}
       </fieldset>
-
-      {error ? <p className="text-bad">{error}</p> : null}
 
       <div className="flex flex-wrap gap-2">
         <button

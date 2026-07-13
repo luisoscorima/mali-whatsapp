@@ -3,6 +3,8 @@ import { Link, useLocation } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
+import { notify } from '@/shared/notify'
+import { TEMPLATE_FLASH_MESSAGES } from './templateFlash'
 import { templateStatusClass } from './templateStatus'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 
@@ -26,17 +28,15 @@ type TemplatesListSidebarProps = {
 export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) {
   const location = useLocation()
   const [templates, setTemplates] = useState<TemplateListItem[] | null>(null)
-  const [error, setError] = useState('')
   const [syncing, setSyncing] = useState(false)
 
   async function load() {
     const result = await apiClient.get<TemplateListItem[]>('/api/templates')
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
     setTemplates(result.data)
-    setError('')
   }
 
   useEffect(() => {
@@ -47,13 +47,13 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
 
   async function onSync() {
     setSyncing(true)
-    setError('')
     const result = await apiClient.post<{ count: number }>('/api/templates/sync', {})
     setSyncing(false)
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
+    notify.success(TEMPLATE_FLASH_MESSAGES.synced)
     await load()
   }
 
@@ -76,7 +76,6 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
           </Link>
         </>
       }
-      filters={error ? <p className="px-3 text-xs text-bad">{error}</p> : null}
     >
       {!templates ? (
         <p className="inbox-empty-list">Cargando plantillas…</p>

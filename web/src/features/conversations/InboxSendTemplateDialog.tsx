@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { WizardTemplateDefinition } from '@/features/campaigns/CampaignTemplateFields'
 import { apiClient } from '@/shared/api'
+import { notify } from '@/shared/notify'
 import { Button } from '@/shared/ui/shadcn/button'
 import {
   Dialog,
@@ -47,7 +48,6 @@ export function InboxSendTemplateDialog({
   const [bodyParams, setBodyParams] = useState<string[]>([])
   const [buttonParams, setButtonParams] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
 
   useEffect(() => {
     if (!open) return
@@ -57,7 +57,6 @@ export function InboxSendTemplateDialog({
     setHeaderParams([])
     setBodyParams([])
     setButtonParams([])
-    setError('')
     void apiClient.get<TemplateItem[]>('/api/templates').then((res) => {
       if (res.ok) {
         setTemplates(res.data.filter((t) => t.status === 'APPROVED'))
@@ -77,7 +76,6 @@ export function InboxSendTemplateDialog({
 
     let cancelled = false
     setDefLoading(true)
-    setError('')
     void apiClient
       .get<WizardTemplateDefinition>(`/api/templates/${templateId}/definition`)
       .then((res) => {
@@ -85,7 +83,7 @@ export function InboxSendTemplateDialog({
         setDefLoading(false)
         if (!res.ok) {
           setDef(null)
-          setError(res.error)
+          notify.error(res.error)
           return
         }
         setDef(res.data)
@@ -128,11 +126,10 @@ export function InboxSendTemplateDialog({
     if (!id || !def) return
     const missing = clientMissingFields()
     if (missing) {
-      setError(missing)
+      notify.error(missing)
       return
     }
     setBusy(true)
-    setError('')
     const res = await apiClient.post(`/api/conversations/${conversationId}/send-template`, {
       templateSyncId: id,
       headerMediaUrl: headerMediaUrl.trim(),
@@ -142,7 +139,7 @@ export function InboxSendTemplateDialog({
     })
     setBusy(false)
     if (!res.ok) {
-      setError(res.error)
+      notify.error(res.error)
       return
     }
     onSent()
@@ -257,8 +254,6 @@ export function InboxSendTemplateDialog({
                 </label>
               ))
             : null}
-
-          {error ? <p className="text-sm text-bad">{error}</p> : null}
         </DialogBody>
         <DialogFooter>
           <DialogClose>Cancelar</DialogClose>

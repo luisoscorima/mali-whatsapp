@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
+import { notify } from '@/shared/notify'
 type SegmentOption = {
   slug: string
   label: string
@@ -15,7 +16,6 @@ export function AttributeNewPage() {
   const [label, setLabel] = useState('')
   const [fieldType, setFieldType] = useState('text')
   const [required, setRequired] = useState(false)
-  const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -29,7 +29,6 @@ export function AttributeNewPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setSaving(true)
-    setError('')
     const result = await apiClient.post<{ id: number }>('/api/attribute-definitions', {
       scope,
       segment_slug: scope === 'segment' ? segmentSlug : undefined,
@@ -40,7 +39,7 @@ export function AttributeNewPage() {
     })
     setSaving(false)
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
     navigate(`/attributes/${result.data.id}`)
@@ -54,8 +53,6 @@ export function AttributeNewPage() {
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">Nuevo atributo</h1>
       </div>
-
-      {error ? <p className="text-bad">{error}</p> : null}
 
       <form
         onSubmit={onSubmit}

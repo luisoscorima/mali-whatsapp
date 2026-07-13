@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { apiClient } from '@/shared/api'
+import { notify } from '@/shared/notify'
 import { WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
 import { MetricsGrid } from './MetricsGrid'
 
@@ -24,13 +25,15 @@ export function CampaignsSummaryPane() {
 
   useEffect(() => {
     apiClient.get<CampaignSummary>('/api/campaigns/summary').then((result) => {
-      if (!result.ok) setError(result.error)
-      else setSummary(result.data)
+      if (!result.ok) {
+        notify.error(result.error)
+        setError(result.error)
+      } else setSummary(result.data)
     })
   }, [])
 
   if (error) {
-    return <WaEmptyPane heading={error} />
+    return <WaEmptyPane heading="No se pudo cargar" />
   }
 
   if (!summary) {

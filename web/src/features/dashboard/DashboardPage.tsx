@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { notify } from '@/shared/notify'
 import { apiClient } from '../../shared/api'
 import { WaSpanMainPage } from '@/shared/ui/shell/WaSpanMainPage'
 
@@ -12,7 +13,7 @@ type DashboardData = {
 export function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [health, setHealth] = useState('')
-  const [error, setError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
   const [pending, setPending] = useState(false)
 
   useEffect(() => {
@@ -28,7 +29,8 @@ export function DashboardPage() {
         apiClient.getHealth(),
       ])
       if (!dashboard.ok) {
-        setError(dashboard.error)
+        notify.error(dashboard.error)
+        setLoadFailed(true)
         return
       }
       setData(dashboard.data)
@@ -52,10 +54,10 @@ export function DashboardPage() {
     )
   }
 
-  if (error) {
+  if (loadFailed) {
     return (
       <WaSpanMainPage title="Panel">
-        <p className="text-bad">{error}</p>
+        <p className="text-muted">No se pudo cargar</p>
       </WaSpanMainPage>
     )
   }

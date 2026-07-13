@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useLocation, Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { apiClient } from '@/shared/api'
+import { notify } from '@/shared/notify'
 import { hasInboxDetailRoute } from '@/shared/layout/inboxDetailRoute'
 import { WaPageContents } from '@/shared/ui/shell/WaLayout'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
@@ -21,7 +22,7 @@ function sectionFromPath(pathname: string): string {
 export function SettingsShell() {
   const location = useLocation()
   const [modules, setModules] = useState<SettingsModule[]>([])
-  const [loadError, setLoadError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
   const active = sectionFromPath(location.pathname)
 
   useEffect(() => {
@@ -31,18 +32,19 @@ export function SettingsShell() {
       )
       .then((result) => {
         if (!result.ok) {
-          setLoadError(result.error)
+          notify.error(result.error)
+          setLoadFailed(true)
           return
         }
         setModules(result.data.modules)
       })
   }, [])
 
-  if (loadError) {
+  if (loadFailed) {
     return (
       <WaPageContents>
         <WaMainPane spanColumns>
-          <p className="p-4 text-bad">{loadError}</p>
+          <p className="p-4 text-muted">No se pudieron cargar los ajustes.</p>
         </WaMainPane>
       </WaPageContents>
     )

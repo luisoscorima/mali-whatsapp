@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { MALI_LOGO_URL } from '@/shared/brand'
+import { notify } from '@/shared/notify'
 import { useTheme } from '@/shared/theme/useTheme'
 import { apiClient } from '../../shared/api'
 import { GoogleLogoIcon } from './GoogleLogoIcon'
@@ -11,7 +12,6 @@ export function LoginPage() {
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const { toggleTheme } = useTheme()
-  const [error, setError] = useState('')
   const [checking, setChecking] = useState(true)
   const [googleEnabled, setGoogleEnabled] = useState(false)
   const [redirecting, setRedirecting] = useState(false)
@@ -22,7 +22,7 @@ export function LoginPage() {
   useEffect(() => {
     const oauthError = searchParams.get('error')
     if (oauthError) {
-      setError(decodeURIComponent(oauthError))
+      notify.error(decodeURIComponent(oauthError))
     }
   }, [searchParams])
 
@@ -30,6 +30,9 @@ export function LoginPage() {
     apiClient.getAuthConfig().then((config) => {
       if (config.ok) {
         setGoogleEnabled(config.data.googleEnabled)
+        if (!config.data.googleEnabled) {
+          notify.error('Google OAuth no está configurado en el servidor.')
+        }
       }
     })
     apiClient.getSession().then((result) => {
@@ -109,12 +112,6 @@ export function LoginPage() {
               Inicia sesión con tu cuenta <strong>@mali.pe</strong>
             </p>
 
-            {error ? (
-              <p className="login-error" role="alert">
-                {error}
-              </p>
-            ) : null}
-
             {googleEnabled ? (
               <button
                 type="button"
@@ -130,11 +127,7 @@ export function LoginPage() {
                 )}
                 {redirecting ? 'Conectando con Google…' : 'Continuar con Google'}
               </button>
-            ) : (
-              <p className="login-error" role="alert">
-                Google OAuth no está configurado en el servidor.
-              </p>
-            )}
+            ) : null}
 
             <p className="login-footnote">
               Acceso exclusivo para el equipo del Museo de Arte de Lima

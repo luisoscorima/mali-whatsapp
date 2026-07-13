@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiClient } from '@/shared/api'
+import { notify } from '@/shared/notify'
 import { useTheme } from '@/shared/theme/useTheme'
 import { Button } from '@/shared/ui/shadcn/button'
 import {
@@ -14,6 +15,8 @@ import {
   DialogTitle,
 } from '@/shared/ui/shadcn/dialog'
 import { segmentFilterPillStyle } from '../segments/segmentColors'
+
+const MAX_ASSIGNABLE_SEGMENTS = 3
 
 type SegmentOption = {
   slug: string
@@ -64,27 +67,33 @@ export function InboxChatActionsDialog({
 }: InboxChatActionsDialogProps) {
   const { theme } = useTheme()
   const [segmentBusy, setSegmentBusy] = useState('')
-  const [segmentError, setSegmentError] = useState('')
   const current = leadScore ?? 0
   const prefillPhone = phone.replace(/\D/g, '')
   const hasConversation = conversationId != null && conversationId > 0
   const status = String(conversationStatus ?? '').toLowerCase()
   const assignableSlugs = new Set(assignableSegments.map((seg) => seg.slug))
-  const activeAssignableSlug = currentSegmentSlugs.find((slug) =>
-    assignableSlugs.has(slug),
+  const activeAssignableSlugs = new Set(
+    currentSegmentSlugs.filter((slug) => assignableSlugs.has(slug)),
   )
 
   async function toggleAssignableSegment(slug: string) {
     if (!contactId) return
+    const isActive = activeAssignableSlugs.has(slug)
+    if (
+      !isActive &&
+      activeAssignableSlugs.size >= MAX_ASSIGNABLE_SEGMENTS
+    ) {
+      notify.error(`Máximo ${MAX_ASSIGNABLE_SEGMENTS} segmentos asignables`)
+      return
+    }
     setSegmentBusy(slug)
-    setSegmentError('')
     const res = await apiClient.patch<{ segment_slugs: string[] }>(
       `/api/contacts/${contactId}/assignable-segment`,
       { segment_slug: slug },
     )
     setSegmentBusy('')
     if (!res.ok) {
-      setSegmentError(res.error)
+      notify.error(res.error)
       return
     }
     onSegmentAdded?.()
@@ -111,16 +120,16 @@ export function InboxChatActionsDialog({
               <p className="text-sm font-medium">Asignar a:</p>
               <div
                 className="flex flex-wrap gap-1"
-                role="radiogroup"
-                aria-label="Asignar a un segmento"
+                role="group"
+                aria-label="Asignar a segmentos"
               >
                 {assignableSegments.map((seg) => {
-                  const active = activeAssignableSlug === seg.slug
+                  const active = activeAssignableSlugs.has(seg.slug)
                   return (
                     <button
                       key={seg.slug}
                       type="button"
-                      role="radio"
+                      role="checkbox"
                       aria-checked={active}
                       disabled={segmentBusy === seg.slug}
                       onClick={() => void toggleAssignableSegment(seg.slug)}
@@ -132,7 +141,6 @@ export function InboxChatActionsDialog({
                   )
                 })}
               </div>
-              {segmentError ? <p className="text-xs text-bad">{segmentError}</p> : null}
             </div>
           ) : null}
 

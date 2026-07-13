@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
-import { TemplateFlashBanner } from './TemplateFlashBanner'
+import { notify } from '@/shared/notify'
+import { TEMPLATE_FLASH_MESSAGES } from './templateFlash'
 import { TemplateForm } from './TemplateForm'
 import { TemplateLivePreview } from './TemplateLivePreview'
 import { templateStatusClass } from './templateStatus'
@@ -31,32 +32,43 @@ type TemplateDetail = {
 
 export function TemplateDetailPage() {
   const { id } = useParams()
-  const [, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [template, setTemplate] = useState<TemplateDetail | null>(null)
-  const [error, setError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
 
   const load = useCallback(async () => {
     if (!id) return
     const result = await apiClient.get<TemplateDetail>(`/api/templates/${id}`)
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
+      setLoadFailed(true)
       return
     }
     setTemplate(result.data)
-    setError('')
+    setLoadFailed(false)
   }, [id])
 
   useEffect(() => {
     void load()
   }, [load])
 
-  if (error) {
+  useEffect(() => {
+    const flash = searchParams.get('flash')
+    if (!flash) return
+    const message = TEMPLATE_FLASH_MESSAGES[flash]
+    if (message) notify.success(message)
+    const next = new URLSearchParams(searchParams)
+    next.delete('flash')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
+
+  if (loadFailed && !template) {
     return (
       <div className="space-y-3">
         <Link to="/templates" className="text-sm text-accent">
           ← Plantillas
         </Link>
-        <p className="text-bad">{error}</p>
+        <p className="text-muted">No se pudo cargar la plantilla.</p>
       </div>
     )
   }
@@ -70,8 +82,6 @@ export function TemplateDetailPage() {
       <Link to="/templates" className="text-sm text-accent">
         ← Plantillas
       </Link>
-
-      <TemplateFlashBanner />
 
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="font-mono text-2xl font-semibold">{template.name}</h1>

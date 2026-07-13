@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { apiClient } from '../../shared/api'
+import { notify } from '@/shared/notify'
 
 type AiSettings = {
   area: string
@@ -14,21 +15,21 @@ export function SettingsAiPage() {
   const [prompt, setPrompt] = useState('')
   const [transferKeyword, setTransferKeyword] = useState('[TRANSFERIR]')
   const [enabled, setEnabled] = useState(false)
-  const [loadError, setLoadError] = useState('')
-  const [status, setStatus] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
   const [busy, setBusy] = useState('')
 
   async function load() {
-    setLoadError('')
     const result = await apiClient.get<AiSettings>('/api/settings/ai')
     if (!result.ok) {
-      setLoadError(result.error)
+      notify.error(result.error)
+      setLoadFailed(true)
       return
     }
     setSettings(result.data)
     setPrompt(result.data.prompt)
     setTransferKeyword(result.data.transfer_keyword || '[TRANSFERIR]')
     setEnabled(result.data.enabled)
+    setLoadFailed(false)
   }
 
   useEffect(() => {
@@ -38,28 +39,28 @@ export function SettingsAiPage() {
   async function handleToggleEnabled(next: boolean) {
     if (!settings?.can_toggle_enabled) return
     setBusy('toggle')
-    setStatus('')
     const result = await apiClient.post(`/api/settings/ai/${settings.area}/enable`, {
       enabled: next,
     })
     setBusy('')
     if (!result.ok) {
-      setStatus(result.error)
+      notify.error(result.error)
       return
     }
     setEnabled(next)
-    setStatus(next ? 'IA activada para el área.' : 'IA desactivada; chats en modo asesor.')
+    notify.success(
+      next ? 'IA activada para el área.' : 'IA desactivada; chats en modo asesor.',
+    )
   }
 
   async function handleSave() {
     if (!settings) return
     const trimmed = prompt.trim()
     if (!trimmed) {
-      setStatus('El prompt no puede estar vacío.')
+      notify.error('El prompt no puede estar vacío.')
       return
     }
     setBusy('save')
-    setStatus('Guardando…')
     const result = await apiClient.patch(`/api/settings/ai/${settings.area}`, {
       enabled,
       prompt: trimmed,
@@ -67,15 +68,14 @@ export function SettingsAiPage() {
     })
     setBusy('')
     if (!result.ok) {
-      setStatus(result.error)
+      notify.error(result.error)
       return
     }
-    setStatus('Guardado.')
-    setTimeout(() => setStatus(''), 4000)
+    notify.success('Guardado.')
   }
 
-  if (loadError) {
-    return <p className="text-bad">{loadError}</p>
+  if (loadFailed) {
+    return <p className="text-muted">No se pudieron cargar los ajustes de IA.</p>
   }
 
   if (!settings) {
@@ -146,7 +146,6 @@ export function SettingsAiPage() {
           >
             {busy === 'save' ? 'Guardando…' : 'Guardar instrucciones'}
           </button>
-          {status ? <span className="text-sm text-muted">{status}</span> : null}
         </div>
       </div>
     </section>

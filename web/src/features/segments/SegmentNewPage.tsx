@@ -1,19 +1,18 @@
 import { type FormEvent, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
+import { notify } from '@/shared/notify'
 import { SegmentColorPicker } from './SegmentColorPicker'
 export function SegmentNewPage() {
   const navigate = useNavigate()
   const [slug, setSlug] = useState('')
   const [label, setLabel] = useState('')
   const [colorKey, setColorKey] = useState('teal')
-  const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setSaving(true)
-    setError('')
     const result = await apiClient.post<{ id: number }>('/api/segments', {
       slug,
       label,
@@ -21,7 +20,7 @@ export function SegmentNewPage() {
     })
     setSaving(false)
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
     navigate(`/segments/${result.data.id}`)
@@ -35,8 +34,6 @@ export function SegmentNewPage() {
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">Añadir segmento</h1>
       </div>
-
-      {error ? <p className="text-bad">{error}</p> : null}
 
       <form
         onSubmit={onSubmit}

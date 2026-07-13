@@ -26,7 +26,6 @@ type InboxAssignDialogProps = {
   assignees: ConversationAssignee[]
   loading: boolean
   saving: boolean
-  error: string
   onSave: (assignedUserId: number | null) => void
 }
 
@@ -39,7 +38,6 @@ export function InboxAssignDialog({
   assignees,
   loading,
   saving,
-  error,
   onSave,
 }: InboxAssignDialogProps) {
   const [selectedId, setSelectedId] = useState<number | null>(currentAssigneeId)
@@ -87,7 +85,6 @@ export function InboxAssignDialog({
               ))}
             </div>
           )}
-          {error ? <p className="text-sm text-bad">{error}</p> : null}
         </DialogBody>
         <DialogFooter>
           <DialogClose disabled={saving}>Cancelar</DialogClose>

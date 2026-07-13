@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
+import { notify } from '@/shared/notify'
 import { ContactForm } from './ContactForm'
 
 type FilterOptions = {
@@ -19,7 +20,7 @@ type FilterOptions = {
 export function ContactNewPage() {
   const navigate = useNavigate()
   const [options, setOptions] = useState<FilterOptions | null>(null)
-  const [error, setError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -28,7 +29,8 @@ export function ContactNewPage() {
       apiClient.get<FilterOptions['segments']>('/api/segments'),
     ]).then(([opts, segs]) => {
       if (!opts.ok) {
-        setError(opts.error)
+        notify.error(opts.error)
+        setLoadFailed(true)
         return
       }
       setOptions({
@@ -47,7 +49,6 @@ export function ContactNewPage() {
     attributes: Record<string, string>
   }) {
     setSaving(true)
-    setError('')
     const result = await apiClient.post<{ id: number }>('/api/contacts', {
       name: values.name,
       last_name: values.last_name,
@@ -58,14 +59,14 @@ export function ContactNewPage() {
     })
     setSaving(false)
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
     navigate(`/contacts/${result.data.id}`)
   }
 
-  if (error && !options) {
-    return <p className="text-bad">{error}</p>
+  if (loadFailed) {
+    return <p className="text-muted">No se pudo cargar</p>
   }
 
   if (!options) {
@@ -80,8 +81,6 @@ export function ContactNewPage() {
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">Añadir contacto</h1>
       </div>
-
-      {error ? <p className="text-bad">{error}</p> : null}
 
       <div className="rounded-xl border border-line bg-surface-strong p-4">
         <ContactForm

@@ -2,6 +2,7 @@ import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, us
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { formatChatListTime } from '../../shared/format'
+import { notify } from '@/shared/notify'
 import { WaPageContents } from '@/shared/ui/shell/WaLayout'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import {
@@ -10,7 +11,6 @@ import {
   WaMainFooter,
 } from '@/shared/ui/shell/WaMainPane'
 import { WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
-import { Alert, AlertDescription } from '@/shared/ui/shadcn/alert'
 import { Badge } from '@/shared/ui/shadcn/badge'
 import { Button } from '@/shared/ui/shadcn/button'
 import { formatContactName } from '../contacts/contactName'
@@ -400,7 +400,6 @@ export function ConversationsInboxPage() {
   const [list, setList] = useState<InboxListResult | null>(null)
   const [detail, setDetail] = useState<InboxDetail | null>(null)
   const [error, setError] = useState('')
-  const [replyError, setReplyError] = useState('')
   const [replyText, setReplyText] = useState('')
   const [replyFile, setReplyFile] = useState<File | null>(null)
   const [sendingReply, setSendingReply] = useState(false)
@@ -414,7 +413,6 @@ export function ConversationsInboxPage() {
   const [assignees, setAssignees] = useState<ConversationAssignee[]>([])
   const [assigneesLoading, setAssigneesLoading] = useState(false)
   const [assignSaving, setAssignSaving] = useState(false)
-  const [assignError, setAssignError] = useState('')
   const lastMessageIdRef = useRef(0)
   const lastAuditIdRef = useRef<bigint>(BigInt(0))
   const listRequestIdRef = useRef(0)
@@ -444,7 +442,10 @@ export function ConversationsInboxPage() {
       .then((result) => {
         if (requestId !== listRequestIdRef.current) return
         if (!result.ok) {
-          if (!opts?.silent) setError(result.error)
+          if (!opts?.silent) {
+            notify.error(result.error)
+            setError(result.error)
+          }
           return
         }
         setList(result.data)
@@ -475,6 +476,7 @@ export function ConversationsInboxPage() {
         .then((result) => {
           setLoadingDetail(false)
           if (!result.ok) {
+            notify.error(result.error)
             setError(result.error)
             setDetail(null)
             return
@@ -618,6 +620,7 @@ export function ConversationsInboxPage() {
         .post<{ id: number }>(`/api/conversations/from-contact/${contactId}`, {})
         .then((result) => {
           if (!result.ok) {
+            notify.error(result.error)
             setError(result.error)
             setLoadingDetail(false)
             return
@@ -663,9 +666,14 @@ export function ConversationsInboxPage() {
   useEffect(() => {
     setReplyText('')
     setReplyFile(null)
-    setReplyError('')
     setReplyToMessage(null)
   }, [selectedId])
+
+  useEffect(() => {
+    if (!detail || detail.can_reply) return
+    const text = replyBlockedText(detail.reply_blocked_reason)
+    if (text) notify.info(text)
+  }, [detail?.conversation.id, detail?.can_reply, detail?.reply_blocked_reason])
 
   function openChatActions(ctx: ChatActionsContext) {
     setActionsContext(ctx)
@@ -758,6 +766,7 @@ export function ConversationsInboxPage() {
       )
       setLoadingDetail(false)
       if (!result.ok) {
+        notify.error(result.error)
         setError(result.error)
         return
       }
@@ -770,13 +779,12 @@ export function ConversationsInboxPage() {
   async function onModeChange(status: 'bot' | 'human') {
     const convId = actionsConversationId ?? selectedId
     if (!convId || convId <= 0) return
-    setReplyError('')
     const result = await apiClient.patch<{ status: 'bot' | 'human' }>(
       `/api/conversations/${convId}/mode`,
       { status },
     )
     if (!result.ok) {
-      setReplyError(result.error)
+      notify.error(result.error)
       return
     }
     if (selectedId === convId) void loadDetail(convId)
@@ -791,7 +799,7 @@ export function ConversationsInboxPage() {
       {},
     )
     if (!result.ok) {
-      setReplyError(result.error)
+      notify.error(result.error)
       return
     }
     if (selectedId === convId) {
@@ -810,7 +818,7 @@ export function ConversationsInboxPage() {
         : { lead_score: String(score) },
     )
     if (!result.ok) {
-      setReplyError(result.error)
+      notify.error(result.error)
       return
     }
     if (selectedId === convId) void loadDetail(convId)
@@ -833,17 +841,16 @@ export function ConversationsInboxPage() {
 
   async function onMessageReact(message: InboxMessage, emoji: string) {
     if (!selectedId || selectedId <= 0 || !detail?.can_reply) {
-      setReplyError('No puedes reaccionar en este momento')
+      notify.error('No puedes reaccionar en este momento')
       return
     }
-    setReplyError('')
     const result = await apiClient.post<{
       ok: true
       target_message_id: number
       reaction: InboxMessageReaction | null
     }>(`/api/conversations/${selectedId}/messages/${message.id}/react`, { emoji })
     if (!result.ok) {
-      setReplyError(result.error)
+      notify.error(result.error)
       return
     }
     setDetail((prev) => {
@@ -862,11 +869,10 @@ export function ConversationsInboxPage() {
     if (!selectedId || selectedId <= 0 || !detail?.can_reply) return
     const text = replyText.trim()
     if (!text && !replyFile) {
-      setReplyError('Escribe un mensaje o adjunta un archivo')
+      notify.error('Escribe un mensaje o adjunta un archivo')
       return
     }
     setSendingReply(true)
-    setReplyError('')
     const replyPayload = replyToMessage
       ? { message: text, reply_to_message_id: replyToMessage.id }
       : { message: text }
@@ -889,7 +895,7 @@ export function ConversationsInboxPage() {
         )
     setSendingReply(false)
     if (!result.ok) {
-      setReplyError(result.error)
+      notify.error(result.error)
       return
     }
     setReplyText('')
@@ -904,14 +910,13 @@ export function ConversationsInboxPage() {
 
   useEffect(() => {
     if (!assignContext || !canAssign) return
-    setAssignError('')
     setAssigneesLoading(true)
     void apiClient
       .get<{ assignees: ConversationAssignee[] }>('/api/conversations/assignees')
       .then((result) => {
         setAssigneesLoading(false)
         if (!result.ok) {
-          setAssignError(result.error)
+          notify.error(result.error)
           return
         }
         setAssignees(result.data.assignees)
@@ -922,14 +927,13 @@ export function ConversationsInboxPage() {
     const convId = assignContext?.conversationId
     if (!convId || convId <= 0) return
     setAssignSaving(true)
-    setAssignError('')
     const result = await apiClient.patch<{
       assigned_user_id: number | null
       assigned_user_label: string | null
     }>(`/api/conversations/${convId}/assign`, { assigned_user_id: assignedUserId })
     setAssignSaving(false)
     if (!result.ok) {
-      setAssignError(result.error)
+      notify.error(result.error)
       return
     }
     setAssignContext(null)
@@ -942,7 +946,7 @@ export function ConversationsInboxPage() {
     formatContactName(item.contact_name, null, item.phone)
 
   if (error && !list) {
-    return <p className="text-bad p-4">{error}</p>
+    return <p className="text-muted p-4">No se pudo cargar</p>
   }
 
   const filterPills = (
@@ -1186,7 +1190,7 @@ export function ConversationsInboxPage() {
         ) : loadingDetail && !detail ? (
           <WaEmptyPane heading="Cargando chat…" />
         ) : error && !detail ? (
-          <WaEmptyPane heading={error} />
+          <WaEmptyPane heading="No se pudo cargar" />
         ) : detail ? (
           <>
             <WaMainHeader>
@@ -1304,15 +1308,10 @@ export function ConversationsInboxPage() {
                   onReplyFileChange={setReplyFile}
                   sendingReply={sendingReply}
                   onSubmit={(e) => void onSendReply(e)}
-                  replyError={replyError}
                   replyTo={replyToMessage}
                   onClearReplyTo={() => setReplyToMessage(null)}
                 />
-              ) : (
-                <Alert>
-                  <AlertDescription>{replyBlockedText(detail.reply_blocked_reason)}</AlertDescription>
-                </Alert>
-              )}
+              ) : null}
             </WaMainFooter>
           </>
         ) : null}
@@ -1380,7 +1379,6 @@ export function ConversationsInboxPage() {
           assignees={assignees}
           loading={assigneesLoading}
           saving={assignSaving}
-          error={assignError}
           onSave={(assignedUserId) => void onAssign(assignedUserId)}
         />
       ) : null}

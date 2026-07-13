@@ -10,6 +10,7 @@ import {
 } from 'recharts'
 import { useSearchParams } from 'react-router-dom'
 import { apiClient } from '@/shared/api'
+import { notify } from '@/shared/notify'
 import { WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
 import { MetricsGrid } from '../campaigns/MetricsGrid'
 import type { MetricCard } from '../campaigns/campaignMetricActions'
@@ -51,8 +52,10 @@ export function ConversationsSummaryPane() {
     const qs = new URLSearchParams({ days: String(days) })
     if (advisorId) qs.set('advisor_id', advisorId)
     void apiClient.get<ConversationSummary>(`/api/conversations/summary?${qs}`).then((res) => {
-      if (!res.ok) setError(res.error)
-      else {
+      if (!res.ok) {
+        notify.error(res.error)
+        setError(res.error)
+      } else {
         setSummary(res.data)
         setError('')
       }
@@ -80,7 +83,7 @@ export function ConversationsSummaryPane() {
   }
 
   if (error) {
-    return <WaEmptyPane heading={error} />
+    return <WaEmptyPane heading="No se pudo cargar" />
   }
 
   if (!summary) {

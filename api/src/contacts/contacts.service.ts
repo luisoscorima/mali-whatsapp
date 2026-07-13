@@ -317,9 +317,15 @@ export class ContactsService {
 
     const currentSlugs = await this.loadContactSegmentSlugs(contactId);
     const otherSlugs = currentSlugs.filter((s) => !assignableSet.has(s));
-    const activeAssignable = currentSlugs.find((s) => assignableSet.has(s));
-    const nextAssignable =
-      activeAssignable === slug ? [] : [slug];
+    const currentAssignable = currentSlugs.filter((s) => assignableSet.has(s));
+    const nextAssignable = currentAssignable.includes(slug)
+      ? currentAssignable.filter((s) => s !== slug)
+      : [...currentAssignable, slug];
+    if (nextAssignable.length > 3) {
+      throw new BadRequestException(
+        'Máximo 3 segmentos asignables por contacto',
+      );
+    }
     const nextSlugs = [...otherSlugs, ...nextAssignable];
 
     await this.prisma.$transaction(async (tx) => {
@@ -341,7 +347,7 @@ export class ContactsService {
         contact_id: contactId,
         segment_slug: slug,
         segments: nextSlugs,
-        toggled_off: activeAssignable === slug,
+        toggled_off: currentAssignable.includes(slug),
       },
     });
 

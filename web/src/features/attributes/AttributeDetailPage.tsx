@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
+import { notify } from '@/shared/notify'
 type AttributeDefinition = {
   id: number
   segment_slug: string | null
@@ -32,8 +33,7 @@ export function AttributeDetailPage() {
   const [fieldType, setFieldType] = useState('text')
   const [required, setRequired] = useState(false)
   const [active, setActive] = useState(true)
-  const [error, setError] = useState('')
-  const [saveMsg, setSaveMsg] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -43,7 +43,8 @@ export function AttributeDetailPage() {
       apiClient.get<SegmentOption[]>('/api/attribute-definitions/segments'),
     ]).then(([detail, segs]) => {
       if (!detail.ok) {
-        setError(detail.error)
+        notify.error(detail.error)
+        setLoadFailed(true)
         return
       }
       setDef(detail.data)
@@ -59,8 +60,6 @@ export function AttributeDetailPage() {
     e.preventDefault()
     if (!id || !def) return
     setSaving(true)
-    setSaveMsg('')
-    setError('')
     const result = await apiClient.patch<AttributeDefinition>(
       `/api/attribute-definitions/${id}`,
       {
@@ -73,11 +72,11 @@ export function AttributeDetailPage() {
     )
     setSaving(false)
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
     setDef(result.data)
-    setSaveMsg('Guardado.')
+    notify.success('Guardado.')
   }
 
   async function onDelete() {
@@ -91,14 +90,14 @@ export function AttributeDetailPage() {
     }
     const result = await apiClient.delete(`/api/attribute-definitions/${id}`)
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
     navigate('/attributes')
   }
 
-  if (error && !def) {
-    return <p className="text-bad">{error}</p>
+  if (loadFailed) {
+    return <p className="text-muted">No se pudo cargar</p>
   }
 
   if (!def) {
@@ -116,9 +115,6 @@ export function AttributeDetailPage() {
           {def.slug} · {scopeLabel(def, segments)}
         </p>
       </div>
-
-      {saveMsg ? <p className="text-sm text-accent">{saveMsg}</p> : null}
-      {error ? <p className="text-bad">{error}</p> : null}
 
       <form
         onSubmit={onSave}

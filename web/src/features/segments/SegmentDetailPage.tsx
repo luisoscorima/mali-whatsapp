@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
+import { notify } from '@/shared/notify'
 import { formatContactName } from '../contacts/contactName'
 import { segmentToneClass } from './segmentColors'
 import { SegmentColorPicker } from './SegmentColorPicker'
@@ -40,8 +41,7 @@ export function SegmentDetailPage() {
   const [active, setActive] = useState(true)
   const [showInFilter, setShowInFilter] = useState(true)
   const [assignable, setAssignable] = useState(false)
-  const [error, setError] = useState('')
-  const [saveMsg, setSaveMsg] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
   const [saving, setSaving] = useState(false)
   const [removingId, setRemovingId] = useState<number | null>(null)
   const [exportBusy, setExportBusy] = useState(false)
@@ -53,7 +53,8 @@ export function SegmentDetailPage() {
       apiClient.get<SegmentDefinition[]>('/api/segments'),
     ]).then(([detail, list]) => {
       if (!detail.ok) {
-        setError(detail.error)
+        notify.error(detail.error)
+        setLoadFailed(true)
         return
       }
       setPayload(detail.data)
@@ -80,8 +81,6 @@ export function SegmentDetailPage() {
     e.preventDefault()
     if (!id) return
     setSaving(true)
-    setSaveMsg('')
-    setError('')
     const result = await apiClient.patch<SegmentDefinition>(`/api/segments/${id}`, {
       slug,
       label,
@@ -93,10 +92,10 @@ export function SegmentDetailPage() {
     })
     setSaving(false)
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
-    setSaveMsg('Segmento actualizado.')
+    notify.success('Segmento actualizado.')
     setPayload((prev) =>
       prev ? { ...prev, segment: { ...prev.segment, ...result.data } } : prev,
     )
@@ -116,7 +115,7 @@ export function SegmentDetailPage() {
     }
     const result = await apiClient.delete(`/api/segments/${id}`)
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
     navigate('/segments')
@@ -126,13 +125,12 @@ export function SegmentDetailPage() {
     if (!id) return
     if (!window.confirm('¿Quitar este contacto del segmento?')) return
     setRemovingId(contactId)
-    setError('')
     const result = await apiClient.delete<SegmentDetail>(
       `/api/segments/${id}/contacts/${contactId}`,
     )
     setRemovingId(null)
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
     setPayload(result.data)
@@ -141,14 +139,13 @@ export function SegmentDetailPage() {
   async function onExport() {
     if (!id) return
     setExportBusy(true)
-    setError('')
     const result = await apiClient.download(`/api/segments/${id}/export`)
     setExportBusy(false)
-    if (!result.ok) setError(result.error)
+    if (!result.ok) notify.error(result.error)
   }
 
-  if (error && !payload) {
-    return <p className="text-bad">{error}</p>
+  if (loadFailed) {
+    return <p className="text-muted">No se pudo cargar</p>
   }
 
   if (!payload) {
@@ -166,9 +163,6 @@ export function SegmentDetailPage() {
         <h1 className="mt-2 text-2xl font-semibold">{label}</h1>
         <p className="font-mono text-sm text-muted">{slug}</p>
       </div>
-
-      {saveMsg ? <p className="text-sm text-accent">{saveMsg}</p> : null}
-      {error ? <p className="text-bad">{error}</p> : null}
 
       <section className="rounded-xl border border-line bg-surface-strong p-4">
         <h2 className="mb-2 font-medium">Editar segmento</h2>

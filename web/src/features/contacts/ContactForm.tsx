@@ -98,10 +98,9 @@ export function ContactForm({
       </label>
 
       <label className="block text-sm">
-        <span className="text-muted">Apellido</span>
+        <span className="text-muted">Apellido (opcional)</span>
         <input
           type="text"
-          required
           maxLength={120}
           value={lastName}
           disabled={disabled}

@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { notify } from '@/shared/notify'
 import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
 
@@ -36,15 +37,15 @@ export function MetaAdDetailPage() {
   const { id } = useParams()
   const [payload, setPayload] = useState<DetailPayload | null>(null)
   const [displayName, setDisplayName] = useState('')
-  const [error, setError] = useState('')
-  const [saveMsg, setSaveMsg] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!id) return
     apiClient.get<DetailPayload>(`/api/meta-ads/${id}`).then((result) => {
       if (!result.ok) {
-        setError(result.error)
+        notify.error(result.error)
+        setLoadFailed(true)
         return
       }
       setPayload(result.data)
@@ -56,23 +57,22 @@ export function MetaAdDetailPage() {
     e.preventDefault()
     if (!id) return
     setSaving(true)
-    setSaveMsg('')
     const result = await apiClient.patch<MetaAdDetail>(`/api/meta-ads/${id}`, {
       display_name: displayName,
     })
     setSaving(false)
     if (!result.ok) {
-      setError(result.error)
+      notify.error(result.error)
       return
     }
     setPayload((prev) =>
       prev ? { ...prev, ad: { ...prev.ad, ...result.data } } : prev,
     )
-    setSaveMsg('Nombre guardado.')
+    notify.success('Nombre guardado.')
   }
 
-  if (error) {
-    return <p className="text-bad">{error}</p>
+  if (loadFailed) {
+    return <p className="text-muted">No se pudo cargar</p>
   }
 
   if (!payload) {
@@ -95,8 +95,6 @@ export function MetaAdDetailPage() {
           ID Meta: {ad.meta_source_id} · {ad.platform_label}
         </p>
       </div>
-
-      {saveMsg ? <p className="text-sm text-accent">{saveMsg}</p> : null}
 
       <section className="rounded-xl border border-line bg-surface-strong p-4">
         <h2 className="mb-2 font-medium">Nombre del anuncio</h2>

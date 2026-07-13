@@ -145,10 +145,7 @@ function resolveNameForImport(
     return { name: parts[0], last_name: explicitLast };
   }
 
-  return {
-    error:
-      'Indica apellido (columna last_name/apellido) o nombre completo con al menos dos palabras',
-  };
+  return { name: parts[0], last_name: '' };
 }
 
 function normalizeImportRecord(

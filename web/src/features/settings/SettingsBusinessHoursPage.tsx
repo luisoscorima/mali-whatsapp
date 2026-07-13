@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { apiClient } from '../../shared/api'
+import { notify } from '@/shared/notify'
 
 const DAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
@@ -21,8 +22,7 @@ export function SettingsBusinessHoursPage() {
   const [to, setTo] = useState('18:00')
   const [message, setMessage] = useState('')
   const [timezone, setTimezone] = useState('America/Lima')
-  const [loadError, setLoadError] = useState('')
-  const [status, setStatus] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -30,7 +30,8 @@ export function SettingsBusinessHoursPage() {
       .get<BusinessHoursSettings>('/api/settings/business-hours')
       .then((result) => {
         if (!result.ok) {
-          setLoadError(result.error)
+          notify.error(result.error)
+          setLoadFailed(true)
           return
         }
         setSettings(result.data)
@@ -56,11 +57,10 @@ export function SettingsBusinessHoursPage() {
     if (!settings) return
     const dayList = [...days].sort((a, b) => a - b)
     if (enabled && dayList.length === 0) {
-      setStatus('Selecciona al menos un día.')
+      notify.error('Selecciona al menos un día.')
       return
     }
     setBusy(true)
-    setStatus('Guardando…')
     const result = await apiClient.patch(
       `/api/settings/business-hours/${settings.area}`,
       {
@@ -74,15 +74,14 @@ export function SettingsBusinessHoursPage() {
     )
     setBusy(false)
     if (!result.ok) {
-      setStatus(result.error)
+      notify.error(result.error)
       return
     }
-    setStatus('Guardado.')
-    setTimeout(() => setStatus(''), 4000)
+    notify.success('Guardado.')
   }
 
-  if (loadError) {
-    return <p className="text-bad">{loadError}</p>
+  if (loadFailed) {
+    return <p className="text-muted">No se pudieron cargar los horarios.</p>
   }
 
   if (!settings) {
@@ -168,7 +167,6 @@ export function SettingsBusinessHoursPage() {
         >
           {busy ? 'Guardando…' : 'Guardar horario'}
         </button>
-        {status ? <span className="text-sm text-muted">{status}</span> : null}
       </div>
     </section>
   )

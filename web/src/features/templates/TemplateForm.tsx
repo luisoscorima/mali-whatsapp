@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { apiClient } from '../../shared/api'
+import { notify } from '@/shared/notify'
 import { TemplateBuilderFields } from './TemplateBuilderFields'
 import { TemplateLivePreview } from './TemplateLivePreview'
 import {
@@ -72,12 +73,10 @@ export function TemplateForm({
   const [language, setLanguage] = useState(initialLanguage)
   const [category, setCategory] = useState(initialCategory)
   const [builder, setBuilder] = useState<TemplateBuilderState>(initialBuilder)
-  const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    setError('')
 
     const payloadBuilder = finalizeBuilder(builder)
     const normalizedName =
@@ -87,7 +86,7 @@ export function TemplateForm({
       name: normalizedName,
     })
     if (validationErrors.length > 0) {
-      setError(validationErrors.join(' '))
+      notify.error(validationErrors.join(' '))
       return
     }
 
@@ -102,7 +101,7 @@ export function TemplateForm({
         { builder: payloadBuilder },
       )
       if (!validateResult.ok) {
-        setError(validateResult.error)
+        notify.error(validateResult.error)
         return
       }
 
@@ -114,7 +113,7 @@ export function TemplateForm({
         source_template_id: sourceTemplateId,
       })
     } catch (submitError) {
-      setError(
+      notify.error(
         submitError instanceof Error
           ? submitError.message
           : 'No se pudo guardar la plantilla',
@@ -132,8 +131,6 @@ export function TemplateForm({
         <code className="font-mono text-xs">{'{{mes}}'}</code>; el sistema las
         normaliza a placeholders numéricos.
       </p>
-
-      {error ? <p className="text-bad">{error}</p> : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         {mode === 'create' ? (

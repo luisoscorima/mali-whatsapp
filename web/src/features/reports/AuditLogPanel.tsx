@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { notify } from '@/shared/notify'
 import { apiClient } from '../../shared/api'
 
 type FilterOption = { value: string; label: string }
@@ -55,7 +56,7 @@ export function AuditLogPanel({
     event_options: FilterOption[]
   } | null>(null)
   const [data, setData] = useState<AuditResult | null>(null)
-  const [error, setError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
   const [busy, setBusy] = useState('')
 
   const query = useMemo(
@@ -80,7 +81,7 @@ export function AuditLogPanel({
   }, [optionsPath])
 
   useEffect(() => {
-    setError('')
+    setLoadFailed(false)
     const qs = new URLSearchParams()
     if (query.level) qs.set('level', query.level)
     if (query.event) qs.set('event', query.event)
@@ -91,7 +92,8 @@ export function AuditLogPanel({
     const suffix = qs.toString()
     apiClient.get<AuditResult>(`${listPath}${suffix ? `?${suffix}` : ''}`).then((result) => {
       if (!result.ok) {
-        setError(result.error)
+        notify.error(result.error)
+        setLoadFailed(true)
         return
       }
       setData(result.data)
@@ -121,11 +123,11 @@ export function AuditLogPanel({
     const path = `${exportPath}${suffix ? `?${suffix}` : ''}`
     const result = await apiClient.download(path)
     setBusy('')
-    if (!result.ok) setError(result.error)
+    if (!result.ok) notify.error(result.error)
   }
 
-  if (error && !data) {
-    return <p className="text-bad">{error}</p>
+  if (loadFailed && !data) {
+    return <p className="text-muted">No se pudo cargar</p>
   }
 
   return (
@@ -208,8 +210,6 @@ export function AuditLogPanel({
           {busy === 'export' ? '…' : 'Descargar Excel'}
         </button>
       </div>
-
-      {error ? <p className="text-sm text-bad">{error}</p> : null}
 
       {!data ? (
         <p className="text-muted">Cargando…</p>
