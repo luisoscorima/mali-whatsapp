@@ -30,7 +30,8 @@ const PERM_FIELDS = [
 export function AdminUserFormPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const isNew = id === 'new'
+  // Ruta `users/new` no define `:id`; `users/:id` puede traer id="new".
+  const isNew = !id || id === 'new'
   const userId = isNew ? null : Number(id)
 
   const [loading, setLoading] = useState(!isNew)
