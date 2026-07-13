@@ -22,8 +22,14 @@ import {
   parseGoogleProfileNames,
 } from './user-access.util';
 
+/** Misma ventana que el middleware last_seen de v1 (main). */
+const LOGIN_LOG_SEEN_BUMP_MS = 60 * 1000;
+
 @Injectable()
 export class AuthService {
+  /** Throttle in-memory del bump de last_seen_at por login_log. */
+  private readonly loginLogBumpAt = new Map<number, number>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
@@ -36,6 +42,18 @@ export class AuthService {
     return this.userAreas.getDevUser();
   }
 
+  private extractAccessToken(req: Request): string {
+    const cookieToken = req.cookies?.[this.config.authCookieName];
+    const authHeader = req.headers.authorization;
+    const bearer =
+      typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+        ? authHeader.slice(7).trim()
+        : '';
+    return (
+      (typeof cookieToken === 'string' ? cookieToken.trim() : '') || bearer
+    );
+  }
+
   async resolveSession(
     req: Request,
   ): Promise<{ authenticated: boolean; user?: AuthUser }> {
@@ -43,14 +61,7 @@ export class AuthService {
       return { authenticated: true, user: this.getDevUser() };
     }
 
-    const cookieToken = req.cookies?.[this.config.authCookieName];
-    const authHeader = req.headers.authorization;
-    const bearer =
-      typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-        ? authHeader.slice(7).trim()
-        : '';
-    const token =
-      (typeof cookieToken === 'string' ? cookieToken.trim() : '') || bearer;
+    const token = this.extractAccessToken(req);
     if (!token) {
       return { authenticated: false };
     }
@@ -61,6 +72,67 @@ export class AuthService {
       return { authenticated: true, user };
     } catch {
       return { authenticated: false };
+    }
+  }
+
+  /** Cierra el login_log de la sesión si el token trae `lid` (no falla el logout). */
+  async logoutFromRequest(req: Request): Promise<void> {
+    const token = this.extractAccessToken(req);
+    if (!token) return;
+    try {
+      const payload = this.jwtService.verify<JwtPayload>(token);
+      if (payload.lid != null) {
+        await this.closeLoginLog(payload.lid);
+      }
+    } catch {
+      /* token inválido/expirado: igual se limpia la cookie en el controller */
+    }
+  }
+
+  private async createLoginLog(
+    userId: number,
+    email: string,
+  ): Promise<number | null> {
+    try {
+      const row = await this.prisma.login_logs.create({
+        data: {
+          user_id: userId,
+          email,
+          last_seen_at: new Date(),
+        },
+        select: { id: true },
+      });
+      return row.id;
+    } catch {
+      return null;
+    }
+  }
+
+  private bumpLoginLogSeen(loginLogId: number | undefined): void {
+    if (loginLogId == null || !this.config.requireAuth) return;
+    const now = Date.now();
+    const last = this.loginLogBumpAt.get(loginLogId) ?? 0;
+    if (now - last < LOGIN_LOG_SEEN_BUMP_MS) return;
+    this.loginLogBumpAt.set(loginLogId, now);
+    void this.prisma.login_logs
+      .updateMany({
+        where: { id: loginLogId, logged_out_at: null },
+        data: { last_seen_at: new Date() },
+      })
+      .catch(() => {
+        /* no bloquear request */
+      });
+  }
+
+  private async closeLoginLog(loginLogId: number): Promise<void> {
+    try {
+      await this.prisma.login_logs.updateMany({
+        where: { id: loginLogId, logged_out_at: null },
+        data: { logged_out_at: new Date() },
+      });
+      this.loginLogBumpAt.delete(loginLogId);
+    } catch {
+      /* no bloquear logout */
     }
   }
 
@@ -105,13 +177,16 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales incorrectas');
     }
 
+    const loginLogId = await this.createLoginLog(user.id, user.email);
     const authUser = await this.buildAuthUser(user, user.area);
+    if (loginLogId != null) authUser.loginLogId = loginLogId;
     const accessToken = await this.signToken(authUser);
     await this.auditLog.write({
       event_type: AuditEvent.AUTH_LOGIN,
       message: `Login: ${authUser.email}`,
       actor: auditActor(authUser),
       clientIp,
+      meta: { login_log_id: loginLogId },
     });
     return { accessToken, user: authUser };
   }
@@ -215,13 +290,16 @@ export class AuthService {
     },
     clientIp?: string | null,
   ): Promise<{ accessToken: string; user: AuthUser }> {
+    const loginLogId = await this.createLoginLog(row.id, row.email);
     const authUser = await this.buildAuthUser(row, row.area, row.picture);
+    if (loginLogId != null) authUser.loginLogId = loginLogId;
     const accessToken = await this.signToken(authUser);
     await this.auditLog.write({
       event_type: AuditEvent.AUTH_LOGIN,
       message: `Login Google: ${authUser.email}`,
       actor: auditActor(authUser),
       clientIp,
+      meta: { login_log_id: loginLogId },
     });
     return { accessToken, user: authUser };
   }
@@ -232,6 +310,7 @@ export class AuthService {
       email: user.email,
       area: user.area,
       ...(user.picture ? { picture: user.picture } : {}),
+      ...(user.loginLogId != null ? { lid: user.loginLogId } : {}),
     };
     return this.jwtService.sign(payload);
   }
@@ -244,7 +323,14 @@ export class AuthService {
       throw new UnauthorizedException('Usuario no encontrado');
     }
 
-    return this.buildAuthUser(user, payload.area, payload.picture);
+    const authUser = await this.buildAuthUser(
+      user,
+      payload.area,
+      payload.picture,
+    );
+    if (payload.lid != null) authUser.loginLogId = payload.lid;
+    this.bumpLoginLogSeen(authUser.loginLogId);
+    return authUser;
   }
 
   async switchArea(
@@ -272,6 +358,7 @@ export class AuthService {
       area,
       user.picture,
     );
+    if (user.loginLogId != null) authUser.loginLogId = user.loginLogId;
     const accessToken = await this.signToken(authUser);
 
     await this.auditLog.write({
@@ -351,6 +438,7 @@ export class AuthService {
     });
 
     const authUser = await this.buildAuthUser(updated, user.area);
+    if (user.loginLogId != null) authUser.loginLogId = user.loginLogId;
     const accessToken = await this.signToken(authUser);
     return { accessToken, user: authUser };
   }

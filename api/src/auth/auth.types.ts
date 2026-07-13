@@ -16,6 +16,8 @@ export interface AuthUser {
   canViewReports: boolean;
   canAssignConversations: boolean;
   picture?: string;
+  /** Id de login_logs de esta sesión (presencia “en línea”). */
+  loginLogId?: number;
 }
 
 export interface JwtPayload {
@@ -23,6 +25,8 @@ export interface JwtPayload {
   email: string;
   area: BusinessArea;
   picture?: string;
+  /** login_logs.id de la sesión actual. */
+  lid?: number;
 }
 
 export interface ApiSuccess<T> {

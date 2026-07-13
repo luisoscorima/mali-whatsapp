@@ -112,7 +112,11 @@ export class AuthController {
   }
 
   @Post('auth/logout')
-  logout(@Res({ passthrough: true }) res: Response): ApiResponse<{ ok: true }> {
+  async logout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<ApiResponse<{ ok: true }>> {
+    await this.authService.logoutFromRequest(req);
     res.clearCookie(this.config.authCookieName, this.config.authCookieOptions());
     return { ok: true, data: { ok: true } };
   }

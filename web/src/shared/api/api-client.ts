@@ -258,9 +258,10 @@ export const apiClient = {
 
   async logout(): Promise<void> {
     try {
+      // Enviar Bearer/cookie para cerrar login_logs; sessionProbe evita loop en 401.
       await request<{ ok: true }>('/api/auth/logout', {
         method: 'POST',
-        skipAuth: true,
+        sessionProbe: true,
       });
     } catch {
       /* red de fondo: igual limpiamos cliente */
