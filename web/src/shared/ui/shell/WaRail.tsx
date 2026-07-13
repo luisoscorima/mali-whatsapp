@@ -6,14 +6,14 @@ import { useTheme } from '@/shared/theme/useTheme'
 
 import { WaAccountMenu } from '@/shared/ui/shell/WaAccountMenu'
 
-const MORE_NAV = ['segments', 'templates', 'attributes', 'anuncios'] as const
+const MORE_NAV = ['templates', 'segments', 'attributes', 'anuncios'] as const
 
 export function navFromPath(pathname: string): string {
   if (pathname.startsWith('/conversations')) return 'conversations'
-  if (pathname.startsWith('/campaigns')) return 'campaigns'
   if (pathname.startsWith('/contacts')) return 'contacts'
-  if (pathname.startsWith('/segments')) return 'segments'
+  if (pathname.startsWith('/campaigns')) return 'campaigns'
   if (pathname.startsWith('/templates')) return 'templates'
+  if (pathname.startsWith('/segments')) return 'segments'
   if (pathname.startsWith('/attributes')) return 'attributes'
   if (pathname.startsWith('/anuncios')) return 'anuncios'
   if (pathname.startsWith('/settings')) return 'settings'
@@ -42,17 +42,6 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
-    key: 'campaigns',
-    to: '/campaigns',
-    label: 'Campañas',
-    icon: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M22 2L11 13" />
-        <path d="M22 2l-7 20-4-9-9-4 20-7z" />
-      </svg>
-    ),
-  },
-  {
     key: 'contacts',
     to: '/contacts',
     label: 'Contactos',
@@ -66,14 +55,13 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
-    key: 'segments',
-    to: '/segments',
-    label: 'Segmentos',
-    mobileSecondary: true,
+    key: 'campaigns',
+    to: '/campaigns',
+    label: 'Campañas',
     icon: (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-        <line x1="7" y1="7" x2="7.01" y2="7" />
+        <path d="M22 2L11 13" />
+        <path d="M22 2l-7 20-4-9-9-4 20-7z" />
       </svg>
     ),
   },
@@ -88,6 +76,18 @@ const NAV_ITEMS: NavItem[] = [
         <line x1="7" y1="8" x2="17" y2="8" />
         <line x1="7" y1="12" x2="14" y2="12" />
         <line x1="7" y1="16" x2="12" y2="16" />
+      </svg>
+    ),
+  },
+  {
+    key: 'segments',
+    to: '/segments',
+    label: 'Segmentos',
+    mobileSecondary: true,
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+        <line x1="7" y1="7" x2="7.01" y2="7" />
       </svg>
     ),
   },
