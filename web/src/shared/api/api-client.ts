@@ -33,10 +33,19 @@ function parseErrorBody(
 ): string {
   if (body && typeof body === 'object') {
     const record = body as Record<string, unknown>;
-    if (typeof record.error === 'string') return record.error;
-    if (typeof record.message === 'string') return record.message;
+    // NestJS pone el detalle útil en `message`; `error` suele ser solo "Bad Request".
+    if (typeof record.message === 'string' && record.message.trim()) {
+      return record.message;
+    }
     if (Array.isArray(record.message)) {
       return record.message.map(String).join(', ');
+    }
+    if (
+      typeof record.error === 'string' &&
+      record.error.trim() &&
+      record.error !== 'Bad Request'
+    ) {
+      return record.error;
     }
   }
   return fallback;

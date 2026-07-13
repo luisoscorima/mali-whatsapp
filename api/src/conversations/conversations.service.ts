@@ -24,9 +24,14 @@ import {
 } from '../contacts/contacts-filter.utils';
 import { normalizePhone } from '../contacts/contacts-validation.utils';
 import {
+  MAX_BODY_PARAM_LEN,
+  MAX_IMAGE_URL_LEN,
+} from '../campaigns/campaign-config.util';
+import {
   buildTemplateDefinition,
   buildWhatsappGraphComponents,
   parseParamMappingFromBody,
+  validateTemplateFormValues,
 } from '../templates/template-definition.util';
 import { sendTemplateWithComponents } from '../templates/whatsapp-meta.util';
 import { PrismaService } from '../prisma/prisma.service';
@@ -627,16 +632,26 @@ export class ConversationsService {
     const def = buildTemplateDefinition(templateRow);
     const staticParams = {
       headerParams: Array.isArray(body.headerParams)
-        ? (body.headerParams as string[])
+        ? (body.headerParams as string[]).map((v) => String(v).trim())
         : [],
-      bodyParams: Array.isArray(body.bodyParams) ? (body.bodyParams as string[]) : [],
+      bodyParams: Array.isArray(body.bodyParams)
+        ? (body.bodyParams as string[]).map((v) => String(v).trim())
+        : [],
       buttonParams: Array.isArray(body.buttonParams)
-        ? (body.buttonParams as string[])
+        ? (body.buttonParams as string[]).map((v) => String(v).trim())
         : [],
       headerMediaUrl:
-        typeof body.headerMediaUrl === 'string' ? body.headerMediaUrl : '',
+        typeof body.headerMediaUrl === 'string' ? body.headerMediaUrl.trim() : '',
     };
     const paramMapping = parseParamMappingFromBody(def, body);
+    const formCheck = validateTemplateFormValues(def, staticParams, {
+      maxBodyLen: MAX_BODY_PARAM_LEN,
+      maxUrlLen: MAX_IMAGE_URL_LEN,
+      paramMapping,
+    });
+    if (!formCheck.ok) {
+      throw new BadRequestException(formCheck.message);
+    }
     const contact = conversation.contacts;
     const attrsMap = contact
       ? await fetchContactAttributesMap(this.prisma, [contact.id])
@@ -681,6 +696,7 @@ export class ConversationsService {
     let messageId: string | null = null;
     let logStatus = 'failed';
     let apiResponse: unknown = null;
+    let sendErrorMessage = '';
 
     try {
       const result = await sendTemplateWithComponents({
@@ -693,10 +709,14 @@ export class ConversationsService {
       messageId = result.messages?.[0]?.id ?? null;
       logStatus = messageId ? 'sent' : 'failed';
       apiResponse = result;
+      if (!messageId) {
+        sendErrorMessage =
+          'WhatsApp no devolvió un id de mensaje. Revisa la configuración.';
+      }
     } catch (error) {
-      apiResponse = {
-        error: error instanceof Error ? error.message : String(error),
-      };
+      sendErrorMessage =
+        error instanceof Error ? error.message : String(error);
+      apiResponse = { error: sendErrorMessage };
     }
 
     await this.prisma.campaign_logs.create({
@@ -730,7 +750,9 @@ export class ConversationsService {
       });
     } else {
       throw new BadRequestException(
-        'No se pudo enviar la plantilla. Revisa la configuración de WhatsApp.',
+        sendErrorMessage
+          ? `No se pudo enviar la plantilla: ${sendErrorMessage}`
+          : 'No se pudo enviar la plantilla. Revisa la configuración de WhatsApp.',
       );
     }
 
