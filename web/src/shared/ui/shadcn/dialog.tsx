@@ -25,6 +25,7 @@ function DialogOverlay({
 function DialogContent({
   className,
   children,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
   return (
@@ -35,6 +36,11 @@ function DialogContent({
           'campaign-drilldown-dialog fixed left-1/2 top-1/2 z-50 flex max-h-[min(88vh,720px)] w-[min(96vw,720px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-line bg-surface-strong shadow-lg',
           className,
         )}
+        onCloseAutoFocus={(event) => {
+          // ContextMenu/Dropdown can leave body pointer-events:none; Dialog may restore that.
+          document.body.style.removeProperty('pointer-events')
+          onCloseAutoFocus?.(event)
+        }}
         {...props}
       >
         {children}

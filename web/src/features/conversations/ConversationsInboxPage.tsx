@@ -781,6 +781,11 @@ export function ConversationsInboxPage() {
     setActionsOpen(true)
   }
 
+  /** Abre overlays tras cerrar el ContextMenu (evita body pointer-events:none bloqueado). */
+  function openAfterContextMenu(action: () => void) {
+    window.setTimeout(action, 0)
+  }
+
   function openAssignDialog(source: AssignContext) {
     setAssignContext(source)
   }
@@ -1456,11 +1461,13 @@ export function ConversationsInboxPage() {
                       </ContextMenuLabel>
                       <ContextMenuItem
                         onSelect={() =>
-                          openContactSheet({
-                            mode: item.contact_id ? 'edit' : 'create',
-                            contactId: item.contact_id,
-                            phone: item.phone,
-                          })
+                          openAfterContextMenu(() =>
+                            openContactSheet({
+                              mode: item.contact_id ? 'edit' : 'create',
+                              contactId: item.contact_id,
+                              phone: item.phone,
+                            }),
+                          )
                         }
                       >
                         {item.contact_id ? 'Editar contacto' : 'Guardar contacto'}
@@ -1468,12 +1475,14 @@ export function ConversationsInboxPage() {
                       {hasConversation && canAssign ? (
                         <ContextMenuItem
                           onSelect={() =>
-                            openAssignDialog({
-                              conversationId: item.id,
-                              heading: name,
-                              phone: item.phone,
-                              assignedUserId: item.assigned_user_id,
-                            })
+                            openAfterContextMenu(() =>
+                              openAssignDialog({
+                                conversationId: item.id,
+                                heading: name,
+                                phone: item.phone,
+                                assignedUserId: item.assigned_user_id,
+                              }),
+                            )
                           }
                         >
                           Asignar chat
@@ -1529,7 +1538,11 @@ export function ConversationsInboxPage() {
                       </>
                     ) : null}
                     <ContextMenuSeparator />
-                    <ContextMenuItem onSelect={() => openChatActions(actionsCtx)}>
+                    <ContextMenuItem
+                      onSelect={() =>
+                        openAfterContextMenu(() => openChatActions(actionsCtx))
+                      }
+                    >
                       Más opciones…
                     </ContextMenuItem>
                   </ContextMenuContent>

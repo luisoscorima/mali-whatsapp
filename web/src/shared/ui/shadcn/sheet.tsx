@@ -49,6 +49,7 @@ function SheetContent({
   className,
   children,
   side = 'right',
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: 'left' | 'right'
@@ -65,6 +66,10 @@ function SheetContent({
             'inset-y-0 right-0 h-full w-[min(100%,32rem)] border-l border-line',
           className,
         )}
+        onCloseAutoFocus={(event) => {
+          document.body.style.removeProperty('pointer-events')
+          onCloseAutoFocus?.(event)
+        }}
         {...props}
       >
         {children}
