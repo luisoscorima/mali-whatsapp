@@ -535,11 +535,10 @@ html[data-theme='dark'] .inbox-layout-wa {
 
 .inbox-chat-msg-times {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0 6px;
-  max-width: 9.5rem;
-  line-height: 1.2;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  line-height: 1.15;
 }
 
 .inbox-chat-msg-time {
