@@ -1306,7 +1306,7 @@ export function ConversationsInboxPage() {
                     >
                       {assignableSegments.length > 0 ? (
                         <label
-                          className="flex w-7 shrink-0 items-center justify-center self-stretch"
+                          className="inbox-chat-item-check"
                           onClick={(event) => event.stopPropagation()}
                         >
                           {contactIdForBulk(item) != null ? (
