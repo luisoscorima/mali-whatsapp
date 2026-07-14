@@ -1457,7 +1457,7 @@ export function ConversationsInboxPage() {
                             openChatActions(actionsCtx)
                           }}
                         >
-                          <span aria-hidden>▾</span>
+                          <span aria-hidden>⋮</span>
                         </button>
                       </div>
                     </li>

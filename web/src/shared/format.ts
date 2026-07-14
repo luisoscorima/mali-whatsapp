@@ -17,6 +17,7 @@ export function formatChatListTime(value: string | Date | null | undefined): str
     return date.toLocaleTimeString('es-PE', {
       hour: '2-digit',
       minute: '2-digit',
+      hour12: false,
       timeZone: tz,
     })
   }
