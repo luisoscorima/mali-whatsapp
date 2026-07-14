@@ -783,6 +783,15 @@ html[data-theme='dark'] .inbox-chat-lead-star.is-on {
   color: inherit;
 }
 
+button.inbox-chat-header-profile {
+  border: none;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
 .inbox-chat-header-profile--link:hover,
 .inbox-chat-header-profile--link:focus-visible {
   opacity: 0.92;

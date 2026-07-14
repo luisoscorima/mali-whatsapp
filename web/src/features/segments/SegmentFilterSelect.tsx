@@ -15,22 +15,29 @@ type SegmentFilterSelectProps = {
   onToggle: (slug: string) => void
   onClearAll: () => void
   showNoneOption?: boolean
+  /** filter = lista/inbox; form = crear/editar contacto */
+  variant?: 'filter' | 'form'
+  disabled?: boolean
   className?: string
 }
 
 function triggerLabel(
   segments: SegmentFilterOption[],
   selectedSlugs: string[],
+  variant: 'filter' | 'form',
 ): string {
-  if (selectedSlugs.length === 0) return 'Segmentos: Todos'
+  if (selectedSlugs.length === 0) {
+    return variant === 'form' ? 'Elegir segmentos…' : 'Segmentos: Todos'
+  }
   const noneActive = selectedSlugs.includes(SEGMENT_NONE)
   const active = segments.filter((s) => selectedSlugs.includes(s.slug))
   const parts = [
     ...active.map((s) => s.label),
     ...(noneActive ? ['Sin segmento'] : []),
   ]
-  if (parts.length <= 2) return `Segmentos: ${parts.join(', ')}`
-  return `Segmentos: ${parts.length} seleccionados`
+  const prefix = variant === 'form' ? '' : 'Segmentos: '
+  if (parts.length <= 2) return `${prefix}${parts.join(', ')}`
+  return `${prefix}${parts.length} seleccionados`
 }
 
 export function SegmentFilterSelect({
@@ -39,13 +46,17 @@ export function SegmentFilterSelect({
   onToggle,
   onClearAll,
   showNoneOption = true,
+  variant = 'filter',
+  disabled = false,
   className = '',
 }: SegmentFilterSelectProps) {
   const { theme } = useTheme()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const hasFilter = selectedSlugs.length > 0
+  const hasSelection = selectedSlugs.length > 0
   const noneActive = selectedSlugs.includes(SEGMENT_NONE)
+  const clearLabel = variant === 'form' ? 'Ninguno' : 'Todos'
+  const effectiveShowNone = variant === 'form' ? false : showNoneOption
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -57,7 +68,7 @@ export function SegmentFilterSelect({
   }, [segments, query])
 
   const showNoneInList =
-    showNoneOption &&
+    effectiveShowNone &&
     (!query.trim() ||
       'sin segmento'.includes(query.trim().toLowerCase()) ||
       'none'.includes(query.trim().toLowerCase()))
@@ -67,6 +78,7 @@ export function SegmentFilterSelect({
       <Popover
         open={open}
         onOpenChange={(next) => {
+          if (disabled) return
           setOpen(next)
           if (!next) setQuery('')
         }}
@@ -74,17 +86,22 @@ export function SegmentFilterSelect({
         <PopoverTrigger asChild>
           <button
             type="button"
-            className={`flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-bg px-2.5 py-1.5 text-left text-xs ${
-              hasFilter ? 'border-accent/40' : ''
+            disabled={disabled}
+            className={`flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-bg px-2.5 py-2 text-left text-sm disabled:opacity-60 ${
+              hasSelection ? 'border-accent/40' : ''
             }`}
-            aria-label="Filtrar por segmento"
+            aria-label={
+              variant === 'form' ? 'Seleccionar segmentos' : 'Filtrar por segmento'
+            }
             title={
-              hasFilter
+              variant === 'filter' && hasSelection
                 ? 'Unión: resultados en cualquiera de los segmentos seleccionados'
                 : undefined
             }
           >
-            <span className="min-w-0 truncate">{triggerLabel(segments, selectedSlugs)}</span>
+            <span className="min-w-0 truncate">
+              {triggerLabel(segments, selectedSlugs, variant)}
+            </span>
             <span className="shrink-0 text-muted" aria-hidden>
               ▾
             </span>
@@ -103,20 +120,19 @@ export function SegmentFilterSelect({
             <button
               type="button"
               className={`rounded-md px-2 py-1 text-xs ${
-                !hasFilter ? 'bg-accent-soft font-semibold text-accent' : 'hover:bg-surface'
+                !hasSelection
+                  ? 'bg-accent-soft font-semibold text-accent'
+                  : 'hover:bg-surface'
               }`}
               onClick={() => {
                 onClearAll()
-                setOpen(false)
+                if (variant === 'filter') setOpen(false)
               }}
             >
-              Todos
+              {clearLabel}
             </button>
           </div>
-          <ul
-            className="max-h-56 overflow-y-auto text-sm"
-            aria-label="Segmentos"
-          >
+          <ul className="max-h-56 overflow-y-auto text-sm" aria-label="Segmentos">
             {showNoneInList ? (
               <li>
                 <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface">
@@ -146,7 +162,11 @@ export function SegmentFilterSelect({
                     />
                     <span
                       className="rounded px-1.5 py-0.5 text-xs"
-                      style={segmentFilterPillStyle(seg.color_key, theme, checked)}
+                      style={segmentFilterPillStyle(
+                        seg.color_key ?? 'slate',
+                        theme,
+                        checked,
+                      )}
                     >
                       {seg.label}
                     </span>

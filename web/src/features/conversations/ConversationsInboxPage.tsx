@@ -23,6 +23,7 @@ import { buildChatTimeline } from './buildChatTimeline'
 import { ConversationBadges } from './ConversationBadges'
 import { InboxAssignDialog, type ConversationAssignee } from './InboxAssignDialog'
 import { InboxChatActionsDialog } from './InboxChatActionsDialog'
+import { InboxContactSheet } from './InboxContactSheet'
 import { InboxSendTemplateDialog } from './InboxSendTemplateDialog'
 import { ConversationsSummaryPane } from './ConversationsSummaryPane'
 import { InboxComposeBar, type ReplyToMessage } from './InboxComposeBar'
@@ -109,7 +110,7 @@ function ProfileBlock({
         />
         <p className="inbox-chat-sub">
           {detail.conversation.phone}
-          {contactId ? ' · Perfil' : ''}
+          {contactId ? ' · Editar contacto' : ' · Añadir contacto'}
           {leadScore ? (
             <>
               {' '}
@@ -438,6 +439,10 @@ export function ConversationsInboxPage() {
   const [actionsOpen, setActionsOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
   const [actionsContext, setActionsContext] = useState<ChatActionsContext | null>(null)
+  const [contactSheetOpen, setContactSheetOpen] = useState(false)
+  const [contactSheetMode, setContactSheetMode] = useState<'edit' | 'create'>('edit')
+  const [contactSheetContactId, setContactSheetContactId] = useState<number | null>(null)
+  const [contactSheetPhone, setContactSheetPhone] = useState('')
   const [replyToMessage, setReplyToMessage] = useState<ReplyToMessage | null>(null)
   const [assignContext, setAssignContext] = useState<AssignContext | null>(null)
   const [assignees, setAssignees] = useState<ConversationAssignee[]>([])
@@ -721,6 +726,17 @@ export function ConversationsInboxPage() {
       phone: ctx.phone,
       assignedUserId: ctx.assignedUserId,
     })
+  }
+
+  function openContactSheet(opts: {
+    mode: 'edit' | 'create'
+    contactId?: number | null
+    phone: string
+  }) {
+    setContactSheetMode(opts.mode)
+    setContactSheetContactId(opts.contactId ?? null)
+    setContactSheetPhone(opts.phone)
+    setContactSheetOpen(true)
   }
 
   const actionsConversationId = actionsContext?.conversationId ?? null
@@ -1396,19 +1412,24 @@ export function ConversationsInboxPage() {
               >
                 ← Chats
               </button>
-              {detail.conversation.contact_id ? (
-                <Link
-                  to={`/contacts/${detail.conversation.contact_id}`}
-                  className="inbox-chat-header-profile inbox-chat-header-profile--link"
-                  title="Ver perfil del contacto"
-                >
-                  <ProfileBlock detail={detail} segments={segments} />
-                </Link>
-              ) : (
-                <div className="inbox-chat-header-profile">
-                  <ProfileBlock detail={detail} segments={segments} />
-                </div>
-              )}
+              <button
+                type="button"
+                className="inbox-chat-header-profile inbox-chat-header-profile--link"
+                title={
+                  detail.conversation.contact_id
+                    ? 'Editar contacto'
+                    : 'Añadir contacto'
+                }
+                onClick={() =>
+                  openContactSheet({
+                    mode: detail.conversation.contact_id ? 'edit' : 'create',
+                    contactId: detail.conversation.contact_id,
+                    phone: detail.conversation.phone,
+                  })
+                }
+              >
+                <ProfileBlock detail={detail} segments={segments} />
+              </button>
               <div className="inbox-chat-header-toolbar">
                 {!detail.user_service_window_open ? (
                   <Button
@@ -1545,6 +1566,13 @@ export function ConversationsInboxPage() {
           onMarkUnread={onMarkUnread}
           onModeChange={onModeChange}
           onAssign={() => openAssignFromActions(actionsContext)}
+          onOpenContact={() =>
+            openContactSheet({
+              mode: actionsContext.contactId ? 'edit' : 'create',
+              contactId: actionsContext.contactId,
+              phone: actionsContext.phone,
+            })
+          }
           onSegmentAdded={() => {
             void loadList()
             if (selectedId) void loadDetail(selectedId)
@@ -1556,6 +1584,18 @@ export function ConversationsInboxPage() {
           }}
         />
       ) : null}
+
+      <InboxContactSheet
+        open={contactSheetOpen}
+        onOpenChange={setContactSheetOpen}
+        mode={contactSheetMode}
+        contactId={contactSheetContactId}
+        prefillPhone={contactSheetPhone}
+        onSaved={() => {
+          void loadList()
+          if (selectedId) void loadDetail(selectedId)
+        }}
+      />
 
       {detail && selectedId ? (
         <InboxSendTemplateDialog

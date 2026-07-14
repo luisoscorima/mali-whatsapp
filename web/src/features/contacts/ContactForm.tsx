@@ -1,4 +1,5 @@
 import { type FormEvent, useMemo, useState } from 'react'
+import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import {
   getApplicableAttributeDefinitions,
   inputTypeForField,
@@ -9,6 +10,7 @@ type SegmentOption = {
   id: number
   slug: string
   label: string
+  color_key?: string
 }
 
 type ContactFormValues = {
@@ -56,6 +58,16 @@ export function ContactForm({
   const applicableDefs = useMemo(
     () => getApplicableAttributeDefinitions(attributeDefinitions, selectedSegments),
     [attributeDefinitions, selectedSegments],
+  )
+
+  const filterSegments = useMemo(
+    () =>
+      segments.map((seg) => ({
+        slug: seg.slug,
+        label: seg.label,
+        color_key: seg.color_key ?? 'slate',
+      })),
+    [segments],
   )
 
   const disabled = isReplaced || segments.length === 0
@@ -167,23 +179,18 @@ export function ContactForm({
         {segments.length === 0 ? (
           <p className="text-muted">Define segmentos en Segmentos.</p>
         ) : (
-          <div className="flex flex-wrap gap-2">
-            {segments.map((seg) => (
-              <label
-                key={seg.id}
-                className="flex items-center gap-2 rounded-lg border border-line px-3 py-2"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedSegments.includes(seg.slug)}
-                  onChange={() => toggleSegment(seg.slug)}
-                />
-                {seg.label}
-              </label>
-            ))}
-          </div>
+          <SegmentFilterSelect
+            variant="form"
+            segments={filterSegments}
+            selectedSlugs={selectedSegments}
+            onToggle={toggleSegment}
+            onClearAll={() => {
+              setSelectedSegments([])
+            }}
+            disabled={disabled}
+          />
         )}
-        <p className="text-xs text-muted">Obligatorio: marca uno o varios.</p>
+        <p className="text-xs text-muted">Obligatorio: elige uno o varios.</p>
         {segmentsError ? (
           <p className="text-xs text-bad">{segmentsError}</p>
         ) : null}

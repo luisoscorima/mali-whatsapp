@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
 import { useTheme } from '@/shared/theme/useTheme'
@@ -41,6 +40,7 @@ type InboxChatActionsDialogProps = {
   onModeChange: (status: 'bot' | 'human') => void
   onExport: () => void
   onAssign: () => void
+  onOpenContact: () => void
   onSegmentAdded?: () => void
 }
 
@@ -62,12 +62,12 @@ export function InboxChatActionsDialog({
   onModeChange,
   onExport,
   onAssign,
+  onOpenContact,
   onSegmentAdded,
 }: InboxChatActionsDialogProps) {
   const { theme } = useTheme()
   const [segmentBusy, setSegmentBusy] = useState('')
   const current = leadScore ?? 0
-  const prefillPhone = phone.replace(/\D/g, '')
   const hasConversation = conversationId != null && conversationId > 0
   const status = String(conversationStatus ?? '').toLowerCase()
   const assignableSlugs = new Set(assignableSegments.map((seg) => seg.slug))
@@ -226,27 +226,17 @@ export function InboxChatActionsDialog({
                 Asignar chat
               </Button>
             ) : null}
-            {contactId ? (
-              <Link
-                to={`/contacts/${contactId}`}
-                className="inline-flex w-full items-center justify-start rounded-md border border-line bg-surface px-3 py-2 text-sm hover:bg-accent-soft"
-                onClick={() => onOpenChange(false)}
-              >
-                Ir a perfil
-              </Link>
-            ) : (
-              <Link
-                to={`/contacts/new?prefill_phone=${encodeURIComponent(prefillPhone)}${
-                  hasConversation
-                    ? `&return_to=${encodeURIComponent(`/conversations/${conversationId}`)}`
-                    : ''
-                }`}
-                className="inline-flex w-full items-center justify-start rounded-md border border-line bg-surface px-3 py-2 text-sm hover:bg-accent-soft"
-                onClick={() => onOpenChange(false)}
-              >
-                Guardar contacto
-              </Link>
-            )}
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full justify-start"
+              onClick={() => {
+                onOpenContact()
+                onOpenChange(false)
+              }}
+            >
+              {contactId ? 'Editar contacto' : 'Guardar contacto'}
+            </Button>
             <Button
               type="button"
               variant="secondary"

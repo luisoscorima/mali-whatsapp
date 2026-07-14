@@ -28,8 +28,15 @@ type ContactDetail = {
 }
 
 type FilterOptions = {
-  segments: Array<{ id: number; slug: string; label: string }>
+  segments: Array<{ id: number; slug: string; label: string; color_key?: string }>
   attribute_definitions: ContactDetail['attribute_definitions']
+}
+
+type ApiSegment = {
+  id: number
+  slug: string
+  label: string
+  color_key?: string
 }
 
 export function ContactDetailPage() {
@@ -49,7 +56,7 @@ export function ContactDetailPage() {
     Promise.all([
       apiClient.get<ContactDetail>(`/api/contacts/${id}`),
       apiClient.get<FilterOptions>('/api/contacts/filter-options'),
-      apiClient.get<FilterOptions['segments']>('/api/segments'),
+      apiClient.get<ApiSegment[]>('/api/segments'),
     ]).then(([detail, opts, allSegs]) => {
       if (!detail.ok) {
         notify.error(detail.error)
@@ -62,7 +69,12 @@ export function ContactDetailPage() {
       }
       if (allSegs.ok) {
         setSegments(
-          allSegs.data.map((s) => ({ id: s.id, slug: s.slug, label: s.label })),
+          allSegs.data.map((s) => ({
+            id: s.id,
+            slug: s.slug,
+            label: s.label,
+            color_key: s.color_key,
+          })),
         )
       } else if (opts.ok) {
         setSegments(opts.data.segments)

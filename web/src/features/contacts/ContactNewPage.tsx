@@ -6,7 +6,7 @@ import { ContactForm } from './ContactForm'
 import { splitPhoneForForm } from './phoneUtils'
 
 type FilterOptions = {
-  segments: Array<{ id: number; slug: string; label: string }>
+  segments: Array<{ id: number; slug: string; label: string; color_key?: string }>
   attribute_definitions: Array<{
     id: number
     segment_slug: string | null
@@ -16,6 +16,13 @@ type FilterOptions = {
     sort_order: number
     required: boolean
   }>
+}
+
+type ApiSegment = {
+  id: number
+  slug: string
+  label: string
+  color_key?: string
 }
 
 function safeReturnTo(raw: string | null): string | null {
@@ -45,7 +52,7 @@ export function ContactNewPage() {
   useEffect(() => {
     Promise.all([
       apiClient.get<FilterOptions>('/api/contacts/filter-options'),
-      apiClient.get<FilterOptions['segments']>('/api/segments'),
+      apiClient.get<ApiSegment[]>('/api/segments'),
     ]).then(([opts, segs]) => {
       if (!opts.ok) {
         notify.error(opts.error)
@@ -54,7 +61,14 @@ export function ContactNewPage() {
       }
       setOptions({
         ...opts.data,
-        segments: segs.ok ? segs.data.map((s) => ({ id: s.id, slug: s.slug, label: s.label })) : opts.data.segments,
+        segments: segs.ok
+          ? segs.data.map((s) => ({
+              id: s.id,
+              slug: s.slug,
+              label: s.label,
+              color_key: s.color_key,
+            }))
+          : opts.data.segments,
       })
     })
   }, [])
