@@ -1,4 +1,5 @@
 export const SEGMENT_SLUG_REGEX = /^[a-z0-9_]{1,50}$/;
+export const ASSIGNMENT_GROUP_REGEX = /^[a-z0-9_]{1,20}$/;
 
 export const SEGMENT_COLOR_KEYS = [
   'teal',
@@ -29,6 +30,14 @@ export function normalizeSegmentColorKey(raw: unknown): SegmentColorKey {
     : 'teal';
 }
 
+/** Normaliza grupo de asignación a slug corto; null si vacío. */
+export function normalizeAssignmentGroup(raw: unknown): string | null {
+  const value = String(raw ?? '')
+    .trim()
+    .toLowerCase();
+  return value || null;
+}
+
 export type SegmentDefinition = {
   id: number;
   slug: string;
@@ -38,6 +47,7 @@ export type SegmentDefinition = {
   active: boolean;
   show_in_filter: boolean;
   assignable: boolean;
+  assignment_group: string | null;
   created_at: string;
 };
 
@@ -50,6 +60,7 @@ export const SEGMENT_SELECT = {
   active: true,
   show_in_filter: true,
   assignable: true,
+  assignment_group: true,
   created_at: true,
 } as const;
 
@@ -62,6 +73,7 @@ export function mapSegmentRow(row: {
   active: boolean;
   show_in_filter: boolean;
   assignable: boolean;
+  assignment_group: string | null;
   created_at: Date;
 }): SegmentDefinition {
   return {

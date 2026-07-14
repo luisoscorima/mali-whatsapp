@@ -173,9 +173,23 @@ export class ConversationsService {
 
   private async loadAssignableSegmentOptions(area: string) {
     return this.prisma.segment_definitions.findMany({
-      where: { area, active: true, assignable: true },
-      orderBy: [{ sort_order: 'asc' }, { slug: 'asc' }],
-      select: { slug: true, label: true, color_key: true },
+      where: {
+        area,
+        active: true,
+        assignable: true,
+        assignment_group: { not: null },
+      },
+      orderBy: [
+        { assignment_group: 'asc' },
+        { sort_order: 'asc' },
+        { slug: 'asc' },
+      ],
+      select: {
+        slug: true,
+        label: true,
+        color_key: true,
+        assignment_group: true,
+      },
     });
   }
 
@@ -207,6 +221,9 @@ export class ConversationsService {
         ? Number(row.matched_message_id)
         : null,
       user_service_window_open: isWithinUserServiceWindow(row.last_user_message_at),
+      last_user_message_at: row.last_user_message_at
+        ? row.last_user_message_at.toISOString()
+        : null,
     };
   }
 

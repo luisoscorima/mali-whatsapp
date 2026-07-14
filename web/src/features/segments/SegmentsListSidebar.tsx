@@ -19,6 +19,7 @@ type SegmentDefinition = {
   active: boolean
   show_in_filter: boolean
   assignable: boolean
+  assignment_group: string | null
   created_at: string
 }
 

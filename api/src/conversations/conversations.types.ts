@@ -11,6 +11,7 @@ export type InboxSegmentOption = {
   slug: string;
   label: string;
   color_key: string;
+  assignment_group?: string | null;
 };
 
 export type InboxListItem = {
@@ -31,6 +32,7 @@ export type InboxListItem = {
   contact_id: number | null;
   matched_message_id: number | null;
   user_service_window_open: boolean;
+  last_user_message_at: string | null;
 };
 
 export type InboxListResult = {

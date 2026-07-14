@@ -5,7 +5,7 @@ import { notify } from '@/shared/notify'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { formatContactName } from './contactName'
 import { SegmentBadge } from '../segments/SegmentBadge'
-import { SegmentFilterChips } from '../segments/SegmentFilterChips'
+import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 
 const LIST_POLL_MS = 15000
@@ -256,7 +256,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
           </form>
 
           {segments.length > 0 ? (
-            <SegmentFilterChips
+            <SegmentFilterSelect
               segments={segments}
               selectedSlugs={selectedSegments}
               onToggle={toggleSegment}

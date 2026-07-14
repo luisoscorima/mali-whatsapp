@@ -395,6 +395,22 @@ html[data-theme='dark'] .inbox-layout-wa {
   pointer-events: none;
 }
 
+.inbox-chat-avatar-hours {
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  transform: translateX(-50%);
+  font-size: 0.55rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  background: var(--surface-strong);
+  padding: 1px 3px;
+  border-radius: 4px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 .inbox-chat-link-main {
   flex: 1;
   min-width: 0;

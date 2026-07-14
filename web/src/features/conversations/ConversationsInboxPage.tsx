@@ -15,7 +15,7 @@ import { WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
 import { Badge } from '@/shared/ui/shadcn/badge'
 import { Button } from '@/shared/ui/shadcn/button'
 import { formatContactName } from '../contacts/contactName'
-import { SegmentFilterChips } from '../segments/SegmentFilterChips'
+import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import { SegmentBadge } from '../segments/SegmentBadge'
 import { ChatMessageBubble } from './ChatMessageBubble'
 import { ChatTimelineDateMarker, ChatTimelineEventMarker } from './ChatTimelineMarker'
@@ -33,6 +33,22 @@ import {
   chatActionsFromListItem,
   type ChatActionsContext,
 } from './inboxChatActions'
+
+const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000
+
+/** Horas enteras restantes de la ventana 24h (ceil); null si cerrada o sin dato. */
+function windowRemainingHoursLabel(
+  open: boolean,
+  lastUserMessageAt: string | null | undefined,
+): string | null {
+  if (!open || !lastUserMessageAt) return null
+  const t = new Date(lastUserMessageAt).getTime()
+  if (Number.isNaN(t)) return null
+  const remainingMs = SESSION_WINDOW_MS - (Date.now() - t)
+  if (remainingMs <= 0) return null
+  const hours = Math.max(1, Math.ceil(remainingMs / (60 * 60 * 1000)))
+  return `${hours}h`
+}
 
 type AssignContext = {
   conversationId: number
@@ -148,6 +164,7 @@ type SegmentOption = {
   slug: string
   label: string
   color_key: string
+  assignment_group?: string | null
 }
 
 type InboxListItem = {
@@ -168,6 +185,7 @@ type InboxListItem = {
   contact_id: number | null
   matched_message_id: number | null
   user_service_window_open: boolean
+  last_user_message_at: string | null
 }
 
 type InboxListResult = {
@@ -953,6 +971,16 @@ export function ConversationsInboxPage() {
 
   const segments = list?.segments ?? []
   const assignableSegments = list?.assignable_segments ?? []
+  const assignableByGroup = useMemo(() => {
+    const groups = new Map<string, SegmentOption[]>()
+    for (const seg of assignableSegments) {
+      const key = (seg.assignment_group ?? '').trim() || 'otros'
+      const rows = groups.get(key) ?? []
+      rows.push(seg)
+      groups.set(key, rows)
+    }
+    return [...groups.entries()]
+  }, [assignableSegments])
 
   function contactIdForBulk(item: InboxListItem): number | null {
     if (item.contact_id && item.contact_id > 0) return item.contact_id
@@ -1062,7 +1090,7 @@ export function ConversationsInboxPage() {
           </Button>
         ))}
       </div>
-      <SegmentFilterChips
+      <SegmentFilterSelect
         segments={segments}
         selectedSlugs={selectedSegments}
         onToggle={toggleSegment}
@@ -1072,7 +1100,6 @@ export function ConversationsInboxPage() {
           next.delete('page')
           setSearchParams(next)
         }}
-        className="conversation-segment-pills"
       />
       <div className="inbox-filters">
         <div className="inbox-search-row">
@@ -1094,10 +1121,18 @@ export function ConversationsInboxPage() {
       ) : null}
       {assignableSegments.length > 0 ? (
         <div className="flex flex-wrap items-center gap-1 text-xs">
-          <button type="button" className="small-btn" onClick={selectAllVisibleContacts}>
+          <button
+            type="button"
+            className="rounded-lg border border-line px-2 py-1 text-xs hover:bg-surface"
+            onClick={selectAllVisibleContacts}
+          >
             Todos
           </button>
-          <button type="button" className="small-btn" onClick={clearContactSelection}>
+          <button
+            type="button"
+            className="rounded-lg border border-line px-2 py-1 text-xs hover:bg-surface"
+            onClick={clearContactSelection}
+          >
             Ninguno
           </button>
           {selectedContactIds.size > 0 ? (
@@ -1109,19 +1144,23 @@ export function ConversationsInboxPage() {
                 value={bulkSegment}
                 onChange={(e) => setBulkSegment(e.target.value)}
                 required
-                className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5"
+                className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5 text-xs"
               >
                 <option value="">Segmento asignable</option>
-                {assignableSegments.map((seg) => (
-                  <option key={seg.slug} value={seg.slug}>
-                    {seg.label}
-                  </option>
+                {assignableByGroup.map(([group, segs]) => (
+                  <optgroup key={group} label={group}>
+                    {segs.map((seg) => (
+                      <option key={seg.slug} value={seg.slug}>
+                        {seg.label}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
               <button
                 type="submit"
                 disabled={bulkBusy || !bulkSegment}
-                className="small-btn primary"
+                className="rounded-lg border border-line bg-surface-strong px-2 py-1 text-xs font-semibold hover:bg-surface disabled:opacity-50"
               >
                 {bulkBusy ? '…' : `Aplicar (${selectedContactIds.size})`}
               </button>
@@ -1149,6 +1188,12 @@ export function ConversationsInboxPage() {
               const name = displayName(item)
               const hasContactName = Boolean(item.contact_name?.trim())
               const leadScore = item.contact_lead_score
+              const windowHours = !item.is_virtual
+                ? windowRemainingHoursLabel(
+                    item.user_service_window_open,
+                    item.last_user_message_at,
+                  )
+                : null
               return (
                 <li
                   key={item.id}
@@ -1191,7 +1236,9 @@ export function ConversationsInboxPage() {
                       title={
                         !item.is_virtual
                           ? item.user_service_window_open
-                            ? 'Ventana 24h abierta'
+                            ? windowHours
+                              ? `Ventana 24h abierta (${windowHours})`
+                              : 'Ventana 24h abierta'
                             : 'Ventana 24h cerrada'
                           : undefined
                       }
@@ -1200,6 +1247,11 @@ export function ConversationsInboxPage() {
                       {!item.is_virtual && !item.user_service_window_open ? (
                         <span className="inbox-chat-avatar-lock" aria-hidden>
                           🔒
+                        </span>
+                      ) : null}
+                      {windowHours ? (
+                        <span className="inbox-chat-avatar-hours" aria-hidden>
+                          {windowHours}
                         </span>
                       ) : null}
                     </span>

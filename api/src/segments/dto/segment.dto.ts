@@ -39,6 +39,11 @@ export class CreateSegmentDto {
   @IsOptional()
   @IsBoolean()
   assignable?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  assignment_group?: string | null;
 }
 
 export class UpdateSegmentDto {
@@ -71,4 +76,9 @@ export class UpdateSegmentDto {
   @IsOptional()
   @IsBoolean()
   assignable?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  assignment_group?: string | null;
 }

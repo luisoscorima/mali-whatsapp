@@ -238,10 +238,16 @@ export class ContactsService {
     const slug = String(segmentSlug || '').trim();
     if (assignableOnly) {
       const assignable = await this.prisma.segment_definitions.findFirst({
-        where: { area, active: true, assignable: true, slug },
-        select: { slug: true },
+        where: {
+          area,
+          active: true,
+          assignable: true,
+          slug,
+          assignment_group: { not: null },
+        },
+        select: { slug: true, assignment_group: true },
       });
-      if (!assignable) {
+      if (!assignable?.assignment_group) {
         throw new BadRequestException('Segmento no asignable');
       }
     } else {
@@ -251,16 +257,24 @@ export class ContactsService {
       }
     }
 
-    const assignableSlugs = assignableOnly
-      ? new Set(
-          (
-            await this.prisma.segment_definitions.findMany({
-              where: { area, active: true, assignable: true },
-              select: { slug: true },
-            })
-          ).map((row) => row.slug),
-        )
-      : null;
+    const assignableRows = assignableOnly
+      ? await this.prisma.segment_definitions.findMany({
+          where: {
+            area,
+            active: true,
+            assignable: true,
+            assignment_group: { not: null },
+          },
+          select: { slug: true, assignment_group: true },
+        })
+      : [];
+    const assignableBySlug = new Map(
+      assignableRows.map((row) => [
+        row.slug,
+        String(row.assignment_group ?? '').trim(),
+      ]),
+    );
+    const targetGroup = assignableBySlug.get(slug) ?? '';
 
     const ids = [
       ...new Set(
@@ -287,19 +301,25 @@ export class ContactsService {
         });
         if (!own) continue;
 
-        if (assignableSlugs) {
+        if (assignableOnly && targetGroup) {
           const current = await tx.contact_segments.findMany({
             where: { contact_id: cid, area },
             select: { segment_slug: true },
           });
-          const currentAssignable = current
+          const sameGroupSlugs = current
             .map((row) => row.segment_slug)
-            .filter((s) => assignableSlugs.has(s));
-          if (
-            !currentAssignable.includes(slug) &&
-            currentAssignable.length >= 3
-          ) {
-            continue;
+            .filter((s) => {
+              const g = assignableBySlug.get(s);
+              return g && g === targetGroup && s !== slug;
+            });
+          if (sameGroupSlugs.length > 0) {
+            await tx.contact_segments.deleteMany({
+              where: {
+                contact_id: cid,
+                area,
+                segment_slug: { in: sameGroupSlugs },
+              },
+            });
           }
         }
 
@@ -337,11 +357,22 @@ export class ContactsService {
     }
 
     const assignableRows = await this.prisma.segment_definitions.findMany({
-      where: { area, active: true, assignable: true },
-      select: { slug: true },
+      where: {
+        area,
+        active: true,
+        assignable: true,
+        assignment_group: { not: null },
+      },
+      select: { slug: true, assignment_group: true },
     });
-    const assignableSet = new Set(assignableRows.map((row) => row.slug));
-    if (!assignableSet.has(slug)) {
+    const assignableBySlug = new Map(
+      assignableRows.map((row) => [
+        row.slug,
+        String(row.assignment_group ?? '').trim(),
+      ]),
+    );
+    const targetGroup = assignableBySlug.get(slug);
+    if (!targetGroup) {
       throw new BadRequestException('Segmento no asignable desde chat');
     }
 
@@ -359,16 +390,18 @@ export class ContactsService {
     }
 
     const currentSlugs = await this.loadContactSegmentSlugs(contactId);
-    const otherSlugs = currentSlugs.filter((s) => !assignableSet.has(s));
-    const currentAssignable = currentSlugs.filter((s) => assignableSet.has(s));
+    const otherSlugs = currentSlugs.filter((s) => !assignableBySlug.has(s));
+    const currentAssignable = currentSlugs.filter((s) =>
+      assignableBySlug.has(s),
+    );
     const nextAssignable = currentAssignable.includes(slug)
       ? currentAssignable.filter((s) => s !== slug)
-      : [...currentAssignable, slug];
-    if (nextAssignable.length > 3) {
-      throw new BadRequestException(
-        'Máximo 3 segmentos asignables por contacto',
-      );
-    }
+      : [
+          ...currentAssignable.filter(
+            (s) => assignableBySlug.get(s) !== targetGroup,
+          ),
+          slug,
+        ];
     const nextSlugs = [...otherSlugs, ...nextAssignable];
 
     await this.prisma.$transaction(async (tx) => {

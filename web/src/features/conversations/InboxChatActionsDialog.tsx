@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
@@ -16,12 +16,11 @@ import {
 } from '@/shared/ui/shadcn/dialog'
 import { segmentFilterPillStyle } from '../segments/segmentColors'
 
-const MAX_ASSIGNABLE_SEGMENTS = 3
-
 type SegmentOption = {
   slug: string
   label: string
   color_key?: string
+  assignment_group?: string | null
 }
 
 type InboxChatActionsDialogProps = {
@@ -76,16 +75,19 @@ export function InboxChatActionsDialog({
     currentSegmentSlugs.filter((slug) => assignableSlugs.has(slug)),
   )
 
+  const groupedAssignable = useMemo(() => {
+    const groups = new Map<string, SegmentOption[]>()
+    for (const seg of assignableSegments) {
+      const key = (seg.assignment_group ?? '').trim() || 'sin_grupo'
+      const list = groups.get(key) ?? []
+      list.push(seg)
+      groups.set(key, list)
+    }
+    return [...groups.entries()]
+  }, [assignableSegments])
+
   async function toggleAssignableSegment(slug: string) {
     if (!contactId) return
-    const isActive = activeAssignableSlugs.has(slug)
-    if (
-      !isActive &&
-      activeAssignableSlugs.size >= MAX_ASSIGNABLE_SEGMENTS
-    ) {
-      notify.error(`Máximo ${MAX_ASSIGNABLE_SEGMENTS} segmentos asignables`)
-      return
-    }
     setSegmentBusy(slug)
     const res = await apiClient.patch<{ segment_slugs: string[] }>(
       `/api/contacts/${contactId}/assignable-segment`,
@@ -116,31 +118,40 @@ export function InboxChatActionsDialog({
           ) : null}
 
           {hasConversation && contactId && assignableSegments.length > 0 ? (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <p className="text-sm font-medium">Asignar a:</p>
-              <div
-                className="flex flex-wrap gap-1"
-                role="group"
-                aria-label="Asignar a segmentos"
-              >
-                {assignableSegments.map((seg) => {
-                  const active = activeAssignableSlugs.has(seg.slug)
-                  return (
-                    <button
-                      key={seg.slug}
-                      type="button"
-                      role="checkbox"
-                      aria-checked={active}
-                      disabled={segmentBusy === seg.slug}
-                      onClick={() => void toggleAssignableSegment(seg.slug)}
-                      className={`inbox-chat-pill contact-filter-pill ${active ? 'is-active' : ''}`}
-                      style={segmentFilterPillStyle(seg.color_key ?? 'slate', theme, active)}
-                    >
-                      {seg.label}
-                    </button>
-                  )
-                })}
-              </div>
+              {groupedAssignable.map(([group, segs]) => (
+                <div key={group} className="space-y-1">
+                  <p className="text-xs text-muted">{group}:</p>
+                  <div
+                    className="flex flex-wrap gap-1"
+                    role="group"
+                    aria-label={`Asignar a ${group}`}
+                  >
+                    {segs.map((seg) => {
+                      const active = activeAssignableSlugs.has(seg.slug)
+                      return (
+                        <button
+                          key={seg.slug}
+                          type="button"
+                          role="checkbox"
+                          aria-checked={active}
+                          disabled={segmentBusy === seg.slug}
+                          onClick={() => void toggleAssignableSegment(seg.slug)}
+                          className={`inbox-chat-pill contact-filter-pill ${active ? 'is-active' : ''}`}
+                          style={segmentFilterPillStyle(
+                            seg.color_key ?? 'slate',
+                            theme,
+                            active,
+                          )}
+                        >
+                          {seg.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           ) : null}
 

@@ -14,6 +14,7 @@ type SegmentDefinition = {
   active: boolean
   show_in_filter: boolean
   assignable: boolean
+  assignment_group: string | null
   created_at: string
 }
 
@@ -41,6 +42,7 @@ export function SegmentDetailPage() {
   const [active, setActive] = useState(true)
   const [showInFilter, setShowInFilter] = useState(true)
   const [assignable, setAssignable] = useState(false)
+  const [assignmentGroup, setAssignmentGroup] = useState('')
   const [loadFailed, setLoadFailed] = useState(false)
   const [saving, setSaving] = useState(false)
   const [removingId, setRemovingId] = useState<number | null>(null)
@@ -65,6 +67,7 @@ export function SegmentDetailPage() {
       setActive(seg.active)
       setShowInFilter(seg.show_in_filter)
       setAssignable(seg.assignable)
+      setAssignmentGroup(seg.assignment_group ?? '')
       if (list.ok) setAllSegments(list.data)
     })
   }, [id])
@@ -89,6 +92,7 @@ export function SegmentDetailPage() {
       active,
       show_in_filter: showInFilter,
       assignable,
+      assignment_group: assignable ? assignmentGroup.trim() : null,
     })
     setSaving(false)
     if (!result.ok) {
@@ -99,6 +103,8 @@ export function SegmentDetailPage() {
     setPayload((prev) =>
       prev ? { ...prev, segment: { ...prev.segment, ...result.data } } : prev,
     )
+    setAssignable(result.data.assignable)
+    setAssignmentGroup(result.data.assignment_group ?? '')
     if (result.data.slug !== slug) {
       setSlug(result.data.slug)
     }
@@ -223,6 +229,24 @@ export function SegmentDetailPage() {
             />
             Asignable desde chat
           </label>
+          {assignable ? (
+            <label className="block text-sm sm:col-span-2">
+              <span className="text-muted">Grupo de asignación</span>
+              <input
+                type="text"
+                required
+                pattern="[a-z0-9_]{1,20}"
+                maxLength={20}
+                value={assignmentGroup}
+                onChange={(e) => setAssignmentGroup(e.target.value)}
+                placeholder="ej.: etapa, interes"
+                className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2 font-mono"
+              />
+              <span className="mt-1 block text-xs text-muted">
+                Solo uno por grupo en «Asignar a» del chat. Minúsculas, números y _.
+              </span>
+            </label>
+          ) : null}
           <div className="flex flex-wrap gap-3 sm:col-span-2">
             <button
               type="submit"

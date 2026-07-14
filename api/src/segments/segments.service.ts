@@ -19,6 +19,8 @@ import {
 import { MAX_CSV_ROWS } from '../contacts/contacts-import.utils';
 import {
   normalizeSegmentColorKey,
+  normalizeAssignmentGroup,
+  ASSIGNMENT_GROUP_REGEX,
   SEGMENT_SLUG_REGEX,
   SEGMENT_SELECT,
   mapSegmentRow,
@@ -31,6 +33,25 @@ import { parseMonthKey } from '../shared/month-filter.util';
 function firstSegmentForLegacyColumn(segments: string[]): string | null {
   if (!segments.length) return null;
   return [...segments].sort()[0] ?? null;
+}
+
+function resolveAssignmentGroup(
+  assignable: boolean,
+  raw: unknown,
+): string | null {
+  if (!assignable) return null;
+  const group = normalizeAssignmentGroup(raw);
+  if (!group) {
+    throw new BadRequestException(
+      'Grupo de asignación obligatorio si es asignable desde chat',
+    );
+  }
+  if (!ASSIGNMENT_GROUP_REGEX.test(group)) {
+    throw new BadRequestException(
+      'Grupo inválido (minúsculas, números y guion bajo, máx. 20)',
+    );
+  }
+  return group;
 }
 
 @Injectable()
@@ -66,7 +87,12 @@ export class SegmentsService {
 
   async listAssignable(area: AuthUser['area']): Promise<SegmentDefinition[]> {
     const rows = await this.prisma.segment_definitions.findMany({
-      where: { area, active: true, assignable: true },
+      where: {
+        area,
+        active: true,
+        assignable: true,
+        assignment_group: { not: null },
+      },
       orderBy: [{ sort_order: 'asc' }, { slug: 'asc' }],
       select: SEGMENT_SELECT,
     });
@@ -172,6 +198,10 @@ export class SegmentsService {
     const active = dto.active !== false;
     const showInFilter = dto.show_in_filter !== false;
     const assignable = dto.assignable === true;
+    const assignmentGroup = resolveAssignmentGroup(
+      assignable,
+      dto.assignment_group,
+    );
 
     if (!SEGMENT_SLUG_REGEX.test(slug)) {
       throw new BadRequestException(
@@ -193,6 +223,7 @@ export class SegmentsService {
           active,
           show_in_filter: showInFilter,
           assignable,
+          assignment_group: assignmentGroup,
         },
         select: SEGMENT_SELECT,
       });
@@ -208,6 +239,7 @@ export class SegmentsService {
           active,
           show_in_filter: showInFilter,
           assignable,
+          assignment_group: assignmentGroup,
         },
       });
       return mapSegmentRow(row);
@@ -236,6 +268,12 @@ export class SegmentsService {
         : existing.show_in_filter;
     const assignable =
       dto.assignable !== undefined ? Boolean(dto.assignable) : existing.assignable;
+    const assignmentGroup = resolveAssignmentGroup(
+      assignable,
+      dto.assignment_group !== undefined
+        ? dto.assignment_group
+        : existing.assignment_group,
+    );
 
     if (!label) {
       throw new BadRequestException('Etiqueta inválida');
@@ -256,6 +294,7 @@ export class SegmentsService {
           active,
           show_in_filter: showInFilter,
           assignable,
+          assignment_group: assignmentGroup,
         },
         select: SEGMENT_SELECT,
       });
@@ -272,6 +311,7 @@ export class SegmentsService {
           active,
           show_in_filter: showInFilter,
           assignable,
+          assignment_group: assignmentGroup,
           slug_changed: false,
         },
       });
@@ -290,6 +330,7 @@ export class SegmentsService {
             active,
             show_in_filter: showInFilter,
             assignable,
+            assignment_group: assignmentGroup,
           },
           select: SEGMENT_SELECT,
         });
@@ -323,6 +364,7 @@ export class SegmentsService {
           active,
           show_in_filter: showInFilter,
           assignable,
+          assignment_group: assignmentGroup,
           slug_changed: true,
         },
       });
