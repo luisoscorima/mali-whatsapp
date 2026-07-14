@@ -1213,7 +1213,7 @@ export function ConversationsInboxPage() {
                 >
                   {assignableSegments.length > 0 ? (
                     <label
-                      className="flex w-8 shrink-0 items-center justify-center self-stretch pl-1"
+                      className="flex w-7 shrink-0 items-center justify-center self-stretch"
                       onClick={(event) => event.stopPropagation()}
                     >
                       {contactIdForBulk(item) != null ? (

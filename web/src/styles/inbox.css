@@ -82,6 +82,8 @@ html[data-theme='dark'] .inbox-layout-wa {
   overflow-y: hidden;
   scrollbar-width: thin;
   scrollbar-color: var(--accent) transparent;
+  max-width: 100%;
+  padding-right: 4px;
 }
 
 .inbox-layout-wa .contact-segment-chips::-webkit-scrollbar {
@@ -213,7 +215,9 @@ html[data-theme='dark'] .inbox-layout-wa {
   flex-direction: column;
   align-items: flex-end;
   gap: 4px;
-  padding: 14px 14px 14px 10px;
+  /* gutter horizontal entre contenido y ↓/↑/⏱ */
+  padding: 12px 12px 12px 18px;
+  margin-left: 2px;
 }
 
 .inbox-chat-item-more {
@@ -317,9 +321,9 @@ html[data-theme='dark'] .inbox-layout-wa {
 .inbox-layout-wa .inbox-chat-item-btn {
   display: flex;
   align-items: flex-start;
-  gap: 14px;
+  gap: 12px;
   width: 100%;
-  padding: 14px 12px;
+  padding: 12px 8px 12px 12px;
   text-decoration: none;
   color: inherit;
   border: none;
@@ -543,19 +547,23 @@ html[data-theme='dark'] .inbox-layout-wa {
   align-items: flex-end;
   gap: 3px;
   line-height: 1.25;
-  min-width: 4.75rem;
+  min-width: 4.25rem;
+  max-width: 5.5rem;
 }
 
 .inbox-chat-msg-time {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .inbox-chat-msg-time > span[aria-hidden] {
   display: inline-block;
   width: 0.85em;
-  margin-right: 3px;
+  margin-right: 2px;
   text-align: center;
   opacity: 0.85;
 }
