@@ -25,6 +25,20 @@ import { InboxAssignDialog, type ConversationAssignee } from './InboxAssignDialo
 import { InboxChatActionsDialog } from './InboxChatActionsDialog'
 import { InboxContactSheet } from './InboxContactSheet'
 import { InboxSendTemplateDialog } from './InboxSendTemplateDialog'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from '@/shared/ui/shadcn/context-menu'
 import { ConversationsSummaryPane } from './ConversationsSummaryPane'
 import { InboxComposeBar, type ReplyToMessage } from './InboxComposeBar'
 import { InboxMessageScroller, type InboxMessageScrollerHandle } from './InboxMessageScroller'
@@ -874,8 +888,11 @@ export function ConversationsInboxPage() {
     navigate(conversationPath(item.id, item))
   }
 
-  async function onModeChange(status: 'bot' | 'human') {
-    const convId = actionsConversationId ?? selectedId
+  async function onModeChange(
+    status: 'bot' | 'human',
+    conversationId?: number | null,
+  ) {
+    const convId = conversationId ?? actionsConversationId ?? selectedId
     if (!convId || convId <= 0) return
     const result = await apiClient.patch<{ status: 'bot' | 'human' }>(
       `/api/conversations/${convId}/mode`,
@@ -889,8 +906,8 @@ export function ConversationsInboxPage() {
     void loadList()
   }
 
-  async function onMarkUnread() {
-    const convId = actionsConversationId ?? selectedId
+  async function onMarkUnread(conversationId?: number | null) {
+    const convId = conversationId ?? actionsConversationId ?? selectedId
     if (!convId || convId <= 0) return
     const result = await apiClient.post<{ ok: true }>(
       `/api/conversations/${convId}/mark-unread`,
@@ -1258,6 +1275,12 @@ export function ConversationsInboxPage() {
               const name = displayName(item)
               const hasContactName = Boolean(item.contact_name?.trim())
               const leadScore = item.contact_lead_score
+              const hasConversation = !item.is_virtual
+              const actionsCtx = chatActionsFromListItem(
+                item,
+                list.ai_area_enabled,
+                name,
+              )
               const windowHours = !item.is_virtual
                 ? windowRemainingHoursLabel(
                     item.user_service_window_open,
@@ -1269,156 +1292,248 @@ export function ConversationsInboxPage() {
                 item.last_outbound_message_at,
                 { windowOpen: item.user_service_window_open },
               )
+              const modeStatus = String(item.conversation_status ?? '').toLowerCase()
               return (
-                <li
-                  key={item.id}
-                  className={`inbox-chat-item ${item.inbox_unread ? 'inbox-chat-item--unread' : ''} ${active ? 'is-active' : ''}`}
-                  onContextMenu={(event) => {
-                    event.preventDefault()
-                    openChatActions(
-                      chatActionsFromListItem(item, list.ai_area_enabled, name),
-                    )
-                  }}
-                >
-                  {assignableSegments.length > 0 ? (
-                    <label
-                      className="flex w-7 shrink-0 items-center justify-center self-stretch"
-                      onClick={(event) => event.stopPropagation()}
+                <ContextMenu key={item.id}>
+                  <ContextMenuTrigger asChild>
+                    <li
+                      className={`inbox-chat-item ${item.inbox_unread ? 'inbox-chat-item--unread' : ''} ${active ? 'is-active' : ''}`}
                     >
-                      {contactIdForBulk(item) != null ? (
-                        <input
-                          type="checkbox"
-                          checked={selectedContactIds.has(contactIdForBulk(item)!)}
-                          onChange={() => toggleContactSelection(contactIdForBulk(item)!)}
+                      {assignableSegments.length > 0 ? (
+                        <label
+                          className="flex w-7 shrink-0 items-center justify-center self-stretch"
                           onClick={(event) => event.stopPropagation()}
-                          aria-label={`Seleccionar ${name}`}
-                        />
-                      ) : null}
-                    </label>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => void onSelectItem(item)}
-                    className="inbox-chat-item-btn"
-                  >
-                    <span
-                      className={`inbox-chat-avatar ${
-                        !item.is_virtual
-                          ? item.user_service_window_open
-                            ? 'inbox-chat-avatar--window-open'
-                            : 'inbox-chat-avatar--window-closed'
-                          : ''
-                      }`}
-                      aria-hidden
-                      title={
-                        !item.is_virtual
-                          ? item.user_service_window_open
-                            ? windowHours
-                              ? `Ventana 24h abierta (${windowHours})`
-                              : 'Ventana 24h abierta'
-                            : 'Ventana 24h cerrada'
-                          : undefined
-                      }
-                    >
-                      {inboxInitials(item.contact_name, item.phone)}
-                      {!item.is_virtual && !item.user_service_window_open ? (
-                        <span className="inbox-chat-avatar-lock" aria-hidden>
-                          🔒
-                        </span>
-                      ) : null}
-                      {windowHours ? (
-                        <span className="inbox-chat-avatar-hours" aria-hidden>
-                          {windowHours}
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="inbox-chat-link-main">
-                      <span className="inbox-chat-row-top">
-                        <span className="inbox-chat-title-group">
-                          <span className="inbox-chat-title-line">
-                            <span className="inbox-chat-title">{name}</span>
-                            {!hasContactName && leadScore ? <LeadStars score={leadScore} /> : null}
-                          </span>
-                          <ConversationBadges
-                            status={item.conversation_status}
-                            assignedUserLabel={item.assigned_user_label}
-                            automationTouchedAt={item.automation_touched_at}
-                          />
-                        </span>
-                      </span>
-                      {hasContactName ? (
-                        <span className="inbox-chat-phone-row">
-                          <span className="inbox-chat-phone">{item.phone}</span>
-                          {leadScore ? <LeadStars score={leadScore} /> : null}
-                        </span>
-                      ) : null}
-                      <span className="inbox-chat-row-mid">
-                        <span className="inbox-chat-preview">{listPreviewText(item.preview)}</span>
-                      </span>
-                      {item.contact_segment_slugs.length > 0 ? (
-                        <span className="contact-segment-chips" role="group" aria-label="Segmentos">
-                          {item.contact_segment_slugs.map((slug) => (
-                            <SegmentBadge
-                              key={slug}
-                              colorKey={segmentColorKey(slug, segments)}
-                              className="inbox-chat-segment"
-                            >
-                              {segmentLabel(slug, segments)}
-                            </SegmentBadge>
-                          ))}
-                        </span>
-                      ) : null}
-                    </span>
-                  </button>
-                  <div className="inbox-chat-side">
-                    <span className="inbox-chat-time-wrap">
-                      {item.inbox_unread ? (
-                        <span className="inbox-unread-dot" title="No leído" aria-label="No leído" />
-                      ) : null}
-                      <span
-                        className="inbox-chat-msg-times"
-                        title={[
-                          `Entrante: ${formatChatListTime(item.last_user_message_at)}`,
-                          `Saliente: ${formatChatListTime(item.last_outbound_message_at)}`,
-                          replyStatus?.title,
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      >
-                        <span className="inbox-chat-msg-time">
-                          <span aria-hidden>↓</span>
-                          {formatChatListTime(item.last_user_message_at)}
-                        </span>
-                        <span className="inbox-chat-msg-time">
-                          <span aria-hidden>↑</span>
-                          {formatChatListTime(item.last_outbound_message_at)}
-                        </span>
-                        <span
-                          className={`inbox-chat-msg-time inbox-chat-msg-time--lag${
-                            replyStatus?.symbol === '⏳' ? ' is-waiting' : ''
-                          }`}
                         >
-                          <span aria-hidden>{replyStatus?.symbol ?? '⏱'}</span>
-                          {replyStatus?.label ?? '—'}
+                          {contactIdForBulk(item) != null ? (
+                            <input
+                              type="checkbox"
+                              checked={selectedContactIds.has(contactIdForBulk(item)!)}
+                              onChange={() => toggleContactSelection(contactIdForBulk(item)!)}
+                              onClick={(event) => event.stopPropagation()}
+                              aria-label={`Seleccionar ${name}`}
+                            />
+                          ) : null}
+                        </label>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => void onSelectItem(item)}
+                        className="inbox-chat-item-btn"
+                      >
+                        <span
+                          className={`inbox-chat-avatar ${
+                            !item.is_virtual
+                              ? item.user_service_window_open
+                                ? 'inbox-chat-avatar--window-open'
+                                : 'inbox-chat-avatar--window-closed'
+                              : ''
+                          }`}
+                          aria-hidden
+                          title={
+                            !item.is_virtual
+                              ? item.user_service_window_open
+                                ? windowHours
+                                  ? `Ventana 24h abierta (${windowHours})`
+                                  : 'Ventana 24h abierta'
+                                : 'Ventana 24h cerrada'
+                              : undefined
+                          }
+                        >
+                          {inboxInitials(item.contact_name, item.phone)}
+                          {!item.is_virtual && !item.user_service_window_open ? (
+                            <span className="inbox-chat-avatar-lock" aria-hidden>
+                              🔒
+                            </span>
+                          ) : null}
+                          {windowHours ? (
+                            <span className="inbox-chat-avatar-hours" aria-hidden>
+                              {windowHours}
+                            </span>
+                          ) : null}
                         </span>
-                      </span>
-                    </span>
-                    <button
-                      type="button"
-                      className="inbox-chat-item-more"
-                      aria-label="Opciones del chat"
-                      title="Opciones del chat"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        openChatActions(
-                          chatActionsFromListItem(item, list.ai_area_enabled, name),
-                        )
-                      }}
-                    >
-                      <span aria-hidden>▾</span>
-                    </button>
-                  </div>
-                </li>
+                        <span className="inbox-chat-link-main">
+                          <span className="inbox-chat-row-top">
+                            <span className="inbox-chat-title-group">
+                              <span className="inbox-chat-title-line">
+                                <span className="inbox-chat-title">{name}</span>
+                                {!hasContactName && leadScore ? (
+                                  <LeadStars score={leadScore} />
+                                ) : null}
+                              </span>
+                              <ConversationBadges
+                                status={item.conversation_status}
+                                assignedUserLabel={item.assigned_user_label}
+                                automationTouchedAt={item.automation_touched_at}
+                              />
+                            </span>
+                          </span>
+                          {hasContactName ? (
+                            <span className="inbox-chat-phone-row">
+                              <span className="inbox-chat-phone">{item.phone}</span>
+                              {leadScore ? <LeadStars score={leadScore} /> : null}
+                            </span>
+                          ) : null}
+                          <span className="inbox-chat-row-mid">
+                            <span className="inbox-chat-preview">
+                              {listPreviewText(item.preview)}
+                            </span>
+                          </span>
+                          {item.contact_segment_slugs.length > 0 ? (
+                            <span
+                              className="contact-segment-chips"
+                              role="group"
+                              aria-label="Segmentos"
+                            >
+                              {item.contact_segment_slugs.map((slug) => (
+                                <SegmentBadge
+                                  key={slug}
+                                  colorKey={segmentColorKey(slug, segments)}
+                                  className="inbox-chat-segment"
+                                >
+                                  {segmentLabel(slug, segments)}
+                                </SegmentBadge>
+                              ))}
+                            </span>
+                          ) : null}
+                        </span>
+                      </button>
+                      <div className="inbox-chat-side">
+                        <span className="inbox-chat-time-wrap">
+                          {item.inbox_unread ? (
+                            <span
+                              className="inbox-unread-dot"
+                              title="No leído"
+                              aria-label="No leído"
+                            />
+                          ) : null}
+                          <span
+                            className="inbox-chat-msg-times"
+                            title={[
+                              `Entrante: ${formatChatListTime(item.last_user_message_at)}`,
+                              `Saliente: ${formatChatListTime(item.last_outbound_message_at)}`,
+                              replyStatus?.title,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          >
+                            <span className="inbox-chat-msg-time">
+                              <span aria-hidden>↓</span>
+                              {formatChatListTime(item.last_user_message_at)}
+                            </span>
+                            <span className="inbox-chat-msg-time">
+                              <span aria-hidden>↑</span>
+                              {formatChatListTime(item.last_outbound_message_at)}
+                            </span>
+                            <span
+                              className={`inbox-chat-msg-time inbox-chat-msg-time--lag${
+                                replyStatus?.symbol === '⏳' ? ' is-waiting' : ''
+                              }`}
+                            >
+                              <span aria-hidden>{replyStatus?.symbol ?? '⏱'}</span>
+                              {replyStatus?.label ?? '—'}
+                            </span>
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          className="inbox-chat-item-more"
+                          aria-label="Opciones del chat"
+                          title="Opciones del chat"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            openChatActions(actionsCtx)
+                          }}
+                        >
+                          <span aria-hidden>▾</span>
+                        </button>
+                      </div>
+                    </li>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent className="w-52">
+                    <ContextMenuGroup>
+                      <ContextMenuLabel className="truncate normal-case">
+                        {name}
+                      </ContextMenuLabel>
+                      <ContextMenuItem
+                        onSelect={() =>
+                          openContactSheet({
+                            mode: item.contact_id ? 'edit' : 'create',
+                            contactId: item.contact_id,
+                            phone: item.phone,
+                          })
+                        }
+                      >
+                        {item.contact_id ? 'Editar contacto' : 'Guardar contacto'}
+                      </ContextMenuItem>
+                      {hasConversation && canAssign ? (
+                        <ContextMenuItem
+                          onSelect={() =>
+                            openAssignDialog({
+                              conversationId: item.id,
+                              heading: name,
+                              phone: item.phone,
+                              assignedUserId: item.assigned_user_id,
+                            })
+                          }
+                        >
+                          Asignar chat
+                        </ContextMenuItem>
+                      ) : null}
+                    </ContextMenuGroup>
+                    {hasConversation ? (
+                      <>
+                        <ContextMenuSeparator />
+                        <ContextMenuGroup>
+                          <ContextMenuItem
+                            onSelect={() => void onMarkUnread(item.id)}
+                          >
+                            Marcar como no leído
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            onSelect={() => {
+                              void apiClient.download(
+                                `/api/conversations/${item.id}/export`,
+                              )
+                            }}
+                          >
+                            Descargar Excel
+                          </ContextMenuItem>
+                        </ContextMenuGroup>
+                      </>
+                    ) : null}
+                    {hasConversation && list.ai_area_enabled ? (
+                      <>
+                        <ContextMenuSeparator />
+                        <ContextMenuSub>
+                          <ContextMenuSubTrigger>Modo</ContextMenuSubTrigger>
+                          <ContextMenuSubContent className="w-36">
+                            <ContextMenuRadioGroup
+                              value={
+                                modeStatus === 'bot' || modeStatus === 'human'
+                                  ? modeStatus
+                                  : undefined
+                              }
+                              onValueChange={(value) => {
+                                if (value === 'bot' || value === 'human') {
+                                  void onModeChange(value, item.id)
+                                }
+                              }}
+                            >
+                              <ContextMenuRadioItem value="bot">Bot</ContextMenuRadioItem>
+                              <ContextMenuRadioItem value="human">
+                                Asesor
+                              </ContextMenuRadioItem>
+                            </ContextMenuRadioGroup>
+                          </ContextMenuSubContent>
+                        </ContextMenuSub>
+                      </>
+                    ) : null}
+                    <ContextMenuSeparator />
+                    <ContextMenuItem onSelect={() => openChatActions(actionsCtx)}>
+                      Más opciones…
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
               )
             })
           )}
