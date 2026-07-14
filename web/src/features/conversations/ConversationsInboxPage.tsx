@@ -1205,18 +1205,20 @@ export function ConversationsInboxPage() {
                     )
                   }}
                 >
-                  {assignableSegments.length > 0 && contactIdForBulk(item) != null ? (
+                  {assignableSegments.length > 0 ? (
                     <label
-                      className="flex items-center self-stretch pl-2"
+                      className="flex w-8 shrink-0 items-center justify-center self-stretch pl-1"
                       onClick={(event) => event.stopPropagation()}
                     >
-                      <input
-                        type="checkbox"
-                        checked={selectedContactIds.has(contactIdForBulk(item)!)}
-                        onChange={() => toggleContactSelection(contactIdForBulk(item)!)}
-                        onClick={(event) => event.stopPropagation()}
-                        aria-label={`Seleccionar ${name}`}
-                      />
+                      {contactIdForBulk(item) != null ? (
+                        <input
+                          type="checkbox"
+                          checked={selectedContactIds.has(contactIdForBulk(item)!)}
+                          onChange={() => toggleContactSelection(contactIdForBulk(item)!)}
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label={`Seleccionar ${name}`}
+                        />
+                      ) : null}
                     </label>
                   ) : null}
                   <button
