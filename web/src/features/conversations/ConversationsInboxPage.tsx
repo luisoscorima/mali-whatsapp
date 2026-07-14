@@ -80,16 +80,59 @@ function LeadStars({ score }: { score: number }) {
   )
 }
 
+function ContactSheetIcon({ mode }: { mode: 'edit' | 'create' }) {
+  if (mode === 'create') {
+    return (
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <line x1="19" y1="8" x2="19" y2="14" />
+        <line x1="22" y1="11" x2="16" y2="11" />
+      </svg>
+    )
+  }
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  )
+}
+
 function ProfileBlock({
   detail,
   segments,
+  onOpenContact,
 }: {
   detail: InboxDetail
   segments: SegmentOption[]
+  onOpenContact: () => void
 }) {
   const user = useAppUser()
   const canManageAnuncios = Boolean(user?.canManageAnuncios)
   const contactId = detail.conversation.contact_id
+  const contactMode = contactId ? 'edit' : 'create'
+  const contactActionLabel = contactId ? 'Editar contacto' : 'Añadir contacto'
   const heading = formatContactName(
     detail.contact?.name,
     detail.contact?.last_name,
@@ -102,7 +145,18 @@ function ProfileBlock({
         {inboxInitials(heading, detail.conversation.phone)}
       </span>
       <div className="inbox-chat-header-identity">
-        <h1 className="inbox-chat-heading">{heading}</h1>
+        <div className="inbox-chat-heading-row">
+          <h1 className="inbox-chat-heading">{heading}</h1>
+          <button
+            type="button"
+            className="inbox-chat-contact-icon-btn"
+            title={contactActionLabel}
+            aria-label={contactActionLabel}
+            onClick={onOpenContact}
+          >
+            <ContactSheetIcon mode={contactMode} />
+          </button>
+        </div>
         <ConversationBadges
           status={detail.conversation.status}
           assignedUserLabel={detail.conversation.assigned_user_label}
@@ -110,7 +164,6 @@ function ProfileBlock({
         />
         <p className="inbox-chat-sub">
           {detail.conversation.phone}
-          {contactId ? ' · Editar contacto' : ' · Añadir contacto'}
           {leadScore ? (
             <>
               {' '}
@@ -1412,24 +1465,19 @@ export function ConversationsInboxPage() {
               >
                 ← Chats
               </button>
-              <button
-                type="button"
-                className="inbox-chat-header-profile inbox-chat-header-profile--link"
-                title={
-                  detail.conversation.contact_id
-                    ? 'Editar contacto'
-                    : 'Añadir contacto'
-                }
-                onClick={() =>
-                  openContactSheet({
-                    mode: detail.conversation.contact_id ? 'edit' : 'create',
-                    contactId: detail.conversation.contact_id,
-                    phone: detail.conversation.phone,
-                  })
-                }
-              >
-                <ProfileBlock detail={detail} segments={segments} />
-              </button>
+              <div className="inbox-chat-header-profile">
+                <ProfileBlock
+                  detail={detail}
+                  segments={segments}
+                  onOpenContact={() =>
+                    openContactSheet({
+                      mode: detail.conversation.contact_id ? 'edit' : 'create',
+                      contactId: detail.conversation.contact_id,
+                      phone: detail.conversation.phone,
+                    })
+                  }
+                />
+              </div>
               <div className="inbox-chat-header-toolbar">
                 {!detail.user_service_window_open ? (
                   <Button

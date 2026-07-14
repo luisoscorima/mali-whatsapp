@@ -37,8 +37,26 @@ type ContactDetail = {
 }
 
 type FilterOptions = {
-  segments: Array<{ id: number; slug: string; label: string }>
+  segments: Array<{ id: number; slug: string; label: string; color_key?: string }>
   attribute_definitions: AttributeDefinition[]
+}
+
+type ApiSegment = {
+  id: number
+  slug: string
+  label: string
+  color_key?: string
+}
+
+function mapSegmentOptions(
+  segs: ApiSegment[],
+): FilterOptions['segments'] {
+  return segs.map((s) => ({
+    id: s.id,
+    slug: s.slug,
+    label: s.label,
+    color_key: s.color_key,
+  }))
 }
 
 export type InboxContactSheetProps = {
@@ -83,7 +101,7 @@ export function InboxContactSheet({
         const [detail, opts, allSegs] = await Promise.all([
           apiClient.get<ContactDetail>(`/api/contacts/${contactId}`),
           apiClient.get<FilterOptions>('/api/contacts/filter-options'),
-          apiClient.get<FilterOptions['segments']>('/api/segments'),
+          apiClient.get<ApiSegment[]>('/api/segments'),
         ])
         if (cancelled) return
         if (!detail.ok) {
@@ -97,9 +115,7 @@ export function InboxContactSheet({
           setAttributeDefinitions(opts.data.attribute_definitions)
         }
         if (allSegs.ok) {
-          setSegments(
-            allSegs.data.map((s) => ({ id: s.id, slug: s.slug, label: s.label })),
-          )
+          setSegments(mapSegmentOptions(allSegs.data))
         } else if (opts.ok) {
           setSegments(opts.data.segments)
         }
@@ -109,7 +125,7 @@ export function InboxContactSheet({
 
       const [opts, segs] = await Promise.all([
         apiClient.get<FilterOptions>('/api/contacts/filter-options'),
-        apiClient.get<FilterOptions['segments']>('/api/segments'),
+        apiClient.get<ApiSegment[]>('/api/segments'),
       ])
       if (cancelled) return
       if (!opts.ok) {
@@ -119,11 +135,7 @@ export function InboxContactSheet({
         return
       }
       setAttributeDefinitions(opts.data.attribute_definitions)
-      setSegments(
-        segs.ok
-          ? segs.data.map((s) => ({ id: s.id, slug: s.slug, label: s.label }))
-          : opts.data.segments,
-      )
+      setSegments(segs.ok ? mapSegmentOptions(segs.data) : opts.data.segments)
       setLoading(false)
     }
 

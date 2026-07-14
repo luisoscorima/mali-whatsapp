@@ -783,18 +783,38 @@ html[data-theme='dark'] .inbox-chat-lead-star.is-on {
   color: inherit;
 }
 
-button.inbox-chat-header-profile {
-  border: none;
-  background: transparent;
-  padding: 0;
-  text-align: left;
-  cursor: pointer;
-  font: inherit;
+.inbox-chat-heading-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
-.inbox-chat-header-profile--link:hover,
-.inbox-chat-header-profile--link:focus-visible {
-  opacity: 0.92;
+.inbox-chat-heading-row .inbox-chat-heading {
+  min-width: 0;
+}
+
+.inbox-chat-contact-icon-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.inbox-chat-contact-icon-btn:hover,
+.inbox-chat-contact-icon-btn:focus-visible {
+  color: var(--ink);
+  background: var(--surface);
 }
 
 .inbox-chat-header-identity {
