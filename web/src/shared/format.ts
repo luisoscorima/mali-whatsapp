@@ -51,14 +51,17 @@ export function formatChatListDuration(ms: number): string {
 
 /**
  * ⏱ respuesta (saliente ≥ entrante) o ⏳ espera (cliente pendiente).
- * Null si no hay entrante.
+ * Null si no hay entrante, o si el cliente tiene la última palabra pero la ventana 24h ya cerró
+ * (no hay expectativa de respuesta libre → evita “5d esperando” en chats cerrados).
  */
 export function chatListReplyStatus(
   lastInboundAt: string | Date | null | undefined,
   lastOutboundAt: string | Date | null | undefined,
-  nowMs: number = Date.now(),
+  options?: { windowOpen?: boolean; nowMs?: number },
 ): { symbol: '⏱' | '⏳'; label: string; title: string } | null {
   if (!lastInboundAt) return null
+  const nowMs = options?.nowMs ?? Date.now()
+  const windowOpen = options?.windowOpen !== false
   const inboundMs = (lastInboundAt instanceof Date
     ? lastInboundAt
     : new Date(lastInboundAt)
@@ -80,6 +83,9 @@ export function chatListReplyStatus(
       title: `Tiempo de respuesta: ${label}`,
     }
   }
+
+  // Cliente tiene la última palabra: solo cuenta como “espera” si aún se puede responder.
+  if (!windowOpen) return null
 
   const label = formatChatListDuration(nowMs - inboundMs)
   return {

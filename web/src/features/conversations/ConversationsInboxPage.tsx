@@ -1198,6 +1198,7 @@ export function ConversationsInboxPage() {
               const replyStatus = chatListReplyStatus(
                 item.last_user_message_at,
                 item.last_outbound_message_at,
+                { windowOpen: item.user_service_window_open },
               )
               return (
                 <li
