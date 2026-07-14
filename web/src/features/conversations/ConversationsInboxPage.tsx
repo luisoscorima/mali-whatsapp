@@ -2,7 +2,7 @@ import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, us
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import { useAppUser } from '@/app/appOutletContext'
 import { apiClient } from '../../shared/api'
-import { formatChatListTime } from '../../shared/format'
+import { formatChatListTime, chatListReplyStatus } from '../../shared/format'
 import { notify } from '@/shared/notify'
 import { WaPageContents } from '@/shared/ui/shell/WaLayout'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
@@ -186,6 +186,7 @@ type InboxListItem = {
   matched_message_id: number | null
   user_service_window_open: boolean
   last_user_message_at: string | null
+  last_outbound_message_at: string | null
 }
 
 type InboxListResult = {
@@ -1194,6 +1195,10 @@ export function ConversationsInboxPage() {
                     item.last_user_message_at,
                   )
                 : null
+              const replyStatus = chatListReplyStatus(
+                item.last_user_message_at,
+                item.last_outbound_message_at,
+              )
               return (
                 <li
                   key={item.id}
@@ -1300,8 +1305,32 @@ export function ConversationsInboxPage() {
                       {item.inbox_unread ? (
                         <span className="inbox-unread-dot" title="No leído" aria-label="No leído" />
                       ) : null}
-                      <span className="inbox-chat-time">
-                        {formatChatListTime(item.last_message_at)}
+                      <span
+                        className="inbox-chat-msg-times"
+                        title={[
+                          `Entrante: ${formatChatListTime(item.last_user_message_at)}`,
+                          `Saliente: ${formatChatListTime(item.last_outbound_message_at)}`,
+                          replyStatus?.title,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      >
+                        <span className="inbox-chat-msg-time">
+                          <span aria-hidden>↓</span>
+                          {formatChatListTime(item.last_user_message_at)}
+                        </span>
+                        <span className="inbox-chat-msg-time">
+                          <span aria-hidden>↑</span>
+                          {formatChatListTime(item.last_outbound_message_at)}
+                        </span>
+                        <span
+                          className={`inbox-chat-msg-time inbox-chat-msg-time--lag${
+                            replyStatus?.symbol === '⏳' ? ' is-waiting' : ''
+                          }`}
+                        >
+                          <span aria-hidden>{replyStatus?.symbol ?? '⏱'}</span>
+                          {replyStatus?.label ?? '—'}
+                        </span>
                       </span>
                     </span>
                     <button

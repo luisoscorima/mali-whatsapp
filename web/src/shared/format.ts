@@ -36,3 +36,55 @@ export function formatChatListTime(value: string | Date | null | undefined): str
     timeZone: tz,
   })
 }
+
+/** Duración compacta para lista (respuesta / espera). */
+export function formatChatListDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return '—'
+  const minutes = Math.floor(ms / 60_000)
+  if (minutes < 1) return '<1m'
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 48) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  return `${days}d`
+}
+
+/**
+ * ⏱ respuesta (saliente ≥ entrante) o ⏳ espera (cliente pendiente).
+ * Null si no hay entrante.
+ */
+export function chatListReplyStatus(
+  lastInboundAt: string | Date | null | undefined,
+  lastOutboundAt: string | Date | null | undefined,
+  nowMs: number = Date.now(),
+): { symbol: '⏱' | '⏳'; label: string; title: string } | null {
+  if (!lastInboundAt) return null
+  const inboundMs = (lastInboundAt instanceof Date
+    ? lastInboundAt
+    : new Date(lastInboundAt)
+  ).getTime()
+  if (Number.isNaN(inboundMs)) return null
+
+  const outboundMs = lastOutboundAt
+    ? (lastOutboundAt instanceof Date
+        ? lastOutboundAt
+        : new Date(lastOutboundAt)
+      ).getTime()
+    : NaN
+
+  if (lastOutboundAt && !Number.isNaN(outboundMs) && outboundMs >= inboundMs) {
+    const label = formatChatListDuration(outboundMs - inboundMs)
+    return {
+      symbol: '⏱',
+      label,
+      title: `Tiempo de respuesta: ${label}`,
+    }
+  }
+
+  const label = formatChatListDuration(nowMs - inboundMs)
+  return {
+    symbol: '⏳',
+    label,
+    title: `Cliente esperando: ${label}`,
+  }
+}

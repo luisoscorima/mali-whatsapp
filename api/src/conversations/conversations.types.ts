@@ -33,6 +33,7 @@ export type InboxListItem = {
   matched_message_id: number | null;
   user_service_window_open: boolean;
   last_user_message_at: string | null;
+  last_outbound_message_at: string | null;
 };
 
 export type InboxListResult = {

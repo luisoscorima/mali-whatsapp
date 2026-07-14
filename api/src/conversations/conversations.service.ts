@@ -129,6 +129,7 @@ type InboxRow = {
   matched_message_id: number | null;
   contact_id: number | null;
   last_user_message_at: Date | null;
+  last_outbound_message_at: Date | null;
 };
 
 @Injectable()
@@ -223,6 +224,9 @@ export class ConversationsService {
       user_service_window_open: isWithinUserServiceWindow(row.last_user_message_at),
       last_user_message_at: row.last_user_message_at
         ? row.last_user_message_at.toISOString()
+        : null,
+      last_outbound_message_at: row.last_outbound_message_at
+        ? row.last_outbound_message_at.toISOString()
         : null,
     };
   }
@@ -357,6 +361,12 @@ export class ConversationsService {
         c.phone,
         c.last_message_at,
         c.last_user_message_at,
+        (
+          SELECT MAX(m_out.created_at)
+          FROM chat_messages m_out
+          WHERE m_out.conversation_id = c.id
+            AND m_out.direction = 'outbound'
+        ) AS last_outbound_message_at,
         c.inbox_unread,
         c.status AS conversation_status,
         c.assigned_user_id,
@@ -434,6 +444,7 @@ export class ConversationsService {
         ct.phone,
         NULL::timestamptz AS last_message_at,
         NULL::timestamptz AS last_user_message_at,
+        NULL::timestamptz AS last_outbound_message_at,
         FALSE AS inbox_unread,
         NULL::text AS conversation_status,
         NULL::int AS assigned_user_id,

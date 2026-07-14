@@ -525,12 +525,37 @@ html[data-theme='dark'] .inbox-layout-wa {
 
 .inbox-chat-time-wrap {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-end;
   gap: 6px;
   flex-shrink: 0;
   white-space: nowrap;
   min-height: 1.1rem;
+}
+
+.inbox-chat-msg-times {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0 6px;
+  max-width: 9.5rem;
+  line-height: 1.2;
+}
+
+.inbox-chat-msg-time {
+  font-size: 0.68rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.inbox-chat-msg-time > span[aria-hidden] {
+  margin-right: 2px;
+  opacity: 0.85;
+}
+
+.inbox-chat-msg-time--lag.is-waiting {
+  color: #d97706;
+  font-weight: 600;
 }
 
 .inbox-chat-time {
@@ -546,12 +571,18 @@ html[data-theme='dark'] .inbox-layout-wa {
   border-radius: 50%;
   background: #25d366;
   flex-shrink: 0;
+  margin-top: 2px;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--wa-list-bg) 40%, #000);
 }
 
-.inbox-chat-item--unread .inbox-chat-time {
+.inbox-chat-item--unread .inbox-chat-time,
+.inbox-chat-item--unread .inbox-chat-msg-time {
   color: var(--accent);
   font-weight: 600;
+}
+
+.inbox-chat-item--unread .inbox-chat-msg-time--lag.is-waiting {
+  color: #d97706;
 }
 
 .inbox-chat-item--unread .inbox-chat-title {
