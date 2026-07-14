@@ -1325,62 +1325,70 @@ export function ConversationsInboxPage() {
                         onClick={() => void onSelectItem(item)}
                         className="inbox-chat-item-btn"
                       >
-                        <span
-                          className={`inbox-chat-avatar ${
-                            !item.is_virtual
-                              ? item.user_service_window_open
-                                ? 'inbox-chat-avatar--window-open'
-                                : 'inbox-chat-avatar--window-closed'
-                              : ''
-                          }`}
-                          aria-hidden
-                          title={
-                            !item.is_virtual
-                              ? item.user_service_window_open
-                                ? windowHours
-                                  ? `Ventana 24h abierta (${windowHours})`
-                                  : 'Ventana 24h abierta'
-                                : 'Ventana 24h cerrada'
-                              : undefined
-                          }
-                        >
-                          {inboxInitials(item.contact_name, item.phone)}
-                          {!item.is_virtual && !item.user_service_window_open ? (
-                            <span className="inbox-chat-avatar-lock" aria-hidden>
-                              🔒
+                        <span className="inbox-chat-item-core">
+                          <span className="inbox-chat-item-primary">
+                            <span
+                              className={`inbox-chat-avatar ${
+                                !item.is_virtual
+                                  ? item.user_service_window_open
+                                    ? 'inbox-chat-avatar--window-open'
+                                    : 'inbox-chat-avatar--window-closed'
+                                  : ''
+                              }`}
+                              aria-hidden
+                              title={
+                                !item.is_virtual
+                                  ? item.user_service_window_open
+                                    ? windowHours
+                                      ? `Ventana 24h abierta (${windowHours})`
+                                      : 'Ventana 24h abierta'
+                                    : 'Ventana 24h cerrada'
+                                  : undefined
+                              }
+                            >
+                              {inboxInitials(item.contact_name, item.phone)}
+                              {!item.is_virtual && !item.user_service_window_open ? (
+                                <span className="inbox-chat-avatar-lock" aria-hidden>
+                                  🔒
+                                </span>
+                              ) : null}
+                              {windowHours ? (
+                                <span className="inbox-chat-avatar-hours" aria-hidden>
+                                  {windowHours}
+                                </span>
+                              ) : null}
                             </span>
-                          ) : null}
-                          {windowHours ? (
-                            <span className="inbox-chat-avatar-hours" aria-hidden>
-                              {windowHours}
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className="inbox-chat-link-main">
-                          <span className="inbox-chat-row-top">
-                            <span className="inbox-chat-title-group">
-                              <span className="inbox-chat-title-line">
-                                <span className="inbox-chat-title">{name}</span>
-                                {!hasContactName && leadScore ? (
-                                  <LeadStars score={leadScore} />
-                                ) : null}
+                            <span className="inbox-chat-link-main">
+                              <span className="inbox-chat-row-top">
+                                <span className="inbox-chat-title-line">
+                                  <span className="inbox-chat-title">{name}</span>
+                                  {!hasContactName && leadScore ? (
+                                    <LeadStars score={leadScore} />
+                                  ) : null}
+                                </span>
                               </span>
-                              <ConversationBadges
-                                status={item.conversation_status}
-                                assignedUserLabel={item.assigned_user_label}
-                                automationTouchedAt={item.automation_touched_at}
-                              />
-                            </span>
-                          </span>
-                          {hasContactName ? (
-                            <span className="inbox-chat-phone-row">
-                              <span className="inbox-chat-phone">{item.phone}</span>
-                              {leadScore ? <LeadStars score={leadScore} /> : null}
-                            </span>
-                          ) : null}
-                          <span className="inbox-chat-row-mid">
-                            <span className="inbox-chat-preview">
-                              {listPreviewText(item.preview)}
+                              {hasContactName ? (
+                                <span className="inbox-chat-phone-row">
+                                  <span className="inbox-chat-phone">{item.phone}</span>
+                                  {leadScore ? <LeadStars score={leadScore} /> : null}
+                                  <ConversationBadges
+                                    status={item.conversation_status}
+                                    assignedUserLabel={item.assigned_user_label}
+                                    automationTouchedAt={item.automation_touched_at}
+                                  />
+                                </span>
+                              ) : (
+                                <ConversationBadges
+                                  status={item.conversation_status}
+                                  assignedUserLabel={item.assigned_user_label}
+                                  automationTouchedAt={item.automation_touched_at}
+                                />
+                              )}
+                              <span className="inbox-chat-row-mid">
+                                <span className="inbox-chat-preview">
+                                  {listPreviewText(item.preview)}
+                                </span>
+                              </span>
                             </span>
                           </span>
                           {item.contact_segment_slugs.length > 0 ? (

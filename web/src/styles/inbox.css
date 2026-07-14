@@ -334,6 +334,22 @@ html[data-theme='dark'] .inbox-layout-wa {
   transition: background 0.15s ease;
 }
 
+.inbox-chat-item-core {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.inbox-chat-item-primary {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
 .inbox-layout-wa .inbox-chat-link:hover,
 .inbox-layout-wa .inbox-chat-item:hover {
   background: color-mix(in srgb, var(--surface-strong) 60%, transparent);
@@ -613,16 +629,24 @@ html[data-theme='dark'] .inbox-layout-wa {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
+  gap: 6px;
   min-width: 0;
+}
+
+.inbox-chat-phone-row .inbox-chat-badges {
+  flex-shrink: 1;
 }
 
 .inbox-layout-wa .inbox-chat-phone {
   display: inline;
   margin: 0;
+  min-width: 0;
   font-size: 0.75rem;
   color: var(--muted);
   font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .inbox-chat-row-mid {
