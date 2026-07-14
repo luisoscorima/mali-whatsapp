@@ -230,7 +230,7 @@ html[data-theme='dark'] .inbox-layout-wa {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 1px;
+  gap: 6px;
   /* gutter horizontal entre contenido y ↓/↑/⏱ */
   padding: 10px 4px 10px 6px;
   margin-left: 0;
@@ -579,8 +579,8 @@ html[data-theme='dark'] .inbox-layout-wa {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 1px;
-  line-height: 1.15;
+  gap: 4px;
+  line-height: 1.25;
   min-width: 0;
   max-width: 3.6rem;
   width: max-content;
