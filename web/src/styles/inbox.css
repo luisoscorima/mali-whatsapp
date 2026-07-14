@@ -587,7 +587,7 @@ html[data-theme='dark'] .inbox-layout-wa {
 }
 
 .inbox-chat-msg-time {
-  font-size: 0.62rem;
+  font-size: 0.68rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   max-width: 100%;
@@ -597,8 +597,8 @@ html[data-theme='dark'] .inbox-layout-wa {
 
 .inbox-chat-msg-time > span[aria-hidden] {
   display: inline-block;
-  width: 0.75em;
-  margin-right: 1px;
+  width: 0.85em;
+  margin-right: 2px;
   text-align: center;
   opacity: 0.85;
 }
