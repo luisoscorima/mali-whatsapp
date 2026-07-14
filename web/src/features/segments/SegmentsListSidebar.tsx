@@ -104,12 +104,7 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
                 <Link to={`/segments/${seg.id}${listQuery}`} className="inbox-chat-link flex-1">
                   <span className="inbox-chat-link-main">
                     <span className="inbox-chat-row-top">
-                      <span className="inbox-chat-title">
-                        {seg.label}
-                        {!seg.active ? (
-                          <span className="ml-1 text-[10px] text-muted">(inactivo)</span>
-                        ) : null}
-                      </span>
+                      <span className="inbox-chat-title">{seg.label}</span>
                     </span>
                     <SegmentBadge
                       colorKey={seg.color_key}
@@ -117,6 +112,14 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
                     >
                       {seg.slug}
                     </SegmentBadge>
+                    <span className="mt-0.5 block text-[10px] leading-snug text-muted">
+                      {seg.active ? 'Activo' : 'Inactivo'}
+                      {' · '}
+                      {seg.show_in_filter ? 'En filtros' : 'Sin filtros'}
+                      {seg.assignable
+                        ? ` · Asignable${seg.assignment_group ? `: ${seg.assignment_group}` : ''}`
+                        : null}
+                    </span>
                   </span>
                 </Link>
               </div>
