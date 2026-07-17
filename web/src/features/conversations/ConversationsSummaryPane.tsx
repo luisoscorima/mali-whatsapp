@@ -36,6 +36,7 @@ const KPI_FILTER_MAP: Record<string, { chat?: string }> = {
 
 export function ConversationsSummaryPane() {
   const user = useAppUser()
+  const area = user?.area
   const canViewGlobal = Boolean(user?.canViewConversationStats)
   const [searchParams, setSearchParams] = useSearchParams()
   const [summary, setSummary] = useState<ConversationSummary | null>(null)
@@ -46,20 +47,27 @@ export function ConversationsSummaryPane() {
   const advisorId = canViewGlobal ? (searchParams.get('kpi_advisor') ?? '') : ''
 
   useEffect(() => {
-    if (!canViewGlobal) {
-      setAssignees([])
-      return
-    }
+    setAssignees([])
+    if (!canViewGlobal || !area) return
+
+    let cancelled = false
     void apiClient.get<{ assignees: Assignee[] }>('/api/conversations/assignees').then((res) => {
-      if (res.ok) setAssignees(res.data.assignees)
+      if (!cancelled && res.ok) setAssignees(res.data.assignees)
     })
-  }, [canViewGlobal])
+    return () => {
+      cancelled = true
+    }
+  }, [area, canViewGlobal])
 
   useEffect(() => {
-    if (!user) return
+    if (!area) return
+    setSummary(null)
+    setError('')
+    let cancelled = false
     const qs = new URLSearchParams({ days: String(days) })
     if (canViewGlobal && advisorId) qs.set('advisor_id', advisorId)
     void apiClient.get<ConversationSummary>(`/api/conversations/summary?${qs}`).then((res) => {
+      if (cancelled) return
       if (!res.ok) {
         notify.error(res.error)
         setError(res.error)
@@ -68,7 +76,10 @@ export function ConversationsSummaryPane() {
         setError('')
       }
     })
-  }, [days, advisorId, canViewGlobal, user])
+    return () => {
+      cancelled = true
+    }
+  }, [area, days, advisorId, canViewGlobal])
 
   const chartData = useMemo(
     () =>

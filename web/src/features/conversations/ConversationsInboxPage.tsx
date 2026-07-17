@@ -492,6 +492,7 @@ export function ConversationsInboxPage() {
   const { id: idParam } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
+  const user = useAppUser()
   const [list, setList] = useState<InboxListResult | null>(null)
   const [detail, setDetail] = useState<InboxDetail | null>(null)
   const [error, setError] = useState('')
@@ -519,6 +520,7 @@ export function ConversationsInboxPage() {
   const lastAuditIdRef = useRef<bigint>(BigInt(0))
   const listRequestIdRef = useRef(0)
   const listInFlightRef = useRef(false)
+  const listAreaRef = useRef<string | null>(null)
   const scrollerRef = useRef<InboxMessageScrollerHandle | null>(null)
   const sendingReplyRef = useRef(false)
 
@@ -561,6 +563,25 @@ export function ConversationsInboxPage() {
         }
       })
   }, [filterQuerySuffix])
+
+  useEffect(() => {
+    const area = user?.area ?? null
+    if (!area) return
+    if (listAreaRef.current === null) {
+      listAreaRef.current = area
+      return
+    }
+    if (listAreaRef.current === area) return
+
+    listAreaRef.current = area
+    listRequestIdRef.current += 1
+    listInFlightRef.current = false
+    setList(null)
+    setDetail(null)
+    setSelectedContactIds(new Set())
+    setBulkSegment('')
+    void loadList()
+  }, [loadList, user?.area])
 
   useEffect(() => {
     setSelectedContactIds(new Set())
@@ -1549,7 +1570,7 @@ export function ConversationsInboxPage() {
                                   ? modeStatus
                                   : undefined
                               }
-                              onValueChange={(value) => {
+                              onValueChange={(value: string) => {
                                 if (value === 'bot' || value === 'human') {
                                   void onModeChange(value, item.id)
                                 }
