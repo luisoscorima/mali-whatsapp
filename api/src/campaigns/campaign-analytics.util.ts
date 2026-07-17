@@ -176,18 +176,13 @@ export function buildFailedLogs(logs: CampaignLogRow[]): FailedLogRow[] {
     .map((log) => enrichFailedLogRow(log));
 }
 
-function collectCampaignStatusCounts(logs: CampaignLogRow[]) {
-  let sentOnly = 0;
-  let deliveredOnly = 0;
-  let read = 0;
-  for (const log of logs) {
-    const status = normalizeLogStatus(log.status);
-    if (status === 'read') read += 1;
-    else if (status === 'delivered') deliveredOnly += 1;
-    else if (status === 'sent') sentOnly += 1;
-  }
-  return { sentOnly, deliveredOnly, read };
-}
+export type CampaignDetailStatusCounts = {
+  sentOnly: number;
+  deliveredOnly: number;
+  read: number;
+  failed: number;
+  logCount: number;
+};
 
 function collectIncidentCounts(failedLogs: FailedLogRow[]) {
   let undeliverable = 0;
@@ -212,7 +207,7 @@ export function buildCampaignDetailAnalytics(
     cost_source?: string | null;
     cost_is_estimated?: boolean | null;
   },
-  logs: CampaignLogRow[],
+  statusCounts: CampaignDetailStatusCounts,
   failedLogs: FailedLogRow[],
   responderMetrics?: {
     window_days?: number;
@@ -220,19 +215,21 @@ export function buildCampaignDetailAnalytics(
   },
 ): CampaignAnalytics {
   const campaignStatus = normalizeLogStatus(campaign.status);
-  const effectiveLogs = collectLatestLogsByPhone(logs);
-  const statusCounts = collectCampaignStatusCounts(effectiveLogs);
-  const sentCount =
-    statusCounts.sentOnly + statusCounts.deliveredOnly + statusCounts.read;
-  const deliveredCount = statusCounts.deliveredOnly + statusCounts.read;
-  const readCount = statusCounts.read;
+  const sentOnly = toInt(statusCounts.sentOnly, 0);
+  const deliveredOnly = toInt(statusCounts.deliveredOnly, 0);
+  const readCount = toInt(statusCounts.read, 0);
+  const sentCount = sentOnly + deliveredOnly + readCount;
+  const deliveredCount = deliveredOnly + readCount;
 
-  const failedCount = failedLogs.length;
+  const failedCount = Math.max(
+    toInt(statusCounts.failed, 0),
+    failedLogs.length,
+  );
   const declaredRecipients = toInt(campaign.total_recipients, 0);
   const totalRecipients = Math.max(
     declaredRecipients,
     sentCount + failedCount,
-    effectiveLogs.length,
+    toInt(statusCounts.logCount, 0),
   );
   const problemsCount = Math.max(totalRecipients - sentCount, 0);
   const hasIncomplete =
@@ -333,19 +330,15 @@ export function buildCampaignDetailAnalytics(
     funnel: [
       metricCard(
         'Pendientes de entrega',
-        formatCountPct(
-          statusCounts.sentOnly,
-          roundPct(statusCounts.sentOnly, sentCount),
-          true,
-        ),
+        formatCountPct(sentOnly, roundPct(sentOnly, sentCount), true),
         'sent',
         'Enviados sin confirmación de entrega o lectura.',
       ),
       metricCard(
         'Entregados no leídos',
         formatCountPct(
-          statusCounts.deliveredOnly,
-          roundPct(statusCounts.deliveredOnly, sentCount),
+          deliveredOnly,
+          roundPct(deliveredOnly, sentCount),
           true,
         ),
         'delivered',

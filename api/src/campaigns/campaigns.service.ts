@@ -16,7 +16,6 @@ import { parseMonthKey } from '../shared/month-filter.util';
 import {
   buildCampaignDetailAnalytics,
   buildCampaignIndexSummary,
-  buildFailedLogs,
   type CampaignLogRow,
   type CampaignTotalsRow,
 } from './campaign-analytics.util';
@@ -46,6 +45,7 @@ import {
 } from './campaign-param-summary.util';
 import {
   CAMPAIGN_LOG_STATUS_SQL,
+  campaignLogStatusColumnSql,
   sqlCampaignLogIsError,
   sqlInList,
   SALIDA_OK_STATUSES,
@@ -430,6 +430,34 @@ export class CampaignsService {
       LIMIT 500
     `);
 
+    const statusSql = campaignLogStatusColumnSql('latest_logs.status');
+    const [statusTotals] = await this.prisma.$queryRaw<
+      {
+        log_count: number;
+        sent_only: number;
+        delivered_only: number;
+        read_count: number;
+        failed_count: number;
+        first_send_at: Date | null;
+      }[]
+    >(Prisma.sql`
+      WITH latest_logs AS (
+        SELECT DISTINCT ON (phone)
+          status, created_at
+        FROM campaign_logs
+        WHERE campaign_id = ${id}
+        ORDER BY phone, id DESC
+      )
+      SELECT
+        COALESCE(COUNT(*), 0)::int AS log_count,
+        COALESCE(SUM(CASE WHEN ${Prisma.raw(statusSql)} = 'sent' THEN 1 ELSE 0 END), 0)::int AS sent_only,
+        COALESCE(SUM(CASE WHEN ${Prisma.raw(statusSql)} = 'delivered' THEN 1 ELSE 0 END), 0)::int AS delivered_only,
+        COALESCE(SUM(CASE WHEN ${Prisma.raw(statusSql)} = 'read' THEN 1 ELSE 0 END), 0)::int AS read_count,
+        COALESCE(SUM(CASE WHEN ${Prisma.raw(statusSql)} IN ${Prisma.raw(ERROR_IN)} THEN 1 ELSE 0 END), 0)::int AS failed_count,
+        MIN(created_at) AS first_send_at
+      FROM latest_logs
+    `);
+
     const normalizedLogs = logs.map((log) => ({
       ...log,
       created_at:
@@ -438,10 +466,12 @@ export class CampaignsService {
           : String(log.created_at),
     }));
 
-    const failedLogs = buildFailedLogs(normalizedLogs).map((log) => ({
-      ...log,
-      created_at: String(log.created_at),
-    }));
+    const failedLogs = (await this.fetchFailedLogsForExport(area, id)).map(
+      (log) => ({
+        ...log,
+        created_at: String(log.created_at),
+      }),
+    );
 
     const responderMetrics = await fetchCampaignResponderMetrics(
       this.prisma,
@@ -451,7 +481,13 @@ export class CampaignsService {
 
     const analytics = buildCampaignDetailAnalytics(
       campaign,
-      normalizedLogs,
+      {
+        sentOnly: statusTotals?.sent_only ?? 0,
+        deliveredOnly: statusTotals?.delivered_only ?? 0,
+        read: statusTotals?.read_count ?? 0,
+        failed: statusTotals?.failed_count ?? 0,
+        logCount: statusTotals?.log_count ?? 0,
+      },
       failedLogs,
       responderMetrics,
     );
@@ -471,14 +507,7 @@ export class CampaignsService {
       exclusions.exclude_contact_ids,
     );
 
-    let firstSendAt: string | null = null;
-    for (const log of normalizedLogs) {
-      const t = new Date(String(log.created_at)).getTime();
-      if (Number.isNaN(t)) continue;
-      if (!firstSendAt || t < new Date(firstSendAt).getTime()) {
-        firstSendAt = String(log.created_at);
-      }
-    }
+    const firstSendAt = toIso(statusTotals?.first_send_at ?? null);
 
     return {
       id: campaign.id,
