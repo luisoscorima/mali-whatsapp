@@ -100,6 +100,7 @@ model chat_messages {
 
   @@index([body_text(ops: raw("gin_trgm_ops"))], map: "idx_chat_messages_body_trgm", type: Gin)
   @@index([conversation_id, created_at], map: "idx_chat_messages_conv")
+  @@index([conversation_id, direction, created_at], map: "idx_chat_messages_conv_dir_created")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.

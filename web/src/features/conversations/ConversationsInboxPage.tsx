@@ -518,6 +518,7 @@ export function ConversationsInboxPage() {
   const lastMessageIdRef = useRef(0)
   const lastAuditIdRef = useRef<bigint>(BigInt(0))
   const listRequestIdRef = useRef(0)
+  const listInFlightRef = useRef(false)
   const scrollerRef = useRef<InboxMessageScrollerHandle | null>(null)
   const sendingReplyRef = useRef(false)
 
@@ -537,8 +538,10 @@ export function ConversationsInboxPage() {
     [searchParams],
   )
 
-  const loadList = useCallback((opts?: { silent?: boolean }) => {
+  const loadList = useCallback((opts?: { silent?: boolean; skipIfInFlight?: boolean }) => {
+    if (opts?.skipIfInFlight && listInFlightRef.current) return Promise.resolve()
     const requestId = ++listRequestIdRef.current
+    listInFlightRef.current = true
     return apiClient
       .get<InboxListResult>(`/api/conversations${filterQuerySuffix}`)
       .then((result) => {
@@ -551,6 +554,11 @@ export function ConversationsInboxPage() {
           return
         }
         setList(result.data)
+      })
+      .finally(() => {
+        if (requestId === listRequestIdRef.current) {
+          listInFlightRef.current = false
+        }
       })
   }, [filterQuerySuffix])
 
@@ -574,26 +582,34 @@ export function ConversationsInboxPage() {
   const listPage =
     list && inboxFilterKeyFromResult(list.filters) === activeFilterKey ? list.page : page
 
-  const loadDetail = useCallback(
-    (conversationId: number) => {
-      setLoadingDetail(true)
-      setError('')
-      return apiClient
-        .get<InboxDetail>(`/api/conversations/${conversationId}`)
-        .then((result) => {
-          setLoadingDetail(false)
-          if (!result.ok) {
-            notify.error(result.error)
-            setError(result.error)
-            setDetail(null)
-            return
+  const loadDetail = useCallback((conversationId: number) => {
+    setLoadingDetail(true)
+    setError('')
+    return apiClient
+      .get<InboxDetail>(`/api/conversations/${conversationId}`)
+      .then((result) => {
+        setLoadingDetail(false)
+        if (!result.ok) {
+          notify.error(result.error)
+          setError(result.error)
+          setDetail(null)
+          return
+        }
+        setDetail(result.data)
+        setList((prev) => {
+          if (!prev) return prev
+          const item = prev.items.find((row) => row.id === conversationId)
+          if (!item?.inbox_unread) return prev
+          return {
+            ...prev,
+            unread_count: Math.max(0, (prev.unread_count ?? 0) - 1),
+            items: prev.items.map((row) =>
+              row.id === conversationId ? { ...row, inbox_unread: false } : row,
+            ),
           }
-          setDetail(result.data)
-          void loadList()
         })
-    },
-    [loadList],
-  )
+      })
+  }, [])
 
   const conversationPath = useCallback(
     (conversationId: number, item?: InboxListItem): string => {
@@ -686,9 +702,12 @@ export function ConversationsInboxPage() {
   }, [sendingReply])
 
   useEffect(() => {
-    function tick() {
+    function tick(opts?: { forceList?: boolean }) {
       if (document.visibilityState === 'hidden') return
-      void loadList({ silent: true })
+      void loadList({
+        silent: true,
+        skipIfInFlight: !opts?.forceList,
+      })
       if (
         selectedId != null &&
         selectedId > 0 &&
@@ -698,9 +717,9 @@ export function ConversationsInboxPage() {
       }
     }
 
-    const timer = window.setInterval(tick, INBOX_POLL_MS)
+    const timer = window.setInterval(() => tick(), INBOX_POLL_MS)
     function onVisibilityChange() {
-      if (document.visibilityState === 'visible') tick()
+      if (document.visibilityState === 'visible') tick({ forceList: true })
     }
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {

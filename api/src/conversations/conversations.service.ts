@@ -110,7 +110,7 @@ import {
 } from './inbox-timeline.util';
 import { fetchConversationSummary } from './conversation-analytics.util';
 
-const INBOX_LIST_PAGE_SIZE = 200;
+const INBOX_LIST_PAGE_SIZE = 100;
 
 type InboxRow = {
   id: number;
