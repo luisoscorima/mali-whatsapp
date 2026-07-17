@@ -65,13 +65,13 @@ function parseCampaignPayload(raw: unknown): CampaignJobPayload | null {
   return raw as CampaignJobPayload;
 }
 
-function sqlNoSuccessfulLogForPhone(): string {
+function sqlNoSuccessfulLogForPhone(outerAlias = 'campaign_logs'): string {
   const okStatus = campaignLogStatusColumnSql('ok.status');
   return `NOT EXISTS (
     SELECT 1 FROM campaign_logs ok
-    WHERE ok.campaign_id = campaign_logs.campaign_id
-      AND ok.phone = campaign_logs.phone
-      AND ok.id <> campaign_logs.id
+    WHERE ok.campaign_id = ${outerAlias}.campaign_id
+      AND ok.phone = ${outerAlias}.phone
+      AND ok.id <> ${outerAlias}.id
       AND ${okStatus} IN ${SALIDA_OK_IN}
   )`;
 }
@@ -148,7 +148,7 @@ export class CampaignRetryService {
         AND ${Prisma.raw(sqlCampaignLogIsError('cl.status'))}
         AND cl.retryable = TRUE
         AND COALESCE(cl.attempt, 1) < ${maxAttempts}
-        AND ${Prisma.raw(sqlNoSuccessfulLogForPhone())}
+        AND ${Prisma.raw(sqlNoSuccessfulLogForPhone('cl'))}
       ORDER BY cl.id ASC
     `);
   }
