@@ -168,7 +168,11 @@ export function CampaignDrilldownDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{action.title}</DialogTitle>
+          <DialogTitle>
+            {action.type === 'responders'
+              ? `${action.title} (${responders.length})`
+              : action.title}
+          </DialogTitle>
           {action.type === 'responders' && responseWindowDays ? (
             <DialogDescription>
               Ventana de {responseWindowDays} días tras el envío.
