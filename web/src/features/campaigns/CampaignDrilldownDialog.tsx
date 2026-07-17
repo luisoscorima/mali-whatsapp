@@ -179,9 +179,22 @@ export function CampaignDrilldownDialog({
         </DialogHeader>
         <DialogBody>
           {action.type === 'responders' && responseTypeSummary.length > 0 ? (
-            <p className="muted campaign-drilldown-dialog__note mb-3 text-sm">
-              {responseTypeSummary.map((item) => `${item.label}: ${item.count}`).join(' · ')}
-            </p>
+            <table className="campaign-drilldown-dialog__note mb-3 w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-muted">
+                  <th className="py-2 pr-3">Respuesta</th>
+                  <th className="py-2 text-right">Cantidad</th>
+                </tr>
+              </thead>
+              <tbody>
+                {responseTypeSummary.map((item) => (
+                  <tr key={item.label} className="border-b border-line/60">
+                    <td className="py-2 pr-3">{item.label}</td>
+                    <td className="py-2 text-right tabular-nums">{item.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           ) : null}
           {action.type === 'incidents' && retryStats ? (
             <div className="mb-3 space-y-2">
