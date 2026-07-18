@@ -1,89 +1,84 @@
-# MALI WhatsApp MVP
+# MALI WhatsApp
 
-Plataforma web para **operar WhatsApp Business (Cloud API)** en MALI: **varios números** (líneas por área: TI, PAM, Patronato, Educación), campañas con plantillas aprobadas, gestión de contactos y **inbox unificado** con conversaciones en tiempo casi real. Incluye **respuesta automática con IA** (bot) por área, con posibilidad de **pasar el hilo a un asesor humano** cuando haga falta.
+Plataforma web de **WhatsApp Business (Cloud API)** para el Museo de Arte de Lima: **varios números oficiales** por área, campañas con plantillas aprobadas, gestión de contactos y **inbox unificado** con conversaciones en tiempo casi real. Incluye **respuesta automática con IA** por área, **asignación a asesores**, horario de atención, bitácora y reportería operativa.
+
+En producción: **[https://whatsapp.mali.pe](https://whatsapp.mali.pe)**.
 
 ## Características
 
-- **Multi-área y multi-número:** TI (desarrollo), PAM, Patronato y Educación operan como **líneas de WhatsApp distintas**: cada área tiene su **token** y **Phone Number ID** (`WHATSAPP_TOKEN_*` / `PHONE_NUMBER_ID_*` en `.env`, o credenciales guardadas en **Admin → Meta** con prioridad sobre el entorno). Los envíos y la bandeja usan siempre la línea del área del usuario. Un mismo webhook de Meta puede alimentar las cuatro líneas: el sistema **resuelve el área** según `metadata.phone_number_id`, el **WABA** (`WABA_ID_TI`, `WABA_ID_PAM`, `WABA_ID_PATRONATO`, `WABA_ID_EDUCACION` si hace falta) o, en casos límite, el teléfono del remitente ya vinculado en contactos/conversaciones/campañas.
-- **Integración Meta:** envío de plantillas, recepción de mensajes y medios, webhook de estados (`sent` / `delivered` / `read` / `failed`) y de **estado de plantillas** (`message_template_status_update`).
-- **Segmentación:** contactos con etiquetas de segmento; campañas dirigidas a segmentos con **exclusiones** (segmentos, IDs o listas guardadas).
-- **Panel unificado:** rutas reales (sin “tabs” por hash), vista tipo inbox para conversaciones y KPIs de campañas ampliados (fallidos, respondieron, costo, reintentos).
-- **Seguridad operativa:** sesiones para el panel, verificación opcional de firma del webhook (`X-Hub-Signature-256`), usuarios por dominio `@mali.pe`.
-- **IA asistida (Groq):** respuestas en sesión de 24 h cuando la conversación está en modo **Bot**; el master puede activar o desactivar el bot por área desde Ajustes.
-- **Leads CTWA:** detección automática de anuncios Click-to-WhatsApp (`referral` en el mensaje, también en `context.referral`) → plataforma Facebook/Instagram, globo en el chat y listado en `/anuncios`.
+- **Multi-área y multi-número:** TI, PAM, Patronato, Educación, Educación CA y Educación EP operan como **líneas distintas**. Cada área tiene su token y Phone Number ID (`WHATSAPP_TOKEN_*` / `PHONE_NUMBER_ID_*` en `.env`, o credenciales en **Admin → Meta**, con prioridad sobre el entorno). Un mismo webhook de Meta alimenta todas las líneas: el sistema **resuelve el área** según `metadata.phone_number_id`, el WABA (`WABA_ID_*`) o, en casos límite, el teléfono ya vinculado.
+- **Integración Meta:** envío de plantillas, recepción de mensajes y medios, estados de entrega (`sent` / `delivered` / `read` / `failed`) y estado de plantillas (`message_template_status_update`).
+- **Campañas en cola:** envíos masivos con **BullMQ + Redis** (inmediato o programado), reintentos automáticos y manuales, KPIs (fallidos, respondieron, costo WABA).
+- **Inbox operativo:** filtros por asignado / sin asignar, asignación a asesores, envío de plantillas desde el hilo, bot ↔ humano, fuera de horario y descarga de medios.
+- **Segmentación y atributos:** contactos con segmentos; definiciones de atributos por área; importación CSV/Excel; campañas con exclusiones y variables por contacto.
+- **Seguridad y gobernanza:** Google OAuth `@mali.pe` + JWT, permisos por módulo, bitácora de auditoría con retención configurable, usuarios y áreas desde Admin.
+- **IA asistida (Groq):** respuestas en ventana de 24 h en modo **Bot**; el master activa o desactiva el bot por área desde Ajustes.
+- **Leads CTWA:** detección de anuncios Click-to-WhatsApp (`referral`) → Facebook/Instagram, globo en el chat y listado en `/anuncios`.
 
 ## Funcionalidades
 
 | Ámbito | Qué incluye |
 |--------|-------------|
-| **Campañas** | Plantillas sincronizadas o **creadas desde la app** (envío a revisión Meta); parámetros **por contacto** (nombre, atributos `sede`/`monto`/`fecha_pago`, etc.); preview de destinatarios con exclusiones; **lista de fallidos** + export CSV; KPI **respondieron (7 días)** con lista de teléfonos; **reintento** automático (~10 min) y manual; **costo/inversión** del envío (WABA o estimado). |
-| **Contactos** | Alta manual, edición, filtros por **número, nombre y atributos**; **importación masiva CSV/Excel** (columnas extra → atributos); ejemplo en `/contacts/sample.xlsx`. |
-| **Segmentos** | Definición y mantenimiento de segmentos para filtrar audiencias. |
-| **Exclusiones en campaña** | Segmentos a excluir en nueva campaña; destinatarios puntuales desmarcando en el paso 2. |
-| **Conversaciones** | Lista e hilo; búsqueda por texto, nombre o número; chips de **segmento y anuncio Meta**; globo con origen FB/IG y texto del anuncio; **descarga** de imágenes/documentos del hilo; marcado no leído; respuesta del asesor en ventana de 24 h; adjuntos y exportación. |
-| **Plantillas** | Sync desde Graph; **alta vía API** (`/templates/new`); listado de estados PENDING/APPROVED/REJECTED; formulario de campaña adaptado a cabeceras y `{{n}}`. |
-| **Anuncios Meta** | Listado automático en `/anuncios` por `source_id`; headline, body, URL; leads por anuncio; nombre editable (API de Ads más adelante). |
-| **Ajustes / Admin** | Credenciales Meta por área; configuración de **IA por área** (master). |
-| **API / sistema** | `GET /health`, `GET /api/dashboard`, webhook `GET/POST /webhook`, APIs de campaña (fallidos, reintento, costo). |
+| **Conversaciones** | Inbox master–detail; búsqueda; chips de segmento y anuncio; asignación; envío de plantilla; marcado no leído; adjuntos y descarga; exportación; bot / asesor. |
+| **Campañas** | Plantillas sync o creadas en la app; parámetros por contacto; preview con exclusiones; cola Redis; programación; fallidos + CSV; respondieron (7 días); reintento auto/manual; costo WABA. |
+| **Contactos** | Alta, edición, filtros (número, nombre, atributos); importación masiva CSV/Excel; segmentos; ejemplo en `/contacts/sample.xlsx`. |
+| **Segmentos** | Definición y mantenimiento de audiencias. |
+| **Atributos** | Definiciones por área (`/attributes`) para formularios, importación y variables `{{n}}` en campañas. |
+| **Plantillas** | Sync desde Graph; alta vía app (`/templates/new`); estados PENDING/APPROVED/REJECTED; preview en vivo. |
+| **Anuncios Meta** | Listado CTWA en `/anuncios` por `source_id`; leads; nombre editable. |
+| **Ajustes** | Integración; IA por área; fuera de horario; bitácora; reportería. |
+| **Admin** | Usuarios y permisos; áreas; credenciales Meta; auditoría global (solo master). |
+| **API / sistema** | `GET /health`, webhook `GET/POST /webhook`, APIs de campañas, contactos, conversaciones y settings. |
 
-## IA y bots (respuesta automática)
+## IA y bots
 
-- **Motor:** API compatible OpenAI de **Groq** (`llama-3.1-8b-instant`), vía `GROQ_API_KEY` en `.env`. Sin clave, los mensajes entrantes se guardan pero **no** se genera respuesta automática.
-- **Modo por conversación:** estados `bot` (responde la IA si está habilitada en el área) y `human` (solo el equipo desde el panel). El usuario master puede **activar o desactivar el bot para todo un área**; al activar, las conversaciones pasan a modo bot; al desactivar, a asesor.
-- **Contexto:** se envían los últimos turnos del hilo para mantener coherencia en la sesión.
-- **Transferencia a humano:** si el modelo incluye la **palabra clave configurable** (por defecto `[TRANSFERIR]`), el sistema notifica al usuario y pasa la conversación a **Asesor**. Si la IA falla o no está disponible, la conversación puede pasar automáticamente a humano con un mensaje de cortesía.
-- **Edición del comportamiento:** usuarios con permiso pueden ajustar **prompt** y **palabra clave** por área; solo el master cambia el interruptor global de activación.
+- **Motor:** API compatible OpenAI de **Groq** (`llama-3.1-8b-instant`), vía `GROQ_API_KEY`. Sin clave, los mensajes se guardan pero no hay respuesta automática.
+- **Modo por conversación:** `bot` (IA si el área tiene el bot habilitado) y `human` (solo el equipo). El master activa o desactiva el bot para todo un área.
+- **Contexto:** últimos turnos del hilo para coherencia en la sesión.
+- **Transferencia a humano:** palabra clave configurable (por defecto `[TRANSFERIR]`); si la IA falla, puede pasar a asesor con mensaje de cortesía.
+- **Fuera de horario:** mensaje automático configurable por área cuando no hay atención humana.
 
-## Beneficios
+## Stack
 
-- **Operación centralizada:** un solo panel para campañas, contactos y atención, alineado a procesos de MALI, con **varios números oficiales** (uno por área) sin mezclar audiencias ni credenciales.
-- **Menos fricción con Meta:** plantillas y parámetros alineados a lo aprobado en WhatsApp Manager; menos errores `132000` / `132001` por desajustes manuales.
-- **Escalado del primer contacto:** el bot responde 24/7 dentro de la ventana de sesión, con reglas claras de **escalamiento a persona**.
-- **Trazabilidad:** logs de campaña, estados de entrega/lectura vía webhook, reintentos clasificados, costo de envío y mensajes etiquetados como generados por IA cuando corresponde.
-- **Cobranza y audiencia:** mensajes personalizados por contacto y exclusiones operativas sin salir del panel.
-- **Despliegue reproducible:** Docker Compose, migraciones idempotentes al arrancar y documentación de producción en el repositorio.
-
-## Estructura
+| Capa | Tecnología |
+|------|------------|
+| API | NestJS + Prisma + BullMQ |
+| Web | React + Vite + Tailwind (SPA) |
+| Datos | PostgreSQL |
+| Colas | Redis |
+| Auth | Google OAuth `@mali.pe` + JWT |
 
 ```txt
 mali-whatsapp-mvp/
   api/                 # NestJS + Prisma + BullMQ
-  web/                 # React + Vite + Tailwind (SPA)
+  web/                 # React + Vite + Tailwind
   docker-compose.yml   # Producción: api + web + postgres + redis
   scripts/             # deploy-production.sh, backup-postgres.sh
   ARRANQUE_V2.md
   DESPLIEGUE_V2.md
 ```
 
-## Estado actual
-
-- **Runtime:** NestJS (`api/`) + React (`web/`). Sin Express/EJS.
-- **Base de datos:** Prisma Migrate (`api/prisma/migrations/`).
-- **Auth:** Google OAuth `@mali.pe` + JWT; aprovisionamiento de permisos por admin.
-- **UI:** SPA con layout master–detail (lista + detalle en la misma vista) en contactos, segmentos, plantillas, campañas, admin usuarios, etc.
-- Arranque local: ver [ARRANQUE_V2.md](ARRANQUE_V2.md). Producción: [DESPLIEGUE_V2.md](DESPLIEGUE_V2.md).
+Arranque local: [ARRANQUE_V2.md](ARRANQUE_V2.md). Producción: [DESPLIEGUE_V2.md](DESPLIEGUE_V2.md).
 
 ## Primer arranque
 
-1. Copia variables en el proyecto raíz:
+1. Copia variables en la raíz del proyecto:
 
 ```bash
 cp .env.example .env
 ```
 
-2. Completa en `.env`:
+2. Completa en `.env` (detalle en `.env.example`):
 
-- `WHATSAPP_TOKEN_TI` / `PHONE_NUMBER_ID_TI`, `WHATSAPP_TOKEN_PAM` / `PHONE_NUMBER_ID_PAM`, `WHATSAPP_TOKEN_PATRONATO` / `PHONE_NUMBER_ID_PATRONATO` y `WHATSAPP_TOKEN_EDUCACION` / `PHONE_NUMBER_ID_EDUCACION` (o `WHATSAPP_TOKEN` / `PHONE_NUMBER_ID` como respaldo genérico)
-- `VERIFY_TOKEN`
-- `APP_SECRET` (obligatorio en produccion)
-- `REQUIRE_WEBHOOK_SIGNATURE=true` en produccion
-- `REQUIRE_AUTH=true` + `SESSION_SECRET` (login con correo **@mali.pe**; ver usuarios abajo)
-- Opcional: `MASTER_INITIAL_PASSWORD` para crear en el **primer arranque** el usuario master `loscorima@mali.pe` (o `MASTER_USER_EMAIL`); luego quita la variable del `.env`
-- `DEFAULT_TEMPLATE_NAME` y `DEFAULT_TEMPLATE_LANGUAGE` (ej. `hello_world` + `en_US` para cuentas de prueba)
-- `TEMPLATES_WITHOUT_COMPONENTS` (ej. `hello_world`)
-- `GROQ_API_KEY` (opcional pero necesaria para **respuesta automática con IA** en conversaciones en modo bot)
-- credenciales de PostgreSQL
-- Opcional campañas: `CAMPAIGN_AUTO_RETRY_DELAY_MINUTES` (default 10), `CAMPAIGN_MAX_RETRY_ATTEMPTS`, `CAMPAIGN_MAX_MANUAL_RETRIES`, `CAMPAIGN_RESPONSE_WINDOW_DAYS` (default 7), `CAMPAIGN_COST_PER_MESSAGE_USD` (fallback si Meta no devuelve costo)
+- Tokens y Phone Number ID por área (`_TI`, `_PAM`, `_PATRONATO`, `_EDUCACION`, `_EDUCACION_CA`, `_EDUCACION_EP`), o respaldo genérico
+- `VERIFY_TOKEN`, `APP_SECRET` (obligatorio en producción)
+- `REQUIRE_WEBHOOK_SIGNATURE=true` en producción
+- `REQUIRE_AUTH=true` + secretos JWT / sesión
+- `BOOTSTRAP_ADMIN_EMAIL` (acceso master vía Google)
+- Opcional: `MASTER_INITIAL_PASSWORD` solo en el **primer arranque**; luego quítalo
+- `GROQ_API_KEY` para respuesta automática
+- PostgreSQL y, en compose, Redis
+- Opcional campañas: `CAMPAIGN_AUTO_RETRY_DELAY_MINUTES`, `CAMPAIGN_MAX_RETRY_ATTEMPTS`, `CAMPAIGN_RESPONSE_WINDOW_DAYS`, `CAMPAIGN_COST_PER_MESSAGE_USD`
 
 3. Levanta entorno local:
 
@@ -91,94 +86,77 @@ cp .env.example .env
 docker compose -f docker-compose.dev.yml up --build
 ```
 
-4. **Usuarios:** login con Google (`@mali.pe`). El bootstrap admin (`BOOTSTRAP_ADMIN_EMAIL` en `.env`) tiene acceso master. El resto se aprovisiona en **Admin → Usuarios**.
+4. **Usuarios:** login con Google (`@mali.pe`). El bootstrap admin tiene acceso master; el resto se aprovisiona en **Admin → Usuarios** con permisos por módulo.
 
-5. Panel web: `http://localhost:5173` (dev) o `https://whatsapp.mali.pe` (prod).
+5. Panel: `http://localhost:5173` (dev) o `https://whatsapp.mali.pe` (prod).
 
 ## Rutas principales del panel
 
-- `GET /` redirección a `GET /campaigns`
-- `GET /conversations` conversaciones (lista + hilo)
-- `GET /conversations/:id` detalle de conversación (también resuelve chats vacíos desde resultados de búsqueda de contactos)
-- `GET /campaigns` campañas (lista)
-- `GET /campaigns/new` nueva campaña (exclusiones, variables por contacto)
-- `GET /campaigns/:id` detalle de campaña (fallidos, respondieron, costo, reintento)
-- `GET /contacts` contactos (lista; filtro por atributos)
-- `GET /contacts/new` añadir un contacto
-- `GET /contacts/import` importación CSV / Excel
-- `GET /contacts/:id` editar contacto (incl. atributos)
-- `GET /segments` segmentos (lista)
-- `GET /segments/new` añadir segmento
-- `GET /segments/:id` editar segmento
-- `GET /anuncios` anuncios Click-to-WhatsApp (leads desde Meta Ads)
-- `GET /anuncios/:id` detalle de anuncio, leads y nombre editable
-- `GET /templates` plantillas (estados de revisión)
-- `GET /templates/new` crear plantilla y enviar a Meta
-- `GET /history` → redirección a `GET /campaigns` (compatibilidad)
-- `GET /history/:id` → redirección a `GET /campaigns/:id` (compatibilidad)
-- `GET /settings` ajustes
+- `GET /` → redirección a `GET /conversations`
+- `GET /conversations` · `GET /conversations/:id` — inbox (lista + hilo)
+- `GET /campaigns` · `/campaigns/new` · `/campaigns/:id` — campañas
+- `GET /contacts` · `/contacts/new` · `/contacts/import` · `/contacts/:id`
+- `GET /segments` · `/segments/new` · `/segments/:id`
+- `GET /attributes` · `/attributes/new` · `/attributes/:id`
+- `GET /templates` · `/templates/new` · `/templates/:id`
+- `GET /anuncios` · `/anuncios/:id`
+- `GET /settings` · `/settings/integracion` · `/settings/ia` · `/settings/fuera-de-horario` · `/settings/bitacora` · `/settings/reporteria`
+- `GET /admin` · `/admin/users` · `/admin/areas` · `/admin/meta` · `/admin/audit-logs` (master)
 
-En **Campañas** (`GET /campaigns`) se muestran la lista de campañas y el **resumen global de envíos** (indicadores); el detalle de cada campaña es `GET /campaigns/:id`.
+**Indicadores de campaña:** Total, Salida OK, Error %, Lectura %; en detalle: Respondieron (7d), Envíos fallidos, Costo/inversión (sync WABA) y reintento. El embudo Meta es desglose por estado; no sustituye los informes de la cuenta Meta.
 
-**Indicadores:** los cuatro KPI operativos en lista y detalle son **Total** (filas en `campaign_logs`), **Salida OK** (estados `sent`, `delivered` o `read`), **Error %** sobre el total y **Lectura %** (lecturas sobre Salida OK; si Salida OK es 0 se muestra —). En el detalle: **Respondieron (7d)**, **Envíos fallidos**, **Costo/inversión** (sync WABA) y acciones de **reintento**. El **Embudo Meta (detalle)** es desglose por estado; no reemplaza informes de la cuenta Meta.
+## Endpoints útiles
 
-## Endpoints útiles (API / sistema)
-
-- `GET /health` salud de app + DB
-- `GET /api/dashboard` datos agregados (compatibilidad para integraciones internas)
-- `GET /webhook` verificación de webhook en Meta
-- `POST /webhook` estados de mensajes, mensajes entrantes (IA en modo bot), **actualización de estado de plantillas**
-- `POST /api/campaigns/recipients-preview` vista previa de destinatarios (con exclusiones)
-- `GET /api/campaigns/:id/failed-export` export CSV de envíos fallidos
-- `POST /api/campaigns/:id/retry-failed` reintento manual de fallidos
-- `POST /api/campaigns/:id/sync-cost` sincronizar costo WABA de la campaña
-- `GET /conversations/:conversationId/messages/:messageId/download` descargar media del hilo (auth)
-- `POST /conversations/:id/mark-unread` marcar conversación como no leída
-- `PATCH /api/settings/ai/:area` configuración de IA por área (master o permiso de edición de prompt)
-- `POST /api/settings/ai/:area/enable` activar/desactivar bot para todo el área (solo master)
-- `GET /api/templates/:id/definition` definición de plantilla para el formulario de campaña
+- `GET /health` — salud de app + DB
+- `GET /webhook` / `POST /webhook` — verificación Meta; mensajes, estados, plantillas, IA en modo bot
+- `POST /api/campaigns/recipients-preview` — vista previa de destinatarios
+- `GET /api/campaigns/:id/failed-export` — CSV de fallidos
+- `POST /api/campaigns/:id/retry-failed` — reintento manual
+- `POST /api/campaigns/:id/sync-cost` — sincronizar costo WABA
+- `GET /conversations/:conversationId/messages/:messageId/download` — media del hilo (auth)
+- `POST /conversations/:id/mark-unread`
+- `PATCH /api/settings/ai/:area` · `POST /api/settings/ai/:area/enable`
+- `GET /api/templates/:id/definition`
 
 ## Plantillas desde Meta
 
-- **Sincronizar:** botón **Sincronizar plantillas** en nueva campaña o flujo de sync → `GET message_templates` del WABA. Solo las **APPROVED** aparecen en el selector de envío.
-- **Crear:** `GET /templates/new` → `POST /templates/create` envía la plantilla a revisión (`PENDING`). Meta notifica por webhook `message_template_status_update`; al aprobarse, aparece tras sync en campañas.
-- El formulario de campaña se adapta a cabeceras (imagen/video/documento), textos `{{1}}`… y botones URL; cada variable puede ser **valor fijo** o **por contacto** (nombre, teléfono, atributos).
+- **Sincronizar:** desde el panel → `GET message_templates` del WABA. Solo **APPROVED** en el selector de envío.
+- **Crear:** `/templates/new` envía a revisión (`PENDING`). Meta notifica con `message_template_status_update`.
+- El formulario de campaña se adapta a cabeceras (media), textos `{{1}}`… y botones URL; cada variable puede ser fija o por contacto.
 
-El token debe poder leer/escribir plantillas (`whatsapp_business_management`). Si falla la resolución del WABA, define `WABA_ID_TI`, `WABA_ID_PAM`, `WABA_ID_PATRONATO` y/o `WABA_ID_EDUCACION`.
+El token necesita `whatsapp_business_management`. Si falla la resolución del WABA, define `WABA_ID_*` por área.
 
-Errores frecuentes: `132001` (plantilla/idioma inexistente), `132000` (parámetros incorrectos), `131030` en sandbox (número no permitido).
+Errores frecuentes: `132001` (plantilla/idioma), `132000` (parámetros), `131030` (sandbox: número no permitido).
 
-En Meta Developers, suscribe el webhook al campo **`message_template_status_update`** además de mensajes y estados.
+En Meta Developers, suscribe el webhook a **`message_template_status_update`** además de mensajes y estados.
 
-## CTWA (anuncios Click-to-WhatsApp)
+## CTWA (Click-to-WhatsApp)
 
-1. Crea la pauta en Meta Ads Manager (CTWA).
-2. Cuando el usuario escribe con `referral` (o `context.referral`) en el webhook, la app registra el anuncio por `source_id`, infiere **Facebook** o **Instagram** desde `source_url`, y muestra **headline** y **body** en un globo pequeño en el hilo.
-3. En **Anuncios** (`/anuncios`) ves la lista de IDs de anuncio, datos del creativo y los teléfonos/nombres que llegaron desde cada uno. Puedes editar un **nombre visible** (más adelante se sincronizará con la API de Meta Ads).
+1. Pauta CTWA en Meta Ads Manager.
+2. Al llegar `referral` (o `context.referral`), la app registra el anuncio por `source_id`, infiere Facebook o Instagram y muestra headline/body en el hilo.
+3. En **Anuncios** (`/anuncios`) aparecen IDs, creativo y leads; el nombre visible es editable.
 
-La **inversión de la pauta** (spend en Ads Manager) **no** se muestra en v1; el costo en detalle de campaña es el del **envío masivo de plantillas** en la app.
+La **inversión de la pauta** (spend Ads) no se muestra; el costo en detalle de campaña es el del **envío masivo de plantillas** (WABA).
 
 ## Guía de producción y operación
 
-- **[DESPLIEGUE_PRODUCCION_APP.md](DESPLIEGUE_PRODUCCION_APP.md)** — arquitectura, Docker, Nginx, `.env`, roles, uso del panel, go-live
-- **[CONFIGURACION_META.md](CONFIGURACION_META.md)** — Developers, Business Manager, webhooks, `subscribed_apps`, `curl` (números nuevos, SMS, register)
-- **[Mejoras.md](Mejoras.md)** — observaciones de usuarios, decisiones de producto y estado de implementación
+- **[DESPLIEGUE_PRODUCCION_APP.md](DESPLIEGUE_PRODUCCION_APP.md)** — arquitectura, Docker, Nginx, `.env`, roles, go-live
+- **[CONFIGURACION_META.md](CONFIGURACION_META.md)** — Developers, Business Manager, webhooks, `subscribed_apps`
+- **[Mejoras.md](Mejoras.md)** — observaciones de usuarios y estado de implementación
+- **[ARRANQUE_V2.md](ARRANQUE_V2.md)** / **[DESPLIEGUE_V2.md](DESPLIEGUE_V2.md)** — arranque local y despliegue v2
 
 ### Publicación (resumen)
 
-El panel en producción vive en **`https://whatsapp.mali.pe`** (subdominio dedicado; sin subruta).
-
-- **NPM:** proxy host `whatsapp.mali.pe` → contenedor `mali-whatsapp-app:3000` en la raíz (`/`), red Docker compartida con NPM.
+- **URL:** `https://whatsapp.mali.pe` (raíz del subdominio; sin subruta)
+- **Proxy:** host → contenedor app en puerto `3000`
 - **`.env`:** `BASE_PATH=` (vacío), `APP_BASE_URL=https://whatsapp.mali.pe`
-- **SSL:** Let’s Encrypt en el mismo proxy host.
 - **Webhook Meta:** `https://whatsapp.mali.pe/webhook`
 
-## Notas del MVP
+## Notas operativas
 
-- La **IA** depende de `GROQ_API_KEY` y de que el área tenga el bot habilitado en Ajustes; las conversaciones deben estar en estado `bot` para respuestas automáticas.
-- Usa plantillas **aprobadas** de WhatsApp para envíos masivos.
-- El idioma debe coincidir con una traducción existente de la plantilla en WhatsApp Manager.
-- En cuentas de prueba de Meta, solo se puede enviar a números en la lista de destinatarios permitidos.
-- **SIGE** (matrícula / conversión por campaña) está planificado para una fase posterior; no forma parte del MVP actual.
-- Los estados `sent`, `delivered`, `read`, `failed` se actualizan desde `/webhook`.
-- Para una siguiente fase conviene valorar cola con Redis en envíos muy grandes.
+- La **IA** requiere `GROQ_API_KEY` y bot habilitado en el área; la conversación debe estar en modo `bot`.
+- Los envíos masivos usan plantillas **aprobadas**; el idioma debe coincidir con una traducción existente en WhatsApp Manager.
+- En cuentas de prueba de Meta solo se puede enviar a números permitidos.
+- Estados `sent` / `delivered` / `read` / `failed` llegan por `/webhook`.
+- Campañas grandes se procesan con **Redis/BullMQ** (cola de envío y reintentos).
+- **SIGE** (matrícula / conversión por campaña) y spend de pauta Ads siguen en backlog; ver [Mejoras.md](Mejoras.md).
