@@ -46,6 +46,11 @@ export class AppConfigService {
     .trim()
     .toLowerCase();
 
+  /** Shared secret for MALI ONE → CRM sync / audience APIs. */
+  readonly crmServiceToken = String(
+    process.env.CRM_SERVICE_TOKEN || '',
+  ).trim();
+
   get googleAuthEnabled(): boolean {
     return Boolean(
       this.googleClientId &&

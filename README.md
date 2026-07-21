@@ -7,6 +7,7 @@ En producción: **[https://whatsapp.mali.pe](https://whatsapp.mali.pe)**.
 ## Características
 
 - **Multi-área y multi-número:** TI, PAM, Patronato, Educación, Educación CA y Educación EP operan como **líneas distintas**. Cada área tiene su token y Phone Number ID (`WHATSAPP_TOKEN_*` / `PHONE_NUMBER_ID_*` en `.env`, o credenciales en **Admin → Meta**, con prioridad sobre el entorno). Un mismo webhook de Meta alimenta todas las líneas: el sistema **resuelve el área** según `metadata.phone_number_id`, el WABA (`WABA_ID_*`) o, en casos límite, el teléfono ya vinculado.
+- **CRM canónico (PAM):** `contacts` es la fuente de verdad de personas (phone, email, `opt_in` / `opt_in_email`). MALI ONE sincroniza membresías vía `POST /api/crm/sync` y consulta audiencia email en `GET /api/crm/audience`. Contrato: [docs/CRM-API.md](docs/CRM-API.md).
 - **Integración Meta:** envío de plantillas, recepción de mensajes y medios, estados de entrega (`sent` / `delivered` / `read` / `failed`) y estado de plantillas (`message_template_status_update`).
 - **Campañas en cola:** envíos masivos con **BullMQ + Redis** (inmediato o programado), reintentos automáticos y manuales, KPIs (fallidos, respondieron, costo WABA).
 - **Inbox operativo:** filtros por asignado / sin asignar, asignación a asesores, envío de plantillas desde el hilo, bot ↔ humano, fuera de horario y descarga de medios.
@@ -21,7 +22,8 @@ En producción: **[https://whatsapp.mali.pe](https://whatsapp.mali.pe)**.
 |--------|-------------|
 | **Conversaciones** | Inbox master–detail; búsqueda; chips de segmento y anuncio; asignación; envío de plantilla; marcado no leído; adjuntos y descarga; exportación; bot / asesor. |
 | **Campañas** | Plantillas sync o creadas en la app; parámetros por contacto; preview con exclusiones; cola Redis; programación; fallidos + CSV; respondieron (7 días); reintento auto/manual; costo WABA. |
-| **Contactos** | Alta, edición, filtros (número, nombre, atributos); importación masiva CSV/Excel; segmentos; ejemplo en `/contacts/sample.xlsx`. |
+| **Contactos** | Alta, edición, filtros (número, nombre, email, atributos); importación masiva CSV/Excel; segmentos; ejemplo en `/contacts/sample.xlsx`. CRM canónico para PAM (sync desde MALI ONE). |
+| **CRM interno** | `POST /api/crm/sync`, `GET /api/crm/audience` con `CRM_SERVICE_TOKEN` para mailing en MALI ONE. |
 | **Segmentos** | Definición y mantenimiento de audiencias. |
 | **Atributos** | Definiciones por área (`/attributes`) para formularios, importación y variables `{{n}}` en campañas. |
 | **Plantillas** | Sync desde Graph; alta vía app (`/templates/new`); estados PENDING/APPROVED/REJECTED; preview en vivo. |
@@ -78,6 +80,7 @@ cp .env.example .env
 - Opcional: `MASTER_INITIAL_PASSWORD` solo en el **primer arranque**; luego quítalo
 - `GROQ_API_KEY` para respuesta automática
 - PostgreSQL y, en compose, Redis
+- `CRM_SERVICE_TOKEN` — sync/audiencia desde MALI ONE ([docs/CRM-API.md](docs/CRM-API.md))
 - Opcional campañas: `CAMPAIGN_AUTO_RETRY_DELAY_MINUTES`, `CAMPAIGN_MAX_RETRY_ATTEMPTS`, `CAMPAIGN_RESPONSE_WINDOW_DAYS`, `CAMPAIGN_COST_PER_MESSAGE_USD`
 
 3. Levanta entorno local:
@@ -117,6 +120,9 @@ docker compose -f docker-compose.dev.yml up --build
 - `POST /conversations/:id/mark-unread`
 - `PATCH /api/settings/ai/:area` · `POST /api/settings/ai/:area/enable`
 - `GET /api/templates/:id/definition`
+- `POST /api/crm/sync` — upsert contacto desde MALI ONE (`X-Crm-Service-Token`)
+- `GET /api/crm/audience` — audiencia email (opt-in) para mailing
+- `GET /api/crm/contacts` — listado CRM completo para vista MALI ONE CRM PAM
 
 ## Plantillas desde Meta
 

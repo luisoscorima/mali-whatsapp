@@ -19,6 +19,7 @@ import { AdminModule } from './admin/admin.module';
 import { AuditModule } from './audit/audit.module';
 import { QueuesModule } from './queues/queues.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { CrmModule } from './crm/crm.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AttributeDefinitionsModule,
     SegmentsModule,
     ContactsModule,
+    CrmModule,
     CampaignsModule,
     SettingsModule,
     ReportsModule,

@@ -10,7 +10,9 @@ export type ContactListItem = {
   name: string;
   last_name: string;
   phone: string;
+  email: string | null;
   opt_in: boolean;
+  opt_in_email: boolean;
   active: boolean;
   replaced_by_contact_id: number | null;
   replaced_at: string | null;
@@ -48,7 +50,9 @@ export type ContactDetail = {
   name: string;
   last_name: string;
   phone: string;
+  email: string | null;
   opt_in: boolean;
+  opt_in_email: boolean;
   active: boolean;
   replaced_by_contact_id: number | null;
   replaced_at: string | null;

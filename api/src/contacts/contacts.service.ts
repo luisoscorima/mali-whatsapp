@@ -44,7 +44,9 @@ type ContactRow = {
   name: string;
   last_name: string;
   phone: string;
+  email: string | null;
   opt_in: boolean;
+  opt_in_email: boolean;
   active: boolean;
   replaced_by_contact_id: number | null;
   replaced_at: Date | null;
@@ -524,7 +526,9 @@ export class ContactsService {
       name: string;
       last_name: string;
       phone: string;
+      email: string | null;
       opt_in: boolean;
+      opt_in_email: boolean;
       active: boolean;
       replaced_by_contact_id: number | null;
       replaced_at: Date | null;
@@ -540,7 +544,9 @@ export class ContactsService {
       name: row.name,
       last_name: row.last_name,
       phone: row.phone,
+      email: row.email,
       opt_in: row.opt_in,
+      opt_in_email: row.opt_in_email,
       active: row.active,
       replaced_by_contact_id: row.replaced_by_contact_id,
       replaced_at: row.replaced_at?.toISOString() ?? null,
@@ -589,6 +595,9 @@ export class ContactsService {
     }
 
     const { name, last_name, phone, segments } = validation.value;
+    const email = this.normalizeOptionalEmail(dto.email);
+    const opt_in_email =
+      dto.opt_in_email !== undefined ? Boolean(dto.opt_in_email) : true;
 
     try {
       const contactId = await this.prisma.$transaction(async (tx) => {
@@ -597,9 +606,11 @@ export class ContactsService {
             name,
             last_name,
             phone,
+            email,
             segment: firstSegmentForLegacyColumn(segments),
             area,
             opt_in: true,
+            opt_in_email,
             active: true,
           },
         });
@@ -619,6 +630,7 @@ export class ContactsService {
           contact_id: contactId,
           phone,
           phone_tail: phoneMetaTail(phone),
+          email,
           segments: validation.value.segments,
         },
       });
@@ -686,6 +698,14 @@ export class ContactsService {
     }
 
     const { name, last_name, phone, segments } = validation.value;
+    const email =
+      dto.email !== undefined
+        ? this.normalizeOptionalEmail(dto.email)
+        : current.email;
+    const opt_in_email =
+      dto.opt_in_email !== undefined
+        ? Boolean(dto.opt_in_email)
+        : current.opt_in_email;
     const phoneChanged = String(current.phone) !== String(phone);
 
     if (!phoneChanged) {
@@ -696,6 +716,8 @@ export class ContactsService {
             name,
             last_name,
             phone,
+            email,
+            opt_in_email,
             segment: firstSegmentForLegacyColumn(segments),
             active: true,
             replaced_by_contact_id: null,
@@ -715,6 +737,7 @@ export class ContactsService {
           contact_id: id,
           phone,
           phone_tail: phoneMetaTail(phone),
+          email,
           segments,
           phone_changed: false,
         },
@@ -728,6 +751,8 @@ export class ContactsService {
           name,
           last_name,
           phone,
+          email,
+          opt_in_email,
           segment: firstSegmentForLegacyColumn(segments),
           area,
           opt_in: current.opt_in,
@@ -929,7 +954,9 @@ export class ContactsService {
         c.name,
         c.last_name,
         c.phone,
+        c.email,
         c.opt_in,
+        c.opt_in_email,
         c.active,
         c.replaced_by_contact_id,
         c.replaced_at,
@@ -957,7 +984,9 @@ export class ContactsService {
         name: row.name,
         last_name: row.last_name,
         phone: row.phone,
+        email: row.email,
         opt_in: row.opt_in,
+        opt_in_email: row.opt_in_email,
         active: row.active,
         replaced_by_contact_id: row.replaced_by_contact_id,
         replaced_at: row.replaced_at?.toISOString() ?? null,
@@ -970,5 +999,16 @@ export class ContactsService {
       limit,
       pages,
     };
+  }
+
+  private normalizeOptionalEmail(value: unknown): string | null {
+    const email = String(value ?? '')
+      .trim()
+      .toLowerCase();
+    if (!email) return null;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new BadRequestException('Email inválido');
+    }
+    return email;
   }
 }
