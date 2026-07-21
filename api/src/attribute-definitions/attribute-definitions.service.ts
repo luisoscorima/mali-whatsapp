@@ -214,4 +214,63 @@ export class AttributeDefinitionsService {
       ),
     );
   }
+
+  /**
+   * Crea defs de área si no existen (idempotente). No falla si el slug ya está.
+   */
+  async ensureAreaDefinitions(
+    area: AuthUser['area'],
+    items: Array<{
+      slug: string;
+      label: string;
+      field_type?: string;
+      sort_order?: number;
+    }>,
+  ): Promise<{ created: number; skipped: number }> {
+    let created = 0;
+    let skipped = 0;
+    for (const item of items) {
+      const slug = normalizeAttrSlug(item.slug);
+      const label = String(item.label ?? slug).trim().slice(0, 120) || slug;
+      if (!ALLOWED_ATTR_KEY.test(slug)) {
+        skipped += 1;
+        continue;
+      }
+      const existing = await this.prisma.contact_attribute_definitions.findFirst({
+        where: { area, slug, segment_slug: null },
+        select: { id: true },
+      });
+      if (existing) {
+        skipped += 1;
+        continue;
+      }
+      try {
+        await this.prisma.contact_attribute_definitions.create({
+          data: {
+            area,
+            segment_slug: null,
+            slug,
+            label,
+            field_type: normalizeFieldType(item.field_type),
+            sort_order: Number(item.sort_order ?? 0) || 0,
+            required: false,
+            active: true,
+          },
+        });
+        created += 1;
+      } catch (error) {
+        if (
+          error &&
+          typeof error === 'object' &&
+          'code' in error &&
+          error.code === 'P2002'
+        ) {
+          skipped += 1;
+          continue;
+        }
+        throw error;
+      }
+    }
+    return { created, skipped };
+  }
 }

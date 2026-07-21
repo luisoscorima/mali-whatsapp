@@ -368,6 +368,22 @@ export class CrmService {
     return this.attributeDefinitions.create(area, dto);
   }
 
+  async ensureAttributeDefinitions(dto: {
+    area?: string;
+    definitions: Array<{
+      slug: string;
+      label: string;
+      field_type?: string;
+      sort_order?: number;
+    }>;
+  }) {
+    const area = this.normalizeArea(dto.area ?? 'pam') as BusinessArea;
+    return this.attributeDefinitions.ensureAreaDefinitions(
+      area,
+      dto.definitions ?? [],
+    );
+  }
+
   async updateAttributeDefinition(
     id: number,
     areaRaw: string | undefined,

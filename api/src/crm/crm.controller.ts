@@ -17,6 +17,7 @@ import {
 } from './dto/crm-attribute-definition.dto';
 import { CrmAudienceQueryDto } from './dto/crm-audience-query.dto';
 import { CrmContactsQueryDto } from './dto/crm-contacts-query.dto';
+import { CrmEnsureAttributeDefinitionsDto } from './dto/crm-ensure-attribute-definitions.dto';
 import { CrmPatchContactDto } from './dto/crm-patch-contact.dto';
 import { CrmSyncContactDto } from './dto/crm-sync-contact.dto';
 
@@ -73,6 +74,14 @@ export class CrmController {
     @Body() body: CrmCreateAttributeDefinitionDto,
   ) {
     const data = await this.crm.createAttributeDefinition(body);
+    return { ok: true, data };
+  }
+
+  @Post('attribute-definitions/ensure')
+  async ensureAttributeDefinitions(
+    @Body() body: CrmEnsureAttributeDefinitionsDto,
+  ) {
+    const data = await this.crm.ensureAttributeDefinitions(body);
     return { ok: true, data };
   }
 
