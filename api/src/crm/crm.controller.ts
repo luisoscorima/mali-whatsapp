@@ -62,6 +62,12 @@ export class CrmController {
     return { ok: true, data };
   }
 
+  @Get('segments')
+  async listSegments(@Query('area') area?: string) {
+    const data = await this.crm.listSegments(area);
+    return { ok: true, data };
+  }
+
   @Post('attribute-definitions')
   async createAttributeDefinition(
     @Body() body: CrmCreateAttributeDefinitionDto,

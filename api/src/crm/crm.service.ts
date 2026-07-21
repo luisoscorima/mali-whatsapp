@@ -354,6 +354,15 @@ export class CrmService {
     return this.attributeDefinitions.listAll(area);
   }
 
+  async listSegments(areaRaw?: string) {
+    const area = this.normalizeArea(areaRaw ?? 'pam');
+    return this.prisma.segment_definitions.findMany({
+      where: { area, active: true },
+      orderBy: { sort_order: 'asc' },
+      select: { slug: true, label: true, color_key: true },
+    });
+  }
+
   async createAttributeDefinition(dto: CrmCreateAttributeDefinitionDto) {
     const area = this.normalizeArea(dto.area ?? 'pam') as BusinessArea;
     return this.attributeDefinitions.create(area, dto);
