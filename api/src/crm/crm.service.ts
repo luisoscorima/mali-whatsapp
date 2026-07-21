@@ -283,29 +283,59 @@ export class CrmService {
         some: { area, segment_slug: query.segment.trim() },
       };
     }
+
+    const andFilters: Prisma.contactsWhereInput[] = [];
+
     if (query.attr_key) {
-      where.contact_attributes = {
-        some: {
-          attr_key: query.attr_key.trim(),
-          ...(query.attr_value !== undefined
-            ? { attr_value: query.attr_value }
-            : {}),
+      const attrKey = query.attr_key.trim();
+      const attrValue = String(query.attr_value ?? '').trim();
+      andFilters.push({
+        contact_attributes: {
+          some: {
+            attr_key: attrKey,
+            ...(attrValue
+              ? {
+                  attr_value: {
+                    contains: attrValue,
+                    mode: 'insensitive',
+                  },
+                }
+              : {}),
+          },
         },
-      };
+      });
     }
+
     const q = String(query.q ?? '').trim();
     if (q) {
-      where.AND = [
-        {
-          OR: [
-            { name: { contains: q, mode: 'insensitive' } },
-            { last_name: { contains: q, mode: 'insensitive' } },
-            { phone: { contains: q } },
-            { email: { contains: q, mode: 'insensitive' } },
-            { dni: { contains: q, mode: 'insensitive' } },
-          ],
-        },
-      ];
+      andFilters.push({
+        OR: [
+          { name: { contains: q, mode: 'insensitive' } },
+          { last_name: { contains: q, mode: 'insensitive' } },
+          { phone: { contains: q } },
+          { email: { contains: q, mode: 'insensitive' } },
+          { dni: { contains: q, mode: 'insensitive' } },
+          {
+            contact_attributes: {
+              some: {
+                attr_value: { contains: q, mode: 'insensitive' },
+              },
+            },
+          },
+          {
+            contact_segments: {
+              some: {
+                area,
+                segment_slug: { contains: q, mode: 'insensitive' },
+              },
+            },
+          },
+        ],
+      });
+    }
+
+    if (andFilters.length > 0) {
+      where.AND = andFilters;
     }
 
     const [total, rows] = await this.prisma.$transaction([
