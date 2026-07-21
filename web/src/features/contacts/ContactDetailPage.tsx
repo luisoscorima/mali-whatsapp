@@ -12,6 +12,9 @@ type ContactDetail = {
   name: string
   last_name: string
   phone: string
+  email: string | null
+  dni: string | null
+  opt_in_email: boolean
   replaced_by_contact_id: number | null
   replacement_reason: string | null
   segment_slugs: string[]
@@ -90,6 +93,9 @@ export function ContactDetailPage() {
     name: string
     last_name: string
     phone: string
+    email: string
+    opt_in_email: boolean
+    dni: string
     segments: string[]
     attributes: Record<string, string>
   }) {
@@ -99,6 +105,9 @@ export function ContactDetailPage() {
       name: values.name,
       last_name: values.last_name,
       phone: values.phone,
+      email: values.email || null,
+      opt_in_email: values.opt_in_email,
+      dni: values.dni || null,
       segments: values.segments,
       attributes: values.attributes,
     })
@@ -196,6 +205,9 @@ export function ContactDetailPage() {
             phone: contact.phone,
             phone_prefix: phoneParts.prefix,
             phone_local: phoneParts.local,
+            email: contact.email ?? '',
+            opt_in_email: contact.opt_in_email ?? true,
+            dni: contact.dni ?? contact.attributes.dni ?? '',
             segments: contact.segment_slugs,
             attributes: contact.attributes,
           }}

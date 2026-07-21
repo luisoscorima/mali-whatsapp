@@ -37,56 +37,50 @@ Upsert de contacto desde producto (`PamRegistration`).
   "last_name": "Pérez",
   "phone": "51999888777",
   "email": "ana@example.com",
+  "dni": "12345678",
   "opt_in": true,
   "opt_in_email": true,
   "external_id": "clx...",
   "attributes": {
-    "dni": "12345678",
     "plan": "amigo",
     "frecuencia": "yearly",
     "mp_status": "approved",
-    "expiry": "2027-07-21"
+    "expiry": "2027-07-21",
+    "payment_id": "clx..."
   }
 }
 ```
 
 - Teléfono: E.164 **sin** `+`.
 - Match: `(area, phone)`.
+- Columnas nativas: `name`, `last_name`, `email`, `dni` (opcional).
 - Atributos se upsertan en `contact_attributes` (incl. `mali_one_id` si hay `external_id`).
 
-Respuesta:
+### `PATCH /api/crm/contacts/:id?area=pam`
 
-```json
-{
-  "ok": true,
-  "data": {
-    "contact_id": 42,
-    "area": "pam",
-    "phone": "51999888777",
-    "email": "ana@example.com",
-    "created": false
-  }
-}
-```
+Edición parcial de persona + attrs + `segment_slugs` (bidireccional desde MALI ONE).
 
 ### `GET /api/crm/contacts`
 
-Listado CRM (todos los contactos activos del área, no solo audiencia email).
+Listado CRM (contactos activos del área). Incluye `dni`, `email`, `segment_slugs`, `attributes`.
 
 Query: `area`, `q`, `segment`, `has_email`, `opt_in_email`, `attr_key`, `attr_value`, `page`, `limit`.
 
-Query:
+### `GET /api/crm/audience`
 
-| Param | Default | Descripción |
-|-------|---------|-------------|
-| `area` | `pam` | Área CRM |
-| `segment` | — | Slug de segmento |
-| `opt_in_email` | `true` | Solo opt-in email |
-| `attr_key` / `attr_value` | — | Filtro por atributo |
-| `page` | `1` | |
-| `limit` | `500` | máx. 2000 |
+Audiencia email (opt-in) para mailing SES.
 
-Solo contactos `active`, con email, no reemplazados.
+### `GET /api/crm/attribute-definitions?area=pam`
+
+Catálogo (activo e inactivo) para columnas dinámicas en CRM PAM.
+
+### `POST /api/crm/attribute-definitions`
+
+Crear definición (`scope: area|segment`, `slug`, `label`, …).
+
+### `PATCH /api/crm/attribute-definitions/:id?area=pam`
+
+Actualizar label / tipo / active.
 
 ## Ownership (PAM)
 
@@ -98,4 +92,4 @@ Solo contactos `active`, con email, no reemplazados.
 | Mailing SES + boletines | MALI ONE |
 | Campañas / inbox WhatsApp | WhatsApp |
 
-Sync: **ONE → WhatsApp** en alta/cambio de `PamRegistration` (create, admin PATCH, webhook Mercado Pago).
+Sync: **ONE → WhatsApp** en alta/cambio de `PamRegistration` y al vincular históricos. Edición de persona/attrs también desde ONE vía `PATCH`.

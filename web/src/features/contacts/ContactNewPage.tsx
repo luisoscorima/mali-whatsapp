@@ -78,6 +78,9 @@ export function ContactNewPage() {
     last_name: string
     phone_prefix: string
     phone_local: string
+    email: string
+    opt_in_email: boolean
+    dni: string
     segments: string[]
     attributes: Record<string, string>
   }) {
@@ -87,6 +90,9 @@ export function ContactNewPage() {
       last_name: values.last_name,
       phone_prefix: values.phone_prefix,
       phone_local: values.phone_local,
+      email: values.email || null,
+      opt_in_email: values.opt_in_email,
+      dni: values.dni || null,
       segments: values.segments,
       attributes: values.attributes,
     })
@@ -134,6 +140,9 @@ export function ContactNewPage() {
             phone: '',
             phone_prefix: phoneParts.prefix,
             phone_local: phoneParts.local,
+            email: '',
+            opt_in_email: true,
+            dni: '',
             segments: [],
             attributes: {},
           }}

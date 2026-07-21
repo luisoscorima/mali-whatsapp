@@ -43,6 +43,11 @@ export class UpsertContactDto {
   @IsBoolean()
   opt_in_email?: boolean;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  dni?: string | null;
+
   @IsArray()
   @IsString({ each: true })
   segments!: string[];

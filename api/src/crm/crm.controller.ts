@@ -1,8 +1,23 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { CrmServiceTokenGuard } from './crm-service-token.guard';
 import { CrmService } from './crm.service';
+import {
+  CrmCreateAttributeDefinitionDto,
+  CrmUpdateAttributeDefinitionDto,
+} from './dto/crm-attribute-definition.dto';
 import { CrmAudienceQueryDto } from './dto/crm-audience-query.dto';
 import { CrmContactsQueryDto } from './dto/crm-contacts-query.dto';
+import { CrmPatchContactDto } from './dto/crm-patch-contact.dto';
 import { CrmSyncContactDto } from './dto/crm-sync-contact.dto';
 
 @Controller('crm')
@@ -28,6 +43,40 @@ export class CrmController {
   @Get('contacts')
   async contacts(@Query() query: CrmContactsQueryDto) {
     const data = await this.crm.listContacts(query);
+    return { ok: true, data };
+  }
+
+  @Patch('contacts/:id')
+  async patchContact(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('area') area: string | undefined,
+    @Body() body: CrmPatchContactDto,
+  ) {
+    const data = await this.crm.patchContact(id, area, body);
+    return { ok: true, data };
+  }
+
+  @Get('attribute-definitions')
+  async listAttributeDefinitions(@Query('area') area?: string) {
+    const data = await this.crm.listAttributeDefinitions(area);
+    return { ok: true, data };
+  }
+
+  @Post('attribute-definitions')
+  async createAttributeDefinition(
+    @Body() body: CrmCreateAttributeDefinitionDto,
+  ) {
+    const data = await this.crm.createAttributeDefinition(body);
+    return { ok: true, data };
+  }
+
+  @Patch('attribute-definitions/:id')
+  async updateAttributeDefinition(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('area') area: string | undefined,
+    @Body() body: CrmUpdateAttributeDefinitionDto,
+  ) {
+    const data = await this.crm.updateAttributeDefinition(id, area, body);
     return { ok: true, data };
   }
 }

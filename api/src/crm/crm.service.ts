@@ -2,15 +2,23 @@ import {
   BadRequestException,
   Injectable,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { BUSINESS_AREAS } from '../config/areas';
+import { AttributeDefinitionsService } from '../attribute-definitions/attribute-definitions.service';
+import { BUSINESS_AREAS, type BusinessArea } from '../config/areas';
 import {
   E164_NO_PLUS_REGEX,
+  firstSegmentForLegacyColumn,
   normalizePhone,
 } from '../contacts/contacts-validation.utils';
 import { PrismaService } from '../prisma/prisma.service';
 import { CrmAudienceQueryDto } from './dto/crm-audience-query.dto';
+import type {
+  CrmCreateAttributeDefinitionDto,
+  CrmUpdateAttributeDefinitionDto,
+} from './dto/crm-attribute-definition.dto';
+import type { CrmPatchContactDto } from './dto/crm-patch-contact.dto';
 import { CrmSyncContactDto } from './dto/crm-sync-contact.dto';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -39,6 +47,7 @@ export type CrmContactRow = {
   last_name: string;
   phone: string;
   email: string | null;
+  dni: string | null;
   opt_in: boolean;
   opt_in_email: boolean;
   active: boolean;
@@ -69,7 +78,10 @@ export type CrmSyncResult = {
 export class CrmService {
   private readonly logger = new Logger(CrmService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly attributeDefinitions: AttributeDefinitionsService,
+  ) {}
 
   async syncFromProduct(dto: CrmSyncContactDto): Promise<CrmSyncResult> {
     const area = this.normalizeArea(dto.area ?? 'pam');
@@ -86,11 +98,15 @@ export class CrmService {
     }
     const last_name = String(dto.last_name ?? '').trim();
     const email = this.normalizeEmail(dto.email);
+    const attributes = this.normalizeAttributes(dto.attributes);
+    const dni = this.normalizeOptionalDni(dto.dni ?? attributes.dni);
     const opt_in = dto.opt_in ?? true;
     const opt_in_email = dto.opt_in_email ?? Boolean(email);
-    const attributes = this.normalizeAttributes(dto.attributes);
     if (dto.external_id) {
       attributes.mali_one_id = String(dto.external_id).trim();
+    }
+    if (dni) {
+      attributes.dni = dni;
     }
 
     const existing = await this.prisma.contacts.findUnique({
@@ -105,6 +121,7 @@ export class CrmService {
               name,
               last_name,
               email: email ?? existing.email,
+              dni: dni ?? existing.dni,
               opt_in,
               opt_in_email,
               active: true,
@@ -120,6 +137,7 @@ export class CrmService {
               last_name,
               phone,
               email,
+              dni,
               area,
               opt_in,
               opt_in_email,
@@ -284,6 +302,7 @@ export class CrmService {
             { last_name: { contains: q, mode: 'insensitive' } },
             { phone: { contains: q } },
             { email: { contains: q, mode: 'insensitive' } },
+            { dni: { contains: q, mode: 'insensitive' } },
           ],
         },
       ];
@@ -314,6 +333,7 @@ export class CrmService {
       last_name: row.last_name,
       phone: row.phone,
       email: this.softEmail(row.email),
+      dni: row.dni?.trim() || null,
       opt_in: row.opt_in,
       opt_in_email: row.opt_in_email,
       active: row.active,
@@ -327,6 +347,134 @@ export class CrmService {
 
     const pages = total > 0 ? Math.ceil(total / limit) : 0;
     return { area, items, total, page, limit, pages };
+  }
+
+  async listAttributeDefinitions(areaRaw?: string) {
+    const area = this.normalizeArea(areaRaw ?? 'pam') as BusinessArea;
+    return this.attributeDefinitions.listAll(area);
+  }
+
+  async createAttributeDefinition(dto: CrmCreateAttributeDefinitionDto) {
+    const area = this.normalizeArea(dto.area ?? 'pam') as BusinessArea;
+    return this.attributeDefinitions.create(area, dto);
+  }
+
+  async updateAttributeDefinition(
+    id: number,
+    areaRaw: string | undefined,
+    dto: CrmUpdateAttributeDefinitionDto,
+  ) {
+    const area = this.normalizeArea(areaRaw ?? 'pam') as BusinessArea;
+    return this.attributeDefinitions.update(area, id, dto);
+  }
+
+  async patchContact(
+    id: number,
+    areaRaw: string | undefined,
+    dto: CrmPatchContactDto,
+  ): Promise<CrmContactRow> {
+    const area = this.normalizeArea(areaRaw ?? 'pam');
+    const contact = await this.prisma.contacts.findFirst({
+      where: { id, area },
+    });
+    if (!contact) {
+      throw new NotFoundException('Contacto no encontrado');
+    }
+
+    const attributes = this.normalizeAttributes(dto.attributes);
+    const dni =
+      dto.dni !== undefined
+        ? this.normalizeOptionalDni(dto.dni)
+        : undefined;
+    if (dni) attributes.dni = dni;
+    if (dto.dni !== undefined && !dni) attributes.dni = '';
+
+    const email =
+      dto.email !== undefined ? this.normalizeEmail(dto.email) : undefined;
+
+    let segmentSlugs = dto.segment_slugs;
+    if (segmentSlugs) {
+      const valid = await this.prisma.segment_definitions.findMany({
+        where: { area, slug: { in: segmentSlugs } },
+        select: { slug: true },
+      });
+      const validSet = new Set(valid.map((s) => s.slug));
+      segmentSlugs = segmentSlugs.filter((s) => validSet.has(s));
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.contacts.update({
+        where: { id },
+        data: {
+          ...(dto.name !== undefined ? { name: String(dto.name).trim() } : {}),
+          ...(dto.last_name !== undefined
+            ? { last_name: String(dto.last_name).trim() }
+            : {}),
+          ...(email !== undefined ? { email } : {}),
+          ...(dni !== undefined ? { dni } : {}),
+          ...(dto.opt_in !== undefined ? { opt_in: dto.opt_in } : {}),
+          ...(dto.opt_in_email !== undefined
+            ? { opt_in_email: dto.opt_in_email }
+            : {}),
+          ...(segmentSlugs
+            ? { segment: firstSegmentForLegacyColumn(segmentSlugs) }
+            : {}),
+          updated_at: new Date(),
+        },
+      });
+
+      if (segmentSlugs) {
+        await tx.contact_segments.deleteMany({ where: { contact_id: id } });
+        if (segmentSlugs.length > 0) {
+          await tx.contact_segments.createMany({
+            data: segmentSlugs.map((segment_slug) => ({
+              contact_id: id,
+              area,
+              segment_slug,
+            })),
+          });
+        }
+      }
+
+      for (const [attr_key, attr_value] of Object.entries(attributes)) {
+        await tx.contact_attributes.upsert({
+          where: { contact_id_attr_key: { contact_id: id, attr_key } },
+          create: { contact_id: id, attr_key, attr_value },
+          update: { attr_value, updated_at: new Date() },
+        });
+      }
+    });
+
+    const updated = await this.prisma.contacts.findFirstOrThrow({
+      where: { id },
+      include: {
+        contact_attributes: {
+          select: { attr_key: true, attr_value: true },
+        },
+        contact_segments: {
+          select: { segment_slug: true },
+          orderBy: { segment_slug: 'asc' },
+        },
+      },
+    });
+
+    return {
+      contact_id: updated.id,
+      name: updated.name,
+      last_name: updated.last_name,
+      phone: updated.phone,
+      email: this.softEmail(updated.email),
+      dni: updated.dni?.trim() || null,
+      opt_in: updated.opt_in,
+      opt_in_email: updated.opt_in_email,
+      active: updated.active,
+      segment_slugs: updated.contact_segments.map((s) => s.segment_slug),
+      attributes: Object.fromEntries(
+        updated.contact_attributes.map((a) => [a.attr_key, a.attr_value]),
+      ),
+      created_at: updated.created_at.toISOString(),
+      updated_at: updated.updated_at.toISOString(),
+    };
   }
 
   private softEmail(value: unknown): string | null {
@@ -356,6 +504,14 @@ export class CrmService {
       throw new BadRequestException(`Email inválido: ${value}`);
     }
     return email;
+  }
+
+  private normalizeOptionalDni(value: unknown): string | null {
+    const dni = String(value ?? '')
+      .trim()
+      .replace(/\s+/g, '');
+    if (!dni) return null;
+    return dni.slice(0, 32);
   }
 
   private normalizeAttributes(

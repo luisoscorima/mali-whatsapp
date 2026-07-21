@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsBoolean,
   IsEmail,
   IsObject,
@@ -9,32 +10,23 @@ import {
   ValidateIf,
 } from 'class-validator';
 
-export class CrmSyncContactDto {
+export class CrmPatchContactDto {
   @IsOptional()
-  @IsString()
-  @MaxLength(20)
-  area?: string;
-
   @IsString()
   @MinLength(1)
   @MaxLength(150)
-  name!: string;
+  name?: string;
 
   @IsOptional()
   @IsString()
   @MaxLength(150)
   last_name?: string;
 
-  @IsString()
-  @MinLength(8)
-  @MaxLength(20)
-  phone!: string;
-
   @IsOptional()
   @ValidateIf((_, v) => v != null && String(v).trim() !== '')
   @IsEmail()
   @MaxLength(255)
-  email?: string;
+  email?: string | null;
 
   @IsOptional()
   @IsBoolean()
@@ -50,12 +42,11 @@ export class CrmSyncContactDto {
   dni?: string | null;
 
   @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  segment_slugs?: string[];
+
+  @IsOptional()
   @IsObject()
   attributes?: Record<string, string>;
-
-  /** External id from product system (e.g. PamRegistration.id) */
-  @IsOptional()
-  @IsString()
-  @MaxLength(64)
-  external_id?: string;
 }

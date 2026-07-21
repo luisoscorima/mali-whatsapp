@@ -33,12 +33,19 @@ const KNOWN_COLUMNS = new Set([
   'country_code',
   'country',
   'pais',
+  'email',
+  'correo',
+  'mail',
+  'dni',
+  'documento',
 ]);
 
 export type ImportContactRow = {
   name: string;
   last_name: string;
   phone: string;
+  email?: string | null;
+  dni?: string | null;
   segments: string[];
   attributes: Record<string, string>;
 };
@@ -63,6 +70,8 @@ type PickedRecord = {
   phone?: string;
   segment?: string;
   prefix?: string;
+  email?: string;
+  dni?: string;
   attributes: Record<string, string>;
 };
 
@@ -96,6 +105,8 @@ function pickContactFieldsFromRecord(
     r.movil;
   const segment = r.segment || r.segmento;
   const prefix = r.prefix || r.prefijo || r.country_code || r.country || r.pais;
+  const email = r.email || r.correo || r.mail || undefined;
+  const dni = r.dni || r.documento || undefined;
 
   const attributes: Record<string, string> = {};
   for (const [key, value] of Object.entries(r)) {
@@ -104,7 +115,17 @@ function pickContactFieldsFromRecord(
     }
   }
 
-  return { name, last_name, full_name, phone, segment, prefix, attributes };
+  return {
+    name,
+    last_name,
+    full_name,
+    phone,
+    segment,
+    prefix,
+    email,
+    dni,
+    attributes,
+  };
 }
 
 function parseSegmentListFromImportCell(cell: unknown): string[] {
@@ -207,6 +228,18 @@ function normalizeImportRecord(
       last_name: validated.value.last_name,
       phone: validated.value.phone,
       segments: validated.value.segments,
+      email: (() => {
+        const raw = String(picked.email ?? '')
+          .trim()
+          .toLowerCase();
+        return raw || null;
+      })(),
+      dni: (() => {
+        const raw = String(picked.dni ?? '')
+          .trim()
+          .replace(/\s+/g, '');
+        return raw ? raw.slice(0, 32) : null;
+      })(),
     },
   };
 }

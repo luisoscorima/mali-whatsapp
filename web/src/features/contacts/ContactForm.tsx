@@ -19,6 +19,9 @@ type ContactFormValues = {
   phone: string
   phone_prefix: string
   phone_local: string
+  email: string
+  opt_in_email: boolean
+  dni: string
   segments: string[]
   attributes: Record<string, string>
 }
@@ -32,6 +35,8 @@ type ContactFormProps = {
   saving?: boolean
   onSubmit: (values: ContactFormValues) => void
 }
+
+const NATIVE_ATTR_SLUGS = new Set(['dni', 'email', 'correo'])
 
 export function ContactForm({
   mode,
@@ -47,6 +52,9 @@ export function ContactForm({
   const [phone, setPhone] = useState(initial.phone)
   const [phonePrefix, setPhonePrefix] = useState(initial.phone_prefix)
   const [phoneLocal, setPhoneLocal] = useState(initial.phone_local)
+  const [email, setEmail] = useState(initial.email)
+  const [optInEmail, setOptInEmail] = useState(initial.opt_in_email)
+  const [dni, setDni] = useState(initial.dni)
   const [selectedSegments, setSelectedSegments] = useState<string[]>(
     initial.segments,
   )
@@ -56,7 +64,11 @@ export function ContactForm({
   const [segmentsError, setSegmentsError] = useState('')
 
   const applicableDefs = useMemo(
-    () => getApplicableAttributeDefinitions(attributeDefinitions, selectedSegments),
+    () =>
+      getApplicableAttributeDefinitions(
+        attributeDefinitions,
+        selectedSegments,
+      ).filter((d) => !NATIVE_ATTR_SLUGS.has(d.slug)),
     [attributeDefinitions, selectedSegments],
   )
 
@@ -99,6 +111,9 @@ export function ContactForm({
       phone,
       phone_prefix: phonePrefix,
       phone_local: phoneLocal,
+      email,
+      opt_in_email: optInEmail,
+      dni,
       segments: selectedSegments,
       attributes,
     })
@@ -173,6 +188,40 @@ export function ContactForm({
           />
         </label>
       )}
+
+      <label className="block text-sm">
+        <span className="text-muted">Email (opcional)</span>
+        <input
+          type="email"
+          maxLength={255}
+          value={email}
+          disabled={disabled}
+          onChange={(e) => setEmail(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
+        />
+      </label>
+
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={optInEmail}
+          disabled={disabled}
+          onChange={(e) => setOptInEmail(e.target.checked)}
+        />
+        <span className="text-muted">Opt-in email</span>
+      </label>
+
+      <label className="block text-sm">
+        <span className="text-muted">DNI (opcional)</span>
+        <input
+          type="text"
+          maxLength={32}
+          value={dni}
+          disabled={disabled}
+          onChange={(e) => setDni(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2 font-mono"
+        />
+      </label>
 
       <fieldset className="space-y-2 text-sm" disabled={disabled}>
         <legend className="font-medium">Segmentos</legend>

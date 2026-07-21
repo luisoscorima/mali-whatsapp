@@ -45,6 +45,7 @@ type ContactRow = {
   last_name: string;
   phone: string;
   email: string | null;
+  dni: string | null;
   opt_in: boolean;
   opt_in_email: boolean;
   active: boolean;
@@ -204,6 +205,8 @@ export class ContactsService {
           COALESCE(c.name, '') ILIKE ${searchPat} ESCAPE '!'
           OR COALESCE(c.last_name, '') ILIKE ${searchPat} ESCAPE '!'
           OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
+          OR COALESCE(c.email, '') ILIKE ${searchPat} ESCAPE '!'
+          OR COALESCE(c.dni, '') ILIKE ${searchPat} ESCAPE '!'
           OR regexp_replace(COALESCE(c.phone, ''), '\\D', '', 'g') LIKE ${digitsPat}
         )`);
       } else {
@@ -211,6 +214,8 @@ export class ContactsService {
           COALESCE(c.name, '') ILIKE ${searchPat} ESCAPE '!'
           OR COALESCE(c.last_name, '') ILIKE ${searchPat} ESCAPE '!'
           OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
+          OR COALESCE(c.email, '') ILIKE ${searchPat} ESCAPE '!'
+          OR COALESCE(c.dni, '') ILIKE ${searchPat} ESCAPE '!'
         )`);
       }
     }
@@ -527,6 +532,7 @@ export class ContactsService {
       last_name: string;
       phone: string;
       email: string | null;
+      dni: string | null;
       opt_in: boolean;
       opt_in_email: boolean;
       active: boolean;
@@ -545,6 +551,7 @@ export class ContactsService {
       last_name: row.last_name,
       phone: row.phone,
       email: row.email,
+      dni: row.dni,
       opt_in: row.opt_in,
       opt_in_email: row.opt_in_email,
       active: row.active,
@@ -557,7 +564,7 @@ export class ContactsService {
       attribute_definitions: getApplicableAttributeDefinitions(
         allDefs,
         segmentSlugs,
-      ),
+      ).filter((d) => d.slug !== 'dni'),
     };
   }
 
@@ -596,6 +603,7 @@ export class ContactsService {
 
     const { name, last_name, phone, segments } = validation.value;
     const email = this.normalizeOptionalEmail(dto.email);
+    const dni = this.normalizeOptionalDni(dto.dni);
     const opt_in_email =
       dto.opt_in_email !== undefined ? Boolean(dto.opt_in_email) : true;
 
@@ -607,6 +615,7 @@ export class ContactsService {
             last_name,
             phone,
             email,
+            dni,
             segment: firstSegmentForLegacyColumn(segments),
             area,
             opt_in: true,
@@ -616,6 +625,9 @@ export class ContactsService {
         });
         await this.replaceContactSegments(tx, contact.id, area, segments);
         await this.upsertContactAttributes(tx, contact.id, attrs);
+        if (dni) {
+          await this.upsertContactAttributes(tx, contact.id, { dni });
+        }
         await tx.conversations.updateMany({
           where: { area, phone },
           data: { contact_id: contact.id, updated_at: new Date() },
@@ -631,6 +643,7 @@ export class ContactsService {
           phone,
           phone_tail: phoneMetaTail(phone),
           email,
+          dni,
           segments: validation.value.segments,
         },
       });
@@ -702,6 +715,10 @@ export class ContactsService {
       dto.email !== undefined
         ? this.normalizeOptionalEmail(dto.email)
         : current.email;
+    const dni =
+      dto.dni !== undefined
+        ? this.normalizeOptionalDni(dto.dni)
+        : current.dni;
     const opt_in_email =
       dto.opt_in_email !== undefined
         ? Boolean(dto.opt_in_email)
@@ -717,6 +734,7 @@ export class ContactsService {
             last_name,
             phone,
             email,
+            dni,
             opt_in_email,
             segment: firstSegmentForLegacyColumn(segments),
             active: true,
@@ -728,6 +746,11 @@ export class ContactsService {
         });
         await this.replaceContactSegments(tx, id, area, segments);
         await this.upsertContactAttributes(tx, id, attrs);
+        if (dto.dni !== undefined) {
+          await this.upsertContactAttributes(tx, id, {
+            dni: dni ?? '',
+          });
+        }
       });
       await this.auditLog.write({
         event_type: AuditEvent.CONTACT_UPDATED,
@@ -738,6 +761,7 @@ export class ContactsService {
           phone,
           phone_tail: phoneMetaTail(phone),
           email,
+          dni,
           segments,
           phone_changed: false,
         },
@@ -752,6 +776,7 @@ export class ContactsService {
           last_name,
           phone,
           email,
+          dni,
           opt_in_email,
           segment: firstSegmentForLegacyColumn(segments),
           area,
@@ -761,6 +786,9 @@ export class ContactsService {
       });
       await this.replaceContactSegments(tx, created.id, area, segments);
       await this.upsertContactAttributes(tx, created.id, attrs);
+      if (dni) {
+        await this.upsertContactAttributes(tx, created.id, { dni });
+      }
       await tx.contacts.update({
         where: { id },
         data: {
@@ -905,6 +933,8 @@ export class ContactsService {
           name: row.name,
           last_name: row.last_name,
           phone: row.phone,
+          email: row.email ?? null,
+          dni: row.dni ?? null,
           segment: firstSegmentForLegacyColumn(row.segments),
           area,
           opt_in: true,
@@ -913,6 +943,8 @@ export class ContactsService {
         update: {
           name: row.name,
           last_name: row.last_name,
+          ...(row.email !== undefined ? { email: row.email } : {}),
+          ...(row.dni !== undefined ? { dni: row.dni } : {}),
           segment: firstSegmentForLegacyColumn(row.segments),
           active: true,
           replaced_by_contact_id: null,
@@ -925,6 +957,9 @@ export class ContactsService {
       await this.replaceContactSegments(tx, contact.id, area, row.segments);
       if (Object.keys(attrs).length > 0) {
         await this.upsertContactAttributes(tx, contact.id, attrs);
+      }
+      if (row.dni) {
+        await this.upsertContactAttributes(tx, contact.id, { dni: row.dni });
       }
       await tx.conversations.updateMany({
         where: { area, phone: row.phone },
@@ -955,6 +990,7 @@ export class ContactsService {
         c.last_name,
         c.phone,
         c.email,
+        c.dni,
         c.opt_in,
         c.opt_in_email,
         c.active,
@@ -985,6 +1021,7 @@ export class ContactsService {
         last_name: row.last_name,
         phone: row.phone,
         email: row.email,
+        dni: row.dni,
         opt_in: row.opt_in,
         opt_in_email: row.opt_in_email,
         active: row.active,
@@ -1010,5 +1047,13 @@ export class ContactsService {
       throw new BadRequestException('Email inválido');
     }
     return email;
+  }
+
+  private normalizeOptionalDni(value: unknown): string | null {
+    const dni = String(value ?? '')
+      .trim()
+      .replace(/\s+/g, '');
+    if (!dni) return null;
+    return dni.slice(0, 32);
   }
 }
