@@ -20,7 +20,6 @@ type ContactFormValues = {
   phone_prefix: string
   phone_local: string
   email: string
-  opt_in_email: boolean
   dni: string
   segments: string[]
   attributes: Record<string, string>
@@ -53,7 +52,6 @@ export function ContactForm({
   const [phonePrefix, setPhonePrefix] = useState(initial.phone_prefix)
   const [phoneLocal, setPhoneLocal] = useState(initial.phone_local)
   const [email, setEmail] = useState(initial.email)
-  const [optInEmail, setOptInEmail] = useState(initial.opt_in_email)
   const [dni, setDni] = useState(initial.dni)
   const [selectedSegments, setSelectedSegments] = useState<string[]>(
     initial.segments,
@@ -112,7 +110,6 @@ export function ContactForm({
       phone_prefix: phonePrefix,
       phone_local: phoneLocal,
       email,
-      opt_in_email: optInEmail,
       dni,
       segments: selectedSegments,
       attributes,
@@ -199,16 +196,6 @@ export function ContactForm({
           onChange={(e) => setEmail(e.target.value)}
           className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
         />
-      </label>
-
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={optInEmail}
-          disabled={disabled}
-          onChange={(e) => setOptInEmail(e.target.checked)}
-        />
-        <span className="text-muted">Opt-in email</span>
       </label>
 
       <label className="block text-sm">

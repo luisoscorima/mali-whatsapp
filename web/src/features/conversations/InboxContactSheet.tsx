@@ -32,7 +32,6 @@ type ContactDetail = {
   phone: string
   email: string | null
   dni: string | null
-  opt_in_email: boolean
   replaced_by_contact_id: number | null
   replacement_reason: string | null
   segment_slugs: string[]
@@ -159,7 +158,6 @@ export function InboxContactSheet({
     phone_prefix: string
     phone_local: string
     email: string
-    opt_in_email: boolean
     dni: string
     segments: string[]
     attributes: Record<string, string>
@@ -172,7 +170,6 @@ export function InboxContactSheet({
         phone_prefix: values.phone_prefix,
         phone_local: values.phone_local,
         email: values.email || null,
-        opt_in_email: values.opt_in_email,
         dni: values.dni || null,
         segments: values.segments,
         attributes: values.attributes,
@@ -197,7 +194,6 @@ export function InboxContactSheet({
       last_name: values.last_name,
       phone: values.phone,
       email: values.email || null,
-      opt_in_email: values.opt_in_email,
       dni: values.dni || null,
       segments: values.segments,
       attributes: values.attributes,
@@ -267,7 +263,6 @@ export function InboxContactSheet({
                         phone_prefix: splitPhoneForForm(contact.phone).prefix,
                         phone_local: splitPhoneForForm(contact.phone).local,
                         email: contact.email ?? '',
-                        opt_in_email: contact.opt_in_email ?? true,
                         dni: contact.dni ?? contact.attributes.dni ?? '',
                         segments: contact.segment_slugs,
                         attributes: contact.attributes,
@@ -279,7 +274,6 @@ export function InboxContactSheet({
                         phone_prefix: phoneParts.prefix,
                         phone_local: phoneParts.local,
                         email: '',
-                        opt_in_email: true,
                         dni: '',
                         segments: [],
                         attributes: {},
