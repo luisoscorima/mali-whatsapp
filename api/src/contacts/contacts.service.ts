@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, ConflictException, NotFoundException }
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/auth.types';
+import { parseStoredOptions } from '../attribute-definitions/attribute-definitions.types';
 import {
   filterAttributesForDefinitions,
   getApplicableAttributeDefinitions,
@@ -84,6 +85,7 @@ export class ContactsService {
           slug: true,
           label: true,
           field_type: true,
+          options: true,
           sort_order: true,
           required: true,
         },
@@ -107,7 +109,10 @@ export class ContactsService {
     return {
       segments,
       attribute_filters,
-      attribute_definitions: attributeRows,
+      attribute_definitions: attributeRows.map((row) => ({
+        ...row,
+        options: parseStoredOptions(row.options),
+      })),
     };
   }
 
@@ -120,7 +125,7 @@ export class ContactsService {
   }
 
   private async loadAttributeDefinitions(area: string) {
-    return this.prisma.contact_attribute_definitions.findMany({
+    const rows = await this.prisma.contact_attribute_definitions.findMany({
       where: { area, active: true },
       orderBy: [
         { segment_slug: { sort: 'asc', nulls: 'first' } },
@@ -133,10 +138,15 @@ export class ContactsService {
         slug: true,
         label: true,
         field_type: true,
+        options: true,
         sort_order: true,
         required: true,
       },
     });
+    return rows.map((row) => ({
+      ...row,
+      options: parseStoredOptions(row.options),
+    }));
   }
 
   private async loadContactAttributes(

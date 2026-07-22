@@ -15,6 +15,7 @@ export function AttributeNewPage() {
   const [slug, setSlug] = useState('')
   const [label, setLabel] = useState('')
   const [fieldType, setFieldType] = useState('text')
+  const [optionsText, setOptionsText] = useState('')
   const [required, setRequired] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -29,12 +30,20 @@ export function AttributeNewPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setSaving(true)
+    const options =
+      fieldType === 'select'
+        ? optionsText
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean)
+        : undefined
     const result = await apiClient.post<{ id: number }>('/api/attribute-definitions', {
       scope,
       segment_slug: scope === 'segment' ? segmentSlug : undefined,
       slug,
       label,
       field_type: fieldType,
+      options,
       required,
     })
     setSaving(false)
@@ -135,8 +144,23 @@ export function AttributeNewPage() {
             <option value="text">Texto</option>
             <option value="number">Número</option>
             <option value="date">Fecha</option>
+            <option value="select">Lista desplegable</option>
           </select>
         </label>
+
+        {fieldType === 'select' ? (
+          <label className="block text-sm">
+            <span className="text-muted">Opciones (una por línea)</span>
+            <textarea
+              required
+              rows={5}
+              value={optionsText}
+              onChange={(e) => setOptionsText(e.target.value)}
+              placeholder={'Sí\nNo\nOtro'}
+              className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
+            />
+          </label>
+        ) : null}
 
         <label className="flex items-center gap-2 text-sm">
           <input

@@ -111,6 +111,7 @@ model contact_attribute_definitions {
   slug         String   @db.VarChar(64)
   label        String   @db.VarChar(120)
   field_type   String   @default("text") @db.VarChar(16)
+  options      Json?
   sort_order   Int      @default(0)
   required     Boolean  @default(false)
   active       Boolean  @default(true)

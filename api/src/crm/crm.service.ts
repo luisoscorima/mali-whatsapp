@@ -404,6 +404,7 @@ export class CrmService {
       slug: string;
       label: string;
       field_type?: string;
+      options?: string[];
       sort_order?: number;
     }>;
   }) {

@@ -1,4 +1,6 @@
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -38,6 +40,13 @@ export class CrmCreateAttributeDefinitionDto {
   field_type?: string;
 
   @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  @MaxLength(120, { each: true })
+  options?: string[];
+
+  @IsOptional()
   @IsInt()
   sort_order?: number;
 
@@ -55,6 +64,13 @@ export class CrmUpdateAttributeDefinitionDto {
   @IsOptional()
   @IsIn(FIELD_TYPES)
   field_type?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  @MaxLength(120, { each: true })
+  options?: string[];
 
   @IsOptional()
   @IsInt()

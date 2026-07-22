@@ -251,15 +251,38 @@ export function ContactForm({
                 {def.segment_slug ? ` · ${def.segment_slug}` : ''}
                 {def.required ? ' *' : ''}
               </span>
-              <input
-                type={inputTypeForField(def.field_type)}
-                maxLength={500}
-                required={def.required && !disabled}
-                disabled={disabled}
-                value={attributes[def.slug] ?? ''}
-                onChange={(e) => setAttribute(def.slug, e.target.value)}
-                className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
-              />
+              {def.field_type === 'select' ? (
+                <select
+                  required={def.required && !disabled}
+                  disabled={disabled}
+                  value={attributes[def.slug] ?? ''}
+                  onChange={(e) => setAttribute(def.slug, e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
+                >
+                  <option value="">{def.required ? '—' : ''}</option>
+                  {(def.options ?? []).map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                  {attributes[def.slug] &&
+                  !(def.options ?? []).includes(attributes[def.slug]) ? (
+                    <option value={attributes[def.slug]}>
+                      {attributes[def.slug]}
+                    </option>
+                  ) : null}
+                </select>
+              ) : (
+                <input
+                  type={inputTypeForField(def.field_type)}
+                  maxLength={500}
+                  required={def.required && !disabled}
+                  disabled={disabled}
+                  value={attributes[def.slug] ?? ''}
+                  onChange={(e) => setAttribute(def.slug, e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
+                />
+              )}
             </label>
           ))
         )}

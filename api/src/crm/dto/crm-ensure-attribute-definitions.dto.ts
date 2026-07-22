@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsInt,
@@ -24,6 +25,13 @@ export class CrmEnsureAttributeItemDto {
   @IsOptional()
   @IsString()
   field_type?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  @MaxLength(120, { each: true })
+  options?: string[];
 
   @IsOptional()
   @IsInt()

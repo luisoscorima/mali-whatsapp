@@ -8,6 +8,7 @@ type AttributeDefinition = {
   slug: string
   label: string
   field_type: string
+  options: string[] | null
   sort_order: number
   required: boolean
   active: boolean
@@ -31,6 +32,7 @@ export function AttributeDetailPage() {
   const [segments, setSegments] = useState<SegmentOption[]>([])
   const [label, setLabel] = useState('')
   const [fieldType, setFieldType] = useState('text')
+  const [optionsText, setOptionsText] = useState('')
   const [required, setRequired] = useState(false)
   const [active, setActive] = useState(true)
   const [loadFailed, setLoadFailed] = useState(false)
@@ -50,6 +52,7 @@ export function AttributeDetailPage() {
       setDef(detail.data)
       setLabel(detail.data.label)
       setFieldType(detail.data.field_type)
+      setOptionsText((detail.data.options ?? []).join('\n'))
       setRequired(detail.data.required)
       setActive(detail.data.active)
       if (segs.ok) setSegments(segs.data)
@@ -60,11 +63,19 @@ export function AttributeDetailPage() {
     e.preventDefault()
     if (!id || !def) return
     setSaving(true)
+    const options =
+      fieldType === 'select'
+        ? optionsText
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean)
+        : undefined
     const result = await apiClient.patch<AttributeDefinition>(
       `/api/attribute-definitions/${id}`,
       {
         label,
         field_type: fieldType,
+        options,
         sort_order: def.sort_order,
         required,
         active,
@@ -76,6 +87,7 @@ export function AttributeDetailPage() {
       return
     }
     setDef(result.data)
+    setOptionsText((result.data.options ?? []).join('\n'))
     notify.success('Guardado.')
   }
 
@@ -147,8 +159,23 @@ export function AttributeDetailPage() {
             <option value="text">Texto</option>
             <option value="number">Número</option>
             <option value="date">Fecha</option>
+            <option value="select">Lista desplegable</option>
           </select>
         </label>
+
+        {fieldType === 'select' ? (
+          <label className="block text-sm">
+            <span className="text-muted">Opciones (una por línea)</span>
+            <textarea
+              required
+              rows={5}
+              value={optionsText}
+              onChange={(e) => setOptionsText(e.target.value)}
+              placeholder={'Sí\nNo\nOtro'}
+              className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
+            />
+          </label>
+        ) : null}
 
         <label className="flex items-center gap-2 text-sm">
           <input

@@ -42,6 +42,7 @@ export type AttributeFieldDefinition = {
   slug: string;
   label: string;
   field_type: string;
+  options: string[] | null;
   sort_order: number;
   required: boolean;
 };

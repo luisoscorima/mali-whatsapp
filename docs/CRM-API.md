@@ -76,11 +76,11 @@ Catálogo (activo e inactivo) para columnas dinámicas en CRM PAM.
 
 ### `POST /api/crm/attribute-definitions`
 
-Crear definición (`scope: area|segment`, `slug`, `label`, …).
+Crear definición (`scope: area|segment`, `slug`, `label`, `field_type`, `options` si es `select`, …).
 
 ### `PATCH /api/crm/attribute-definitions/:id?area=pam`
 
-Actualizar label / tipo / active.
+Actualizar label / tipo / options / active.
 
 ## Ownership (PAM)
 
