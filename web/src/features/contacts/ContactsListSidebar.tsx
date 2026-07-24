@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { type FormEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
@@ -7,8 +7,40 @@ import { formatContactName } from './contactName'
 import { SegmentBadge } from '../segments/SegmentBadge'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
+import { Button } from '@/shared/ui/shadcn/button'
 
 const LIST_POLL_MS = 15000
+const SEARCH_DEBOUNCE_MS = 300
+
+/** Páginas visibles del paginador: 1, 2, 3, …, N (con vecinos del actual). */
+function contactListPageItems(current: number, total: number): Array<number | 'ellipsis'> {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+  const show = new Set<number>([1, total])
+  for (let p = current - 1; p <= current + 1; p++) {
+    if (p >= 1 && p <= total) show.add(p)
+  }
+  if (current <= 3) {
+    show.add(2)
+    show.add(3)
+    show.add(4)
+  }
+  if (current >= total - 2) {
+    show.add(total - 1)
+    show.add(total - 2)
+    show.add(total - 3)
+  }
+  const sorted = [...show].sort((a, b) => a - b)
+  const out: Array<number | 'ellipsis'> = []
+  let prev = 0
+  for (const p of sorted) {
+    if (prev > 0 && p - prev > 1) out.push('ellipsis')
+    out.push(p)
+    prev = p
+  }
+  return out
+}
 
 type SegmentOption = {
   id: number
@@ -71,6 +103,8 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
   const [bulkBusy, setBulkBusy] = useState(false)
   const [exportBusy, setExportBusy] = useState(false)
   const [chatOpeningId, setChatOpeningId] = useState<number | null>(null)
+  const [listScrollAtEnd, setListScrollAtEnd] = useState(false)
+  const [listCanScroll, setListCanScroll] = useState(false)
   const fabRef = useRef<HTMLDetailsElement>(null)
 
   const selectedSegments = searchParams.getAll('segment')
@@ -127,6 +161,24 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
 
   useIntervalWhenVisible(refresh, LIST_POLL_MS)
 
+  const urlQ = searchParams.get('q') ?? ''
+  useEffect(() => {
+    setSearchInput(urlQ)
+  }, [urlQ])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const q = searchInput.trim()
+      const currentQ = (searchParams.get('q') ?? '').trim()
+      if (q === currentQ) return
+      updateParams((sp) => {
+        if (q) sp.set('q', q)
+        else sp.delete('q')
+      })
+    }, SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [searchInput])
+
   useEffect(() => {
     function onPointerDown(ev: MouseEvent) {
       const fab = fabRef.current
@@ -160,10 +212,11 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
     })
   }
 
-  function onSearchSubmit(e: FormEvent) {
-    e.preventDefault()
+  function onSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== 'Enter') return
+    event.preventDefault()
+    const q = searchInput.trim()
     updateParams((sp) => {
-      const q = searchInput.trim()
       if (q) sp.set('q', q)
       else sp.delete('q')
     })
@@ -175,6 +228,47 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
     else sp.set('page', String(nextPage))
     setSearchParams(sp)
   }
+
+  function getContactListViewport(): HTMLElement | null {
+    return document.querySelector(
+      '.inbox-sidebar--contacts [data-radix-scroll-area-viewport]',
+    )
+  }
+
+  function scrollContactListEdge() {
+    const el = getContactListViewport()
+    if (!el) return
+    el.scrollTo({
+      top: listScrollAtEnd ? 0 : el.scrollHeight,
+      behavior: 'smooth',
+    })
+  }
+
+  useEffect(() => {
+    const viewport = getContactListViewport()
+    if (!viewport) return
+
+    function sync() {
+      const el = viewport!
+      const canScroll = el.scrollHeight > el.clientHeight + 8
+      setListCanScroll(canScroll)
+      setListScrollAtEnd(
+        canScroll && el.scrollHeight - el.scrollTop - el.clientHeight < 48,
+      )
+    }
+
+    sync()
+    viewport.addEventListener('scroll', sync, { passive: true })
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(sync) : null
+    ro?.observe(viewport)
+    const content = viewport.firstElementChild
+    if (content instanceof HTMLElement) ro?.observe(content)
+
+    return () => {
+      viewport.removeEventListener('scroll', sync)
+      ro?.disconnect()
+    }
+  }, [result?.items.length, page, result?.pages])
 
   function toggleContactSelection(id: number) {
     setSelectedIds((prev) => {
@@ -251,7 +345,23 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
       title="Contactos"
       className="inbox-sidebar--contacts"
       floating={
-        <details ref={fabRef} className="contact-fab">
+        <>
+          {listCanScroll ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="contact-list-scroll-btn absolute z-10 size-8 rounded-full p-0 shadow-md"
+              onClick={scrollContactListEdge}
+              aria-label={
+                listScrollAtEnd ? 'Ir al inicio de la lista' : 'Ir al final de la lista'
+              }
+              title={listScrollAtEnd ? 'Ir al inicio' : 'Ir al final'}
+            >
+              {listScrollAtEnd ? '↑' : '↓'}
+            </Button>
+          ) : null}
+          <details ref={fabRef} className="contact-fab">
           <summary
             className="contact-fab__trigger"
             title="Añadir, importar o exportar contactos"
@@ -363,22 +473,20 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
             </button>
           </div>
         </details>
+        </>
       }
       filters={
         <div className="inbox-sidebar-filters space-y-2 px-3 pb-2">
-          <div className="flex gap-1">
-            <form onSubmit={onSearchSubmit} className="flex min-w-0 flex-1 gap-1">
-              <input
-                type="search"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Buscar…"
-                className="min-w-0 flex-1 rounded-lg border border-line bg-bg px-2 py-1.5 text-sm"
-              />
-              <button type="submit" className="small-btn">
-                Buscar
-              </button>
-            </form>
+          <div className="inbox-search-row">
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={onSearchKeyDown}
+              placeholder="Buscar…"
+              className="inbox-search-input"
+              aria-label="Buscar contactos"
+            />
 
             {segments.length > 0 ? (
               <SegmentFilterSelect
@@ -637,27 +745,48 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
                 </li>
               )
             })}
+            {result.pages > 1 ? (
+              <li className="inbox-chat-list-pager">
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => goToPage(page - 1)}
+                  className="small-btn"
+                  aria-label="Página anterior"
+                >
+                  {'<'}
+                </button>
+                {contactListPageItems(page, result.pages).map((item, idx) =>
+                  item === 'ellipsis' ? (
+                    <span key={`e-${idx}`} className="inbox-chat-list-pager-ellipsis muted">
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={item}
+                      type="button"
+                      className={`small-btn${item === page ? ' primary' : ''}`}
+                      aria-current={item === page ? 'page' : undefined}
+                      onClick={() => {
+                        if (item !== page) goToPage(item)
+                      }}
+                    >
+                      {item}
+                    </button>
+                  ),
+                )}
+                <button
+                  type="button"
+                  disabled={page >= result.pages}
+                  onClick={() => goToPage(page + 1)}
+                  className="small-btn"
+                  aria-label="Página siguiente"
+                >
+                  {'>'}
+                </button>
+              </li>
+            ) : null}
           </ul>
-          {result.pages > 1 ? (
-            <div className="flex items-center justify-center gap-2 border-t border-line p-2 text-sm">
-              <button
-                type="button"
-                disabled={page <= 1}
-                onClick={() => goToPage(page - 1)}
-                className="small-btn"
-              >
-                Anterior
-              </button>
-              <button
-                type="button"
-                disabled={page >= result.pages}
-                onClick={() => goToPage(page + 1)}
-                className="small-btn"
-              >
-                Siguiente
-              </button>
-            </div>
-          ) : null}
         </>
       )}
     </WaSidebar>

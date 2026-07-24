@@ -31,6 +31,7 @@ import {
 import { exportFilenameDateStamp } from './campaign-format.util';
 import { enrichFailedLogRow, type EnrichedFailedLog } from './campaign-incident.util';
 import {
+  buildCampaignCostSummary,
   estimateCategoryCost,
   getCampaignTemplateCategory,
 } from './campaign-pricing.util';
@@ -72,6 +73,7 @@ import type {
   CampaignListItem,
   CampaignRetryActionResult,
   CampaignSummary,
+  CampaignSummaryMonthlyPoint,
   RecipientsPreviewResult,
   SendCampaignResult,
 } from './campaigns.types';
@@ -81,9 +83,126 @@ const SALIDA_OK_IN = sqlInList(SALIDA_OK_STATUSES);
 const ERROR_IN = sqlInList(ERROR_STATUSES);
 const LOG_STATUS = CAMPAIGN_LOG_STATUS_SQL;
 
+const MONTH_LABELS = [
+  'Ene',
+  'Feb',
+  'Mar',
+  'Abr',
+  'May',
+  'Jun',
+  'Jul',
+  'Ago',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dic',
+] as const;
+
 function toIso(value: Date | string | null | undefined): string | null {
   if (!value) return null;
   return value instanceof Date ? value.toISOString() : String(value);
+}
+
+type SummaryCampaignRow = {
+  id: number;
+  campaign_payload: unknown;
+  cost_amount: unknown;
+  cost_currency: string | null;
+  cost_source: string | null;
+  cost_is_estimated: boolean | null;
+  total_recipients: number;
+  created_at: Date;
+  scheduled_at: Date | null;
+  first_send_at: Date | null;
+  log_count: number;
+  salida_ok: number;
+  delivered_count: number;
+  read_count: number;
+  failed_count: number;
+};
+
+function effectiveCampaignDate(row: SummaryCampaignRow): Date {
+  const raw = row.first_send_at ?? row.scheduled_at ?? row.created_at;
+  return raw instanceof Date ? raw : new Date(raw);
+}
+
+function buildRecentMonthOptions(count = 6): { key: string; label: string }[] {
+  const options: { key: string; label: string }[] = [];
+  const now = new Date();
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const year = String(d.getFullYear()).slice(-2);
+    options.push({ key, label: `${MONTH_LABELS[d.getMonth()]} ${year}` });
+  }
+  return options;
+}
+
+function aggregateSummaryRows(rows: SummaryCampaignRow[]): CampaignTotalsRow {
+  let total_logs = 0;
+  let salida_ok = 0;
+  let delivered_count = 0;
+  let read_count = 0;
+  let failed_count = 0;
+  let total_recipients = 0;
+  const cost_rows: CampaignTotalsRow['cost_rows'] = [];
+
+  for (const row of rows) {
+    total_logs += row.log_count;
+    salida_ok += row.salida_ok;
+    delivered_count += row.delivered_count;
+    read_count += row.read_count;
+    failed_count += row.failed_count;
+    total_recipients += row.total_recipients;
+    cost_rows.push({
+      id: row.id,
+      campaign_payload: row.campaign_payload,
+      cost_amount: row.cost_amount,
+      cost_currency: row.cost_currency,
+      cost_source: row.cost_source,
+      cost_is_estimated: row.cost_is_estimated,
+      delivered_count: row.delivered_count,
+    });
+  }
+
+  return {
+    total_logs,
+    salida_ok,
+    delivered_count,
+    read_count,
+    failed_count,
+    campaign_count: rows.length,
+    total_recipients,
+    cost_rows,
+  };
+}
+
+function buildMonthlySeries(
+  rows: SummaryCampaignRow[],
+): CampaignSummaryMonthlyPoint[] {
+  const months = buildRecentMonthOptions(6);
+  const ranges = months.map((m) => ({
+    ...m,
+    range: parseMonthKey(m.key)!,
+  }));
+
+  return ranges.map(({ key, label, range }) => {
+    const inMonth = rows.filter((row) => {
+      const d = effectiveCampaignDate(row);
+      return d >= range.start && d < range.end;
+    });
+    let costUsd = 0;
+    for (const row of inMonth) {
+      const cost = buildCampaignCostSummary(row, row.delivered_count);
+      costUsd += Number(cost.usdAmount || 0);
+    }
+    return {
+      monthKey: key,
+      label,
+      campaignsCount: inMonth.length,
+      costUsd: Math.round(costUsd * 100) / 100,
+    };
+  });
 }
 
 type ListRow = {
@@ -318,53 +437,17 @@ export class CampaignsService {
     });
   }
 
-  async getSummary(area: AuthUser['area']): Promise<CampaignSummary> {
-    const logTotals = await this.prisma.$queryRaw<
-      {
-        total_logs: number;
-        salida_ok: number;
-        delivered_count: number;
-        read_count: number;
-        failed_count: number;
-      }[]
-    >(Prisma.sql`
+  async getSummary(
+    area: AuthUser['area'],
+    month?: string,
+  ): Promise<CampaignSummary> {
+    const rows = await this.prisma.$queryRaw<SummaryCampaignRow[]>(Prisma.sql`
       WITH latest_logs AS (
         SELECT DISTINCT ON (cl.campaign_id, cl.phone)
           cl.campaign_id,
           cl.phone,
-          cl.status
-        FROM campaign_logs cl
-        JOIN campaigns cx ON cx.id = cl.campaign_id
-        WHERE cx.area = ${area}
-        ORDER BY cl.campaign_id, cl.phone, cl.id DESC
-      )
-      SELECT
-        COUNT(cl.phone)::int AS total_logs,
-        COALESCE(SUM(CASE WHEN ${Prisma.raw(LOG_STATUS)} IN ${Prisma.raw(SALIDA_OK_IN)} THEN 1 ELSE 0 END), 0)::int AS salida_ok,
-        COALESCE(SUM(CASE WHEN ${Prisma.raw(LOG_STATUS)} IN ('delivered', 'read') THEN 1 ELSE 0 END), 0)::int AS delivered_count,
-        COALESCE(SUM(CASE WHEN ${Prisma.raw(LOG_STATUS)} = 'read' THEN 1 ELSE 0 END), 0)::int AS read_count,
-        COALESCE(SUM(CASE WHEN ${Prisma.raw(LOG_STATUS)} IN ${Prisma.raw(ERROR_IN)} THEN 1 ELSE 0 END), 0)::int AS failed_count
-      FROM latest_logs cl
-    `);
-
-    const campaignTotals = await this.prisma.$queryRaw<
-      { campaign_count: number; total_recipients: number }[]
-    >(Prisma.sql`
-      SELECT
-        COUNT(*)::int AS campaign_count,
-        COALESCE(SUM(total_recipients), 0)::int AS total_recipients
-      FROM campaigns
-      WHERE area = ${area}
-    `);
-
-    const costRows = await this.prisma.$queryRaw<
-      CampaignTotalsRow['cost_rows']
-    >(Prisma.sql`
-      WITH latest_logs AS (
-        SELECT DISTINCT ON (cl.campaign_id, cl.phone)
-          cl.campaign_id,
-          cl.phone,
-          cl.status
+          cl.status,
+          cl.created_at
         FROM campaign_logs cl
         JOIN campaigns cx ON cx.id = cl.campaign_id
         WHERE cx.area = ${area}
@@ -377,7 +460,15 @@ export class CampaignsService {
         c.cost_currency,
         c.cost_source,
         c.cost_is_estimated,
-        COALESCE(SUM(CASE WHEN ${Prisma.raw(LOG_STATUS)} IN ('delivered', 'read') THEN 1 ELSE 0 END), 0)::int AS delivered_count
+        c.total_recipients,
+        c.created_at,
+        c.scheduled_at,
+        MIN(cl.created_at) AS first_send_at,
+        COALESCE(COUNT(cl.phone), 0)::int AS log_count,
+        COALESCE(SUM(CASE WHEN ${Prisma.raw(LOG_STATUS)} IN ${Prisma.raw(SALIDA_OK_IN)} THEN 1 ELSE 0 END), 0)::int AS salida_ok,
+        COALESCE(SUM(CASE WHEN ${Prisma.raw(LOG_STATUS)} IN ('delivered', 'read') THEN 1 ELSE 0 END), 0)::int AS delivered_count,
+        COALESCE(SUM(CASE WHEN ${Prisma.raw(LOG_STATUS)} = 'read' THEN 1 ELSE 0 END), 0)::int AS read_count,
+        COALESCE(SUM(CASE WHEN ${Prisma.raw(LOG_STATUS)} IN ${Prisma.raw(ERROR_IN)} THEN 1 ELSE 0 END), 0)::int AS failed_count
       FROM campaigns c
       LEFT JOIN latest_logs cl ON cl.campaign_id = c.id
       WHERE c.area = ${area}
@@ -385,19 +476,21 @@ export class CampaignsService {
       ORDER BY c.id DESC
     `);
 
-    const totals: CampaignTotalsRow = {
-      ...(logTotals[0] || {
-        total_logs: 0,
-        salida_ok: 0,
-        delivered_count: 0,
-        read_count: 0,
-        failed_count: 0,
-      }),
-      ...(campaignTotals[0] || { campaign_count: 0, total_recipients: 0 }),
-      cost_rows: costRows,
-    };
+    const range = parseMonthKey(month);
+    const filtered = range
+      ? rows.filter((row) => {
+          const d = effectiveCampaignDate(row);
+          return d >= range.start && d < range.end;
+        })
+      : rows;
 
-    return buildCampaignIndexSummary(totals);
+    const summary: CampaignSummary = buildCampaignIndexSummary(
+      aggregateSummaryRows(filtered),
+    );
+    if (!range) {
+      summary.monthlySeries = buildMonthlySeries(rows);
+    }
+    return summary;
   }
 
   async getById(

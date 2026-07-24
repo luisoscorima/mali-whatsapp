@@ -4,7 +4,6 @@ import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
-import { MonthFilterChips } from '@/shared/ui/MonthFilterChips'
 import { SortableSidebarList } from '@/shared/ui/SortableSidebarList'
 import { SegmentBadge } from './SegmentBadge'
 
@@ -53,25 +52,25 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const [segments, setSegments] = useState<SegmentDefinition[] | null>(null)
-  const month = searchParams.get('month') ?? ''
+  const [searchQuery, setSearchQuery] = useState('')
   const statusRaw = searchParams.get('status') ?? ''
   const statusFilter: StatusFilterKey = isStatusFilterKey(statusRaw) ? statusRaw : ''
 
   const listQuery = useMemo(() => {
     const qs = new URLSearchParams(location.search)
+    qs.delete('month')
     return qs.toString() ? `?${qs.toString()}` : ''
   }, [location.search])
 
   const refresh = useCallback(() => {
-    const qs = month ? `?month=${encodeURIComponent(month)}` : ''
-    void apiClient.get<SegmentDefinition[]>(`/api/segments${qs}`).then((result) => {
+    void apiClient.get<SegmentDefinition[]>('/api/segments').then((result) => {
       if (!result.ok) {
         notify.error(result.error)
         return
       }
       setSegments(result.data)
     })
-  }, [month])
+  }, [])
 
   useEffect(() => {
     refresh()
@@ -81,10 +80,17 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
 
   const filteredSegments = useMemo(() => {
     if (!segments) return null
-    return segments.filter((seg) => matchesStatusFilter(seg, statusFilter))
-  }, [segments, statusFilter])
+    const q = searchQuery.trim().toLowerCase()
+    return segments.filter((seg) => {
+      if (!matchesStatusFilter(seg, statusFilter)) return false
+      if (!q) return true
+      return (
+        seg.label.toLowerCase().includes(q) || seg.slug.toLowerCase().includes(q)
+      )
+    })
+  }, [segments, statusFilter, searchQuery])
 
-  const canReorder = !statusFilter
+  const canReorder = !statusFilter && !searchQuery.trim()
 
   async function handleReorder(orderedIds: number[]) {
     if (!canReorder) return
@@ -99,6 +105,7 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
   function setStatusFilter(key: StatusFilterKey) {
     setSearchParams((sp) => {
       const next = new URLSearchParams(sp)
+      next.delete('month')
       if (key) next.set('status', key)
       else next.delete('status')
       return next
@@ -115,17 +122,16 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
       }
       filters={
         <div className="space-y-2">
-          <MonthFilterChips
-            selectedMonthKey={month}
-            onChange={(key) =>
-              setSearchParams((sp) => {
-                const next = new URLSearchParams(sp)
-                if (key) next.set('month', key)
-                else next.delete('month')
-                return next
-              })
-            }
-          />
+          <div className="inbox-search-row">
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar por slug o etiqueta…"
+              className="inbox-search-input"
+              aria-label="Buscar segmentos"
+            />
+          </div>
           <div
             className="inbox-chat-filter-pills inbox-chat-filter-pills--row contact-filter-pills segment-filter-chips"
             aria-label="Filtrar segmentos"
@@ -183,6 +189,13 @@ function renderSegmentRow(
         <span className="inbox-chat-link-main">
           <span className="inbox-chat-row-top">
             <span className="inbox-chat-title">{seg.label}</span>
+            <span
+              className={`rounded px-1.5 text-[10px] ${
+                seg.active ? 'bg-accent-soft text-accent' : 'bg-bad/15 text-bad'
+              }`}
+            >
+              {seg.active ? 'Activo' : 'Inactivo'}
+            </span>
           </span>
           <SegmentBadge
             colorKey={seg.color_key}
@@ -191,8 +204,6 @@ function renderSegmentRow(
             {seg.slug}
           </SegmentBadge>
           <span className="mt-0.5 block text-[10px] leading-snug text-muted">
-            {seg.active ? 'Activo' : 'Inactivo'}
-            {' · '}
             {seg.show_in_filter ? 'En filtros' : 'Sin filtros'}
             {seg.assignable
               ? ` · Asignable${seg.assignment_group ? `: ${seg.assignment_group}` : ''}`

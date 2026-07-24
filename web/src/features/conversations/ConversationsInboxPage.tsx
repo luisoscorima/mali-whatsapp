@@ -101,6 +101,27 @@ function WindowClockIcon() {
   )
 }
 
+/** Caja + flecha abajo, estilo WhatsApp / archive. */
+function ArchiveChatsIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <polyline points="21 8 21 21 3 21 3 8" />
+      <rect x="1" y="3" width="22" height="5" rx="1" />
+      <line x1="10" y1="12" x2="14" y2="12" />
+    </svg>
+  )
+}
+
 type AssignContext = {
   conversationId: number
   heading: string
@@ -1351,8 +1372,8 @@ export function ConversationsInboxPage() {
             [
               { key: 'all', label: 'Todos' },
               { key: 'unread', label: list?.unread_count ? `Sin leer (${list.unread_count})` : 'Sin leer' },
-              { key: 'unanswered', label: 'Sin responder' },
               { key: 'mine', label: 'Mis chats' },
+              { key: 'unanswered', label: 'Sin responder' },
               { key: 'unassigned', label: 'Sin asignar' },
             ] as const
           ).map((pill) => (
@@ -1452,7 +1473,7 @@ export function ConversationsInboxPage() {
         aria-pressed={isArchivedChatFilter(chatFilter)}
       >
         <span className="inbox-archived-row__icon" aria-hidden>
-          ⬇
+          <ArchiveChatsIcon />
         </span>
         <span className="inbox-archived-row__label">Archivados</span>
         {list?.archived_count != null ? (

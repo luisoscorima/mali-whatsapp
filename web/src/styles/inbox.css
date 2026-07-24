@@ -183,13 +183,12 @@ html[data-theme='dark'] .inbox-layout-wa {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.6rem;
-  height: 1.6rem;
+  width: 2rem;
+  height: 2rem;
   flex-shrink: 0;
   border-radius: 999px;
   background: color-mix(in srgb, var(--muted) 18%, transparent);
   color: var(--muted);
-  font-size: 0.85rem;
 }
 
 .inbox-archived-row.is-active .inbox-archived-row__icon {
@@ -1907,6 +1906,18 @@ html[data-theme='dark'] .contact-filter-pill[data-seg-tone='slate'] {
   bottom: 16px;
   z-index: 4;
   list-style: none;
+}
+
+.contact-list-scroll-btn {
+  right: 22px;
+  bottom: 84px;
+}
+
+@media (max-width: 768px) {
+  .contact-list-scroll-btn {
+    right: 18px;
+    bottom: 76px;
+  }
 }
 
 .contact-fab summary {

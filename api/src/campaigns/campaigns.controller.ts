@@ -43,9 +43,10 @@ export class CampaignsController {
   @Get('summary')
   async summary(
     @CurrentUser() user: AuthUser,
+    @Query('month') month?: string,
   ): Promise<ApiResponse<CampaignSummary>> {
     assertCanViewCampaignStats(user);
-    const data = await this.campaignsService.getSummary(user.area);
+    const data = await this.campaignsService.getSummary(user.area, month);
     return { ok: true, data };
   }
 

@@ -26,11 +26,19 @@ export type CampaignListItem = {
   send_mode: string;
 };
 
+export type CampaignSummaryMonthlyPoint = {
+  monthKey: string;
+  label: string;
+  campaignsCount: number;
+  costUsd: number;
+};
+
 export type CampaignSummary = {
   business: MetricCard[];
   results: MetricCard[];
   hint: string;
   campaignsCount: number;
+  monthlySeries?: CampaignSummaryMonthlyPoint[];
 };
 
 export type CampaignRecipientPreview = {
