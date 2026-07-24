@@ -17,6 +17,7 @@ import {
   MarkerType,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import '../../styles/flow-canvas.css'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import {
@@ -63,6 +64,8 @@ type FlowCanvasEditorProps = {
   deleting?: boolean
 }
 
+const HANDLE_CLASS = 'flow-canvas-handle'
+
 function MessageNodeView({ id, data, selected }: NodeProps<Node<CanvasData>>) {
   // Handles a nivel de nodo (no anidados): si van dentro de cada fila con top %,
   // React Flow los mide respecto al nodo completo y se apilan → el hilo no engancha.
@@ -78,7 +81,7 @@ function MessageNodeView({ id, data, selected }: NodeProps<Node<CanvasData>>) {
         selected ? 'border-accent' : 'border-line'
       } ${data.isEntry ? 'ring-1 ring-accent/40' : ''}`}
     >
-      <Handle type="target" position={Position.Left} className="!bg-accent" />
+      <Handle type="target" position={Position.Left} className={HANDLE_CLASS} />
       <p className="text-xs font-medium text-muted">
         Mensaje{data.isEntry ? ' · Inicio' : ''}
       </p>
@@ -106,7 +109,7 @@ function MessageNodeView({ id, data, selected }: NodeProps<Node<CanvasData>>) {
               type="source"
               position={Position.Right}
               id={`btn:${b.id}`}
-              className="!bg-accent !h-2.5 !w-2.5"
+              className={HANDLE_CLASS}
               style={{ top: 'auto', bottom: buttonHandleBottom(i) }}
             />
           ))}
@@ -116,7 +119,7 @@ function MessageNodeView({ id, data, selected }: NodeProps<Node<CanvasData>>) {
           type="source"
           position={Position.Right}
           id="next"
-          className="!bg-accent !h-2.5 !w-2.5"
+          className={HANDLE_CLASS}
         />
       )}
       <p className="mt-2 truncate font-mono text-[10px] text-muted">{id}</p>
@@ -131,7 +134,7 @@ function HandoffNodeView({ id, data, selected }: NodeProps<Node<CanvasData>>) {
         selected ? 'border-accent' : 'border-line'
       }`}
     >
-      <Handle type="target" position={Position.Left} className="!bg-accent" />
+      <Handle type="target" position={Position.Left} className={HANDLE_CLASS} />
       <p className="text-xs font-medium text-muted">Derivar a asesor</p>
       <p className="mt-1 line-clamp-2 text-sm">
         {data.body_text || 'Mensaje de derivación'}
@@ -153,7 +156,7 @@ function EndNodeView({ id, selected }: NodeProps<Node<CanvasData>>) {
         selected ? 'border-accent' : 'border-line'
       }`}
     >
-      <Handle type="target" position={Position.Left} className="!bg-accent" />
+      <Handle type="target" position={Position.Left} className={HANDLE_CLASS} />
       <p className="text-xs font-medium text-muted">Fin del flujo</p>
       <p className="mt-1 text-sm">Cierra sin derivar ni enviar más.</p>
       <p className="mt-2 truncate font-mono text-[10px] text-muted">{id}</p>
@@ -203,6 +206,7 @@ function FlowCanvasEditorInner({
 }: FlowCanvasEditorProps) {
   const [advisors, setAdvisors] = useState<Advisor[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
 
   const initialRfNodes: Node<CanvasData>[] = useMemo(
     () =>
@@ -453,7 +457,16 @@ function FlowCanvasEditorInner({
     setSelectedId(null)
   }
 
+  function removeSelectedEdge() {
+    if (!selectedEdgeId) return
+    const nextEdges = rfEdges.filter((e) => e.id !== selectedEdgeId)
+    setRfEdges(nextEdges)
+    syncOut(rfNodes, nextEdges)
+    setSelectedEdgeId(null)
+  }
+
   const selected = rfNodes.find((n) => n.id === selectedId)
+  const selectedEdge = rfEdges.find((e) => e.id === selectedEdgeId)
 
   function handleFormSubmit(e: FormEvent) {
     e.preventDefault()
@@ -586,38 +599,51 @@ function FlowCanvasEditorInner({
       </div>
       {metricsNote ? (
         <p className="muted campaign-drilldown-dialog__note text-sm">{metricsNote}</p>
-      ) : (
-        <p className="text-xs text-muted">
-          Arrastra desde el punto de cada botón (key) hacia el siguiente nodo.
-          Cada key debe ser única en el flujo. Solo cuenta el último mensaje del
-          asistente: un botón de un paso anterior no cambia de rama.
-        </p>
-      )}
+      ) : null}
+      <p className="text-xs text-muted">
+        Arrastra desde el punto de cada botón (key) hacia el siguiente nodo.
+        Para quitar un conector: haz clic en la línea y pulsa Supr / Backspace, o
+        usa «Quitar conexión» en el panel. Cada key debe ser única. Solo cuenta el
+        último mensaje del asistente.
+      </p>
 
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[1fr_280px]">
-        <div className="min-h-[420px] overflow-hidden rounded-xl border border-line bg-surface">
+        <div className="flow-canvas min-h-[420px] overflow-hidden rounded-xl border border-line bg-surface">
           <ReactFlow
             nodes={rfNodes}
             edges={rfEdges}
             onNodesChange={onNodesChange}
             onEdgesChange={(chs) => {
               onEdgesChange(chs)
+              if (chs.some((c) => c.type === 'remove')) {
+                setSelectedEdgeId(null)
+              }
+            }}
+            onEdgesDelete={(deleted) => {
+              const deletedIds = new Set(deleted.map((e) => e.id))
+              const nextEdges = rfEdges.filter((e) => !deletedIds.has(e.id))
+              syncOut(rfNodes, nextEdges)
+              setSelectedEdgeId(null)
             }}
             onNodeDragStop={(_e, _node, nodes) => {
               syncOut(nodes as Node<CanvasData>[], rfEdges)
             }}
             onConnect={onConnect}
-            onSelectionChange={({ nodes: sel }) => {
+            onSelectionChange={({ nodes: sel, edges: edgeSel }) => {
               setSelectedId(sel[0]?.id ?? null)
+              setSelectedEdgeId(edgeSel[0]?.id ?? null)
             }}
             nodeTypes={nodeTypes}
             fitView
             snapToGrid
             snapGrid={[16, 16]}
             connectionRadius={28}
+            deleteKeyCode={['Backspace', 'Delete']}
+            multiSelectionKeyCode={null}
             proOptions={{ hideAttribution: true }}
             defaultEdgeOptions={{
               markerEnd: { type: MarkerType.ArrowClosed },
+              interactionWidth: 28,
             }}
           >
             <Background />
@@ -627,9 +653,23 @@ function FlowCanvasEditorInner({
         </div>
 
         <aside className="space-y-3 rounded-xl border border-line bg-surface-strong p-3">
-          {!selected ? (
+          {selectedEdge && !selected ? (
+            <>
+              <p className="text-sm font-medium">Conexión</p>
+              <p className="text-xs text-muted">
+                {String(selectedEdge.label || 'siguiente')} → destino
+              </p>
+              <button
+                type="button"
+                className="text-sm text-bad"
+                onClick={removeSelectedEdge}
+              >
+                Quitar conexión
+              </button>
+            </>
+          ) : !selected ? (
             <p className="text-sm text-muted">
-              Selecciona un nodo para editarlo. Marca uno como inicio abajo.
+              Selecciona un nodo o un conector para editarlo.
             </p>
           ) : (
             <>

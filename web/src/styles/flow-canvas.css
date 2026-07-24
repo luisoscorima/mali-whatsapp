@@ -1,0 +1,34 @@
+/* Handles del lienzo de flujos: discretos (sin “bombillas” de acento). */
+.flow-canvas .react-flow__handle {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--surface-strong);
+  border: 1.5px solid color-mix(in srgb, var(--ink) 38%, transparent);
+  box-shadow: none;
+}
+
+.flow-canvas .react-flow__handle:hover,
+.flow-canvas .react-flow__handle-connecting,
+.flow-canvas .react-flow__handle-valid {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface-strong));
+}
+
+.flow-canvas .react-flow__edge-path {
+  stroke: color-mix(in srgb, var(--ink) 28%, transparent);
+}
+
+.flow-canvas .react-flow__edge.selected .react-flow__edge-path,
+.flow-canvas .react-flow__edge:focus .react-flow__edge-path {
+  stroke: var(--accent);
+}
+
+.flow-canvas .react-flow__edge .react-flow__edge-textbg {
+  fill: var(--surface-strong);
+}
+
+.flow-canvas .react-flow__edge .react-flow__edge-text {
+  fill: var(--muted);
+  font-size: 10px;
+}
