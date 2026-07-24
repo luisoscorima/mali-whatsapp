@@ -362,7 +362,50 @@ export class FlowsService {
     );
     const fallback = edges.find((e) => e.match_payload == null);
     const edge = exact || fallback;
-    if (!edge) return false;
+
+    if (!edge) {
+      const current = await this.prisma.flow_nodes.findFirst({
+        where: { id: input.currentNodeId, flow_id: input.flowId },
+        select: { buttons_json: true, kind: true },
+      });
+      const buttons = parseButtons(current?.buttons_json);
+      const isOwnButton = buttons.some(
+        (b) => String(b.id || '').trim() === input.matchPayload,
+      );
+      if (isOwnButton) {
+        // Botón del paso actual sin destino: cerrar limpio.
+        this.logger.log(
+          `Flujo: botón ${input.matchPayload} sin arista; se cierra la sesión`,
+        );
+        await this.closeSession(
+          input.sessionId,
+          'completed',
+          input.currentNodeId,
+        );
+        return true;
+      }
+      // Mensaje viejo u opción fuera de contexto: no saltar de rama.
+      this.logger.log(
+        `Flujo: clic fuera de contexto payload=${input.matchPayload} nodo=${input.currentNodeId}`,
+      );
+      try {
+        await this.sendOutboundText({
+          conversationId: input.conversationId,
+          area: input.area,
+          phone: input.phone,
+          phoneNumberId: input.phoneNumberId,
+          text: 'Esa opción ya no aplica. Usa los botones del último mensaje del asistente.',
+          source: 'flow',
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Flujo: no se pudo avisar clic fuera de contexto: ${
+            error instanceof Error ? error.message : error
+          }`,
+        );
+      }
+      return true;
+    }
 
     await this.executeNode({
       sessionId: input.sessionId,

@@ -18,6 +18,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { apiClient } from '../../shared/api'
+import { notify } from '@/shared/notify'
 import {
   emptyNode,
   nextClientKey,
@@ -63,9 +64,17 @@ type FlowCanvasEditorProps = {
 }
 
 function MessageNodeView({ id, data, selected }: NodeProps<Node<CanvasData>>) {
+  // Handles a nivel de nodo (no anidados): si van dentro de cada fila con top %,
+  // React Flow los mide respecto al nodo completo y se apilan → el hilo no engancha.
+  const buttonHandleBottom = (index: number) => {
+    const fromBottom = data.buttons.length - 1 - index
+    // id mono (~22px) + padding + centro de fila (~34px)
+    return 22 + fromBottom * 34 + 14
+  }
+
   return (
     <div
-      className={`min-w-[220px] max-w-[260px] rounded-xl border bg-surface-strong p-3 shadow-sm ${
+      className={`relative min-w-[220px] max-w-[260px] rounded-xl border bg-surface-strong p-3 shadow-sm ${
         selected ? 'border-accent' : 'border-line'
       } ${data.isEntry ? 'ring-1 ring-accent/40' : ''}`}
     >
@@ -77,30 +86,37 @@ function MessageNodeView({ id, data, selected }: NodeProps<Node<CanvasData>>) {
         {data.body_text || 'Sin texto'}
       </p>
       {data.buttons.length > 0 ? (
-        <div className="mt-2 space-y-1">
+        <>
+          <div className="mt-2 space-y-1">
+            {data.buttons.map((b, i) => (
+              <div
+                key={`${b.id}-${i}`}
+                className="rounded-md border border-line px-2 py-1.5 text-xs"
+              >
+                <span className="font-medium">{b.title || 'Botón'}</span>
+                <span className="ml-1 font-mono text-[10px] text-muted">
+                  {b.id}
+                </span>
+              </div>
+            ))}
+          </div>
           {data.buttons.map((b, i) => (
-            <div
-              key={`${b.id}-${i}`}
-              className="relative rounded-md border border-line px-2 py-1 text-xs"
-            >
-              <span className="font-medium">{b.title || 'Botón'}</span>
-              <span className="ml-1 font-mono text-[10px] text-muted">{b.id}</span>
-              <Handle
-                type="source"
-                position={Position.Right}
-                id={`btn:${b.id}`}
-                className="!bg-accent"
-                style={{ top: '50%' }}
-              />
-            </div>
+            <Handle
+              key={`src-${b.id}-${i}`}
+              type="source"
+              position={Position.Right}
+              id={`btn:${b.id}`}
+              className="!bg-accent !h-2.5 !w-2.5"
+              style={{ top: 'auto', bottom: buttonHandleBottom(i) }}
+            />
           ))}
-        </div>
+        </>
       ) : (
         <Handle
           type="source"
           position={Position.Right}
           id="next"
-          className="!bg-accent"
+          className="!bg-accent !h-2.5 !w-2.5"
         />
       )}
       <p className="mt-2 truncate font-mono text-[10px] text-muted">{id}</p>
@@ -289,9 +305,30 @@ function FlowCanvasEditorInner({
     [setEditorEdges, setEditorNodes],
   )
 
+  useEffect(() => {
+    setRfNodes((nodes) =>
+      nodes.map((n) => {
+        const isEntry = n.id === entryClientKey
+        if (n.data.isEntry === isEntry) return n
+        return { ...n, data: { ...n.data, isEntry } }
+      }),
+    )
+  }, [entryClientKey, setRfNodes])
+
   const onConnect = useCallback(
     (connection: Connection) => {
+      if (!connection.source || !connection.target) return
       setRfEdges((eds) => {
+        // Una sola salida por handle (key de botón)
+        const without = connection.sourceHandle
+          ? eds.filter(
+              (e) =>
+                !(
+                  e.source === connection.source &&
+                  e.sourceHandle === connection.sourceHandle
+                ),
+            )
+          : eds
         const next = addEdge(
           {
             ...connection,
@@ -301,7 +338,7 @@ function FlowCanvasEditorInner({
                 ? connection.sourceHandle.slice(4)
                 : 'siguiente',
           },
-          eds,
+          without,
         )
         syncOut(rfNodes, next)
         return next
@@ -342,6 +379,7 @@ function FlowCanvasEditorInner({
 
   function updateSelected(patch: Partial<CanvasData>) {
     if (!selectedId) return
+    const selectedNode = rfNodes.find((n) => n.id === selectedId)
     const next = rfNodes.map((n) => {
       if (n.id !== selectedId) return n
       const data = { ...n.data, ...patch }
@@ -352,7 +390,52 @@ function FlowCanvasEditorInner({
       }
       return { ...n, data }
     })
-    pushNodes(next)
+    let nextEdges = rfEdges
+    if (patch.buttons && selectedNode) {
+      const oldButtons = selectedNode.data.buttons
+      nextEdges = rfEdges
+        .map((e) => {
+          if (e.source !== selectedId) return e
+          const handle = String(e.sourceHandle || '')
+          if (!handle.startsWith('btn:')) {
+            return patch.buttons!.length === 0 ? e : e
+          }
+          const oldId = handle.slice(4)
+          const idx = oldButtons.findIndex((b) => b.id === oldId)
+          if (idx < 0) return null
+          const nextBtn = patch.buttons![idx]
+          if (!nextBtn) return null
+          if (nextBtn.id === oldId) return e
+          return {
+            ...e,
+            sourceHandle: `btn:${nextBtn.id}`,
+            label: nextBtn.id,
+          }
+        })
+        .filter((e): e is Edge => e != null)
+      // Mensaje sin botones: handles "next"; con botones: quitar "next" huérfanos
+      if (patch.buttons.length === 0) {
+        nextEdges = nextEdges.map((e) =>
+          e.source === selectedId && e.sourceHandle?.startsWith('btn:')
+            ? { ...e, sourceHandle: 'next', label: 'siguiente' }
+            : e,
+        )
+      } else {
+        nextEdges = nextEdges.map((e) =>
+          e.source === selectedId &&
+          (e.sourceHandle === 'next' || !e.sourceHandle)
+            ? {
+                ...e,
+                sourceHandle: `btn:${patch.buttons![0]!.id}`,
+                label: patch.buttons![0]!.id,
+              }
+            : e,
+        )
+      }
+      setRfEdges(nextEdges)
+    }
+    setRfNodes(next)
+    syncOut(next, nextEdges)
   }
 
   function removeSelected() {
@@ -393,6 +476,23 @@ function FlowCanvasEditorInner({
         handoff_user_id: n.data.handoff_user_id,
       }
     })
+    const keyCounts = new Map<string, number>()
+    for (const n of mapped) {
+      for (const b of n.buttons) {
+        const id = String(b.id || '').trim()
+        if (!id) continue
+        keyCounts.set(id, (keyCounts.get(id) || 0) + 1)
+      }
+    }
+    const dupes = [...keyCounts.entries()]
+      .filter(([, c]) => c > 1)
+      .map(([id]) => id)
+    if (dupes.length) {
+      notify.error(
+        `Keys de botón duplicadas: ${dupes.join(', ')}. Cada key debe ser única en el flujo.`,
+      )
+      return
+    }
     const mappedEdges: FlowEditorEdge[] = rfEdges.map((ed) => {
       const handle = String(ed.sourceHandle || '')
       const match = handle.startsWith('btn:') ? handle.slice(4) : null
@@ -488,22 +588,18 @@ function FlowCanvasEditorInner({
         <p className="muted campaign-drilldown-dialog__note text-sm">{metricsNote}</p>
       ) : (
         <p className="text-xs text-muted">
-          Conecta handles de botones (key) hacia el siguiente nodo. El trigger key
-          debe coincidir con el QUICK_REPLY de la plantilla o el inicio desde inbox.
+          Arrastra desde el punto de cada botón (key) hacia el siguiente nodo.
+          Cada key debe ser única en el flujo. Solo cuenta el último mensaje del
+          asistente: un botón de un paso anterior no cambia de rama.
         </p>
       )}
 
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[1fr_280px]">
         <div className="min-h-[420px] overflow-hidden rounded-xl border border-line bg-surface">
           <ReactFlow
-            nodes={rfNodes.map((n) => ({
-              ...n,
-              data: { ...n.data, isEntry: n.id === entryClientKey },
-            }))}
+            nodes={rfNodes}
             edges={rfEdges}
-            onNodesChange={(chs) => {
-              onNodesChange(chs)
-            }}
+            onNodesChange={onNodesChange}
             onEdgesChange={(chs) => {
               onEdgesChange(chs)
             }}
@@ -516,7 +612,13 @@ function FlowCanvasEditorInner({
             }}
             nodeTypes={nodeTypes}
             fitView
+            snapToGrid
+            snapGrid={[16, 16]}
+            connectionRadius={28}
             proOptions={{ hideAttribution: true }}
+            defaultEdgeOptions={{
+              markerEnd: { type: MarkerType.ArrowClosed },
+            }}
           >
             <Background />
             <Controls />

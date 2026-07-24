@@ -235,6 +235,7 @@ type TemplateRow = {
   language: string;
   category: string | null;
   components_json: unknown;
+  placeholder_aliases_json?: unknown;
 };
 
 export function buildSendContextFromCampaign(
@@ -259,6 +260,7 @@ export function buildSendContextFromCampaign(
       language: templateRow.language,
       category: templateRow.category || '',
       components_json: templateRow.components_json,
+      placeholder_aliases_json: templateRow.placeholder_aliases_json,
     };
   }
 
@@ -271,7 +273,10 @@ export function buildSendContextFromCampaign(
     category: String(templateSnapshot.category || ''),
     status: 'APPROVED',
     components_json: templateSnapshot.components_json,
-    placeholder_aliases_json: null,
+    placeholder_aliases_json:
+      templateSnapshot.placeholder_aliases_json ??
+      templateRow?.placeholder_aliases_json ??
+      null,
   });
 
   const staticParams =

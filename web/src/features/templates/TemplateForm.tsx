@@ -48,6 +48,7 @@ function finalizeBuilder(state: TemplateBuilderState): TemplateBuilderState {
     },
     buttons: state.buttons.map((btn) => ({
       ...btn,
+      payload: String(btn.payload || '').trim(),
       exampleValues: ensureExampleValues(
         btn.exampleValues,
         extractPlaceholders(btn.url).length,

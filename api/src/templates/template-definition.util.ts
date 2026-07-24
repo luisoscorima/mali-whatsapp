@@ -28,6 +28,7 @@ function parseMetaTemplateComponents(components: unknown[]) {
       paramCount: number;
       order: number[];
     }[],
+    quickReplies: [] as { index: number; text: string }[],
   };
 
   for (const raw of components || []) {
@@ -49,7 +50,15 @@ function parseMetaTemplateComponents(components: unknown[]) {
     if (type === 'BUTTONS' && Array.isArray(c.buttons)) {
       c.buttons.forEach((btn, idx) => {
         const b = btn as Record<string, unknown>;
-        if (String(b.type || '').toUpperCase() === 'URL' && b.url) {
+        const btnType = String(b.type || '').toUpperCase();
+        if (btnType === 'QUICK_REPLY') {
+          result.quickReplies.push({
+            index: idx,
+            text: String(b.text || '').trim(),
+          });
+          return;
+        }
+        if (btnType === 'URL' && b.url) {
           const order = extractPlaceholderOrderSequential(String(b.url));
           if (order.length) {
             result.buttons.push({ index: idx, paramCount: order.length, order });
@@ -100,6 +109,13 @@ export type TemplateButtonDef = {
   paramDefs: TemplateParamDef[];
 };
 
+export type TemplateQuickReplyDef = {
+  index: number;
+  text: string;
+  /** Payload enviado a Meta al mandar la plantilla (dispara flujos). */
+  payload: string;
+};
+
 export type TemplateDefinition = {
   id: number;
   name: string;
@@ -114,6 +130,7 @@ export type TemplateDefinition = {
   bodySlotCount: number;
   bodyParamDefs: TemplateParamDef[];
   buttons: TemplateButtonDef[];
+  quickReplyButtons: TemplateQuickReplyDef[];
   totalButtonParams: number;
   buttonParamDefs: TemplateParamDef[];
   needsHeaderMedia: boolean;
@@ -192,6 +209,18 @@ export function buildTemplateDefinition(row: {
     };
   });
 
+  const quickReplyButtons: TemplateQuickReplyDef[] = parsed.quickReplies.map(
+    (qr) => {
+      const stored = aliases.quickReplyPayloads.find((p) => p.index === qr.index);
+      const payload = String(stored?.payload || qr.text || '').trim();
+      return {
+        index: qr.index,
+        text: qr.text,
+        payload: payload || qr.text,
+      };
+    },
+  );
+
   return {
     id: row.id,
     name: row.name,
@@ -206,6 +235,7 @@ export function buildTemplateDefinition(row: {
     bodySlotCount: parsed.bodyTextOrder.length,
     bodyParamDefs,
     buttons,
+    quickReplyButtons,
     totalButtonParams,
     buttonParamDefs,
     needsHeaderMedia: Boolean(parsed.headerMedia),
@@ -283,6 +313,17 @@ export function buildWhatsappGraphComponents(
       sub_type: 'url',
       index: String(btn.index),
       parameters: slice.map((text) => ({ type: 'text', text })),
+    });
+  }
+
+  for (const qr of def.quickReplyButtons) {
+    const payload = String(qr.payload || qr.text || '').trim();
+    if (!payload) continue;
+    components.push({
+      type: 'button',
+      sub_type: 'quick_reply',
+      index: String(qr.index),
+      parameters: [{ type: 'payload', payload }],
     });
   }
 

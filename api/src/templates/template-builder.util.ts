@@ -12,6 +12,8 @@ export type PlaceholderAliases = {
   headerText: string[];
   bodyText: string[];
   buttons: { index: number; aliases: string[] }[];
+  /** Payload estable de QUICK_REPLY (no va a Meta en el create; sí al enviar). */
+  quickReplyPayloads: { index: number; payload: string }[];
 };
 
 export type TemplateBuilderPayload = {
@@ -32,6 +34,8 @@ export type TemplateBuilderPayload = {
   buttons: {
     type: string;
     text: string;
+    /** Solo QUICK_REPLY: trigger del flujo / payload de webhook. */
+    payload: string;
     url: string;
     exampleValues: string[];
   }[];
@@ -70,10 +74,26 @@ export function parseStoredPlaceholderAliases(
         })
         .filter((entry) => entry.aliases.length > 0)
     : [];
+  const quickReplyPayloads = Array.isArray(src.quickReplyPayloads)
+    ? src.quickReplyPayloads
+        .map((entry, idx) => {
+          const row = entry as Record<string, unknown>;
+          const payload = trimString(row?.payload);
+          if (!payload) return null;
+          return {
+            index: Number.isInteger(row?.index) ? (row.index as number) : idx,
+            payload,
+          };
+        })
+        .filter(
+          (entry): entry is { index: number; payload: string } => entry != null,
+        )
+    : [];
   return {
     headerText: toStringArray(src.headerText).filter(Boolean),
     bodyText: toStringArray(src.bodyText).filter(Boolean),
     buttons,
+    quickReplyPayloads,
   };
 }
 
@@ -84,7 +104,8 @@ export function hasPlaceholderAliases(aliases: unknown): boolean {
       parsed.bodyText.length ||
       parsed.buttons.some(
         (entry) => Array.isArray(entry.aliases) && entry.aliases.length > 0,
-      ),
+      ) ||
+      parsed.quickReplyPayloads.length,
   );
 }
 
@@ -299,6 +320,9 @@ function sanitizeStoredAliases(
   if (aliases.headerText.length) out.headerText = aliases.headerText;
   if (aliases.bodyText.length) out.bodyText = aliases.bodyText;
   if (aliases.buttons.length) out.buttons = aliases.buttons;
+  if (aliases.quickReplyPayloads.length) {
+    out.quickReplyPayloads = aliases.quickReplyPayloads;
+  }
   return Object.keys(out).length ? (out as PlaceholderAliases) : null;
 }
 
@@ -342,6 +366,7 @@ export function normalizeBuilderPayload(
       return {
         type: trimString(b?.type || 'url').toLowerCase() || 'url',
         text: trimString(b?.text),
+        payload: trimString(b?.payload),
         url: trimString(b?.url),
         exampleValues: toStringArray(b?.exampleValues),
       };
@@ -403,9 +428,13 @@ export function buildTemplateBuilderState(
         const b = button as Record<string, unknown>;
         const btnType = trimString(b?.type).toUpperCase();
         if (btnType === 'QUICK_REPLY') {
+          const text = trimString(b?.text);
+          const stored = aliases.quickReplyPayloads.find((p) => p.index === idx);
           state.buttons.push({
             type: 'quick_reply',
-            text: trimString(b?.text),
+            text,
+            // Compat: plantillas viejas usaban el texto como payload
+            payload: stored?.payload || text,
             url: '',
             exampleValues: [],
           });
@@ -416,6 +445,7 @@ export function buildTemplateBuilderState(
         state.buttons.push({
           type: 'url',
           text: trimString(b?.text),
+          payload: '',
           url: replaceNumericPlaceholdersWithAliases(
             String(b?.url || ''),
             aliasEntry?.aliases || [],
@@ -450,6 +480,7 @@ export async function compileTemplateBuilderPayload(
     headerText: [],
     bodyText: [],
     buttons: [],
+    quickReplyPayloads: [],
   };
 
   const headerType =
@@ -573,10 +604,22 @@ export async function compileTemplateBuilderPayload(
     }
 
     if (type === 'quick_reply') {
+      const payload = trimString(button?.payload) || text;
+      if (!payload) {
+        throw new Error(
+          `Trigger/payload del botón ${idx + 1} es obligatorio.`,
+        );
+      }
+      if (payload.length > 256) {
+        throw new Error(
+          `Trigger/payload del botón ${idx + 1} no puede superar 256 caracteres.`,
+        );
+      }
       buttonItems.push({
         type: 'QUICK_REPLY',
         text,
       });
+      placeholderAliases.quickReplyPayloads.push({ index: idx, payload });
       return;
     }
 

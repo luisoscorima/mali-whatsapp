@@ -32,6 +32,7 @@ export type CampaignTemplateSnapshot = {
   language: string;
   category: string | null;
   components_json: unknown;
+  placeholder_aliases_json?: unknown;
 };
 
 export type CampaignJobPayload = {
@@ -187,7 +188,8 @@ export class CampaignSenderService {
       category: templateSnapshot.category || '',
       status: 'APPROVED',
       components_json: templateSnapshot.components_json,
-      placeholder_aliases_json: null,
+      placeholder_aliases_json:
+        templateSnapshot.placeholder_aliases_json ?? null,
     };
     const def = buildTemplateDefinition(row);
     const usePerContactParams = Boolean(paramMapping);

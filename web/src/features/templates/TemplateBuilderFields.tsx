@@ -1,5 +1,6 @@
-import { useRef, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { insertAtSelection, wrapSelection } from '@/shared/textSelection'
+import { apiClient } from '@/shared/api'
 import {
   ensureExampleValues,
   type TemplateBuilderState,
@@ -9,6 +10,13 @@ import {
   labelForPlaceholder,
   sanitizeAlias,
 } from './templatePreviewUtils'
+
+type FlowOption = {
+  id: number
+  name: string
+  trigger_payload: string
+  status: string
+}
 
 type TemplateBuilderFieldsProps = {
   builder: TemplateBuilderState
@@ -124,6 +132,18 @@ export function TemplateBuilderFields({
   const headerTextRef = useRef<HTMLTextAreaElement>(null)
   const bodyTextRef = useRef<HTMLTextAreaElement>(null)
   const buttonUrlRefs = useRef<(HTMLInputElement | null)[]>([])
+  const [flows, setFlows] = useState<FlowOption[]>([])
+
+  useEffect(() => {
+    apiClient
+      .get<FlowOption[]>('/api/flows')
+      .then((res) => {
+        if (res.ok) {
+          setFlows(res.data.filter((f) => f.status === 'active'))
+        }
+      })
+      .catch(() => undefined)
+  }, [])
 
   const headerPlaceholders = extractPlaceholders(builder.header.text)
   const headerExamples = ensureExampleValues(
@@ -348,8 +368,9 @@ export function TemplateBuilderFields({
 
         {builder.buttons.length === 0 ? (
           <p className="text-xs text-muted">
-            Hasta 3 botones: URL (máx. 2) o respuesta rápida (QUICK_REPLY). El
-            texto del QUICK_REPLY es el payload que dispara un flujo.
+            Hasta 3 botones: URL (máx. 2) o respuesta rápida. En respuesta
+            rápida el texto es lo que ve el contacto; el trigger es el payload
+            que inicia el flujo.
           </p>
         ) : null}
 
@@ -391,6 +412,8 @@ export function TemplateBuilderFields({
                     updateButton(index, {
                       type: e.target.value,
                       url: e.target.value === 'quick_reply' ? '' : btn.url,
+                      payload:
+                        e.target.value === 'quick_reply' ? btn.payload || '' : '',
                       exampleValues:
                         e.target.value === 'quick_reply' ? [] : btn.exampleValues,
                     })
@@ -402,7 +425,7 @@ export function TemplateBuilderFields({
               </label>
               <label className="block text-sm">
                 <span className="text-muted">
-                  {isQr ? 'Texto / payload del botón' : 'Texto del botón'}
+                  {isQr ? 'Texto del botón (lo que ve el contacto)' : 'Texto del botón'}
                 </span>
                 <input
                   className="mt-1 w-full rounded-lg border border-line bg-surface-strong px-3 py-2"
@@ -411,14 +434,61 @@ export function TemplateBuilderFields({
                   maxLength={25}
                   required
                   autoComplete="off"
-                  placeholder={isQr ? 'INICIAR_FLUJO_VENTAS' : undefined}
+                  placeholder={isQr ? 'Iniciar' : undefined}
                 />
               </label>
               {isQr ? (
-                <p className="text-xs text-muted">
-                  Meta reenvía este texto como payload al hacer clic. Debe
-                  coincidir con el trigger del flujo.
-                </p>
+                <>
+                  <label className="block text-sm">
+                    <span className="text-muted">Trigger del flujo (payload)</span>
+                    <input
+                      className="mt-1 w-full rounded-lg border border-line bg-surface-strong px-3 py-2 font-mono text-sm"
+                      value={btn.payload || ''}
+                      onChange={(e) =>
+                        updateButton(index, { payload: e.target.value })
+                      }
+                      maxLength={256}
+                      required
+                      autoComplete="off"
+                      placeholder="INICIAR_FLUJO"
+                      list={`flow-triggers-${index}`}
+                    />
+                    <datalist id={`flow-triggers-${index}`}>
+                      {flows.map((f) => (
+                        <option
+                          key={f.id}
+                          value={f.trigger_payload}
+                          label={`${f.name} · ${f.trigger_payload}`}
+                        />
+                      ))}
+                    </datalist>
+                  </label>
+                  <p className="text-xs text-muted">
+                    Debe coincidir con el Trigger key del flujo. El contacto
+                    solo ve el texto de arriba.
+                  </p>
+                  {flows.length > 0 ? (
+                    <label className="block text-sm">
+                      <span className="text-muted">Usar trigger de un flujo</span>
+                      <select
+                        className="mt-1 w-full rounded-lg border border-line bg-surface-strong px-3 py-2 text-sm"
+                        value=""
+                        onChange={(e) => {
+                          const trigger = e.target.value
+                          if (!trigger) return
+                          updateButton(index, { payload: trigger })
+                        }}
+                      >
+                        <option value="">Elegir flujo activo…</option>
+                        {flows.map((f) => (
+                          <option key={f.id} value={f.trigger_payload}>
+                            {f.name} · {f.trigger_payload}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                </>
               ) : (
                 <>
                   <label className="block text-sm">
@@ -489,7 +559,7 @@ export function TemplateBuilderFields({
                   ...builder,
                   buttons: [
                     ...builder.buttons,
-                    { type: 'url', text: '', url: '', exampleValues: [] },
+                    { type: 'url', text: '', payload: '', url: '', exampleValues: [] },
                   ],
                 })
               }
@@ -509,6 +579,7 @@ export function TemplateBuilderFields({
                     {
                       type: 'quick_reply',
                       text: '',
+                      payload: '',
                       url: '',
                       exampleValues: [],
                     },

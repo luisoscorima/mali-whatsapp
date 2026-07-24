@@ -119,7 +119,8 @@ export class CampaignRetryService {
       category: templateSnapshot.category || '',
       status: 'APPROVED',
       components_json: templateSnapshot.components_json,
-      placeholder_aliases_json: null,
+      placeholder_aliases_json:
+        templateSnapshot.placeholder_aliases_json ?? null,
     };
     const def = buildTemplateDefinition(row);
     return {

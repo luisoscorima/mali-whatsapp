@@ -87,6 +87,7 @@ type TemplateBackfillRow = {
   language: string;
   category: string | null;
   components_json: unknown;
+  placeholder_aliases_json: unknown;
 };
 
 async function fetchTemplateRow(
@@ -107,6 +108,7 @@ async function fetchTemplateRow(
       language: true,
       category: true,
       components_json: true,
+      placeholder_aliases_json: true,
     },
   });
   cache.set(key, row);

@@ -692,6 +692,7 @@ export class CampaignsService {
         language: true,
         category: true,
         components_json: true,
+        placeholder_aliases_json: true,
       },
     });
     return row;
@@ -1045,6 +1046,7 @@ export class CampaignsService {
       language: tRow.language,
       category: tRow.category,
       components_json: tRow.components_json,
+      placeholder_aliases_json: tRow.placeholder_aliases_json,
     };
 
     const staticParams = {
