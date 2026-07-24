@@ -3,6 +3,7 @@ export type ChatActionsContext = {
   heading: string
   phone: string
   contactId: number | null
+  waProfileName: string
   leadScore: number | null
   aiAreaEnabled: boolean
   conversationStatus: string | null
@@ -15,6 +16,7 @@ type ListItemLike = {
   id: number
   phone: string
   contact_name: string
+  wa_profile_name?: string | null
   contact_id: number | null
   contact_lead_score: number | null
   conversation_status: string | null
@@ -30,6 +32,7 @@ type DetailLike = {
     phone: string
     status: string
     contact_id: number | null
+    wa_profile_name?: string | null
     assigned_user_id: number | null
     archived?: boolean
     last_user_message_at?: string | null
@@ -44,11 +47,13 @@ export function chatActionsFromListItem(
   aiAreaEnabled: boolean,
   heading: string,
 ): ChatActionsContext {
+  const crmName = String(item.contact_name ?? '').trim()
   return {
     conversationId: item.is_virtual ? null : item.id,
     heading,
     phone: item.phone,
     contactId: item.contact_id,
+    waProfileName: crmName ? '' : String(item.wa_profile_name ?? '').trim(),
     leadScore: item.contact_lead_score,
     aiAreaEnabled,
     conversationStatus: item.conversation_status,
@@ -68,6 +73,9 @@ export function chatActionsFromDetail(
     heading,
     phone: detail.conversation.phone,
     contactId: detail.conversation.contact_id,
+    waProfileName: detail.conversation.contact_id
+      ? ''
+      : String(detail.conversation.wa_profile_name ?? '').trim(),
     leadScore: detail.contact?.lead_score ?? null,
     aiAreaEnabled,
     conversationStatus: detail.conversation.status,

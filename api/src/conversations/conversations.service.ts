@@ -129,6 +129,7 @@ type InboxRow = {
   automation_touched_at: Date | null;
   contact_lead_score: number | null;
   contact_name: string | null;
+  wa_profile_name: string | null;
   contact_segment_slugs: string[];
   preview: string | null;
   conversation_tags: string[];
@@ -219,6 +220,7 @@ export class ConversationsService {
         ? row.automation_touched_at.toISOString()
         : null,
       contact_name: String(row.contact_name ?? '').trim(),
+      wa_profile_name: String(row.wa_profile_name ?? '').trim() || null,
       contact_lead_score: row.contact_lead_score,
       contact_segment_slugs: row.contact_segment_slugs ?? [],
       preview: String(row.preview ?? '').trim(),
@@ -284,6 +286,7 @@ export class ConversationsService {
         OR COALESCE(ct.last_name, '') ILIKE ${searchPat} ESCAPE '!'
         OR COALESCE(ct.phone, '') ILIKE ${searchPat} ESCAPE '!'
         OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
+        OR COALESCE(c.wa_profile_name, '') ILIKE ${searchPat} ESCAPE '!'
         OR regexp_replace(COALESCE(ct.phone, ''), '\\D', '', 'g') LIKE ${digitsPat}
         OR regexp_replace(COALESCE(c.phone, ''), '\\D', '', 'g') LIKE ${digitsPat}
         ${segmentSql}
@@ -300,6 +303,7 @@ export class ConversationsService {
       OR COALESCE(ct.last_name, '') ILIKE ${searchPat} ESCAPE '!'
       OR COALESCE(ct.phone, '') ILIKE ${searchPat} ESCAPE '!'
       OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
+      OR COALESCE(c.wa_profile_name, '') ILIKE ${searchPat} ESCAPE '!'
       ${segmentSql}
       ${attributeSql}
     )`;
@@ -405,6 +409,7 @@ export class ConversationsService {
             LIMIT 1
           )
         ) AS contact_name,
+        NULLIF(TRIM(COALESCE(c.wa_profile_name, '')), '') AS wa_profile_name,
         COALESCE((
           SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
           FROM contact_segments cs
@@ -476,6 +481,7 @@ export class ConversationsService {
         NULL::text AS assigned_user_label,
         ct.lead_score AS contact_lead_score,
         ${this.inboxContactNameSql('ct')} AS contact_name,
+        NULL::text AS wa_profile_name,
         COALESCE((
           SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
           FROM contact_segments cs
@@ -1050,6 +1056,8 @@ export class ConversationsService {
         inbox_unread: false,
         archived: Boolean(activeConversation.archived),
         contact_id: activeConversation.contact_id,
+        wa_profile_name:
+          String(activeConversation.wa_profile_name ?? '').trim() || null,
         meta_ctwa_ad_id: activeConversation.meta_ctwa_ad_id,
         assigned_user_id: activeConversation.assigned_user_id,
         assigned_user_label: assignedUserLabel,

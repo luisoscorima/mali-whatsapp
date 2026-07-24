@@ -13,8 +13,14 @@ export type MetaWebhookChange = {
   value?: MetaWebhookChangeValue;
 };
 
+export type MetaWebhookContact = {
+  profile?: { name?: string };
+  wa_id?: string;
+};
+
 export type MetaWebhookChangeValue = {
   metadata?: { phone_number_id?: string };
+  contacts?: MetaWebhookContact[];
   messages?: Record<string, unknown>[];
   statuses?: Record<string, unknown>[];
   message_template_name?: string;

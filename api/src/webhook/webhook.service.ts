@@ -23,6 +23,7 @@ import { resolveInboundArea } from './webhook-area.util';
 import {
   extractInboundMessagePreview,
   extractInboundMediaRef,
+  extractInboundProfileName,
   resolveInboundLinePhoneNumberId,
 } from './webhook-inbound.util';
 import {
@@ -500,6 +501,7 @@ export class WebhookService {
         contactId = anyContact?.id ?? null;
       }
 
+      const waProfileName = extractInboundProfileName(value.contacts, from);
       const { messageType, bodyText } = extractInboundMessagePreview(record);
       const linePhoneNumberId = resolveInboundLinePhoneNumberId(
         value,
@@ -518,9 +520,11 @@ export class WebhookService {
           inbox_unread: true,
           whatsapp_phone_number_id: linePhoneNumberId,
           status: 'bot',
+          ...(waProfileName ? { wa_profile_name: waProfileName } : {}),
         },
         update: {
           ...(contactId ? { contact_id: contactId } : {}),
+          ...(waProfileName ? { wa_profile_name: waProfileName } : {}),
           last_user_message_at: new Date(),
           last_message_at: new Date(),
           inbox_unread: true,
@@ -557,6 +561,7 @@ export class WebhookService {
           routing_source: source,
           known_db_area:
             areaByPhone && areaByPhone !== area ? areaByPhone : null,
+          ...(waProfileName ? { wa_profile_name: waProfileName } : {}),
         },
       };
 

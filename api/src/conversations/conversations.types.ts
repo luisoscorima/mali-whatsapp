@@ -30,6 +30,7 @@ export type InboxListItem = {
   assigned_user_label: string | null;
   automation_touched_at: string | null;
   contact_name: string;
+  wa_profile_name: string | null;
   contact_lead_score: number | null;
   contact_segment_slugs: string[];
   preview: string;
@@ -136,6 +137,7 @@ export type InboxConversation = {
   inbox_unread: boolean;
   archived: boolean;
   contact_id: number | null;
+  wa_profile_name: string | null;
   meta_ctwa_ad_id: number | null;
   assigned_user_id: number | null;
   assigned_user_label: string | null;

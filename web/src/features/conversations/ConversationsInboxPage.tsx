@@ -204,20 +204,24 @@ function ProfileBlock({
   const contactId = detail.conversation.contact_id
   const contactMode = contactId ? 'edit' : 'create'
   const contactActionLabel = contactId ? 'Editar contacto' : 'Añadir contacto'
-  const heading = formatContactName(
+  const crmName = formatContactName(
     detail.contact?.name,
     detail.contact?.last_name,
-    detail.conversation.phone,
   )
+  const waAlias = String(detail.conversation.wa_profile_name ?? '').trim()
+  const isWaAlias = !crmName && Boolean(waAlias)
+  const heading = crmName || waAlias || detail.conversation.phone
   const leadScore = detail.contact?.lead_score
   return (
     <>
       <span className="inbox-chat-avatar inbox-chat-avatar--header" aria-hidden>
-        {inboxInitials(heading, detail.conversation.phone)}
+        {inboxInitials(crmName || waAlias, detail.conversation.phone)}
       </span>
       <div className="inbox-chat-header-identity">
         <div className="inbox-chat-heading-row">
-          <h1 className="inbox-chat-heading">{heading}</h1>
+          <h1 className={`inbox-chat-heading${isWaAlias ? ' muted' : ''}`}>
+            {heading}
+          </h1>
           <button
             type="button"
             className="inbox-chat-contact-icon-btn"
@@ -301,6 +305,7 @@ type InboxListItem = {
   assigned_user_label: string | null
   automation_touched_at: string | null
   contact_name: string
+  wa_profile_name: string | null
   contact_lead_score: number | null
   contact_segment_slugs: string[]
   preview: string
@@ -379,6 +384,7 @@ type InboxDetail = {
     inbox_unread: boolean
     archived?: boolean
     contact_id: number | null
+    wa_profile_name: string | null
     assigned_user_id: number | null
     assigned_user_label: string | null
     automation_touched_at: string | null
@@ -625,6 +631,7 @@ export function ConversationsInboxPage() {
   const [contactSheetMode, setContactSheetMode] = useState<'edit' | 'create'>('edit')
   const [contactSheetContactId, setContactSheetContactId] = useState<number | null>(null)
   const [contactSheetPhone, setContactSheetPhone] = useState('')
+  const [contactSheetPrefillName, setContactSheetPrefillName] = useState('')
   const [replyToMessage, setReplyToMessage] = useState<ReplyToMessage | null>(null)
   const [assignContext, setAssignContext] = useState<AssignContext | null>(null)
   const [assignees, setAssignees] = useState<ConversationAssignee[]>([])
@@ -921,11 +928,14 @@ export function ConversationsInboxPage() {
   )
 
   const detailHeading = detail
-    ? formatContactName(
-        detail.contact?.name,
-        detail.contact?.last_name,
-        detail.conversation.phone,
-      )
+    ? (() => {
+        const crmName = formatContactName(
+          detail.contact?.name,
+          detail.contact?.last_name,
+        )
+        const waAlias = String(detail.conversation.wa_profile_name ?? '').trim()
+        return crmName || waAlias || detail.conversation.phone
+      })()
     : ''
 
   useEffect(() => {
@@ -962,10 +972,14 @@ export function ConversationsInboxPage() {
     mode: 'edit' | 'create'
     contactId?: number | null
     phone: string
+    prefillName?: string
   }) {
     setContactSheetMode(opts.mode)
     setContactSheetContactId(opts.contactId ?? null)
     setContactSheetPhone(opts.phone)
+    setContactSheetPrefillName(
+      opts.mode === 'create' ? String(opts.prefillName ?? '').trim() : '',
+    )
     setContactSheetOpen(true)
   }
 
@@ -1354,8 +1368,11 @@ export function ConversationsInboxPage() {
     setBulkSegment('')
     void loadList({ silent: true })
   }
-  const displayName = (item: InboxListItem) =>
-    formatContactName(item.contact_name, null, item.phone)
+  const displayName = (item: InboxListItem) => {
+    const crmName = String(item.contact_name ?? '').trim()
+    const waAlias = String(item.wa_profile_name ?? '').trim()
+    return crmName || waAlias || item.phone
+  }
 
   if (error && !list) {
     return <p className="text-muted p-4">No se pudo cargar</p>
@@ -1593,8 +1610,12 @@ export function ConversationsInboxPage() {
           ) : (
             list.items.map((item) => {
               const active = selectedId === item.id
+              const crmName = String(item.contact_name ?? '').trim()
+              const waAlias = String(item.wa_profile_name ?? '').trim()
               const name = displayName(item)
-              const hasContactName = Boolean(item.contact_name?.trim())
+              const hasContactName = Boolean(crmName)
+              const hasWaAlias = !hasContactName && Boolean(waAlias)
+              const showPhoneRow = hasContactName || hasWaAlias
               const leadScore = item.contact_lead_score
               const hasConversation = !item.is_virtual
               const actionsCtx = chatActionsFromListItem(
@@ -1613,7 +1634,6 @@ export function ConversationsInboxPage() {
                 item.last_outbound_message_at,
                 { windowOpen: item.user_service_window_open },
               )
-              const modeStatus = String(item.conversation_status ?? '').toLowerCase()
               return (
                 <ContextMenu key={item.id}>
                   <ContextMenuTrigger asChild>
@@ -1662,7 +1682,7 @@ export function ConversationsInboxPage() {
                                   : undefined
                               }
                             >
-                              {inboxInitials(item.contact_name, item.phone)}
+                              {inboxInitials(crmName || waAlias, item.phone)}
                               {!item.is_virtual && !item.user_service_window_open ? (
                                 <span className="inbox-chat-avatar-lock" aria-hidden>
                                   🔒
@@ -1677,13 +1697,17 @@ export function ConversationsInboxPage() {
                             <span className="inbox-chat-link-main">
                               <span className="inbox-chat-row-top">
                                 <span className="inbox-chat-title-line">
-                                  <span className="inbox-chat-title">{name}</span>
-                                  {!hasContactName && leadScore ? (
+                                  <span
+                                    className={`inbox-chat-title${hasWaAlias ? ' muted' : ''}`}
+                                  >
+                                    {name}
+                                  </span>
+                                  {!showPhoneRow && leadScore ? (
                                     <LeadStars score={leadScore} />
                                   ) : null}
                                 </span>
                               </span>
-                              {hasContactName ? (
+                              {showPhoneRow ? (
                                 <span className="inbox-chat-phone-row">
                                   <span className="inbox-chat-phone">{item.phone}</span>
                                   {leadScore ? <LeadStars score={leadScore} /> : null}
@@ -1788,6 +1812,7 @@ export function ConversationsInboxPage() {
                               mode: item.contact_id ? 'edit' : 'create',
                               contactId: item.contact_id,
                               phone: item.phone,
+                              prefillName: waAlias,
                             }),
                           )
                         }
@@ -1956,6 +1981,7 @@ export function ConversationsInboxPage() {
                       mode: detail.conversation.contact_id ? 'edit' : 'create',
                       contactId: detail.conversation.contact_id,
                       phone: detail.conversation.phone,
+                      prefillName: detail.conversation.wa_profile_name ?? '',
                     })
                   }
                 />
@@ -2106,6 +2132,7 @@ export function ConversationsInboxPage() {
               mode: actionsContext.contactId ? 'edit' : 'create',
               contactId: actionsContext.contactId,
               phone: actionsContext.phone,
+              prefillName: actionsContext.waProfileName,
             })
           }
           onSegmentAdded={() => {
@@ -2126,6 +2153,7 @@ export function ConversationsInboxPage() {
         mode={contactSheetMode}
         contactId={contactSheetContactId}
         prefillPhone={contactSheetPhone}
+        prefillName={contactSheetPrefillName}
         onSaved={() => {
           void loadList()
           if (selectedId) void loadDetail(selectedId)

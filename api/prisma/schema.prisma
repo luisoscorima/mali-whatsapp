@@ -218,6 +218,7 @@ model conversations {
   assigned_at                  DateTime?            @db.Timestamptz(6)
   automation_touched_at        DateTime?            @db.Timestamptz(6)
   archived                     Boolean              @default(false)
+  wa_profile_name              String?              @db.VarChar(150)
   chat_messages                chat_messages[]
   conversation_tags            conversation_tags[]
   contacts                     contacts?            @relation(fields: [contact_id], references: [id], onUpdate: NoAction)

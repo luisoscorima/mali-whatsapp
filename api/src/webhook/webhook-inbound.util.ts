@@ -63,6 +63,21 @@ export function extractInboundMessagePreview(msg: Record<string, unknown>): {
   return { messageType: type || 'unknown', bodyText: `[${type || 'mensaje'}]` };
 }
 
+/** Nombre de perfil WhatsApp del webhook Meta (`value.contacts[].profile.name`). */
+export function extractInboundProfileName(
+  contacts: { profile?: { name?: string }; wa_id?: string }[] | undefined,
+  senderPhone: string,
+): string | null {
+  if (!Array.isArray(contacts) || contacts.length === 0) return null;
+  const phone = String(senderPhone || '').trim();
+  const matched = phone
+    ? contacts.find((c) => String(c?.wa_id ?? '').trim() === phone)
+    : undefined;
+  const entry = matched ?? (contacts.length === 1 ? contacts[0] : undefined);
+  const name = String(entry?.profile?.name ?? '').trim();
+  return name || null;
+}
+
 export function resolveInboundLinePhoneNumberId(
   value: { metadata?: { phone_number_id?: string } } | undefined,
   area: string | null,

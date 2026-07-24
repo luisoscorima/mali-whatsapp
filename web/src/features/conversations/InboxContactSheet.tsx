@@ -68,6 +68,7 @@ export type InboxContactSheetProps = {
   mode: 'edit' | 'create'
   contactId?: number | null
   prefillPhone?: string
+  prefillName?: string
   onSaved: () => void
 }
 
@@ -77,6 +78,7 @@ export function InboxContactSheet({
   mode,
   contactId = null,
   prefillPhone = '',
+  prefillName = '',
   onSaved,
 }: InboxContactSheetProps) {
   const [contact, setContact] = useState<ContactDetail | null>(null)
@@ -213,7 +215,7 @@ export function InboxContactSheet({
   const formKey =
     mode === 'edit'
       ? `edit-${contact?.id ?? contactId ?? 'pending'}`
-      : `create-${prefillPhone}`
+      : `create-${prefillPhone}-${String(prefillName ?? '').trim()}`
 
   const ready =
     !loading &&
@@ -270,7 +272,7 @@ export function InboxContactSheet({
                         attributes: contact.attributes,
                       }
                     : {
-                        name: '',
+                        name: String(prefillName ?? '').trim(),
                         last_name: '',
                         phone: '',
                         phone_prefix: phoneParts.prefix,
