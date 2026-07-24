@@ -4,6 +4,7 @@ import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { ContactForm } from './ContactForm'
 import { splitPhoneForForm } from './phoneUtils'
+import { segmentOptionsForAssignment, pruneSegmentSlugsToOptions } from '../segments/segmentOptions'
 
 import { formatContactName } from './contactName'
 
@@ -40,6 +41,7 @@ type ApiSegment = {
   slug: string
   label: string
   color_key?: string
+  active: boolean
 }
 
 export function ContactDetailPage() {
@@ -48,6 +50,7 @@ export function ContactDetailPage() {
   const navigate = useNavigate()
   const [contact, setContact] = useState<ContactDetail | null>(null)
   const [segments, setSegments] = useState<FilterOptions['segments']>([])
+  const [selectedSegmentSlugs, setSelectedSegmentSlugs] = useState<string[]>([])
   const [allAttributeDefs, setAllAttributeDefs] = useState<
     ContactDetail['attribute_definitions']
   >([])
@@ -60,8 +63,8 @@ export function ContactDetailPage() {
     Promise.all([
       apiClient.get<ContactDetail>(`/api/contacts/${id}`),
       apiClient.get<FilterOptions>('/api/contacts/filter-options'),
-      apiClient.get<ApiSegment[]>('/api/segments'),
-    ]).then(([detail, opts, allSegs]) => {
+      apiClient.get<ApiSegment[]>('/api/segments/active'),
+    ]).then(([detail, opts, activeSegs]) => {
       if (!detail.ok) {
         notify.error(detail.error)
         setLoadFailed(true)
@@ -71,18 +74,15 @@ export function ContactDetailPage() {
       if (opts.ok) {
         setAllAttributeDefs(opts.data.attribute_definitions)
       }
-      if (allSegs.ok) {
-        setSegments(
-          allSegs.data.map((s) => ({
-            id: s.id,
-            slug: s.slug,
-            label: s.label,
-            color_key: s.color_key,
-          })),
-        )
-      } else if (opts.ok) {
-        setSegments(opts.data.segments)
-      }
+      const options = activeSegs.ok
+        ? segmentOptionsForAssignment(activeSegs.data)
+        : opts.ok
+          ? opts.data.segments
+          : []
+      setSegments(options)
+      setSelectedSegmentSlugs(
+        pruneSegmentSlugsToOptions(detail.data.segment_slugs, options),
+      )
     })
   }, [id])
 
@@ -213,7 +213,7 @@ export function ContactDetailPage() {
             phone_local: phoneParts.local,
             email: contact.email ?? '',
             dni: contact.dni ?? contact.attributes.dni ?? '',
-            segments: contact.segment_slugs,
+            segments: selectedSegmentSlugs,
             attributes: contact.attributes,
           }}
           saving={saving}

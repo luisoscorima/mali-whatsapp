@@ -54,6 +54,24 @@ export class SegmentsController {
     return { ok: true, data };
   }
 
+  /** Segmentos activos (formularios de contacto, campañas). */
+  @Get('active')
+  async listActive(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<SegmentDefinition[]>> {
+    const data = await this.segmentsService.listActiveForAudience(user.area);
+    return { ok: true, data };
+  }
+
+  /** Activos y visibles en filtros (listas/filtros de UI). */
+  @Get('for-filters')
+  async listForFilters(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<SegmentDefinition[]>> {
+    const data = await this.segmentsService.listForFilters(user.area);
+    return { ok: true, data };
+  }
+
   @Get(':id/export')
   async exportMembers(
     @CurrentUser() user: AuthUser,

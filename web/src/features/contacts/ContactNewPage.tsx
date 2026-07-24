@@ -4,6 +4,7 @@ import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { ContactForm } from './ContactForm'
 import { splitPhoneForForm } from './phoneUtils'
+import { segmentOptionsForAssignment } from '../segments/segmentOptions'
 
 type FilterOptions = {
   segments: Array<{ id: number; slug: string; label: string; color_key?: string }>
@@ -24,6 +25,7 @@ type ApiSegment = {
   slug: string
   label: string
   color_key?: string
+  active?: boolean
 }
 
 function safeReturnTo(raw: string | null): string | null {
@@ -53,7 +55,7 @@ export function ContactNewPage() {
   useEffect(() => {
     Promise.all([
       apiClient.get<FilterOptions>('/api/contacts/filter-options'),
-      apiClient.get<ApiSegment[]>('/api/segments'),
+      apiClient.get<ApiSegment[]>('/api/segments/active'),
     ]).then(([opts, segs]) => {
       if (!opts.ok) {
         notify.error(opts.error)
@@ -63,12 +65,7 @@ export function ContactNewPage() {
       setOptions({
         ...opts.data,
         segments: segs.ok
-          ? segs.data.map((s) => ({
-              id: s.id,
-              slug: s.slug,
-              label: s.label,
-              color_key: s.color_key,
-            }))
+          ? segmentOptionsForAssignment(segs.data)
           : opts.data.segments,
       })
     })

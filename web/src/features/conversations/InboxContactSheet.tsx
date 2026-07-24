@@ -4,6 +4,7 @@ import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
 import { ContactForm } from '../contacts/ContactForm'
 import { splitPhoneForForm } from '../contacts/phoneUtils'
+import { segmentOptionsForAssignment, pruneSegmentSlugsToOptions } from '../segments/segmentOptions'
 import {
   Sheet,
   SheetBody,
@@ -49,17 +50,7 @@ type ApiSegment = {
   slug: string
   label: string
   color_key?: string
-}
-
-function mapSegmentOptions(
-  segs: ApiSegment[],
-): FilterOptions['segments'] {
-  return segs.map((s) => ({
-    id: s.id,
-    slug: s.slug,
-    label: s.label,
-    color_key: s.color_key,
-  }))
+  active?: boolean
 }
 
 export type InboxContactSheetProps = {
@@ -83,6 +74,7 @@ export function InboxContactSheet({
 }: InboxContactSheetProps) {
   const [contact, setContact] = useState<ContactDetail | null>(null)
   const [segments, setSegments] = useState<FilterOptions['segments']>([])
+  const [selectedSegmentSlugs, setSelectedSegmentSlugs] = useState<string[]>([])
   const [attributeDefinitions, setAttributeDefinitions] = useState<AttributeDefinition[]>([])
   const [loadFailed, setLoadFailed] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -100,13 +92,14 @@ export function InboxContactSheet({
     setLoadFailed(false)
     setLoading(true)
     setContact(null)
+    setSelectedSegmentSlugs([])
 
     async function load() {
       if (mode === 'edit' && contactId) {
-        const [detail, opts, allSegs] = await Promise.all([
+        const [detail, opts, activeSegs] = await Promise.all([
           apiClient.get<ContactDetail>(`/api/contacts/${contactId}`),
           apiClient.get<FilterOptions>('/api/contacts/filter-options'),
-          apiClient.get<ApiSegment[]>('/api/segments'),
+          apiClient.get<ApiSegment[]>('/api/segments/active'),
         ])
         if (cancelled) return
         if (!detail.ok) {
@@ -119,18 +112,22 @@ export function InboxContactSheet({
         if (opts.ok) {
           setAttributeDefinitions(opts.data.attribute_definitions)
         }
-        if (allSegs.ok) {
-          setSegments(mapSegmentOptions(allSegs.data))
-        } else if (opts.ok) {
-          setSegments(opts.data.segments)
-        }
+        const options = activeSegs.ok
+          ? segmentOptionsForAssignment(activeSegs.data)
+          : opts.ok
+            ? opts.data.segments
+            : []
+        setSegments(options)
+        setSelectedSegmentSlugs(
+          pruneSegmentSlugsToOptions(detail.data.segment_slugs, options),
+        )
         setLoading(false)
         return
       }
 
       const [opts, segs] = await Promise.all([
         apiClient.get<FilterOptions>('/api/contacts/filter-options'),
-        apiClient.get<ApiSegment[]>('/api/segments'),
+        apiClient.get<ApiSegment[]>('/api/segments/active'),
       ])
       if (cancelled) return
       if (!opts.ok) {
@@ -140,7 +137,12 @@ export function InboxContactSheet({
         return
       }
       setAttributeDefinitions(opts.data.attribute_definitions)
-      setSegments(segs.ok ? mapSegmentOptions(segs.data) : opts.data.segments)
+      setSegments(
+        segs.ok
+          ? segmentOptionsForAssignment(segs.data)
+          : opts.data.segments,
+      )
+      setSelectedSegmentSlugs([])
       setLoading(false)
     }
 
@@ -214,7 +216,7 @@ export function InboxContactSheet({
 
   const formKey =
     mode === 'edit'
-      ? `edit-${contact?.id ?? contactId ?? 'pending'}`
+      ? `edit-${contact?.id ?? contactId ?? 'pending'}-${selectedSegmentSlugs.join(',')}-${segments.map((s) => s.slug).join(',')}`
       : `create-${prefillPhone}-${String(prefillName ?? '').trim()}`
 
   const ready =
@@ -268,7 +270,7 @@ export function InboxContactSheet({
                         phone_local: splitPhoneForForm(contact.phone).local,
                         email: contact.email ?? '',
                         dni: contact.dni ?? contact.attributes.dni ?? '',
-                        segments: contact.segment_slugs,
+                        segments: selectedSegmentSlugs,
                         attributes: contact.attributes,
                       }
                     : {

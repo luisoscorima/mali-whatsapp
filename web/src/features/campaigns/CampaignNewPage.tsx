@@ -158,7 +158,7 @@ export function CampaignNewPage() {
   async function loadWizardData() {
     setLoadFailed(false)
     const [segResult, tplResult, attrResult, flowsResult] = await Promise.all([
-      apiClient.get<SegmentDefinition[]>('/api/segments'),
+      apiClient.get<SegmentDefinition[]>('/api/segments/active'),
       apiClient.get<TemplateListItem[]>('/api/templates'),
       apiClient.get<AttributeOption[]>('/api/attribute-definitions'),
       apiClient.get<
@@ -175,7 +175,7 @@ export function CampaignNewPage() {
       setLoadFailed(true)
       return
     }
-    setSegments(segResult.data.filter((seg) => seg.active))
+    setSegments(segResult.data)
     setTemplates(tplResult.data)
     if (attrResult.ok) {
       setAttrDefs(
