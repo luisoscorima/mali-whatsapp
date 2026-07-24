@@ -1783,8 +1783,9 @@ export function ConversationsInboxPage() {
                 disabled={listPage <= 1}
                 onClick={() => goToPage(listPage - 1)}
                 className="small-btn"
+                aria-label="Página anterior"
               >
-                Anterior
+                {'<'}
               </button>
               {chatListPageItems(listPage, listPages).map((item, idx) =>
                 item === 'ellipsis' ? (
@@ -1810,8 +1811,9 @@ export function ConversationsInboxPage() {
                 disabled={listPage >= listPages}
                 onClick={() => goToPage(listPage + 1)}
                 className="small-btn"
+                aria-label="Página siguiente"
               >
-                Siguiente
+                {'>'}
               </button>
             </li>
           ) : null}
