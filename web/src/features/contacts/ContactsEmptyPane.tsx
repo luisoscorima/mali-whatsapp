@@ -4,7 +4,7 @@ export function ContactsEmptyPane() {
   return (
     <WaEmptyPane
       heading="Contactos"
-      text="Selecciona un contacto de la lista o crea uno nuevo."
+      text="Selecciona un contacto de la lista o usa el botón + para añadir uno nuevo, importar o exportar."
     />
   )
 }

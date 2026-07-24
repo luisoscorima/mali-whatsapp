@@ -1,4 +1,4 @@
-import { type FormEvent, useMemo, useState } from 'react'
+import { type FormEvent, type ReactNode, useMemo, useState } from 'react'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import {
   getApplicableAttributeDefinitions,
@@ -32,6 +32,7 @@ type ContactFormProps = {
   initial: ContactFormValues
   isReplaced?: boolean
   saving?: boolean
+  actions?: ReactNode
   onSubmit: (values: ContactFormValues) => void
 }
 
@@ -44,11 +45,11 @@ export function ContactForm({
   initial,
   isReplaced = false,
   saving = false,
+  actions,
   onSubmit,
 }: ContactFormProps) {
   const [name, setName] = useState(initial.name)
   const [lastName, setLastName] = useState(initial.last_name)
-  const [phone, setPhone] = useState(initial.phone)
   const [phonePrefix, setPhonePrefix] = useState(initial.phone_prefix)
   const [phoneLocal, setPhoneLocal] = useState(initial.phone_local)
   const [email, setEmail] = useState(initial.email)
@@ -103,10 +104,12 @@ export function ContactForm({
       return
     }
     setSegmentsError('')
+    const prefixDigits = phonePrefix.replace(/\D/g, '')
+    const localDigits = phoneLocal.replace(/\D/g, '')
     onSubmit({
       name,
       last_name: lastName,
-      phone,
+      phone: `${prefixDigits}${localDigits}`,
       phone_prefix: phonePrefix,
       phone_local: phoneLocal,
       email,
@@ -143,48 +146,33 @@ export function ContactForm({
         />
       </label>
 
-      {mode === 'create' ? (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <label className="block text-sm sm:col-span-1">
-            <span className="text-muted">Prefijo país</span>
-            <input
-              type="text"
-              maxLength={4}
-              inputMode="numeric"
-              value={phonePrefix}
-              disabled={disabled}
-              onChange={(e) => setPhonePrefix(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
-            />
-          </label>
-          <label className="block text-sm sm:col-span-2">
-            <span className="text-muted">Número (sin +51)</span>
-            <input
-              type="text"
-              required
-              inputMode="numeric"
-              placeholder="982160981"
-              value={phoneLocal}
-              disabled={disabled}
-              onChange={(e) => setPhoneLocal(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
-            />
-          </label>
-        </div>
-      ) : (
-        <label className="block text-sm">
-          <span className="text-muted">Teléfono (E.164 sin +)</span>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <label className="block text-sm sm:col-span-1">
+          <span className="text-muted">Prefijo país</span>
+          <input
+            type="text"
+            maxLength={4}
+            inputMode="numeric"
+            value={phonePrefix}
+            disabled={disabled}
+            onChange={(e) => setPhonePrefix(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
+          />
+        </label>
+        <label className="block text-sm sm:col-span-2">
+          <span className="text-muted">Número (sin +51)</span>
           <input
             type="text"
             required
             inputMode="numeric"
-            value={phone}
+            placeholder="982160981"
+            value={phoneLocal}
             disabled={disabled}
-            onChange={(e) => setPhone(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2 font-mono"
+            onChange={(e) => setPhoneLocal(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
           />
         </label>
-      )}
+      </div>
 
       <label className="block text-sm">
         <span className="text-muted">Email (opcional)</span>
@@ -288,13 +276,16 @@ export function ContactForm({
         )}
       </div>
 
-      <button
-        type="submit"
-        disabled={disabled || saving}
-        className="rounded-lg bg-accent px-4 py-2 text-sm text-white disabled:opacity-60"
-      >
-        {saving ? 'Guardando…' : mode === 'create' ? 'Guardar' : 'Guardar cambios'}
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="submit"
+          disabled={disabled || saving}
+          className="rounded-lg bg-accent px-4 py-2 text-sm text-white disabled:opacity-60"
+        >
+          {saving ? 'Guardando…' : mode === 'create' ? 'Guardar' : 'Guardar cambios'}
+        </button>
+        {actions}
+      </div>
     </form>
   )
 }

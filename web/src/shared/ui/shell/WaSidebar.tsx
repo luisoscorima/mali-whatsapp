@@ -5,6 +5,7 @@ type WaSidebarProps = {
   title: string
   actions?: ReactNode
   filters?: ReactNode
+  floating?: ReactNode
   children: ReactNode
   className?: string
   hiddenOnMobile?: boolean
@@ -14,6 +15,7 @@ export function WaSidebar({
   title,
   actions,
   filters,
+  floating,
   children,
   className = '',
   hiddenOnMobile,
@@ -29,6 +31,7 @@ export function WaSidebar({
       </div>
       {filters ? <div className="inbox-sidebar-filters">{filters}</div> : null}
       <ScrollArea className="inbox-sidebar-scroll min-h-0 flex-1">{children}</ScrollArea>
+      {floating}
     </aside>
   )
 }

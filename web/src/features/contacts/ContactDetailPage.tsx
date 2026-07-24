@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { ContactForm } from './ContactForm'
@@ -44,6 +44,7 @@ type ApiSegment = {
 
 export function ContactDetailPage() {
   const { id } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
   const [contact, setContact] = useState<ContactDetail | null>(null)
   const [segments, setSegments] = useState<FilterOptions['segments']>([])
@@ -93,6 +94,8 @@ export function ContactDetailPage() {
     name: string
     last_name: string
     phone: string
+    phone_prefix: string
+    phone_local: string
     email: string
     dni: string
     segments: string[]
@@ -103,7 +106,8 @@ export function ContactDetailPage() {
     const result = await apiClient.patch<ContactDetail>(`/api/contacts/${id}`, {
       name: values.name,
       last_name: values.last_name,
-      phone: values.phone,
+      phone_prefix: values.phone_prefix,
+      phone_local: values.phone_local,
       email: values.email || null,
       dni: values.dni || null,
       segments: values.segments,
@@ -117,7 +121,7 @@ export function ContactDetailPage() {
     notify.success('Contacto actualizado.')
     setContact(result.data)
     if (result.data.id !== Number(id)) {
-      navigate(`/contacts/${result.data.id}`, { replace: true })
+      navigate(`/contacts/${result.data.id}${location.search}`, { replace: true })
     }
   }
 
@@ -129,7 +133,7 @@ export function ContactDetailPage() {
       notify.error(result.error)
       return
     }
-    navigate('/contacts')
+    navigate(`/contacts${location.search}`)
   }
 
   async function onReactivate() {
@@ -171,17 +175,20 @@ export function ContactDetailPage() {
   }
 
   const phoneParts = splitPhoneForForm(contact.phone)
+  const listHref = `/contacts${location.search}`
 
   return (
     <div className="space-y-4">
-      <div>
-        <Link to="/contacts" className="text-sm text-accent hover:underline">
-          ← Contactos
+      <div className="contact-detail-heading">
+        <Link to={listHref} className="contact-detail-back" aria-label="Volver a contactos">
+          ‹
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold">
-          {formatContactName(contact.name, contact.last_name, contact.phone)}
-        </h1>
-        <p className="font-mono text-sm text-muted">{contact.phone}</p>
+        <div className="min-w-0">
+          <h1 className="contact-detail-title">
+            {formatContactName(contact.name, contact.last_name, contact.phone)}
+          </h1>
+          <p className="contact-detail-phone">{contact.phone}</p>
+        </div>
       </div>
 
       {isReplaced ? (
@@ -193,6 +200,7 @@ export function ContactDetailPage() {
 
       <div className="rounded-xl border border-line bg-surface-strong p-4">
         <ContactForm
+          key={contact.id}
           mode="edit"
           segments={segments}
           attributeDefinitions={allAttributeDefs}
@@ -210,34 +218,35 @@ export function ContactDetailPage() {
           }}
           saving={saving}
           onSubmit={onSubmit}
+          actions={
+            <>
+              <button
+                type="button"
+                disabled={chatBusy || isReplaced}
+                onClick={() => void onOpenChat()}
+                className="rounded-lg border border-line bg-bg px-4 py-2 text-sm disabled:opacity-60"
+              >
+                {chatBusy ? 'Abriendo…' : 'Ir al chat'}
+              </button>
+              {isReplaced ? (
+                <button
+                  type="button"
+                  onClick={() => void onReactivate()}
+                  className="rounded-lg border border-line bg-bg px-4 py-2 text-sm"
+                >
+                  Reactivar contacto
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void onDelete()}
+                className="rounded-lg border border-bad px-4 py-2 text-sm text-bad"
+              >
+                Eliminar contacto
+              </button>
+            </>
+          }
         />
-
-        <div className="mt-4 flex flex-wrap gap-3">
-          <button
-            type="button"
-            disabled={chatBusy || isReplaced}
-            onClick={() => void onOpenChat()}
-            className="rounded-lg bg-accent px-4 py-2 text-sm text-white disabled:opacity-60"
-          >
-            {chatBusy ? 'Abriendo…' : 'Ir al chat'}
-          </button>
-          {isReplaced ? (
-            <button
-              type="button"
-              onClick={onReactivate}
-              className="rounded-lg border border-line px-4 py-2 text-sm"
-            >
-              Reactivar contacto
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={onDelete}
-            className="rounded-lg border border-bad px-4 py-2 text-sm text-bad"
-          >
-            Eliminar contacto
-          </button>
-        </div>
       </div>
     </div>
   )

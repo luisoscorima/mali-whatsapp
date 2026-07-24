@@ -39,6 +39,14 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/shared/ui/shadcn/context-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/shared/ui/shadcn/dropdown-menu'
 import { ConversationsSummaryPane } from './ConversationsSummaryPane'
 import { InboxComposeBar, type ReplyToMessage } from './InboxComposeBar'
 import { InboxMessageScroller, type InboxMessageScrollerHandle } from './InboxMessageScroller'
@@ -50,6 +58,15 @@ import {
 } from './inboxChatActions'
 
 const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000
+const WINDOW_MAX_BUCKETS = [2, 6, 12, 24] as const
+type WindowMaxFilter = (typeof WINDOW_MAX_BUCKETS)[number] | null
+
+function parseWindowMaxFilter(raw: string | null): WindowMaxFilter {
+  const n = Number(raw ?? '')
+  return WINDOW_MAX_BUCKETS.includes(n as (typeof WINDOW_MAX_BUCKETS)[number])
+    ? (n as WindowMaxFilter)
+    : null
+}
 
 /** Horas enteras restantes de la ventana 24h (ceil); null si cerrada o sin dato. */
 function windowRemainingHoursLabel(
@@ -63,6 +80,25 @@ function windowRemainingHoursLabel(
   if (remainingMs <= 0) return null
   const hours = Math.max(1, Math.ceil(remainingMs / (60 * 60 * 1000)))
   return `${hours}h`
+}
+
+function WindowClockIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  )
 }
 
 type AssignContext = {
@@ -270,6 +306,7 @@ type InboxListResult = {
   filters: {
     q: string
     chat: 'all' | 'unread' | 'bot' | 'human' | 'mine' | 'unassigned' | 'new'
+    window_max: WindowMaxFilter
     segment_slugs: string[]
     include_none: boolean
   }
@@ -371,6 +408,8 @@ function inboxApiQuery(searchParams: URLSearchParams, extra?: { msg?: number }):
   if (q) qs.set('q', q)
   const chat = searchParams.get('chat')
   if (chat && chat !== 'all') qs.set('chat', chat)
+  const windowMax = parseWindowMaxFilter(searchParams.get('window_max'))
+  if (windowMax != null) qs.set('window_max', String(windowMax))
   searchParams.getAll('segment').forEach((slug) => qs.append('segment', slug))
   const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1)
   if (page > 1) qs.set('page', String(page))
@@ -382,14 +421,16 @@ function inboxApiQuery(searchParams: URLSearchParams, extra?: { msg?: number }):
 function inboxFilterKeyFromParams(searchParams: URLSearchParams): string {
   const q = (searchParams.get('q') ?? '').trim()
   const chat = searchParams.get('chat') || 'all'
+  const windowMax = parseWindowMaxFilter(searchParams.get('window_max')) ?? ''
   const segments = searchParams.getAll('segment').sort().join('\0')
-  return `${q}\n${chat}\n${segments}`
+  return `${q}\n${chat}\n${windowMax}\n${segments}`
 }
 
 function inboxFilterKeyFromResult(filters: InboxListResult['filters']): string {
   const segments = [...filters.segment_slugs]
   if (filters.include_none) segments.push('__none__')
-  return `${filters.q}\n${filters.chat}\n${segments.sort().join('\0')}`
+  const windowMax = filters.window_max ?? ''
+  return `${filters.q}\n${filters.chat}\n${windowMax}\n${segments.sort().join('\0')}`
 }
 
 function inboxInitials(contactName: string, phone: string): string {
@@ -488,6 +529,36 @@ function replyBlockedText(reason: InboxDetail['reply_blocked_reason']): string {
   return ''
 }
 
+/** Páginas visibles del paginador: 1, 2, 3, …, N (con vecinos del actual). */
+function chatListPageItems(current: number, total: number): Array<number | 'ellipsis'> {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+  const show = new Set<number>([1, total])
+  for (let p = current - 1; p <= current + 1; p++) {
+    if (p >= 1 && p <= total) show.add(p)
+  }
+  if (current <= 3) {
+    show.add(2)
+    show.add(3)
+    show.add(4)
+  }
+  if (current >= total - 2) {
+    show.add(total - 1)
+    show.add(total - 2)
+    show.add(total - 3)
+  }
+  const sorted = [...show].sort((a, b) => a - b)
+  const out: Array<number | 'ellipsis'> = []
+  let prev = 0
+  for (const p of sorted) {
+    if (prev > 0 && p - prev > 1) out.push('ellipsis')
+    out.push(p)
+    prev = p
+  }
+  return out
+}
+
 export function ConversationsInboxPage() {
   const { id: idParam } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -523,6 +594,8 @@ export function ConversationsInboxPage() {
   const listAreaRef = useRef<string | null>(null)
   const scrollerRef = useRef<InboxMessageScrollerHandle | null>(null)
   const sendingReplyRef = useRef(false)
+  const [listScrollAtEnd, setListScrollAtEnd] = useState(false)
+  const [listCanScroll, setListCanScroll] = useState(false)
 
   const selectedId = idParam ? Number(idParam) : null
   const filterQuerySuffix = useMemo(() => {
@@ -533,6 +606,7 @@ export function ConversationsInboxPage() {
   const searchQuery = (searchParams.get('q') ?? '').trim()
   const highlightMsgId = Number(searchParams.get('msg') || '') || null
   const chatFilter = (searchParams.get('chat') || 'all') as InboxListResult['filters']['chat']
+  const windowMaxFilter = parseWindowMaxFilter(searchParams.get('window_max'))
   const selectedSegments = searchParams.getAll('segment')
   const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1)
   const activeFilterKey = useMemo(
@@ -881,6 +955,14 @@ export function ConversationsInboxPage() {
     setSearchParams(next)
   }
 
+  function setWindowMaxFilter(windowMax: WindowMaxFilter) {
+    const next = new URLSearchParams(searchParams)
+    next.delete('page')
+    if (windowMax == null) next.delete('window_max')
+    else next.set('window_max', String(windowMax))
+    setSearchParams(next)
+  }
+
   function toggleSegment(slug: string) {
     const next = new URLSearchParams(searchParams)
     next.delete('page')
@@ -913,6 +995,47 @@ export function ConversationsInboxPage() {
     else next.set('page', String(nextPage))
     setSearchParams(next)
   }
+
+  function getChatListViewport(): HTMLElement | null {
+    return document.querySelector(
+      '.conversations-inbox-sidebar [data-radix-scroll-area-viewport]',
+    )
+  }
+
+  function scrollChatListEdge() {
+    const el = getChatListViewport()
+    if (!el) return
+    el.scrollTo({
+      top: listScrollAtEnd ? 0 : el.scrollHeight,
+      behavior: 'smooth',
+    })
+  }
+
+  useEffect(() => {
+    const viewport = getChatListViewport()
+    if (!viewport) return
+
+    function sync() {
+      const el = viewport!
+      const canScroll = el.scrollHeight > el.clientHeight + 8
+      setListCanScroll(canScroll)
+      setListScrollAtEnd(
+        canScroll && el.scrollHeight - el.scrollTop - el.clientHeight < 48,
+      )
+    }
+
+    sync()
+    viewport.addEventListener('scroll', sync, { passive: true })
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(sync) : null
+    ro?.observe(viewport)
+    const content = viewport.firstElementChild
+    if (content instanceof HTMLElement) ro?.observe(content)
+
+    return () => {
+      viewport.removeEventListener('scroll', sync)
+      ro?.disconnect()
+    }
+  }, [list?.items.length, listPage, listPages])
 
   async function onSelectItem(item: InboxListItem) {
     if (item.is_virtual && item.contact_id) {
@@ -1221,6 +1344,44 @@ export function ConversationsInboxPage() {
             {pill.label}
           </Button>
         ))}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              size="sm"
+              variant={windowMaxFilter != null ? 'default' : 'outline'}
+              className="rounded-full"
+              aria-label={
+                windowMaxFilter != null
+                  ? `Ventana ≤${windowMaxFilter}h`
+                  : 'Filtrar por horas de ventana'
+              }
+              title="Filtrar por horas restantes de ventana"
+            >
+              <WindowClockIcon />
+              {windowMaxFilter != null ? `≤${windowMaxFilter}h` : null}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuLabel>Horas restantes</DropdownMenuLabel>
+            <DropdownMenuItem
+              onSelect={() => setWindowMaxFilter(null)}
+              className={windowMaxFilter == null ? 'bg-accent-soft' : undefined}
+            >
+              Todas
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {WINDOW_MAX_BUCKETS.map((hours) => (
+              <DropdownMenuItem
+                key={hours}
+                onSelect={() => setWindowMaxFilter(hours)}
+                className={windowMaxFilter === hours ? 'bg-accent-soft' : undefined}
+              >
+                ≤{hours}h
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       <div className="inbox-filters space-y-2">
         <SegmentFilterSelect
@@ -1249,6 +1410,7 @@ export function ConversationsInboxPage() {
       {listCount != null ? (
         <p className="text-xs text-muted">
           {listCount} chat{listCount === 1 ? '' : 's'}
+          {listPages > 1 ? ` · Pág. ${listPage}/${listPages}` : null}
         </p>
       ) : null}
       {assignableSegments.length > 0 ? (
@@ -1307,7 +1469,23 @@ export function ConversationsInboxPage() {
     <WaPageContents>
       <WaSidebar
         title={listCount != null ? `Chats (${listCount})` : 'Chats'}
+        className="relative conversations-inbox-sidebar"
         filters={filterPills}
+        floating={
+          listCanScroll ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="absolute bottom-3 right-3 z-10 size-8 rounded-full p-0 shadow-md"
+              onClick={scrollChatListEdge}
+              aria-label={listScrollAtEnd ? 'Ir al inicio de la lista' : 'Ir al final de la lista'}
+              title={listScrollAtEnd ? 'Ir al inicio' : 'Ir al final'}
+            >
+              {listScrollAtEnd ? '↑' : '↓'}
+            </Button>
+          ) : null
+        }
       >
         <ul className="inbox-chat-list">
           {!list ? (
@@ -1600,9 +1778,6 @@ export function ConversationsInboxPage() {
           )}
           {listPages > 1 ? (
             <li className="inbox-chat-list-pager">
-              <span className="inbox-chat-list-pager-label muted">
-                Pág. {listPage}/{listPages}
-              </span>
               <button
                 type="button"
                 disabled={listPage <= 1}
@@ -1611,6 +1786,25 @@ export function ConversationsInboxPage() {
               >
                 Anterior
               </button>
+              {chatListPageItems(listPage, listPages).map((item, idx) =>
+                item === 'ellipsis' ? (
+                  <span key={`e-${idx}`} className="inbox-chat-list-pager-ellipsis muted">
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={item}
+                    type="button"
+                    className={`small-btn${item === listPage ? ' primary' : ''}`}
+                    aria-current={item === listPage ? 'page' : undefined}
+                    onClick={() => {
+                      if (item !== listPage) goToPage(item)
+                    }}
+                  >
+                    {item}
+                  </button>
+                ),
+              )}
               <button
                 type="button"
                 disabled={listPage >= listPages}

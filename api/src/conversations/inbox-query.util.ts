@@ -1,6 +1,12 @@
 import { Prisma } from '@prisma/client';
+import { readSessionWindowMs } from '../campaigns/campaign-conversation-window.util';
 import type { SegmentListFilter } from '../contacts/contacts.types';
-import type { InboxChatFilter } from './conversations.types';
+import type {
+  InboxChatFilter,
+  InboxWindowMaxFilter,
+} from './conversations.types';
+
+export const INBOX_WINDOW_MAX_BUCKETS = [2, 6, 12, 24] as const;
 
 export function parseInboxChatFilter(raw?: string): InboxChatFilter {
   const value = String(raw ?? '').trim().toLowerCase();
@@ -15,6 +21,37 @@ export function parseInboxChatFilter(raw?: string): InboxChatFilter {
     return value;
   }
   return 'all';
+}
+
+/** Buckets ≤Nh restantes (ceil de la UI). null = sin filtro. */
+export function parseInboxWindowMaxFilter(
+  raw?: string,
+): InboxWindowMaxFilter {
+  const n = Number(String(raw ?? '').trim());
+  if (
+    INBOX_WINDOW_MAX_BUCKETS.includes(
+      n as (typeof INBOX_WINDOW_MAX_BUCKETS)[number],
+    )
+  ) {
+    return n as InboxWindowMaxFilter;
+  }
+  return null;
+}
+
+/**
+ * Chats con ventana abierta y horas restantes (ceil) ≤ maxHours.
+ * remainingMs = sessionWindow - (now - last_user) ∈ (0, maxHours·1h].
+ */
+export function buildWindowMaxFilterSql(
+  windowMax: InboxWindowMaxFilter,
+): Prisma.Sql {
+  if (windowMax == null) return Prisma.empty;
+  const sessionWindowMs = readSessionWindowMs();
+  const maxRemainingMs = windowMax * 60 * 60 * 1000;
+  const minAgeMs = Math.max(0, sessionWindowMs - maxRemainingMs);
+  return Prisma.sql` AND c.last_user_message_at IS NOT NULL
+    AND c.last_user_message_at > NOW() - (${sessionWindowMs}::bigint * INTERVAL '1 millisecond')
+    AND c.last_user_message_at <= NOW() - (${minAgeMs}::bigint * INTERVAL '1 millisecond')`;
 }
 
 export function parseSegmentQueryParam(

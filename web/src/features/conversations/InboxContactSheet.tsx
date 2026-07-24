@@ -193,7 +193,8 @@ export function InboxContactSheet({
     const result = await apiClient.patch<ContactDetail>(`/api/contacts/${contactId}`, {
       name: values.name,
       last_name: values.last_name,
-      phone: values.phone,
+      phone_prefix: values.phone_prefix,
+      phone_local: values.phone_local,
       email: values.email || null,
       dni: values.dni || null,
       segments: values.segments,

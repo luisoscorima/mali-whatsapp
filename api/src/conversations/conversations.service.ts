@@ -69,7 +69,9 @@ import {
 import {
   buildContactSegmentSql,
   buildConversationSegmentSql,
+  buildWindowMaxFilterSql,
   parseInboxChatFilter,
+  parseInboxWindowMaxFilter,
   parseSegmentQueryParam,
 } from './inbox-query.util';
 import { formatAdvisorLabel } from '../users/advisor-label.util';
@@ -334,6 +336,7 @@ export class ConversationsService {
     segmentFilter: ReturnType<typeof parseSegmentListFilter>,
     searchQ: string,
     chatFilter: ReturnType<typeof parseInboxChatFilter>,
+    windowMax: ReturnType<typeof parseInboxWindowMaxFilter>,
     userId: number,
     page: number,
     limit: number,
@@ -341,6 +344,7 @@ export class ConversationsService {
     const segmentSql = buildConversationSegmentSql(segmentFilter);
     const searchSql = searchQ ? this.buildInboxSearchSql(searchQ) : Prisma.empty;
     const chatSql = this.buildChatFilterSql(chatFilter, userId);
+    const windowSql = buildWindowMaxFilterSql(windowMax);
     const offset = (page - 1) * limit;
     const searchPat = searchQ
       ? `%${escapeForLikePattern(searchQ)}%`
@@ -407,11 +411,12 @@ export class ConversationsService {
       ${segmentSql}
       ${searchSql}
       ${chatSql}
+      ${windowSql}
       ORDER BY c.last_message_at DESC
       LIMIT ${limit} OFFSET ${offset}
     `);
 
-    if (!searchQ || chatFilter !== 'all' || page !== 1) {
+    if (!searchQ || chatFilter !== 'all' || windowMax != null || page !== 1) {
       return rows;
     }
 
@@ -483,11 +488,13 @@ export class ConversationsService {
     segmentFilter: ReturnType<typeof parseSegmentListFilter>,
     searchQ: string,
     chatFilter: ReturnType<typeof parseInboxChatFilter>,
+    windowMax: ReturnType<typeof parseInboxWindowMaxFilter>,
     userId: number,
   ): Promise<number> {
     const segmentSql = buildConversationSegmentSql(segmentFilter);
     const searchSql = searchQ ? this.buildInboxSearchSql(searchQ) : Prisma.empty;
     const chatSql = this.buildChatFilterSql(chatFilter, userId);
+    const windowSql = buildWindowMaxFilterSql(windowMax);
 
     const rows = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
       SELECT COUNT(*)::int AS n
@@ -497,10 +504,11 @@ export class ConversationsService {
       ${segmentSql}
       ${searchSql}
       ${chatSql}
+      ${windowSql}
     `);
     let total = rows[0]?.n ?? 0;
 
-    if (!searchQ || chatFilter !== 'all') {
+    if (!searchQ || chatFilter !== 'all' || windowMax != null) {
       return total;
     }
 
@@ -567,6 +575,9 @@ export class ConversationsService {
     const chat = parseInboxChatFilter(
       Array.isArray(query.chat) ? query.chat[0] : query.chat,
     );
+    const windowMax = parseInboxWindowMaxFilter(
+      Array.isArray(query.window_max) ? query.window_max[0] : query.window_max,
+    );
     const segmentRaw = parseSegmentQueryParam(query.segment);
     const slugSet = await this.getSegmentSlugSet(area);
     const segmentFilter = parseSegmentListFilter(segmentRaw, slugSet);
@@ -583,6 +594,7 @@ export class ConversationsService {
         segmentFilter,
         searchQ,
         chat,
+        windowMax,
         user.id,
       ),
       this.loadAiAreaEnabled(area),
@@ -596,6 +608,7 @@ export class ConversationsService {
       segmentFilter,
       searchQ,
       chat,
+      windowMax,
       user.id,
       pageClamped,
       limit,
@@ -614,6 +627,7 @@ export class ConversationsService {
       filters: {
         q: searchQ,
         chat,
+        window_max: windowMax,
         segment_slugs: segmentFilter.slugs,
         include_none: segmentFilter.includeNone,
       },

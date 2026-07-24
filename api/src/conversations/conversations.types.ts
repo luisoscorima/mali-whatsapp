@@ -7,6 +7,9 @@ export type InboxChatFilter =
   | 'unassigned'
   | 'new';
 
+/** Horas máximas restantes de ventana 24h (buckets). null = sin filtro. */
+export type InboxWindowMaxFilter = 2 | 6 | 12 | 24 | null;
+
 export type InboxSegmentOption = {
   slug: string;
   label: string;
@@ -49,6 +52,7 @@ export type InboxListResult = {
   filters: {
     q: string;
     chat: InboxChatFilter;
+    window_max: InboxWindowMaxFilter;
     segment_slugs: string[];
     include_none: boolean;
   };

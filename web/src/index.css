@@ -19,7 +19,7 @@
   --wa-active: color-mix(in srgb, var(--accent) 14%, transparent);
   --wa-active-border: var(--accent);
   --font-sans: 'Manrope', system-ui, sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-mono: 'Ubuntu Mono', ui-monospace, monospace;
 }
 
 /* Tailwind usa estas vars; deben apuntar a --ink/--surface/etc. para seguir data-theme */
