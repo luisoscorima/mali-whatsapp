@@ -6,6 +6,10 @@ import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import { SortableSidebarList } from '@/shared/ui/SortableSidebarList'
 import { SegmentBadge } from './SegmentBadge'
+import {
+  SEGMENTS_LIST_REFRESH_EVENT,
+  SEGMENTS_LIST_UPSERT_EVENT,
+} from './segmentsListEvents'
 
 const LIST_POLL_MS = 15000
 
@@ -109,6 +113,28 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
 
   useEffect(() => {
     refresh()
+  }, [refresh])
+
+  useEffect(() => {
+    const onRefresh = () => refresh()
+    const onUpsert = (event: Event) => {
+      const segment = (event as CustomEvent<SegmentDefinition>).detail
+      if (!segment?.id) return
+      setSegments((prev) => {
+        if (!prev) return [segment]
+        const idx = prev.findIndex((s) => s.id === segment.id)
+        if (idx < 0) return [...prev, segment]
+        const next = prev.slice()
+        next[idx] = { ...next[idx], ...segment }
+        return next
+      })
+    }
+    window.addEventListener(SEGMENTS_LIST_REFRESH_EVENT, onRefresh)
+    window.addEventListener(SEGMENTS_LIST_UPSERT_EVENT, onUpsert)
+    return () => {
+      window.removeEventListener(SEGMENTS_LIST_REFRESH_EVENT, onRefresh)
+      window.removeEventListener(SEGMENTS_LIST_UPSERT_EVENT, onUpsert)
+    }
   }, [refresh])
 
   useIntervalWhenVisible(refresh, LIST_POLL_MS)

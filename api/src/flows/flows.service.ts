@@ -15,6 +15,7 @@ import {
 } from '../conversations/conversation-whatsapp.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { TRANSFER_TO_HUMAN_NOTICE } from '../webhook/ai-response.util';
+import { formatAdvisorLabel } from '../users/advisor-label.util';
 import type { CreateFlowDto, UpdateFlowDto } from './dto/flow.dto';
 import type {
   FlowButton,
@@ -84,6 +85,36 @@ export class FlowsService {
         updated_at: row.updated_at.toISOString(),
       };
     });
+  }
+
+  async listAdvisors(
+    area: string,
+  ): Promise<{ id: number; label: string }[]> {
+    const rows = await this.prisma.$queryRaw<
+      {
+        id: number;
+        email: string;
+        first_name: string | null;
+        last_name: string | null;
+      }[]
+    >`
+      SELECT DISTINCT u.id, u.email, u.first_name, u.last_name
+      FROM users u
+      WHERE u.is_provisioned = TRUE
+        AND (
+          u.area = ${area}
+          OR u.is_master = TRUE
+          OR EXISTS (
+            SELECT 1 FROM user_areas ua
+            WHERE ua.user_id = u.id AND ua.area = ${area}
+          )
+        )
+      ORDER BY u.email ASC
+    `;
+    return rows.map((row) => ({
+      id: row.id,
+      label: formatAdvisorLabel(row),
+    }));
   }
 
   async getDetail(area: string, id: number): Promise<FlowDetail> {
@@ -379,10 +410,38 @@ export class FlowsService {
           text,
           source: 'flow_handoff',
         });
+        const handoffUserId =
+          node.handoff_user_id != null &&
+          Number.isInteger(node.handoff_user_id) &&
+          node.handoff_user_id > 0
+            ? node.handoff_user_id
+            : null;
+        let assignedOk = false;
+        if (handoffUserId) {
+          const inArea = await this.prisma.user_areas.findFirst({
+            where: { user_id: handoffUserId, area: input.area },
+            select: { user_id: true },
+          });
+          const userRow = await this.prisma.users.findFirst({
+            where: { id: handoffUserId },
+            select: { id: true, area: true, is_master: true },
+          });
+          assignedOk = Boolean(
+            inArea ||
+              userRow?.is_master ||
+              String(userRow?.area || '') === input.area,
+          );
+        }
         await this.prisma.conversations.update({
           where: { id: input.conversationId },
           data: {
             status: 'human',
+            ...(assignedOk && handoffUserId
+              ? {
+                  assigned_user_id: handoffUserId,
+                  assigned_at: new Date(),
+                }
+              : {}),
             automation_touched_at: new Date(),
             updated_at: new Date(),
           },
@@ -635,6 +694,14 @@ export class FlowsService {
               ? (parseButtons(node.buttons) as unknown as Prisma.InputJsonValue)
               : undefined,
           sort_order: node.sort_order ?? sort,
+          position_x: Number(node.position_x) || 0,
+          position_y: Number(node.position_y) || 0,
+          handoff_user_id:
+            node.kind === 'handoff_human' &&
+            node.handoff_user_id != null &&
+            Number(node.handoff_user_id) > 0
+              ? Number(node.handoff_user_id)
+              : null,
         },
       });
       keyToId.set(key, created.id);
@@ -680,6 +747,9 @@ export class FlowsService {
       body_text: string | null;
       buttons_json: unknown;
       sort_order: number;
+      position_x: number;
+      position_y: number;
+      handoff_user_id: number | null;
     }[];
     flow_edges: {
       id: number;
@@ -695,6 +765,9 @@ export class FlowsService {
       body_text: String(n.body_text || ''),
       buttons: parseButtons(n.buttons_json),
       sort_order: n.sort_order,
+      position_x: Number(n.position_x) || 0,
+      position_y: Number(n.position_y) || 0,
+      handoff_user_id: n.handoff_user_id ?? null,
     }));
     const edges: FlowEdgeDto[] = row.flow_edges.map((e) => ({
       id: e.id,

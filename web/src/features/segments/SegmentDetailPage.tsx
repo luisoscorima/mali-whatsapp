@@ -5,6 +5,7 @@ import { notify } from '@/shared/notify'
 import { formatContactName } from '../contacts/contactName'
 import { segmentToneClass } from './segmentColors'
 import { SegmentColorPicker } from './SegmentColorPicker'
+import { notifySegmentsListRefresh, notifySegmentsListUpsert } from './segmentsListEvents'
 type SegmentDefinition = {
   id: number
   slug: string
@@ -103,11 +104,16 @@ export function SegmentDetailPage() {
     setPayload((prev) =>
       prev ? { ...prev, segment: { ...prev.segment, ...result.data } } : prev,
     )
+    setActive(result.data.active)
+    setShowInFilter(result.data.show_in_filter)
     setAssignable(result.data.assignable)
     setAssignmentGroup(result.data.assignment_group ?? '')
+    setLabel(result.data.label)
+    setColorKey(result.data.color_key)
     if (result.data.slug !== slug) {
       setSlug(result.data.slug)
     }
+    notifySegmentsListUpsert(result.data)
   }
 
   async function onDelete() {
@@ -124,6 +130,7 @@ export function SegmentDetailPage() {
       notify.error(result.error)
       return
     }
+    notifySegmentsListRefresh()
     navigate('/segments')
   }
 

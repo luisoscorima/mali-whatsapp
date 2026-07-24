@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { SegmentColorPicker } from './SegmentColorPicker'
+import { notifySegmentsListRefresh } from './segmentsListEvents'
 export function SegmentNewPage() {
   const navigate = useNavigate()
   const [slug, setSlug] = useState('')
@@ -23,6 +24,7 @@ export function SegmentNewPage() {
       notify.error(result.error)
       return
     }
+    notifySegmentsListRefresh()
     navigate(`/segments/${result.data.id}`)
   }
 

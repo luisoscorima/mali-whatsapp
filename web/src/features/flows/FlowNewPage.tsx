@@ -1,8 +1,8 @@
-import { type FormEvent, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
-import { FlowEditorForm } from './FlowEditorForm'
+import { FlowCanvasEditor } from './FlowCanvasEditor'
 import {
   emptyNode,
   type FlowDetail,
@@ -21,22 +21,31 @@ export function FlowNewPage() {
   const [edges, setEdges] = useState<FlowEditorEdge[]>([])
   const [saving, setSaving] = useState(false)
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault()
+  async function persist(graph: {
+    nodes: FlowEditorNode[]
+    edges: FlowEditorEdge[]
+    entry: string
+  }) {
     setSaving(true)
+    setNodes(graph.nodes)
+    setEdges(graph.edges)
+    setEntryClientKey(graph.entry)
     const result = await apiClient.post<FlowDetail>('/api/flows', {
       name: name.trim(),
       trigger_payload: triggerPayload.trim(),
       status,
-      entry_client_key: entryClientKey,
-      nodes: nodes.map((n, i) => ({
+      entry_client_key: graph.entry,
+      nodes: graph.nodes.map((n, i) => ({
         client_key: n.client_key,
         kind: n.kind,
         body_text: n.body_text,
         buttons: n.buttons,
         sort_order: i,
+        position_x: n.position_x,
+        position_y: n.position_y,
+        handoff_user_id: n.handoff_user_id,
       })),
-      edges: edges.map((ed) => ({
+      edges: graph.edges.map((ed) => ({
         from_client_key: ed.from_client_key,
         to_client_key: ed.to_client_key,
         match_payload: ed.match_payload,
@@ -52,7 +61,7 @@ export function FlowNewPage() {
   }
 
   return (
-    <FlowEditorForm
+    <FlowCanvasEditor
       name={name}
       setName={setName}
       triggerPayload={triggerPayload}
@@ -66,7 +75,7 @@ export function FlowNewPage() {
       edges={edges}
       setEdges={setEdges}
       saving={saving}
-      onSubmit={onSubmit}
+      onPersist={persist}
       submitLabel="Crear flujo"
     />
   )

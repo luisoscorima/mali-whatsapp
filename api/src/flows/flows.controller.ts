@@ -30,6 +30,14 @@ export class FlowsController {
     return { ok: true, data };
   }
 
+  @Get('advisors')
+  async advisors(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<{ id: number; label: string }[]>> {
+    const data = await this.flowsService.listAdvisors(user.area);
+    return { ok: true, data };
+  }
+
   @Get(':id')
   async detail(
     @CurrentUser() user: AuthUser,

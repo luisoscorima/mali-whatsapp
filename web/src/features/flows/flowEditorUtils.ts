@@ -11,6 +11,9 @@ export type FlowEditorNode = {
   kind: FlowNodeKind
   body_text: string
   buttons: FlowButton[]
+  position_x: number
+  position_y: number
+  handoff_user_id: number | null
 }
 
 export type FlowEditorEdge = {
@@ -31,6 +34,9 @@ export type FlowDetail = {
     body_text: string
     buttons: FlowButton[]
     sort_order: number
+    position_x: number
+    position_y: number
+    handoff_user_id: number | null
   }[]
   edges: {
     id: number
@@ -51,7 +57,10 @@ export function nextClientKey(prefix = 'n'): string {
   return `${prefix}_${Date.now().toString(36)}_${keySeq}`
 }
 
-export function emptyNode(kind: FlowNodeKind = 'message_buttons'): FlowEditorNode {
+export function emptyNode(
+  kind: FlowNodeKind = 'message_buttons',
+  pos = { x: 80, y: 80 },
+): FlowEditorNode {
   return {
     client_key: nextClientKey(),
     kind,
@@ -60,6 +69,9 @@ export function emptyNode(kind: FlowNodeKind = 'message_buttons'): FlowEditorNod
       kind === 'message_buttons'
         ? [{ id: 'BTN_A', title: 'Opción A' }]
         : [],
+    position_x: pos.x,
+    position_y: pos.y,
+    handoff_user_id: null,
   }
 }
 
@@ -72,9 +84,10 @@ export function detailToEditor(detail: FlowDetail): {
   edges: FlowEditorEdge[]
 } {
   const idToKey = new Map<number, string>()
-  const nodes: FlowEditorNode[] = detail.nodes.map((n) => {
-    const key = nextClientKey(`n${n.id}`)
+  const nodes: FlowEditorNode[] = detail.nodes.map((n, i) => {
+    const key = `n_${n.id}`
     idToKey.set(n.id, key)
+    const hasPos = n.position_x !== 0 || n.position_y !== 0
     return {
       client_key: key,
       kind: n.kind,
@@ -82,6 +95,9 @@ export function detailToEditor(detail: FlowDetail): {
       buttons: n.buttons.length
         ? n.buttons.map((b) => ({ id: b.id, title: b.title }))
         : [],
+      position_x: hasPos ? n.position_x : 80 + (i % 3) * 280,
+      position_y: hasPos ? n.position_y : 80 + Math.floor(i / 3) * 220,
+      handoff_user_id: n.handoff_user_id ?? null,
     }
   })
   const edges: FlowEditorEdge[] = detail.edges.map((e) => ({
@@ -104,8 +120,8 @@ export function detailToEditor(detail: FlowDetail): {
 }
 
 export const KIND_LABEL: Record<FlowNodeKind, string> = {
-  message_text: 'Texto libre',
-  message_buttons: 'Texto + botones',
-  handoff_human: 'Derivar a asesor',
-  end: 'Fin',
+  message_text: 'Mensaje',
+  message_buttons: 'Mensaje',
+  handoff_human: 'Derivar',
+  end: 'Fin del flujo',
 }

@@ -1,8 +1,8 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
-import { FlowEditorForm } from './FlowEditorForm'
+import { FlowCanvasEditor } from './FlowCanvasEditor'
 import {
   detailToEditor,
   emptyNode,
@@ -22,11 +22,14 @@ export function FlowDetailPage() {
   const [edges, setEdges] = useState<FlowEditorEdge[]>([])
   const [metricsNote, setMetricsNote] = useState('')
   const [loadFailed, setLoadFailed] = useState(false)
+  const [ready, setReady] = useState(false)
+  const [canvasKey, setCanvasKey] = useState(0)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (!id) return
+    setReady(false)
     apiClient.get<FlowDetail>(`/api/flows/${id}`).then((result) => {
       if (!result.ok) {
         notify.error(result.error)
@@ -45,26 +48,37 @@ export function FlowDetailPage() {
         `Sesiones — activas: ${m.active_sessions} · completadas: ${m.completed_sessions} · derivadas: ${m.handed_off_sessions}`,
       )
       setLoadFailed(false)
+      setCanvasKey((k) => k + 1)
+      setReady(true)
     })
   }, [id])
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault()
+  async function persist(graph: {
+    nodes: FlowEditorNode[]
+    edges: FlowEditorEdge[]
+    entry: string
+  }) {
     if (!id) return
     setSaving(true)
+    setNodes(graph.nodes)
+    setEdges(graph.edges)
+    setEntryClientKey(graph.entry)
     const result = await apiClient.patch<FlowDetail>(`/api/flows/${id}`, {
       name: name.trim(),
       trigger_payload: triggerPayload.trim(),
       status,
-      entry_client_key: entryClientKey,
-      nodes: nodes.map((n, i) => ({
+      entry_client_key: graph.entry,
+      nodes: graph.nodes.map((n, i) => ({
         client_key: n.client_key,
         kind: n.kind,
         body_text: n.body_text,
         buttons: n.buttons,
         sort_order: i,
+        position_x: n.position_x,
+        position_y: n.position_y,
+        handoff_user_id: n.handoff_user_id,
       })),
-      edges: edges.map((ed) => ({
+      edges: graph.edges.map((ed) => ({
         from_client_key: ed.from_client_key,
         to_client_key: ed.to_client_key,
         match_payload: ed.match_payload,
@@ -77,6 +91,9 @@ export function FlowDetailPage() {
     }
     notify.success('Flujo guardado')
     const editor = detailToEditor(result.data)
+    setName(editor.name)
+    setTriggerPayload(editor.trigger_payload)
+    setStatus(editor.status)
     setEntryClientKey(editor.entry_client_key)
     setNodes(editor.nodes)
     setEdges(editor.edges)
@@ -84,6 +101,7 @@ export function FlowDetailPage() {
     setMetricsNote(
       `Sesiones — activas: ${m.active_sessions} · completadas: ${m.completed_sessions} · derivadas: ${m.handed_off_sessions}`,
     )
+    setCanvasKey((k) => k + 1)
   }
 
   async function onDelete() {
@@ -103,9 +121,13 @@ export function FlowDetailPage() {
   if (loadFailed) {
     return <p className="muted p-4">No se pudo cargar el flujo.</p>
   }
+  if (!ready) {
+    return <p className="muted p-4">Cargando…</p>
+  }
 
   return (
-    <FlowEditorForm
+    <FlowCanvasEditor
+      key={`${id}-${canvasKey}`}
       name={name}
       setName={setName}
       triggerPayload={triggerPayload}
@@ -119,7 +141,7 @@ export function FlowDetailPage() {
       edges={edges}
       setEdges={setEdges}
       saving={saving}
-      onSubmit={onSubmit}
+      onPersist={persist}
       submitLabel="Guardar"
       metricsNote={metricsNote}
       onDelete={onDelete}

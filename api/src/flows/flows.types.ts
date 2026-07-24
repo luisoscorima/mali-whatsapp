@@ -17,6 +17,9 @@ export type FlowNodeDto = {
   body_text: string;
   buttons: FlowButton[];
   sort_order: number;
+  position_x: number;
+  position_y: number;
+  handoff_user_id: number | null;
 };
 
 export type FlowEdgeDto = {
@@ -63,6 +66,9 @@ export type FlowNodeInput = {
   body_text?: string;
   buttons?: FlowButton[];
   sort_order?: number;
+  position_x?: number;
+  position_y?: number;
+  handoff_user_id?: number | null;
 };
 
 export type FlowEdgeInput = {

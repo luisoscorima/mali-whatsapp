@@ -2,10 +2,12 @@ import {
   IsArray,
   IsIn,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   MaxLength,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -53,6 +55,20 @@ export class FlowNodeInputDto {
   @IsOptional()
   @IsInt()
   sort_order?: number;
+
+  @IsOptional()
+  @IsNumber()
+  position_x?: number;
+
+  @IsOptional()
+  @IsNumber()
+  position_y?: number;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @IsInt()
+  @Type(() => Number)
+  handoff_user_id?: number | null;
 }
 
 export class FlowEdgeInputDto {

@@ -25,7 +25,6 @@ import { InboxAssignDialog, type ConversationAssignee } from './InboxAssignDialo
 import { InboxChatActionsDialog } from './InboxChatActionsDialog'
 import { InboxContactSheet } from './InboxContactSheet'
 import { InboxSendTemplateDialog } from './InboxSendTemplateDialog'
-import { InboxStartFlowMenu } from './InboxStartFlowMenu'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -634,6 +633,7 @@ export function ConversationsInboxPage() {
   const [contactSheetPhone, setContactSheetPhone] = useState('')
   const [contactSheetPrefillName, setContactSheetPrefillName] = useState('')
   const [replyToMessage, setReplyToMessage] = useState<ReplyToMessage | null>(null)
+  const [contactAttributes, setContactAttributes] = useState<Record<string, string>>({})
   const [assignContext, setAssignContext] = useState<AssignContext | null>(null)
   const [assignees, setAssignees] = useState<ConversationAssignee[]>([])
   const [assigneesLoading, setAssigneesLoading] = useState(false)
@@ -739,9 +739,21 @@ export function ConversationsInboxPage() {
           notify.error(result.error)
           setError(result.error)
           setDetail(null)
+          setContactAttributes({})
           return
         }
         setDetail(result.data)
+        const cid = result.data.conversation.contact_id
+        if (cid) {
+          apiClient
+            .get<{ attributes: Record<string, string> }>(`/api/contacts/${cid}`)
+            .then((cr) => {
+              if (cr.ok) setContactAttributes(cr.data.attributes || {})
+              else setContactAttributes({})
+            })
+        } else {
+          setContactAttributes({})
+        }
         setList((prev) => {
           if (!prev) return prev
           const item = prev.items.find((row) => row.id === conversationId)
@@ -1989,21 +2001,6 @@ export function ConversationsInboxPage() {
                 />
               </div>
               <div className="inbox-chat-header-toolbar">
-                {!detail.user_service_window_open ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setTemplateOpen(true)}
-                  >
-                    Enviar plantilla
-                  </Button>
-                ) : (
-                  <InboxStartFlowMenu
-                    conversationId={detail.conversation.id}
-                    onStarted={() => void loadDetail(detail.conversation.id)}
-                  />
-                )}
                 {canAssign ? (
                   <Button
                     type="button"
@@ -2079,25 +2076,22 @@ export function ConversationsInboxPage() {
             </div>
 
             <WaMainFooter>
-              {detail.can_reply ? (
-                <InboxComposeBar
-                  replyText={replyText}
-                  onReplyTextChange={setReplyText}
-                  replyFile={replyFile}
-                  onReplyFileChange={setReplyFile}
-                  sendingReply={sendingReply}
-                  onSubmit={(e) => void onSendReply(e)}
-                  replyTo={replyToMessage}
-                  onClearReplyTo={() => setReplyToMessage(null)}
-                />
-              ) : (
-                <Alert>
-                  <AlertDescription>
-                    {replyBlockedText(detail.reply_blocked_reason) ||
-                      'No puedes responder en este momento.'}
-                  </AlertDescription>
-                </Alert>
-              )}
+              <InboxComposeBar
+                replyText={replyText}
+                onReplyTextChange={setReplyText}
+                replyFile={replyFile}
+                onReplyFileChange={setReplyFile}
+                sendingReply={sendingReply}
+                onSubmit={(e) => void onSendReply(e)}
+                replyTo={replyToMessage}
+                onClearReplyTo={() => setReplyToMessage(null)}
+                windowOpen={detail.user_service_window_open}
+                canReply={detail.can_reply}
+                conversationId={detail.conversation.id}
+                onOpenTemplate={() => setTemplateOpen(true)}
+                onFlowStarted={() => void loadDetail(detail.conversation.id)}
+                contactAttributes={contactAttributes}
+              />
             </WaMainFooter>
           </>
         ) : null}

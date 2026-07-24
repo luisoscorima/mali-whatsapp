@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { insertAtSelection } from '@/shared/textSelection'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { Button } from '@/shared/ui/shadcn/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/ui/shadcn/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/shadcn/popover'
 
 type AdvisorNote = {
@@ -11,30 +18,54 @@ type AdvisorNote = {
   sort_order: number
 }
 
+type AttrDef = { slug: string; label: string }
+
 type InboxAdvisorNotesPopoverProps = {
   onInsert: (text: string) => void
+  contactAttributes?: Record<string, string>
+  triggerIcon?: ReactNode
+}
+
+function resolveNotePlaceholders(
+  template: string,
+  attrs: Record<string, string>,
+): string {
+  return template.replace(/\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}/g, (_m, slug: string) => {
+    const v = attrs[slug]
+    return v != null && String(v).trim() ? String(v) : ''
+  })
 }
 
 export function InboxAdvisorNotesPopover({
   onInsert,
+  contactAttributes = {},
+  triggerIcon,
 }: InboxAdvisorNotesPopoverProps) {
   const [open, setOpen] = useState(false)
   const [notes, setNotes] = useState<AdvisorNote[]>([])
+  const [attrDefs, setAttrDefs] = useState<AttrDef[]>([])
   const [loading, setLoading] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [saving, setSaving] = useState(false)
+  const bodyRef = useRef<HTMLTextAreaElement>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
-    const result = await apiClient.get<AdvisorNote[]>('/api/advisor-notes')
+    const [notesRes, attrsRes] = await Promise.all([
+      apiClient.get<AdvisorNote[]>('/api/advisor-notes'),
+      apiClient.get<{ slug: string; label: string }[]>('/api/attribute-definitions'),
+    ])
     setLoading(false)
-    if (!result.ok) {
-      notify.error(result.error)
+    if (!notesRes.ok) {
+      notify.error(notesRes.error)
       return
     }
-    setNotes(result.data)
+    setNotes(notesRes.data)
+    if (attrsRes.ok) {
+      setAttrDefs(attrsRes.data.map((a) => ({ slug: a.slug, label: a.label })))
+    }
   }, [])
 
   useEffect(() => {
@@ -92,6 +123,15 @@ export function InboxAdvisorNotesPopover({
     setBody(note.body)
   }
 
+  function insertAttr(slug: string) {
+    insertAtSelection(bodyRef.current, `{{${slug}}}`, body, setBody)
+  }
+
+  function insertNoteIntoComposer(noteBody: string) {
+    onInsert(resolveNotePlaceholders(noteBody, contactAttributes))
+    setOpen(false)
+  }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -102,7 +142,7 @@ export function InboxAdvisorNotesPopover({
           title="Mis notas"
           aria-label="Mis notas"
         >
-          <span aria-hidden="true">📝</span>
+          {triggerIcon ?? <span aria-hidden>N</span>}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 p-3">
@@ -128,10 +168,7 @@ export function InboxAdvisorNotesPopover({
                   <button
                     type="button"
                     className="w-full text-left"
-                    onClick={() => {
-                      onInsert(note.body)
-                      setOpen(false)
-                    }}
+                    onClick={() => insertNoteIntoComposer(note.body)}
                   >
                     <span className="block text-sm font-medium">{note.title}</span>
                     <span className="mt-0.5 line-clamp-2 block text-xs text-muted">
@@ -171,13 +208,38 @@ export function InboxAdvisorNotesPopover({
               onChange={(e) => setTitle(e.target.value)}
             />
             <textarea
+              ref={bodyRef}
               className="w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
-              placeholder="Texto a insertar…"
+              placeholder="Texto a insertar… Usa {{atributo}} si hace falta."
               rows={3}
               value={body}
               maxLength={4000}
               onChange={(e) => setBody(e.target.value)}
             />
+            {attrDefs.length > 0 ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" size="sm" variant="outline">
+                    Atributo
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="max-h-56 overflow-y-auto">
+                  {attrDefs.map((a) => (
+                    <DropdownMenuItem
+                      key={a.slug}
+                      onSelect={() => insertAttr(a.slug)}
+                    >
+                      <span className="flex flex-col">
+                        <span>{a.label}</span>
+                        <span className="font-mono text-[10px] text-muted">
+                          {`{{${a.slug}}}`}
+                        </span>
+                      </span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
             <div className="flex gap-2">
               <Button
                 type="button"
