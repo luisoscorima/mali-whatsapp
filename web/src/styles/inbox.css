@@ -131,8 +131,7 @@ html[data-theme='dark'] .inbox-layout-wa {
 }
 
 .inbox-filters {
-  padding: 0 14px 12px;
-  gap: 10px;
+  padding: 8px 14px 12px;
   border-bottom: 1px solid var(--line);
   background: var(--wa-list-bg);
 }

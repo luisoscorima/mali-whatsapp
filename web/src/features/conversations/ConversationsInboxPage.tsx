@@ -1222,18 +1222,18 @@ export function ConversationsInboxPage() {
           </Button>
         ))}
       </div>
-      <SegmentFilterSelect
-        segments={segments}
-        selectedSlugs={selectedSegments}
-        onToggle={toggleSegment}
-        onClearAll={() => {
-          const next = new URLSearchParams(searchParams)
-          next.delete('segment')
-          next.delete('page')
-          setSearchParams(next)
-        }}
-      />
-      <div className="inbox-filters">
+      <div className="inbox-filters space-y-2">
+        <SegmentFilterSelect
+          segments={segments}
+          selectedSlugs={selectedSegments}
+          onToggle={toggleSegment}
+          onClearAll={() => {
+            const next = new URLSearchParams(searchParams)
+            next.delete('segment')
+            next.delete('page')
+            setSearchParams(next)
+          }}
+        />
         <div className="inbox-search-row">
           <input
             type="search"

@@ -86,10 +86,14 @@
   position: relative;
   z-index: 1;
   width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
+  box-sizing: border-box;
 }
 
 .login-stack {
@@ -375,6 +379,12 @@
 .login-loading {
   position: relative;
   z-index: 1;
+  min-height: 100vh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: rgb(255 255 255 / 0.85);
   font-size: 0.95rem;
 }
