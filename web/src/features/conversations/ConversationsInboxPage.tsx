@@ -50,7 +50,6 @@ import {
 import { ConversationsSummaryPane } from './ConversationsSummaryPane'
 import { InboxComposeBar, type ReplyToMessage } from './InboxComposeBar'
 import { InboxMessageScroller, type InboxMessageScrollerHandle } from './InboxMessageScroller'
-import { Alert, AlertDescription } from '@/shared/ui/shadcn/alert'
 import {
   chatActionsFromDetail,
   chatActionsFromListItem,
@@ -566,16 +565,6 @@ function messageReplyPreview(message: InboxMessage): string {
   if (mt === 'document') return 'Documento'
   if (mt === 'campaign') return 'Campaña'
   return 'Mensaje'
-}
-
-function replyBlockedText(reason: InboxDetail['reply_blocked_reason']): string {
-  if (reason === '24h') {
-    return 'La ventana de 24 h para responder al cliente está cerrada. Solo puedes enviar plantillas aprobadas (próximamente en este módulo).'
-  }
-  if (reason === 'bot_mode') {
-    return 'La conversación está en modo Bot. Cambia a modo Asesor para responder manualmente (próximamente).'
-  }
-  return ''
 }
 
 /** Páginas visibles del paginador: 1, 2, 3, …, N (con vecinos del actual). */
