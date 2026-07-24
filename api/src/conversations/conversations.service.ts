@@ -11,7 +11,10 @@ import type { AuthUser } from '../auth/auth.types';
 import { AuditEvent } from '../audit/audit-events';
 import { auditActor, phoneMetaTail } from '../audit/audit-actor.util';
 import { AuditLogService } from '../audit/audit-log.service';
-import { isWithinUserServiceWindow } from '../campaigns/campaign-conversation-window.util';
+import {
+  isWithinUserServiceWindow,
+  readSessionWindowMs,
+} from '../campaigns/campaign-conversation-window.util';
 import { persistCampaignChatMessage } from '../campaigns/campaign-chat-message.util';
 import { buildCampaignMessagePreview } from '../campaigns/campaign-message-preview.util';
 import {
@@ -88,6 +91,7 @@ import type {
   InboxConversationUpdates,
   ConversationAssigneesResult,
   AssignConversationResult,
+  ArchiveConversationResult,
   MessageReactionResult,
   InboxTimelineEvent,
 } from './conversations.types';
@@ -132,6 +136,7 @@ type InboxRow = {
   contact_id: number | null;
   last_user_message_at: Date | null;
   last_outbound_message_at: Date | null;
+  archived: boolean;
 };
 
 @Injectable()
@@ -230,6 +235,7 @@ export class ConversationsService {
       last_outbound_message_at: row.last_outbound_message_at
         ? row.last_outbound_message_at.toISOString()
         : null,
+      archived: Boolean(row.archived),
     };
   }
 
@@ -303,32 +309,43 @@ export class ConversationsService {
     chat: ReturnType<typeof parseInboxChatFilter>,
     userId: number,
   ): Prisma.Sql {
-    if (chat === 'unread') return Prisma.sql` AND c.inbox_unread = TRUE`;
+    if (chat === 'archived') {
+      return Prisma.sql` AND (c.archived = TRUE OR c.last_user_message_at IS NULL)`;
+    }
+    if (chat === 'archived_auto') {
+      return Prisma.sql` AND c.last_user_message_at IS NULL`;
+    }
+    if (chat === 'archived_manual') {
+      return Prisma.sql` AND c.archived = TRUE AND c.last_user_message_at IS NOT NULL`;
+    }
+    const activeInbox = Prisma.sql` AND c.archived = FALSE AND c.last_user_message_at IS NOT NULL`;
+    if (chat === 'unread') {
+      return Prisma.sql`${activeInbox} AND c.inbox_unread = TRUE`;
+    }
     if (chat === 'bot') {
-      return Prisma.sql` AND LOWER(TRIM(COALESCE(c.status, ''))) = 'bot'`;
+      return Prisma.sql`${activeInbox} AND LOWER(TRIM(COALESCE(c.status, ''))) = 'bot'`;
     }
     if (chat === 'human') {
-      return Prisma.sql` AND LOWER(TRIM(COALESCE(c.status, ''))) = 'human'`;
+      return Prisma.sql`${activeInbox} AND LOWER(TRIM(COALESCE(c.status, ''))) = 'human'`;
     }
     if (chat === 'mine') {
-      return Prisma.sql` AND c.assigned_user_id = ${userId}`;
+      return Prisma.sql`${activeInbox} AND c.assigned_user_id = ${userId}`;
     }
     if (chat === 'unassigned') {
-      return Prisma.sql` AND c.assigned_user_id IS NULL
-        AND (
-          LOWER(TRIM(COALESCE(c.status, ''))) = 'bot'
-          OR (
-            LOWER(TRIM(COALESCE(c.status, ''))) = 'human'
-            AND c.automation_touched_at IS NOT NULL
-          )
+      return Prisma.sql`${activeInbox} AND c.assigned_user_id IS NULL`;
+    }
+    if (chat === 'unanswered') {
+      const sessionWindowMs = readSessionWindowMs();
+      return Prisma.sql`${activeInbox}
+        AND c.last_user_message_at > NOW() - (${sessionWindowMs}::bigint * INTERVAL '1 millisecond')
+        AND NOT EXISTS (
+          SELECT 1 FROM chat_messages m_out
+          WHERE m_out.conversation_id = c.id
+            AND m_out.direction = 'outbound'
+            AND m_out.created_at >= c.last_user_message_at
         )`;
     }
-    if (chat === 'new') {
-      return Prisma.sql` AND LOWER(TRIM(COALESCE(c.status, ''))) = 'human'
-        AND c.assigned_user_id IS NULL
-        AND c.automation_touched_at IS NULL`;
-    }
-    return Prisma.empty;
+    return activeInbox;
   }
 
   private async fetchInboxConversations(
@@ -372,6 +389,7 @@ export class ConversationsService {
             AND m_out.direction = 'outbound'
         ) AS last_outbound_message_at,
         c.inbox_unread,
+        c.archived,
         c.status AS conversation_status,
         c.assigned_user_id,
         c.automation_touched_at,
@@ -451,6 +469,7 @@ export class ConversationsService {
         NULL::timestamptz AS last_user_message_at,
         NULL::timestamptz AS last_outbound_message_at,
         FALSE AS inbox_unread,
+        FALSE AS archived,
         NULL::text AS conversation_status,
         NULL::int AS assigned_user_id,
         NULL::timestamptz AS automation_touched_at,
@@ -560,7 +579,26 @@ export class ConversationsService {
       SELECT COUNT(*)::int AS n
       FROM conversations c
       LEFT JOIN contacts ct ON ct.id = c.contact_id
-      WHERE c.area = ${area} AND c.inbox_unread = TRUE
+      WHERE c.area = ${area}
+        AND c.inbox_unread = TRUE
+        AND c.archived = FALSE
+        AND c.last_user_message_at IS NOT NULL
+      ${segmentSql}
+    `);
+    return rows[0]?.n ?? 0;
+  }
+
+  private async countInboxArchived(
+    area: string,
+    segmentFilter: ReturnType<typeof parseSegmentListFilter>,
+  ): Promise<number> {
+    const segmentSql = buildConversationSegmentSql(segmentFilter);
+    const rows = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
+      SELECT COUNT(*)::int AS n
+      FROM conversations c
+      LEFT JOIN contacts ct ON ct.id = c.contact_id
+      WHERE c.area = ${area}
+        AND (c.archived = TRUE OR c.last_user_message_at IS NULL)
       ${segmentSql}
     `);
     return rows[0]?.n ?? 0;
@@ -585,8 +623,14 @@ export class ConversationsService {
     const page = Math.max(1, Number(pageRaw) || 1);
     const limit = INBOX_LIST_PAGE_SIZE;
 
-    const [segments, assignableSegments, totalCount, aiAreaEnabled, unreadCount] =
-      await Promise.all([
+    const [
+      segments,
+      assignableSegments,
+      totalCount,
+      aiAreaEnabled,
+      unreadCount,
+      archivedCount,
+    ] = await Promise.all([
       this.loadSegmentOptions(area),
       this.loadAssignableSegmentOptions(area),
       this.countInboxConversations(
@@ -599,6 +643,7 @@ export class ConversationsService {
       ),
       this.loadAiAreaEnabled(area),
       this.countInboxUnread(area, segmentFilter),
+      this.countInboxArchived(area, segmentFilter),
     ]);
 
     const pages = totalCount > 0 ? Math.ceil(totalCount / limit) : 0;
@@ -620,6 +665,7 @@ export class ConversationsService {
       page: pageClamped,
       pages,
       unread_count: unreadCount,
+      archived_count: archivedCount,
       ai_area_enabled: aiAreaEnabled,
       can_assign_conversations: this.canAssignConversations(user),
       segments,
@@ -1002,6 +1048,7 @@ export class ConversationsService {
         last_user_message_at:
           activeConversation.last_user_message_at?.toISOString() ?? null,
         inbox_unread: false,
+        archived: Boolean(activeConversation.archived),
         contact_id: activeConversation.contact_id,
         meta_ctwa_ad_id: activeConversation.meta_ctwa_ad_id,
         assigned_user_id: activeConversation.assigned_user_id,
@@ -1920,6 +1967,47 @@ export class ConversationsService {
     return { ok: true };
   }
 
+  async setArchived(
+    user: AuthUser,
+    conversationId: number,
+    archived: boolean,
+  ): Promise<ArchiveConversationResult> {
+    if (!Number.isInteger(conversationId) || conversationId <= 0) {
+      throw new BadRequestException('Id invalido');
+    }
+    if (typeof archived !== 'boolean') {
+      throw new BadRequestException('archived debe ser boolean');
+    }
+    const area = user.area;
+    const conversation = await this.prisma.conversations.findFirst({
+      where: { id: conversationId, area },
+      select: { id: true, last_user_message_at: true },
+    });
+    if (!conversation) {
+      throw new NotFoundException('Conversacion no encontrada');
+    }
+    if (!archived && conversation.last_user_message_at == null) {
+      // Sin inbound sigue en Archivados por regla automática; el flag ya es false.
+      return { archived: false };
+    }
+    const updated = await this.prisma.conversations.updateMany({
+      where: { id: conversationId, area },
+      data: { archived, updated_at: new Date() },
+    });
+    if (updated.count === 0) {
+      throw new NotFoundException('Conversacion no encontrada');
+    }
+    await this.auditLog.write({
+      event_type: AuditEvent.CONVERSATION_ARCHIVE,
+      message: archived
+        ? `Conversación ${conversationId} archivada`
+        : `Conversación ${conversationId} desarchivada`,
+      actor: auditActor(user),
+      meta: { conversation_id: conversationId, archived },
+    });
+    return { archived };
+  }
+
   async setLeadScore(
     user: AuthUser,
     conversationId: number,
@@ -2065,6 +2153,7 @@ export class ConversationsService {
           conversation.last_user_message_at?.toISOString() ?? null,
         status: conversation.status,
         inbox_unread: messageRows.length > 0 ? false : conversation.inbox_unread,
+        archived: Boolean(conversation.archived),
         assigned_user_id: conversation.assigned_user_id,
         assigned_user_label: assignedUserLabel,
         automation_touched_at:

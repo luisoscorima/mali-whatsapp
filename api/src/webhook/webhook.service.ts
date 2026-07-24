@@ -524,6 +524,7 @@ export class WebhookService {
           last_user_message_at: new Date(),
           last_message_at: new Date(),
           inbox_unread: true,
+          archived: false,
           whatsapp_phone_number_id: linePhoneNumberId,
           updated_at: new Date(),
         },

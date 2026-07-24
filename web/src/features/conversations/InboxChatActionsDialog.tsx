@@ -37,6 +37,9 @@ type InboxChatActionsDialogProps = {
   currentSegmentSlugs: string[]
   onLeadScore: (score: number | null) => void
   onMarkUnread: () => void
+  onSetArchived?: (archived: boolean) => void
+  archived?: boolean
+  lastUserMessageAt?: string | null
   onModeChange: (status: 'bot' | 'human') => void
   onExport: () => void
   onAssign: () => void
@@ -59,6 +62,9 @@ export function InboxChatActionsDialog({
   currentSegmentSlugs,
   onLeadScore,
   onMarkUnread,
+  onSetArchived,
+  archived = false,
+  lastUserMessageAt = null,
   onModeChange,
   onExport,
   onAssign,
@@ -70,6 +76,9 @@ export function InboxChatActionsDialog({
   const current = leadScore ?? 0
   const hasConversation = conversationId != null && conversationId > 0
   const status = String(conversationStatus ?? '').toLowerCase()
+  const hasInbound = lastUserMessageAt != null
+  const canUnarchive = archived && hasInbound
+  const canArchive = hasConversation && hasInbound && !archived
   const assignableSlugs = new Set(assignableSegments.map((seg) => seg.slug))
   const activeAssignableSlugs = new Set(
     currentSegmentSlugs.filter((slug) => assignableSlugs.has(slug)),
@@ -237,6 +246,32 @@ export function InboxChatActionsDialog({
             >
               {contactId ? 'Editar contacto' : 'Guardar contacto'}
             </Button>
+            {canArchive && onSetArchived ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full justify-start"
+                onClick={() => {
+                  onSetArchived(true)
+                  onOpenChange(false)
+                }}
+              >
+                Archivar chat
+              </Button>
+            ) : null}
+            {canUnarchive && onSetArchived ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full justify-start"
+                onClick={() => {
+                  onSetArchived(false)
+                  onOpenChange(false)
+                }}
+              >
+                Desarchivar chat
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="secondary"

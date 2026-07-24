@@ -22,6 +22,7 @@ export const AuditEvent = {
   TEMPLATE_SYNC: 'template.sync',
   CONVERSATION_MODE: 'conversation.mode',
   CONVERSATION_MARK_UNREAD: 'conversation.mark_unread',
+  CONVERSATION_ARCHIVE: 'conversation.archive',
   CONVERSATION_REPLY: 'conversation.reply',
   CONVERSATION_ASSIGN: 'conversation.assign',
   CONVERSATION_EXPORT: 'conversation.export',

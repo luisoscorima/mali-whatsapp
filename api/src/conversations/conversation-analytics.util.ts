@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import type { MetricCard } from '../campaigns/campaign-analytics.util';
+import { readSessionWindowMs } from '../campaigns/campaign-conversation-window.util';
 export { isWithinUserServiceWindow } from '../campaigns/campaign-conversation-window.util';
 
 export type ConversationDailyPoint = {
@@ -33,6 +34,7 @@ export async function fetchConversationSummary(
 ): Promise<ConversationSummary> {
   const safeDays = Math.min(Math.max(Math.round(days) || 30, 1), 90);
   const since = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000);
+  const sessionWindowMs = readSessionWindowMs();
   const advisorFilter =
     advisorId != null && advisorId > 0
       ? Prisma.sql` AND c.assigned_user_id = ${advisorId}`
@@ -45,7 +47,7 @@ export async function fetchConversationSummary(
         window_open: number;
         window_closed: number;
         unassigned: number;
-        new_chats: number;
+        unanswered: number;
         bot_mode: number;
         human_mode: number;
         unread: number;
@@ -63,19 +65,17 @@ export async function fetchConversationSummary(
         )::int AS window_closed,
         COUNT(*) FILTER (
           WHERE c.assigned_user_id IS NULL
-            AND (
-              LOWER(TRIM(COALESCE(c.status, ''))) = 'bot'
-              OR (
-                LOWER(TRIM(COALESCE(c.status, ''))) = 'human'
-                AND c.automation_touched_at IS NOT NULL
-              )
-            )
         )::int AS unassigned,
         COUNT(*) FILTER (
-          WHERE LOWER(TRIM(COALESCE(c.status, ''))) = 'human'
-            AND c.assigned_user_id IS NULL
-            AND c.automation_touched_at IS NULL
-        )::int AS new_chats,
+          WHERE c.last_user_message_at IS NOT NULL
+            AND c.last_user_message_at > NOW() - (${sessionWindowMs}::bigint * INTERVAL '1 millisecond')
+            AND NOT EXISTS (
+              SELECT 1 FROM chat_messages m_out
+              WHERE m_out.conversation_id = c.id
+                AND m_out.direction = 'outbound'
+                AND m_out.created_at >= c.last_user_message_at
+            )
+        )::int AS unanswered,
         COUNT(*) FILTER (
           WHERE LOWER(TRIM(COALESCE(c.status, ''))) = 'bot'
         )::int AS bot_mode,
@@ -136,7 +136,7 @@ export async function fetchConversationSummary(
     window_open: 0,
     window_closed: 0,
     unassigned: 0,
-    new_chats: 0,
+    unanswered: 0,
     bot_mode: 0,
     human_mode: 0,
     unread: 0,
@@ -167,9 +167,10 @@ export async function fetchConversationSummary(
       tone: 'ink',
     },
     {
-      label: 'Nuevo',
-      display: fmt(c.new_chats),
+      label: 'Sin responder',
+      display: fmt(c.unanswered),
       tone: 'ink',
+      tooltip: 'Cliente con la última palabra y ventana abierta',
     },
     {
       label: 'Sin leer',

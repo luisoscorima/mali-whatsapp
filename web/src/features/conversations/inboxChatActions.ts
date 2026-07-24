@@ -7,6 +7,8 @@ export type ChatActionsContext = {
   aiAreaEnabled: boolean
   conversationStatus: string | null
   assignedUserId: number | null
+  archived: boolean
+  lastUserMessageAt: string | null
 }
 
 type ListItemLike = {
@@ -18,6 +20,8 @@ type ListItemLike = {
   conversation_status: string | null
   assigned_user_id: number | null
   is_virtual: boolean
+  archived?: boolean
+  last_user_message_at?: string | null
 }
 
 type DetailLike = {
@@ -27,6 +31,8 @@ type DetailLike = {
     status: string
     contact_id: number | null
     assigned_user_id: number | null
+    archived?: boolean
+    last_user_message_at?: string | null
   }
   contact: {
     lead_score: number | null
@@ -47,6 +53,8 @@ export function chatActionsFromListItem(
     aiAreaEnabled,
     conversationStatus: item.conversation_status,
     assignedUserId: item.is_virtual ? null : item.assigned_user_id,
+    archived: Boolean(item.archived),
+    lastUserMessageAt: item.last_user_message_at ?? null,
   }
 }
 
@@ -64,5 +72,7 @@ export function chatActionsFromDetail(
     aiAreaEnabled,
     conversationStatus: detail.conversation.status,
     assignedUserId: detail.conversation.assigned_user_id,
+    archived: Boolean(detail.conversation.archived),
+    lastUserMessageAt: detail.conversation.last_user_message_at ?? null,
   }
 }

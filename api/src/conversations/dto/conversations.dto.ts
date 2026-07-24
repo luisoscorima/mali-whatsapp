@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { MAX_SESSION_TEXT_LEN } from '../../settings/business-hours.util';
 
 export class ReplyConversationDto {
@@ -36,4 +36,9 @@ export class LeadScoreDto {
 export class AssignConversationDto {
   @IsOptional()
   assigned_user_id?: number | null;
+}
+
+export class ArchiveConversationDto {
+  @IsBoolean()
+  archived!: boolean;
 }

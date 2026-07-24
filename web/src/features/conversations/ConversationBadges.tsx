@@ -3,13 +3,11 @@ import { Badge } from '@/shared/ui/shadcn/badge'
 export type ConversationBadgeInput = {
   status: string | null
   assignedUserLabel: string | null
-  automationTouchedAt: string | null
 }
 
 export function ConversationBadges({
   status,
   assignedUserLabel,
-  automationTouchedAt,
 }: ConversationBadgeInput) {
   const mode = String(status ?? '').toLowerCase()
   const assignee = assignedUserLabel?.trim() || null
@@ -41,14 +39,10 @@ export function ConversationBadges({
   }
 
   if (isHuman) {
-    const queueLabel = automationTouchedAt ? 'Sin asignar' : 'Nuevo'
     return (
       <span className="inbox-chat-badges">
-        <Badge
-          variant={automationTouchedAt ? 'secondary' : 'outline'}
-          title={queueLabel}
-        >
-          {queueLabel}
+        <Badge variant="secondary" title="Sin asignar">
+          Sin asignar
         </Badge>
       </span>
     )

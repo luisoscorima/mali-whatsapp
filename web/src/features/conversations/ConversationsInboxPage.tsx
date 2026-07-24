@@ -210,7 +210,6 @@ function ProfileBlock({
         <ConversationBadges
           status={detail.conversation.status}
           assignedUserLabel={detail.conversation.assigned_user_label}
-          automationTouchedAt={detail.conversation.automation_touched_at}
         />
         <p className="inbox-chat-sub">
           {detail.conversation.phone}
@@ -291,6 +290,7 @@ type InboxListItem = {
   user_service_window_open: boolean
   last_user_message_at: string | null
   last_outbound_message_at: string | null
+  archived: boolean
 }
 
 type InboxListResult = {
@@ -299,13 +299,14 @@ type InboxListResult = {
   page: number
   pages: number
   unread_count: number
+  archived_count: number
   ai_area_enabled: boolean
   can_assign_conversations: boolean
   segments: SegmentOption[]
   assignable_segments: SegmentOption[]
   filters: {
     q: string
-    chat: 'all' | 'unread' | 'bot' | 'human' | 'mine' | 'unassigned' | 'new'
+    chat: 'all' | 'unread' | 'bot' | 'human' | 'mine' | 'unassigned' | 'unanswered' | 'archived' | 'archived_auto' | 'archived_manual'
     window_max: WindowMaxFilter
     segment_slugs: string[]
     include_none: boolean
@@ -355,6 +356,7 @@ type InboxDetail = {
     last_message_at: string | null
     last_user_message_at?: string | null
     inbox_unread: boolean
+    archived?: boolean
     contact_id: number | null
     assigned_user_id: number | null
     assigned_user_label: string | null
@@ -393,6 +395,7 @@ type InboxConversationUpdates = {
     last_user_message_at: string | null
     status: string
     inbox_unread: boolean
+    archived: boolean
     assigned_user_id: number | null
     assigned_user_label: string | null
     automation_touched_at: string | null
@@ -402,12 +405,21 @@ type InboxConversationUpdates = {
   user_service_window_open: boolean
 }
 
+function normalizeInboxChatParam(
+  raw: string | null,
+): InboxListResult['filters']['chat'] {
+  const chat = raw || 'all'
+  // Legacy: «Nuevo» unificado en «Sin asignar».
+  if (chat === 'new') return 'unassigned'
+  return chat as InboxListResult['filters']['chat']
+}
+
 function inboxApiQuery(searchParams: URLSearchParams, extra?: { msg?: number }): string {
   const qs = new URLSearchParams()
   const q = searchParams.get('q')
   if (q) qs.set('q', q)
-  const chat = searchParams.get('chat')
-  if (chat && chat !== 'all') qs.set('chat', chat)
+  const chat = normalizeInboxChatParam(searchParams.get('chat'))
+  if (chat !== 'all') qs.set('chat', chat)
   const windowMax = parseWindowMaxFilter(searchParams.get('window_max'))
   if (windowMax != null) qs.set('window_max', String(windowMax))
   searchParams.getAll('segment').forEach((slug) => qs.append('segment', slug))
@@ -420,7 +432,7 @@ function inboxApiQuery(searchParams: URLSearchParams, extra?: { msg?: number }):
 
 function inboxFilterKeyFromParams(searchParams: URLSearchParams): string {
   const q = (searchParams.get('q') ?? '').trim()
-  const chat = searchParams.get('chat') || 'all'
+  const chat = normalizeInboxChatParam(searchParams.get('chat'))
   const windowMax = parseWindowMaxFilter(searchParams.get('window_max')) ?? ''
   const segments = searchParams.getAll('segment').sort().join('\0')
   return `${q}\n${chat}\n${windowMax}\n${segments}`
@@ -448,6 +460,16 @@ function inboxInitials(contactName: string, phone: string): string {
 
 function listPreviewText(preview: string): string {
   return preview.trim() || 'Sin mensajes'
+}
+
+function isArchivedChatFilter(
+  chat: InboxListResult['filters']['chat'],
+): boolean {
+  return (
+    chat === 'archived' ||
+    chat === 'archived_auto' ||
+    chat === 'archived_manual'
+  )
 }
 
 function mergeMessageReactions(
@@ -605,7 +627,7 @@ export function ConversationsInboxPage() {
   }, [searchParams])
   const searchQuery = (searchParams.get('q') ?? '').trim()
   const highlightMsgId = Number(searchParams.get('msg') || '') || null
-  const chatFilter = (searchParams.get('chat') || 'all') as InboxListResult['filters']['chat']
+  const chatFilter = normalizeInboxChatParam(searchParams.get('chat'))
   const windowMaxFilter = parseWindowMaxFilter(searchParams.get('window_max'))
   const selectedSegments = searchParams.getAll('segment')
   const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1)
@@ -751,6 +773,7 @@ export function ConversationsInboxPage() {
             last_message_at: result.data.conversation.last_message_at,
             last_user_message_at: result.data.conversation.last_user_message_at,
             inbox_unread: result.data.conversation.inbox_unread,
+            archived: result.data.conversation.archived,
             assigned_user_id: result.data.conversation.assigned_user_id,
             assigned_user_label: result.data.conversation.assigned_user_label,
             automation_touched_at: result.data.conversation.automation_touched_at,
@@ -952,6 +975,7 @@ export function ConversationsInboxPage() {
     next.delete('page')
     if (chat === 'all') next.delete('chat')
     else next.set('chat', chat)
+    if (isArchivedChatFilter(chat)) next.delete('window_max')
     setSearchParams(next)
   }
 
@@ -1087,6 +1111,30 @@ export function ConversationsInboxPage() {
     }
     if (selectedId === convId) {
       navigate(`/conversations${filterQuerySuffix}`)
+    }
+    void loadList()
+  }
+
+  async function onSetArchived(
+    archived: boolean,
+    conversationId?: number | null,
+  ) {
+    const convId = conversationId ?? actionsConversationId ?? selectedId
+    if (!convId || convId <= 0) return
+    const result = await apiClient.patch<{ archived: boolean }>(
+      `/api/conversations/${convId}/archive`,
+      { archived },
+    )
+    if (!result.ok) {
+      notify.error(result.error)
+      return
+    }
+    if (selectedId === convId) {
+      if (archived || isArchivedChatFilter(chatFilter)) {
+        navigate(`/conversations${filterQuerySuffix}`)
+      } else {
+        void loadDetail(convId)
+      }
     }
     void loadList()
   }
@@ -1294,127 +1342,156 @@ export function ConversationsInboxPage() {
 
   const filterPills = (
     <>
-      <div
-        className="inbox-chat-filter-pills inbox-chat-filter-pills--row inbox-chat-filter-pills--compact"
-        aria-label="Filtrar lista"
-      >
-        {(
-          [
-            { key: 'all', label: 'Todos' },
-            { key: 'unread', label: list?.unread_count ? `Sin leer (${list.unread_count})` : 'Sin leer' },
-          ] as const
-        ).map((pill) => (
-          <Button
-            key={pill.key}
-            type="button"
-            size="sm"
-            variant={chatFilter === pill.key ? 'default' : 'outline'}
-            className="rounded-full"
-            onClick={() => setChatFilter(pill.key)}
-          >
-            {pill.label}
-          </Button>
-        ))}
-        {list?.ai_area_enabled ? (
-          <Button
-            type="button"
-            size="sm"
-            variant={chatFilter === 'bot' ? 'default' : 'outline'}
-            className="rounded-full"
-            onClick={() => setChatFilter('bot')}
-          >
-            Bot
-          </Button>
-        ) : null}
-        {(
-          [
-            { key: 'mine', label: 'Mis chats' },
-            { key: 'unassigned', label: 'Sin asignar' },
-            { key: 'new', label: 'Nuevo' },
-          ] as const
-        ).map((pill) => (
-          <Button
-            key={pill.key}
-            type="button"
-            size="sm"
-            variant={chatFilter === pill.key ? 'default' : 'outline'}
-            className="rounded-full"
-            onClick={() => setChatFilter(pill.key)}
-          >
-            {pill.label}
-          </Button>
-        ))}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+      {!isArchivedChatFilter(chatFilter) ? (
+        <div
+          className="inbox-chat-filter-pills inbox-chat-filter-pills--row inbox-chat-filter-pills--compact"
+          aria-label="Filtrar lista"
+        >
+          {(
+            [
+              { key: 'all', label: 'Todos' },
+              { key: 'unread', label: list?.unread_count ? `Sin leer (${list.unread_count})` : 'Sin leer' },
+              { key: 'unanswered', label: 'Sin responder' },
+              { key: 'mine', label: 'Mis chats' },
+              { key: 'unassigned', label: 'Sin asignar' },
+            ] as const
+          ).map((pill) => (
+            <Button
+              key={pill.key}
+              type="button"
+              size="sm"
+              variant={chatFilter === pill.key ? 'default' : 'outline'}
+              className="rounded-full"
+              onClick={() => setChatFilter(pill.key)}
+            >
+              {pill.label}
+            </Button>
+          ))}
+          {list?.ai_area_enabled ? (
             <Button
               type="button"
               size="sm"
-              variant={windowMaxFilter != null ? 'default' : 'outline'}
+              variant={chatFilter === 'bot' ? 'default' : 'outline'}
               className="rounded-full"
-              aria-label={
-                windowMaxFilter != null
-                  ? `Ventana ≤${windowMaxFilter}h`
-                  : 'Filtrar por horas de ventana'
-              }
-              title="Filtrar por horas restantes de ventana"
+              onClick={() => setChatFilter('bot')}
             >
-              <WindowClockIcon />
-              {windowMaxFilter != null ? `≤${windowMaxFilter}h` : null}
+              Bot
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuLabel>Horas restantes</DropdownMenuLabel>
-            <DropdownMenuItem
-              onSelect={() => setWindowMaxFilter(null)}
-              className={windowMaxFilter == null ? 'bg-accent-soft' : undefined}
-            >
-              Todas
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            {WINDOW_MAX_BUCKETS.map((hours) => (
-              <DropdownMenuItem
-                key={hours}
-                onSelect={() => setWindowMaxFilter(hours)}
-                className={windowMaxFilter === hours ? 'bg-accent-soft' : undefined}
+          ) : null}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                variant={windowMaxFilter != null ? 'default' : 'outline'}
+                className="rounded-full"
+                aria-label={
+                  windowMaxFilter != null
+                    ? `Ventana ≤${windowMaxFilter}h`
+                    : 'Filtrar por horas de ventana'
+                }
+                title="Filtrar por horas restantes de ventana"
               >
-                ≤{hours}h
+                <WindowClockIcon />
+                {windowMaxFilter != null ? `≤${windowMaxFilter}h` : null}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuLabel>Horas restantes</DropdownMenuLabel>
+              <DropdownMenuItem
+                onSelect={() => setWindowMaxFilter(null)}
+                className={windowMaxFilter == null ? 'bg-accent-soft' : undefined}
+              >
+                Todas
               </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+              <DropdownMenuSeparator />
+              {WINDOW_MAX_BUCKETS.map((hours) => (
+                <DropdownMenuItem
+                  key={hours}
+                  onSelect={() => setWindowMaxFilter(hours)}
+                  className={windowMaxFilter === hours ? 'bg-accent-soft' : undefined}
+                >
+                  ≤{hours}h
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ) : null}
       <div className="inbox-filters space-y-2">
-        <SegmentFilterSelect
-          segments={segments}
-          selectedSlugs={selectedSegments}
-          onToggle={toggleSegment}
-          onClearAll={() => {
-            const next = new URLSearchParams(searchParams)
-            next.delete('segment')
-            next.delete('page')
-            setSearchParams(next)
-          }}
-        />
         <div className="inbox-search-row">
           <input
             type="search"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={onSearchKeyDown}
-            placeholder="Buscar nombre, teléfono, mensaje, segmento o atributo…"
+            placeholder="Buscar…"
             className="inbox-search-input"
             aria-label="Buscar en chats"
           />
+          <SegmentFilterSelect
+            compact
+            segments={segments}
+            selectedSlugs={selectedSegments}
+            onToggle={toggleSegment}
+            onClearAll={() => {
+              const next = new URLSearchParams(searchParams)
+              next.delete('segment')
+              next.delete('page')
+              setSearchParams(next)
+            }}
+          />
         </div>
       </div>
+      <button
+        type="button"
+        className={`inbox-archived-row${isArchivedChatFilter(chatFilter) ? ' is-active' : ''}`}
+        onClick={() =>
+          setChatFilter(isArchivedChatFilter(chatFilter) ? 'all' : 'archived')
+        }
+        aria-pressed={isArchivedChatFilter(chatFilter)}
+      >
+        <span className="inbox-archived-row__icon" aria-hidden>
+          ⬇
+        </span>
+        <span className="inbox-archived-row__label">Archivados</span>
+        {list?.archived_count != null ? (
+          <span className="inbox-archived-row__count">{list.archived_count}</span>
+        ) : null}
+      </button>
+      {isArchivedChatFilter(chatFilter) ? (
+        <div
+          className="inbox-chat-filter-pills inbox-chat-filter-pills--row inbox-chat-filter-pills--compact"
+          aria-label="Filtrar archivados"
+        >
+          {(
+            [
+              { key: 'archived', label: 'Todos' },
+              { key: 'archived_auto', label: 'Sin respuesta' },
+              { key: 'archived_manual', label: 'Manuales' },
+            ] as const
+          ).map((pill) => (
+            <Button
+              key={pill.key}
+              type="button"
+              size="sm"
+              variant={chatFilter === pill.key ? 'default' : 'outline'}
+              className="rounded-full"
+              onClick={() => setChatFilter(pill.key)}
+            >
+              {pill.label}
+            </Button>
+          ))}
+        </div>
+      ) : null}
       {listCount != null ? (
-        <p className="text-xs text-muted">
+        <p className="px-3 text-xs text-muted">
           {listCount} chat{listCount === 1 ? '' : 's'}
           {listPages > 1 ? ` · Pág. ${listPage}/${listPages}` : null}
         </p>
       ) : null}
       {assignableSegments.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-1 text-xs">
+        <div className="flex flex-wrap items-center gap-1 px-3 pb-2 text-xs">
           <button
             type="button"
             className="rounded-lg border border-line px-2 py-1 text-xs hover:bg-surface"
@@ -1592,14 +1669,12 @@ export function ConversationsInboxPage() {
                                   <ConversationBadges
                                     status={item.conversation_status}
                                     assignedUserLabel={item.assigned_user_label}
-                                    automationTouchedAt={item.automation_touched_at}
                                   />
                                 </span>
                               ) : (
                                 <ConversationBadges
                                   status={item.conversation_status}
                                   assignedUserLabel={item.assigned_user_label}
-                                  automationTouchedAt={item.automation_touched_at}
                                 />
                               )}
                               <span className="inbox-chat-row-mid">
@@ -1719,6 +1794,20 @@ export function ConversationsInboxPage() {
                       <>
                         <ContextMenuSeparator />
                         <ContextMenuGroup>
+                          {item.last_user_message_at && !item.archived ? (
+                            <ContextMenuItem
+                              onSelect={() => void onSetArchived(true, item.id)}
+                            >
+                              Archivar chat
+                            </ContextMenuItem>
+                          ) : null}
+                          {item.archived && item.last_user_message_at ? (
+                            <ContextMenuItem
+                              onSelect={() => void onSetArchived(false, item.id)}
+                            >
+                              Desarchivar chat
+                            </ContextMenuItem>
+                          ) : null}
                           <ContextMenuItem
                             onSelect={() => void onMarkUnread(item.id)}
                           >
@@ -1983,7 +2072,12 @@ export function ConversationsInboxPage() {
             []
           }
           onLeadScore={onLeadScore}
-          onMarkUnread={onMarkUnread}
+          onMarkUnread={() => void onMarkUnread(actionsContext.conversationId)}
+          onSetArchived={(archived) =>
+            void onSetArchived(archived, actionsContext.conversationId)
+          }
+          archived={actionsContext.archived}
+          lastUserMessageAt={actionsContext.lastUserMessageAt}
           onModeChange={onModeChange}
           onAssign={() => openAssignFromActions(actionsContext)}
           onOpenContact={() =>

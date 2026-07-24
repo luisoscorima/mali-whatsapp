@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { formatContactName } from '../contacts/contactName'
-import { segmentToneClass } from '../segments/segmentColors'
+import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import {
   CampaignTemplateFields,
   emptyTemplateFormState,
@@ -16,6 +16,7 @@ type SegmentDefinition = {
   slug: string
   label: string
   color_key: string
+  active: boolean
 }
 
 type TemplateListItem = {
@@ -37,17 +38,6 @@ type ExcludedContact = {
   id: number
   name: string
   phone: string
-}
-
-function segmentTileClass(selected: boolean, exclude = false): string {
-  const base =
-    'flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors'
-  if (selected) {
-    return exclude
-      ? `${base} border-bad bg-bad/10`
-      : `${base} border-accent bg-accent-soft`
-  }
-  return `${base} border-line bg-surface hover:bg-surface-strong`
 }
 
 function fieldLabel(text: string, step?: string) {
@@ -174,7 +164,7 @@ export function CampaignNewPage() {
       setLoadFailed(true)
       return
     }
-    setSegments(segResult.data)
+    setSegments(segResult.data.filter((seg) => seg.active))
     setTemplates(tplResult.data)
     if (attrResult.ok) {
       setAttrDefs(
@@ -372,51 +362,29 @@ export function CampaignNewPage() {
               Incluye contactos que pertenezcan a <strong>cualquiera</strong> de
               los segmentos marcados (unión).
             </p>
-            <div className="flex flex-wrap gap-2">
-              {segments.map((seg) => (
-                <label
-                  key={seg.slug}
-                  className={segmentTileClass(includeSegments.has(seg.slug))}
-                >
-                  <input
-                    type="checkbox"
-                    className="sr-only"
-                    checked={includeSegments.has(seg.slug)}
-                    onChange={() =>
-                      toggleSegment(seg.slug, setIncludeSegments)
-                    }
-                  />
-                  <span
-                    className={`h-2 w-2 rounded-full ${segmentToneClass(seg.color_key)}`}
-                  />
-                  <span>{seg.label}</span>
-                </label>
-              ))}
-            </div>
+            <SegmentFilterSelect
+              variant="form"
+              segments={segments}
+              selectedSlugs={[...includeSegments]}
+              onToggle={(slug) => toggleSegment(slug, setIncludeSegments)}
+              onClearAll={() => {
+                setIncludeSegments(new Set())
+                invalidateRecipients()
+              }}
+            />
 
             <div className="space-y-2 border-t border-line pt-4">
               <p className="text-sm font-medium">Excluir segmentos (opcional)</p>
-              <div className="flex flex-wrap gap-2">
-                {segments.map((seg) => (
-                  <label
-                    key={`ex-${seg.slug}`}
-                    className={segmentTileClass(
-                      excludeSegments.has(seg.slug),
-                      true,
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      className="sr-only"
-                      checked={excludeSegments.has(seg.slug)}
-                      onChange={() =>
-                        toggleSegment(seg.slug, setExcludeSegments)
-                      }
-                    />
-                    <span>{seg.label}</span>
-                  </label>
-                ))}
-              </div>
+              <SegmentFilterSelect
+                variant="form"
+                segments={segments}
+                selectedSlugs={[...excludeSegments]}
+                onToggle={(slug) => toggleSegment(slug, setExcludeSegments)}
+                onClearAll={() => {
+                  setExcludeSegments(new Set())
+                  invalidateRecipients()
+                }}
+              />
             </div>
 
             <label className="flex items-start gap-2 text-sm">

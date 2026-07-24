@@ -217,6 +217,7 @@ model conversations {
   assigned_user_id             Int?
   assigned_at                  DateTime?            @db.Timestamptz(6)
   automation_touched_at        DateTime?            @db.Timestamptz(6)
+  archived                     Boolean              @default(false)
   chat_messages                chat_messages[]
   conversation_tags            conversation_tags[]
   contacts                     contacts?            @relation(fields: [contact_id], references: [id], onUpdate: NoAction)
@@ -227,6 +228,7 @@ model conversations {
   @@unique([area, phone])
   @@index([area, last_message_at(sort: Desc)], map: "idx_conversations_area_last_msg")
   @@index([area, assigned_user_id], map: "idx_conversations_area_assignee")
+  @@index([area, archived], map: "idx_conversations_area_archived")
 }
 
 model login_logs {

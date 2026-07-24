@@ -366,31 +366,34 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
       }
       filters={
         <div className="inbox-sidebar-filters space-y-2 px-3 pb-2">
-          <form onSubmit={onSearchSubmit} className="flex gap-1">
-            <input
-              type="search"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Buscar número o nombre"
-              className="min-w-0 flex-1 rounded-lg border border-line bg-bg px-2 py-1.5 text-sm"
-            />
-            <button type="submit" className="small-btn">
-              Buscar
-            </button>
-          </form>
+          <div className="flex gap-1">
+            <form onSubmit={onSearchSubmit} className="flex min-w-0 flex-1 gap-1">
+              <input
+                type="search"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Buscar…"
+                className="min-w-0 flex-1 rounded-lg border border-line bg-bg px-2 py-1.5 text-sm"
+              />
+              <button type="submit" className="small-btn">
+                Buscar
+              </button>
+            </form>
 
-          {segments.length > 0 ? (
-            <SegmentFilterSelect
-              segments={segments}
-              selectedSlugs={selectedSegments}
-              onToggle={toggleSegment}
-              onClearAll={() =>
-                updateParams((sp) => {
-                  sp.delete('segment')
-                })
-              }
-            />
-          ) : null}
+            {segments.length > 0 ? (
+              <SegmentFilterSelect
+                compact
+                segments={segments}
+                selectedSlugs={selectedSegments}
+                onToggle={toggleSegment}
+                onClearAll={() =>
+                  updateParams((sp) => {
+                    sp.delete('segment')
+                  })
+                }
+              />
+            ) : null}
+          </div>
 
           <div className="flex flex-wrap items-end gap-2 text-xs">
             <label className="flex items-center gap-1">

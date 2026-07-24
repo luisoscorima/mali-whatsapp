@@ -17,6 +17,8 @@ type SegmentFilterSelectProps = {
   showNoneOption?: boolean
   /** filter = lista/inbox; form = crear/editar contacto */
   variant?: 'filter' | 'form'
+  /** Trigger más estrecho para compartir fila con el buscador */
+  compact?: boolean
   disabled?: boolean
   className?: string
 }
@@ -25,9 +27,11 @@ function triggerLabel(
   segments: SegmentFilterOption[],
   selectedSlugs: string[],
   variant: 'filter' | 'form',
+  compact: boolean,
 ): string {
   if (selectedSlugs.length === 0) {
-    return variant === 'form' ? 'Elegir segmentos…' : 'Segmentos: Todos'
+    if (variant === 'form') return 'Elegir segmentos…'
+    return compact ? 'Segmentos' : 'Segmentos: Todos'
   }
   const noneActive = selectedSlugs.includes(SEGMENT_NONE)
   const active = segments.filter((s) => selectedSlugs.includes(s.slug))
@@ -35,7 +39,7 @@ function triggerLabel(
     ...active.map((s) => s.label),
     ...(noneActive ? ['Sin segmento'] : []),
   ]
-  const prefix = variant === 'form' ? '' : 'Segmentos: '
+  const prefix = variant === 'form' || compact ? '' : 'Segmentos: '
   if (parts.length <= 2) return `${prefix}${parts.join(', ')}`
   return `${prefix}${parts.length} seleccionados`
 }
@@ -47,6 +51,7 @@ export function SegmentFilterSelect({
   onClearAll,
   showNoneOption = true,
   variant = 'filter',
+  compact = false,
   disabled = false,
   className = '',
 }: SegmentFilterSelectProps) {
@@ -87,20 +92,20 @@ export function SegmentFilterSelect({
           <button
             type="button"
             disabled={disabled}
-            className={`flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-bg px-2.5 py-2 text-left text-sm disabled:opacity-60 ${
-              hasSelection ? 'border-accent/40' : ''
-            }`}
+            className={`flex items-center justify-between gap-2 rounded-lg border border-line bg-bg px-2.5 py-2 text-left text-sm disabled:opacity-60 ${
+              compact ? 'w-auto max-w-[7.5rem] shrink-0' : 'w-full'
+            } ${hasSelection ? 'border-accent/40' : ''}`}
             aria-label={
               variant === 'form' ? 'Seleccionar segmentos' : 'Filtrar por segmento'
             }
             title={
               variant === 'filter' && hasSelection
                 ? 'Unión: resultados en cualquiera de los segmentos seleccionados'
-                : undefined
+                : triggerLabel(segments, selectedSlugs, variant, compact)
             }
           >
             <span className="min-w-0 truncate">
-              {triggerLabel(segments, selectedSlugs, variant)}
+              {triggerLabel(segments, selectedSlugs, variant, compact)}
             </span>
             <span className="shrink-0 text-muted" aria-hidden>
               ▾

@@ -36,6 +36,7 @@ import {
   UpdateConversationModeDto,
   LeadScoreDto,
   AssignConversationDto,
+  ArchiveConversationDto,
   MessageReactionDto,
 } from './dto/conversations.dto';
 
@@ -157,6 +158,20 @@ export class ConversationsController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<{ ok: true }>> {
     const data = await this.conversationsService.markUnread(user, id);
+    return { ok: true, data };
+  }
+
+  @Patch(':id/archive')
+  async setArchived(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: ArchiveConversationDto,
+  ): Promise<ApiResponse<{ archived: boolean }>> {
+    const data = await this.conversationsService.setArchived(
+      user,
+      id,
+      body.archived,
+    );
     return { ok: true, data };
   }
 

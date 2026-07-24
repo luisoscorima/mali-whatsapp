@@ -10,17 +10,31 @@ export const INBOX_WINDOW_MAX_BUCKETS = [2, 6, 12, 24] as const;
 
 export function parseInboxChatFilter(raw?: string): InboxChatFilter {
   const value = String(raw ?? '').trim().toLowerCase();
+  // Legacy: «Nuevo» se unificó en «Sin asignar».
+  if (value === 'new') return 'unassigned';
   if (
     value === 'unread' ||
     value === 'bot' ||
     value === 'human' ||
     value === 'mine' ||
     value === 'unassigned' ||
-    value === 'new'
+    value === 'unanswered' ||
+    value === 'archived' ||
+    value === 'archived_auto' ||
+    value === 'archived_manual'
   ) {
     return value;
   }
   return 'all';
+}
+
+/** Vista Archivados (todos / auto / manual). */
+export function isArchivedChatFilter(chat: InboxChatFilter): boolean {
+  return (
+    chat === 'archived' ||
+    chat === 'archived_auto' ||
+    chat === 'archived_manual'
+  );
 }
 
 /** Buckets ≤Nh restantes (ceil de la UI). null = sin filtro. */

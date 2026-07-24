@@ -154,6 +154,62 @@ html[data-theme='dark'] .inbox-layout-wa {
   color: var(--ink);
 }
 
+.inbox-archived-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--wa-list-bg);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inbox-archived-row:hover {
+  background: color-mix(in srgb, var(--surface-strong) 55%, transparent);
+}
+
+.inbox-archived-row.is-active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.inbox-archived-row__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 18%, transparent);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.inbox-archived-row.is-active .inbox-archived-row__icon {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+.inbox-archived-row__label {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.inbox-archived-row__count {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 .inbox-layout-wa .inbox-chat-list {
   flex: 1;
   min-height: 0;

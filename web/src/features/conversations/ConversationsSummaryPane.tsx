@@ -28,7 +28,7 @@ type Assignee = { id: number; label: string }
 
 const KPI_FILTER_MAP: Record<string, { chat?: string }> = {
   'Sin asignar': { chat: 'unassigned' },
-  Nuevo: { chat: 'new' },
+  'Sin responder': { chat: 'unanswered' },
   'Sin leer': { chat: 'unread' },
   'Modo Bot': { chat: 'bot' },
   'Modo Asesor': { chat: 'human' },

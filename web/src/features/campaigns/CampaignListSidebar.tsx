@@ -53,7 +53,7 @@ export function CampaignListSidebar({ selectedId, onRefresh }: CampaignListSideb
       title="Campañas"
       actions={
         <Link to="/campaigns/new" className="small-btn primary">
-          Nueva
+          +
         </Link>
       }
       filters={

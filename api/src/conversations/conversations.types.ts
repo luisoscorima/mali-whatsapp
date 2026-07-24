@@ -5,7 +5,10 @@ export type InboxChatFilter =
   | 'human'
   | 'mine'
   | 'unassigned'
-  | 'new';
+  | 'unanswered'
+  | 'archived'
+  | 'archived_auto'
+  | 'archived_manual';
 
 /** Horas máximas restantes de ventana 24h (buckets). null = sin filtro. */
 export type InboxWindowMaxFilter = 2 | 6 | 12 | 24 | null;
@@ -37,6 +40,7 @@ export type InboxListItem = {
   user_service_window_open: boolean;
   last_user_message_at: string | null;
   last_outbound_message_at: string | null;
+  archived: boolean;
 };
 
 export type InboxListResult = {
@@ -45,6 +49,7 @@ export type InboxListResult = {
   page: number;
   pages: number;
   unread_count: number;
+  archived_count: number;
   ai_area_enabled: boolean;
   can_assign_conversations: boolean;
   segments: InboxSegmentOption[];
@@ -129,6 +134,7 @@ export type InboxConversation = {
   last_message_at: string | null;
   last_user_message_at: string | null;
   inbox_unread: boolean;
+  archived: boolean;
   contact_id: number | null;
   meta_ctwa_ad_id: number | null;
   assigned_user_id: number | null;
@@ -177,6 +183,10 @@ export type AssignConversationResult = {
   assigned_user_label: string | null;
 };
 
+export type ArchiveConversationResult = {
+  archived: boolean;
+};
+
 export type MessageReactionResult = {
   ok: true;
   target_message_id: number;
@@ -193,6 +203,7 @@ export type InboxConversationUpdates = {
     last_user_message_at: string | null;
     status: string;
     inbox_unread: boolean;
+    archived: boolean;
     assigned_user_id: number | null;
     assigned_user_label: string | null;
     automation_touched_at: string | null;
