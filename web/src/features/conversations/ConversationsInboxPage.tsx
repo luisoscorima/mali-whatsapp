@@ -1634,6 +1634,7 @@ export function ConversationsInboxPage() {
                 item.last_outbound_message_at,
                 { windowOpen: item.user_service_window_open },
               )
+              const modeStatus = String(item.conversation_status ?? '').toLowerCase()
               return (
                 <ContextMenu key={item.id}>
                   <ContextMenuTrigger asChild>
