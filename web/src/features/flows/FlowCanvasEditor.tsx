@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -10,6 +10,7 @@ import {
   addEdge,
   useEdgesState,
   useNodesState,
+  useUpdateNodeInternals,
   type Connection,
   type Edge,
   type Node,
@@ -67,16 +68,35 @@ type FlowCanvasEditorProps = {
 const HANDLE_CLASS = 'flow-canvas-handle'
 
 function MessageNodeView({ id, data, selected }: NodeProps<Node<CanvasData>>) {
-  // Handles a nivel de nodo (no anidados): si van dentro de cada fila con top %,
-  // React Flow los mide respecto al nodo completo y se apilan → el hilo no engancha.
-  const buttonHandleBottom = (index: number) => {
-    const fromBottom = data.buttons.length - 1 - index
-    // id mono (~22px) + padding + centro de fila (~34px)
-    return 22 + fromBottom * 34 + 14
-  }
+  const updateNodeInternals = useUpdateNodeInternals()
+  const rootRef = useRef<HTMLDivElement>(null)
+  const rowRefs = useRef<(HTMLDivElement | null)[]>([])
+  const [handleTops, setHandleTops] = useState<number[]>([])
+
+  const buttonKey = data.buttons.map((b) => b.id).join('|')
+
+  useLayoutEffect(() => {
+    const root = rootRef.current
+    if (!root) return
+    const rootTop = root.getBoundingClientRect().top
+    const tops = data.buttons.map((_, i) => {
+      const row = rowRefs.current[i]
+      if (!row) return 0
+      const rect = row.getBoundingClientRect()
+      return rect.top - rootTop + rect.height / 2
+    })
+    setHandleTops(tops)
+  }, [id, buttonKey, data.buttons.length, data.body_text, selected])
+
+  useLayoutEffect(() => {
+    updateNodeInternals(id)
+    const raf = requestAnimationFrame(() => updateNodeInternals(id))
+    return () => cancelAnimationFrame(raf)
+  }, [id, handleTops, buttonKey, data.body_text, updateNodeInternals])
 
   return (
     <div
+      ref={rootRef}
       className={`relative min-w-[220px] max-w-[260px] rounded-xl border bg-surface-strong p-3 shadow-sm ${
         selected ? 'border-accent' : 'border-line'
       } ${data.isEntry ? 'ring-1 ring-accent/40' : ''}`}
@@ -94,6 +114,9 @@ function MessageNodeView({ id, data, selected }: NodeProps<Node<CanvasData>>) {
             {data.buttons.map((b, i) => (
               <div
                 key={`${b.id}-${i}`}
+                ref={(el) => {
+                  rowRefs.current[i] = el
+                }}
                 className="rounded-md border border-line px-2 py-1.5 text-xs"
               >
                 <span className="font-medium">{b.title || 'Botón'}</span>
@@ -110,7 +133,10 @@ function MessageNodeView({ id, data, selected }: NodeProps<Node<CanvasData>>) {
               position={Position.Right}
               id={`btn:${b.id}`}
               className={HANDLE_CLASS}
-              style={{ top: 'auto', bottom: buttonHandleBottom(i) }}
+              style={{
+                top: handleTops[i] ?? 0,
+                transform: 'translate(50%, -50%)',
+              }}
             />
           ))}
         </>
