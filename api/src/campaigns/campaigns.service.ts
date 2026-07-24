@@ -602,6 +602,17 @@ export class CampaignsService {
 
     const firstSendAt = toIso(statusTotals?.first_send_at ?? null);
 
+    let linkedFlowName: string | null = null;
+    let linkedFlowTrigger: string | null = null;
+    if (campaign.linked_flow_id) {
+      const flow = await this.prisma.flows.findFirst({
+        where: { id: campaign.linked_flow_id, area },
+        select: { name: true, trigger_payload: true },
+      });
+      linkedFlowName = flow?.name ?? null;
+      linkedFlowTrigger = flow?.trigger_payload ?? null;
+    }
+
     return {
       id: campaign.id,
       segment: campaign.segment,
@@ -631,6 +642,9 @@ export class CampaignsService {
       exclude_contact_ids: exclusions.exclude_contact_ids,
       exclude_contacts: excludeContacts,
       first_send_at: firstSendAt,
+      linked_flow_id: campaign.linked_flow_id ?? null,
+      linked_flow_name: linkedFlowName,
+      linked_flow_trigger: linkedFlowTrigger,
     };
   }
 
@@ -1074,6 +1088,19 @@ export class CampaignsService {
 
     const campaignStatus = isScheduled ? 'scheduled' : 'queued';
 
+    let linkedFlowId: number | null = null;
+    const rawLinkedFlow = Number(body.linked_flow_id);
+    if (Number.isInteger(rawLinkedFlow) && rawLinkedFlow > 0) {
+      const flow = await this.prisma.flows.findFirst({
+        where: { id: rawLinkedFlow, area },
+        select: { id: true },
+      });
+      if (!flow) {
+        throw new BadRequestException('Flujo vinculado no encontrado');
+      }
+      linkedFlowId = flow.id;
+    }
+
     const campaign = await this.prisma.campaigns.create({
       data: {
         area,
@@ -1085,6 +1112,7 @@ export class CampaignsService {
         total_recipients: recipients.length,
         campaign_payload: campaignPayload as object,
         scheduled_at: isScheduled && scheduledAt ? scheduledAt : null,
+        linked_flow_id: linkedFlowId,
       },
       select: { id: true },
     });
@@ -1119,6 +1147,28 @@ export class CampaignsService {
       totalRecipients: recipients.length,
       isScheduled,
     };
+  }
+
+  async linkFlow(
+    area: AuthUser['area'],
+    campaignId: number,
+    linkedFlowId: number | null,
+  ): Promise<CampaignDetail> {
+    await this.assertCampaignInArea(area, campaignId);
+    if (linkedFlowId != null) {
+      const flow = await this.prisma.flows.findFirst({
+        where: { id: linkedFlowId, area },
+        select: { id: true },
+      });
+      if (!flow) {
+        throw new BadRequestException('Flujo no encontrado');
+      }
+    }
+    await this.prisma.campaigns.update({
+      where: { id: campaignId },
+      data: { linked_flow_id: linkedFlowId },
+    });
+    return this.getById(area, campaignId);
   }
 
   async retryFailed(

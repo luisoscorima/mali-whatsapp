@@ -94,6 +94,17 @@ export class ConversationsController {
     return { ok: true, data };
   }
 
+  @Post(':id/start-flow')
+  async startFlow(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { flow_id?: number },
+  ) {
+    const flowId = Number(body?.flow_id);
+    const data = await this.conversationsService.startFlow(user, id, flowId);
+    return { ok: true, data };
+  }
+
   @Post(':id/reply')
   @UseInterceptors(
     FileInterceptor('file', {

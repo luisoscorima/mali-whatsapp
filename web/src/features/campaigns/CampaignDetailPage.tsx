@@ -111,6 +111,9 @@ type CampaignDetail = {
     responders: ResponderRow[]
     response_type_summary: { label: string; count: number }[]
   }
+  linked_flow_id: number | null
+  linked_flow_name: string | null
+  linked_flow_trigger: string | null
 }
 
 function actionButtonClass(secondary = false): string {
@@ -133,6 +136,11 @@ export function CampaignDetailPage() {
   const [logsFilter, setLogsFilter] = useState('all_current')
   const [drilldownAction, setDrilldownAction] = useState<MetricAction | null>(null)
   const [drilldownOpen, setDrilldownOpen] = useState(false)
+  const [flowOptions, setFlowOptions] = useState<
+    { id: number; name: string; trigger_payload: string; status: string }[]
+  >([])
+  const [linkFlowId, setLinkFlowId] = useState('')
+  const [linkingFlow, setLinkingFlow] = useState(false)
 
   function onMetricClick(metric: MetricCard) {
     const action = resolveMetricAction(metric)
@@ -151,11 +159,41 @@ export function CampaignDetailPage() {
     }
     setLoadFailed(false)
     setCampaign(result.data)
+    setLinkFlowId(
+      result.data.linked_flow_id != null
+        ? String(result.data.linked_flow_id)
+        : '',
+    )
   }
 
   useEffect(() => {
     reload()
+    apiClient
+      .get<{ id: number; name: string; trigger_payload: string; status: string }[]>(
+        '/api/flows',
+      )
+      .then((res) => {
+        if (res.ok) setFlowOptions(res.data)
+      })
   }, [id])
+
+  async function handleLinkFlow() {
+    if (!id) return
+    setLinkingFlow(true)
+    const result = await apiClient.patch<CampaignDetail>(
+      `/api/campaigns/${id}/linked-flow`,
+      {
+        linked_flow_id: linkFlowId ? Number(linkFlowId) : null,
+      },
+    )
+    setLinkingFlow(false)
+    if (!result.ok) {
+      notify.error(result.error)
+      return
+    }
+    setCampaign(result.data)
+    notify.success('Vínculo con flujo actualizado')
+  }
 
   async function handleDownload(path: string, label: string) {
     setBusy(label)
@@ -233,6 +271,39 @@ export function CampaignDetailPage() {
         {campaign.template_name} ·{' '}
         <span className="font-mono">{campaign.segment_display}</span>
       </p>
+
+      <p className="muted campaign-drilldown-dialog__note">
+        Flujo vinculado:{' '}
+        {campaign.linked_flow_name
+          ? `${campaign.linked_flow_name} (trigger: ${campaign.linked_flow_trigger || '—'})`
+          : 'ninguno'}
+        . Solo metadata; el motor usa el payload del botón QUICK_REPLY.
+      </p>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="block text-sm">
+          <span className="text-muted">Vincular flujo</span>
+          <select
+            className={selectClass() + ' mt-1 block min-w-[220px]'}
+            value={linkFlowId}
+            onChange={(e) => setLinkFlowId(e.target.value)}
+          >
+            <option value="">Sin flujo</option>
+            {flowOptions.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name} ({f.status})
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className={actionButtonClass(true)}
+          disabled={linkingFlow}
+          onClick={handleLinkFlow}
+        >
+          {linkingFlow ? 'Guardando…' : 'Guardar vínculo'}
+        </button>
+      </div>
 
       {campaign.status === 'queued' || campaign.status === 'processing' ? (
         <p className="rounded-lg border border-line bg-surface-strong px-3 py-2 text-sm">

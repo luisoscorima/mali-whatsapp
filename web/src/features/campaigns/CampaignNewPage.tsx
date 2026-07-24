@@ -65,6 +65,7 @@ function buildSendPayload(input: {
   batchSize: number
   batchDelayMs: number
   form: CampaignTemplateFormState
+  linkedFlowId: string
 }): Record<string, unknown> {
   const body: Record<string, unknown> = {
     segments: input.segments,
@@ -76,6 +77,9 @@ function buildSendPayload(input: {
     batchSize: input.batchSize,
     batchDelayMs: input.batchDelayMs,
     headerMediaUrl: input.form.headerMediaUrl,
+  }
+  if (input.linkedFlowId) {
+    body.linked_flow_id = Number(input.linkedFlowId)
   }
   if (input.excludeContactIds.length > 0) {
     body.excludeContactIds = input.excludeContactIds
@@ -134,6 +138,10 @@ export function CampaignNewPage() {
   const [scheduledAt, setScheduledAt] = useState('')
   const [batchSize, setBatchSize] = useState(40)
   const [batchDelayMs, setBatchDelayMs] = useState(1500)
+  const [linkedFlowId, setLinkedFlowId] = useState('')
+  const [flowOptions, setFlowOptions] = useState<
+    { id: number; name: string; trigger_payload: string; status: string }[]
+  >([])
 
   const approvedTemplates = useMemo(
     () =>
@@ -149,10 +157,13 @@ export function CampaignNewPage() {
 
   async function loadWizardData() {
     setLoadFailed(false)
-    const [segResult, tplResult, attrResult] = await Promise.all([
+    const [segResult, tplResult, attrResult, flowsResult] = await Promise.all([
       apiClient.get<SegmentDefinition[]>('/api/segments'),
       apiClient.get<TemplateListItem[]>('/api/templates'),
       apiClient.get<AttributeOption[]>('/api/attribute-definitions'),
+      apiClient.get<
+        { id: number; name: string; trigger_payload: string; status: string }[]
+      >('/api/flows'),
     ])
     if (!segResult.ok) {
       notify.error(segResult.error)
@@ -171,6 +182,7 @@ export function CampaignNewPage() {
         attrResult.data.map((a) => ({ slug: a.slug, label: a.label })),
       )
     }
+    if (flowsResult.ok) setFlowOptions(flowsResult.data)
   }
 
   useEffect(() => {
@@ -311,6 +323,7 @@ export function CampaignNewPage() {
       batchSize,
       batchDelayMs,
       form: templateForm,
+      linkedFlowId,
     })
 
     const result = await apiClient.post<{
@@ -597,6 +610,25 @@ export function CampaignNewPage() {
             />
           </label>
         </div>
+        <label className="block text-sm">
+          <span className="text-muted">Flujo vinculado (opcional)</span>
+          <select
+            className="mt-1 block w-full max-w-md rounded-lg border border-line bg-surface px-2 py-2"
+            value={linkedFlowId}
+            onChange={(e) => setLinkedFlowId(e.target.value)}
+          >
+            <option value="">Sin flujo</option>
+            {flowOptions.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name} · {f.trigger_payload}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-muted">
+            Solo referencia. El trigger del flujo debe coincidir con el botón
+            QUICK_REPLY de la plantilla.
+          </p>
+        </label>
       </section>
 
       <p className="text-sm text-muted">

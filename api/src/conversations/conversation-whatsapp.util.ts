@@ -175,6 +175,68 @@ export async function sendSessionTextMessage(input: {
   return graphPostJson<SessionMessageResult>(`${phoneNumberId}/messages`, token, payload);
 }
 
+/** Reply buttons de sesión (máx. 3). `id` = payload estable para el motor de flujos. */
+export const MAX_INTERACTIVE_BUTTONS = 3;
+export const INTERACTIVE_BUTTON_TITLE_MAX = 20;
+export const INTERACTIVE_BUTTON_ID_MAX = 256;
+
+export async function sendSessionInteractiveButtons(input: {
+  to: string;
+  bodyText: string;
+  buttons: { id: string; title: string }[];
+  area: unknown;
+  phoneNumberId?: string | null;
+  footerText?: string | null;
+}): Promise<SessionMessageResult> {
+  const { token, phoneNumberId } = resolveWhatsAppSendCredentials({
+    area: input.area,
+    phoneNumberId: input.phoneNumberId,
+  });
+  const body = String(input.bodyText || '').trim();
+  if (!body) throw new Error('Mensaje vacio');
+  if (body.length > MAX_SESSION_TEXT_LEN) {
+    throw new Error(`Mensaje demasiado largo (max ${MAX_SESSION_TEXT_LEN})`);
+  }
+  const buttons = Array.isArray(input.buttons) ? input.buttons : [];
+  if (buttons.length < 1 || buttons.length > MAX_INTERACTIVE_BUTTONS) {
+    throw new Error(
+      `Se requieren entre 1 y ${MAX_INTERACTIVE_BUTTONS} botones interactivos.`,
+    );
+  }
+  const actionButtons = buttons.map((btn, idx) => {
+    const id = String(btn?.id || '').trim();
+    const title = String(btn?.title || '').trim();
+    if (!id) throw new Error(`Payload del botón ${idx + 1} es obligatorio.`);
+    if (id.length > INTERACTIVE_BUTTON_ID_MAX) {
+      throw new Error(
+        `Payload del botón ${idx + 1} no puede superar ${INTERACTIVE_BUTTON_ID_MAX} caracteres.`,
+      );
+    }
+    if (!title) throw new Error(`Texto del botón ${idx + 1} es obligatorio.`);
+    if (title.length > INTERACTIVE_BUTTON_TITLE_MAX) {
+      throw new Error(
+        `Texto del botón ${idx + 1} no puede superar ${INTERACTIVE_BUTTON_TITLE_MAX} caracteres.`,
+      );
+    }
+    return { type: 'reply', reply: { id, title } };
+  });
+  const interactive: Record<string, unknown> = {
+    type: 'button',
+    body: { text: body },
+    action: { buttons: actionButtons },
+  };
+  const footer = String(input.footerText || '').trim();
+  if (footer) {
+    interactive.footer = { text: footer.slice(0, 60) };
+  }
+  return graphPostJson<SessionMessageResult>(`${phoneNumberId}/messages`, token, {
+    messaging_product: 'whatsapp',
+    to: input.to,
+    type: 'interactive',
+    interactive,
+  });
+}
+
 export async function sendMessageReaction(input: {
   to: string;
   waMessageId: string;

@@ -29,6 +29,10 @@ import { CampaignsShell } from '../features/campaigns/CampaignsShell'
 import { CampaignsSummaryPane } from '../features/campaigns/CampaignsSummaryPane'
 import { CampaignNewPage } from '../features/campaigns/CampaignNewPage'
 import { CampaignDetailPage } from '../features/campaigns/CampaignDetailPage'
+import { FlowsShell } from '../features/flows/FlowsShell'
+import { FlowsEmptyPane } from '../features/flows/FlowsEmptyPane'
+import { FlowNewPage } from '../features/flows/FlowNewPage'
+import { FlowDetailPage } from '../features/flows/FlowDetailPage'
 import { SettingsShell } from '../features/settings/SettingsShell'
 import { SettingsIndexPage } from '../features/settings/SettingsIndexPage'
 import { SettingsIntegrationPage } from '../features/settings/SettingsIntegrationPage'
@@ -106,6 +110,11 @@ export function AppRouter() {
               <Route index element={<CampaignsSummaryPane />} />
               <Route path="new" element={<CampaignNewPage />} />
               <Route path=":id" element={<CampaignDetailPage />} />
+            </Route>
+            <Route path="flows" element={<FlowsShell />}>
+              <Route index element={<FlowsEmptyPane />} />
+              <Route path="new" element={<FlowNewPage />} />
+              <Route path=":id" element={<FlowDetailPage />} />
             </Route>
             <Route path="conversations" element={<ConversationsInboxPage />} />
             <Route path="conversations/:id" element={<ConversationsInboxPage />} />

@@ -6,12 +6,13 @@ import { useTheme } from '@/shared/theme/useTheme'
 
 import { WaAccountMenu } from '@/shared/ui/shell/WaAccountMenu'
 
-const MORE_NAV = ['templates', 'segments', 'attributes', 'anuncios'] as const
+const MORE_NAV = ['templates', 'flows', 'segments', 'attributes', 'anuncios'] as const
 
 export function navFromPath(pathname: string): string {
   if (pathname.startsWith('/conversations')) return 'conversations'
   if (pathname.startsWith('/contacts')) return 'contacts'
   if (pathname.startsWith('/campaigns')) return 'campaigns'
+  if (pathname.startsWith('/flows')) return 'flows'
   if (pathname.startsWith('/templates')) return 'templates'
   if (pathname.startsWith('/segments')) return 'segments'
   if (pathname.startsWith('/attributes')) return 'attributes'
@@ -76,6 +77,21 @@ const NAV_ITEMS: NavItem[] = [
         <line x1="7" y1="8" x2="17" y2="8" />
         <line x1="7" y1="12" x2="14" y2="12" />
         <line x1="7" y1="16" x2="12" y2="16" />
+      </svg>
+    ),
+  },
+  {
+    key: 'flows',
+    to: '/flows',
+    label: 'Flujos',
+    mobileSecondary: true,
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="6" cy="6" r="2.5" />
+        <circle cx="18" cy="6" r="2.5" />
+        <circle cx="12" cy="18" r="2.5" />
+        <path d="M8.2 7.5 10.5 15" />
+        <path d="M15.8 7.5 13.5 15" />
       </svg>
     ),
   },

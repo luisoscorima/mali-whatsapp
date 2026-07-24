@@ -68,17 +68,30 @@ export function validateTemplateBuilder(
     if (!String(btn.text || '').trim()) {
       errors.push(`Texto del botón ${btnIdx + 1} es obligatorio.`)
     }
-    if (!String(btn.url || '').trim()) {
-      errors.push(`URL del botón ${btnIdx + 1} es obligatoria.`)
-    }
-    extractPlaceholders(btn.url).forEach((token, idx) => {
-      if (!String(btn.exampleValues[idx] || '').trim()) {
-        errors.push(
-          `Falta el ejemplo para ${labelForPlaceholder(token, idx)} en botón ${btnIdx + 1}.`,
-        )
+    const isQr = String(btn.type || '').toLowerCase() === 'quick_reply'
+    if (!isQr) {
+      if (!String(btn.url || '').trim()) {
+        errors.push(`URL del botón ${btnIdx + 1} es obligatoria.`)
       }
-    })
+      extractPlaceholders(btn.url).forEach((token, idx) => {
+        if (!String(btn.exampleValues[idx] || '').trim()) {
+          errors.push(
+            `Falta el ejemplo para ${labelForPlaceholder(token, idx)} en botón ${btnIdx + 1}.`,
+          )
+        }
+      })
+    }
   })
+
+  if (state.buttons.length > 3) {
+    errors.push('Máximo 3 botones por plantilla.')
+  }
+  const urlButtons = state.buttons.filter(
+    (b) => String(b.type || '').toLowerCase() !== 'quick_reply',
+  )
+  if (urlButtons.length > 2) {
+    errors.push('Máximo 2 botones URL por plantilla.')
+  }
 
   errors.push(...buildPreviewWarnings(state))
 

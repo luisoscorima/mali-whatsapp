@@ -343,16 +343,18 @@ export function TemplateBuilderFields({
       <section className="space-y-3 rounded-xl border border-line p-4">
         <div className="flex items-center gap-2">
           <StepBadge n={4} />
-          <h3 className="font-medium">Botones URL</h3>
+          <h3 className="font-medium">Botones</h3>
         </div>
 
         {builder.buttons.length === 0 ? (
           <p className="text-xs text-muted">
-            Puedes añadir hasta 2 botones URL con variables opcionales.
+            Hasta 3 botones: URL (máx. 2) o respuesta rápida (QUICK_REPLY). El
+            texto del QUICK_REPLY es el payload que dispara un flujo.
           </p>
         ) : null}
 
         {builder.buttons.map((btn, index) => {
+          const isQr = String(btn.type || '').toLowerCase() === 'quick_reply'
           const urlPlaceholders = extractPlaceholders(btn.url)
           const urlExamples = ensureExampleValues(
             btn.exampleValues,
@@ -364,7 +366,9 @@ export function TemplateBuilderFields({
               className="space-y-2 rounded-lg border border-line p-3"
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium">Botón URL {index + 1}</p>
+                <p className="text-sm font-medium">
+                  {isQr ? 'Respuesta rápida' : 'Botón URL'} {index + 1}
+                </p>
                 <button
                   type="button"
                   className="text-sm text-bad"
@@ -379,7 +383,27 @@ export function TemplateBuilderFields({
                 </button>
               </div>
               <label className="block text-sm">
-                <span className="text-muted">Texto del botón</span>
+                <span className="text-muted">Tipo</span>
+                <select
+                  className="mt-1 w-full rounded-lg border border-line bg-surface-strong px-3 py-2"
+                  value={isQr ? 'quick_reply' : 'url'}
+                  onChange={(e) =>
+                    updateButton(index, {
+                      type: e.target.value,
+                      url: e.target.value === 'quick_reply' ? '' : btn.url,
+                      exampleValues:
+                        e.target.value === 'quick_reply' ? [] : btn.exampleValues,
+                    })
+                  }
+                >
+                  <option value="url">URL</option>
+                  <option value="quick_reply">Respuesta rápida</option>
+                </select>
+              </label>
+              <label className="block text-sm">
+                <span className="text-muted">
+                  {isQr ? 'Texto / payload del botón' : 'Texto del botón'}
+                </span>
                 <input
                   className="mt-1 w-full rounded-lg border border-line bg-surface-strong px-3 py-2"
                   value={btn.text}
@@ -387,78 +411,115 @@ export function TemplateBuilderFields({
                   maxLength={25}
                   required
                   autoComplete="off"
+                  placeholder={isQr ? 'INICIAR_FLUJO_VENTAS' : undefined}
                 />
               </label>
-              <label className="block text-sm">
-                <span className="text-muted">URL</span>
-                <input
-                  ref={(el) => {
-                    buttonUrlRefs.current[index] = el
-                  }}
-                  className="mt-1 w-full rounded-lg border border-line bg-surface-strong px-3 py-2"
-                  value={btn.url}
-                  onChange={(e) => updateButton(index, { url: e.target.value })}
-                  placeholder="https://mali.pe/evento/{{codigo}}"
-                  required
-                  autoComplete="off"
-                />
-              </label>
-              <button
-                type="button"
-                className="rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-accent-soft"
-                onClick={() => {
-                  const alias = promptAlias()
-                  if (!alias) return
-                  insertAtSelection(
-                    buttonUrlRefs.current[index],
-                    `{{${alias}}}`,
-                    btn.url,
-                    (url) => updateButton(index, { url }),
-                  )
-                }}
-              >
-                Añadir variable
-              </button>
-              <ExampleFields
-                prefix={`button-${index}`}
-                text={btn.url}
-                values={urlExamples}
-                onChange={(exampleValues) =>
-                  updateButton(index, { exampleValues })
-                }
-              />
-              {urlPlaceholders.length > 1 ? (
-                <p className="text-xs text-bad">
-                  Cada botón URL admite solo 1 variable.
+              {isQr ? (
+                <p className="text-xs text-muted">
+                  Meta reenvía este texto como payload al hacer clic. Debe
+                  coincidir con el trigger del flujo.
                 </p>
-              ) : null}
-              {urlPlaceholders.length === 1 &&
-              !/\}\}\s*$/.test(btn.url || '') ? (
-                <p className="text-xs text-bad">
-                  La variable del botón URL debe ir al final de la URL.
-                </p>
-              ) : null}
+              ) : (
+                <>
+                  <label className="block text-sm">
+                    <span className="text-muted">URL</span>
+                    <input
+                      ref={(el) => {
+                        buttonUrlRefs.current[index] = el
+                      }}
+                      className="mt-1 w-full rounded-lg border border-line bg-surface-strong px-3 py-2"
+                      value={btn.url}
+                      onChange={(e) =>
+                        updateButton(index, { url: e.target.value })
+                      }
+                      placeholder="https://mali.pe/evento/{{codigo}}"
+                      required
+                      autoComplete="off"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-accent-soft"
+                    onClick={() => {
+                      const alias = promptAlias()
+                      if (!alias) return
+                      insertAtSelection(
+                        buttonUrlRefs.current[index],
+                        `{{${alias}}}`,
+                        btn.url,
+                        (url) => updateButton(index, { url }),
+                      )
+                    }}
+                  >
+                    Añadir variable
+                  </button>
+                  <ExampleFields
+                    prefix={`button-${index}`}
+                    text={btn.url}
+                    values={urlExamples}
+                    onChange={(exampleValues) =>
+                      updateButton(index, { exampleValues })
+                    }
+                  />
+                  {urlPlaceholders.length > 1 ? (
+                    <p className="text-xs text-bad">
+                      Cada botón URL admite solo 1 variable.
+                    </p>
+                  ) : null}
+                  {urlPlaceholders.length === 1 &&
+                  !/\}\}\s*$/.test(btn.url || '') ? (
+                    <p className="text-xs text-bad">
+                      La variable del botón URL debe ir al final de la URL.
+                    </p>
+                  ) : null}
+                </>
+              )}
             </div>
           )
         })}
 
-        {builder.buttons.length < 2 ? (
-          <button
-            type="button"
-            className="rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-accent-soft"
-            onClick={() =>
-              onChange({
-                ...builder,
-                buttons: [
-                  ...builder.buttons,
-                  { type: 'url', text: '', url: '', exampleValues: [] },
-                ],
-              })
-            }
-          >
-            Añadir botón URL
-          </button>
-        ) : null}
+        <div className="flex flex-wrap gap-2">
+          {builder.buttons.length < 3 &&
+          builder.buttons.filter((b) => b.type !== 'quick_reply').length < 2 ? (
+            <button
+              type="button"
+              className="rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-accent-soft"
+              onClick={() =>
+                onChange({
+                  ...builder,
+                  buttons: [
+                    ...builder.buttons,
+                    { type: 'url', text: '', url: '', exampleValues: [] },
+                  ],
+                })
+              }
+            >
+              Añadir botón URL
+            </button>
+          ) : null}
+          {builder.buttons.length < 3 ? (
+            <button
+              type="button"
+              className="rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-accent-soft"
+              onClick={() =>
+                onChange({
+                  ...builder,
+                  buttons: [
+                    ...builder.buttons,
+                    {
+                      type: 'quick_reply',
+                      text: '',
+                      url: '',
+                      exampleValues: [],
+                    },
+                  ],
+                })
+              }
+            >
+              Añadir respuesta rápida
+            </button>
+          ) : null}
+        </div>
       </section>
     </div>
   )

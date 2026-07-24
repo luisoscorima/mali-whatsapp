@@ -5,6 +5,8 @@ export const HEADER_TEXT_MAX_LEN = 60;
 export const FOOTER_MAX_LEN = 60;
 export const BUTTON_TEXT_MAX_LEN = 25;
 export const MAX_URL_BUTTONS = 2;
+export const MAX_QUICK_REPLY_BUTTONS = 3;
+export const MAX_TEMPLATE_BUTTONS = 3;
 
 export type PlaceholderAliases = {
   headerText: string[];
@@ -399,7 +401,17 @@ export function buildTemplateBuilderState(
     } else if (type === 'BUTTONS' && Array.isArray(row?.buttons)) {
       row.buttons.forEach((button, idx) => {
         const b = button as Record<string, unknown>;
-        if (trimString(b?.type).toUpperCase() !== 'URL') return;
+        const btnType = trimString(b?.type).toUpperCase();
+        if (btnType === 'QUICK_REPLY') {
+          state.buttons.push({
+            type: 'quick_reply',
+            text: trimString(b?.text),
+            url: '',
+            exampleValues: [],
+          });
+          return;
+        }
+        if (btnType !== 'URL') return;
         const aliasEntry = aliases.buttons.find((entry) => entry.index === idx);
         state.buttons.push({
           type: 'url',
@@ -526,19 +538,30 @@ export async function compileTemplateBuilderPayload(
   const buttons = Array.isArray(builderPayload.buttons)
     ? builderPayload.buttons
     : [];
-  if (buttons.length > MAX_URL_BUTTONS) {
+  if (buttons.length > MAX_TEMPLATE_BUTTONS) {
+    throw new Error(
+      `Solo se permiten ${MAX_TEMPLATE_BUTTONS} botones por plantilla.`,
+    );
+  }
+  const urlCount = buttons.filter(
+    (b) => trimString(b?.type || 'url').toLowerCase() === 'url',
+  ).length;
+  const qrCount = buttons.filter(
+    (b) => trimString(b?.type || '').toLowerCase() === 'quick_reply',
+  ).length;
+  if (urlCount > MAX_URL_BUTTONS) {
     throw new Error(
       `Solo se permiten ${MAX_URL_BUTTONS} botones URL por plantilla.`,
+    );
+  }
+  if (qrCount > MAX_QUICK_REPLY_BUTTONS) {
+    throw new Error(
+      `Solo se permiten ${MAX_QUICK_REPLY_BUTTONS} botones de respuesta rápida.`,
     );
   }
   const buttonItems: Record<string, unknown>[] = [];
   buttons.forEach((button, idx) => {
     const type = trimString(button?.type || 'url').toLowerCase();
-    if (type !== 'url') {
-      throw new Error(
-        `El botón ${idx + 1} no es compatible. Solo se permiten botones URL.`,
-      );
-    }
     const text = trimString(button?.text);
     if (!text) {
       throw new Error(`Texto del botón ${idx + 1} es obligatorio.`);
@@ -546,6 +569,20 @@ export async function compileTemplateBuilderPayload(
     if (text.length > BUTTON_TEXT_MAX_LEN) {
       throw new Error(
         `Texto del botón ${idx + 1} no puede superar ${BUTTON_TEXT_MAX_LEN} caracteres.`,
+      );
+    }
+
+    if (type === 'quick_reply') {
+      buttonItems.push({
+        type: 'QUICK_REPLY',
+        text,
+      });
+      return;
+    }
+
+    if (type !== 'url') {
+      throw new Error(
+        `El botón ${idx + 1} no es compatible. Usa URL o respuesta rápida.`,
       );
     }
     const normalizedUrl = normalizeTemplateTextPlaceholders(button?.url, {

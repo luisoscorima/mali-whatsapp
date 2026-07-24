@@ -48,12 +48,17 @@ export function extractInboundMessagePreview(msg: Record<string, unknown>): {
   if (type === 'interactive') {
     const interactive = msg.interactive as {
       type?: string;
-      button_reply?: { title?: string };
+      button_reply?: { title?: string; id?: string };
+      list_reply?: { title?: string; id?: string };
     } | undefined;
     const interactiveType = String(interactive?.type ?? '').trim();
     if (interactiveType === 'button_reply') {
       const t = String(interactive?.button_reply?.title ?? '').trim();
       return { messageType: 'interactive', bodyText: t || '[Botón]' };
+    }
+    if (interactiveType === 'list_reply') {
+      const t = String(interactive?.list_reply?.title ?? '').trim();
+      return { messageType: 'interactive', bodyText: t || '[Lista]' };
     }
     return { messageType: 'interactive', bodyText: '[Interactivo]' };
   }
@@ -109,5 +114,45 @@ export function extractInboundMediaRef(
   if (t === 'voice' && voice?.id) return { mediaId: String(voice.id) };
   if (t === 'document' && document?.id) return { mediaId: String(document.id) };
   if (t === 'sticker' && sticker?.id) return { mediaId: String(sticker.id) };
+  return null;
+}
+
+/**
+ * Payload estable de botón (plantilla QUICK_REPLY o reply interactivo de sesión).
+ * Preferir `payload` / `button_reply.id` sobre el título visible.
+ */
+export function extractInboundButtonPayload(
+  msg: Record<string, unknown>,
+): { payload: string; title: string } | null {
+  const type = String(msg?.type || '').trim();
+  if (type === 'button') {
+    const button = msg.button as { text?: string; payload?: string } | undefined;
+    const title = String(button?.text ?? '').trim();
+    const payload = String(button?.payload ?? '').trim() || title;
+    if (!payload) return null;
+    return { payload, title: title || payload };
+  }
+  if (type === 'interactive') {
+    const interactive = msg.interactive as {
+      type?: string;
+      button_reply?: { title?: string; id?: string };
+      list_reply?: { title?: string; id?: string };
+    } | undefined;
+    const interactiveType = String(interactive?.type ?? '').trim();
+    if (interactiveType === 'button_reply') {
+      const title = String(interactive?.button_reply?.title ?? '').trim();
+      const payload =
+        String(interactive?.button_reply?.id ?? '').trim() || title;
+      if (!payload) return null;
+      return { payload, title: title || payload };
+    }
+    if (interactiveType === 'list_reply') {
+      const title = String(interactive?.list_reply?.title ?? '').trim();
+      const payload =
+        String(interactive?.list_reply?.id ?? '').trim() || title;
+      if (!payload) return null;
+      return { payload, title: title || payload };
+    }
+  }
   return null;
 }

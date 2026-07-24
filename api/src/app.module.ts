@@ -20,6 +20,8 @@ import { AuditModule } from './audit/audit.module';
 import { QueuesModule } from './queues/queues.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { CrmModule } from './crm/crm.module';
+import { FlowsModule } from './flows/flows.module';
+import { AdvisorNotesModule } from './advisor-notes/advisor-notes.module';
 
 @Module({
   imports: [
@@ -40,6 +42,8 @@ import { CrmModule } from './crm/crm.module';
     ReportsModule,
     TemplatesModule,
     ConversationsModule,
+    FlowsModule,
+    AdvisorNotesModule,
     WebhookModule,
     AdminModule,
   ],

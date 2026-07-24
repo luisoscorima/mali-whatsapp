@@ -88,6 +88,12 @@ export function SettingsAiPage() {
         Respuesta automática (IA) · {settings.area}
       </h2>
 
+      <p className="muted campaign-drilldown-dialog__note">
+        Prioridad de automatización: flujos activos (Respuestas automatizadas) →
+        mensaje fuera de horario → IA. Si un contacto está en un flujo, la IA no
+        responde hasta que el flujo termine o derive a asesor.
+      </p>
+
       {settings.can_toggle_enabled ? (
         <div className="space-y-2">
           <p className="text-sm text-muted">

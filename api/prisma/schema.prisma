@@ -78,11 +78,14 @@ model campaigns {
   cost_source          String?         @db.VarChar(40)
   cost_is_estimated    Boolean         @default(false)
   send_mode            String          @default("mass") @db.VarChar(16)
+  linked_flow_id       Int?
   campaign_logs        campaign_logs[]
+  linked_flow          flows?          @relation(fields: [linked_flow_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([area], map: "idx_campaigns_area")
   @@index([auto_retry_at], map: "idx_campaigns_auto_retry")
   @@index([status, scheduled_at], map: "idx_campaigns_scheduled")
+  @@index([linked_flow_id], map: "idx_campaigns_linked_flow")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -221,6 +224,7 @@ model conversations {
   wa_profile_name              String?              @db.VarChar(150)
   chat_messages                chat_messages[]
   conversation_tags            conversation_tags[]
+  flow_sessions                flow_sessions[]
   contacts                     contacts?            @relation(fields: [contact_id], references: [id], onUpdate: NoAction)
   meta_ctwa_ads                meta_ctwa_ads?       @relation(fields: [meta_ctwa_ad_id], references: [id], onUpdate: NoAction)
   meta_ctwa_ad_leads           meta_ctwa_ad_leads[]
@@ -230,6 +234,72 @@ model conversations {
   @@index([area, last_message_at(sort: Desc)], map: "idx_conversations_area_last_msg")
   @@index([area, assigned_user_id], map: "idx_conversations_area_assignee")
   @@index([area, archived], map: "idx_conversations_area_archived")
+}
+
+model flows {
+  id              Int             @id @default(autoincrement())
+  area            String          @db.VarChar(20)
+  name            String          @db.VarChar(150)
+  status          String          @default("draft") @db.VarChar(16)
+  trigger_payload String          @db.VarChar(256)
+  entry_node_id   Int?
+  created_at      DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime        @default(now()) @db.Timestamptz(6)
+  campaigns       campaigns[]
+  flow_nodes      flow_nodes[]
+  flow_edges      flow_edges[]
+  flow_sessions   flow_sessions[]
+
+  @@unique([area, trigger_payload], map: "flows_area_trigger_uq")
+  @@index([area, status], map: "idx_flows_area_status")
+}
+
+model flow_nodes {
+  id           Int       @id @default(autoincrement())
+  flow_id      Int
+  kind         String    @db.VarChar(32)
+  body_text    String?   @db.Text
+  buttons_json Json?
+  sort_order   Int       @default(0)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime  @default(now()) @db.Timestamptz(6)
+  flows        flows     @relation(fields: [flow_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  edges_from   flow_edges[] @relation("flow_edge_from")
+  edges_to     flow_edges[] @relation("flow_edge_to")
+  sessions     flow_sessions[]
+
+  @@index([flow_id], map: "idx_flow_nodes_flow")
+}
+
+model flow_edges {
+  id             Int        @id @default(autoincrement())
+  flow_id        Int
+  from_node_id   Int
+  to_node_id     Int
+  match_payload  String?    @db.VarChar(256)
+  created_at     DateTime   @default(now()) @db.Timestamptz(6)
+  flows          flows      @relation(fields: [flow_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  from_node      flow_nodes @relation("flow_edge_from", fields: [from_node_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  to_node        flow_nodes @relation("flow_edge_to", fields: [to_node_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([flow_id], map: "idx_flow_edges_flow")
+  @@index([from_node_id], map: "idx_flow_edges_from")
+}
+
+model flow_sessions {
+  id              Int           @id @default(autoincrement())
+  conversation_id Int
+  flow_id         Int
+  current_node_id Int?
+  status          String        @default("active") @db.VarChar(24)
+  started_at      DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime      @default(now()) @db.Timestamptz(6)
+  conversations   conversations @relation(fields: [conversation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  flows           flows         @relation(fields: [flow_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  current_node    flow_nodes?   @relation(fields: [current_node_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([conversation_id, status], map: "idx_flow_sessions_conv_status")
+  @@index([flow_id], map: "idx_flow_sessions_flow")
 }
 
 model login_logs {
@@ -343,6 +413,20 @@ model users {
   login_logs                   login_logs[]
   user_areas                   user_areas[]
   assigned_conversations       conversations[] @relation("conversation_assignee")
+  advisor_notes                advisor_notes[]
+}
+
+model advisor_notes {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  title      String   @db.VarChar(120)
+  body       String   @db.Text
+  sort_order Int      @default(0)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  users      users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id, sort_order], map: "idx_advisor_notes_user_sort")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.

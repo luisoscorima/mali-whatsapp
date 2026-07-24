@@ -184,6 +184,9 @@ export function MetaAdDetailPage() {
                   <th className="px-2 py-2 font-medium">Nombre</th>
                   <th className="px-2 py-2 font-medium">Teléfono</th>
                   <th className="px-2 py-2 font-medium">Primer mensaje</th>
+                  <th className="px-2 py-2 font-medium">
+                    <span className="sr-only">Chat</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -192,6 +195,34 @@ export function MetaAdDetailPage() {
                     <td className="px-2 py-2">{lead.contact_name || '—'}</td>
                     <td className="px-2 py-2 font-mono">{lead.phone}</td>
                     <td className="px-2 py-2">{formatDateTime(lead.first_message_at)}</td>
+                    <td className="px-2 py-2">
+                      {lead.conversation_id ? (
+                        <Link
+                          to={`/conversations/${lead.conversation_id}`}
+                          className="contact-row-action-btn"
+                          title="Abrir chat"
+                          aria-label="Abrir chat"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="17"
+                            height="17"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                            focusable="false"
+                          >
+                            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                          </svg>
+                        </Link>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

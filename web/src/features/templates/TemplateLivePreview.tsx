@@ -157,7 +157,13 @@ export function TemplateLivePreview({
                     key={idx}
                     className="w-full rounded-lg border border-line bg-bg px-3 py-2 text-center text-sm text-accent"
                   >
-                    <p>{button.text || 'Botón URL'}</p>
+                    <p>
+                      {button.text ||
+                        (String(button.type || '').toLowerCase() ===
+                        'quick_reply'
+                          ? 'Respuesta rápida'
+                          : 'Botón URL')}
+                    </p>
                     {button.url ? (
                       <p className="truncate text-xs text-muted">
                         {summarizePreviewUrl(

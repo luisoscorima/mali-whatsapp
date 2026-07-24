@@ -9,6 +9,7 @@ import {
 } from '@/shared/ui/shadcn/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/shadcn/popover'
 import { InboxAttachment } from './InboxAttachment'
+import { InboxAdvisorNotesPopover } from './InboxAdvisorNotesPopover'
 
 const COMMON_EMOJIS = [
   '😀', '😁', '😂', '😊', '😍', '😘', '🙂', '😉', '😎', '🤔',
@@ -138,6 +139,12 @@ export function InboxComposeBar({
             </div>
           </PopoverContent>
         </Popover>
+
+        <InboxAdvisorNotesPopover
+          onInsert={(text) =>
+            insertAtSelection(textareaRef.current, text, replyText, onReplyTextChange)
+          }
+        />
 
         <Button
           type="button"

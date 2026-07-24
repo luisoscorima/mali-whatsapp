@@ -10,6 +10,7 @@ import {
   E164_NO_PLUS_REGEX,
   normalizePhone,
 } from '../contacts/contacts-validation.utils';
+import { FlowsService } from '../flows/flows.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   isBusinessHoursConfigOperational,
@@ -21,6 +22,7 @@ import { getWhatsAppCredentialsForArea } from '../templates/whatsapp-meta.util';
 import { processInboundReferral } from './meta-ctwa-referral.util';
 import { resolveInboundArea } from './webhook-area.util';
 import {
+  extractInboundButtonPayload,
   extractInboundMessagePreview,
   extractInboundMediaRef,
   extractInboundProfileName,
@@ -48,7 +50,10 @@ import {
 export class WebhookService {
   private readonly logger = new Logger(WebhookService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly flowsService: FlowsService,
+  ) {}
 
   handleVerification(
     mode: string | undefined,
@@ -585,6 +590,19 @@ export class WebhookService {
           area,
           conversationId: conversation.id,
         });
+
+        const buttonInfo = extractInboundButtonPayload(record);
+        const flowResult = await this.flowsService.handleInbound({
+          area,
+          conversationId: conversation.id,
+          phone: from,
+          phoneNumberId: linePhoneNumberId,
+          buttonPayload: buttonInfo?.payload ?? null,
+        });
+        // Prioridad: flujo activo/manejado > fuera de horario > IA
+        if (flowResult.handled || flowResult.waiting) {
+          continue;
+        }
 
         const skipAi = await this.maybeOutsideHoursReply({
           area,

@@ -25,6 +25,7 @@ import { InboxAssignDialog, type ConversationAssignee } from './InboxAssignDialo
 import { InboxChatActionsDialog } from './InboxChatActionsDialog'
 import { InboxContactSheet } from './InboxContactSheet'
 import { InboxSendTemplateDialog } from './InboxSendTemplateDialog'
+import { InboxStartFlowMenu } from './InboxStartFlowMenu'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -1997,7 +1998,12 @@ export function ConversationsInboxPage() {
                   >
                     Enviar plantilla
                   </Button>
-                ) : null}
+                ) : (
+                  <InboxStartFlowMenu
+                    conversationId={detail.conversation.id}
+                    onStarted={() => void loadDetail(detail.conversation.id)}
+                  />
+                )}
                 {canAssign ? (
                   <Button
                     type="button"

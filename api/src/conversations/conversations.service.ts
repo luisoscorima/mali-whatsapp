@@ -38,6 +38,7 @@ import {
 } from '../templates/template-definition.util';
 import { sendTemplateWithComponents } from '../templates/whatsapp-meta.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { FlowsService } from '../flows/flows.service';
 import { MAX_SESSION_TEXT_LEN } from '../settings/business-hours.util';
 import { parseAiConfigValue } from '../settings/ai-config.util';
 import {
@@ -145,6 +146,7 @@ export class ConversationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
+    private readonly flowsService: FlowsService,
   ) {}
 
   private async getSegmentSlugSet(area: string): Promise<Set<string>> {
@@ -1252,6 +1254,64 @@ export class ConversationsService {
         'Este chat está en modo Bot; cambia a Asesor para responder.',
       );
     }
+  }
+
+  /**
+   * Lanza un flujo activo en una conversación con ventana 24h abierta.
+   * No requiere que el contacto pulse un botón.
+   */
+  async startFlow(
+    user: AuthUser,
+    conversationId: number,
+    flowId: number,
+  ): Promise<{ flow_id: number; flow_name: string }> {
+    if (!Number.isInteger(conversationId) || conversationId <= 0) {
+      throw new BadRequestException('Id de conversación inválido');
+    }
+    if (!Number.isInteger(flowId) || flowId <= 0) {
+      throw new BadRequestException('Flujo inválido');
+    }
+    const area = user.area;
+    const conversation = await this.prisma.conversations.findFirst({
+      where: { id: conversationId, area },
+      select: {
+        id: true,
+        phone: true,
+        last_user_message_at: true,
+        whatsapp_phone_number_id: true,
+      },
+    });
+    if (!conversation) {
+      throw new NotFoundException('Conversación no encontrada');
+    }
+    if (!isWithinUserServiceWindow(conversation.last_user_message_at)) {
+      throw new BadRequestException(
+        'Ventana de 24 h cerrada: el contacto debe escribir primero o usa una plantilla.',
+      );
+    }
+
+    const result = await this.flowsService.startFlowById({
+      area,
+      conversationId: conversation.id,
+      flowId,
+      phone: conversation.phone,
+      phoneNumberId:
+        String(conversation.whatsapp_phone_number_id || '').trim() || null,
+    });
+
+    await this.auditLog.write({
+      event_type: AuditEvent.CONVERSATION_REPLY,
+      message: `Flujo «${result.flow_name}» iniciado en conversación #${conversationId}`,
+      actor: auditActor(user),
+      meta: {
+        conversation_id: conversationId,
+        flow_id: result.flow_id,
+        phone: phoneMetaTail(conversation.phone),
+        source: 'inbox_start_flow',
+      },
+    }).catch(() => undefined);
+
+    return result;
   }
 
   private mapMessageRow(row: {

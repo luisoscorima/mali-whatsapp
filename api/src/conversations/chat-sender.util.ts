@@ -7,6 +7,7 @@ const NON_ADVISOR_LABELS = new Set([
   'campaña',
   'automatico',
   'automático',
+  'flujo',
 ]);
 
 function actorLabelFromEmail(email: string | null | undefined): string | null {
@@ -38,6 +39,8 @@ export function readMessageSenderLabel(
   const mt = String(messageType || '').trim().toLowerCase();
   if (mt === 'campaign') return 'Campaña';
   if (String(record.source ?? '').trim() === 'campaign_send') return 'Campaña';
+  const source = String(record.source ?? '').trim();
+  if (source === 'flow' || source === 'flow_handoff') return 'Flujo';
   return null;
 }
 
@@ -61,7 +64,9 @@ export function isHumanAdvisorOutboundMessage(
   if (mt === 'campaign') return false;
   if (rawPayload && typeof rawPayload === 'object' && !Array.isArray(rawPayload)) {
     const record = rawPayload as Record<string, unknown>;
-    if (String(record.source ?? '').trim() === 'campaign_send') return false;
+    const source = String(record.source ?? '').trim();
+    if (source === 'campaign_send') return false;
+    if (source === 'flow' || source === 'flow_handoff') return false;
   }
   const label = readMessageSenderLabel(rawPayload, isAi, messageType);
   if (!label) return true;
