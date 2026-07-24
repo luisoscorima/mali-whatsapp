@@ -53,11 +53,7 @@ export class TemplatesService {
   async list(area: AuthUser['area']): Promise<TemplateListItem[]> {
     const rows = await this.prisma.whatsapp_templates.findMany({
       where: { area },
-      orderBy: [
-        { submitted_at: 'desc' },
-        { synced_at: 'desc' },
-        { id: 'desc' },
-      ],
+      orderBy: [{ id: 'desc' }],
       select: {
         id: true,
         name: true,

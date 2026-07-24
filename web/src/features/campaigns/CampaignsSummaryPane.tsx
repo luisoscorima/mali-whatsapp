@@ -14,6 +14,7 @@ import { useAppUser } from '@/app/appOutletContext'
 import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
 import { WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
+import { chartTooltipProps } from '@/shared/charts/chartTooltip'
 import { MetricsGrid } from './MetricsGrid'
 
 type MetricCard = {
@@ -115,6 +116,7 @@ export function CampaignsSummaryPane() {
                   tickFormatter={(v: number) => `$${v}`}
                 />
                 <Tooltip
+                  {...chartTooltipProps}
                   formatter={(value, name) => {
                     const n = Number(value) || 0
                     if (name === 'Gasto USD') {

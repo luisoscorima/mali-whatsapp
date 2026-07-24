@@ -543,6 +543,12 @@ html[data-theme='dark'] .inbox-layout-wa {
   min-width: 0;
 }
 
+.inbox-chat-row-top > .inbox-chat-title,
+.inbox-chat-row-top > .inbox-chat-title-line {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .inbox-chat-title-group {
   display: flex;
   align-items: center;

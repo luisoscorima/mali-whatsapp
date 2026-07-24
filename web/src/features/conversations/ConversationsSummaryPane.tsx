@@ -13,6 +13,7 @@ import { useAppUser } from '@/app/appOutletContext'
 import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
 import { WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
+import { chartTooltipProps } from '@/shared/charts/chartTooltip'
 import { MetricsGrid } from '../campaigns/MetricsGrid'
 import type { MetricCard } from '../campaigns/campaignMetricActions'
 
@@ -176,7 +177,7 @@ export function ConversationsSummaryPane() {
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="var(--muted)" />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="var(--muted)" />
-                <Tooltip />
+                <Tooltip {...chartTooltipProps} />
                 <Line
                   type="monotone"
                   dataKey="count"

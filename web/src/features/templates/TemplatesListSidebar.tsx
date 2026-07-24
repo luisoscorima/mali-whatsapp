@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
@@ -9,6 +9,24 @@ import { templateStatusClass } from './templateStatus'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 
 const LIST_POLL_MS = 15000
+
+const CATEGORY_FILTERS = [
+  { key: '', label: 'Todas' },
+  { key: 'MARKETING', label: 'Marketing' },
+  { key: 'UTILITY', label: 'Utilidad' },
+  { key: 'AUTHENTICATION', label: 'Auth' },
+] as const
+
+const STATUS_FILTERS = [
+  { key: '', label: 'Todos' },
+  { key: 'APPROVED', label: 'Aprobadas' },
+  { key: 'PENDING', label: 'Pendientes' },
+  { key: 'REJECTED', label: 'Rechazadas' },
+  { key: 'DISABLED', label: 'Deshabilitadas' },
+] as const
+
+type CategoryFilterKey = (typeof CATEGORY_FILTERS)[number]['key']
+type StatusFilterKey = (typeof STATUS_FILTERS)[number]['key']
 
 type TemplateListItem = {
   id: number
@@ -25,10 +43,32 @@ type TemplatesListSidebarProps = {
   selectedId?: number | null
 }
 
+function isCategoryFilterKey(value: string): value is CategoryFilterKey {
+  return CATEGORY_FILTERS.some((opt) => opt.key === value)
+}
+
+function isStatusFilterKey(value: string): value is StatusFilterKey {
+  return STATUS_FILTERS.some((opt) => opt.key === value)
+}
+
 export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) {
   const location = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [templates, setTemplates] = useState<TemplateListItem[] | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
   const [syncing, setSyncing] = useState(false)
+
+  const categoryRaw = searchParams.get('category') ?? ''
+  const statusRaw = searchParams.get('status') ?? ''
+  const categoryFilter: CategoryFilterKey = isCategoryFilterKey(categoryRaw)
+    ? categoryRaw
+    : ''
+  const statusFilter: StatusFilterKey = isStatusFilterKey(statusRaw) ? statusRaw : ''
+
+  const listQuery = useMemo(() => {
+    const qs = new URLSearchParams(location.search)
+    return qs.toString() ? `?${qs.toString()}` : ''
+  }, [location.search])
 
   async function load() {
     const result = await apiClient.get<TemplateListItem[]>('/api/templates')
@@ -44,6 +84,44 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
   }, [location.search])
 
   useIntervalWhenVisible(() => void load(), LIST_POLL_MS)
+
+  const filteredTemplates = useMemo(() => {
+    if (!templates) return null
+    const q = searchQuery.trim().toLowerCase()
+    return templates.filter((t) => {
+      if (categoryFilter && (t.category ?? '').toUpperCase() !== categoryFilter) {
+        return false
+      }
+      if (statusFilter && t.status.toUpperCase() !== statusFilter) {
+        return false
+      }
+      if (!q) return true
+      return (
+        t.name.toLowerCase().includes(q) ||
+        t.language.toLowerCase().includes(q) ||
+        (t.category ?? '').toLowerCase().includes(q) ||
+        t.status.toLowerCase().includes(q)
+      )
+    })
+  }, [templates, searchQuery, categoryFilter, statusFilter])
+
+  function setCategoryFilter(key: CategoryFilterKey) {
+    setSearchParams((sp) => {
+      const next = new URLSearchParams(sp)
+      if (key) next.set('category', key)
+      else next.delete('category')
+      return next
+    })
+  }
+
+  function setStatusFilter(key: StatusFilterKey) {
+    setSearchParams((sp) => {
+      const next = new URLSearchParams(sp)
+      if (key) next.set('status', key)
+      else next.delete('status')
+      return next
+    })
+  }
 
   async function onSync() {
     setSyncing(true)
@@ -71,30 +149,82 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
           >
             {syncing ? '…' : 'Sync'}
           </button>
-          <Link to="/templates/new" className="small-btn primary">
+          <Link to={`/templates/new${listQuery}`} className="small-btn primary">
             +
           </Link>
         </>
       }
+      filters={
+        <div className="space-y-2">
+          <div className="inbox-search-row">
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar plantilla…"
+              className="inbox-search-input"
+              aria-label="Buscar plantillas"
+            />
+          </div>
+          <div
+            className="inbox-chat-filter-pills inbox-chat-filter-pills--row contact-filter-pills segment-filter-chips"
+            aria-label="Filtrar por categoría"
+          >
+            {CATEGORY_FILTERS.map((opt) => (
+              <button
+                key={opt.key || 'all-category'}
+                type="button"
+                className={`inbox-chat-pill contact-filter-pill text-[11px] ${
+                  categoryFilter === opt.key ? 'is-active' : ''
+                }`}
+                onClick={() => setCategoryFilter(opt.key)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <div
+            className="inbox-chat-filter-pills inbox-chat-filter-pills--row contact-filter-pills segment-filter-chips"
+            aria-label="Filtrar por estado"
+          >
+            {STATUS_FILTERS.map((opt) => (
+              <button
+                key={opt.key || 'all-status'}
+                type="button"
+                className={`inbox-chat-pill contact-filter-pill text-[11px] ${
+                  statusFilter === opt.key ? 'is-active' : ''
+                }`}
+                onClick={() => setStatusFilter(opt.key)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      }
     >
-      {!templates ? (
+      {!filteredTemplates ? (
         <p className="inbox-empty-list">Cargando plantillas…</p>
-      ) : templates.length === 0 ? (
+      ) : filteredTemplates.length === 0 ? (
         <p className="inbox-empty-list">
-          No hay plantillas en caché. Pulsa Sync para traerlas desde Meta.
+          {templates?.length
+            ? 'No hay plantillas en este filtro.'
+            : 'No hay plantillas en caché. Pulsa Sync para traerlas desde Meta.'}
         </p>
       ) : (
         <ul className="inbox-chat-list">
-          {templates.map((t) => {
+          {filteredTemplates.map((t) => {
             const active = selectedId === t.id
             return (
               <li key={t.id} className={`inbox-chat-item ${active ? 'is-active' : ''}`}>
-                <Link to={`/templates/${t.id}`} className="inbox-chat-link">
+                <Link to={`/templates/${t.id}${listQuery}`} className="inbox-chat-link">
                   <span className="inbox-chat-link-main">
                     <span className="inbox-chat-row-top">
-                      <span className="inbox-chat-title font-mono">{t.name}</span>
+                      <span className="inbox-chat-title-line">
+                        <span className="inbox-chat-title font-mono">{t.name}</span>
+                      </span>
                       <span
-                        className={`rounded px-1.5 text-[10px] ${templateStatusClass(t.status)}`}
+                        className={`shrink-0 rounded px-1.5 text-[10px] ${templateStatusClass(t.status)}`}
                       >
                         {t.status}
                       </span>

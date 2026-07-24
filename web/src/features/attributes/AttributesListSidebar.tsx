@@ -266,15 +266,15 @@ function renderAttributeRow(
       <Link to={`/attributes/${def.id}${listQuery}`} className="inbox-chat-link flex-1">
         <span className="inbox-chat-link-main">
           <span className="inbox-chat-row-top">
-            <span className="inbox-chat-title inline-flex min-w-0 items-center gap-1.5">
+            <span className="inbox-chat-title-line">
               <FieldTypeIcon fieldType={def.field_type} />
-              <span className="truncate">
+              <span className="inbox-chat-title">
                 {def.label}
                 {def.required ? <span className="text-bad">*</span> : null}
               </span>
             </span>
             <span
-              className={`rounded px-1.5 text-[10px] ${
+              className={`shrink-0 rounded px-1.5 text-[10px] ${
                 def.active ? 'bg-accent-soft text-accent' : 'bg-bad/15 text-bad'
               }`}
             >

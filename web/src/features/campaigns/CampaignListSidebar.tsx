@@ -84,10 +84,12 @@ export function CampaignListSidebar({ selectedId, onRefresh }: CampaignListSideb
                 <Link to={`/campaigns/${c.id}${listQuery}`} className="inbox-chat-link">
                   <span className="inbox-chat-link-main">
                     <span className="inbox-chat-row-top">
-                      <span className="inbox-chat-title">
-                        #{c.id} · {c.template_name || '—'}
+                      <span className="inbox-chat-title-line">
+                        <span className="inbox-chat-title">
+                          #{c.id} · {c.template_name || '—'}
+                        </span>
                       </span>
-                      <span className="flex gap-1">
+                      <span className="flex shrink-0 gap-1">
                         {c.send_mode === 'direct' ? (
                           <span className="rounded bg-amber-500/15 px-1.5 text-[10px] text-amber-700 dark:text-amber-300">
                             Directo

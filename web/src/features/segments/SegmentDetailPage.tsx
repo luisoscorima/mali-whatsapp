@@ -219,7 +219,7 @@ export function SegmentDetailPage() {
               checked={showInFilter}
               onChange={(e) => setShowInFilter(e.target.checked)}
             />
-            Mostrar en filtros
+            Visible en filtros
           </label>
           <label className="flex items-center gap-2 text-sm sm:col-span-1">
             <input

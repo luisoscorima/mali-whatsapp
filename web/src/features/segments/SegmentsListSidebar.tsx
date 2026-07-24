@@ -48,6 +48,41 @@ function isStatusFilterKey(value: string): value is StatusFilterKey {
   return STATUS_FILTERS.some((opt) => opt.key === value)
 }
 
+function FilterVisibilityIcon({ visible }: { visible: boolean }) {
+  const common = {
+    width: 14,
+    height: 14,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.75,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    className: 'shrink-0 text-muted',
+    'aria-hidden': true as const,
+  }
+
+  if (visible) {
+    return (
+      <svg {...common}>
+        <title>Visible en filtros</title>
+        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg {...common}>
+      <title>Oculto en filtros</title>
+      <path d="M10.7 5.1A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.2 3.1" />
+      <path d="M6.6 6.6C3.9 8.5 2 12 2 12s3.5 7 10 7a9.7 9.7 0 0 0 4.4-1" />
+      <path d="M14.1 14.1a3 3 0 1 1-4.2-4.2" />
+      <path d="m3 3 18 18" />
+    </svg>
+  )
+}
+
 export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -188,27 +223,33 @@ function renderSegmentRow(
       <Link to={`/segments/${seg.id}${listQuery}`} className="inbox-chat-link flex-1">
         <span className="inbox-chat-link-main">
           <span className="inbox-chat-row-top">
-            <span className="inbox-chat-title">{seg.label}</span>
+            <span className="inbox-chat-title-line">
+              <span className="inbox-chat-title">{seg.label}</span>
+            </span>
             <span
-              className={`rounded px-1.5 text-[10px] ${
+              className={`shrink-0 rounded px-1.5 text-[10px] ${
                 seg.active ? 'bg-accent-soft text-accent' : 'bg-bad/15 text-bad'
               }`}
             >
               {seg.active ? 'Activo' : 'Inactivo'}
             </span>
           </span>
-          <SegmentBadge
-            colorKey={seg.color_key}
-            className="inbox-chat-segment font-mono text-[10px]"
-          >
-            {seg.slug}
-          </SegmentBadge>
-          <span className="mt-0.5 block text-[10px] leading-snug text-muted">
-            {seg.show_in_filter ? 'En filtros' : 'Sin filtros'}
-            {seg.assignable
-              ? ` · Asignable${seg.assignment_group ? `: ${seg.assignment_group}` : ''}`
-              : null}
+          <span className="inbox-chat-row-top">
+            <SegmentBadge
+              colorKey={seg.color_key}
+              className="inbox-chat-segment font-mono text-[10px]"
+            >
+              {seg.slug}
+            </SegmentBadge>
+            <span className="ml-auto shrink-0">
+              <FilterVisibilityIcon visible={seg.show_in_filter} />
+            </span>
           </span>
+          {seg.assignable ? (
+            <span className="mt-0.5 block text-[10px] leading-snug text-muted">
+              Asignable{seg.assignment_group ? `: ${seg.assignment_group}` : ''}
+            </span>
+          ) : null}
         </span>
       </Link>
     </div>

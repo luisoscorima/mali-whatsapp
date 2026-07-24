@@ -177,12 +177,28 @@ export class CrmService {
     };
   }
 
-  async listAudience(query: CrmAudienceQueryDto): Promise<CrmAudienceResult> {
+  async listAudience(
+    query: CrmAudienceQueryDto & {
+      segments?: string[];
+      exclude_segments?: string[];
+    },
+  ): Promise<CrmAudienceResult> {
     const area = this.normalizeArea(query.area ?? 'pam');
     const page = query.page ?? 1;
     const limit = query.limit ?? 500;
     const offset = (page - 1) * limit;
     const requireOptInEmail = query.opt_in_email !== false;
+
+    const includeSegments = this.normalizeSegmentList(
+      query.segments?.length
+        ? query.segments
+        : query.segment
+          ? [query.segment]
+          : [],
+    );
+    const excludeSegments = this.normalizeSegmentList(
+      query.exclude_segments ?? [],
+    ).filter((s) => !includeSegments.includes(s));
 
     const where: Prisma.contactsWhereInput = {
       area,
@@ -196,10 +212,35 @@ export class CrmService {
       where.opt_in_email = true;
     }
 
-    if (query.segment) {
-      where.contact_segments = {
-        some: { area, segment_slug: query.segment.trim() },
-      };
+    const segmentFilters: Prisma.contactsWhereInput[] = [];
+    if (includeSegments.length === 1) {
+      segmentFilters.push({
+        contact_segments: {
+          some: { area, segment_slug: includeSegments[0] },
+        },
+      });
+    } else if (includeSegments.length > 1) {
+      segmentFilters.push({
+        contact_segments: {
+          some: { area, segment_slug: { in: includeSegments } },
+        },
+      });
+    }
+
+    if (excludeSegments.length > 0) {
+      segmentFilters.push({
+        NOT: {
+          contact_segments: {
+            some: { area, segment_slug: { in: excludeSegments } },
+          },
+        },
+      });
+    }
+
+    if (segmentFilters.length === 1) {
+      Object.assign(where, segmentFilters[0]);
+    } else if (segmentFilters.length > 1) {
+      where.AND = [...(Array.isArray(where.AND) ? where.AND : []), ...segmentFilters];
     }
 
     if (query.attr_key) {
@@ -246,6 +287,16 @@ export class CrmService {
 
     const pages = total > 0 ? Math.ceil(total / limit) : 0;
     return { area, items, total, page, limit, pages };
+  }
+
+  private normalizeSegmentList(raw: string[]): string[] {
+    return [
+      ...new Set(
+        raw
+          .map((s) => String(s ?? '').trim())
+          .filter(Boolean),
+      ),
+    ];
   }
 
   /** Full CRM contact list for MALI ONE CRM PAM (not only email audience). */

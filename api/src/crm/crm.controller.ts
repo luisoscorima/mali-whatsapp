@@ -15,6 +15,7 @@ import {
   CrmCreateAttributeDefinitionDto,
   CrmUpdateAttributeDefinitionDto,
 } from './dto/crm-attribute-definition.dto';
+import { CrmAudienceBodyDto } from './dto/crm-audience-body.dto';
 import { CrmAudienceQueryDto } from './dto/crm-audience-query.dto';
 import { CrmContactsQueryDto } from './dto/crm-contacts-query.dto';
 import { CrmEnsureAttributeDefinitionsDto } from './dto/crm-ensure-attribute-definitions.dto';
@@ -33,10 +34,20 @@ export class CrmController {
     return { ok: true, data };
   }
 
-  /** Email audience for mailing (opt_in_email + valid email). */
+  /** Email audience for mailing (opt_in_email + valid email). Legacy single segment. */
   @Get('audience')
   async audience(@Query() query: CrmAudienceQueryDto) {
     const data = await this.crm.listAudience(query);
+    return { ok: true, data };
+  }
+
+  /**
+   * Email audience with multi-segment include/exclude (MALI ONE campaigns).
+   * Same response shape as GET /audience.
+   */
+  @Post('audience')
+  async audiencePost(@Body() body: CrmAudienceBodyDto) {
+    const data = await this.crm.listAudience(body);
     return { ok: true, data };
   }
 
