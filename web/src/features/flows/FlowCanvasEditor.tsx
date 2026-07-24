@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type FormEvent } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -16,6 +16,7 @@ import {
   type Node,
   type NodeProps,
   MarkerType,
+  ConnectionMode,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import '../../styles/flow-canvas.css'
@@ -69,39 +70,28 @@ const HANDLE_CLASS = 'flow-canvas-handle'
 
 function MessageNodeView({ id, data, selected }: NodeProps<Node<CanvasData>>) {
   const updateNodeInternals = useUpdateNodeInternals()
-  const rootRef = useRef<HTMLDivElement>(null)
-  const rowRefs = useRef<(HTMLDivElement | null)[]>([])
-  const [handleTops, setHandleTops] = useState<number[]>([])
+  const buttonKey = data.buttons.map((b) => `${b.id}:${b.title}`).join('|')
 
-  const buttonKey = data.buttons.map((b) => b.id).join('|')
-
-  useLayoutEffect(() => {
-    const root = rootRef.current
-    if (!root) return
-    const rootTop = root.getBoundingClientRect().top
-    const tops = data.buttons.map((_, i) => {
-      const row = rowRefs.current[i]
-      if (!row) return 0
-      const rect = row.getBoundingClientRect()
-      return rect.top - rootTop + rect.height / 2
-    })
-    setHandleTops(tops)
-  }, [id, buttonKey, data.buttons.length, data.body_text, selected])
-
+  // Handles anidados: hay que refrescar bounds tras layout (si no, el hitbox queda desfasado).
   useLayoutEffect(() => {
     updateNodeInternals(id)
-    const raf = requestAnimationFrame(() => updateNodeInternals(id))
-    return () => cancelAnimationFrame(raf)
-  }, [id, handleTops, buttonKey, data.body_text, updateNodeInternals])
+    const t = window.setTimeout(() => updateNodeInternals(id), 0)
+    return () => window.clearTimeout(t)
+  }, [id, buttonKey, data.body_text, selected, updateNodeInternals])
 
   return (
     <div
-      ref={rootRef}
-      className={`relative min-w-[220px] max-w-[260px] rounded-xl border bg-surface-strong p-3 shadow-sm ${
+      className={`relative min-w-[220px] max-w-[280px] rounded-xl border bg-surface-strong p-3 shadow-sm ${
         selected ? 'border-accent' : 'border-line'
       } ${data.isEntry ? 'ring-1 ring-accent/40' : ''}`}
     >
-      <Handle type="target" position={Position.Left} className={HANDLE_CLASS} />
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="in"
+        className={HANDLE_CLASS}
+        isConnectable
+      />
       <p className="text-xs font-medium text-muted">
         Mensaje{data.isEntry ? ' · Inicio' : ''}
       </p>
@@ -109,43 +99,33 @@ function MessageNodeView({ id, data, selected }: NodeProps<Node<CanvasData>>) {
         {data.body_text || 'Sin texto'}
       </p>
       {data.buttons.length > 0 ? (
-        <>
-          <div className="mt-2 space-y-1">
-            {data.buttons.map((b, i) => (
-              <div
-                key={`${b.id}-${i}`}
-                ref={(el) => {
-                  rowRefs.current[i] = el
-                }}
-                className="rounded-md border border-line px-2 py-1.5 text-xs"
-              >
-                <span className="font-medium">{b.title || 'Botón'}</span>
-                <span className="ml-1 font-mono text-[10px] text-muted">
-                  {b.id}
-                </span>
-              </div>
-            ))}
-          </div>
+        <div className="mt-2 space-y-1">
           {data.buttons.map((b, i) => (
-            <Handle
-              key={`src-${b.id}-${i}`}
-              type="source"
-              position={Position.Right}
-              id={`btn:${b.id}`}
-              className={HANDLE_CLASS}
-              style={{
-                top: handleTops[i] ?? 0,
-                transform: 'translate(50%, -50%)',
-              }}
-            />
+            <div
+              key={`${b.id}-${i}`}
+              className="relative rounded-md border border-line px-2 py-1.5 pr-3 text-xs"
+            >
+              <span className="font-medium">{b.title || 'Botón'}</span>
+              <span className="ml-1 font-mono text-[10px] text-muted">
+                {b.id}
+              </span>
+              <Handle
+                type="source"
+                position={Position.Right}
+                id={`btn:${b.id}`}
+                className={HANDLE_CLASS}
+                isConnectable
+              />
+            </div>
           ))}
-        </>
+        </div>
       ) : (
         <Handle
           type="source"
           position={Position.Right}
           id="next"
           className={HANDLE_CLASS}
+          isConnectable
         />
       )}
       <p className="mt-2 truncate font-mono text-[10px] text-muted">{id}</p>
@@ -156,11 +136,17 @@ function MessageNodeView({ id, data, selected }: NodeProps<Node<CanvasData>>) {
 function HandoffNodeView({ id, data, selected }: NodeProps<Node<CanvasData>>) {
   return (
     <div
-      className={`min-w-[200px] rounded-xl border bg-surface-strong p-3 shadow-sm ${
+      className={`relative min-w-[200px] rounded-xl border bg-surface-strong p-3 shadow-sm ${
         selected ? 'border-accent' : 'border-line'
       }`}
     >
-      <Handle type="target" position={Position.Left} className={HANDLE_CLASS} />
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="in"
+        className={HANDLE_CLASS}
+        isConnectable
+      />
       <p className="text-xs font-medium text-muted">Derivar a asesor</p>
       <p className="mt-1 line-clamp-2 text-sm">
         {data.body_text || 'Mensaje de derivación'}
@@ -178,11 +164,17 @@ function HandoffNodeView({ id, data, selected }: NodeProps<Node<CanvasData>>) {
 function EndNodeView({ id, selected }: NodeProps<Node<CanvasData>>) {
   return (
     <div
-      className={`min-w-[160px] rounded-xl border bg-surface-strong p-3 shadow-sm ${
+      className={`relative min-w-[160px] rounded-xl border bg-surface-strong p-3 shadow-sm ${
         selected ? 'border-accent' : 'border-line'
       }`}
     >
-      <Handle type="target" position={Position.Left} className={HANDLE_CLASS} />
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="in"
+        className={HANDLE_CLASS}
+        isConnectable
+      />
       <p className="text-xs font-medium text-muted">Fin del flujo</p>
       <p className="mt-1 text-sm">Cierra sin derivar ni enviar más.</p>
       <p className="mt-2 truncate font-mono text-[10px] text-muted">{id}</p>
@@ -348,25 +340,41 @@ function FlowCanvasEditorInner({
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return
+
+      let source = connection.source
+      let target = connection.target
+      let sourceHandle = connection.sourceHandle
+      let targetHandle = connection.targetHandle || 'in'
+
+      // Si se arrastró desde una entrada, RF ya intercambia ids; por si acaso normalizamos.
+      const out = String(sourceHandle || '')
+      const looksLikeOut =
+        out.startsWith('btn:') || out === 'next' || out === ''
+      if (!looksLikeOut && out === 'in') {
+        source = connection.target!
+        target = connection.source!
+        sourceHandle = connection.targetHandle
+        targetHandle = connection.sourceHandle || 'in'
+      }
+
       setRfEdges((eds) => {
-        // Una sola salida por handle (key de botón)
-        const without = connection.sourceHandle
+        const without = sourceHandle
           ? eds.filter(
               (e) =>
-                !(
-                  e.source === connection.source &&
-                  e.sourceHandle === connection.sourceHandle
-                ),
+                !(e.source === source && e.sourceHandle === sourceHandle),
             )
           : eds
+        const label = String(sourceHandle || '').startsWith('btn:')
+          ? String(sourceHandle).slice(4)
+          : 'siguiente'
         const next = addEdge(
           {
-            ...connection,
+            source,
+            target,
+            sourceHandle,
+            targetHandle,
             markerEnd: { type: MarkerType.ArrowClosed },
-            label:
-              connection.sourceHandle?.startsWith('btn:')
-                ? connection.sourceHandle.slice(4)
-                : 'siguiente',
+            label,
           },
           without,
         )
@@ -663,7 +671,11 @@ function FlowCanvasEditorInner({
             fitView
             snapToGrid
             snapGrid={[16, 16]}
-            connectionRadius={28}
+            connectionMode={ConnectionMode.Loose}
+            connectionRadius={40}
+            nodesConnectable
+            edgesFocusable
+            elementsSelectable
             deleteKeyCode={['Backspace', 'Delete']}
             multiSelectionKeyCode={null}
             proOptions={{ hideAttribution: true }}
