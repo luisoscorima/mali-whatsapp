@@ -491,20 +491,11 @@ export class WebhookService {
       const waId = String(record.id || '').trim();
       if (!from || !E164_NO_PLUS_REGEX.test(from)) continue;
 
-      let contactId: number | null = null;
       const contactInArea = await this.prisma.contacts.findFirst({
         where: { area, phone: from },
         select: { id: true },
       });
-      contactId = contactInArea?.id ?? null;
-      if (!contactId) {
-        const anyContact = await this.prisma.contacts.findFirst({
-          where: { phone: from },
-          orderBy: { updated_at: 'desc' },
-          select: { id: true },
-        });
-        contactId = anyContact?.id ?? null;
-      }
+      const contactId = contactInArea?.id ?? null;
 
       const waProfileName = extractInboundProfileName(value.contacts, from);
       const { messageType, bodyText } = extractInboundMessagePreview(record);
