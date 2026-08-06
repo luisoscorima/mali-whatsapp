@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -249,6 +249,7 @@ function FlowCanvasEditorInner({
   const [advisors, setAdvisors] = useState<Advisor[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
+  const suppressSelectionRef = useRef(false)
 
   const initialRfNodes: Node<CanvasData>[] = useMemo(
     () =>
@@ -293,6 +294,21 @@ function FlowCanvasEditorInner({
 
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState(initialRfNodes)
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState(initialRfEdges)
+
+  function closeInspector() {
+    suppressSelectionRef.current = true
+    setSelectedId(null)
+    setSelectedEdgeId(null)
+    setRfNodes((nodes) =>
+      nodes.map((n) => (n.selected ? { ...n, selected: false } : n)),
+    )
+    setRfEdges((edges) =>
+      edges.map((e) => (e.selected ? { ...e, selected: false } : e)),
+    )
+    window.setTimeout(() => {
+      suppressSelectionRef.current = false
+    }, 0)
+  }
 
   useEffect(() => {
     apiClient.get<Advisor[]>('/api/flows/advisors').then((res) => {
@@ -742,6 +758,7 @@ function FlowCanvasEditorInner({
           }}
           onConnect={onConnect}
           onSelectionChange={({ nodes: sel, edges: edgeSel }) => {
+            if (suppressSelectionRef.current) return
             setSelectedId(sel[0]?.id ?? null)
             setSelectedEdgeId(edgeSel[0]?.id ?? null)
           }}
@@ -776,13 +793,26 @@ function FlowCanvasEditorInner({
       <Sheet
         open={Boolean(selected || selectedEdge)}
         onOpenChange={(open) => {
-          if (!open) {
-            setSelectedId(null)
-            setSelectedEdgeId(null)
-          }
+          if (!open) closeInspector()
         }}
       >
-        <SheetContent side="right" className="w-[min(100%,28rem)]">
+        <SheetContent
+          side="right"
+          className="w-[min(100%,28rem)]"
+          onPointerDownOutside={(e) => {
+            // Evita que el click en el overlay re-seleccione el canvas debajo.
+            e.preventDefault()
+            closeInspector()
+          }}
+          onInteractOutside={(e) => {
+            e.preventDefault()
+            closeInspector()
+          }}
+          onEscapeKeyDown={(e) => {
+            e.preventDefault()
+            closeInspector()
+          }}
+        >
           <SheetHeader>
             <SheetTitle>
               {selectedEdge && !selected
@@ -1113,7 +1143,9 @@ function FlowCanvasEditorInner({
             ) : null}
           </SheetBody>
           <SheetFooter>
-            <SheetClose>Cerrar</SheetClose>
+            <SheetClose type="button" onClick={closeInspector}>
+              Cerrar
+            </SheetClose>
           </SheetFooter>
         </SheetContent>
       </Sheet>

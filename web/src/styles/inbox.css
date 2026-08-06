@@ -1724,6 +1724,12 @@ html[data-theme='dark'] .chat-bubble__reply-to {
   color: #fff;
 }
 
+.small-btn.compact {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  border-radius: 6px;
+}
+
 .small-btn:hover {
   background: var(--accent-soft);
 }

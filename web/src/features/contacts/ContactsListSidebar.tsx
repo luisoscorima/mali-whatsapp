@@ -625,20 +625,21 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
         <>
           {canBulkSelect ? (
             <div className="flex flex-wrap items-center gap-1 border-b border-line px-3 py-1.5 text-xs">
-              <button type="button" className="small-btn" onClick={selectAllContacts}>
+              <button type="button" className="small-btn compact" onClick={selectAllContacts}>
                 Todos
               </button>
-              <button type="button" className="small-btn" onClick={clearContactSelection}>
+              <button type="button" className="small-btn compact" onClick={clearContactSelection}>
                 Ninguno
               </button>
-              <button
-                type="button"
-                className="small-btn primary"
-                disabled={selectedIds.size === 0}
-                onClick={() => setBulkActionsOpen(true)}
-              >
-                Acciones{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
-              </button>
+              {selectedIds.size > 0 ? (
+                <button
+                  type="button"
+                  className="small-btn primary compact"
+                  onClick={() => setBulkActionsOpen(true)}
+                >
+                  Acciones ({selectedIds.size})
+                </button>
+              ) : null}
             </div>
           ) : null}
           <ul className="inbox-chat-list">

@@ -1611,27 +1611,27 @@ export function ConversationsInboxPage() {
           <div className="flex flex-wrap items-center gap-1 border-b border-line px-3 py-1.5 text-xs">
             <button
               type="button"
-              className="small-btn"
+              className="small-btn compact"
               onClick={selectAllVisibleContacts}
             >
               Todos
             </button>
             <button
               type="button"
-              className="small-btn"
+              className="small-btn compact"
               onClick={clearContactSelection}
             >
               Ninguno
             </button>
-            <button
-              type="button"
-              className="small-btn primary"
-              disabled={selectedContactIds.size === 0}
-              onClick={() => setBulkActionsOpen(true)}
-            >
-              Acciones
-              {selectedContactIds.size > 0 ? ` (${selectedContactIds.size})` : ''}
-            </button>
+            {selectedContactIds.size > 0 ? (
+              <button
+                type="button"
+                className="small-btn primary compact"
+                onClick={() => setBulkActionsOpen(true)}
+              >
+                Acciones ({selectedContactIds.size})
+              </button>
+            ) : null}
           </div>
         ) : null}
         <ul className="inbox-chat-list">
