@@ -78,14 +78,11 @@ model campaigns {
   cost_source          String?         @db.VarChar(40)
   cost_is_estimated    Boolean         @default(false)
   send_mode            String          @default("mass") @db.VarChar(16)
-  linked_flow_id       Int?
   campaign_logs        campaign_logs[]
-  linked_flow          flows?          @relation(fields: [linked_flow_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([area], map: "idx_campaigns_area")
   @@index([auto_retry_at], map: "idx_campaigns_auto_retry")
   @@index([status, scheduled_at], map: "idx_campaigns_scheduled")
-  @@index([linked_flow_id], map: "idx_campaigns_linked_flow")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -245,7 +242,6 @@ model flows {
   entry_node_id   Int?
   created_at      DateTime        @default(now()) @db.Timestamptz(6)
   updated_at      DateTime        @default(now()) @db.Timestamptz(6)
-  campaigns       campaigns[]
   flow_nodes      flow_nodes[]
   flow_edges      flow_edges[]
   flow_sessions   flow_sessions[]

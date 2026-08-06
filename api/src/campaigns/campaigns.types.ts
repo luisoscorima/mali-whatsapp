@@ -106,7 +106,4 @@ export type CampaignDetail = {
   exclude_contact_ids: number[];
   exclude_contacts: CampaignExcludedContact[];
   first_send_at: string | null;
-  linked_flow_id: number | null;
-  linked_flow_name: string | null;
-  linked_flow_trigger: string | null;
 };

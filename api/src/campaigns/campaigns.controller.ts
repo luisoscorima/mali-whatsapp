@@ -4,7 +4,6 @@ import {
   Get,
   Param,
   ParseIntPipe,
-  Patch,
   Post,
   Query,
   Res,
@@ -179,27 +178,6 @@ export class CampaignsController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<CampaignDetail>> {
     const data = await this.campaignsService.getById(user.area, id);
-    return { ok: true, data };
-  }
-
-  @Patch(':id/linked-flow')
-  async linkFlow(
-    @CurrentUser() user: AuthUser,
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: { linked_flow_id?: number | null },
-  ): Promise<ApiResponse<CampaignDetail>> {
-    const raw = body?.linked_flow_id;
-    const linkedFlowId =
-      raw === null || raw === undefined || raw === ('' as unknown)
-        ? null
-        : Number(raw);
-    const data = await this.campaignsService.linkFlow(
-      user.area,
-      id,
-      linkedFlowId != null && Number.isInteger(linkedFlowId) && linkedFlowId > 0
-        ? linkedFlowId
-        : null,
-    );
     return { ok: true, data };
   }
 }

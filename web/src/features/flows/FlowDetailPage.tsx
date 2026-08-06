@@ -169,16 +169,6 @@ export function FlowDetailPage() {
   return (
     <>
       {confirmDialog}
-      <div className="space-y-3 p-3 pb-0 md:px-4 md:pt-4">
-        <h2 className="text-sm font-medium text-muted">Historial del flujo</h2>
-        <FlowAnalyticsPanel
-          analytics={analytics}
-          onOpenDrilldown={(q) => {
-            setDrilldownQuery(q)
-            setDrilldownOpen(true)
-          }}
-        />
-      </div>
       <FlowCanvasEditor
         key={`${id}-${canvasKey}`}
         name={name}
@@ -199,6 +189,16 @@ export function FlowDetailPage() {
         onDelete={onDelete}
         deleting={deleting}
       />
+      <div className="space-y-3 p-3 pt-0 md:px-4 md:pb-4">
+        <h2 className="text-sm font-medium text-muted">Historial del flujo</h2>
+        <FlowAnalyticsPanel
+          analytics={analytics}
+          onOpenDrilldown={(q) => {
+            setDrilldownQuery(q)
+            setDrilldownOpen(true)
+          }}
+        />
+      </div>
       <FlowDrilldownDialog
         open={drilldownOpen}
         onOpenChange={setDrilldownOpen}
