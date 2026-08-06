@@ -17,13 +17,27 @@ export const FLOW_TIMEOUT_STOP = 'FLOW_STOP';
 export const DEFAULT_FLOW_TIMEOUT_BODY =
   '¿Sigues ahí? Pulsa Continuar para seguir con el flujo.';
 
+export type FlowEventType =
+  | 'entered'
+  | 'replied'
+  | 'timeout_sent'
+  | 'timeout_closed'
+  | 'completed'
+  | 'handed_off';
+
 export type FlowNodeDto = {
   id: number;
+  client_key: string;
   kind: FlowNodeKind;
   body_text: string;
   buttons: FlowButton[];
   timeout_minutes: number | null;
   timeout_body_text: string;
+  timeout_repeat: boolean;
+  timeout_max_nudges: number | null;
+  timeout_close_on_silence: boolean;
+  timeout_window_guard: boolean;
+  timeout_window_lead_minutes: number | null;
   sort_order: number;
   position_x: number;
   position_y: number;
@@ -35,6 +49,38 @@ export type FlowEdgeDto = {
   from_node_id: number;
   to_node_id: number;
   match_payload: string | null;
+};
+
+export type FlowNodeAnalytics = {
+  client_key: string;
+  node_id: number | null;
+  label: string;
+  kind: string;
+  entered: number;
+  replied: number;
+  waiting: number;
+  deleted: boolean;
+};
+
+export type FlowAnalytics = {
+  started: number;
+  active: number;
+  completed: number;
+  handed_off: number;
+  timeout_closed: number;
+  nodes: FlowNodeAnalytics[];
+};
+
+export type FlowEventContactRow = {
+  conversation_id: number;
+  contact_id: number | null;
+  contact_name: string;
+  phone: string;
+  event_type: string;
+  client_key: string | null;
+  node_label: string | null;
+  match_payload: string | null;
+  created_at: string;
 };
 
 export type FlowListItem = {
@@ -64,6 +110,7 @@ export type FlowDetail = {
     completed_sessions: number;
     handed_off_sessions: number;
   };
+  analytics: FlowAnalytics;
   created_at: string;
   updated_at: string;
 };
@@ -75,6 +122,11 @@ export type FlowNodeInput = {
   buttons?: FlowButton[];
   timeout_minutes?: number | null;
   timeout_body_text?: string;
+  timeout_repeat?: boolean;
+  timeout_max_nudges?: number | null;
+  timeout_close_on_silence?: boolean;
+  timeout_window_guard?: boolean;
+  timeout_window_lead_minutes?: number | null;
   sort_order?: number;
   position_x?: number;
   position_y?: number;

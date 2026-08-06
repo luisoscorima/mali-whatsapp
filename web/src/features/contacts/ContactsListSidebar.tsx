@@ -614,15 +614,15 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
               {segments.length > 0 ? (
                 <form
                   onSubmit={(e) => void handleBulkSegment(e)}
-                  className="flex flex-wrap items-end gap-1 text-xs"
+                  className="flex min-w-0 flex-wrap items-end gap-1 text-xs"
                 >
                   <select
                     value={bulkSegment}
                     onChange={(e) => setBulkSegment(e.target.value)}
                     required
-                    className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5"
+                    className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5 text-xs"
                   >
-                    <option value="">Segmento bulk</option>
+                    <option value="">Segmento</option>
                     {segments.map((seg) => (
                       <option key={seg.slug} value={seg.slug}>
                         {seg.label}
@@ -641,7 +641,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
               {bulkAttrDefs.length > 0 ? (
                 <form
                   onSubmit={(e) => void handleBulkAttribute(e)}
-                  className="flex flex-wrap items-end gap-1 text-xs"
+                  className="flex min-w-0 flex-wrap items-end gap-1 text-xs"
                 >
                   <select
                     value={bulkAttrKey}
@@ -650,9 +650,9 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
                       setBulkAttrValue('')
                     }}
                     required
-                    className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5"
+                    className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5 text-xs"
                   >
-                    <option value="">Atributo bulk</option>
+                    <option value="">Atributo</option>
                     {bulkAttrDefs.map((def) => (
                       <option key={def.slug} value={def.slug}>
                         {def.label}
@@ -663,7 +663,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
                     <select
                       value={bulkAttrValue}
                       onChange={(e) => setBulkAttrValue(e.target.value)}
-                      className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5"
+                      className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5 text-xs"
                     >
                       <option value="">Valor</option>
                       {(bulkAttrDef.options ?? []).map((opt) => (
@@ -678,7 +678,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
                       value={bulkAttrValue}
                       onChange={(e) => setBulkAttrValue(e.target.value)}
                       placeholder="Valor"
-                      className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5"
+                      className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5 text-xs"
                     />
                   )}
                   <button
@@ -705,7 +705,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
         </p>
       ) : (
         <>
-          {segments.length > 0 ? (
+          {segments.length > 0 || bulkAttrDefs.length > 0 ? (
             <div className="flex flex-wrap gap-1 border-b border-line px-3 py-1.5 text-xs">
               <button type="button" className="small-btn" onClick={selectAllContacts}>
                 Todos
@@ -730,7 +730,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
                   className={`inbox-chat-item ${active ? 'is-active' : ''}`}
                 >
                   <div className="flex min-h-full w-full items-stretch">
-                    {segments.length > 0 ? (
+                    {segments.length > 0 || bulkAttrDefs.length > 0 ? (
                       <label
                         className="flex items-center pl-2"
                         onClick={(e) => e.stopPropagation()}

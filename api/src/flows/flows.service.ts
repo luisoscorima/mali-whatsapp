@@ -16,11 +16,20 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { TRANSFER_TO_HUMAN_NOTICE } from '../webhook/ai-response.util';
 import { formatAdvisorLabel } from '../users/advisor-label.util';
+import { readSessionWindowMs } from '../campaigns/campaign-conversation-window.util';
 import type { CreateFlowDto, UpdateFlowDto } from './dto/flow.dto';
+import {
+  buildFlowAnalytics,
+  nodeLabelSnapshot,
+  recordFlowEvent,
+} from './flow-analytics.util';
 import type {
+  FlowAnalytics,
   FlowButton,
   FlowDetail,
   FlowEdgeDto,
+  FlowEventContactRow,
+  FlowEventType,
   FlowListItem,
   FlowNodeDto,
   FlowNodeKind,
@@ -139,7 +148,250 @@ export class FlowsService {
       },
     });
     if (!row) throw new NotFoundException('Flujo no encontrado');
-    return this.toDetail(row);
+    const analytics = await this.buildAnalyticsForFlow(id, row.flow_nodes, row.flow_sessions);
+    return this.toDetail(row, analytics);
+  }
+
+  async listEventContacts(
+    area: string,
+    flowId: number,
+    query: {
+      client_key?: string;
+      event_type?: string;
+    },
+  ): Promise<FlowEventContactRow[]> {
+    const flow = await this.prisma.flows.findFirst({
+      where: { id: flowId, area },
+      select: { id: true },
+    });
+    if (!flow) throw new NotFoundException('Flujo no encontrado');
+
+    const eventType = String(query.event_type || '').trim();
+    const clientKey = String(query.client_key || '').trim();
+    const where: Prisma.flow_session_eventsWhereInput = { flow_id: flowId };
+    if (clientKey) where.client_key = clientKey;
+    if (
+      eventType &&
+      eventType !== 'started' &&
+      eventType !== 'active' &&
+      eventType !== 'completed' &&
+      eventType !== 'handed_off'
+    ) {
+      where.event_type = eventType;
+    }
+
+    if (eventType === 'active') {
+      const sessions = await this.prisma.flow_sessions.findMany({
+        where: {
+          flow_id: flowId,
+          status: 'active',
+          ...(clientKey
+            ? { current_node: { client_key: clientKey } }
+            : {}),
+        },
+        take: 500,
+        orderBy: { updated_at: 'desc' },
+        include: {
+          conversations: {
+            select: {
+              id: true,
+              phone: true,
+              contact_id: true,
+              contacts: { select: { name: true, last_name: true } },
+            },
+          },
+          current_node: { select: { client_key: true, body_text: true, kind: true } },
+        },
+      });
+      return sessions.map((s) => {
+        const c = s.conversations;
+        const name = [c.contacts?.name, c.contacts?.last_name]
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+        return {
+          conversation_id: c.id,
+          contact_id: c.contact_id,
+          contact_name: name || c.phone,
+          phone: c.phone,
+          event_type: 'active',
+          client_key: s.current_node?.client_key ?? null,
+          node_label: s.current_node
+            ? nodeLabelSnapshot(s.current_node.kind, s.current_node.body_text)
+            : null,
+          match_payload: null,
+          created_at: s.updated_at.toISOString(),
+        };
+      });
+    }
+
+    if (eventType === 'started') {
+      const sessions = await this.prisma.flow_sessions.findMany({
+        where: { flow_id: flowId },
+        take: 500,
+        orderBy: { started_at: 'desc' },
+        include: {
+          conversations: {
+            select: {
+              id: true,
+              phone: true,
+              contact_id: true,
+              contacts: { select: { name: true, last_name: true } },
+            },
+          },
+        },
+      });
+      return sessions.map((s) => {
+        const c = s.conversations;
+        const name = [c.contacts?.name, c.contacts?.last_name]
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+        return {
+          conversation_id: c.id,
+          contact_id: c.contact_id,
+          contact_name: name || c.phone,
+          phone: c.phone,
+          event_type: 'started',
+          client_key: null,
+          node_label: null,
+          match_payload: s.status,
+          created_at: s.started_at.toISOString(),
+        };
+      });
+    }
+
+    if (eventType === 'completed' || eventType === 'handed_off') {
+      const sessions = await this.prisma.flow_sessions.findMany({
+        where: { flow_id: flowId, status: eventType },
+        take: 500,
+        orderBy: { updated_at: 'desc' },
+        include: {
+          conversations: {
+            select: {
+              id: true,
+              phone: true,
+              contact_id: true,
+              contacts: { select: { name: true, last_name: true } },
+            },
+          },
+        },
+      });
+      return sessions.map((s) => {
+        const c = s.conversations;
+        const name = [c.contacts?.name, c.contacts?.last_name]
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+        return {
+          conversation_id: c.id,
+          contact_id: c.contact_id,
+          contact_name: name || c.phone,
+          phone: c.phone,
+          event_type: eventType,
+          client_key: null,
+          node_label: null,
+          match_payload: null,
+          created_at: s.updated_at.toISOString(),
+        };
+      });
+    }
+
+    const events = await this.prisma.flow_session_events.findMany({
+      where,
+      take: 500,
+      orderBy: { created_at: 'desc' },
+    });
+
+    const convIds = [...new Set(events.map((e) => e.conversation_id))];
+    const convs = await this.prisma.conversations.findMany({
+      where: { id: { in: convIds } },
+      select: {
+        id: true,
+        phone: true,
+        contact_id: true,
+        contacts: { select: { name: true, last_name: true } },
+      },
+    });
+    const convMap = new Map(convs.map((c) => [c.id, c]));
+
+    const seen = new Set<string>();
+    const rows: FlowEventContactRow[] = [];
+    for (const e of events) {
+      const dedupeKey = `${e.conversation_id}:${e.event_type}:${e.client_key || ''}`;
+      if (eventType === 'started' || eventType === 'entered' || eventType === 'replied' || eventType === 'completed' || eventType === 'handed_off' || eventType === 'timeout_closed') {
+        if (seen.has(`${e.conversation_id}:${eventType || e.event_type}`)) continue;
+        seen.add(`${e.conversation_id}:${eventType || e.event_type}`);
+      } else if (seen.has(dedupeKey)) {
+        continue;
+      } else {
+        seen.add(dedupeKey);
+      }
+      const c = convMap.get(e.conversation_id);
+      if (!c) continue;
+      const name = [c.contacts?.name, c.contacts?.last_name]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+      rows.push({
+        conversation_id: c.id,
+        contact_id: c.contact_id,
+        contact_name: name || c.phone,
+        phone: c.phone,
+        event_type: e.event_type,
+        client_key: e.client_key,
+        node_label: e.node_label,
+        match_payload: e.match_payload,
+        created_at: e.created_at.toISOString(),
+      });
+    }
+    return rows;
+  }
+
+  private async buildAnalyticsForFlow(
+    flowId: number,
+    nodes: {
+      id: number;
+      client_key: string | null;
+      kind: string;
+      body_text: string | null;
+    }[],
+    sessions: { status: string }[],
+  ): Promise<FlowAnalytics> {
+    const eventAggs = await this.prisma.flow_session_events.groupBy({
+      by: ['client_key', 'event_type'],
+      where: {
+        flow_id: flowId,
+        event_type: { in: ['entered', 'replied'] },
+      },
+      _count: { _all: true },
+    });
+
+    const waitingRaw = await this.prisma.$queryRaw<
+      { client_key: string | null; count: bigint }[]
+    >`
+      SELECT n.client_key, COUNT(*)::bigint AS count
+      FROM flow_sessions s
+      LEFT JOIN flow_nodes n ON n.id = s.current_node_id
+      WHERE s.flow_id = ${flowId} AND s.status = 'active'
+      GROUP BY n.client_key
+    `;
+
+    const timeoutClosed = await this.prisma.flow_session_events.count({
+      where: { flow_id: flowId, event_type: 'timeout_closed' },
+    });
+
+    return buildFlowAnalytics({
+      sessions,
+      nodes,
+      eventAggs: eventAggs.map((r) => ({
+        client_key: r.client_key,
+        event_type: r.event_type,
+        count: r._count._all,
+      })),
+      waitingByKey: waitingRaw,
+      timeoutClosed,
+    });
   }
 
   async create(area: string, dto: CreateFlowDto): Promise<FlowDetail> {
@@ -346,14 +598,13 @@ export class FlowsService {
     return { flow_id: flow.id, flow_name: flow.name };
   }
 
-  /** Poll de maintenance: envía confirmación en sesiones con timeout vencido. */
+  /** Poll de maintenance: envía confirmación o cierra por silencio. */
   async processDueTimeouts(): Promise<number> {
     const now = new Date();
     const due = await this.prisma.flow_sessions.findMany({
       where: {
         status: 'active',
         timeout_at: { lte: now },
-        timeout_sent_at: null,
       },
       take: FLOW_TIMEOUT_BATCH,
       orderBy: { timeout_at: 'asc' },
@@ -364,15 +615,10 @@ export class FlowsService {
             area: true,
             phone: true,
             whatsapp_phone_number_id: true,
+            last_user_message_at: true,
           },
         },
-        current_node: {
-          select: {
-            id: true,
-            kind: true,
-            timeout_body_text: true,
-          },
-        },
+        current_node: true,
       },
     });
 
@@ -382,6 +628,25 @@ export class FlowsService {
       const node = session.current_node;
       if (!conv || !node || String(node.kind) !== 'message_buttons') {
         await this.markTimeoutHandled(session.id);
+        continue;
+      }
+
+      const maxNudges = this.effectiveMaxNudges(node);
+      const count = session.timeout_nudge_count || 0;
+
+      if (node.timeout_close_on_silence && count >= maxNudges) {
+        await this.recordNodeEvent({
+          flowId: session.flow_id,
+          sessionId: session.id,
+          conversationId: conv.id,
+          node,
+          eventType: 'timeout_closed',
+        });
+        await this.closeSession(session.id, 'completed', node.id, {
+          flowId: session.flow_id,
+          conversationId: conv.id,
+          skipStatusEvent: true,
+        });
         continue;
       }
 
@@ -398,14 +663,47 @@ export class FlowsService {
           buttons: FLOW_TIMEOUT_CONFIRM_BUTTONS,
           source: 'flow_timeout',
         });
-        await this.prisma.flow_sessions.update({
-          where: { id: session.id },
-          data: {
-            timeout_sent_at: now,
-            timeout_at: null,
-            updated_at: now,
-          },
+        const nextCount = count + 1;
+        await this.recordNodeEvent({
+          flowId: session.flow_id,
+          sessionId: session.id,
+          conversationId: conv.id,
+          node,
+          eventType: 'timeout_sent',
         });
+
+        const shouldRepeat =
+          Boolean(node.timeout_repeat) && nextCount < maxNudges;
+        const shouldWaitToClose =
+          Boolean(node.timeout_close_on_silence) && nextCount >= maxNudges;
+
+        if (shouldRepeat || shouldWaitToClose) {
+          const nextAt = this.computeTimeoutAt({
+            timeoutMinutes: node.timeout_minutes,
+            windowGuard: node.timeout_window_guard,
+            windowLeadMinutes: node.timeout_window_lead_minutes,
+            lastUserMessageAt: conv.last_user_message_at,
+          });
+          await this.prisma.flow_sessions.update({
+            where: { id: session.id },
+            data: {
+              timeout_nudge_count: nextCount,
+              timeout_sent_at: now,
+              timeout_at: nextAt,
+              updated_at: now,
+            },
+          });
+        } else {
+          await this.prisma.flow_sessions.update({
+            where: { id: session.id },
+            data: {
+              timeout_nudge_count: nextCount,
+              timeout_sent_at: now,
+              timeout_at: null,
+              updated_at: now,
+            },
+          });
+        }
         sent += 1;
       } catch (error) {
         this.logger.warn(
@@ -430,19 +728,71 @@ export class FlowsService {
     });
   }
 
-  private async scheduleSessionTimeout(
-    sessionId: number,
-    timeoutMinutes: number | null | undefined,
-  ): Promise<void> {
-    if (!timeoutMinutes || timeoutMinutes <= 0) {
-      await this.clearSessionTimeout(sessionId);
+  private effectiveMaxNudges(node: {
+    timeout_repeat?: boolean | null;
+    timeout_max_nudges?: number | null;
+  }): number {
+    if (!node.timeout_repeat) return 1;
+    const n = Number(node.timeout_max_nudges);
+    if (!Number.isInteger(n) || n < 1) return 3;
+    return Math.min(5, n);
+  }
+
+  private computeTimeoutAt(input: {
+    timeoutMinutes: number | null | undefined;
+    windowGuard: boolean | null | undefined;
+    windowLeadMinutes: number | null | undefined;
+    lastUserMessageAt: Date | null | undefined;
+  }): Date | null {
+    const candidates: number[] = [];
+    const minutes = this.parseTimeoutMinutes(input.timeoutMinutes);
+    if (minutes) {
+      candidates.push(Date.now() + minutes * 60_000);
+    }
+    if (input.windowGuard && input.lastUserMessageAt) {
+      const lead =
+        this.parseTimeoutMinutes(input.windowLeadMinutes) ?? 60;
+      const windowEnd =
+        new Date(input.lastUserMessageAt).getTime() + readSessionWindowMs();
+      const at = windowEnd - lead * 60_000;
+      if (at > Date.now() + 5_000) {
+        candidates.push(at);
+      }
+    }
+    if (!candidates.length) return null;
+    return new Date(Math.min(...candidates));
+  }
+
+  private async scheduleSessionTimeout(input: {
+    sessionId: number;
+    conversationId: number;
+    node: {
+      timeout_minutes: number | null;
+      timeout_window_guard: boolean;
+      timeout_window_lead_minutes: number | null;
+    };
+    resetCount?: boolean;
+  }): Promise<void> {
+    const conv = await this.prisma.conversations.findFirst({
+      where: { id: input.conversationId },
+      select: { last_user_message_at: true },
+    });
+    const timeoutAt = this.computeTimeoutAt({
+      timeoutMinutes: input.node.timeout_minutes,
+      windowGuard: input.node.timeout_window_guard,
+      windowLeadMinutes: input.node.timeout_window_lead_minutes,
+      lastUserMessageAt: conv?.last_user_message_at,
+    });
+    if (!timeoutAt) {
+      await this.clearSessionTimeout(input.sessionId);
       return;
     }
     await this.prisma.flow_sessions.update({
-      where: { id: sessionId },
+      where: { id: input.sessionId },
       data: {
-        timeout_at: new Date(Date.now() + timeoutMinutes * 60_000),
+        timeout_at: timeoutAt,
         timeout_sent_at: null,
+        ...(input.resetCount ? { timeout_nudge_count: 0 } : {}),
         updated_at: new Date(),
       },
     });
@@ -454,6 +804,7 @@ export class FlowsService {
       data: {
         timeout_at: null,
         timeout_sent_at: null,
+        timeout_nudge_count: 0,
         updated_at: new Date(),
       },
     });
@@ -468,21 +819,84 @@ export class FlowsService {
 
   private normalizeNodeTimeoutFields(
     kind: FlowNodeKind,
-    timeoutMinutes: unknown,
-    timeoutBodyText: unknown,
-  ): { timeout_minutes: number | null; timeout_body_text: string | null } {
-    if (kind !== 'message_buttons') {
-      return { timeout_minutes: null, timeout_body_text: null };
+    node: {
+      timeout_minutes?: number | null;
+      timeout_body_text?: string | null;
+      timeout_repeat?: boolean;
+      timeout_max_nudges?: number | null;
+      timeout_close_on_silence?: boolean;
+      timeout_window_guard?: boolean;
+      timeout_window_lead_minutes?: number | null;
+    },
+  ): {
+    timeout_minutes: number | null;
+    timeout_body_text: string | null;
+    timeout_repeat: boolean;
+    timeout_max_nudges: number | null;
+    timeout_close_on_silence: boolean;
+    timeout_window_guard: boolean;
+    timeout_window_lead_minutes: number | null;
+  } {
+    const empty = {
+      timeout_minutes: null as number | null,
+      timeout_body_text: null as string | null,
+      timeout_repeat: false,
+      timeout_max_nudges: null as number | null,
+      timeout_close_on_silence: false,
+      timeout_window_guard: false,
+      timeout_window_lead_minutes: null as number | null,
+    };
+    if (kind !== 'message_buttons') return empty;
+
+    const minutes = this.parseTimeoutMinutes(node.timeout_minutes);
+    const windowGuard = Boolean(node.timeout_window_guard);
+    if (!minutes && !windowGuard) return empty;
+
+    const repeat = Boolean(node.timeout_repeat) && Boolean(minutes);
+    let maxNudges: number | null = null;
+    if (repeat) {
+      const n = Number(node.timeout_max_nudges);
+      maxNudges = Number.isInteger(n) && n >= 1 && n <= 5 ? n : 3;
     }
-    const minutes = this.parseTimeoutMinutes(timeoutMinutes);
-    if (!minutes) {
-      return { timeout_minutes: null, timeout_body_text: null };
-    }
-    const body = String(timeoutBodyText || '').trim();
+    const lead = windowGuard
+      ? this.parseTimeoutMinutes(node.timeout_window_lead_minutes) ?? 60
+      : null;
+
     return {
       timeout_minutes: minutes,
-      timeout_body_text: body || null,
+      timeout_body_text: String(node.timeout_body_text || '').trim() || null,
+      timeout_repeat: repeat,
+      timeout_max_nudges: maxNudges,
+      timeout_close_on_silence: Boolean(node.timeout_close_on_silence),
+      timeout_window_guard: windowGuard,
+      timeout_window_lead_minutes: lead,
     };
+  }
+
+  private async recordNodeEvent(input: {
+    flowId: number;
+    sessionId: number;
+    conversationId: number;
+    node: {
+      id: number;
+      client_key?: string | null;
+      kind: string;
+      body_text?: string | null;
+    };
+    eventType: FlowEventType;
+    matchPayload?: string | null;
+  }): Promise<void> {
+    await recordFlowEvent(this.prisma, {
+      flowId: input.flowId,
+      sessionId: input.sessionId,
+      conversationId: input.conversationId,
+      nodeId: input.node.id,
+      clientKey: input.node.client_key,
+      nodeKind: input.node.kind,
+      nodeLabel: nodeLabelSnapshot(input.node.kind, input.node.body_text),
+      eventType: input.eventType,
+      matchPayload: input.matchPayload,
+    });
   }
 
   private async advanceSession(input: {
@@ -499,7 +913,10 @@ export class FlowsService {
 
     if (input.matchPayload === FLOW_TIMEOUT_STOP) {
       await this.clearSessionTimeout(input.sessionId);
-      await this.closeSession(input.sessionId, 'completed', input.currentNodeId);
+      await this.closeSession(input.sessionId, 'completed', input.currentNodeId, {
+        flowId: input.flowId,
+        conversationId: input.conversationId,
+      });
       return true;
     }
 
@@ -513,10 +930,13 @@ export class FlowsService {
         area: input.area,
         phone: input.phone,
         phoneNumberId: input.phoneNumberId,
-        skipTimeoutSchedule: true,
       });
       return true;
     }
+
+    const currentNode = await this.prisma.flow_nodes.findFirst({
+      where: { id: input.currentNodeId, flow_id: input.flowId },
+    });
 
     const edges = await this.prisma.flow_edges.findMany({
       where: {
@@ -531,27 +951,35 @@ export class FlowsService {
     const edge = exact || fallback;
 
     if (!edge) {
-      const current = await this.prisma.flow_nodes.findFirst({
-        where: { id: input.currentNodeId, flow_id: input.flowId },
-        select: { buttons_json: true, kind: true },
-      });
-      const buttons = parseButtons(current?.buttons_json);
+      const buttons = parseButtons(currentNode?.buttons_json);
       const isOwnButton = buttons.some(
         (b) => String(b.id || '').trim() === input.matchPayload,
       );
       if (isOwnButton) {
-        // Botón del paso actual sin destino: cerrar limpio.
         this.logger.log(
           `Flujo: botón ${input.matchPayload} sin arista; se cierra la sesión`,
         );
+        if (currentNode) {
+          await this.recordNodeEvent({
+            flowId: input.flowId,
+            sessionId: input.sessionId,
+            conversationId: input.conversationId,
+            node: currentNode,
+            eventType: 'replied',
+            matchPayload: input.matchPayload,
+          });
+        }
         await this.closeSession(
           input.sessionId,
           'completed',
           input.currentNodeId,
+          {
+            flowId: input.flowId,
+            conversationId: input.conversationId,
+          },
         );
         return true;
       }
-      // Mensaje viejo u opción fuera de contexto: no saltar de rama.
       this.logger.log(
         `Flujo: clic fuera de contexto payload=${input.matchPayload} nodo=${input.currentNodeId}`,
       );
@@ -574,6 +1002,16 @@ export class FlowsService {
       return true;
     }
 
+    if (currentNode) {
+      await this.recordNodeEvent({
+        flowId: input.flowId,
+        sessionId: input.sessionId,
+        conversationId: input.conversationId,
+        node: currentNode,
+        eventType: 'replied',
+        matchPayload: input.matchPayload,
+      });
+    }
     await this.clearSessionTimeout(input.sessionId);
     await this.executeNode({
       sessionId: input.sessionId,
@@ -595,13 +1033,15 @@ export class FlowsService {
     area: string;
     phone: string;
     phoneNumberId: string | null;
-    skipTimeoutSchedule?: boolean;
   }): Promise<void> {
     const node = await this.prisma.flow_nodes.findFirst({
       where: { id: input.nodeId, flow_id: input.flowId },
     });
     if (!node) {
-      await this.closeSession(input.sessionId, 'completed');
+      await this.closeSession(input.sessionId, 'completed', undefined, {
+        flowId: input.flowId,
+        conversationId: input.conversationId,
+      });
       return;
     }
 
@@ -609,9 +1049,20 @@ export class FlowsService {
     const body = String(node.body_text || '').trim();
     const buttons = parseButtons(node.buttons_json);
 
+    await this.recordNodeEvent({
+      flowId: input.flowId,
+      sessionId: input.sessionId,
+      conversationId: input.conversationId,
+      node,
+      eventType: 'entered',
+    });
+
     try {
       if (kind === 'end') {
-        await this.closeSession(input.sessionId, 'completed', null);
+        await this.closeSession(input.sessionId, 'completed', null, {
+          flowId: input.flowId,
+          conversationId: input.conversationId,
+        });
         return;
       }
 
@@ -658,7 +1109,10 @@ export class FlowsService {
             updated_at: new Date(),
           },
         });
-        await this.closeSession(input.sessionId, 'handed_off', node.id);
+        await this.closeSession(input.sessionId, 'handed_off', node.id, {
+          flowId: input.flowId,
+          conversationId: input.conversationId,
+        });
         return;
       }
 
@@ -667,7 +1121,10 @@ export class FlowsService {
           this.logger.warn(
             `Flujo nodo ${node.id}: message_buttons incompleto`,
           );
-          await this.closeSession(input.sessionId, 'completed', node.id);
+          await this.closeSession(input.sessionId, 'completed', node.id, {
+            flowId: input.flowId,
+            conversationId: input.conversationId,
+          });
           return;
         }
         await this.sendOutboundButtons({
@@ -682,12 +1139,12 @@ export class FlowsService {
             updated_at: new Date(),
           },
         });
-        if (!input.skipTimeoutSchedule) {
-          await this.scheduleSessionTimeout(
-            input.sessionId,
-            node.timeout_minutes,
-          );
-        }
+        await this.scheduleSessionTimeout({
+          sessionId: input.sessionId,
+          conversationId: input.conversationId,
+          node,
+          resetCount: true,
+        });
         return;
       }
 
@@ -720,7 +1177,10 @@ export class FlowsService {
           nodeId: nextEdge.to_node_id,
         });
       } else {
-        await this.closeSession(input.sessionId, 'completed', node.id);
+        await this.closeSession(input.sessionId, 'completed', node.id, {
+          flowId: input.flowId,
+          conversationId: input.conversationId,
+        });
       }
     } catch (error) {
       this.logger.warn(
@@ -733,19 +1193,53 @@ export class FlowsService {
     sessionId: number,
     status: 'completed' | 'handed_off',
     currentNodeId?: number | null,
+    meta?: {
+      flowId: number;
+      conversationId: number;
+      skipStatusEvent?: boolean;
+    },
   ): Promise<void> {
+    const session = await this.prisma.flow_sessions.findFirst({
+      where: { id: sessionId },
+      include: {
+        current_node: {
+          select: {
+            id: true,
+            client_key: true,
+            kind: true,
+            body_text: true,
+          },
+        },
+      },
+    });
     await this.prisma.flow_sessions.update({
       where: { id: sessionId },
       data: {
         status,
         timeout_at: null,
         timeout_sent_at: null,
+        timeout_nudge_count: 0,
         ...(currentNodeId !== undefined
           ? { current_node_id: currentNodeId }
           : {}),
         updated_at: new Date(),
       },
     });
+    if (meta && !meta.skipStatusEvent) {
+      const node = session?.current_node;
+      await recordFlowEvent(this.prisma, {
+        flowId: meta.flowId,
+        sessionId,
+        conversationId: meta.conversationId,
+        nodeId: node?.id ?? (typeof currentNodeId === 'number' ? currentNodeId : null),
+        clientKey: node?.client_key,
+        nodeKind: node?.kind,
+        nodeLabel: node
+          ? nodeLabelSnapshot(node.kind, node.body_text)
+          : null,
+        eventType: status === 'handed_off' ? 'handed_off' : 'completed',
+      });
+    }
   }
 
   private async sendOutboundText(input: {
@@ -877,9 +1371,30 @@ export class FlowsService {
             'El recordatorio debe ser entre 1 y 1440 minutos',
           );
         }
+        if (
+          !timeoutMinutes &&
+          !node.timeout_window_guard &&
+          (node.timeout_repeat || node.timeout_close_on_silence)
+        ) {
+          throw new BadRequestException(
+            'Activa minutos de recordatorio o aviso 24h antes de repetir/cerrar',
+          );
+        }
+        if (node.timeout_window_guard) {
+          const lead = this.parseTimeoutMinutes(
+            node.timeout_window_lead_minutes ?? 60,
+          );
+          if (!lead) {
+            throw new BadRequestException(
+              'El margen de ventana 24h debe ser entre 1 y 1440 minutos',
+            );
+          }
+        }
       } else if (
-        node.timeout_minutes != null &&
-        Number(node.timeout_minutes) > 0
+        (node.timeout_minutes != null && Number(node.timeout_minutes) > 0) ||
+        node.timeout_window_guard ||
+        node.timeout_repeat ||
+        node.timeout_close_on_silence
       ) {
         throw new BadRequestException(
           'El recordatorio solo aplica a pasos con botones',
@@ -922,14 +1437,11 @@ export class FlowsService {
     for (const node of dto.nodes) {
       const key = String(node.client_key).trim();
       const kind = node.kind as FlowNodeKind;
-      const timeoutFields = this.normalizeNodeTimeoutFields(
-        kind,
-        node.timeout_minutes,
-        node.timeout_body_text,
-      );
+      const timeoutFields = this.normalizeNodeTimeoutFields(kind, node);
       const created = await tx.flow_nodes.create({
         data: {
           flow_id: flowId,
+          client_key: key,
           kind: node.kind,
           body_text: String(node.body_text || '').trim() || null,
           buttons_json:
@@ -938,6 +1450,12 @@ export class FlowsService {
               : undefined,
           timeout_minutes: timeoutFields.timeout_minutes,
           timeout_body_text: timeoutFields.timeout_body_text,
+          timeout_repeat: timeoutFields.timeout_repeat,
+          timeout_max_nudges: timeoutFields.timeout_max_nudges,
+          timeout_close_on_silence: timeoutFields.timeout_close_on_silence,
+          timeout_window_guard: timeoutFields.timeout_window_guard,
+          timeout_window_lead_minutes:
+            timeoutFields.timeout_window_lead_minutes,
           sort_order: node.sort_order ?? sort,
           position_x: Number(node.position_x) || 0,
           position_y: Number(node.position_y) || 0,
@@ -978,41 +1496,56 @@ export class FlowsService {
     });
   }
 
-  private toDetail(row: {
-    id: number;
-    name: string;
-    status: string;
-    trigger_payload: string;
-    entry_node_id: number | null;
-    created_at: Date;
-    updated_at: Date;
-    flow_nodes: {
+  private toDetail(
+    row: {
       id: number;
-      kind: string;
-      body_text: string | null;
-      buttons_json: unknown;
-      timeout_minutes: number | null;
-      timeout_body_text: string | null;
-      sort_order: number;
-      position_x: number;
-      position_y: number;
-      handoff_user_id: number | null;
-    }[];
-    flow_edges: {
-      id: number;
-      from_node_id: number;
-      to_node_id: number;
-      match_payload: string | null;
-    }[];
-    flow_sessions: { status: string }[];
-  }): FlowDetail {
+      name: string;
+      status: string;
+      trigger_payload: string;
+      entry_node_id: number | null;
+      created_at: Date;
+      updated_at: Date;
+      flow_nodes: {
+        id: number;
+        client_key: string | null;
+        kind: string;
+        body_text: string | null;
+        buttons_json: unknown;
+        timeout_minutes: number | null;
+        timeout_body_text: string | null;
+        timeout_repeat: boolean;
+        timeout_max_nudges: number | null;
+        timeout_close_on_silence: boolean;
+        timeout_window_guard: boolean;
+        timeout_window_lead_minutes: number | null;
+        sort_order: number;
+        position_x: number;
+        position_y: number;
+        handoff_user_id: number | null;
+      }[];
+      flow_edges: {
+        id: number;
+        from_node_id: number;
+        to_node_id: number;
+        match_payload: string | null;
+      }[];
+      flow_sessions: { status: string }[];
+    },
+    analytics: FlowAnalytics,
+  ): FlowDetail {
     const nodes: FlowNodeDto[] = row.flow_nodes.map((n) => ({
       id: n.id,
+      client_key: String(n.client_key || `n_${n.id}`),
       kind: n.kind as FlowNodeKind,
       body_text: String(n.body_text || ''),
       buttons: parseButtons(n.buttons_json),
       timeout_minutes: n.timeout_minutes ?? null,
       timeout_body_text: String(n.timeout_body_text || ''),
+      timeout_repeat: Boolean(n.timeout_repeat),
+      timeout_max_nudges: n.timeout_max_nudges ?? null,
+      timeout_close_on_silence: Boolean(n.timeout_close_on_silence),
+      timeout_window_guard: Boolean(n.timeout_window_guard),
+      timeout_window_lead_minutes: n.timeout_window_lead_minutes ?? null,
       sort_order: n.sort_order,
       position_x: Number(n.position_x) || 0,
       position_y: Number(n.position_y) || 0,
@@ -1040,6 +1573,7 @@ export class FlowsService {
         handed_off_sessions: sessions.filter((s) => s.status === 'handed_off')
           .length,
       },
+      analytics,
       created_at: row.created_at.toISOString(),
       updated_at: row.updated_at.toISOString(),
     };

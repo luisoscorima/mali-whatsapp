@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsNumber,
@@ -66,6 +67,34 @@ export class FlowNodeInputDto {
   @IsString()
   @MaxLength(4096)
   timeout_body_text?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  timeout_repeat?: boolean;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  @Type(() => Number)
+  timeout_max_nudges?: number | null;
+
+  @IsOptional()
+  @IsBoolean()
+  timeout_close_on_silence?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  timeout_window_guard?: boolean;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @IsInt()
+  @Min(1)
+  @Max(1440)
+  @Type(() => Number)
+  timeout_window_lead_minutes?: number | null;
 
   @IsOptional()
   @IsInt()

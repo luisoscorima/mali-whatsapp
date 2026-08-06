@@ -1590,18 +1590,18 @@ export function ConversationsInboxPage() {
           {listPages > 1 ? ` · Pág. ${listPage}/${listPages}` : null}
         </p>
       ) : null}
-      {assignableSegments.length > 0 ? (
+      {assignableSegments.length > 0 || bulkAttrDefs.length > 0 ? (
         <div className="flex flex-wrap items-center gap-1 px-3 pb-2 text-xs">
           <button
             type="button"
-            className="rounded-lg border border-line px-2 py-1 text-xs hover:bg-surface"
+            className="small-btn"
             onClick={selectAllVisibleContacts}
           >
             Todos
           </button>
           <button
             type="button"
-            className="rounded-lg border border-line px-2 py-1 text-xs hover:bg-surface"
+            className="small-btn"
             onClick={clearContactSelection}
           >
             Ninguno
@@ -1611,7 +1611,7 @@ export function ConversationsInboxPage() {
               {assignableByGroup.length > 0 ? (
                 <form
                   onSubmit={(e) => void handleBulkAssignableSegment(e)}
-                  className="flex min-w-0 flex-wrap items-end gap-1"
+                  className="flex min-w-0 flex-wrap items-end gap-1 text-xs"
                 >
                   <select
                     value={bulkSegment}
@@ -1619,7 +1619,7 @@ export function ConversationsInboxPage() {
                     required
                     className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5 text-xs"
                   >
-                    <option value="">Segmento asignable</option>
+                    <option value="">Segmento</option>
                     {assignableByGroup.map(([group, segs]) => (
                       <optgroup key={group} label={group}>
                         {segs.map((seg) => (
@@ -1633,7 +1633,7 @@ export function ConversationsInboxPage() {
                   <button
                     type="submit"
                     disabled={bulkBusy || !bulkSegment}
-                    className="rounded-lg border border-line bg-surface-strong px-2 py-1 text-xs font-semibold hover:bg-surface disabled:opacity-50"
+                    className="small-btn primary"
                   >
                     {bulkBusy ? '…' : `Aplicar (${selectedContactIds.size})`}
                   </button>
@@ -1642,7 +1642,7 @@ export function ConversationsInboxPage() {
               {bulkAttrDefs.length > 0 ? (
                 <form
                   onSubmit={(e) => void handleBulkAttribute(e)}
-                  className="flex min-w-0 flex-wrap items-end gap-1"
+                  className="flex min-w-0 flex-wrap items-end gap-1 text-xs"
                 >
                   <select
                     value={bulkAttrKey}
@@ -1653,7 +1653,7 @@ export function ConversationsInboxPage() {
                     required
                     className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5 text-xs"
                   >
-                    <option value="">Atributo bulk</option>
+                    <option value="">Atributo</option>
                     {bulkAttrDefs.map((def) => (
                       <option key={def.slug} value={def.slug}>
                         {def.label}
@@ -1685,7 +1685,7 @@ export function ConversationsInboxPage() {
                   <button
                     type="submit"
                     disabled={bulkBusy || !bulkAttrKey}
-                    className="rounded-lg border border-line bg-surface-strong px-2 py-1 text-xs font-semibold hover:bg-surface disabled:opacity-50"
+                    className="small-btn primary"
                   >
                     {bulkBusy ? '…' : `Aplicar (${selectedContactIds.size})`}
                   </button>
@@ -1759,7 +1759,7 @@ export function ConversationsInboxPage() {
                     <li
                       className={`inbox-chat-item ${item.inbox_unread ? 'inbox-chat-item--unread' : ''} ${active ? 'is-active' : ''}`}
                     >
-                      {assignableSegments.length > 0 ? (
+                      {assignableSegments.length > 0 || bulkAttrDefs.length > 0 ? (
                         <label
                           className="inbox-chat-item-check"
                           onClick={(event) => event.stopPropagation()}

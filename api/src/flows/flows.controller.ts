@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -15,7 +16,11 @@ import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
 import { CreateFlowDto, UpdateFlowDto } from './dto/flow.dto';
 import { FlowsService } from './flows.service';
-import type { FlowDetail, FlowListItem } from './flows.types';
+import type {
+  FlowDetail,
+  FlowEventContactRow,
+  FlowListItem,
+} from './flows.types';
 
 @Controller('flows')
 @UseGuards(JwtAuthGuard, ProvisionedGuard)
@@ -35,6 +40,20 @@ export class FlowsController {
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<{ id: number; label: string }[]>> {
     const data = await this.flowsService.listAdvisors(user.area);
+    return { ok: true, data };
+  }
+
+  @Get(':id/events')
+  async events(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Query('client_key') clientKey?: string,
+    @Query('event_type') eventType?: string,
+  ): Promise<ApiResponse<FlowEventContactRow[]>> {
+    const data = await this.flowsService.listEventContacts(user.area, id, {
+      client_key: clientKey,
+      event_type: eventType,
+    });
     return { ok: true, data };
   }
 

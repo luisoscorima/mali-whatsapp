@@ -249,31 +249,39 @@ model flows {
   flow_nodes      flow_nodes[]
   flow_edges      flow_edges[]
   flow_sessions   flow_sessions[]
+  flow_session_events flow_session_events[]
 
   @@unique([area, trigger_payload], map: "flows_area_trigger_uq")
   @@index([area, status], map: "idx_flows_area_status")
 }
 
 model flow_nodes {
-  id                 Int       @id @default(autoincrement())
-  flow_id            Int
-  kind               String    @db.VarChar(32)
-  body_text          String?   @db.Text
-  buttons_json       Json?
-  timeout_minutes    Int?
-  timeout_body_text  String?   @db.Text
-  sort_order         Int       @default(0)
-  position_x         Float     @default(0)
-  position_y         Float     @default(0)
-  handoff_user_id    Int?
-  created_at      DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime  @default(now()) @db.Timestamptz(6)
-  flows           flows     @relation(fields: [flow_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  handoff_user    users?    @relation("flow_node_handoff", fields: [handoff_user_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  edges_from      flow_edges[] @relation("flow_edge_from")
-  edges_to        flow_edges[] @relation("flow_edge_to")
-  sessions        flow_sessions[]
+  id                          Int       @id @default(autoincrement())
+  flow_id                     Int
+  client_key                  String?   @db.VarChar(64)
+  kind                        String    @db.VarChar(32)
+  body_text                   String?   @db.Text
+  buttons_json                Json?
+  timeout_minutes             Int?
+  timeout_body_text           String?   @db.Text
+  timeout_repeat              Boolean   @default(false)
+  timeout_max_nudges          Int?
+  timeout_close_on_silence    Boolean   @default(false)
+  timeout_window_guard        Boolean   @default(false)
+  timeout_window_lead_minutes Int?
+  sort_order                  Int       @default(0)
+  position_x                  Float     @default(0)
+  position_y                  Float     @default(0)
+  handoff_user_id             Int?
+  created_at                  DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime  @default(now()) @db.Timestamptz(6)
+  flows                       flows     @relation(fields: [flow_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  handoff_user                users?    @relation("flow_node_handoff", fields: [handoff_user_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  edges_from                  flow_edges[] @relation("flow_edge_from")
+  edges_to                    flow_edges[] @relation("flow_edge_to")
+  sessions                    flow_sessions[]
 
+  @@unique([flow_id, client_key], map: "flow_nodes_flow_client_key_uq")
   @@index([flow_id], map: "idx_flow_nodes_flow")
   @@index([handoff_user_id], map: "idx_flow_nodes_handoff_user")
 }
@@ -294,22 +302,45 @@ model flow_edges {
 }
 
 model flow_sessions {
-  id              Int           @id @default(autoincrement())
-  conversation_id Int
-  flow_id         Int
-  current_node_id Int?
-  status          String        @default("active") @db.VarChar(24)
-  timeout_at      DateTime?     @db.Timestamptz(6)
-  timeout_sent_at DateTime?     @db.Timestamptz(6)
-  started_at      DateTime      @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime      @default(now()) @db.Timestamptz(6)
-  conversations   conversations @relation(fields: [conversation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  flows           flows         @relation(fields: [flow_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  current_node    flow_nodes?   @relation(fields: [current_node_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  id                   Int           @id @default(autoincrement())
+  conversation_id      Int
+  flow_id              Int
+  current_node_id      Int?
+  status               String        @default("active") @db.VarChar(24)
+  timeout_at           DateTime?     @db.Timestamptz(6)
+  timeout_sent_at      DateTime?     @db.Timestamptz(6)
+  timeout_nudge_count  Int           @default(0)
+  started_at           DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime      @default(now()) @db.Timestamptz(6)
+  conversations        conversations @relation(fields: [conversation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  flows                flows         @relation(fields: [flow_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  current_node         flow_nodes?   @relation(fields: [current_node_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  events               flow_session_events[]
 
   @@index([conversation_id, status], map: "idx_flow_sessions_conv_status")
   @@index([flow_id], map: "idx_flow_sessions_flow")
   @@index([status, timeout_at], map: "idx_flow_sessions_status_timeout")
+}
+
+model flow_session_events {
+  id               Int           @id @default(autoincrement())
+  flow_id          Int
+  session_id       Int
+  conversation_id  Int
+  node_id          Int?
+  client_key       String?       @db.VarChar(64)
+  node_kind        String?       @db.VarChar(32)
+  node_label       String?       @db.VarChar(200)
+  event_type       String        @db.VarChar(32)
+  match_payload    String?       @db.VarChar(256)
+  created_at       DateTime      @default(now()) @db.Timestamptz(6)
+  flows            flows         @relation(fields: [flow_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  sessions         flow_sessions @relation(fields: [session_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([flow_id, event_type], map: "idx_flow_events_flow_type")
+  @@index([flow_id, client_key, event_type], map: "idx_flow_events_flow_key_type")
+  @@index([session_id], map: "idx_flow_events_session")
+  @@index([conversation_id], map: "idx_flow_events_conversation")
 }
 
 model login_logs {

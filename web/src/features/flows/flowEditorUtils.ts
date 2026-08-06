@@ -13,6 +13,11 @@ export type FlowEditorNode = {
   buttons: FlowButton[]
   timeout_minutes: number | null
   timeout_body_text: string
+  timeout_repeat: boolean
+  timeout_max_nudges: number | null
+  timeout_close_on_silence: boolean
+  timeout_window_guard: boolean
+  timeout_window_lead_minutes: number | null
   position_x: number
   position_y: number
   handoff_user_id: number | null
@@ -24,6 +29,38 @@ export type FlowEditorEdge = {
   match_payload: string | null
 }
 
+export type FlowNodeAnalytics = {
+  client_key: string
+  node_id: number | null
+  label: string
+  kind: string
+  entered: number
+  replied: number
+  waiting: number
+  deleted: boolean
+}
+
+export type FlowAnalytics = {
+  started: number
+  active: number
+  completed: number
+  handed_off: number
+  timeout_closed: number
+  nodes: FlowNodeAnalytics[]
+}
+
+export type FlowEventContactRow = {
+  conversation_id: number
+  contact_id: number | null
+  contact_name: string
+  phone: string
+  event_type: string
+  client_key: string | null
+  node_label: string | null
+  match_payload: string | null
+  created_at: string
+}
+
 export type FlowDetail = {
   id: number
   name: string
@@ -32,11 +69,17 @@ export type FlowDetail = {
   entry_node_id: number | null
   nodes: {
     id: number
+    client_key: string
     kind: FlowNodeKind
     body_text: string
     buttons: FlowButton[]
     timeout_minutes: number | null
     timeout_body_text: string
+    timeout_repeat: boolean
+    timeout_max_nudges: number | null
+    timeout_close_on_silence: boolean
+    timeout_window_guard: boolean
+    timeout_window_lead_minutes: number | null
     sort_order: number
     position_x: number
     position_y: number
@@ -53,6 +96,7 @@ export type FlowDetail = {
     completed_sessions: number
     handed_off_sessions: number
   }
+  analytics: FlowAnalytics
 }
 
 let keySeq = 0
@@ -75,6 +119,11 @@ export function emptyNode(
         : [],
     timeout_minutes: null,
     timeout_body_text: '',
+    timeout_repeat: false,
+    timeout_max_nudges: null,
+    timeout_close_on_silence: false,
+    timeout_window_guard: false,
+    timeout_window_lead_minutes: null,
     position_x: pos.x,
     position_y: pos.y,
     handoff_user_id: null,
@@ -91,7 +140,7 @@ export function detailToEditor(detail: FlowDetail): {
 } {
   const idToKey = new Map<number, string>()
   const nodes: FlowEditorNode[] = detail.nodes.map((n, i) => {
-    const key = `n_${n.id}`
+    const key = n.client_key || `n_${n.id}`
     idToKey.set(n.id, key)
     const hasPos = n.position_x !== 0 || n.position_y !== 0
     return {
@@ -103,6 +152,11 @@ export function detailToEditor(detail: FlowDetail): {
         : [],
       timeout_minutes: n.timeout_minutes ?? null,
       timeout_body_text: n.timeout_body_text ?? '',
+      timeout_repeat: Boolean(n.timeout_repeat),
+      timeout_max_nudges: n.timeout_max_nudges ?? null,
+      timeout_close_on_silence: Boolean(n.timeout_close_on_silence),
+      timeout_window_guard: Boolean(n.timeout_window_guard),
+      timeout_window_lead_minutes: n.timeout_window_lead_minutes ?? null,
       position_x: hasPos ? n.position_x : 80 + (i % 3) * 280,
       position_y: hasPos ? n.position_y : 80 + Math.floor(i / 3) * 220,
       handoff_user_id: n.handoff_user_id ?? null,
@@ -125,6 +179,27 @@ export function detailToEditor(detail: FlowDetail): {
     nodes,
     edges,
   }
+}
+
+export function formatTimeoutBadge(n: {
+  timeout_minutes: number | null
+  timeout_repeat: boolean
+  timeout_max_nudges: number | null
+  timeout_window_guard: boolean
+}): string | null {
+  if (!n.timeout_minutes && !n.timeout_window_guard) return null
+  const parts: string[] = []
+  if (n.timeout_minutes) {
+    parts.push(
+      n.timeout_minutes < 60
+        ? `${n.timeout_minutes}m`
+        : `${Math.round(n.timeout_minutes / 60)}h`,
+    )
+  }
+  const max = n.timeout_repeat ? n.timeout_max_nudges || 3 : 1
+  if (max > 1) parts.push(`×${max}`)
+  if (n.timeout_window_guard) parts.push('24h')
+  return `⏱ ${parts.join(' · ')}`
 }
 
 export const KIND_LABEL: Record<FlowNodeKind, string> = {

@@ -24,6 +24,7 @@ import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import {
   emptyNode,
+  formatTimeoutBadge,
   nextClientKey,
   type FlowEditorEdge,
   type FlowEditorNode,
@@ -38,6 +39,11 @@ type CanvasData = {
   buttons: { id: string; title: string }[]
   timeout_minutes: number | null
   timeout_body_text: string
+  timeout_repeat: boolean
+  timeout_max_nudges: number | null
+  timeout_close_on_silence: boolean
+  timeout_window_guard: boolean
+  timeout_window_lead_minutes: number | null
   handoff_user_id: number | null
   advisor_label?: string
   isEntry: boolean
@@ -97,6 +103,12 @@ function MessageNodeView({ id, data, selected }: NodeProps<Node<CanvasData>>) {
       <p className="text-xs font-medium text-muted">
         Mensaje{data.isEntry ? ' · Inicio' : ''}
       </p>
+      {(() => {
+        const badge = formatTimeoutBadge(data)
+        return badge ? (
+          <p className="mt-0.5 text-[11px] text-muted">{badge}</p>
+        ) : null
+      })()}
       <p className="mt-1 line-clamp-3 text-sm whitespace-pre-wrap">
         {data.body_text || 'Sin texto'}
       </p>
@@ -240,6 +252,11 @@ function FlowCanvasEditorInner({
           buttons: n.buttons,
           timeout_minutes: n.timeout_minutes ?? null,
           timeout_body_text: n.timeout_body_text ?? '',
+          timeout_repeat: Boolean(n.timeout_repeat),
+          timeout_max_nudges: n.timeout_max_nudges ?? null,
+          timeout_close_on_silence: Boolean(n.timeout_close_on_silence),
+          timeout_window_guard: Boolean(n.timeout_window_guard),
+          timeout_window_lead_minutes: n.timeout_window_lead_minutes ?? null,
           handoff_user_id: n.handoff_user_id,
           isEntry: n.client_key === entryClientKey,
         },
@@ -310,6 +327,20 @@ function FlowCanvasEditorInner({
             kind === 'message_buttons' ? n.data.timeout_minutes : null,
           timeout_body_text:
             kind === 'message_buttons' ? n.data.timeout_body_text : '',
+          timeout_repeat:
+            kind === 'message_buttons' ? n.data.timeout_repeat : false,
+          timeout_max_nudges:
+            kind === 'message_buttons' ? n.data.timeout_max_nudges : null,
+          timeout_close_on_silence:
+            kind === 'message_buttons'
+              ? n.data.timeout_close_on_silence
+              : false,
+          timeout_window_guard:
+            kind === 'message_buttons' ? n.data.timeout_window_guard : false,
+          timeout_window_lead_minutes:
+            kind === 'message_buttons'
+              ? n.data.timeout_window_lead_minutes
+              : null,
           position_x: n.position.x,
           position_y: n.position.y,
           handoff_user_id: n.data.handoff_user_id,
@@ -415,6 +446,11 @@ function FlowCanvasEditorInner({
         buttons: blank.buttons,
         timeout_minutes: blank.timeout_minutes,
         timeout_body_text: blank.timeout_body_text,
+        timeout_repeat: blank.timeout_repeat,
+        timeout_max_nudges: blank.timeout_max_nudges,
+        timeout_close_on_silence: blank.timeout_close_on_silence,
+        timeout_window_guard: blank.timeout_window_guard,
+        timeout_window_lead_minutes: blank.timeout_window_lead_minutes,
         handoff_user_id: null,
         isEntry: rfNodes.length === 0,
       },
@@ -532,6 +568,18 @@ function FlowCanvasEditorInner({
           kind === 'message_buttons' ? n.data.timeout_minutes : null,
         timeout_body_text:
           kind === 'message_buttons' ? n.data.timeout_body_text : '',
+        timeout_repeat:
+          kind === 'message_buttons' ? n.data.timeout_repeat : false,
+        timeout_max_nudges:
+          kind === 'message_buttons' ? n.data.timeout_max_nudges : null,
+        timeout_close_on_silence:
+          kind === 'message_buttons' ? n.data.timeout_close_on_silence : false,
+        timeout_window_guard:
+          kind === 'message_buttons' ? n.data.timeout_window_guard : false,
+        timeout_window_lead_minutes:
+          kind === 'message_buttons'
+            ? n.data.timeout_window_lead_minutes
+            : null,
         position_x: n.position.x,
         position_y: n.position.y,
         handoff_user_id: n.data.handoff_user_id,
@@ -572,42 +620,44 @@ function FlowCanvasEditorInner({
 
   return (
     <form className="flex h-full min-h-[70vh] flex-col gap-3 p-3 md:p-4" onSubmit={handleFormSubmit}>
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="block text-sm">
-          <span className="text-muted">Nombre</span>
-          <input
-            className="mt-1 block w-56 rounded-lg border border-line bg-surface-strong px-3 py-2"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            maxLength={150}
-          />
-        </label>
-        <label className="block text-sm">
-          <span className="text-muted">Trigger key</span>
-          <input
-            className="mt-1 block w-56 rounded-lg border border-line bg-surface-strong px-3 py-2 font-mono text-sm"
-            value={triggerPayload}
-            onChange={(e) => setTriggerPayload(e.target.value)}
-            required
-            maxLength={256}
-            placeholder="INICIAR_FLUJO"
-          />
-        </label>
-        <label className="block text-sm">
-          <span className="text-muted">Estado</span>
-          <select
-            className="mt-1 block rounded-lg border border-line bg-surface-strong px-3 py-2"
-            value={status}
-            onChange={(e) =>
-              setStatus(e.target.value as 'draft' | 'active' | 'paused')
-            }
-          >
-            <option value="draft">Borrador</option>
-            <option value="active">Activo</option>
-            <option value="paused">Pausado</option>
-          </select>
-        </label>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="block text-sm">
+            <span className="text-muted">Nombre</span>
+            <input
+              className="mt-1 block w-56 rounded-lg border border-line bg-surface-strong px-3 py-2"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              maxLength={150}
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="text-muted">Trigger key</span>
+            <input
+              className="mt-1 block w-56 rounded-lg border border-line bg-surface-strong px-3 py-2 font-mono text-sm"
+              value={triggerPayload}
+              onChange={(e) => setTriggerPayload(e.target.value)}
+              required
+              maxLength={256}
+              placeholder="INICIAR_FLUJO"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="text-muted">Estado</span>
+            <select
+              className="mt-1 block rounded-lg border border-line bg-surface-strong px-3 py-2"
+              value={status}
+              onChange={(e) =>
+                setStatus(e.target.value as 'draft' | 'active' | 'paused')
+              }
+            >
+              <option value="draft">Borrador</option>
+              <option value="active">Activo</option>
+              <option value="paused">Pausado</option>
+            </select>
+          </label>
+        </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -631,23 +681,25 @@ function FlowCanvasEditorInner({
             + Fin
           </button>
         </div>
-        <button
-          type="submit"
-          className="rounded-lg bg-accent px-4 py-2 text-sm text-white disabled:opacity-60"
-          disabled={saving}
-        >
-          {saving ? 'Guardando…' : submitLabel}
-        </button>
-        {onDelete ? (
+        <div className="flex flex-wrap gap-2">
           <button
-            type="button"
-            className="rounded-lg border border-bad px-4 py-2 text-sm text-bad disabled:opacity-60"
-            disabled={deleting}
-            onClick={onDelete}
+            type="submit"
+            className="rounded-lg bg-accent px-4 py-2 text-sm text-white disabled:opacity-60"
+            disabled={saving}
           >
-            {deleting ? 'Eliminando…' : 'Eliminar'}
+            {saving ? 'Guardando…' : submitLabel}
           </button>
-        ) : null}
+          {onDelete ? (
+            <button
+              type="button"
+              className="rounded-lg border border-bad px-4 py-2 text-sm text-bad disabled:opacity-60"
+              disabled={deleting}
+              onClick={onDelete}
+            >
+              {deleting ? 'Eliminando…' : 'Eliminar'}
+            </button>
+          ) : null}
+        </div>
       </div>
       {metricsNote ? (
         <p className="muted campaign-drilldown-dialog__note text-sm">{metricsNote}</p>
@@ -845,7 +897,15 @@ function FlowCanvasEditorInner({
                           timeout_body_text: e.target.checked
                             ? selected.data.timeout_body_text ||
                               '¿Sigues ahí? Pulsa Continuar para seguir con el flujo.'
-                            : '',
+                            : selected.data.timeout_window_guard
+                              ? selected.data.timeout_body_text
+                              : '',
+                          timeout_repeat: e.target.checked
+                            ? selected.data.timeout_repeat
+                            : false,
+                          timeout_max_nudges: e.target.checked
+                            ? selected.data.timeout_max_nudges
+                            : null,
                         })
                       }
                     />
@@ -880,12 +940,98 @@ function FlowCanvasEditorInner({
                           }
                         />
                       </label>
-                      <p className="muted text-xs">
-                        Provoca una respuesta para mantener la ventana de 24h; un
-                        mensaje solo del bot no la renueva.
-                      </p>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selected.data.timeout_repeat}
+                          onChange={(e) =>
+                            updateSelected({
+                              timeout_repeat: e.target.checked,
+                              timeout_max_nudges: e.target.checked
+                                ? selected.data.timeout_max_nudges || 3
+                                : null,
+                            })
+                          }
+                        />
+                        Repetir recordatorio
+                      </label>
+                      {selected.data.timeout_repeat ? (
+                        <label className="block text-sm">
+                          <span className="text-muted">Veces (máx. 5)</span>
+                          <input
+                            type="number"
+                            className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
+                            min={1}
+                            max={5}
+                            value={selected.data.timeout_max_nudges ?? 3}
+                            onChange={(e) =>
+                              updateSelected({
+                                timeout_max_nudges: Number(e.target.value) || 3,
+                              })
+                            }
+                          />
+                        </label>
+                      ) : null}
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selected.data.timeout_close_on_silence}
+                          onChange={(e) =>
+                            updateSelected({
+                              timeout_close_on_silence: e.target.checked,
+                            })
+                          }
+                        />
+                        Cerrar flujo si sigue sin responder
+                      </label>
                     </>
                   ) : null}
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={selected.data.timeout_window_guard}
+                      onChange={(e) =>
+                        updateSelected({
+                          timeout_window_guard: e.target.checked,
+                          timeout_window_lead_minutes: e.target.checked
+                            ? selected.data.timeout_window_lead_minutes || 60
+                            : null,
+                          timeout_body_text: e.target.checked
+                            ? selected.data.timeout_body_text ||
+                              '¿Sigues ahí? Pulsa Continuar para seguir con el flujo.'
+                            : selected.data.timeout_minutes
+                              ? selected.data.timeout_body_text
+                              : '',
+                        })
+                      }
+                    />
+                    Avisar antes de cerrar ventana 24h
+                  </label>
+                  {selected.data.timeout_window_guard ? (
+                    <label className="block text-sm">
+                      <span className="text-muted">Minutos antes del cierre</span>
+                      <input
+                        type="number"
+                        className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
+                        min={1}
+                        max={1440}
+                        value={selected.data.timeout_window_lead_minutes ?? 60}
+                        onChange={(e) =>
+                          updateSelected({
+                            timeout_window_lead_minutes:
+                              Number(e.target.value) || 60,
+                          })
+                        }
+                      />
+                    </label>
+                  ) : null}
+                  {(selected.data.timeout_minutes != null ||
+                    selected.data.timeout_window_guard) && (
+                    <p className="muted text-xs">
+                      Provoca una respuesta para mantener la ventana de 24h; un
+                      mensaje solo del bot no la renueva.
+                    </p>
+                  )}
                 </div>
               ) : null}
               {selected.type === 'handoff' ? (
