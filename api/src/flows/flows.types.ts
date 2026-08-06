@@ -11,11 +11,19 @@ export type FlowButton = {
   title: string;
 };
 
+export const FLOW_TIMEOUT_CONTINUE = 'FLOW_CONTINUE';
+export const FLOW_TIMEOUT_STOP = 'FLOW_STOP';
+
+export const DEFAULT_FLOW_TIMEOUT_BODY =
+  '¿Sigues ahí? Pulsa Continuar para seguir con el flujo.';
+
 export type FlowNodeDto = {
   id: number;
   kind: FlowNodeKind;
   body_text: string;
   buttons: FlowButton[];
+  timeout_minutes: number | null;
+  timeout_body_text: string;
   sort_order: number;
   position_x: number;
   position_y: number;
@@ -65,6 +73,8 @@ export type FlowNodeInput = {
   kind: FlowNodeKind;
   body_text?: string;
   buttons?: FlowButton[];
+  timeout_minutes?: number | null;
+  timeout_body_text?: string;
   sort_order?: number;
   position_x?: number;
   position_y?: number;

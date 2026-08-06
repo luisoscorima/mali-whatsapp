@@ -255,15 +255,17 @@ model flows {
 }
 
 model flow_nodes {
-  id              Int       @id @default(autoincrement())
-  flow_id         Int
-  kind            String    @db.VarChar(32)
-  body_text       String?   @db.Text
-  buttons_json    Json?
-  sort_order      Int       @default(0)
-  position_x      Float     @default(0)
-  position_y      Float     @default(0)
-  handoff_user_id Int?
+  id                 Int       @id @default(autoincrement())
+  flow_id            Int
+  kind               String    @db.VarChar(32)
+  body_text          String?   @db.Text
+  buttons_json       Json?
+  timeout_minutes    Int?
+  timeout_body_text  String?   @db.Text
+  sort_order         Int       @default(0)
+  position_x         Float     @default(0)
+  position_y         Float     @default(0)
+  handoff_user_id    Int?
   created_at      DateTime  @default(now()) @db.Timestamptz(6)
   updated_at      DateTime  @default(now()) @db.Timestamptz(6)
   flows           flows     @relation(fields: [flow_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -297,6 +299,8 @@ model flow_sessions {
   flow_id         Int
   current_node_id Int?
   status          String        @default("active") @db.VarChar(24)
+  timeout_at      DateTime?     @db.Timestamptz(6)
+  timeout_sent_at DateTime?     @db.Timestamptz(6)
   started_at      DateTime      @default(now()) @db.Timestamptz(6)
   updated_at      DateTime      @default(now()) @db.Timestamptz(6)
   conversations   conversations @relation(fields: [conversation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -305,6 +309,7 @@ model flow_sessions {
 
   @@index([conversation_id, status], map: "idx_flow_sessions_conv_status")
   @@index([flow_id], map: "idx_flow_sessions_flow")
+  @@index([status, timeout_at], map: "idx_flow_sessions_status_timeout")
 }
 
 model login_logs {

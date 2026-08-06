@@ -9,6 +9,7 @@ export const CampaignJobName = {
 export const MaintenanceJobName = {
   PROMOTE_SCHEDULED: 'promote-scheduled',
   PROMOTE_AUTO_RETRIES: 'promote-auto-retries',
+  PROMOTE_FLOW_TIMEOUTS: 'promote-flow-timeouts',
   AUDIT_PURGE: 'audit-purge',
   STARTUP_CAMPAIGNS: 'startup-campaigns',
 } as const;

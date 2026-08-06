@@ -26,6 +26,11 @@ import type {
   FlowNodeKind,
   FlowStatus,
 } from './flows.types';
+import {
+  DEFAULT_FLOW_TIMEOUT_BODY,
+  FLOW_TIMEOUT_CONTINUE,
+  FLOW_TIMEOUT_STOP,
+} from './flows.types';
 
 const VALID_KINDS = new Set<FlowNodeKind>([
   'message_text',
@@ -33,6 +38,13 @@ const VALID_KINDS = new Set<FlowNodeKind>([
   'handoff_human',
   'end',
 ]);
+
+const FLOW_TIMEOUT_BATCH = 50;
+
+const FLOW_TIMEOUT_CONFIRM_BUTTONS: FlowButton[] = [
+  { id: FLOW_TIMEOUT_CONTINUE, title: 'Continuar' },
+  { id: FLOW_TIMEOUT_STOP, title: 'Ahora no' },
+];
 
 function asStatus(value: string): FlowStatus {
   if (value === 'active' || value === 'paused' || value === 'draft') return value;
@@ -211,11 +223,6 @@ export class FlowsService {
     if (result.count === 0) throw new NotFoundException('Flujo no encontrado');
   }
 
-  /**
-   * Procesa inbound para el motor de flujos.
-   * @returns handled — si el flujo tomó el control (no correr IA/horario).
-   * @returns waiting — sesión activa sin match de botón (tampoco IA).
-   */
   async handleInbound(input: {
     area: string;
     conversationId: number;
@@ -339,6 +346,145 @@ export class FlowsService {
     return { flow_id: flow.id, flow_name: flow.name };
   }
 
+  /** Poll de maintenance: envía confirmación en sesiones con timeout vencido. */
+  async processDueTimeouts(): Promise<number> {
+    const now = new Date();
+    const due = await this.prisma.flow_sessions.findMany({
+      where: {
+        status: 'active',
+        timeout_at: { lte: now },
+        timeout_sent_at: null,
+      },
+      take: FLOW_TIMEOUT_BATCH,
+      orderBy: { timeout_at: 'asc' },
+      include: {
+        conversations: {
+          select: {
+            id: true,
+            area: true,
+            phone: true,
+            whatsapp_phone_number_id: true,
+          },
+        },
+        current_node: {
+          select: {
+            id: true,
+            kind: true,
+            timeout_body_text: true,
+          },
+        },
+      },
+    });
+
+    let sent = 0;
+    for (const session of due) {
+      const conv = session.conversations;
+      const node = session.current_node;
+      if (!conv || !node || String(node.kind) !== 'message_buttons') {
+        await this.markTimeoutHandled(session.id);
+        continue;
+      }
+
+      const bodyText =
+        String(node.timeout_body_text || '').trim() || DEFAULT_FLOW_TIMEOUT_BODY;
+
+      try {
+        await this.sendOutboundButtons({
+          conversationId: conv.id,
+          area: conv.area,
+          phone: conv.phone,
+          phoneNumberId: conv.whatsapp_phone_number_id,
+          bodyText,
+          buttons: FLOW_TIMEOUT_CONFIRM_BUTTONS,
+          source: 'flow_timeout',
+        });
+        await this.prisma.flow_sessions.update({
+          where: { id: session.id },
+          data: {
+            timeout_sent_at: now,
+            timeout_at: null,
+            updated_at: now,
+          },
+        });
+        sent += 1;
+      } catch (error) {
+        this.logger.warn(
+          `Flujo timeout sesión ${session.id}: ${
+            error instanceof Error ? error.message : error
+          }`,
+        );
+        await this.markTimeoutHandled(session.id);
+      }
+    }
+    return sent;
+  }
+
+  private async markTimeoutHandled(sessionId: number): Promise<void> {
+    await this.prisma.flow_sessions.update({
+      where: { id: sessionId },
+      data: {
+        timeout_sent_at: new Date(),
+        timeout_at: null,
+        updated_at: new Date(),
+      },
+    });
+  }
+
+  private async scheduleSessionTimeout(
+    sessionId: number,
+    timeoutMinutes: number | null | undefined,
+  ): Promise<void> {
+    if (!timeoutMinutes || timeoutMinutes <= 0) {
+      await this.clearSessionTimeout(sessionId);
+      return;
+    }
+    await this.prisma.flow_sessions.update({
+      where: { id: sessionId },
+      data: {
+        timeout_at: new Date(Date.now() + timeoutMinutes * 60_000),
+        timeout_sent_at: null,
+        updated_at: new Date(),
+      },
+    });
+  }
+
+  private async clearSessionTimeout(sessionId: number): Promise<void> {
+    await this.prisma.flow_sessions.update({
+      where: { id: sessionId },
+      data: {
+        timeout_at: null,
+        timeout_sent_at: null,
+        updated_at: new Date(),
+      },
+    });
+  }
+
+  private parseTimeoutMinutes(value: unknown): number | null {
+    if (value == null) return null;
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < 1 || n > 1440) return null;
+    return n;
+  }
+
+  private normalizeNodeTimeoutFields(
+    kind: FlowNodeKind,
+    timeoutMinutes: unknown,
+    timeoutBodyText: unknown,
+  ): { timeout_minutes: number | null; timeout_body_text: string | null } {
+    if (kind !== 'message_buttons') {
+      return { timeout_minutes: null, timeout_body_text: null };
+    }
+    const minutes = this.parseTimeoutMinutes(timeoutMinutes);
+    if (!minutes) {
+      return { timeout_minutes: null, timeout_body_text: null };
+    }
+    const body = String(timeoutBodyText || '').trim();
+    return {
+      timeout_minutes: minutes,
+      timeout_body_text: body || null,
+    };
+  }
+
   private async advanceSession(input: {
     sessionId: number;
     flowId: number;
@@ -350,6 +496,27 @@ export class FlowsService {
     matchPayload: string;
   }): Promise<boolean> {
     if (!input.currentNodeId) return false;
+
+    if (input.matchPayload === FLOW_TIMEOUT_STOP) {
+      await this.clearSessionTimeout(input.sessionId);
+      await this.closeSession(input.sessionId, 'completed', input.currentNodeId);
+      return true;
+    }
+
+    if (input.matchPayload === FLOW_TIMEOUT_CONTINUE) {
+      await this.clearSessionTimeout(input.sessionId);
+      await this.executeNode({
+        sessionId: input.sessionId,
+        flowId: input.flowId,
+        nodeId: input.currentNodeId,
+        conversationId: input.conversationId,
+        area: input.area,
+        phone: input.phone,
+        phoneNumberId: input.phoneNumberId,
+        skipTimeoutSchedule: true,
+      });
+      return true;
+    }
 
     const edges = await this.prisma.flow_edges.findMany({
       where: {
@@ -407,6 +574,7 @@ export class FlowsService {
       return true;
     }
 
+    await this.clearSessionTimeout(input.sessionId);
     await this.executeNode({
       sessionId: input.sessionId,
       flowId: input.flowId,
@@ -427,6 +595,7 @@ export class FlowsService {
     area: string;
     phone: string;
     phoneNumberId: string | null;
+    skipTimeoutSchedule?: boolean;
   }): Promise<void> {
     const node = await this.prisma.flow_nodes.findFirst({
       where: { id: input.nodeId, flow_id: input.flowId },
@@ -513,6 +682,12 @@ export class FlowsService {
             updated_at: new Date(),
           },
         });
+        if (!input.skipTimeoutSchedule) {
+          await this.scheduleSessionTimeout(
+            input.sessionId,
+            node.timeout_minutes,
+          );
+        }
         return;
       }
 
@@ -563,6 +738,8 @@ export class FlowsService {
       where: { id: sessionId },
       data: {
         status,
+        timeout_at: null,
+        timeout_sent_at: null,
         ...(currentNodeId !== undefined
           ? { current_node_id: currentNodeId }
           : {}),
@@ -613,7 +790,9 @@ export class FlowsService {
     phoneNumberId: string | null;
     bodyText: string;
     buttons: FlowButton[];
+    source?: string;
   }): Promise<void> {
+    const source = input.source || 'flow';
     const apiResponse = await sendSessionInteractiveButtons({
       to: input.phone,
       bodyText: input.bodyText,
@@ -623,7 +802,7 @@ export class FlowsService {
     });
     const msgId = apiResponse.messages?.[0]?.id || null;
     let payload = sanitizeApiResponse(apiResponse) as Record<string, unknown>;
-    payload.source = 'flow';
+    payload.source = source;
     payload.flow_buttons = input.buttons;
     payload = setMessageSender(payload, 'Flujo');
     const preview =
@@ -691,6 +870,21 @@ export class FlowsService {
       if (kind === 'message_text' && !String(node.body_text || '').trim()) {
         throw new BadRequestException('El paso de texto necesita cuerpo');
       }
+      if (kind === 'message_buttons') {
+        const timeoutMinutes = this.parseTimeoutMinutes(node.timeout_minutes);
+        if (node.timeout_minutes != null && timeoutMinutes == null) {
+          throw new BadRequestException(
+            'El recordatorio debe ser entre 1 y 1440 minutos',
+          );
+        }
+      } else if (
+        node.timeout_minutes != null &&
+        Number(node.timeout_minutes) > 0
+      ) {
+        throw new BadRequestException(
+          'El recordatorio solo aplica a pasos con botones',
+        );
+      }
     }
 
     const entryKey = String(dto.entry_client_key || nodes[0]?.client_key || '').trim();
@@ -727,6 +921,12 @@ export class FlowsService {
     let sort = 0;
     for (const node of dto.nodes) {
       const key = String(node.client_key).trim();
+      const kind = node.kind as FlowNodeKind;
+      const timeoutFields = this.normalizeNodeTimeoutFields(
+        kind,
+        node.timeout_minutes,
+        node.timeout_body_text,
+      );
       const created = await tx.flow_nodes.create({
         data: {
           flow_id: flowId,
@@ -736,6 +936,8 @@ export class FlowsService {
             node.kind === 'message_buttons'
               ? (parseButtons(node.buttons) as unknown as Prisma.InputJsonValue)
               : undefined,
+          timeout_minutes: timeoutFields.timeout_minutes,
+          timeout_body_text: timeoutFields.timeout_body_text,
           sort_order: node.sort_order ?? sort,
           position_x: Number(node.position_x) || 0,
           position_y: Number(node.position_y) || 0,
@@ -789,6 +991,8 @@ export class FlowsService {
       kind: string;
       body_text: string | null;
       buttons_json: unknown;
+      timeout_minutes: number | null;
+      timeout_body_text: string | null;
       sort_order: number;
       position_x: number;
       position_y: number;
@@ -807,6 +1011,8 @@ export class FlowsService {
       kind: n.kind as FlowNodeKind,
       body_text: String(n.body_text || ''),
       buttons: parseButtons(n.buttons_json),
+      timeout_minutes: n.timeout_minutes ?? null,
+      timeout_body_text: String(n.timeout_body_text || ''),
       sort_order: n.sort_order,
       position_x: Number(n.position_x) || 0,
       position_y: Number(n.position_y) || 0,

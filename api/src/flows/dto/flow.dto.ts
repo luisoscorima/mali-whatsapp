@@ -5,7 +5,9 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
   MinLength,
   ValidateIf,
   ValidateNested,
@@ -51,6 +53,19 @@ export class FlowNodeInputDto {
   @ValidateNested({ each: true })
   @Type(() => FlowButtonDto)
   buttons?: FlowButtonDto[];
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @IsInt()
+  @Min(1)
+  @Max(1440)
+  @Type(() => Number)
+  timeout_minutes?: number | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(4096)
+  timeout_body_text?: string;
 
   @IsOptional()
   @IsInt()

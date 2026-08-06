@@ -1,6 +1,7 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Global, Module, forwardRef } from '@nestjs/common';
 import { CampaignsModule } from '../campaigns/campaigns.module';
+import { FlowsModule } from '../flows/flows.module';
 import { CampaignQueueProcessor } from './campaign-queue.processor';
 import { CampaignQueueService } from './campaign-queue.service';
 import { MaintenanceQueueProcessor } from './maintenance-queue.processor';
@@ -19,6 +20,7 @@ import { readRedisConnection } from './redis.util';
       { name: MAINTENANCE_QUEUE },
     ),
     forwardRef(() => CampaignsModule),
+    forwardRef(() => FlowsModule),
   ],
   providers: [
     CampaignQueueService,

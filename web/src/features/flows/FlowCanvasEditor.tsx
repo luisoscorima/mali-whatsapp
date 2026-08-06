@@ -36,6 +36,8 @@ type CanvasData = {
   kind: FlowNodeKind
   body_text: string
   buttons: { id: string; title: string }[]
+  timeout_minutes: number | null
+  timeout_body_text: string
   handoff_user_id: number | null
   advisor_label?: string
   isEntry: boolean
@@ -236,6 +238,8 @@ function FlowCanvasEditorInner({
           kind: n.kind,
           body_text: n.body_text,
           buttons: n.buttons,
+          timeout_minutes: n.timeout_minutes ?? null,
+          timeout_body_text: n.timeout_body_text ?? '',
           handoff_user_id: n.handoff_user_id,
           isEntry: n.client_key === entryClientKey,
         },
@@ -302,6 +306,10 @@ function FlowCanvasEditorInner({
           kind,
           body_text: n.data.body_text,
           buttons: kind === 'message_buttons' ? n.data.buttons : [],
+          timeout_minutes:
+            kind === 'message_buttons' ? n.data.timeout_minutes : null,
+          timeout_body_text:
+            kind === 'message_buttons' ? n.data.timeout_body_text : '',
           position_x: n.position.x,
           position_y: n.position.y,
           handoff_user_id: n.data.handoff_user_id,
@@ -405,6 +413,8 @@ function FlowCanvasEditorInner({
         kind,
         body_text: blank.body_text,
         buttons: blank.buttons,
+        timeout_minutes: blank.timeout_minutes,
+        timeout_body_text: blank.timeout_body_text,
         handoff_user_id: null,
         isEntry: rfNodes.length === 0,
       },
@@ -518,6 +528,10 @@ function FlowCanvasEditorInner({
         kind,
         body_text: n.data.body_text,
         buttons: kind === 'message_buttons' ? n.data.buttons : [],
+        timeout_minutes:
+          kind === 'message_buttons' ? n.data.timeout_minutes : null,
+        timeout_body_text:
+          kind === 'message_buttons' ? n.data.timeout_body_text : '',
         position_x: n.position.x,
         position_y: n.position.y,
         handoff_user_id: n.data.handoff_user_id,
@@ -597,33 +611,37 @@ function FlowCanvasEditorInner({
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            className="rounded-lg border border-line px-3 py-2 text-sm"
+            className="small-btn"
             onClick={() => addCanvasNode('message_buttons')}
           >
             + Mensaje
           </button>
           <button
             type="button"
-            className="rounded-lg border border-line px-3 py-2 text-sm"
+            className="small-btn"
             onClick={() => addCanvasNode('handoff_human')}
           >
             + Derivar
           </button>
           <button
             type="button"
-            className="rounded-lg border border-line px-3 py-2 text-sm"
+            className="small-btn"
             onClick={() => addCanvasNode('end')}
           >
             + Fin
           </button>
         </div>
-        <button type="submit" className="btn btn-primary" disabled={saving}>
+        <button
+          type="submit"
+          className="rounded-lg bg-accent px-4 py-2 text-sm text-white disabled:opacity-60"
+          disabled={saving}
+        >
           {saving ? 'Guardando…' : submitLabel}
         </button>
         {onDelete ? (
           <button
             type="button"
-            className="btn btn-ghost text-bad"
+            className="rounded-lg border border-bad px-4 py-2 text-sm text-bad disabled:opacity-60"
             disabled={deleting}
             onClick={onDelete}
           >
@@ -684,9 +702,14 @@ function FlowCanvasEditorInner({
               interactionWidth: 28,
             }}
           >
-            <Background />
-            <Controls />
-            <MiniMap />
+            <Background color="var(--line)" gap={16} />
+            <Controls showInteractive={false} />
+            <MiniMap
+              pannable
+              zoomable={false}
+              nodeStrokeWidth={0}
+              maskColor="color-mix(in srgb, var(--ink) 18%, transparent)"
+            />
           </ReactFlow>
         </div>
 
@@ -699,7 +722,7 @@ function FlowCanvasEditorInner({
               </p>
               <button
                 type="button"
-                className="text-sm text-bad"
+                className="rounded-lg border border-bad px-3 py-1.5 text-sm text-bad"
                 onClick={removeSelectedEdge}
               >
                 Quitar conexión
@@ -720,11 +743,15 @@ function FlowCanvasEditorInner({
               </p>
               <label className="flex items-center gap-2 text-sm">
                 <input
-                  type="checkbox"
+                  type="radio"
+                  name="flow-entry-node"
                   checked={entryClientKey === selected.id}
                   onChange={() => setEntryClientKey(selected.id)}
                 />
                 Nodo inicial
+                {entryClientKey === selected.id ? (
+                  <span className="text-xs text-muted">(único)</span>
+                ) : null}
               </label>
               {selected.type !== 'end' ? (
                 <label className="block text-sm">
@@ -774,7 +801,7 @@ function FlowCanvasEditorInner({
                       />
                       <button
                         type="button"
-                        className="text-xs text-bad"
+                        className="rounded border border-bad px-2 py-0.5 text-xs text-bad"
                         onClick={() =>
                           updateSelected({
                             buttons: selected.data.buttons.filter((_, i) => i !== idx),
@@ -788,7 +815,7 @@ function FlowCanvasEditorInner({
                   {selected.data.buttons.length < 3 ? (
                     <button
                       type="button"
-                      className="text-sm"
+                      className="small-btn"
                       onClick={() =>
                         updateSelected({
                           buttons: [
@@ -803,6 +830,61 @@ function FlowCanvasEditorInner({
                     >
                       + Botón
                     </button>
+                  ) : null}
+                </div>
+              ) : null}
+              {selected.type === 'message' && selected.data.buttons.length > 0 ? (
+                <div className="space-y-2 rounded-lg border border-line p-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={selected.data.timeout_minutes != null}
+                      onChange={(e) =>
+                        updateSelected({
+                          timeout_minutes: e.target.checked ? 15 : null,
+                          timeout_body_text: e.target.checked
+                            ? selected.data.timeout_body_text ||
+                              '¿Sigues ahí? Pulsa Continuar para seguir con el flujo.'
+                            : '',
+                        })
+                      }
+                    />
+                    Recordatorio si no responde
+                  </label>
+                  {selected.data.timeout_minutes != null ? (
+                    <>
+                      <label className="block text-sm">
+                        <span className="text-muted">Minutos</span>
+                        <input
+                          type="number"
+                          className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
+                          min={1}
+                          max={1440}
+                          value={selected.data.timeout_minutes}
+                          onChange={(e) => {
+                            const raw = e.target.value.trim()
+                            updateSelected({
+                              timeout_minutes: raw ? Number(raw) : null,
+                            })
+                          }}
+                        />
+                      </label>
+                      <label className="block text-sm">
+                        <span className="text-muted">Mensaje de confirmación</span>
+                        <textarea
+                          className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
+                          rows={3}
+                          value={selected.data.timeout_body_text}
+                          onChange={(e) =>
+                            updateSelected({ timeout_body_text: e.target.value })
+                          }
+                        />
+                      </label>
+                      <p className="muted text-xs">
+                        Provoca una respuesta para mantener la ventana de 24h; un
+                        mensaje solo del bot no la renueva.
+                      </p>
+                    </>
                   ) : null}
                 </div>
               ) : null}
@@ -835,7 +917,8 @@ function FlowCanvasEditorInner({
               ) : null}
               <button
                 type="button"
-                className="text-sm text-bad"
+                className="rounded-lg border border-bad px-3 py-1.5 text-sm text-bad disabled:opacity-40"
+                disabled={rfNodes.length <= 1}
                 onClick={removeSelected}
               >
                 Eliminar nodo

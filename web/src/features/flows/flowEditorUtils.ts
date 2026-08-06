@@ -11,6 +11,8 @@ export type FlowEditorNode = {
   kind: FlowNodeKind
   body_text: string
   buttons: FlowButton[]
+  timeout_minutes: number | null
+  timeout_body_text: string
   position_x: number
   position_y: number
   handoff_user_id: number | null
@@ -33,6 +35,8 @@ export type FlowDetail = {
     kind: FlowNodeKind
     body_text: string
     buttons: FlowButton[]
+    timeout_minutes: number | null
+    timeout_body_text: string
     sort_order: number
     position_x: number
     position_y: number
@@ -69,6 +73,8 @@ export function emptyNode(
       kind === 'message_buttons'
         ? [{ id: 'BTN_A', title: 'Opción A' }]
         : [],
+    timeout_minutes: null,
+    timeout_body_text: '',
     position_x: pos.x,
     position_y: pos.y,
     handoff_user_id: null,
@@ -95,6 +101,8 @@ export function detailToEditor(detail: FlowDetail): {
       buttons: n.buttons.length
         ? n.buttons.map((b) => ({ id: b.id, title: b.title }))
         : [],
+      timeout_minutes: n.timeout_minutes ?? null,
+      timeout_body_text: n.timeout_body_text ?? '',
       position_x: hasPos ? n.position_x : 80 + (i % 3) * 280,
       position_y: hasPos ? n.position_y : 80 + Math.floor(i / 3) * 220,
       handoff_user_id: n.handoff_user_id ?? null,

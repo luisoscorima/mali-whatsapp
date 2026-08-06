@@ -30,6 +30,7 @@ import type {
 } from './contacts.types';
 import { ListContactsQueryDto } from './dto/list-contacts.query.dto';
 import { BulkAddSegmentDto } from './dto/bulk-add-segment.dto';
+import { BulkSetAttributeDto } from './dto/bulk-set-attribute.dto';
 import { SetAssignableSegmentDto } from './dto/set-assignable-segment.dto';
 import { UpsertContactDto } from './dto/upsert-contact.dto';
 
@@ -135,6 +136,20 @@ export class ContactsController {
       body.segment_slug,
       body.contact_ids,
       Boolean(body.assignable_only),
+    );
+    return { ok: true, data };
+  }
+
+  @Post('bulk-set-attribute')
+  async bulkSetAttribute(
+    @CurrentUser() user: AuthUser,
+    @Body() body: BulkSetAttributeDto,
+  ): Promise<ApiResponse<{ updated: number }>> {
+    const data = await this.contactsService.bulkSetAttribute(
+      user,
+      body.attr_key,
+      body.attr_value,
+      body.contact_ids,
     );
     return { ok: true, data };
   }

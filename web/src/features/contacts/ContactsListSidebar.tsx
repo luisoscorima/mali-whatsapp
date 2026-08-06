@@ -4,10 +4,16 @@ import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { formatContactName } from './contactName'
+import {
+  inputTypeForField,
+  type AttributeFieldDefinition,
+} from './contactFormUtils'
 import { SegmentBadge } from '../segments/SegmentBadge'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import { Button } from '@/shared/ui/shadcn/button'
+
+const BULK_NATIVE_ATTR_SLUGS = new Set(['dni', 'email', 'correo'])
 
 const LIST_POLL_MS = 15000
 const SEARCH_DEBOUNCE_MS = 300
@@ -77,6 +83,7 @@ type ContactsListResult = {
 type FilterOptions = {
   segments: SegmentOption[]
   attribute_filters: AttributeFilterOption[]
+  attribute_definitions: AttributeFieldDefinition[]
 }
 
 function segmentLabel(slug: string, segments: SegmentOption[]): string {
@@ -100,6 +107,8 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
   const [searchInput, setSearchInput] = useState(searchParams.get('q') ?? '')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [bulkSegment, setBulkSegment] = useState('')
+  const [bulkAttrKey, setBulkAttrKey] = useState('')
+  const [bulkAttrValue, setBulkAttrValue] = useState('')
   const [bulkBusy, setBulkBusy] = useState(false)
   const [exportBusy, setExportBusy] = useState(false)
   const [chatOpeningId, setChatOpeningId] = useState<number | null>(null)
@@ -288,6 +297,19 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
     setSelectedIds(new Set())
   }
 
+  const bulkAttrDefs = useMemo(() => {
+    const all = options?.attribute_definitions ?? []
+    const bySlug = new Map<string, AttributeFieldDefinition>()
+    for (const def of all) {
+      if (BULK_NATIVE_ATTR_SLUGS.has(def.slug)) continue
+      const prev = bySlug.get(def.slug)
+      if (!prev || !def.segment_slug) bySlug.set(def.slug, def)
+    }
+    return [...bySlug.values()].sort((a, b) => a.label.localeCompare(b.label))
+  }, [options])
+
+  const bulkAttrDef = bulkAttrDefs.find((d) => d.slug === bulkAttrKey) ?? null
+
   async function handleBulkSegment(e: FormEvent) {
     e.preventDefault()
     if (!bulkSegment || selectedIds.size === 0) return
@@ -305,6 +327,31 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
       return
     }
     clearContactSelection()
+    const listRes = await apiClient.get<ContactsListResult>(`/api/contacts?${apiQuery}`)
+    if (listRes.ok) setResult(listRes.data)
+  }
+
+  async function handleBulkAttribute(e: FormEvent) {
+    e.preventDefault()
+    if (!bulkAttrKey || selectedIds.size === 0) return
+    setBulkBusy(true)
+    const res = await apiClient.post<{ updated: number }>(
+      '/api/contacts/bulk-set-attribute',
+      {
+        attr_key: bulkAttrKey,
+        attr_value: bulkAttrValue,
+        contact_ids: [...selectedIds],
+      },
+    )
+    setBulkBusy(false)
+    if (!res.ok) {
+      notify.error(res.error)
+      return
+    }
+    notify.success(`Atributo aplicado a ${res.data.updated} contacto(s)`)
+    clearContactSelection()
+    setBulkAttrKey('')
+    setBulkAttrValue('')
     const listRes = await apiClient.get<ContactsListResult>(`/api/contacts?${apiQuery}`)
     if (listRes.ok) setResult(listRes.data)
   }
@@ -562,32 +609,88 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
             </p>
           ) : null}
 
-          {result && result.items.length > 0 && segments.length > 0 && selectedIds.size > 0 ? (
-            <form
-              onSubmit={(e) => void handleBulkSegment(e)}
-              className="flex flex-wrap items-end gap-1 text-xs"
-            >
-              <select
-                value={bulkSegment}
-                onChange={(e) => setBulkSegment(e.target.value)}
-                required
-                className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5"
-              >
-                <option value="">Segmento bulk</option>
-                {segments.map((seg) => (
-                  <option key={seg.slug} value={seg.slug}>
-                    {seg.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="submit"
-                disabled={bulkBusy || !bulkSegment}
-                className="small-btn primary"
-              >
-                {bulkBusy ? '…' : `Aplicar (${selectedIds.size})`}
-              </button>
-            </form>
+          {result && result.items.length > 0 && selectedIds.size > 0 ? (
+            <div className="flex flex-col gap-1">
+              {segments.length > 0 ? (
+                <form
+                  onSubmit={(e) => void handleBulkSegment(e)}
+                  className="flex flex-wrap items-end gap-1 text-xs"
+                >
+                  <select
+                    value={bulkSegment}
+                    onChange={(e) => setBulkSegment(e.target.value)}
+                    required
+                    className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5"
+                  >
+                    <option value="">Segmento bulk</option>
+                    {segments.map((seg) => (
+                      <option key={seg.slug} value={seg.slug}>
+                        {seg.label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="submit"
+                    disabled={bulkBusy || !bulkSegment}
+                    className="small-btn primary"
+                  >
+                    {bulkBusy ? '…' : `Aplicar (${selectedIds.size})`}
+                  </button>
+                </form>
+              ) : null}
+              {bulkAttrDefs.length > 0 ? (
+                <form
+                  onSubmit={(e) => void handleBulkAttribute(e)}
+                  className="flex flex-wrap items-end gap-1 text-xs"
+                >
+                  <select
+                    value={bulkAttrKey}
+                    onChange={(e) => {
+                      setBulkAttrKey(e.target.value)
+                      setBulkAttrValue('')
+                    }}
+                    required
+                    className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5"
+                  >
+                    <option value="">Atributo bulk</option>
+                    {bulkAttrDefs.map((def) => (
+                      <option key={def.slug} value={def.slug}>
+                        {def.label}
+                      </option>
+                    ))}
+                  </select>
+                  {bulkAttrDef?.field_type === 'select' ? (
+                    <select
+                      value={bulkAttrValue}
+                      onChange={(e) => setBulkAttrValue(e.target.value)}
+                      className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5"
+                    >
+                      <option value="">Valor</option>
+                      {(bulkAttrDef.options ?? []).map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type={inputTypeForField(bulkAttrDef?.field_type ?? 'text')}
+                      value={bulkAttrValue}
+                      onChange={(e) => setBulkAttrValue(e.target.value)}
+                      placeholder="Valor"
+                      className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5"
+                    />
+                  )}
+                  <button
+                    type="submit"
+                    disabled={bulkBusy || !bulkAttrKey}
+                    className="small-btn primary"
+                  >
+                    {bulkBusy ? '…' : `Aplicar (${selectedIds.size})`}
+                  </button>
+                </form>
+              ) : null}
+            </div>
           ) : null}
         </div>
       }

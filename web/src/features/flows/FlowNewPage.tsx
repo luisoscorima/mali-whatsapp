@@ -40,6 +40,8 @@ export function FlowNewPage() {
         kind: n.kind,
         body_text: n.body_text,
         buttons: n.buttons,
+        timeout_minutes: n.timeout_minutes,
+        timeout_body_text: n.timeout_body_text,
         sort_order: i,
         position_x: n.position_x,
         position_y: n.position_y,

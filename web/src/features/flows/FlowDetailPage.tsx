@@ -23,6 +23,7 @@ export function FlowDetailPage() {
   const [nodes, setNodes] = useState<FlowEditorNode[]>([emptyNode()])
   const [edges, setEdges] = useState<FlowEditorEdge[]>([])
   const [metricsNote, setMetricsNote] = useState('')
+  const [activeSessions, setActiveSessions] = useState(0)
   const [loadFailed, setLoadFailed] = useState(false)
   const [ready, setReady] = useState(false)
   const [canvasKey, setCanvasKey] = useState(0)
@@ -46,6 +47,7 @@ export function FlowDetailPage() {
       setNodes(editor.nodes)
       setEdges(editor.edges)
       const m = result.data.metrics
+      setActiveSessions(m.active_sessions)
       setMetricsNote(
         `Sesiones — activas: ${m.active_sessions} · completadas: ${m.completed_sessions} · derivadas: ${m.handed_off_sessions}`,
       )
@@ -61,6 +63,15 @@ export function FlowDetailPage() {
     entry: string
   }) {
     if (!id) return
+    if (activeSessions > 0) {
+      const ok = await confirm({
+        title: 'Guardar flujo en uso',
+        description: `Hay ${activeSessions} sesión(es) activa(s). Al guardar se cerrarán y el grafo nuevo aplica solo a conversaciones que disparen el flujo después.`,
+        confirmLabel: 'Guardar de todos modos',
+        tone: 'danger',
+      })
+      if (!ok) return
+    }
     setSaving(true)
     setNodes(graph.nodes)
     setEdges(graph.edges)
@@ -75,6 +86,8 @@ export function FlowDetailPage() {
         kind: n.kind,
         body_text: n.body_text,
         buttons: n.buttons,
+        timeout_minutes: n.timeout_minutes,
+        timeout_body_text: n.timeout_body_text,
         sort_order: i,
         position_x: n.position_x,
         position_y: n.position_y,
@@ -100,6 +113,7 @@ export function FlowDetailPage() {
     setNodes(editor.nodes)
     setEdges(editor.edges)
     const m = result.data.metrics
+    setActiveSessions(m.active_sessions)
     setMetricsNote(
       `Sesiones — activas: ${m.active_sessions} · completadas: ${m.completed_sessions} · derivadas: ${m.handed_off_sessions}`,
     )

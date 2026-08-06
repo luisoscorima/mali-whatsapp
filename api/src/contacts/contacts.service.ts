@@ -362,6 +362,84 @@ export class ContactsService {
     return { updated };
   }
 
+  async bulkSetAttribute(
+    user: AuthUser,
+    attrKey: string,
+    attrValue: string,
+    contactIds: number[],
+  ): Promise<{ updated: number }> {
+    const area = user.area;
+    const normalized = normalizeAttributesInput({ [attrKey]: attrValue });
+    const keys = Object.keys(normalized);
+    if (keys.length !== 1) {
+      throw new BadRequestException('Atributo invalido');
+    }
+    const key = keys[0];
+    const value = normalized[key];
+    if (key === 'dni') {
+      throw new BadRequestException('No se puede asignar DNI de forma masiva');
+    }
+
+    const allDefs = await this.loadAttributeDefinitions(area);
+    const defExists = allDefs.some((d) => d.slug === key);
+    if (!defExists) {
+      throw new BadRequestException('Atributo invalido');
+    }
+
+    const ids = [
+      ...new Set(
+        contactIds
+          .map((x) => Number(x))
+          .filter((n) => Number.isInteger(n) && n > 0),
+      ),
+    ];
+    if (ids.length === 0) {
+      throw new BadRequestException('Selecciona al menos un contacto');
+    }
+
+    let updated = 0;
+    await this.prisma.$transaction(async (tx) => {
+      for (const cid of ids) {
+        const own = await tx.contacts.findFirst({
+          where: {
+            id: cid,
+            area,
+            replacement_reason: null,
+            replaced_by_contact_id: null,
+          },
+          select: { id: true },
+        });
+        if (!own) continue;
+
+        const segmentRows = await tx.contact_segments.findMany({
+          where: { contact_id: cid, area },
+          select: { segment_slug: true },
+        });
+        const segmentSlugs = segmentRows.map((r) => r.segment_slug);
+        const applicable = getApplicableAttributeDefinitions(
+          allDefs,
+          segmentSlugs,
+        );
+        if (!applicable.some((d) => d.slug === key)) continue;
+
+        await this.upsertContactAttributes(tx, cid, { [key]: value });
+        updated += 1;
+      }
+    });
+
+    await this.auditLog.write({
+      event_type: AuditEvent.CONTACT_BULK_ATTRIBUTE,
+      message: `Asignación masiva del atributo «${key}» (${updated} contactos)`,
+      actor: auditActor(user),
+      meta: {
+        attr_key: key,
+        contact_count: updated,
+      },
+    });
+
+    return { updated };
+  }
+
   async setAssignableSegment(
     user: AuthUser,
     contactId: number,

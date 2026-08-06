@@ -41,6 +41,15 @@ export class QueueBootstrapService implements OnModuleInit {
     );
 
     await this.maintenanceQueue.add(
+      MaintenanceJobName.PROMOTE_FLOW_TIMEOUTS,
+      {},
+      {
+        ...REPEAT_JOB_OPTS,
+        repeat: { every: CAMPAIGN_SCHEDULE_POLL_MS, key: 'promote-flow-timeouts' },
+      },
+    );
+
+    await this.maintenanceQueue.add(
       MaintenanceJobName.AUDIT_PURGE,
       { source: 'interval' },
       {

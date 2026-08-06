@@ -6,6 +6,7 @@ import { runCampaignChatBackfills } from '../campaigns/campaign-chat-backfill.ut
 import { backfillUnassignedConversationAssignments, backfillFirstSenderHistoricalAssignments } from '../conversations/conversation-assignment.util';
 import { CampaignJobsService } from '../campaigns/campaign-jobs.service';
 import { CampaignRetryService } from '../campaigns/campaign-retry.service';
+import { FlowsService } from '../flows/flows.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CAMPAIGN_SCHEDULE_POLL_MS } from '../campaigns/campaign-config.util';
 import {
@@ -24,6 +25,7 @@ export class MaintenanceQueueProcessor extends WorkerHost {
     private readonly retry: CampaignRetryService,
     private readonly auditLog: AuditLogService,
     private readonly prisma: PrismaService,
+    private readonly flows: FlowsService,
   ) {
     super();
   }
@@ -37,6 +39,14 @@ export class MaintenanceQueueProcessor extends WorkerHost {
       case MaintenanceJobName.PROMOTE_AUTO_RETRIES:
         await this.retry.promoteDueCampaignRetries();
         return;
+
+      case MaintenanceJobName.PROMOTE_FLOW_TIMEOUTS: {
+        const sent = await this.flows.processDueTimeouts();
+        if (sent > 0) {
+          this.logger.log(`Flujos: ${sent} recordatorio(s) de confirmación enviado(s)`);
+        }
+        return;
+      }
 
       case MaintenanceJobName.AUDIT_PURGE: {
         const deleted = await this.auditLog.purgeOld();

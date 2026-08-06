@@ -42,3 +42,54 @@
   fill: var(--muted);
   font-size: 10px;
 }
+
+/* Controls / MiniMap: tema del proyecto (xyflow trae fondo blanco fijo). */
+.flow-canvas .react-flow__controls {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.flow-canvas .react-flow__controls-button {
+  background: var(--surface-strong);
+  border-bottom: 1px solid var(--line);
+  fill: var(--ink);
+  color: var(--ink);
+  width: 28px;
+  height: 28px;
+}
+
+.flow-canvas .react-flow__controls-button:hover {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-strong));
+}
+
+.flow-canvas .react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+.flow-canvas .react-flow__minimap {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: grab;
+}
+
+.flow-canvas .react-flow__minimap:active {
+  cursor: grabbing;
+}
+
+.flow-canvas .react-flow__minimap-mask {
+  fill: color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+.flow-canvas .react-flow__minimap-node {
+  fill: color-mix(in srgb, var(--accent) 45%, var(--surface));
+  stroke: none;
+}
+
+.flow-canvas .react-flow__attribution {
+  background: transparent;
+  color: var(--muted);
+}
