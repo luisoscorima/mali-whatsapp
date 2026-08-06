@@ -10,6 +10,7 @@ import {
   addEdge,
   useEdgesState,
   useNodesState,
+  useReactFlow,
   useUpdateNodeInternals,
   type Connection,
   type Edge,
@@ -250,6 +251,14 @@ function FlowCanvasEditorInner({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
   const suppressSelectionRef = useRef(false)
+  const didFitViewRef = useRef(false)
+  const { fitView } = useReactFlow()
+
+  const runFitView = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      fitView({ padding: 0.2, duration: 200 })
+    })
+  }, [fitView])
 
   const initialRfNodes: Node<CanvasData>[] = useMemo(
     () =>
@@ -309,6 +318,13 @@ function FlowCanvasEditorInner({
       suppressSelectionRef.current = false
     }, 0)
   }
+
+  useEffect(() => {
+    if (didFitViewRef.current || rfNodes.length === 0) return
+    didFitViewRef.current = true
+    const t = window.setTimeout(runFitView, 50)
+    return () => window.clearTimeout(t)
+  }, [rfNodes.length, runFitView])
 
   useEffect(() => {
     apiClient.get<Advisor[]>('/api/flows/advisors').then((res) => {
@@ -764,6 +780,8 @@ function FlowCanvasEditorInner({
           }}
           nodeTypes={nodeTypes}
           fitView
+          fitViewOptions={{ padding: 0.2 }}
+          onInit={() => runFitView()}
           snapToGrid
           snapGrid={[16, 16]}
           connectionMode={ConnectionMode.Loose}
