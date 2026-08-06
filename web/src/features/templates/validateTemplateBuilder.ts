@@ -1,5 +1,5 @@
 import type { TemplateBuilderState } from './templateFormUtils'
-import { TEMPLATE_NAME_REGEX } from './templateFormUtils'
+import { BODY_TEXT_MAX_LEN, TEMPLATE_NAME_REGEX } from './templateFormUtils'
 import {
   buildPreviewWarnings,
   extractPlaceholders,
@@ -28,6 +28,10 @@ export function validateTemplateBuilder(
 
   if (!String(state.body.text || '').trim()) {
     errors.push('El texto del cuerpo es obligatorio.')
+  } else if (String(state.body.text).length > BODY_TEXT_MAX_LEN) {
+    errors.push(
+      `El cuerpo no puede superar ${BODY_TEXT_MAX_LEN} caracteres (Meta). Ahora: ${String(state.body.text).length}.`,
+    )
   }
 
   if (state.header.type === 'text' && !String(state.header.text || '').trim()) {

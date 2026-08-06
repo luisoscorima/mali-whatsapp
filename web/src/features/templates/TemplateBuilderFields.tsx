@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 import { insertAtSelection, wrapSelection } from '@/shared/textSelection'
 import { apiClient } from '@/shared/api'
 import {
+  BODY_TEXT_MAX_LEN,
   ensureExampleValues,
   type TemplateBuilderState,
 } from './templateFormUtils'
@@ -308,6 +309,11 @@ export function TemplateBuilderFields({
             required
           />
         </label>
+        <p
+          className={`text-xs ${builder.body.text.length > BODY_TEXT_MAX_LEN ? 'text-bad' : 'text-muted'}`}
+        >
+          {builder.body.text.length} / {BODY_TEXT_MAX_LEN} caracteres
+        </p>
         <div className="flex flex-wrap items-center gap-2">
           <FormatToolbar
             inputRef={bodyTextRef}

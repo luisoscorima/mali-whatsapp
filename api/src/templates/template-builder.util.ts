@@ -2,6 +2,7 @@ const VALID_ALIAS_RE = /^[A-Za-z][A-Za-z0-9_]*$/;
 const PLACEHOLDER_RE = /\{\{([^{}]+)\}\}/g;
 export const MEDIA_HEADER_TYPES = new Set(['image', 'video', 'document']);
 export const HEADER_TEXT_MAX_LEN = 60;
+export const BODY_TEXT_MAX_LEN = 1024;
 export const FOOTER_MAX_LEN = 60;
 export const BUTTON_TEXT_MAX_LEN = 25;
 export const MAX_URL_BUTTONS = 2;
@@ -540,7 +541,11 @@ export async function compileTemplateBuilderPayload(
 
   const normalizedBody = normalizeTemplateTextPlaceholders(
     builderPayload.body?.text,
-    { fieldLabel: 'Texto del cuerpo', required: true },
+    {
+      fieldLabel: 'Texto del cuerpo',
+      required: true,
+      maxLength: BODY_TEXT_MAX_LEN,
+    },
   );
   const bodyComponent: Record<string, unknown> = {
     type: 'BODY',

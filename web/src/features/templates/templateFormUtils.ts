@@ -24,6 +24,8 @@ export type TemplateBuilderState = {
 }
 
 export const TEMPLATE_NAME_REGEX = /^[a-z0-9_]{1,128}$/
+/** Límite de Meta para el BODY de plantillas. */
+export const BODY_TEXT_MAX_LEN = 1024
 
 export const EMPTY_BUILDER: TemplateBuilderState = {
   header: {
