@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { notify } from '@/shared/notify'
 import { apiClient } from '../../shared/api'
 import { AREA_OPTIONS } from './areaLabels'
+import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 
 type AdminUserDetail = {
   id: number
@@ -41,6 +42,7 @@ const PERM_FIELDS = [
 export function AdminUserFormPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { confirm, confirmDialog } = useConfirmDialog()
   // Ruta `users/new` no define `:id`; `users/:id` puede traer id="new".
   const isNew = !id || id === 'new'
   const userId = isNew ? null : Number(id)
@@ -133,7 +135,16 @@ export function AdminUserFormPage() {
 
   async function onDelete() {
     if (isNew || !userId || !email) return
-    if (!window.confirm(`¿Eliminar ${email}?`)) return
+    if (
+      !(await confirm({
+        title: 'Eliminar usuario',
+        description: `¿Eliminar ${email}?`,
+        confirmLabel: 'Eliminar',
+        tone: 'danger',
+      }))
+    ) {
+      return
+    }
     const result = await apiClient.delete(`/api/admin/users/${userId}`)
     if (!result.ok) {
       notify.error(result.error)
@@ -146,6 +157,7 @@ export function AdminUserFormPage() {
 
   return (
     <form onSubmit={(e) => void onSubmit(e)} className="max-w-xl space-y-4">
+      {confirmDialog}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">
           {isNew ? 'Nuevo usuario' : 'Editar usuario'}

@@ -10,6 +10,7 @@ import {
   type AttributeOption,
   type CampaignTemplateFormState,
 } from './CampaignTemplateFields'
+import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 
 type SegmentDefinition = {
   id: number
@@ -107,6 +108,7 @@ function buildSendPayload(input: {
 
 export function CampaignNewPage() {
   const navigate = useNavigate()
+  const { confirm, confirmDialog } = useConfirmDialog()
   const [segments, setSegments] = useState<SegmentDefinition[]>([])
   const [templates, setTemplates] = useState<TemplateListItem[]>([])
   const [attrDefs, setAttrDefs] = useState<AttributeOption[]>([])
@@ -299,15 +301,19 @@ export function CampaignNewPage() {
       scheduleMode === 'scheduled'
         ? `programada para ${scheduledAt}`
         : 'envío inmediato'
-    const ok = window.confirm(
-      `¿Confirmas la campaña?\n\n` +
+    const ok = await confirm({
+      title: 'Confirmar campaña',
+      description:
+        `¿Confirmas la campaña?\n\n` +
         `${selectedIds.size} destinatarios` +
         (excludedContacts.length > 0
           ? `\n${excludedContacts.length} contacto(s) excluido(s)`
           : '') +
         `\nPlantilla: ${tplLabel}\n` +
         `${when}`,
-    )
+      confirmLabel:
+        scheduleMode === 'scheduled' ? 'Programar' : 'Enviar',
+    })
     if (!ok) return
 
     setBusy('send')
@@ -352,6 +358,7 @@ export function CampaignNewPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
+      {confirmDialog}
       <div>
         <h1 className="text-2xl font-semibold">Nueva campaña</h1>
         <p className="text-sm text-muted">
@@ -645,7 +652,7 @@ export function CampaignNewPage() {
         type="button"
         className="rounded-lg bg-accent px-4 py-2 text-sm text-white hover:opacity-90 disabled:opacity-50"
         disabled={!canSend || busy !== ''}
-        onClick={() => handleSend()}
+        onClick={() => void handleSend()}
       >
         {busy === 'send'
           ? scheduleMode === 'scheduled'

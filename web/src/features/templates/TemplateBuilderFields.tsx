@@ -2,6 +2,15 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 import { insertAtSelection, wrapSelection } from '@/shared/textSelection'
 import { apiClient } from '@/shared/api'
 import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/ui/shadcn/dialog'
+import {
   BODY_TEXT_MAX_LEN,
   ensureExampleValues,
   type TemplateBuilderState,
@@ -23,6 +32,11 @@ type TemplateBuilderFieldsProps = {
   builder: TemplateBuilderState
   onChange: (next: TemplateBuilderState) => void
 }
+
+type AliasInsertTarget =
+  | { kind: 'header' }
+  | { kind: 'body' }
+  | { kind: 'button'; index: number }
 
 function StepBadge({ n }: { n: number }) {
   return (
@@ -64,22 +78,6 @@ function FormatToolbar({
       <span className="muted text-xs">WhatsApp: *negrita*, _cursiva_</span>
     </div>
   )
-}
-
-function promptAlias(): string | null {
-  const raw = window.prompt(
-    'Nombre de la variable (solo letras, números y guion bajo):',
-    'fecha',
-  )
-  if (raw === null) return null
-  const alias = sanitizeAlias(raw)
-  if (!alias) {
-    window.alert(
-      'Ingresa un nombre válido, por ejemplo: fecha, horario o mes.',
-    )
-    return null
-  }
-  return alias
 }
 
 function ExampleFields({
@@ -133,7 +131,16 @@ export function TemplateBuilderFields({
   const headerTextRef = useRef<HTMLTextAreaElement>(null)
   const bodyTextRef = useRef<HTMLTextAreaElement>(null)
   const buttonUrlRefs = useRef<(HTMLInputElement | null)[]>([])
+  const aliasInputRef = useRef<HTMLInputElement>(null)
   const [flows, setFlows] = useState<FlowOption[]>([])
+  const [aliasOpen, setAliasOpen] = useState(false)
+  const [aliasDraft, setAliasDraft] = useState('fecha')
+  const [aliasError, setAliasError] = useState('')
+  const [aliasTarget, setAliasTarget] = useState<AliasInsertTarget | null>(null)
+  const [aliasRange, setAliasRange] = useState<{
+    start: number
+    end: number
+  } | null>(null)
 
   useEffect(() => {
     apiClient
@@ -176,8 +183,134 @@ export function TemplateBuilderFields({
     })
   }
 
+  function openAliasDialog(target: AliasInsertTarget) {
+    const el =
+      target.kind === 'header'
+        ? headerTextRef.current
+        : target.kind === 'body'
+          ? bodyTextRef.current
+          : buttonUrlRefs.current[target.index]
+    setAliasRange(
+      el
+        ? {
+            start: el.selectionStart ?? 0,
+            end: el.selectionEnd ?? 0,
+          }
+        : null,
+    )
+    setAliasTarget(target)
+    setAliasDraft('fecha')
+    setAliasError('')
+    setAliasOpen(true)
+  }
+
+  function confirmAliasInsert() {
+    const alias = sanitizeAlias(aliasDraft)
+    if (!alias) {
+      setAliasError(
+        'Ingresa un nombre válido, por ejemplo: fecha, horario o mes.',
+      )
+      aliasInputRef.current?.focus()
+      return
+    }
+    if (!aliasTarget) {
+      setAliasOpen(false)
+      return
+    }
+    const snippet = `{{${alias}}}`
+    if (aliasTarget.kind === 'header') {
+      insertAtSelection(
+        headerTextRef.current,
+        snippet,
+        builder.header.text,
+        (text) => updateHeader({ text }),
+        aliasRange,
+      )
+    } else if (aliasTarget.kind === 'body') {
+      insertAtSelection(
+        bodyTextRef.current,
+        snippet,
+        builder.body.text,
+        (text) => updateBody({ text }),
+        aliasRange,
+      )
+    } else {
+      const index = aliasTarget.index
+      const btn = builder.buttons[index]
+      if (btn) {
+        insertAtSelection(
+          buttonUrlRefs.current[index],
+          snippet,
+          btn.url,
+          (url) => updateButton(index, { url }),
+          aliasRange,
+        )
+      }
+    }
+    setAliasOpen(false)
+    setAliasTarget(null)
+    setAliasRange(null)
+  }
+
   return (
     <div className="space-y-4">
+      <Dialog
+        open={aliasOpen}
+        onOpenChange={(open) => {
+          setAliasOpen(open)
+          if (!open) {
+            setAliasTarget(null)
+            setAliasRange(null)
+          }
+        }}
+      >
+        <DialogContent className="w-[min(96vw,420px)]">
+          <DialogHeader>
+            <DialogTitle>Añadir variable</DialogTitle>
+            <DialogDescription>
+              Solo letras, números y guion bajo. Se insertará como{' '}
+              <code className="font-mono text-xs">{`{{nombre}}`}</code>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 px-5 py-4">
+            <label className="block text-sm">
+              <span className="text-muted">Nombre</span>
+              <input
+                ref={aliasInputRef}
+                className="mt-1 w-full rounded-lg border border-line bg-surface-strong px-3 py-2 font-mono text-sm"
+                value={aliasDraft}
+                onChange={(e) => {
+                  setAliasDraft(e.target.value)
+                  if (aliasError) setAliasError('')
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    confirmAliasInsert()
+                  }
+                }}
+                autoFocus
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </label>
+            {aliasError ? (
+              <p className="text-xs text-bad">{aliasError}</p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <DialogClose>Cancelar</DialogClose>
+            <button
+              type="button"
+              className="rounded-lg bg-accent px-3 py-1.5 text-sm text-white"
+              onClick={confirmAliasInsert}
+            >
+              Insertar
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <section className="space-y-3 rounded-xl border border-line p-4">
         <div className="flex items-center gap-2">
           <StepBadge n={1} />
@@ -228,16 +361,7 @@ export function TemplateBuilderFields({
               <button
                 type="button"
                 className="rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-accent-soft"
-                onClick={() => {
-                  const alias = promptAlias()
-                  if (!alias) return
-                  insertAtSelection(
-                    headerTextRef.current,
-                    `{{${alias}}}`,
-                    builder.header.text,
-                    (text) => updateHeader({ text }),
-                  )
-                }}
+                onClick={() => openAliasDialog({ kind: 'header' })}
               >
                 Añadir variable
               </button>
@@ -323,16 +447,7 @@ export function TemplateBuilderFields({
           <button
             type="button"
             className="rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-accent-soft"
-            onClick={() => {
-              const alias = promptAlias()
-              if (!alias) return
-              insertAtSelection(
-                bodyTextRef.current,
-                `{{${alias}}}`,
-                builder.body.text,
-                (text) => updateBody({ text }),
-              )
-            }}
+            onClick={() => openAliasDialog({ kind: 'body' })}
           >
             Añadir variable
           </button>
@@ -516,16 +631,9 @@ export function TemplateBuilderFields({
                   <button
                     type="button"
                     className="rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-accent-soft"
-                    onClick={() => {
-                      const alias = promptAlias()
-                      if (!alias) return
-                      insertAtSelection(
-                        buttonUrlRefs.current[index],
-                        `{{${alias}}}`,
-                        btn.url,
-                        (url) => updateButton(index, { url }),
-                      )
-                    }}
+                    onClick={() =>
+                      openAliasDialog({ kind: 'button', index })
+                    }
                   >
                     Añadir variable
                   </button>

@@ -2,6 +2,15 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/ui/shadcn/dialog'
 import { TemplateBuilderFields } from './TemplateBuilderFields'
 import { TemplateLivePreview } from './TemplateLivePreview'
 import {
@@ -57,9 +66,6 @@ function finalizeBuilder(state: TemplateBuilderState): TemplateBuilderState {
   }
 }
 
-const META_CONFIRM_MESSAGE =
-  'Meta revisará la plantilla antes de aprobarla. Solo las aprobadas se pueden usar en campañas. ¿Enviar ahora?'
-
 export function TemplateForm({
   mode,
   initialName = '',
@@ -75,8 +81,9 @@ export function TemplateForm({
   const [category, setCategory] = useState(initialCategory)
   const [builder, setBuilder] = useState<TemplateBuilderState>(initialBuilder)
   const [saving, setSaving] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
-  async function handleSubmit(event: FormEvent) {
+  function handleSubmit(event: FormEvent) {
     event.preventDefault()
 
     const payloadBuilder = finalizeBuilder(builder)
@@ -91,9 +98,13 @@ export function TemplateForm({
       return
     }
 
-    if (!window.confirm(META_CONFIRM_MESSAGE)) {
-      return
-    }
+    setConfirmOpen(true)
+  }
+
+  async function confirmSendToMeta() {
+    const payloadBuilder = finalizeBuilder(builder)
+    const normalizedName =
+      mode === 'create' ? normalizeTemplateNameInput(name) : undefined
 
     setSaving(true)
     try {
@@ -113,6 +124,7 @@ export function TemplateForm({
         builder: payloadBuilder,
         source_template_id: sourceTemplateId,
       })
+      setConfirmOpen(false)
     } catch (submitError) {
       notify.error(
         submitError instanceof Error
@@ -125,81 +137,112 @@ export function TemplateForm({
   }
 
   return (
-    <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-      <p className="text-sm text-muted">
-        Se envía a revisión en Meta. Puedes usar variables como{' '}
-        <code className="font-mono text-xs">{'{{fecha}}'}</code> o{' '}
-        <code className="font-mono text-xs">{'{{mes}}'}</code>; el sistema las
-        normaliza a placeholders numéricos.
-      </p>
+    <>
+      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+        <p className="text-sm text-muted">
+          Se envía a revisión en Meta. Puedes usar variables como{' '}
+          <code className="font-mono text-xs">{'{{fecha}}'}</code> o{' '}
+          <code className="font-mono text-xs">{'{{mes}}'}</code>; el sistema las
+          normaliza a placeholders numéricos.
+        </p>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        {mode === 'create' ? (
-          <>
-            <label className="block text-sm">
-              <span className="text-muted">Nombre (snake_case)</span>
-              <input
-                className="mt-1 w-full rounded-lg border border-line bg-surface-strong px-3 py-2"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                pattern="[a-z0-9_]+"
-                placeholder="recordatorio_pago_mayo"
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="text-muted">Idioma</span>
-              <input
-                className="mt-1 w-full rounded-lg border border-line bg-surface-strong px-3 py-2"
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                required
-              />
-            </label>
-          </>
-        ) : (
-          <>
-            <div className="text-sm">
-              <p className="text-muted">Nombre</p>
-              <p className="mt-1 font-mono">{initialName}</p>
-            </div>
-            <div className="text-sm">
-              <p className="text-muted">Idioma</p>
-              <p className="mt-1">{initialLanguage}</p>
-            </div>
-          </>
-        )}
-        <label
-          className={`block text-sm ${mode === 'edit' ? 'sm:col-span-2' : ''}`}
-        >
-          <span className="text-muted">Categoría</span>
-          <select
-            className="mt-1 w-full rounded-lg border border-line bg-surface-strong px-3 py-2"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
+        <div className="grid gap-3 sm:grid-cols-2">
+          {mode === 'create' ? (
+            <>
+              <label className="block text-sm">
+                <span className="text-muted">Nombre (snake_case)</span>
+                <input
+                  className="mt-1 w-full rounded-lg border border-line bg-surface-strong px-3 py-2"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  pattern="[a-z0-9_]+"
+                  placeholder="recordatorio_pago_mayo"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-muted">Idioma</span>
+                <input
+                  className="mt-1 w-full rounded-lg border border-line bg-surface-strong px-3 py-2"
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  required
+                />
+              </label>
+            </>
+          ) : (
+            <>
+              <div className="text-sm">
+                <p className="text-muted">Nombre</p>
+                <p className="mt-1 font-mono">{initialName}</p>
+              </div>
+              <div className="text-sm">
+                <p className="text-muted">Idioma</p>
+                <p className="mt-1">{initialLanguage}</p>
+              </div>
+            </>
+          )}
+          <label
+            className={`block text-sm ${mode === 'edit' ? 'sm:col-span-2' : ''}`}
           >
-            <option value="MARKETING">MARKETING</option>
-            <option value="UTILITY">UTILITY</option>
-            <option value="AUTHENTICATION">AUTHENTICATION</option>
-          </select>
-        </label>
-      </div>
-
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
-        <div className="space-y-4">
-          <TemplateBuilderFields builder={builder} onChange={setBuilder} />
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-lg bg-accent px-4 py-2 text-sm text-white disabled:opacity-60"
-          >
-            {saving ? 'Enviando…' : submitLabel}
-          </button>
+            <span className="text-muted">Categoría</span>
+            <select
+              className="mt-1 w-full rounded-lg border border-line bg-surface-strong px-3 py-2"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+            >
+              <option value="MARKETING">MARKETING</option>
+              <option value="UTILITY">UTILITY</option>
+              <option value="AUTHENTICATION">AUTHENTICATION</option>
+            </select>
+          </label>
         </div>
-        <aside className="xl:sticky xl:top-4">
-          <TemplateLivePreview state={builder} />
-        </aside>
-      </div>
-    </form>
+
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+          <div className="space-y-4">
+            <TemplateBuilderFields builder={builder} onChange={setBuilder} />
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-lg bg-accent px-4 py-2 text-sm text-white disabled:opacity-60"
+            >
+              {saving ? 'Enviando…' : submitLabel}
+            </button>
+          </div>
+          <aside className="xl:sticky xl:top-4">
+            <TemplateLivePreview state={builder} />
+          </aside>
+        </div>
+      </form>
+
+      <Dialog
+        open={confirmOpen}
+        onOpenChange={(open) => {
+          if (saving) return
+          setConfirmOpen(open)
+        }}
+      >
+        <DialogContent className="w-[min(96vw,420px)]">
+          <DialogHeader>
+            <DialogTitle>Enviar a Meta</DialogTitle>
+            <DialogDescription>
+              Meta revisará la plantilla antes de aprobarla. Solo las
+              aprobadas se pueden usar en campañas. ¿Enviar ahora?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose disabled={saving}>Cancelar</DialogClose>
+            <button
+              type="button"
+              disabled={saving}
+              className="rounded-lg bg-accent px-3 py-1.5 text-sm text-white disabled:opacity-60"
+              onClick={() => void confirmSendToMeta()}
+            >
+              {saving ? 'Enviando…' : 'Enviar a Meta'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

@@ -5,12 +5,15 @@ export function insertAtSelection(
   snippet: string,
   current: string,
   onUpdate: (value: string) => void,
+  range?: { start: number; end: number } | null,
 ) {
-  if (!el) return
-  const start = el.selectionStart ?? current.length
-  const end = el.selectionEnd ?? current.length
+  if (!el && range == null) return
+  const start =
+    range?.start ?? el?.selectionStart ?? current.length
+  const end = range?.end ?? el?.selectionEnd ?? current.length
   const next = current.slice(0, start) + snippet + current.slice(end)
   onUpdate(next)
+  if (!el) return
   requestAnimationFrame(() => {
     el.focus()
     const pos = start + snippet.length

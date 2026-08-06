@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
+import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 type AttributeDefinition = {
   id: number
   segment_slug: string | null
@@ -28,6 +29,7 @@ function scopeLabel(def: AttributeDefinition, segments: SegmentOption[]): string
 export function AttributeDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { confirm, confirmDialog } = useConfirmDialog()
   const [def, setDef] = useState<AttributeDefinition | null>(null)
   const [segments, setSegments] = useState<SegmentOption[]>([])
   const [label, setLabel] = useState('')
@@ -94,9 +96,13 @@ export function AttributeDetailPage() {
   async function onDelete() {
     if (!id) return
     if (
-      !window.confirm(
-        '¿Eliminar esta definición? Los valores guardados en contactos permanecen en la base de datos.',
-      )
+      !(await confirm({
+        title: 'Eliminar definición',
+        description:
+          '¿Eliminar esta definición? Los valores guardados en contactos permanecen en la base de datos.',
+        confirmLabel: 'Eliminar',
+        tone: 'danger',
+      }))
     ) {
       return
     }
@@ -118,6 +124,7 @@ export function AttributeDetailPage() {
 
   return (
     <div className="space-y-4">
+      {confirmDialog}
       <div>
         <Link to="/attributes" className="text-sm text-accent hover:underline">
           ← Atributos
@@ -205,7 +212,7 @@ export function AttributeDetailPage() {
           </button>
           <button
             type="button"
-            onClick={onDelete}
+            onClick={() => void onDelete()}
             className="rounded-lg border border-bad px-4 py-2 text-sm text-bad"
           >
             Eliminar definición

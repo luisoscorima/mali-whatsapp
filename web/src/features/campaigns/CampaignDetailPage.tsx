@@ -19,6 +19,7 @@ import {
 } from './campaignMetricActions'
 import { resolveMetricAction } from './metricAction'
 import { campaignStatusClass } from './campaignStatus'
+import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 
 type CampaignLog = {
   id: number
@@ -130,6 +131,7 @@ export function CampaignDetailPage() {
   const { id } = useParams()
   const user = useAppUser()
   const canViewStats = Boolean(user?.canViewCampaignStats)
+  const { confirm, confirmDialog } = useConfirmDialog()
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
   const [busy, setBusy] = useState('')
@@ -219,9 +221,12 @@ export function CampaignDetailPage() {
   async function handleRetryFailed() {
     if (!id) return
     if (
-      !window.confirm(
-        '¿Reintentar envíos fallidos elegibles de esta campaña?',
-      )
+      !(await confirm({
+        title: 'Reintentar fallidos',
+        description:
+          '¿Reintentar envíos fallidos elegibles de esta campaña?',
+        confirmLabel: 'Reintentar',
+      }))
     ) {
       return
     }
@@ -258,6 +263,7 @@ export function CampaignDetailPage() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold">Campaña #{campaign.id}</h1>
         <span

@@ -10,10 +10,12 @@ import {
   type FlowEditorEdge,
   type FlowEditorNode,
 } from './flowEditorUtils'
+import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 
 export function FlowDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { confirm, confirmDialog } = useConfirmDialog()
   const [name, setName] = useState('')
   const [triggerPayload, setTriggerPayload] = useState('')
   const [status, setStatus] = useState<'draft' | 'active' | 'paused'>('draft')
@@ -106,7 +108,16 @@ export function FlowDetailPage() {
 
   async function onDelete() {
     if (!id) return
-    if (!window.confirm('¿Eliminar este flujo?')) return
+    if (
+      !(await confirm({
+        title: 'Eliminar flujo',
+        description: '¿Eliminar este flujo?',
+        confirmLabel: 'Eliminar',
+        tone: 'danger',
+      }))
+    ) {
+      return
+    }
     setDeleting(true)
     const result = await apiClient.delete<{ deleted: true }>(`/api/flows/${id}`)
     setDeleting(false)
@@ -126,12 +137,14 @@ export function FlowDetailPage() {
   }
 
   return (
-    <FlowCanvasEditor
-      key={`${id}-${canvasKey}`}
-      name={name}
-      setName={setName}
-      triggerPayload={triggerPayload}
-      setTriggerPayload={setTriggerPayload}
+    <>
+      {confirmDialog}
+      <FlowCanvasEditor
+        key={`${id}-${canvasKey}`}
+        name={name}
+        setName={setName}
+        triggerPayload={triggerPayload}
+        setTriggerPayload={setTriggerPayload}
       status={status}
       setStatus={setStatus}
       entryClientKey={entryClientKey}
@@ -147,5 +160,6 @@ export function FlowDetailPage() {
       onDelete={onDelete}
       deleting={deleting}
     />
+    </>
   )
 }

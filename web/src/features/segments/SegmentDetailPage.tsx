@@ -6,6 +6,7 @@ import { formatContactName } from '../contacts/contactName'
 import { segmentToneClass } from './segmentColors'
 import { SegmentColorPicker } from './SegmentColorPicker'
 import { notifySegmentsListRefresh, notifySegmentsListUpsert } from './segmentsListEvents'
+import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 type SegmentDefinition = {
   id: number
   slug: string
@@ -35,6 +36,7 @@ type SegmentDetail = {
 export function SegmentDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { confirm, confirmDialog } = useConfirmDialog()
   const [payload, setPayload] = useState<SegmentDetail | null>(null)
   const [allSegments, setAllSegments] = useState<SegmentDefinition[]>([])
   const [slug, setSlug] = useState('')
@@ -119,9 +121,13 @@ export function SegmentDetailPage() {
   async function onDelete() {
     if (!id) return
     if (
-      !window.confirm(
-        '¿Borrar este segmento? Se quitará de los contactos (vínculos), no se borran las personas.',
-      )
+      !(await confirm({
+        title: 'Borrar segmento',
+        description:
+          '¿Borrar este segmento? Se quitará de los contactos (vínculos), no se borran las personas.',
+        confirmLabel: 'Borrar',
+        tone: 'danger',
+      }))
     ) {
       return
     }
@@ -136,7 +142,16 @@ export function SegmentDetailPage() {
 
   async function onRemoveMember(contactId: number) {
     if (!id) return
-    if (!window.confirm('¿Quitar este contacto del segmento?')) return
+    if (
+      !(await confirm({
+        title: 'Quitar contacto',
+        description: '¿Quitar este contacto del segmento?',
+        confirmLabel: 'Quitar',
+        tone: 'danger',
+      }))
+    ) {
+      return
+    }
     setRemovingId(contactId)
     const result = await apiClient.delete<SegmentDetail>(
       `/api/segments/${id}/contacts/${contactId}`,
@@ -169,6 +184,7 @@ export function SegmentDetailPage() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <div>
         <Link to="/segments" className="text-sm text-accent hover:underline">
           ← Segmentos
@@ -335,7 +351,7 @@ export function SegmentDetailPage() {
                         ? 'Quitar del segmento'
                         : 'El contacto debe conservar al menos un segmento'
                     }
-                    onClick={() => onRemoveMember(member.id)}
+                    onClick={() => void onRemoveMember(member.id)}
                     className="rounded-lg border border-bad px-3 py-1.5 text-sm text-bad disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {removingId === member.id ? 'Quitando…' : 'Quitar'}

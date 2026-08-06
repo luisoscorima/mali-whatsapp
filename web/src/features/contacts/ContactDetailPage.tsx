@@ -7,6 +7,7 @@ import { splitPhoneForForm } from './phoneUtils'
 import { segmentOptionsForAssignment, pruneSegmentSlugsToOptions } from '../segments/segmentOptions'
 
 import { formatContactName } from './contactName'
+import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 
 type ContactDetail = {
   id: number
@@ -48,6 +49,7 @@ export function ContactDetailPage() {
   const { id } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
+  const { confirm, confirmDialog } = useConfirmDialog()
   const [contact, setContact] = useState<ContactDetail | null>(null)
   const [segments, setSegments] = useState<FilterOptions['segments']>([])
   const [selectedSegmentSlugs, setSelectedSegmentSlugs] = useState<string[]>([])
@@ -127,7 +129,16 @@ export function ContactDetailPage() {
 
   async function onDelete() {
     if (!id) return
-    if (!window.confirm('¿Eliminar este contacto?')) return
+    if (
+      !(await confirm({
+        title: 'Eliminar contacto',
+        description: '¿Eliminar este contacto?',
+        confirmLabel: 'Eliminar',
+        tone: 'danger',
+      }))
+    ) {
+      return
+    }
     const result = await apiClient.delete(`/api/contacts/${id}`)
     if (!result.ok) {
       notify.error(result.error)
@@ -138,7 +149,15 @@ export function ContactDetailPage() {
 
   async function onReactivate() {
     if (!id) return
-    if (!window.confirm('¿Reactivar este contacto?')) return
+    if (
+      !(await confirm({
+        title: 'Reactivar contacto',
+        description: '¿Reactivar este contacto?',
+        confirmLabel: 'Reactivar',
+      }))
+    ) {
+      return
+    }
     const result = await apiClient.post<ContactDetail>(
       `/api/contacts/${id}/reactivate`,
       {},
@@ -179,6 +198,7 @@ export function ContactDetailPage() {
 
   return (
     <div className="space-y-4">
+      {confirmDialog}
       <div className="contact-detail-heading">
         <Link to={listHref} className="contact-detail-back" aria-label="Volver a contactos">
           ‹

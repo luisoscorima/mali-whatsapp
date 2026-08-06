@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/ui/shadcn/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/shadcn/popover'
+import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 
 type AdvisorNote = {
   id: number
@@ -41,6 +42,7 @@ export function InboxAdvisorNotesPopover({
   contactAttributes = {},
   triggerIcon,
 }: InboxAdvisorNotesPopoverProps) {
+  const { confirm, confirmDialog } = useConfirmDialog()
   const [open, setOpen] = useState(false)
   const [notes, setNotes] = useState<AdvisorNote[]>([])
   const [attrDefs, setAttrDefs] = useState<AttrDef[]>([])
@@ -105,7 +107,16 @@ export function InboxAdvisorNotesPopover({
   }
 
   async function removeNote(id: number) {
-    if (!window.confirm('¿Eliminar esta nota?')) return
+    if (
+      !(await confirm({
+        title: 'Eliminar nota',
+        description: '¿Eliminar esta nota?',
+        confirmLabel: 'Eliminar',
+        tone: 'danger',
+      }))
+    ) {
+      return
+    }
     const result = await apiClient.delete<{ deleted: true }>(
       `/api/advisor-notes/${id}`,
     )
@@ -133,7 +144,9 @@ export function InboxAdvisorNotesPopover({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <>
+      {confirmDialog}
+      <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -264,5 +277,6 @@ export function InboxAdvisorNotesPopover({
         </div>
       </PopoverContent>
     </Popover>
+    </>
   )
 }
