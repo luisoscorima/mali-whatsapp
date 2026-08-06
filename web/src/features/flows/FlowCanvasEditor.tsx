@@ -250,9 +250,22 @@ function FlowCanvasEditorInner({
   const [advisors, setAdvisors] = useState<Advisor[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
+  const [viewOnly, setViewOnly] = useState(() =>
+    typeof window !== 'undefined'
+      ? window.matchMedia('(max-width: 768px)').matches
+      : false,
+  )
   const suppressSelectionRef = useRef(false)
   const didFitViewRef = useRef(false)
   const { fitView } = useReactFlow()
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)')
+    const onChange = () => setViewOnly(mq.matches)
+    onChange()
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
 
   const runFitView = useCallback(() => {
     window.requestAnimationFrame(() => {

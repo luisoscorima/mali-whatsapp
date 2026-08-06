@@ -57,6 +57,7 @@ import {
   chatActionsFromListItem,
   type ChatActionsContext,
 } from './inboxChatActions'
+import { useAssignedInboxBrowserNotify } from './useAssignedInboxBrowserNotify'
 
 const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000
 const WINDOW_MAX_BUCKETS = [2, 6, 12, 24] as const
@@ -789,6 +790,23 @@ export function ConversationsInboxPage() {
     },
     [searchParams],
   )
+
+  const openConversationFromNotify = useCallback(
+    (conversationId: number) => {
+      navigate(conversationPath(conversationId))
+    },
+    [navigate, conversationPath],
+  )
+
+  const {
+    permission: browserNotifyPermission,
+    enable: enableBrowserNotify,
+    supported: browserNotifySupported,
+  } = useAssignedInboxBrowserNotify({
+    userId: user?.id,
+    selectedConversationId: selectedId != null && selectedId > 0 ? selectedId : null,
+    onOpenConversation: openConversationFromNotify,
+  })
 
   const pollConversationUpdates = useCallback(
     async (conversationId: number) => {
@@ -1534,6 +1552,23 @@ export function ConversationsInboxPage() {
             }}
           />
         </div>
+        {browserNotifySupported ? (
+          <p className="muted text-xs">
+            {browserNotifyPermission === 'granted' ? (
+              'Avisos de Mis chats activos'
+            ) : browserNotifyPermission === 'denied' ? (
+              'Avisos bloqueados en el navegador'
+            ) : (
+              <button
+                type="button"
+                className="underline"
+                onClick={() => void enableBrowserNotify()}
+              >
+                Activar avisos de Mis chats
+              </button>
+            )}
+          </p>
+        ) : null}
       </div>
       <button
         type="button"

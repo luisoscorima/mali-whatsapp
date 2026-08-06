@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { FlowCanvasEditor } from './FlowCanvasEditor'
@@ -169,6 +169,11 @@ export function FlowDetailPage() {
   return (
     <div className="flex flex-col gap-4">
       {confirmDialog}
+      <div className="px-3 pt-3 md:px-4 md:pt-4">
+        <Link to="/flows" className="inbox-back-mobile">
+          ← Flujos
+        </Link>
+      </div>
       <FlowCanvasEditor
         key={`${id}-${canvasKey}`}
         name={name}
