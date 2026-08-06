@@ -23,6 +23,16 @@ import '../../styles/flow-canvas.css'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import {
+  Sheet,
+  SheetBody,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/shared/ui/shadcn/sheet'
+import {
   emptyNode,
   formatTimeoutBadge,
   nextClientKey,
@@ -706,373 +716,407 @@ function FlowCanvasEditorInner({
       ) : null}
       <p className="text-xs text-muted">
         Arrastra desde el punto de cada botón (key) hacia el siguiente nodo.
-        Para quitar un conector: haz clic en la línea y pulsa Supr / Backspace, o
-        usa «Quitar conexión» en el panel. Cada key debe ser única. Solo cuenta el
-        último mensaje del asistente.
+        Haz clic en un nodo o conector para editarlo en el panel. Cada key debe
+        ser única. Solo cuenta el último mensaje del asistente.
       </p>
 
-      <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
-        <div className="flow-canvas h-[min(52vh,560px)] min-h-[380px] overflow-hidden rounded-xl border border-line bg-surface">
-          <ReactFlow
-            nodes={rfNodes}
-            edges={rfEdges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={(chs) => {
-              onEdgesChange(chs)
-              if (chs.some((c) => c.type === 'remove')) {
-                setSelectedEdgeId(null)
-              }
-            }}
-            onEdgesDelete={(deleted) => {
-              const deletedIds = new Set(deleted.map((e) => e.id))
-              const nextEdges = rfEdges.filter((e) => !deletedIds.has(e.id))
-              syncOut(rfNodes, nextEdges)
+      <div className="flow-canvas h-[min(60vh,640px)] min-h-[420px] overflow-hidden rounded-xl border border-line bg-surface">
+        <ReactFlow
+          nodes={rfNodes}
+          edges={rfEdges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={(chs) => {
+            onEdgesChange(chs)
+            if (chs.some((c) => c.type === 'remove')) {
               setSelectedEdgeId(null)
-            }}
-            onNodeDragStop={(_e, _node, nodes) => {
-              syncOut(nodes as Node<CanvasData>[], rfEdges)
-            }}
-            onConnect={onConnect}
-            onSelectionChange={({ nodes: sel, edges: edgeSel }) => {
-              setSelectedId(sel[0]?.id ?? null)
-              setSelectedEdgeId(edgeSel[0]?.id ?? null)
-            }}
-            nodeTypes={nodeTypes}
-            fitView
-            snapToGrid
-            snapGrid={[16, 16]}
-            connectionMode={ConnectionMode.Loose}
-            connectionRadius={40}
-            nodesConnectable
-            edgesFocusable
-            elementsSelectable
-            deleteKeyCode={['Backspace', 'Delete']}
-            multiSelectionKeyCode={null}
-            proOptions={{ hideAttribution: true }}
-            defaultEdgeOptions={{
-              markerEnd: { type: MarkerType.ArrowClosed },
-              interactionWidth: 28,
-            }}
-          >
-            <Background color="var(--line)" gap={16} />
-            <Controls showInteractive={false} />
-            <MiniMap
-              pannable
-              zoomable={false}
-              nodeStrokeWidth={0}
-              maskColor="color-mix(in srgb, var(--ink) 18%, transparent)"
-            />
-          </ReactFlow>
-        </div>
+            }
+          }}
+          onEdgesDelete={(deleted) => {
+            const deletedIds = new Set(deleted.map((e) => e.id))
+            const nextEdges = rfEdges.filter((e) => !deletedIds.has(e.id))
+            syncOut(rfNodes, nextEdges)
+            setSelectedEdgeId(null)
+          }}
+          onNodeDragStop={(_e, _node, nodes) => {
+            syncOut(nodes as Node<CanvasData>[], rfEdges)
+          }}
+          onConnect={onConnect}
+          onSelectionChange={({ nodes: sel, edges: edgeSel }) => {
+            setSelectedId(sel[0]?.id ?? null)
+            setSelectedEdgeId(edgeSel[0]?.id ?? null)
+          }}
+          nodeTypes={nodeTypes}
+          fitView
+          snapToGrid
+          snapGrid={[16, 16]}
+          connectionMode={ConnectionMode.Loose}
+          connectionRadius={40}
+          nodesConnectable
+          edgesFocusable
+          elementsSelectable
+          deleteKeyCode={['Backspace', 'Delete']}
+          multiSelectionKeyCode={null}
+          proOptions={{ hideAttribution: true }}
+          defaultEdgeOptions={{
+            markerEnd: { type: MarkerType.ArrowClosed },
+            interactionWidth: 28,
+          }}
+        >
+          <Background color="var(--line)" gap={16} />
+          <Controls showInteractive={false} />
+          <MiniMap
+            pannable
+            zoomable={false}
+            nodeStrokeWidth={0}
+            maskColor="color-mix(in srgb, var(--ink) 18%, transparent)"
+          />
+        </ReactFlow>
+      </div>
 
-        <aside className="space-y-3 rounded-xl border border-line bg-surface-strong p-3">
-          {selectedEdge && !selected ? (
-            <>
-              <p className="text-sm font-medium">Conexión</p>
-              <p className="text-xs text-muted">
-                {String(selectedEdge.label || 'siguiente')} → destino
-              </p>
-              <button
-                type="button"
-                className="rounded-lg border border-bad px-3 py-1.5 text-sm text-bad"
-                onClick={removeSelectedEdge}
-              >
-                Quitar conexión
-              </button>
-            </>
-          ) : !selected ? (
-            <p className="text-sm text-muted">
-              Selecciona un nodo o un conector para editarlo.
-            </p>
-          ) : (
-            <>
-              <p className="text-sm font-medium">
-                {selected.type === 'handoff'
+      <Sheet
+        open={Boolean(selected || selectedEdge)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedId(null)
+            setSelectedEdgeId(null)
+          }
+        }}
+      >
+        <SheetContent side="right" className="w-[min(100%,28rem)]">
+          <SheetHeader>
+            <SheetTitle>
+              {selectedEdge && !selected
+                ? 'Conexión'
+                : selected?.type === 'handoff'
                   ? 'Derivar'
-                  : selected.type === 'end'
+                  : selected?.type === 'end'
                     ? 'Fin'
                     : 'Mensaje'}
-              </p>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="flow-entry-node"
-                  checked={entryClientKey === selected.id}
-                  onChange={() => setEntryClientKey(selected.id)}
-                />
-                Nodo inicial
-                {entryClientKey === selected.id ? (
-                  <span className="text-xs text-muted">(único)</span>
-                ) : null}
-              </label>
-              {selected.type !== 'end' ? (
-                <label className="block text-sm">
-                  <span className="text-muted">Texto</span>
-                  <textarea
-                    className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
-                    rows={4}
-                    value={selected.data.body_text}
-                    onChange={(e) =>
-                      updateSelected({ body_text: e.target.value })
-                    }
-                  />
-                </label>
-              ) : (
+            </SheetTitle>
+            <SheetDescription>
+              {selectedEdge && !selected
+                ? 'Edita o quita esta conexión del flujo.'
+                : 'Los cambios se aplican al instante; usa Guardar para persistir el flujo.'}
+            </SheetDescription>
+          </SheetHeader>
+          <SheetBody className="space-y-3">
+            {selectedEdge && !selected ? (
+              <>
                 <p className="text-xs text-muted">
-                  Termina la sesión del flujo sin enviar ni derivar.
+                  {String(selectedEdge.label || 'siguiente')} → destino
                 </p>
-              )}
-              {selected.type === 'message' ? (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted">Botones (título + key, máx. 3)</p>
-                  {selected.data.buttons.map((b, idx) => (
-                    <div key={idx} className="space-y-1 rounded-lg border border-line p-2">
-                      <input
-                        className="w-full rounded border border-line bg-surface px-2 py-1 text-sm"
-                        placeholder="Título"
-                        maxLength={20}
-                        value={b.title}
-                        onChange={(e) => {
-                          const buttons = selected.data.buttons.map((x, i) =>
-                            i === idx ? { ...x, title: e.target.value } : x,
-                          )
-                          updateSelected({ buttons })
-                        }}
-                      />
-                      <input
-                        className="w-full rounded border border-line bg-surface px-2 py-1 font-mono text-xs"
-                        placeholder="key"
-                        maxLength={256}
-                        value={b.id}
-                        onChange={(e) => {
-                          const buttons = selected.data.buttons.map((x, i) =>
-                            i === idx ? { ...x, id: e.target.value } : x,
-                          )
-                          updateSelected({ buttons })
-                        }}
-                      />
+                <button
+                  type="button"
+                  className="rounded-lg border border-bad px-3 py-1.5 text-sm text-bad"
+                  onClick={removeSelectedEdge}
+                >
+                  Quitar conexión
+                </button>
+              </>
+            ) : selected ? (
+              <>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="flow-entry-node"
+                    checked={entryClientKey === selected.id}
+                    onChange={() => setEntryClientKey(selected.id)}
+                  />
+                  Nodo inicial
+                  {entryClientKey === selected.id ? (
+                    <span className="text-xs text-muted">(único)</span>
+                  ) : null}
+                </label>
+                {selected.type !== 'end' ? (
+                  <label className="block text-sm">
+                    <span className="text-muted">Texto</span>
+                    <textarea
+                      className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
+                      rows={4}
+                      value={selected.data.body_text}
+                      onChange={(e) =>
+                        updateSelected({ body_text: e.target.value })
+                      }
+                    />
+                  </label>
+                ) : (
+                  <p className="text-xs text-muted">
+                    Termina la sesión del flujo sin enviar ni derivar.
+                  </p>
+                )}
+                {selected.type === 'message' ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted">
+                      Botones (título + key, máx. 3)
+                    </p>
+                    {selected.data.buttons.map((b, idx) => (
+                      <div
+                        key={idx}
+                        className="space-y-1 rounded-lg border border-line p-2"
+                      >
+                        <input
+                          className="w-full rounded border border-line bg-surface px-2 py-1 text-sm"
+                          placeholder="Título"
+                          maxLength={20}
+                          value={b.title}
+                          onChange={(e) => {
+                            const buttons = selected.data.buttons.map((x, i) =>
+                              i === idx ? { ...x, title: e.target.value } : x,
+                            )
+                            updateSelected({ buttons })
+                          }}
+                        />
+                        <input
+                          className="w-full rounded border border-line bg-surface px-2 py-1 font-mono text-xs"
+                          placeholder="key"
+                          maxLength={256}
+                          value={b.id}
+                          onChange={(e) => {
+                            const buttons = selected.data.buttons.map((x, i) =>
+                              i === idx ? { ...x, id: e.target.value } : x,
+                            )
+                            updateSelected({ buttons })
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="rounded border border-bad px-2 py-0.5 text-xs text-bad"
+                          onClick={() =>
+                            updateSelected({
+                              buttons: selected.data.buttons.filter(
+                                (_, i) => i !== idx,
+                              ),
+                            })
+                          }
+                        >
+                          Quitar
+                        </button>
+                      </div>
+                    ))}
+                    {selected.data.buttons.length < 3 ? (
                       <button
                         type="button"
-                        className="rounded border border-bad px-2 py-0.5 text-xs text-bad"
+                        className="small-btn"
                         onClick={() =>
                           updateSelected({
-                            buttons: selected.data.buttons.filter((_, i) => i !== idx),
+                            buttons: [
+                              ...selected.data.buttons,
+                              {
+                                id: `BTN_${selected.data.buttons.length + 1}`,
+                                title: `Opción ${selected.data.buttons.length + 1}`,
+                              },
+                            ],
                           })
                         }
                       >
-                        Quitar
+                        + Botón
                       </button>
-                    </div>
-                  ))}
-                  {selected.data.buttons.length < 3 ? (
-                    <button
-                      type="button"
-                      className="small-btn"
-                      onClick={() =>
-                        updateSelected({
-                          buttons: [
-                            ...selected.data.buttons,
-                            {
-                              id: `BTN_${selected.data.buttons.length + 1}`,
-                              title: `Opción ${selected.data.buttons.length + 1}`,
-                            },
-                          ],
-                        })
-                      }
-                    >
-                      + Botón
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-              {selected.type === 'message' && selected.data.buttons.length > 0 ? (
-                <div className="space-y-2 rounded-lg border border-line p-2">
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selected.data.timeout_minutes != null}
-                      onChange={(e) =>
-                        updateSelected({
-                          timeout_minutes: e.target.checked ? 15 : null,
-                          timeout_body_text: e.target.checked
-                            ? selected.data.timeout_body_text ||
-                              '¿Sigues ahí? Pulsa Continuar para seguir con el flujo.'
-                            : selected.data.timeout_window_guard
-                              ? selected.data.timeout_body_text
-                              : '',
-                          timeout_repeat: e.target.checked
-                            ? selected.data.timeout_repeat
-                            : false,
-                          timeout_max_nudges: e.target.checked
-                            ? selected.data.timeout_max_nudges
-                            : null,
-                        })
-                      }
-                    />
-                    Recordatorio si no responde
-                  </label>
-                  {selected.data.timeout_minutes != null ? (
-                    <>
+                    ) : null}
+                  </div>
+                ) : null}
+                {selected.type === 'message' &&
+                selected.data.buttons.length > 0 ? (
+                  <div className="space-y-2 rounded-lg border border-line p-2">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={selected.data.timeout_minutes != null}
+                        onChange={(e) =>
+                          updateSelected({
+                            timeout_minutes: e.target.checked ? 15 : null,
+                            timeout_body_text: e.target.checked
+                              ? selected.data.timeout_body_text ||
+                                '¿Sigues ahí? Pulsa Continuar para seguir con el flujo.'
+                              : selected.data.timeout_window_guard
+                                ? selected.data.timeout_body_text
+                                : '',
+                            timeout_repeat: e.target.checked
+                              ? selected.data.timeout_repeat
+                              : false,
+                            timeout_max_nudges: e.target.checked
+                              ? selected.data.timeout_max_nudges
+                              : null,
+                          })
+                        }
+                      />
+                      Recordatorio si no responde
+                    </label>
+                    {selected.data.timeout_minutes != null ? (
+                      <>
+                        <label className="block text-sm">
+                          <span className="text-muted">Minutos</span>
+                          <input
+                            type="number"
+                            className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
+                            min={1}
+                            max={1440}
+                            value={selected.data.timeout_minutes}
+                            onChange={(e) => {
+                              const raw = e.target.value.trim()
+                              updateSelected({
+                                timeout_minutes: raw ? Number(raw) : null,
+                              })
+                            }}
+                          />
+                        </label>
+                        <label className="block text-sm">
+                          <span className="text-muted">
+                            Mensaje de confirmación
+                          </span>
+                          <textarea
+                            className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
+                            rows={3}
+                            value={selected.data.timeout_body_text}
+                            onChange={(e) =>
+                              updateSelected({
+                                timeout_body_text: e.target.value,
+                              })
+                            }
+                          />
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={selected.data.timeout_repeat}
+                            onChange={(e) =>
+                              updateSelected({
+                                timeout_repeat: e.target.checked,
+                                timeout_max_nudges: e.target.checked
+                                  ? selected.data.timeout_max_nudges || 3
+                                  : null,
+                              })
+                            }
+                          />
+                          Repetir recordatorio
+                        </label>
+                        {selected.data.timeout_repeat ? (
+                          <label className="block text-sm">
+                            <span className="text-muted">Veces (máx. 5)</span>
+                            <input
+                              type="number"
+                              className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
+                              min={1}
+                              max={5}
+                              value={selected.data.timeout_max_nudges ?? 3}
+                              onChange={(e) =>
+                                updateSelected({
+                                  timeout_max_nudges:
+                                    Number(e.target.value) || 3,
+                                })
+                              }
+                            />
+                          </label>
+                        ) : null}
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={selected.data.timeout_close_on_silence}
+                            onChange={(e) =>
+                              updateSelected({
+                                timeout_close_on_silence: e.target.checked,
+                              })
+                            }
+                          />
+                          Cerrar flujo si sigue sin responder
+                        </label>
+                      </>
+                    ) : null}
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={selected.data.timeout_window_guard}
+                        onChange={(e) =>
+                          updateSelected({
+                            timeout_window_guard: e.target.checked,
+                            timeout_window_lead_minutes: e.target.checked
+                              ? selected.data.timeout_window_lead_minutes || 60
+                              : null,
+                            timeout_body_text: e.target.checked
+                              ? selected.data.timeout_body_text ||
+                                '¿Sigues ahí? Pulsa Continuar para seguir con el flujo.'
+                              : selected.data.timeout_minutes
+                                ? selected.data.timeout_body_text
+                                : '',
+                          })
+                        }
+                      />
+                      Avisar antes de cerrar ventana 24h
+                    </label>
+                    {selected.data.timeout_window_guard ? (
                       <label className="block text-sm">
-                        <span className="text-muted">Minutos</span>
+                        <span className="text-muted">
+                          Minutos antes del cierre
+                        </span>
                         <input
                           type="number"
                           className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
                           min={1}
                           max={1440}
-                          value={selected.data.timeout_minutes}
-                          onChange={(e) => {
-                            const raw = e.target.value.trim()
-                            updateSelected({
-                              timeout_minutes: raw ? Number(raw) : null,
-                            })
-                          }}
-                        />
-                      </label>
-                      <label className="block text-sm">
-                        <span className="text-muted">Mensaje de confirmación</span>
-                        <textarea
-                          className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
-                          rows={3}
-                          value={selected.data.timeout_body_text}
-                          onChange={(e) =>
-                            updateSelected({ timeout_body_text: e.target.value })
+                          value={
+                            selected.data.timeout_window_lead_minutes ?? 60
                           }
-                        />
-                      </label>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selected.data.timeout_repeat}
                           onChange={(e) =>
                             updateSelected({
-                              timeout_repeat: e.target.checked,
-                              timeout_max_nudges: e.target.checked
-                                ? selected.data.timeout_max_nudges || 3
-                                : null,
+                              timeout_window_lead_minutes:
+                                Number(e.target.value) || 60,
                             })
                           }
                         />
-                        Repetir recordatorio
                       </label>
-                      {selected.data.timeout_repeat ? (
-                        <label className="block text-sm">
-                          <span className="text-muted">Veces (máx. 5)</span>
-                          <input
-                            type="number"
-                            className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
-                            min={1}
-                            max={5}
-                            value={selected.data.timeout_max_nudges ?? 3}
-                            onChange={(e) =>
-                              updateSelected({
-                                timeout_max_nudges: Number(e.target.value) || 3,
-                              })
-                            }
-                          />
-                        </label>
-                      ) : null}
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selected.data.timeout_close_on_silence}
-                          onChange={(e) =>
-                            updateSelected({
-                              timeout_close_on_silence: e.target.checked,
-                            })
-                          }
-                        />
-                        Cerrar flujo si sigue sin responder
-                      </label>
-                    </>
-                  ) : null}
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selected.data.timeout_window_guard}
+                    ) : null}
+                    {(selected.data.timeout_minutes != null ||
+                      selected.data.timeout_window_guard) && (
+                      <p className="muted text-xs">
+                        Provoca una respuesta para mantener la ventana de 24h;
+                        un mensaje solo del bot no la renueva.
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+                {selected.type === 'handoff' ? (
+                  <label className="block text-sm">
+                    <span className="text-muted">Asesor</span>
+                    <select
+                      className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5"
+                      value={selected.data.handoff_user_id ?? ''}
                       onChange={(e) =>
                         updateSelected({
-                          timeout_window_guard: e.target.checked,
-                          timeout_window_lead_minutes: e.target.checked
-                            ? selected.data.timeout_window_lead_minutes || 60
+                          handoff_user_id: e.target.value
+                            ? Number(e.target.value)
                             : null,
-                          timeout_body_text: e.target.checked
-                            ? selected.data.timeout_body_text ||
-                              '¿Sigues ahí? Pulsa Continuar para seguir con el flujo.'
-                            : selected.data.timeout_minutes
-                              ? selected.data.timeout_body_text
-                              : '',
+                          advisor_label: e.target.value
+                            ? advisors.find(
+                                (a) => a.id === Number(e.target.value),
+                              )?.label
+                            : undefined,
                         })
                       }
-                    />
-                    Avisar antes de cerrar ventana 24h
+                    >
+                      <option value="">Sin asignar (solo modo asesor)</option>
+                      {advisors.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.label}
+                        </option>
+                      ))}
+                    </select>
                   </label>
-                  {selected.data.timeout_window_guard ? (
-                    <label className="block text-sm">
-                      <span className="text-muted">Minutos antes del cierre</span>
-                      <input
-                        type="number"
-                        className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
-                        min={1}
-                        max={1440}
-                        value={selected.data.timeout_window_lead_minutes ?? 60}
-                        onChange={(e) =>
-                          updateSelected({
-                            timeout_window_lead_minutes:
-                              Number(e.target.value) || 60,
-                          })
-                        }
-                      />
-                    </label>
-                  ) : null}
-                  {(selected.data.timeout_minutes != null ||
-                    selected.data.timeout_window_guard) && (
-                    <p className="muted text-xs">
-                      Provoca una respuesta para mantener la ventana de 24h; un
-                      mensaje solo del bot no la renueva.
-                    </p>
-                  )}
-                </div>
-              ) : null}
-              {selected.type === 'handoff' ? (
-                <label className="block text-sm">
-                  <span className="text-muted">Asesor</span>
-                  <select
-                    className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5"
-                    value={selected.data.handoff_user_id ?? ''}
-                    onChange={(e) =>
-                      updateSelected({
-                        handoff_user_id: e.target.value
-                          ? Number(e.target.value)
-                          : null,
-                        advisor_label: e.target.value
-                          ? advisors.find((a) => a.id === Number(e.target.value))
-                              ?.label
-                          : undefined,
-                      })
-                    }
-                  >
-                    <option value="">Sin asignar (solo modo asesor)</option>
-                    {advisors.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              <button
-                type="button"
-                className="rounded-lg border border-bad px-3 py-1.5 text-sm text-bad disabled:opacity-40"
-                disabled={rfNodes.length <= 1}
-                onClick={removeSelected}
-              >
-                Eliminar nodo
-              </button>
-            </>
-          )}
-        </aside>
-      </div>
+                ) : null}
+                <button
+                  type="button"
+                  className="rounded-lg border border-bad px-3 py-1.5 text-sm text-bad disabled:opacity-40"
+                  disabled={rfNodes.length <= 1}
+                  onClick={removeSelected}
+                >
+                  Eliminar nodo
+                </button>
+              </>
+            ) : null}
+          </SheetBody>
+          <SheetFooter>
+            <SheetClose>Cerrar</SheetClose>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </form>
   )
 }

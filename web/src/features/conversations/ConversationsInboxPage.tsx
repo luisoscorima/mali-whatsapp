@@ -15,10 +15,8 @@ import { WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
 import { Badge } from '@/shared/ui/shadcn/badge'
 import { Button } from '@/shared/ui/shadcn/button'
 import { formatContactName } from '../contacts/contactName'
-import {
-  inputTypeForField,
-  type AttributeFieldDefinition,
-} from '../contacts/contactFormUtils'
+import { type AttributeFieldDefinition } from '../contacts/contactFormUtils'
+import { BulkContactActionsDialog } from '../contacts/BulkContactActionsDialog'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import { SegmentBadge } from '../segments/SegmentBadge'
 import { ChatMessageBubble } from './ChatMessageBubble'
@@ -617,11 +615,9 @@ export function ConversationsInboxPage() {
   const [searchInput, setSearchInput] = useState(searchParams.get('q') ?? '')
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [selectedContactIds, setSelectedContactIds] = useState<Set<number>>(new Set())
-  const [bulkSegment, setBulkSegment] = useState('')
-  const [bulkAttrKey, setBulkAttrKey] = useState('')
-  const [bulkAttrValue, setBulkAttrValue] = useState('')
   const [bulkAttrDefs, setBulkAttrDefs] = useState<AttributeFieldDefinition[]>([])
   const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkActionsOpen, setBulkActionsOpen] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
   const [actionsContext, setActionsContext] = useState<ChatActionsContext | null>(null)
@@ -702,17 +698,11 @@ export function ConversationsInboxPage() {
     setList(null)
     setDetail(null)
     setSelectedContactIds(new Set())
-    setBulkSegment('')
-    setBulkAttrKey('')
-    setBulkAttrValue('')
     void loadList()
   }, [loadList, user?.area])
 
   useEffect(() => {
     setSelectedContactIds(new Set())
-    setBulkSegment('')
-    setBulkAttrKey('')
-    setBulkAttrValue('')
   }, [filterQuerySuffix])
 
   useEffect(() => {
@@ -1344,16 +1334,17 @@ export function ConversationsInboxPage() {
 
   const segments = list?.segments ?? []
   const assignableSegments = list?.assignable_segments ?? []
-  const assignableByGroup = useMemo(() => {
-    const groups = new Map<string, SegmentOption[]>()
-    for (const seg of assignableSegments) {
-      const key = (seg.assignment_group ?? '').trim() || 'otros'
-      const rows = groups.get(key) ?? []
-      rows.push(seg)
-      groups.set(key, rows)
-    }
-    return [...groups.entries()]
-  }, [assignableSegments])
+  const canBulkSelect =
+    assignableSegments.length > 0 || bulkAttrDefs.length > 0
+  const bulkSegmentOptions = useMemo(
+    () =>
+      assignableSegments.map((seg) => ({
+        slug: seg.slug,
+        label: seg.label,
+        group: (seg.assignment_group ?? '').trim() || undefined,
+      })),
+    [assignableSegments],
+  )
 
   function contactIdForBulk(item: InboxListItem): number | null {
     if (item.contact_id && item.contact_id > 0) return item.contact_id
@@ -1381,14 +1372,13 @@ export function ConversationsInboxPage() {
     setSelectedContactIds(new Set())
   }
 
-  async function handleBulkAssignableSegment(e: FormEvent) {
-    e.preventDefault()
-    if (!bulkSegment || selectedContactIds.size === 0) return
+  async function applyBulkSegment(segmentSlug: string): Promise<boolean> {
+    if (!segmentSlug || selectedContactIds.size === 0) return false
     setBulkBusy(true)
     const res = await apiClient.post<{ updated: number }>(
       '/api/contacts/bulk-add-segment',
       {
-        segment_slug: bulkSegment,
+        segment_slug: segmentSlug,
         contact_ids: [...selectedContactIds],
         assignable_only: true,
       },
@@ -1396,39 +1386,41 @@ export function ConversationsInboxPage() {
     setBulkBusy(false)
     if (!res.ok) {
       notify.error(res.error)
-      return
+      return false
     }
     notify.success(`Segmento aplicado a ${res.data.updated} contacto(s)`)
-    clearContactSelection()
-    setBulkSegment('')
     void loadList({ silent: true })
+    return true
   }
 
-  async function handleBulkAttribute(e: FormEvent) {
-    e.preventDefault()
-    if (!bulkAttrKey || selectedContactIds.size === 0) return
+  async function applyBulkAttribute(
+    attrKey: string,
+    attrValue: string,
+  ): Promise<boolean> {
+    if (!attrKey || selectedContactIds.size === 0) return false
     setBulkBusy(true)
     const res = await apiClient.post<{ updated: number }>(
       '/api/contacts/bulk-set-attribute',
       {
-        attr_key: bulkAttrKey,
-        attr_value: bulkAttrValue,
+        attr_key: attrKey,
+        attr_value: attrValue,
         contact_ids: [...selectedContactIds],
       },
     )
     setBulkBusy(false)
     if (!res.ok) {
       notify.error(res.error)
-      return
+      return false
     }
     notify.success(`Atributo aplicado a ${res.data.updated} contacto(s)`)
-    clearContactSelection()
-    setBulkAttrKey('')
-    setBulkAttrValue('')
     void loadList({ silent: true })
+    return true
   }
 
-  const bulkAttrDef = bulkAttrDefs.find((d) => d.slug === bulkAttrKey) ?? null
+  function onBulkActionsOpenChange(open: boolean) {
+    setBulkActionsOpen(open)
+    if (!open) clearContactSelection()
+  }
 
   const displayName = (item: InboxListItem) => {
     const crmName = String(item.contact_name ?? '').trim()
@@ -1590,111 +1582,6 @@ export function ConversationsInboxPage() {
           {listPages > 1 ? ` · Pág. ${listPage}/${listPages}` : null}
         </p>
       ) : null}
-      {assignableSegments.length > 0 || bulkAttrDefs.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-1 px-3 pb-2 text-xs">
-          <button
-            type="button"
-            className="small-btn"
-            onClick={selectAllVisibleContacts}
-          >
-            Todos
-          </button>
-          <button
-            type="button"
-            className="small-btn"
-            onClick={clearContactSelection}
-          >
-            Ninguno
-          </button>
-          {selectedContactIds.size > 0 ? (
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              {assignableByGroup.length > 0 ? (
-                <form
-                  onSubmit={(e) => void handleBulkAssignableSegment(e)}
-                  className="flex min-w-0 flex-wrap items-end gap-1 text-xs"
-                >
-                  <select
-                    value={bulkSegment}
-                    onChange={(e) => setBulkSegment(e.target.value)}
-                    required
-                    className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5 text-xs"
-                  >
-                    <option value="">Segmento</option>
-                    {assignableByGroup.map(([group, segs]) => (
-                      <optgroup key={group} label={group}>
-                        {segs.map((seg) => (
-                          <option key={seg.slug} value={seg.slug}>
-                            {seg.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                  <button
-                    type="submit"
-                    disabled={bulkBusy || !bulkSegment}
-                    className="small-btn primary"
-                  >
-                    {bulkBusy ? '…' : `Aplicar (${selectedContactIds.size})`}
-                  </button>
-                </form>
-              ) : null}
-              {bulkAttrDefs.length > 0 ? (
-                <form
-                  onSubmit={(e) => void handleBulkAttribute(e)}
-                  className="flex min-w-0 flex-wrap items-end gap-1 text-xs"
-                >
-                  <select
-                    value={bulkAttrKey}
-                    onChange={(e) => {
-                      setBulkAttrKey(e.target.value)
-                      setBulkAttrValue('')
-                    }}
-                    required
-                    className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5 text-xs"
-                  >
-                    <option value="">Atributo</option>
-                    {bulkAttrDefs.map((def) => (
-                      <option key={def.slug} value={def.slug}>
-                        {def.label}
-                      </option>
-                    ))}
-                  </select>
-                  {bulkAttrDef?.field_type === 'select' ? (
-                    <select
-                      value={bulkAttrValue}
-                      onChange={(e) => setBulkAttrValue(e.target.value)}
-                      className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5 text-xs"
-                    >
-                      <option value="">Valor</option>
-                      {(bulkAttrDef.options ?? []).map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type={inputTypeForField(bulkAttrDef?.field_type ?? 'text')}
-                      value={bulkAttrValue}
-                      onChange={(e) => setBulkAttrValue(e.target.value)}
-                      placeholder="Valor"
-                      className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5 text-xs"
-                    />
-                  )}
-                  <button
-                    type="submit"
-                    disabled={bulkBusy || !bulkAttrKey}
-                    className="small-btn primary"
-                  >
-                    {bulkBusy ? '…' : `Aplicar (${selectedContactIds.size})`}
-                  </button>
-                </form>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
     </>
   )
 
@@ -1720,6 +1607,33 @@ export function ConversationsInboxPage() {
           ) : null
         }
       >
+        {canBulkSelect && list && list.items.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1 border-b border-line px-3 py-1.5 text-xs">
+            <button
+              type="button"
+              className="small-btn"
+              onClick={selectAllVisibleContacts}
+            >
+              Todos
+            </button>
+            <button
+              type="button"
+              className="small-btn"
+              onClick={clearContactSelection}
+            >
+              Ninguno
+            </button>
+            <button
+              type="button"
+              className="small-btn primary"
+              disabled={selectedContactIds.size === 0}
+              onClick={() => setBulkActionsOpen(true)}
+            >
+              Acciones
+              {selectedContactIds.size > 0 ? ` (${selectedContactIds.size})` : ''}
+            </button>
+          </div>
+        ) : null}
         <ul className="inbox-chat-list">
           {!list ? (
             <li className="inbox-empty-list">Cargando…</li>
@@ -1759,7 +1673,7 @@ export function ConversationsInboxPage() {
                     <li
                       className={`inbox-chat-item ${item.inbox_unread ? 'inbox-chat-item--unread' : ''} ${active ? 'is-active' : ''}`}
                     >
-                      {assignableSegments.length > 0 || bulkAttrDefs.length > 0 ? (
+                      {canBulkSelect ? (
                         <label
                           className="inbox-chat-item-check"
                           onClick={(event) => event.stopPropagation()}
@@ -2293,6 +2207,16 @@ export function ConversationsInboxPage() {
           onSave={(assignedUserId) => void onAssign(assignedUserId)}
         />
       ) : null}
+      <BulkContactActionsDialog
+        open={bulkActionsOpen}
+        onOpenChange={onBulkActionsOpenChange}
+        selectedCount={selectedContactIds.size}
+        segments={bulkSegmentOptions}
+        attributeDefinitions={bulkAttrDefs}
+        busy={bulkBusy}
+        onApplySegment={applyBulkSegment}
+        onApplyAttribute={applyBulkAttribute}
+      />
     </WaPageContents>
   )
 }

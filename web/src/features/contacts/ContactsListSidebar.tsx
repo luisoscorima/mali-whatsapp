@@ -1,13 +1,11 @@
-import { type FormEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { formatContactName } from './contactName'
-import {
-  inputTypeForField,
-  type AttributeFieldDefinition,
-} from './contactFormUtils'
+import { type AttributeFieldDefinition } from './contactFormUtils'
+import { BulkContactActionsDialog } from './BulkContactActionsDialog'
 import { SegmentBadge } from '../segments/SegmentBadge'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
@@ -106,10 +104,8 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
   const [result, setResult] = useState<ContactsListResult | null>(null)
   const [searchInput, setSearchInput] = useState(searchParams.get('q') ?? '')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-  const [bulkSegment, setBulkSegment] = useState('')
-  const [bulkAttrKey, setBulkAttrKey] = useState('')
-  const [bulkAttrValue, setBulkAttrValue] = useState('')
   const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkActionsOpen, setBulkActionsOpen] = useState(false)
   const [exportBusy, setExportBusy] = useState(false)
   const [chatOpeningId, setChatOpeningId] = useState<number | null>(null)
   const [listScrollAtEnd, setListScrollAtEnd] = useState(false)
@@ -308,52 +304,58 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
     return [...bySlug.values()].sort((a, b) => a.label.localeCompare(b.label))
   }, [options])
 
-  const bulkAttrDef = bulkAttrDefs.find((d) => d.slug === bulkAttrKey) ?? null
+  const segments = options?.segments ?? []
+  const canBulkSelect = segments.length > 0 || bulkAttrDefs.length > 0
 
-  async function handleBulkSegment(e: FormEvent) {
-    e.preventDefault()
-    if (!bulkSegment || selectedIds.size === 0) return
+  async function applyBulkSegment(segmentSlug: string): Promise<boolean> {
+    if (!segmentSlug || selectedIds.size === 0) return false
     setBulkBusy(true)
     const res = await apiClient.post<{ updated: number }>(
       '/api/contacts/bulk-add-segment',
       {
-        segment_slug: bulkSegment,
+        segment_slug: segmentSlug,
         contact_ids: [...selectedIds],
       },
     )
     setBulkBusy(false)
     if (!res.ok) {
       notify.error(res.error)
-      return
+      return false
     }
-    clearContactSelection()
+    notify.success(`Segmento aplicado a ${res.data.updated} contacto(s)`)
     const listRes = await apiClient.get<ContactsListResult>(`/api/contacts?${apiQuery}`)
     if (listRes.ok) setResult(listRes.data)
+    return true
   }
 
-  async function handleBulkAttribute(e: FormEvent) {
-    e.preventDefault()
-    if (!bulkAttrKey || selectedIds.size === 0) return
+  async function applyBulkAttribute(
+    attrKey: string,
+    attrValue: string,
+  ): Promise<boolean> {
+    if (!attrKey || selectedIds.size === 0) return false
     setBulkBusy(true)
     const res = await apiClient.post<{ updated: number }>(
       '/api/contacts/bulk-set-attribute',
       {
-        attr_key: bulkAttrKey,
-        attr_value: bulkAttrValue,
+        attr_key: attrKey,
+        attr_value: attrValue,
         contact_ids: [...selectedIds],
       },
     )
     setBulkBusy(false)
     if (!res.ok) {
       notify.error(res.error)
-      return
+      return false
     }
     notify.success(`Atributo aplicado a ${res.data.updated} contacto(s)`)
-    clearContactSelection()
-    setBulkAttrKey('')
-    setBulkAttrValue('')
     const listRes = await apiClient.get<ContactsListResult>(`/api/contacts?${apiQuery}`)
     if (listRes.ok) setResult(listRes.data)
+    return true
+  }
+
+  function onBulkActionsOpenChange(open: boolean) {
+    setBulkActionsOpen(open)
+    if (!open) clearContactSelection()
   }
 
   async function handleExport() {
@@ -378,7 +380,6 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
     navigate(`/conversations/${res.data.id}`)
   }
 
-  const segments = options?.segments ?? []
   const listQuery = location.search
   const path = location.pathname
   const hasFilters =
@@ -388,6 +389,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
     showReplaced
 
   return (
+    <>
     <WaSidebar
       title="Contactos"
       className="inbox-sidebar--contacts"
@@ -608,90 +610,6 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
               {result.pages > 1 ? ` · pág. ${result.page}/${result.pages}` : ''}
             </p>
           ) : null}
-
-          {result && result.items.length > 0 && selectedIds.size > 0 ? (
-            <div className="flex flex-col gap-1">
-              {segments.length > 0 ? (
-                <form
-                  onSubmit={(e) => void handleBulkSegment(e)}
-                  className="flex min-w-0 flex-wrap items-end gap-1 text-xs"
-                >
-                  <select
-                    value={bulkSegment}
-                    onChange={(e) => setBulkSegment(e.target.value)}
-                    required
-                    className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5 text-xs"
-                  >
-                    <option value="">Segmento</option>
-                    {segments.map((seg) => (
-                      <option key={seg.slug} value={seg.slug}>
-                        {seg.label}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="submit"
-                    disabled={bulkBusy || !bulkSegment}
-                    className="small-btn primary"
-                  >
-                    {bulkBusy ? '…' : `Aplicar (${selectedIds.size})`}
-                  </button>
-                </form>
-              ) : null}
-              {bulkAttrDefs.length > 0 ? (
-                <form
-                  onSubmit={(e) => void handleBulkAttribute(e)}
-                  className="flex min-w-0 flex-wrap items-end gap-1 text-xs"
-                >
-                  <select
-                    value={bulkAttrKey}
-                    onChange={(e) => {
-                      setBulkAttrKey(e.target.value)
-                      setBulkAttrValue('')
-                    }}
-                    required
-                    className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5 text-xs"
-                  >
-                    <option value="">Atributo</option>
-                    {bulkAttrDefs.map((def) => (
-                      <option key={def.slug} value={def.slug}>
-                        {def.label}
-                      </option>
-                    ))}
-                  </select>
-                  {bulkAttrDef?.field_type === 'select' ? (
-                    <select
-                      value={bulkAttrValue}
-                      onChange={(e) => setBulkAttrValue(e.target.value)}
-                      className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5 text-xs"
-                    >
-                      <option value="">Valor</option>
-                      {(bulkAttrDef.options ?? []).map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type={inputTypeForField(bulkAttrDef?.field_type ?? 'text')}
-                      value={bulkAttrValue}
-                      onChange={(e) => setBulkAttrValue(e.target.value)}
-                      placeholder="Valor"
-                      className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5 text-xs"
-                    />
-                  )}
-                  <button
-                    type="submit"
-                    disabled={bulkBusy || !bulkAttrKey}
-                    className="small-btn primary"
-                  >
-                    {bulkBusy ? '…' : `Aplicar (${selectedIds.size})`}
-                  </button>
-                </form>
-              ) : null}
-            </div>
-          ) : null}
         </div>
       }
     >
@@ -705,13 +623,21 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
         </p>
       ) : (
         <>
-          {segments.length > 0 || bulkAttrDefs.length > 0 ? (
-            <div className="flex flex-wrap gap-1 border-b border-line px-3 py-1.5 text-xs">
+          {canBulkSelect ? (
+            <div className="flex flex-wrap items-center gap-1 border-b border-line px-3 py-1.5 text-xs">
               <button type="button" className="small-btn" onClick={selectAllContacts}>
                 Todos
               </button>
               <button type="button" className="small-btn" onClick={clearContactSelection}>
                 Ninguno
+              </button>
+              <button
+                type="button"
+                className="small-btn primary"
+                disabled={selectedIds.size === 0}
+                onClick={() => setBulkActionsOpen(true)}
+              >
+                Acciones{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
               </button>
             </div>
           ) : null}
@@ -730,7 +656,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
                   className={`inbox-chat-item ${active ? 'is-active' : ''}`}
                 >
                   <div className="flex min-h-full w-full items-stretch">
-                    {segments.length > 0 || bulkAttrDefs.length > 0 ? (
+                    {canBulkSelect ? (
                       <label
                         className="flex items-center pl-2"
                         onClick={(e) => e.stopPropagation()}
@@ -893,5 +819,16 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
         </>
       )}
     </WaSidebar>
+    <BulkContactActionsDialog
+      open={bulkActionsOpen}
+      onOpenChange={onBulkActionsOpenChange}
+      selectedCount={selectedIds.size}
+      segments={segments.map((seg) => ({ slug: seg.slug, label: seg.label }))}
+      attributeDefinitions={bulkAttrDefs}
+      busy={bulkBusy}
+      onApplySegment={applyBulkSegment}
+      onApplyAttribute={applyBulkAttribute}
+    />
+    </>
   )
 }
