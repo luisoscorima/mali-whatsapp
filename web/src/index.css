@@ -141,15 +141,14 @@ body:has(.login-shell) {
   margin: 0;
   width: 100%;
   max-width: 100%;
+  /* En iOS Safari -webkit-fill-available resuelve al viewport grande: el rail
+     inferior quedaba bajo la barra del navegador y sin scroll para alcanzarlo. */
   min-height: 100vh;
   min-height: 100dvh;
-  min-height: -webkit-fill-available;
   height: 100vh;
   height: 100dvh;
-  height: -webkit-fill-available;
   max-height: 100vh;
   max-height: 100dvh;
-  max-height: -webkit-fill-available;
   overflow: hidden;
   background: var(--wa-shell-bg);
 }

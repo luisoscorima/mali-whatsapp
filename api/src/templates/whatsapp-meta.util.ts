@@ -36,8 +36,39 @@ function normalizeSecretValue(value: unknown): string {
 }
 
 type GraphErrorBody = {
-  error?: { message?: string };
+  error?: {
+    message?: string;
+    error_user_title?: string;
+    error_user_msg?: string;
+    error_data?: { details?: string; messaging_product?: string };
+  };
 };
+
+function formatGraphError(
+  body: GraphErrorBody | null | undefined,
+  fallback: string,
+): string {
+  const err = body?.error;
+  if (!err) return fallback;
+  const details = String(err.error_data?.details || '').trim();
+  const userMsg = String(err.error_user_msg || '').trim();
+  const userTitle = String(err.error_user_title || '').trim();
+  const message = String(err.message || '').trim();
+  // Prefer Meta's actionable detail over the generic "(#100) Invalid parameter".
+  const primary = details || userMsg || message || fallback;
+  const extras = [userTitle, userMsg, message]
+    .map((part) => part.trim())
+    .filter(
+      (part) =>
+        part &&
+        part.toLowerCase() !== primary.toLowerCase() &&
+        // Avoid repeating the same generic Invalid parameter next to real details.
+        !(details && /^(\(#\d+\)\s*)?invalid parameter\.?$/i.test(part)),
+    );
+  if (!extras.length) return primary;
+  const unique = [...new Set(extras)];
+  return `${primary} (${unique.join(' · ')})`;
+}
 
 async function graphGet<T>(
   path: string,
@@ -55,10 +86,12 @@ async function graphGet<T>(
   });
   const body = (await response.json()) as T & GraphErrorBody;
   if (!response.ok) {
-    const message =
-      body?.error?.message ||
-      `Meta Graph API error ${response.status} en ${path}`;
-    const err = new Error(message);
+    const err = new Error(
+      formatGraphError(
+        body,
+        `Meta Graph API error ${response.status} en ${path}`,
+      ),
+    );
     (err as Error & { status?: number }).status = response.status;
     throw err;
   }
@@ -213,10 +246,12 @@ async function graphPost<T>(
   });
   const parsed = (await response.json()) as T & GraphErrorBody;
   if (!response.ok) {
-    const message =
-      parsed?.error?.message ||
-      `Meta Graph API error ${response.status} en ${path}`;
-    throw new Error(message);
+    throw new Error(
+      formatGraphError(
+        parsed,
+        `Meta Graph API error ${response.status} en ${path}`,
+      ),
+    );
   }
   return parsed;
 }
@@ -263,8 +298,10 @@ export async function uploadTemplateHeaderHandle(input: {
   const initBody = (await initRes.json()) as { id?: string } & GraphErrorBody;
   if (!initRes.ok) {
     throw new Error(
-      initBody?.error?.message ||
+      formatGraphError(
+        initBody,
         'Error iniciando upload de cabecera en Meta.',
+      ),
     );
   }
   const sessionId = String(initBody?.id || '').trim();
@@ -284,7 +321,7 @@ export async function uploadTemplateHeaderHandle(input: {
   const uploadBody = (await uploadRes.json()) as { h?: string } & GraphErrorBody;
   if (!uploadRes.ok) {
     throw new Error(
-      uploadBody?.error?.message || 'Error subiendo cabecera media.',
+      formatGraphError(uploadBody, 'Error subiendo cabecera media.'),
     );
   }
   const handle = String(uploadBody?.h || '').trim();

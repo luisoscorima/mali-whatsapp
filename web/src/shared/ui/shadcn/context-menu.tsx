@@ -3,9 +3,18 @@ import * as ContextMenuPrimitive from '@radix-ui/react-context-menu'
 import { cn } from '@/lib/utils'
 
 function ContextMenu({
+  modal,
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Root>) {
-  return <ContextMenuPrimitive.Root {...props} />
+  // modal deja pointer-events:none en <body> y en iOS Safari no siempre se limpia
+  // al cerrar (el long-press lo abre sin querer y la pantalla queda muerta).
+  const isIOS =
+    typeof navigator !== 'undefined' &&
+    /iPad|iPhone|iPod/.test(navigator.userAgent)
+
+  return (
+    <ContextMenuPrimitive.Root modal={modal ?? !isIOS} {...props} />
+  )
 }
 
 function ContextMenuTrigger({
