@@ -167,7 +167,7 @@ export function FlowDetailPage() {
   const flowId = Number(id)
 
   return (
-    <>
+    <div className="flex flex-col gap-4">
       {confirmDialog}
       <FlowCanvasEditor
         key={`${id}-${canvasKey}`}
@@ -189,7 +189,7 @@ export function FlowDetailPage() {
         onDelete={onDelete}
         deleting={deleting}
       />
-      <div className="space-y-3 p-3 pt-0 md:px-4 md:pb-4">
+      <div className="relative z-10 space-y-3 border-t border-line bg-[var(--wa-chat-bg,var(--surface))] px-3 pb-4 pt-4 md:px-4">
         <h2 className="text-sm font-medium text-muted">Historial del flujo</h2>
         <FlowAnalyticsPanel
           analytics={analytics}
@@ -205,6 +205,6 @@ export function FlowDetailPage() {
         flowId={flowId}
         query={drilldownQuery}
       />
-    </>
+    </div>
   )
 }

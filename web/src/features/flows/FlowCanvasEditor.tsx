@@ -619,7 +619,7 @@ function FlowCanvasEditorInner({
   }
 
   return (
-    <form className="flex h-full min-h-[70vh] flex-col gap-3 p-3 md:p-4" onSubmit={handleFormSubmit}>
+    <form className="flex flex-col gap-3 p-3 md:p-4" onSubmit={handleFormSubmit}>
       <div className="space-y-3">
         <div className="flex flex-wrap items-end gap-3">
           <label className="block text-sm">
@@ -711,8 +711,8 @@ function FlowCanvasEditorInner({
         último mensaje del asistente.
       </p>
 
-      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[1fr_280px]">
-        <div className="flow-canvas min-h-[420px] overflow-hidden rounded-xl border border-line bg-surface">
+      <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
+        <div className="flow-canvas h-[min(52vh,560px)] min-h-[380px] overflow-hidden rounded-xl border border-line bg-surface">
           <ReactFlow
             nodes={rfNodes}
             edges={rfEdges}
