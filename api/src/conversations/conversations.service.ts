@@ -437,7 +437,7 @@ export class ConversationsService {
       ${searchSql}
       ${chatSql}
       ${windowSql}
-      ORDER BY c.last_message_at DESC
+      ORDER BY c.inbox_unread DESC, c.last_message_at DESC
       LIMIT ${limit} OFFSET ${offset}
     `);
 
