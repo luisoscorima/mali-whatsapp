@@ -158,7 +158,12 @@ export class AdminUsersService {
       throw new BadRequestException('Area invalida');
     }
 
-    const hash = await bcrypt.hash(dto.password, 10);
+    const hash = await bcrypt.hash(
+      dto.password?.trim()
+        ? dto.password
+        : `google-provisioned-${email}-${Date.now()}`,
+      10,
+    );
     try {
       const created = await this.prisma.users.create({
         data: {
@@ -167,7 +172,7 @@ export class AdminUsersService {
           area,
           is_master: Boolean(dto.is_master),
           is_provisioned: true,
-          must_change_password: dto.must_change_password !== false,
+          must_change_password: false,
           can_edit_ai_prompt: Boolean(dto.can_edit_ai_prompt),
           can_view_audit_logs: Boolean(dto.can_view_audit_logs),
           can_view_integration: Boolean(dto.can_view_integration),
@@ -198,7 +203,6 @@ export class AdminUsersService {
           email,
           area,
           is_master: Boolean(dto.is_master),
-          must_change_password: dto.must_change_password !== false,
         },
       });
       return this.getById(created.id);
@@ -232,50 +236,29 @@ export class AdminUsersService {
       );
     }
 
-    if (dto.password) {
-      await this.prisma.users.update({
-        where: { id },
-        data: {
-          area,
-          is_master: Boolean(dto.is_master),
-          is_provisioned: true,
-          must_change_password: false,
-          password_hash: await bcrypt.hash(dto.password, 10),
-          can_edit_ai_prompt: Boolean(dto.can_edit_ai_prompt),
-          can_view_audit_logs: Boolean(dto.can_view_audit_logs),
-          can_view_integration: Boolean(dto.can_view_integration),
-          can_edit_business_hours: Boolean(dto.can_edit_business_hours),
-          can_view_reports: Boolean(dto.can_view_reports),
-          can_assign_conversations: Boolean(dto.can_assign_conversations),
-          can_manage_attributes: Boolean(dto.can_manage_attributes),
-          can_manage_segments: Boolean(dto.can_manage_segments),
-          can_view_conversation_stats: Boolean(dto.can_view_conversation_stats),
-          can_view_campaign_stats: Boolean(dto.can_view_campaign_stats),
-          can_manage_anuncios: Boolean(dto.can_manage_anuncios),
-        },
-      });
-    } else {
-      await this.prisma.users.update({
-        where: { id },
-        data: {
-          area,
-          is_master: Boolean(dto.is_master),
-          is_provisioned: true,
-          must_change_password: Boolean(dto.must_change_password),
-          can_edit_ai_prompt: Boolean(dto.can_edit_ai_prompt),
-          can_view_audit_logs: Boolean(dto.can_view_audit_logs),
-          can_view_integration: Boolean(dto.can_view_integration),
-          can_edit_business_hours: Boolean(dto.can_edit_business_hours),
-          can_view_reports: Boolean(dto.can_view_reports),
-          can_assign_conversations: Boolean(dto.can_assign_conversations),
-          can_manage_attributes: Boolean(dto.can_manage_attributes),
-          can_manage_segments: Boolean(dto.can_manage_segments),
-          can_view_conversation_stats: Boolean(dto.can_view_conversation_stats),
-          can_view_campaign_stats: Boolean(dto.can_view_campaign_stats),
-          can_manage_anuncios: Boolean(dto.can_manage_anuncios),
-        },
-      });
-    }
+    await this.prisma.users.update({
+      where: { id },
+      data: {
+        area,
+        is_master: Boolean(dto.is_master),
+        is_provisioned: true,
+        must_change_password: false,
+        ...(dto.password
+          ? { password_hash: await bcrypt.hash(dto.password, 10) }
+          : {}),
+        can_edit_ai_prompt: Boolean(dto.can_edit_ai_prompt),
+        can_view_audit_logs: Boolean(dto.can_view_audit_logs),
+        can_view_integration: Boolean(dto.can_view_integration),
+        can_edit_business_hours: Boolean(dto.can_edit_business_hours),
+        can_view_reports: Boolean(dto.can_view_reports),
+        can_assign_conversations: Boolean(dto.can_assign_conversations),
+        can_manage_attributes: Boolean(dto.can_manage_attributes),
+        can_manage_segments: Boolean(dto.can_manage_segments),
+        can_view_conversation_stats: Boolean(dto.can_view_conversation_stats),
+        can_view_campaign_stats: Boolean(dto.can_view_campaign_stats),
+        can_manage_anuncios: Boolean(dto.can_manage_anuncios),
+      },
+    });
 
     await this.userAreas.replaceExtraAreasForUser(
       id,
@@ -292,10 +275,6 @@ export class AdminUsersService {
         email: existing.email,
         area,
         is_master: Boolean(dto.is_master),
-        password_changed: Boolean(dto.password),
-        must_change_password: dto.password
-          ? false
-          : Boolean(dto.must_change_password),
       },
     });
 

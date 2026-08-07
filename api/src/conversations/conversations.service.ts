@@ -945,14 +945,7 @@ export class ConversationsService {
       this.loadAiAreaEnabled(area),
     ]);
 
-    await this.prisma.conversations.updateMany({
-      where: { id: conversationId, area },
-      data: {
-        inbox_unread: false,
-        outside_hours_notice_sent_at: null,
-        updated_at: new Date(),
-      },
-    });
+    await this.clearInboxUnreadOnOpen(user, conversationId, area);
 
     let contact: InboxDetail['contact'] = null;
     if (activeConversation.contact_id) {
@@ -1361,6 +1354,37 @@ export class ConversationsService {
       campaign_preview,
       campaign_id,
     };
+  }
+
+  private async clearInboxUnreadOnOpen(
+    user: AuthUser,
+    conversationId: number,
+    area: string,
+  ): Promise<void> {
+    const clearedUnread = await this.prisma.conversations.updateMany({
+      where: { id: conversationId, area, inbox_unread: true },
+      data: {
+        inbox_unread: false,
+        outside_hours_notice_sent_at: null,
+        updated_at: new Date(),
+      },
+    });
+    if (clearedUnread.count > 0) {
+      await this.auditLog.write({
+        event_type: AuditEvent.CONVERSATION_OPEN,
+        message: `Conversación ${conversationId} abierta`,
+        actor: auditActor(user),
+        meta: { conversation_id: conversationId },
+      });
+      return;
+    }
+    await this.prisma.conversations.updateMany({
+      where: { id: conversationId, area },
+      data: {
+        outside_hours_notice_sent_at: null,
+        updated_at: new Date(),
+      },
+    });
   }
 
   private async loadConversationTimelineEvents(
@@ -2171,14 +2195,7 @@ export class ConversationsService {
     const messageDeliveries = await this.loadMessageDeliveries(conversationId);
 
     if (messageRows.length > 0) {
-      await this.prisma.conversations.updateMany({
-        where: { id: conversationId, area },
-        data: {
-          inbox_unread: false,
-          outside_hours_notice_sent_at: null,
-          updated_at: new Date(),
-        },
-      });
+      await this.clearInboxUnreadOnOpen(user, conversationId, area);
     }
 
     const aiAreaEnabled = await this.loadAiAreaEnabled(area);

@@ -22,6 +22,7 @@ export const AuditEvent = {
   CAMPAIGN_RETRY_MANUAL: 'campaign.retry_manual',
   TEMPLATE_SYNC: 'template.sync',
   CONVERSATION_MODE: 'conversation.mode',
+  CONVERSATION_OPEN: 'conversation.open',
   CONVERSATION_MARK_UNREAD: 'conversation.mark_unread',
   CONVERSATION_ARCHIVE: 'conversation.archive',
   CONVERSATION_REPLY: 'conversation.reply',

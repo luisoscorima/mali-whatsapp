@@ -115,7 +115,7 @@ export function WaAccountMenu({ user, onUserUpdate }: WaAccountMenuProps) {
           </Link>
           {user.isMaster ? (
             <Link
-              to="/admin/users"
+              to="/admin"
               className="rounded-md px-2 py-1.5 text-sm hover:bg-accent-soft"
               onClick={() => setOpen(false)}
             >

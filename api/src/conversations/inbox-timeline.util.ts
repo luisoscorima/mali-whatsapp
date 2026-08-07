@@ -7,6 +7,8 @@ const DISPLAY_TIMEZONE = 'America/Lima';
 export const INBOX_TIMELINE_EVENT_TYPES = [
   AuditEvent.CONVERSATION_ASSIGN,
   AuditEvent.CONVERSATION_MODE,
+  AuditEvent.CONVERSATION_OPEN,
+  AuditEvent.CONVERSATION_MARK_UNREAD,
   AuditEvent.CONTACT_LEAD_SCORE,
   AuditEvent.CONTACT_UPDATED,
 ] as const;
@@ -98,6 +100,14 @@ export function formatInboxTimelineEventLabel(
     if (status === 'bot') return `${actor} cambió a modo Bot`;
     if (status === 'human') return `${actor} cambió a modo Asesor`;
     return `${actor} cambió el modo de la conversación`;
+  }
+
+  if (eventType === AuditEvent.CONVERSATION_OPEN) {
+    return `${actor} abrió el chat`;
+  }
+
+  if (eventType === AuditEvent.CONVERSATION_MARK_UNREAD) {
+    return `${actor} marcó como no leído`;
   }
 
   if (eventType === AuditEvent.CONTACT_LEAD_SCORE) {

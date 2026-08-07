@@ -43,8 +43,6 @@ import { SettingsReporteriaPage } from '../features/settings/SettingsReporteriaP
 import { ConversationsInboxPage } from '../features/conversations/ConversationsInboxPage'
 import { RequireMaster, AdminShell } from '../features/admin/AdminShell'
 import { AdminUsersShell } from '../features/admin/AdminUsersShell'
-import { AdminUsersEmptyPane } from '../features/admin/AdminUsersEmptyPane'
-import { AdminUserFormPage } from '../features/admin/AdminUserFormPage'
 import { AdminIndexPage } from '../features/admin/AdminIndexPage'
 import { AdminMetaPage } from '../features/admin/AdminMetaPage'
 import { AdminAuditPage } from '../features/admin/AdminAuditPage'
@@ -121,11 +119,9 @@ export function AppRouter() {
             <Route element={<RequireMaster />}>
               <Route path="admin" element={<AdminShell />}>
                 <Route index element={<AdminIndexPage />} />
-                <Route path="users" element={<AdminUsersShell />}>
-                  <Route index element={<AdminUsersEmptyPane />} />
-                  <Route path="new" element={<AdminUserFormPage />} />
-                  <Route path=":id" element={<AdminUserFormPage />} />
-                </Route>
+                <Route path="users" element={<AdminUsersShell />} />
+                <Route path="users/new" element={<Navigate to="/admin/users" replace />} />
+                <Route path="users/:id" element={<Navigate to="/admin/users" replace />} />
                 <Route path="areas" element={<AdminAreasPage />} />
                 <Route path="meta" element={<AdminMetaPage />} />
                 <Route path="audit-logs" element={<AdminAuditPage />} />
