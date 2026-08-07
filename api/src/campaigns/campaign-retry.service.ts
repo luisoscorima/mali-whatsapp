@@ -27,12 +27,14 @@ import {
 import { persistCampaignChatMessage } from './campaign-chat-message.util';
 import {
   campaignLogStatusColumnSql,
+  ERROR_STATUSES,
   SALIDA_OK_STATUSES,
   sqlCampaignLogIsError,
   sqlInList,
 } from './campaign-log-statuses.util';
 
 const SALIDA_OK_IN = sqlInList(SALIDA_OK_STATUSES);
+const ERROR_STATUS_IN = sqlInList(ERROR_STATUSES);
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -81,12 +83,14 @@ type RetryCandidate = {
   contact_id: number | null;
   phone: string;
   attempt: number | null;
+  whatsapp_message_id: string | null;
 };
 
 export type CampaignRetryResult = {
   retried: number;
   recovered: number;
   stillFailed: number;
+  skippedWithoutResend?: number;
   skipped?: boolean;
   error?: string;
 };
@@ -142,8 +146,10 @@ export class CampaignRetryService {
     campaignId: number,
     maxAttempts: number,
   ): Promise<RetryCandidate[]> {
+    // Si ya hay chat/wamid OK, el loop hace heal sin llamar a Meta
+    // (incluimos esos logs para corregir "error" fantasma).
     return this.prisma.$queryRaw<RetryCandidate[]>(Prisma.sql`
-      SELECT cl.id, cl.contact_id, cl.phone, cl.attempt
+      SELECT cl.id, cl.contact_id, cl.phone, cl.attempt, cl.whatsapp_message_id
       FROM campaign_logs cl
       WHERE cl.campaign_id = ${campaignId}
         AND ${Prisma.raw(sqlCampaignLogIsError('cl.status'))}
@@ -152,6 +158,94 @@ export class CampaignRetryService {
         AND ${Prisma.raw(sqlNoSuccessfulLogForPhone('cl'))}
       ORDER BY cl.id ASC
     `);
+  }
+
+  /** Wamid ya persistido en chat para esta campaña + teléfono. */
+  private async findExistingCampaignChatWaId(
+    campaignId: number,
+    phone: string,
+  ): Promise<string | null> {
+    const rows = await this.prisma.$queryRaw<{ wa_message_id: string }[]>(
+      Prisma.sql`
+        SELECT m.wa_message_id
+        FROM chat_messages m
+        INNER JOIN conversations conv ON conv.id = m.conversation_id
+        WHERE conv.phone = ${phone}
+          AND m.direction = 'outbound'
+          AND m.message_type = 'campaign'
+          AND NULLIF(BTRIM(m.raw_payload->>'campaign_id'), '') ~ '^[0-9]+$'
+          AND (m.raw_payload->>'campaign_id')::int = ${campaignId}
+          AND m.wa_message_id IS NOT NULL
+        ORDER BY m.id DESC
+        LIMIT 1
+      `,
+    );
+    const id = String(rows[0]?.wa_message_id || '').trim();
+    return id || null;
+  }
+
+  /**
+   * Evita que dos workers procesen el mismo log a la vez.
+   * Marca retryable=false hasta resolver (éxito, heal o nuevo error).
+   */
+  private async claimRetryCandidate(
+    row: RetryCandidate,
+    maxAttempts: number,
+  ): Promise<RetryCandidate | null> {
+    const currentAttempt = Number(row.attempt || 1);
+    const claimed = await this.prisma.$queryRaw<RetryCandidate[]>(Prisma.sql`
+      UPDATE campaign_logs
+      SET retryable = FALSE,
+          last_retry_at = NOW()
+      WHERE id = ${row.id}
+        AND ${Prisma.raw(`${campaignLogStatusColumnSql('status')} IN ${ERROR_STATUS_IN}`)}
+        AND retryable = TRUE
+        AND COALESCE(attempt, 1) = ${currentAttempt}
+        AND COALESCE(attempt, 1) < ${maxAttempts}
+      RETURNING id, contact_id, phone, attempt, whatsapp_message_id
+    `);
+    return claimed[0] ?? null;
+  }
+
+  private async recoverWithoutResend(input: {
+    campaignId: number;
+    logId: number;
+    phone: string;
+    contactId: number | null;
+    waMessageId: string;
+    nextAttempt: number;
+    area: string;
+    templateName: string;
+    preview: ReturnType<typeof buildCampaignMessagePreview>;
+  }): Promise<void> {
+    await this.prisma.campaign_logs.update({
+      where: { id: input.logId },
+      data: {
+        status: 'sent',
+        whatsapp_message_id: input.waMessageId,
+        attempt: input.nextAttempt,
+        retryable: false,
+        last_retry_at: new Date(),
+      },
+    });
+
+    try {
+      await persistCampaignChatMessage(this.prisma, {
+        area: input.area,
+        campaignId: input.campaignId,
+        templateName: input.templateName,
+        contactId: input.contactId,
+        phone: input.phone,
+        waMessageId: input.waMessageId,
+        preview: input.preview,
+      });
+    } catch (persistError) {
+      this.logger.warn(
+        `Reintento campaña #${input.campaignId}: heal sin reenvío, chat no persistido (${input.phone}): ${
+          persistError instanceof Error ? persistError.message : persistError
+        }`,
+      );
+    }
   }
 
   async runCampaignRetryJob(
@@ -265,6 +359,8 @@ export class CampaignRetryService {
     const gapMs = readCampaignPhoneMinGapMs();
     let recovered = 0;
     let stillFailed = 0;
+    let skippedWithoutResend = 0;
+    let metaAttempts = 0;
 
     for (const row of candidates) {
       if (retryDelayMs > 0) {
@@ -272,6 +368,64 @@ export class CampaignRetryService {
       }
 
       const phoneNorm = normalizePhone(row.phone);
+      if (!phoneNorm) {
+        stillFailed += 1;
+        continue;
+      }
+
+      const claimed = await this.claimRetryCandidate(row, maxAttempts);
+      if (!claimed) {
+        continue;
+      }
+
+      const nextAttempt = Number(claimed.attempt || 1) + 1;
+      const contact = claimed.contact_id
+        ? contactById.get(claimed.contact_id)
+        : null;
+
+      const resolvedParams = sendCtx.paramMapping
+        ? buildParamsForContact(
+            sendCtx.staticParams,
+            sendCtx.paramMapping,
+            contact || { name: '', phone: claimed.phone },
+            contact ? attrsMap.get(contact.id) : undefined,
+          )
+        : sendCtx.staticParams;
+      const preview = applyCampaignImageFallback(
+        buildCampaignMessagePreview(
+          sendCtx.def,
+          sendCtx.templateSnapshot.components_json,
+          resolvedParams,
+        ),
+        campaign.image_url,
+      );
+      const templateName = String(sendCtx.templateSnapshot.name || '');
+
+      const existingWaId =
+        String(claimed.whatsapp_message_id || '').trim() ||
+        (await this.findExistingCampaignChatWaId(campaignId, phoneNorm));
+
+      // Meta ya aceptó (hay wamid en log o en chat): no volver a enviar.
+      if (existingWaId) {
+        await this.recoverWithoutResend({
+          campaignId,
+          logId: claimed.id,
+          phone: phoneNorm,
+          contactId: claimed.contact_id,
+          waMessageId: existingWaId,
+          nextAttempt,
+          area: sendCtx.area,
+          templateName,
+          preview,
+        });
+        this.logger.log(
+          `Campaña #${campaignId}: skip reenvío Meta (${phoneNorm}); wamid existente ${existingWaId}`,
+        );
+        skippedWithoutResend += 1;
+        recovered += 1;
+        continue;
+      }
+
       if (gapMs > 0) {
         const last = await this.prisma.campaign_logs.findFirst({
           where: { phone: phoneNorm },
@@ -286,20 +440,13 @@ export class CampaignRetryService {
         }
       }
 
-      const nextAttempt = Number(row.attempt || 1) + 1;
-      const contact = row.contact_id ? contactById.get(row.contact_id) : null;
-
       try {
-        const resolvedParams = sendCtx.paramMapping
-          ? buildParamsForContact(
-              sendCtx.staticParams,
-              sendCtx.paramMapping,
-              contact || { name: '', phone: row.phone },
-              contact ? attrsMap.get(contact.id) : undefined,
-            )
-          : sendCtx.staticParams;
-        const components = buildWhatsappGraphComponents(sendCtx.def, resolvedParams);
+        const components = buildWhatsappGraphComponents(
+          sendCtx.def,
+          resolvedParams,
+        );
 
+        metaAttempts += 1;
         const apiResponse = await sendTemplateWithComponents({
           to: phoneNorm,
           templateName: sendCtx.templateSnapshot.name,
@@ -309,23 +456,15 @@ export class CampaignRetryService {
         });
 
         const messageId = apiResponse.messages?.[0]?.id || null;
-        const preview = applyCampaignImageFallback(
-          buildCampaignMessagePreview(
-            sendCtx.def,
-            sendCtx.templateSnapshot.components_json,
-            resolvedParams,
-          ),
-          campaign.image_url,
-        );
 
         await this.prisma.campaign_logs.update({
-          where: { id: row.id },
+          where: { id: claimed.id },
           data: {
             status: 'sent',
             whatsapp_message_id: messageId,
             response: sanitizeApiResponse(apiResponse) as object,
             attempt: nextAttempt,
-            retryable: true,
+            retryable: false,
             last_retry_at: new Date(),
           },
         });
@@ -334,8 +473,8 @@ export class CampaignRetryService {
           await persistCampaignChatMessage(this.prisma, {
             area: sendCtx.area,
             campaignId,
-            templateName: String(sendCtx.templateSnapshot.name || ''),
-            contactId: row.contact_id,
+            templateName,
+            contactId: claimed.contact_id,
             phone: phoneNorm,
             waMessageId: messageId,
             preview,
@@ -359,7 +498,7 @@ export class CampaignRetryService {
         const classification = classifyCampaignSendError(payloadErr);
 
         await this.prisma.campaign_logs.update({
-          where: { id: row.id },
+          where: { id: claimed.id },
           data: {
             status: 'error',
             response: payloadErr as object,
@@ -383,9 +522,10 @@ export class CampaignRetryService {
     }
 
     return {
-      retried: candidates.length,
+      retried: metaAttempts,
       recovered,
       stillFailed,
+      skippedWithoutResend,
     };
   }
 

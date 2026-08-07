@@ -232,8 +232,10 @@ export class CampaignSenderService {
         const batch = recipients.slice(i, i + batchSize);
 
         for (const contact of batch) {
+          const phoneNorm = normalizePhone(contact.phone);
+          let acceptedMessageId: string | null = null;
+          let acceptedApiResponse: unknown = null;
           try {
-            const phoneNorm = normalizePhone(contact.phone);
             if (gapMs > 0) {
               const last = await this.prisma.campaign_logs.findFirst({
                 where: { phone: phoneNorm },
@@ -267,6 +269,8 @@ export class CampaignSenderService {
             });
 
             const messageId = apiResponse.messages?.[0]?.id || null;
+            acceptedMessageId = messageId;
+            acceptedApiResponse = apiResponse;
             const preview = applyCampaignImageFallback(
               buildCampaignMessagePreview(
                 def,
@@ -309,6 +313,35 @@ export class CampaignSenderService {
             }
           } catch (error) {
             const err = error as Error & { response?: { data?: unknown } };
+
+            // Meta ya aceptó: no registrar "error" sin wamid (evita reenvío duplicado).
+            if (acceptedMessageId) {
+              this.logger.warn(
+                `Campaña #${campaignId}: Meta aceptó ${acceptedMessageId} pero falló el post-proceso (${phoneNorm}): ${err.message}`,
+              );
+              try {
+                await this.prisma.campaign_logs.create({
+                  data: {
+                    campaign_id: campaignId,
+                    contact_id: contact.id,
+                    phone: phoneNorm,
+                    whatsapp_message_id: acceptedMessageId,
+                    status: 'sent',
+                    response: sanitizeApiResponse(acceptedApiResponse) as object,
+                    retryable: false,
+                    attempt: 1,
+                  },
+                });
+              } catch (logError) {
+                this.logger.warn(
+                  `Campaña #${campaignId}: no se pudo guardar log sent tras accept Meta (${phoneNorm}): ${
+                    logError instanceof Error ? logError.message : logError
+                  }`,
+                );
+              }
+              continue;
+            }
+
             const payload = sanitizeApiErrorPayload(
               err.response?.data || { message: err.message },
             );
@@ -318,7 +351,7 @@ export class CampaignSenderService {
               data: {
                 campaign_id: campaignId,
                 contact_id: contact.id,
-                phone: normalizePhone(contact.phone),
+                phone: phoneNorm,
                 status: 'error',
                 response: payload as object,
                 retryable,

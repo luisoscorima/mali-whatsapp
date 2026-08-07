@@ -30,10 +30,22 @@ export class CampaignQueueService {
     campaignId: number,
     mode: 'auto' | 'manual' = 'auto',
   ): Promise<void> {
-    await this.queue.add(
-      CampaignJobName.RETRY,
-      { campaignId, mode },
-      JOB_OPTS,
-    );
+    try {
+      await this.queue.add(
+        CampaignJobName.RETRY,
+        { campaignId, mode },
+        {
+          ...JOB_OPTS,
+          // Evita dos workers de retry concurrentes para la misma campaña.
+          jobId: `campaign-retry-${campaignId}-${mode}`,
+        },
+      );
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (/already (exists|waiting|active|delayed)/i.test(msg) || /JobId/i.test(msg)) {
+        return;
+      }
+      throw error;
+    }
   }
 }

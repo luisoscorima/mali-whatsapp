@@ -4,6 +4,7 @@ import {
   SALIDA_OK_STATUSES,
   sqlCampaignLogIsError,
   sqlInList,
+  sqlNoSuccessfulCampaignChatForPhone,
 } from './campaign-log-statuses.util';
 
 const SALIDA_OK_IN = sqlInList(SALIDA_OK_STATUSES);
@@ -17,6 +18,12 @@ function sqlNoSuccessfulLogForPhone(): string {
       AND ok.id <> campaign_logs.id
       AND ${okStatus} IN ${SALIDA_OK_IN}
   )`;
+}
+
+function sqlFailedStillNeedsRetry(): string {
+  return `${sqlCampaignLogIsError('status')}
+    AND ${sqlNoSuccessfulLogForPhone()}
+    AND ${sqlNoSuccessfulCampaignChatForPhone('campaign_logs')}`;
 }
 
 function readCampaignConfig() {
@@ -64,7 +71,7 @@ export async function fetchCampaignRetryStats(
   const rows = await prisma.$queryRaw<RetryStatsRow[]>(Prisma.sql`
     SELECT
       COALESCE(SUM(CASE WHEN ${Prisma.raw(okStatus)} IN ${Prisma.raw(SALIDA_OK_IN)} AND COALESCE(attempt, 1) > 1 THEN 1 ELSE 0 END), 0)::int AS recovered_count,
-      COALESCE(SUM(CASE WHEN ${Prisma.raw(sqlCampaignLogIsError('status'))} AND ${Prisma.raw(sqlNoSuccessfulLogForPhone())} THEN 1 ELSE 0 END), 0)::int AS failed_count
+      COALESCE(SUM(CASE WHEN ${Prisma.raw(sqlFailedStillNeedsRetry())} THEN 1 ELSE 0 END), 0)::int AS failed_count
     FROM campaign_logs
     WHERE campaign_id = ${campaignId}
   `);
