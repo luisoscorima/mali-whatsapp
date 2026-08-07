@@ -121,7 +121,9 @@ export function ContactImportPage() {
         Columnas: <code className="font-mono">name</code>,{' '}
         <code className="font-mono">last_name</code> (o apellido, opcional),{' '}
         <code className="font-mono">phone</code>, <code className="font-mono">segment</code>.
-        Opcional: <code className="font-mono">prefix</code> y columnas extra como atributos
+        Opcional: <code className="font-mono">email</code> (o correo/mail),{' '}
+        <code className="font-mono">dni</code> (o documento),{' '}
+        <code className="font-mono">prefix</code> y columnas extra como atributos
         (slugs definidos en Atributos). Varios segmentos separados por ; o ,.
       </p>
     </div>

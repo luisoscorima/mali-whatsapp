@@ -115,6 +115,8 @@ export type InboxContact = {
   name: string | null;
   last_name: string | null;
   phone: string;
+  email: string | null;
+  dni: string | null;
   lead_score: number | null;
   segment_slugs: string[];
 };

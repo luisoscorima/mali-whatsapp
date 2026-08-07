@@ -719,7 +719,14 @@ export class ConversationsService {
       where: { id: conversationId, area },
       include: {
         contacts: {
-          select: { id: true, name: true, last_name: true, phone: true },
+          select: {
+            id: true,
+            name: true,
+            last_name: true,
+            phone: true,
+            email: true,
+            dni: true,
+          },
         },
       },
     });
@@ -955,6 +962,8 @@ export class ConversationsService {
           name: string | null;
           last_name: string | null;
           phone: string;
+          email: string | null;
+          dni: string | null;
           lead_score: number | null;
           segment_slugs: string[];
         }[]
@@ -963,6 +972,8 @@ export class ConversationsService {
           c.name,
           c.last_name,
           c.phone,
+          c.email,
+          c.dni,
           c.lead_score,
           COALESCE((
             SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
@@ -980,6 +991,8 @@ export class ConversationsService {
           name: string | null;
           last_name: string | null;
           phone: string;
+          email: string | null;
+          dni: string | null;
           lead_score: number | null;
           segment_slugs: string[];
         }[]
@@ -988,6 +1001,8 @@ export class ConversationsService {
           c.name,
           c.last_name,
           c.phone,
+          c.email,
+          c.dni,
           c.lead_score,
           COALESCE((
             SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)

@@ -439,6 +439,8 @@ type InboxDetail = {
     name: string | null
     last_name: string | null
     phone: string
+    email: string | null
+    dni: string | null
     lead_score: number | null
     segment_slugs: string[]
   } | null
@@ -2338,6 +2340,18 @@ export function ConversationsInboxPage() {
                 onSwitchToHuman={() => void onModeChange('human', detail.conversation.id)}
                 onFlowStarted={() => void loadDetail(detail.conversation.id)}
                 contactAttributes={contactAttributes}
+                contactName={
+                  formatContactName(
+                    detail.contact?.name,
+                    detail.contact?.last_name,
+                  ) ||
+                  String(detail.conversation.wa_profile_name ?? '').trim()
+                }
+                contactPhone={
+                  detail.contact?.phone || detail.conversation.phone
+                }
+                contactEmail={detail.contact?.email || ''}
+                contactDni={detail.contact?.dni || ''}
               />
             </WaMainFooter>
           </>

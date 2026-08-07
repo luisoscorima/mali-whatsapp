@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsInt,
   IsObject,
   IsOptional,
@@ -37,6 +38,12 @@ export class UpdateTemplateDto {
 
   @IsObject()
   builder!: Record<string, unknown>;
+}
+
+export class UpdateTemplateFlagsDto {
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
 }
 
 export class ValidateTemplateDto {

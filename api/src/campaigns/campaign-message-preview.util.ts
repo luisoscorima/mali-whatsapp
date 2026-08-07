@@ -49,6 +49,8 @@ export function formatCampaignParamSourceLabel(source: unknown): string {
   if (!s || s === 'static') return '';
   if (s === 'contact.name') return 'Nombre del contacto';
   if (s === 'contact.phone') return 'Telefono del contacto';
+  if (s === 'contact.email') return 'Email del contacto';
+  if (s === 'contact.dni') return 'DNI del contacto';
   if (s.startsWith('attr.')) {
     const key = s.slice('attr.'.length).trim();
     return key ? `Atributo: ${key}` : 'Atributo';

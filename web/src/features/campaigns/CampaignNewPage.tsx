@@ -27,6 +27,7 @@ type TemplateListItem = {
   language: string
   category: string
   status: string
+  active: boolean
 }
 
 type RecipientPreview = {
@@ -163,7 +164,9 @@ export function CampaignNewPage() {
   const approvedTemplates = useMemo(
     () =>
       templates.filter(
-        (t) => String(t.status || '').trim().toUpperCase() === 'APPROVED',
+        (t) =>
+          String(t.status || '').trim().toUpperCase() === 'APPROVED' &&
+          t.active !== false,
       ),
     [templates],
   )

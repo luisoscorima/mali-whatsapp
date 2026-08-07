@@ -15,6 +15,7 @@ import type { ApiResponse, AuthUser } from '../auth/auth.types';
 import {
   CreateTemplateDto,
   UpdateTemplateDto,
+  UpdateTemplateFlagsDto,
   ValidateTemplateDto,
 } from './dto/template.dto';
 import { TemplatesService } from './templates.service';
@@ -81,6 +82,20 @@ export class TemplatesController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<TemplateDetail>> {
     const data = await this.templatesService.getById(user.area, id);
+    return { ok: true, data };
+  }
+
+  @Patch(':id/flags')
+  async updateFlags(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdateTemplateFlagsDto,
+  ): Promise<ApiResponse<TemplateDetail>> {
+    const data = await this.templatesService.updateFlags(
+      user.area,
+      id,
+      body,
+    );
     return { ok: true, data };
   }
 

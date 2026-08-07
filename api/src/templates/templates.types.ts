@@ -10,6 +10,30 @@ export type TemplateListItem = {
   rejection_reason: string | null;
   submitted_at: string | null;
   synced_at: string;
+  active: boolean;
+};
+
+export type TemplateUsageMassCampaign = {
+  id: number;
+  status: string;
+  segment: string;
+  total_recipients: number;
+  created_at: string;
+  scheduled_at: string | null;
+};
+
+export type TemplateUsageLinkedFlow = {
+  id: number;
+  name: string;
+  status: string;
+  trigger_payload: string;
+  button_index: number | null;
+};
+
+export type TemplateUsage = {
+  mass_campaigns: TemplateUsageMassCampaign[];
+  direct_sends_count: number;
+  linked_flows: TemplateUsageLinkedFlow[];
 };
 
 export type TemplateDetail = TemplateListItem & {
@@ -17,6 +41,7 @@ export type TemplateDetail = TemplateListItem & {
   display: TemplateDisplayContent;
   can_edit: boolean;
   builder: TemplateBuilderPayload;
+  usage: TemplateUsage;
 };
 
 export type TemplateSyncResult = {

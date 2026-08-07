@@ -12,6 +12,8 @@ export type RecipientRow = {
   id: number;
   name: string;
   phone: string;
+  email: string | null;
+  dni: string | null;
   last_user_message_at: Date | null;
 };
 
@@ -27,7 +29,7 @@ function buildRecipientQuery(
     parts.push(Prisma.sql`SELECT COUNT(DISTINCT c.id)::int AS n`);
   } else {
     parts.push(
-      Prisma.sql`SELECT DISTINCT c.id, c.name, c.phone, conv.last_user_message_at`,
+      Prisma.sql`SELECT DISTINCT c.id, c.name, c.phone, c.email, c.dni, conv.last_user_message_at`,
     );
   }
 

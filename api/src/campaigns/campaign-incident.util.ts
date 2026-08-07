@@ -188,6 +188,8 @@ export type EnrichedFailedLog = {
   response: unknown;
   created_at: Date | string;
   contact_name?: string;
+  contact_email?: string;
+  contact_dni?: string;
   segment_labels?: string;
   error_summary: string;
   incident_type: string;
@@ -202,6 +204,8 @@ export function enrichFailedLogRow(
     response: unknown;
     created_at: Date | string;
     contact_name?: string;
+    contact_email?: string;
+    contact_dni?: string;
     segment_labels?: string;
   },
 ): EnrichedFailedLog {

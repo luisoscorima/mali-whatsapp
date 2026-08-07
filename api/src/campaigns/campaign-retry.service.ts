@@ -238,7 +238,7 @@ export class CampaignRetryService {
       contactIds.length > 0
         ? await this.prisma.contacts.findMany({
             where: { id: { in: contactIds } },
-            select: { id: true, name: true, phone: true },
+            select: { id: true, name: true, phone: true, email: true, dni: true },
           })
         : [];
     const contactById = new Map(contactRows.map((c) => [c.id, c]));

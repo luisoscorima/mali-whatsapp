@@ -543,6 +543,8 @@ export class ContactsService {
         c.name,
         c.last_name,
         c.phone,
+        c.email,
+        c.dni,
         COALESCE((
           SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
           FROM contact_segments cs

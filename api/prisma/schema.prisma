@@ -485,6 +485,7 @@ model whatsapp_templates {
   submitted_at             DateTime? @db.Timestamptz(6)
   submitted_by             Int?
   placeholder_aliases_json Json?
+  active                   Boolean   @default(true)
 
   @@unique([area, name, language])
   @@index([area], map: "idx_whatsapp_templates_area")

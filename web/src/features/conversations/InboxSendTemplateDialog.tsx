@@ -18,6 +18,7 @@ type TemplateItem = {
   name: string
   language: string
   status: string
+  active: boolean
 }
 
 type InboxSendTemplateDialogProps = {
@@ -59,7 +60,11 @@ export function InboxSendTemplateDialog({
     setButtonParams([])
     void apiClient.get<TemplateItem[]>('/api/templates').then((res) => {
       if (res.ok) {
-        setTemplates(res.data.filter((t) => t.status === 'APPROVED'))
+        setTemplates(
+          res.data.filter(
+            (t) => t.status === 'APPROVED' && t.active !== false,
+          ),
+        )
       }
     })
   }, [open])

@@ -25,8 +25,15 @@ const STATUS_FILTERS = [
   { key: 'DISABLED', label: 'Deshabilitadas' },
 ] as const
 
+const VISIBILITY_FILTERS = [
+  { key: '', label: 'Todas' },
+  { key: 'active', label: 'Activas' },
+  { key: 'inactive', label: 'Inactivas' },
+] as const
+
 type CategoryFilterKey = (typeof CATEGORY_FILTERS)[number]['key']
 type StatusFilterKey = (typeof STATUS_FILTERS)[number]['key']
+type VisibilityFilterKey = (typeof VISIBILITY_FILTERS)[number]['key']
 
 type TemplateListItem = {
   id: number
@@ -37,6 +44,7 @@ type TemplateListItem = {
   rejection_reason: string | null
   submitted_at: string | null
   synced_at: string
+  active: boolean
 }
 
 type TemplatesListSidebarProps = {
@@ -51,6 +59,10 @@ function isStatusFilterKey(value: string): value is StatusFilterKey {
   return STATUS_FILTERS.some((opt) => opt.key === value)
 }
 
+function isVisibilityFilterKey(value: string): value is VisibilityFilterKey {
+  return VISIBILITY_FILTERS.some((opt) => opt.key === value)
+}
+
 export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) {
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -60,10 +72,14 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
 
   const categoryRaw = searchParams.get('category') ?? ''
   const statusRaw = searchParams.get('status') ?? ''
+  const visibilityRaw = searchParams.get('visibility') ?? ''
   const categoryFilter: CategoryFilterKey = isCategoryFilterKey(categoryRaw)
     ? categoryRaw
     : ''
   const statusFilter: StatusFilterKey = isStatusFilterKey(statusRaw) ? statusRaw : ''
+  const visibilityFilter: VisibilityFilterKey = isVisibilityFilterKey(visibilityRaw)
+    ? visibilityRaw
+    : ''
 
   const listQuery = useMemo(() => {
     const qs = new URLSearchParams(location.search)
@@ -95,6 +111,8 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
       if (statusFilter && t.status.toUpperCase() !== statusFilter) {
         return false
       }
+      if (visibilityFilter === 'active' && !t.active) return false
+      if (visibilityFilter === 'inactive' && t.active) return false
       if (!q) return true
       return (
         t.name.toLowerCase().includes(q) ||
@@ -103,7 +121,7 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
         t.status.toLowerCase().includes(q)
       )
     })
-  }, [templates, searchQuery, categoryFilter, statusFilter])
+  }, [templates, searchQuery, categoryFilter, statusFilter, visibilityFilter])
 
   function setCategoryFilter(key: CategoryFilterKey) {
     setSearchParams((sp) => {
@@ -119,6 +137,15 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
       const next = new URLSearchParams(sp)
       if (key) next.set('status', key)
       else next.delete('status')
+      return next
+    })
+  }
+
+  function setVisibilityFilter(key: VisibilityFilterKey) {
+    setSearchParams((sp) => {
+      const next = new URLSearchParams(sp)
+      if (key) next.set('visibility', key)
+      else next.delete('visibility')
       return next
     })
   }
@@ -185,7 +212,7 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
           </div>
           <div
             className="inbox-chat-filter-pills inbox-chat-filter-pills--row contact-filter-pills segment-filter-chips"
-            aria-label="Filtrar por estado"
+            aria-label="Filtrar por estado Meta"
           >
             {STATUS_FILTERS.map((opt) => (
               <button
@@ -195,6 +222,23 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
                   statusFilter === opt.key ? 'is-active' : ''
                 }`}
                 onClick={() => setStatusFilter(opt.key)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <div
+            className="inbox-chat-filter-pills inbox-chat-filter-pills--row contact-filter-pills segment-filter-chips"
+            aria-label="Filtrar por visibilidad"
+          >
+            {VISIBILITY_FILTERS.map((opt) => (
+              <button
+                key={opt.key || 'all-visibility'}
+                type="button"
+                className={`inbox-chat-pill contact-filter-pill text-[11px] ${
+                  visibilityFilter === opt.key ? 'is-active' : ''
+                }`}
+                onClick={() => setVisibilityFilter(opt.key)}
               >
                 {opt.label}
               </button>
@@ -214,19 +258,33 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
       ) : (
         <ul className="inbox-chat-list">
           {filteredTemplates.map((t) => {
-            const active = selectedId === t.id
+            const isSelected = selectedId === t.id
             return (
-              <li key={t.id} className={`inbox-chat-item ${active ? 'is-active' : ''}`}>
+              <li
+                key={t.id}
+                className={`inbox-chat-item ${isSelected ? 'is-active' : ''}`}
+              >
                 <Link to={`/templates/${t.id}${listQuery}`} className="inbox-chat-link">
                   <span className="inbox-chat-link-main">
                     <span className="inbox-chat-row-top">
                       <span className="inbox-chat-title-line">
                         <span className="inbox-chat-title font-mono">{t.name}</span>
                       </span>
-                      <span
-                        className={`shrink-0 rounded px-1.5 text-[10px] ${templateStatusClass(t.status)}`}
-                      >
-                        {t.status}
+                      <span className="flex shrink-0 items-center gap-1">
+                        <span
+                          className={`rounded px-1.5 text-[10px] ${
+                            t.active
+                              ? 'bg-accent-soft text-accent'
+                              : 'bg-bad/15 text-bad'
+                          }`}
+                        >
+                          {t.active ? 'Activo' : 'Inactivo'}
+                        </span>
+                        <span
+                          className={`rounded px-1.5 text-[10px] ${templateStatusClass(t.status)}`}
+                        >
+                          {t.status}
+                        </span>
                       </span>
                     </span>
                     <span className="inbox-chat-preview">

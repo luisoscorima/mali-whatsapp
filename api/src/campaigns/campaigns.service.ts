@@ -709,12 +709,16 @@ export class CampaignsService {
         response: unknown;
         created_at: Date;
         contact_name: string;
+        contact_email: string;
+        contact_dni: string;
         segment_labels: string;
       }[]
     >(Prisma.sql`
       SELECT latest_logs.id, latest_logs.phone, latest_logs.status, latest_logs.response,
              latest_logs.created_at,
              COALESCE(ct.name, '') AS contact_name,
+             COALESCE(ct.email, '') AS contact_email,
+             COALESCE(ct.dni, '') AS contact_dni,
              COALESCE((
                SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
                FROM contact_segments cs
@@ -757,11 +761,15 @@ export class CampaignsService {
         response: unknown;
         created_at: Date;
         contact_name: string;
+        contact_email: string;
+        contact_dni: string;
         segment_labels: string;
       }[]
     >(Prisma.sql`
       SELECT cl.id, cl.phone, cl.whatsapp_message_id, cl.status, cl.response, cl.created_at,
              COALESCE(ct.name, '') AS contact_name,
+             COALESCE(ct.email, '') AS contact_email,
+             COALESCE(ct.dni, '') AS contact_dni,
              COALESCE((
                SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
                FROM contact_segments cs

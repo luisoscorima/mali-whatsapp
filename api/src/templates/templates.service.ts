@@ -10,12 +10,18 @@ import { AuditEvent } from '../audit/audit-events';
 import { auditActor } from '../audit/audit-actor.util';
 import { AuditLogService } from '../audit/audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateTemplateDto, UpdateTemplateDto, ValidateTemplateDto } from './dto/template.dto';
+import {
+  CreateTemplateDto,
+  UpdateTemplateDto,
+  UpdateTemplateFlagsDto,
+  ValidateTemplateDto,
+} from './dto/template.dto';
 import {
   buildTemplateBuilderState,
   compileTemplateBuilderPayload,
   normalizeBuilderPayload,
   normalizeTemplateName,
+  parseStoredPlaceholderAliases,
   TEMPLATE_NAME_REGEX,
 } from './template-builder.util';
 import { downloadTemplateMediaFromUrl } from './template-media.util';
@@ -28,6 +34,7 @@ import type {
   TemplateDetail,
   TemplateListItem,
   TemplateSyncResult,
+  TemplateUsage,
   TemplateValidateResult,
 } from './templates.types';
 import {
@@ -63,6 +70,7 @@ export class TemplatesService {
         rejection_reason: true,
         submitted_at: true,
         synced_at: true,
+        active: true,
       },
     });
     return rows.map((row) => ({
@@ -88,6 +96,7 @@ export class TemplatesService {
         rejection_reason: true,
         submitted_at: true,
         synced_at: true,
+        active: true,
         components_json: true,
         placeholder_aliases_json: true,
       },
@@ -95,7 +104,12 @@ export class TemplatesService {
     if (!row) {
       throw new NotFoundException('Plantilla no encontrada');
     }
-    return this.mapDetailRow(row);
+    const usage = await this.loadUsage(
+      area,
+      row.name,
+      row.placeholder_aliases_json,
+    );
+    return this.mapDetailRow(row, usage);
   }
 
   async getDefinition(
@@ -259,6 +273,46 @@ export class TemplatesService {
     return { id: row.id, status: row.status };
   }
 
+  async updateFlags(
+    area: AuthUser['area'],
+    id: number,
+    dto: UpdateTemplateFlagsDto,
+  ): Promise<TemplateDetail> {
+    const existing = await this.prisma.whatsapp_templates.findFirst({
+      where: { id, area },
+    });
+    if (!existing) {
+      throw new NotFoundException('Plantilla no encontrada');
+    }
+
+    const active =
+      dto.active !== undefined ? Boolean(dto.active) : existing.active;
+
+    const row = await this.prisma.whatsapp_templates.update({
+      where: { id },
+      data: { active },
+      select: {
+        id: true,
+        meta_id: true,
+        name: true,
+        language: true,
+        category: true,
+        status: true,
+        rejection_reason: true,
+        submitted_at: true,
+        synced_at: true,
+        active: true,
+        components_json: true,
+        placeholder_aliases_json: true,
+      },
+    });
+
+    return this.mapDetailRow(
+      row,
+      await this.loadUsage(area, row.name, row.placeholder_aliases_json),
+    );
+  }
+
   async sync(user: AuthUser): Promise<TemplateSyncResult> {
     const area = user.area;
     const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
@@ -337,19 +391,103 @@ export class TemplatesService {
     return { count: templates.length };
   }
 
-  private mapDetailRow(row: {
-    id: number;
-    meta_id: string | null;
-    name: string;
-    language: string;
-    category: string | null;
-    status: string;
-    rejection_reason: string | null;
-    submitted_at: Date | null;
-    synced_at: Date;
-    components_json: unknown;
-    placeholder_aliases_json: unknown;
-  }): TemplateDetail {
+  private async loadUsage(
+    area: AuthUser['area'],
+    templateName: string,
+    placeholderAliasesJson: unknown,
+  ): Promise<TemplateUsage> {
+    const [massRows, directSendsCount] = await Promise.all([
+      this.prisma.campaigns.findMany({
+        where: {
+          area,
+          template_name: templateName,
+          send_mode: { not: 'direct' },
+        },
+        orderBy: { created_at: 'desc' },
+        take: 30,
+        select: {
+          id: true,
+          status: true,
+          segment: true,
+          total_recipients: true,
+          created_at: true,
+          scheduled_at: true,
+        },
+      }),
+      this.prisma.campaigns.count({
+        where: {
+          area,
+          template_name: templateName,
+          send_mode: 'direct',
+        },
+      }),
+    ]);
+
+    const aliases = parseStoredPlaceholderAliases(placeholderAliasesJson);
+    const payloadToButtonIndex = new Map<string, number>();
+    for (const entry of aliases.quickReplyPayloads) {
+      const payload = String(entry.payload || '').trim();
+      if (!payload) continue;
+      if (!payloadToButtonIndex.has(payload)) {
+        payloadToButtonIndex.set(payload, entry.index);
+      }
+    }
+    const payloads = [...payloadToButtonIndex.keys()];
+
+    const flowRows =
+      payloads.length === 0
+        ? []
+        : await this.prisma.flows.findMany({
+            where: {
+              area,
+              trigger_payload: { in: payloads },
+            },
+            select: {
+              id: true,
+              name: true,
+              status: true,
+              trigger_payload: true,
+            },
+            orderBy: { name: 'asc' },
+          });
+
+    return {
+      mass_campaigns: massRows.map((c) => ({
+        id: c.id,
+        status: c.status,
+        segment: c.segment,
+        total_recipients: c.total_recipients,
+        created_at: c.created_at.toISOString(),
+        scheduled_at: toIso(c.scheduled_at),
+      })),
+      direct_sends_count: directSendsCount,
+      linked_flows: flowRows.map((f) => ({
+        id: f.id,
+        name: f.name,
+        status: f.status,
+        trigger_payload: f.trigger_payload,
+        button_index: payloadToButtonIndex.get(f.trigger_payload) ?? null,
+      })),
+    };
+  }
+
+  private mapDetailRow(
+    row: {
+      id: number;
+      meta_id: string | null;
+      name: string;
+      language: string;
+      category: string | null;
+      status: string;
+      rejection_reason: string | null;
+      submitted_at: Date | null;
+      synced_at: Date;
+      active: boolean;
+      components_json: unknown;
+      placeholder_aliases_json: unknown;
+    },
+    usage: TemplateUsage,
+  ): TemplateDetail {
     return {
       id: row.id,
       meta_id: row.meta_id,
@@ -360,12 +498,14 @@ export class TemplatesService {
       rejection_reason: row.rejection_reason,
       submitted_at: toIso(row.submitted_at),
       synced_at: row.synced_at.toISOString(),
+      active: row.active,
       display: extractTemplateDisplayContent(row.components_json),
       can_edit: templateStatusAllowsEdit(row.status),
       builder: buildTemplateBuilderState(
         row.components_json,
         row.placeholder_aliases_json,
       ),
+      usage,
     };
   }
 

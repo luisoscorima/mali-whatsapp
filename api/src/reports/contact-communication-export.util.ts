@@ -25,6 +25,8 @@ export function buildContactCommunicationXlsxBuffer(
   ws['!cols'] = [
     { wch: 16 },
     { wch: 28 },
+    { wch: 28 },
+    { wch: 16 },
     { wch: 22 },
     { wch: 12 },
     { wch: 48 },

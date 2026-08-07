@@ -115,6 +115,10 @@ type InboxComposeBarProps = {
   onSwitchToHuman?: () => void | Promise<void>
   onFlowStarted?: () => void
   contactAttributes?: Record<string, string>
+  contactName?: string
+  contactPhone?: string
+  contactEmail?: string
+  contactDni?: string
   notesTrigger?: ReactNode
 }
 
@@ -135,6 +139,10 @@ export function InboxComposeBar({
   onSwitchToHuman,
   onFlowStarted,
   contactAttributes = {},
+  contactName = '',
+  contactPhone = '',
+  contactEmail = '',
+  contactDni = '',
 }: InboxComposeBarProps) {
   const { confirm, confirmDialog } = useConfirmDialog()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -381,6 +389,10 @@ export function InboxComposeBar({
                 <InboxAdvisorNotesPopover
                   triggerIcon={<IconPostIt />}
                   contactAttributes={contactAttributes}
+                  contactName={contactName}
+                  contactPhone={contactPhone}
+                  contactEmail={contactEmail}
+                  contactDni={contactDni}
                   onInsert={(text) =>
                     insertAtSelection(textareaRef.current, text, replyText, onReplyTextChange)
                   }

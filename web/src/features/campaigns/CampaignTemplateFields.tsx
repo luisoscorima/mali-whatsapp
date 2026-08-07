@@ -80,8 +80,12 @@ function ParamRow({
         ? 'nombre del contacto'
         : source === 'contact.phone'
           ? 'teléfono del contacto'
-          : attrs.find((a) => `attr.${a.slug}` === source)?.label?.toLowerCase() ||
-            'valor por contacto'
+          : source === 'contact.email'
+            ? 'email del contacto'
+            : source === 'contact.dni'
+              ? 'DNI del contacto'
+              : attrs.find((a) => `attr.${a.slug}` === source)?.label?.toLowerCase() ||
+                'valor por contacto'
 
   return (
     <div className="space-y-2 rounded-lg border border-line bg-surface p-3">
@@ -112,6 +116,8 @@ function ParamRow({
           <option value="static">Valor fijo (igual para todos)</option>
           <option value="contact.name">Nombre del contacto</option>
           <option value="contact.phone">Teléfono del contacto</option>
+          <option value="contact.email">Email del contacto</option>
+          <option value="contact.dni">DNI del contacto</option>
           {attrs.map((a) => (
             <option key={a.slug} value={`attr.${a.slug}`}>
               Atributo: {a.label}

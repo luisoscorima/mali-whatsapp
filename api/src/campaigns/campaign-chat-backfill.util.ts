@@ -140,7 +140,12 @@ async function fetchCampaignRow(
 
 function rebuildPreviewForContact(
   sendCtx: NonNullable<ReturnType<typeof buildSendContextFromCampaign>>,
-  contact: { name?: string | null; phone?: string | null },
+  contact: {
+    name?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    dni?: string | null;
+  },
   attrs?: Record<string, string>,
   imageUrl?: string | null,
 ) {
@@ -221,11 +226,26 @@ export async function backfillCampaignChatFromLogs(
           (
             await prisma.contacts.findMany({
               where: { id: { in: contactIds } },
-              select: { id: true, name: true, phone: true },
+              select: {
+                id: true,
+                name: true,
+                phone: true,
+                email: true,
+                dni: true,
+              },
             })
           ).map((c) => [c.id, c]),
         )
-      : new Map<number, { id: number; name: string | null; phone: string }>();
+      : new Map<
+          number,
+          {
+            id: number;
+            name: string | null;
+            phone: string;
+            email: string | null;
+            dni: string | null;
+          }
+        >();
     const attrsMap = await fetchContactAttributesMap(prisma, contactIds);
 
     for (const row of batch) {
@@ -358,11 +378,26 @@ export async function backfillCampaignChatPreviews(
           (
             await prisma.contacts.findMany({
               where: { id: { in: [...contactIds] } },
-              select: { id: true, name: true, phone: true },
+              select: {
+                id: true,
+                name: true,
+                phone: true,
+                email: true,
+                dni: true,
+              },
             })
           ).map((c) => [c.id, c]),
         )
-      : new Map<number, { id: number; name: string | null; phone: string }>();
+      : new Map<
+          number,
+          {
+            id: number;
+            name: string | null;
+            phone: string;
+            email: string | null;
+            dni: string | null;
+          }
+        >();
 
     const contactsByAreaPhone = new Map<
       string,

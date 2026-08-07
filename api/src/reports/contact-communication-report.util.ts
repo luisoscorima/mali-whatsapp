@@ -7,6 +7,8 @@ const PREVIEW_TRUNCATE = 120;
 export const REPORT_HEADERS = [
   'Número',
   'Nombre',
+  'Email',
+  'DNI',
   'Fecha primera comunicación',
   'Iniciada por',
   'Mensaje 1 (inicio)',
@@ -21,6 +23,8 @@ export const REPORT_HEADERS = [
 export type ContactCommunicationRow = {
   phone: string;
   name: string;
+  email: string;
+  dni: string;
   first_communication_at: string | null;
   first_communication_display: string;
   initiated_by: string;
@@ -98,7 +102,7 @@ function truncateForPreview(text: string, max = PREVIEW_TRUNCATE): string {
 }
 
 function buildRowFromMessages(
-  contact: { phone: string; name: string },
+  contact: { phone: string; name: string; email: string; dni: string },
   msgs: MessageRow[],
   outsideHoursMessage: string,
 ): ContactCommunicationRow {
@@ -121,6 +125,8 @@ function buildRowFromMessages(
   return {
     phone: contact.phone,
     name: contact.name,
+    email: contact.email,
+    dni: contact.dni,
     first_communication_at: first1?.created_at?.toISOString() ?? null,
     first_communication_display: first1
       ? formatExportDate(first1.created_at) || '—'
@@ -163,7 +169,14 @@ async function fetchContactIdsForReport(
   opts: { limit?: number; offset?: number },
 ): Promise<{
   total: number;
-  contacts: { id: number; name: string; phone: string; conversation_id: number }[];
+  contacts: {
+    id: number;
+    name: string;
+    phone: string;
+    email: string;
+    dni: string;
+    conversation_id: number;
+  }[];
 }> {
   const countRows = await prisma.$queryRaw<{ c: number }[]>(Prisma.sql`
     SELECT COUNT(*)::int AS c
@@ -184,9 +197,22 @@ async function fetchContactIdsForReport(
   }
 
   const contacts = await prisma.$queryRaw<
-    { id: number; name: string; phone: string; conversation_id: number }[]
+    {
+      id: number;
+      name: string;
+      phone: string;
+      email: string;
+      dni: string;
+      conversation_id: number;
+    }[]
   >(Prisma.sql`
-    SELECT c.id, c.name, c.phone, conv.id AS conversation_id
+    SELECT
+      c.id,
+      c.name,
+      c.phone,
+      COALESCE(c.email, '') AS email,
+      COALESCE(c.dni, '') AS dni,
+      conv.id AS conversation_id
     FROM contacts c
     INNER JOIN conversations conv ON conv.area = c.area AND conv.phone = c.phone
     WHERE c.area = ${area}
@@ -263,6 +289,8 @@ export function reportRowToExportCells(row: ContactCommunicationRow): string[] {
   return [
     row.phone,
     row.name,
+    row.email,
+    row.dni,
     row.first_communication_display,
     row.initiated_by,
     row.message1,

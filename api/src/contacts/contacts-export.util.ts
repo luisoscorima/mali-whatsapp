@@ -2,13 +2,18 @@ import * as XLSX from 'xlsx';
 import { exportFilenameDateStamp } from '../campaigns/campaign-format.util';
 import { safeFilenamePart } from '../conversations/conversation-export.util';
 
-const BASE_HEADERS = ['Nombre', 'Apellidos', 'Teléfono', 'Segmentos'];
+const BASE_HEADERS = ['Nombre', 'Apellidos', 'Teléfono', 'Email', 'DNI', 'Segmentos'];
+
+/** Slugs nativos que no deben salir como columnas de atributo dinámico. */
+const NATIVE_ATTR_KEYS = new Set(['dni', 'email', 'correo']);
 
 export type ContactExportRow = {
   id: number;
   name: string;
   last_name: string;
   phone: string;
+  email: string | null;
+  dni: string | null;
   segment_labels: string;
 };
 
@@ -20,7 +25,10 @@ export function collectAttributeKeys(
   for (const id of contactIds) {
     const attrs = attrMap.get(id);
     if (!attrs) continue;
-    for (const k of Object.keys(attrs)) keys.add(k);
+    for (const k of Object.keys(attrs)) {
+      if (NATIVE_ATTR_KEYS.has(k)) continue;
+      keys.add(k);
+    }
   }
   return [...keys].sort();
 }
@@ -42,6 +50,8 @@ export function buildContactsExportBuffer(
         String(c.name || ''),
         String(c.last_name || ''),
         String(c.phone || ''),
+        String(c.email || ''),
+        String(c.dni || ''),
         String(c.segment_labels || ''),
       ];
       if (includeAttributes) {
@@ -56,6 +66,8 @@ export function buildContactsExportBuffer(
     { wch: 28 },
     { wch: 28 },
     { wch: 18 },
+    { wch: 28 },
+    { wch: 16 },
     { wch: 36 },
     ...attrKeys.map(() => ({ wch: 20 })),
   ];

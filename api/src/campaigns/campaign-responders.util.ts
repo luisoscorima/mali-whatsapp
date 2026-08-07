@@ -24,6 +24,8 @@ function readResponseWindowDays(): number {
 export type CampaignResponderRow = {
   phone: string;
   contact_name: string;
+  contact_email: string;
+  contact_dni: string;
   segment_labels: string;
   contact_id: number | null;
   conversation_id: number | null;
@@ -43,6 +45,8 @@ export type CampaignResponderMetrics = {
 type ResponderSqlRow = {
   phone: string;
   contact_name: string;
+  contact_email: string;
+  contact_dni: string;
   segment_labels: string;
   contact_id: number | null;
   conversation_id: number | null;
@@ -58,6 +62,8 @@ function mapResponderRow(row: ResponderSqlRow): CampaignResponderRow {
   return {
     phone: row.phone,
     contact_name: row.contact_name || '',
+    contact_email: row.contact_email || '',
+    contact_dni: row.contact_dni || '',
     segment_labels: row.segment_labels || '',
     contact_id: row.contact_id,
     conversation_id: row.conversation_id,
@@ -128,6 +134,8 @@ async function fetchCampaignResponders(
     SELECT
       latest_logs.phone,
       COALESCE(ct.name, '') AS contact_name,
+      COALESCE(ct.email, '') AS contact_email,
+      COALESCE(ct.dni, '') AS contact_dni,
       COALESCE((
         SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
         FROM contact_segments cs
@@ -145,7 +153,7 @@ async function fetchCampaignResponders(
       AND cm.created_at <= latest_logs.created_at + ${Prisma.raw(`INTERVAL '${windowDays} days'`)}
     LEFT JOIN contacts ct ON ct.id = COALESCE(latest_logs.contact_id, conv.contact_id)
     WHERE ${Prisma.raw(sqlCampaignLogIsSalidaOk('latest_logs.status'))}
-    GROUP BY latest_logs.phone, ct.name, latest_logs.contact_id, conv.contact_id, conv.id
+    GROUP BY latest_logs.phone, ct.name, ct.email, ct.dni, latest_logs.contact_id, conv.contact_id, conv.id
     ORDER BY first_response_at DESC
   `);
   return rows.map(mapResponderRow);
@@ -172,6 +180,8 @@ async function fetchCampaignInteractiveResponders(
     SELECT
       latest_logs.phone,
       COALESCE(ct.name, '') AS contact_name,
+      COALESCE(ct.email, '') AS contact_email,
+      COALESCE(ct.dni, '') AS contact_dni,
       COALESCE((
         SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
         FROM contact_segments cs

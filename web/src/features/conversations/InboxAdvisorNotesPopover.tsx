@@ -24,22 +24,56 @@ type AttrDef = { slug: string; label: string }
 type InboxAdvisorNotesPopoverProps = {
   onInsert: (text: string) => void
   contactAttributes?: Record<string, string>
+  contactName?: string
+  contactPhone?: string
+  contactEmail?: string
+  contactDni?: string
   triggerIcon?: ReactNode
 }
+
+const CONTACT_NAME_KEY = 'contact.name'
+const CONTACT_PHONE_KEY = 'contact.phone'
+const CONTACT_EMAIL_KEY = 'contact.email'
+const CONTACT_DNI_KEY = 'contact.dni'
 
 function resolveNotePlaceholders(
   template: string,
   attrs: Record<string, string>,
+  contact: {
+    name: string
+    phone: string
+    email: string
+    dni: string
+  },
 ): string {
-  return template.replace(/\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}/g, (_m, slug: string) => {
-    const v = attrs[slug]
-    return v != null && String(v).trim() ? String(v) : ''
-  })
+  return template.replace(
+    /\{\{\s*([A-Za-z][A-Za-z0-9_.]*)\s*\}\}/g,
+    (_m, key: string) => {
+      if (key === CONTACT_NAME_KEY) return contact.name.trim()
+      if (key === CONTACT_PHONE_KEY) return contact.phone.trim()
+      if (key === CONTACT_EMAIL_KEY) {
+        const native = contact.email.trim()
+        if (native) return native
+        return String(attrs.email || attrs.correo || '').trim()
+      }
+      if (key === CONTACT_DNI_KEY) {
+        const native = contact.dni.trim()
+        if (native) return native
+        return String(attrs.dni || '').trim()
+      }
+      const v = attrs[key]
+      return v != null && String(v).trim() ? String(v) : ''
+    },
+  )
 }
 
 export function InboxAdvisorNotesPopover({
   onInsert,
   contactAttributes = {},
+  contactName = '',
+  contactPhone = '',
+  contactEmail = '',
+  contactDni = '',
   triggerIcon,
 }: InboxAdvisorNotesPopoverProps) {
   const { confirm, confirmDialog } = useConfirmDialog()
@@ -134,12 +168,19 @@ export function InboxAdvisorNotesPopover({
     setBody(note.body)
   }
 
-  function insertAttr(slug: string) {
-    insertAtSelection(bodyRef.current, `{{${slug}}}`, body, setBody)
+  function insertVariable(key: string) {
+    insertAtSelection(bodyRef.current, `{{${key}}}`, body, setBody)
   }
 
   function insertNoteIntoComposer(noteBody: string) {
-    onInsert(resolveNotePlaceholders(noteBody, contactAttributes))
+    onInsert(
+      resolveNotePlaceholders(noteBody, contactAttributes, {
+        name: contactName,
+        phone: contactPhone,
+        email: contactEmail,
+        dni: contactDni,
+      }),
+    )
     setOpen(false)
   }
 
@@ -225,36 +266,74 @@ export function InboxAdvisorNotesPopover({
             <textarea
               ref={bodyRef}
               className="w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
-              placeholder="Texto a insertar… Usa {{atributo}} si hace falta."
+              placeholder="Texto a insertar… Usa {{variable}} si hace falta."
               rows={3}
               value={body}
               maxLength={4000}
               onChange={(e) => setBody(e.target.value)}
             />
-            {attrDefs.length > 0 ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button type="button" size="sm" variant="outline">
-                    Atributo
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="max-h-56 overflow-y-auto">
-                  {attrDefs.map((a) => (
-                    <DropdownMenuItem
-                      key={a.slug}
-                      onSelect={() => insertAttr(a.slug)}
-                    >
-                      <span className="flex flex-col">
-                        <span>{a.label}</span>
-                        <span className="font-mono text-[10px] text-muted">
-                          {`{{${a.slug}}}`}
-                        </span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" size="sm" variant="outline">
+                  Variable
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-h-56 overflow-y-auto">
+                <DropdownMenuItem
+                  onSelect={() => insertVariable(CONTACT_NAME_KEY)}
+                >
+                  <span className="flex flex-col">
+                    <span>Nombre del contacto</span>
+                    <span className="font-mono text-[10px] text-muted">
+                      {`{{${CONTACT_NAME_KEY}}}`}
+                    </span>
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => insertVariable(CONTACT_PHONE_KEY)}
+                >
+                  <span className="flex flex-col">
+                    <span>Teléfono del contacto</span>
+                    <span className="font-mono text-[10px] text-muted">
+                      {`{{${CONTACT_PHONE_KEY}}}`}
+                    </span>
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => insertVariable(CONTACT_EMAIL_KEY)}
+                >
+                  <span className="flex flex-col">
+                    <span>Email del contacto</span>
+                    <span className="font-mono text-[10px] text-muted">
+                      {`{{${CONTACT_EMAIL_KEY}}}`}
+                    </span>
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => insertVariable(CONTACT_DNI_KEY)}
+                >
+                  <span className="flex flex-col">
+                    <span>DNI del contacto</span>
+                    <span className="font-mono text-[10px] text-muted">
+                      {`{{${CONTACT_DNI_KEY}}}`}
+                    </span>
+                  </span>
+                </DropdownMenuItem>
+                {attrDefs.map((a) => (
+                  <DropdownMenuItem
+                    key={a.slug}
+                    onSelect={() => insertVariable(a.slug)}
+                  >
+                    <span className="flex flex-col">
+                      <span>Atributo: {a.label}</span>
+                      <span className="font-mono text-[10px] text-muted">
+                        {`{{${a.slug}}}`}
                       </span>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
+                    </span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <div className="flex gap-2">
               <Button
                 type="button"

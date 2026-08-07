@@ -27,15 +27,32 @@ export async function fetchContactAttributesMap(
   return map;
 }
 
+export type ContactTemplateFields = {
+  name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  dni?: string | null;
+};
+
 function resolveFieldValue(
   source: string,
-  contact: { name?: string | null; phone?: string | null },
+  contact: ContactTemplateFields,
   attrs?: Record<string, string>,
 ): string | null {
   const s = String(source || '').trim();
   if (!s || s === 'static') return null;
   if (s === 'contact.name') return String(contact.name || '').trim();
   if (s === 'contact.phone') return String(contact.phone || '').trim();
+  if (s === 'contact.email') {
+    const native = String(contact.email || '').trim();
+    if (native) return native;
+    return String((attrs && (attrs.email || attrs.correo)) || '').trim();
+  }
+  if (s === 'contact.dni') {
+    const native = String(contact.dni || '').trim();
+    if (native) return native;
+    return String((attrs && attrs.dni) || '').trim();
+  }
   if (s.startsWith(ATTR_PREFIX)) {
     const key = s.slice(ATTR_PREFIX.length);
     return String((attrs && attrs[key]) || '').trim();
@@ -46,7 +63,7 @@ function resolveFieldValue(
 export function buildParamsForContact(
   staticParams: StaticTemplateParams,
   paramMapping: ParamMapping | null,
-  contact: { name?: string | null; phone?: string | null },
+  contact: ContactTemplateFields,
   attrs?: Record<string, string>,
 ): StaticTemplateParams {
   const out: StaticTemplateParams = {

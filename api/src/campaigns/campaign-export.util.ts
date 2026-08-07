@@ -11,11 +11,21 @@ export type CampaignExportLogRow = {
   created_at: Date | string;
   whatsapp_message_id?: string | null;
   contact_name?: string;
+  contact_email?: string;
+  contact_dni?: string;
   segment_labels?: string;
 };
 
 function exportContactName(log: { contact_name?: string }): string {
   return String(log.contact_name || '').trim();
+}
+
+function exportContactEmail(log: { contact_email?: string }): string {
+  return String(log.contact_email || '').trim();
+}
+
+function exportContactDni(log: { contact_dni?: string }): string {
+  return String(log.contact_dni || '').trim();
 }
 
 function exportSegmentLabels(log: { segment_labels?: string }): string {
@@ -90,6 +100,8 @@ export function buildCampaignFailedLogsCsv(
   const header = [
     'telefono',
     'nombre',
+    'email',
+    'dni',
     'segmentos',
     'estado',
     'incidencia',
@@ -102,6 +114,8 @@ export function buildCampaignFailedLogsCsv(
       [
         csvEscapeCell(log.phone),
         csvEscapeCell(exportContactName(log)),
+        csvEscapeCell(exportContactEmail(log)),
+        csvEscapeCell(exportContactDni(log)),
         csvEscapeCell(exportSegmentLabels(log)),
         csvEscapeCell(log.status),
         csvEscapeCell(log.incident_label || ''),
@@ -122,6 +136,8 @@ export function buildCampaignLogsExportBuffer(
       'Fecha y hora',
       'Teléfono',
       'Nombre',
+      'Email',
+      'DNI',
       'Segmentos',
       'Estado',
       'ID mensaje',
@@ -131,6 +147,8 @@ export function buildCampaignLogsExportBuffer(
       formatDate(log.created_at),
       String(log.phone || ''),
       exportContactName(log),
+      exportContactEmail(log),
+      exportContactDni(log),
       exportSegmentLabels(log),
       String(log.status || ''),
       String(log.whatsapp_message_id || ''),
@@ -142,6 +160,8 @@ export function buildCampaignLogsExportBuffer(
     { wch: 24 },
     { wch: 18 },
     { wch: 28 },
+    { wch: 28 },
+    { wch: 16 },
     { wch: 36 },
     { wch: 14 },
     { wch: 28 },
@@ -161,6 +181,8 @@ export function buildCampaignFailedLogsExportBuffer(
       'Fecha y hora',
       'Teléfono',
       'Nombre',
+      'Email',
+      'DNI',
       'Segmentos',
       'Estado',
       'Incidencia',
@@ -170,6 +192,8 @@ export function buildCampaignFailedLogsExportBuffer(
       formatDate(log.created_at),
       String(log.phone || ''),
       exportContactName(log),
+      exportContactEmail(log),
+      exportContactDni(log),
       exportSegmentLabels(log),
       String(log.status || ''),
       String(log.incident_label || ''),
@@ -181,6 +205,8 @@ export function buildCampaignFailedLogsExportBuffer(
     { wch: 24 },
     { wch: 18 },
     { wch: 28 },
+    { wch: 28 },
+    { wch: 16 },
     { wch: 36 },
     { wch: 14 },
     { wch: 24 },
@@ -194,6 +220,8 @@ export function buildCampaignFailedLogsExportBuffer(
 export type ResponderExportRow = {
   phone: string;
   contact_name?: string;
+  contact_email?: string;
+  contact_dni?: string;
   segment_labels?: string;
   first_response_at: Date | string;
   interactive_response_text?: string;
@@ -207,6 +235,8 @@ export function buildCampaignRespondersExportBuffer(
     [
       'Teléfono',
       'Nombre',
+      'Email',
+      'DNI',
       'Segmentos',
       'Primera respuesta',
       'Respuesta interactiva',
@@ -214,6 +244,8 @@ export function buildCampaignRespondersExportBuffer(
     ...rows.map((row) => [
       String(row.phone || ''),
       String(row.contact_name || ''),
+      String(row.contact_email || ''),
+      String(row.contact_dni || ''),
       String(row.segment_labels || ''),
       formatDate(row.first_response_at),
       String(row.interactive_response_text || ''),
@@ -223,6 +255,8 @@ export function buildCampaignRespondersExportBuffer(
   ws['!cols'] = [
     { wch: 18 },
     { wch: 28 },
+    { wch: 28 },
+    { wch: 16 },
     { wch: 36 },
     { wch: 24 },
     { wch: 40 },
