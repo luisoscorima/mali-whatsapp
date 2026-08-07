@@ -11,6 +11,7 @@ import {
   type CampaignTemplateFormState,
 } from './CampaignTemplateFields'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
+import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard'
 
 type SegmentDefinition = {
   id: number
@@ -136,6 +137,28 @@ export function CampaignNewPage() {
   const [scheduledAt, setScheduledAt] = useState('')
   const [batchSize, setBatchSize] = useState(40)
   const [batchDelayMs, setBatchDelayMs] = useState(1500)
+
+  const dirty = useMemo(() => {
+    if (includeSegments.size > 0) return true
+    if (excludeSegments.size > 0) return true
+    if (excludeContactIds.size > 0) return true
+    if (excludeServiceWindow) return true
+    if (templateId) return true
+    if (recipientsLoaded) return true
+    if (scheduleMode !== 'now' || scheduledAt) return true
+    return false
+  }, [
+    includeSegments,
+    excludeSegments,
+    excludeContactIds,
+    excludeServiceWindow,
+    templateId,
+    recipientsLoaded,
+    scheduleMode,
+    scheduledAt,
+  ])
+
+  useUnsavedChangesGuard(dirty && !busy)
 
   const approvedTemplates = useMemo(
     () =>

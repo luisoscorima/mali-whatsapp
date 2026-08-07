@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -8,12 +9,16 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
+import { MAX_MEDIA_DOCUMENT_BYTES } from '../conversations/conversation-whatsapp.util';
 import { CreateFlowDto, UpdateFlowDto } from './dto/flow.dto';
 import { FlowsService } from './flows.service';
 import type {
@@ -40,6 +45,36 @@ export class FlowsController {
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<{ id: number; label: string }[]>> {
     const data = await this.flowsService.listAdvisors(user.area);
+    return { ok: true, data };
+  }
+
+  @Post('media')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: MAX_MEDIA_DOCUMENT_BYTES, files: 1 },
+    }),
+  )
+  async uploadMedia(
+    @CurrentUser() user: AuthUser,
+    @UploadedFile()
+    file:
+      | { buffer: Buffer; mimetype: string; originalname: string }
+      | undefined,
+    @Body() body: { kind?: string },
+  ): Promise<
+    ApiResponse<{
+      url: string;
+      mime: string;
+      filename: string;
+      wa_type: 'image' | 'document';
+    }>
+  > {
+    const kindRaw = String(body?.kind || 'image').trim().toLowerCase();
+    const kind = kindRaw === 'document' ? 'document' : 'image';
+    if (!file) {
+      throw new BadRequestException('Archivo obligatorio');
+    }
+    const data = await this.flowsService.uploadMedia(user.area, file, kind);
     return { ok: true, data };
   }
 

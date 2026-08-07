@@ -19,6 +19,8 @@ const FLOW_STATUSES = ['draft', 'active', 'paused'] as const;
 const NODE_KINDS = [
   'message_text',
   'message_buttons',
+  'message_image',
+  'message_document',
   'handoff_human',
   'end',
 ] as const;
@@ -54,6 +56,24 @@ export class FlowNodeInputDto {
   @ValidateNested({ each: true })
   @Type(() => FlowButtonDto)
   buttons?: FlowButtonDto[];
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @IsString()
+  @MaxLength(1024)
+  media_url?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @IsString()
+  @MaxLength(128)
+  media_mime?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @IsString()
+  @MaxLength(255)
+  media_filename?: string | null;
 
   @IsOptional()
   @ValidateIf((_, v) => v !== null && v !== undefined)

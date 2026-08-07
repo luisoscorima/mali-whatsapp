@@ -269,6 +269,9 @@ model flow_nodes {
   position_x                  Float     @default(0)
   position_y                  Float     @default(0)
   handoff_user_id             Int?
+  media_url                   String?   @db.VarChar(1024)
+  media_mime                  String?   @db.VarChar(128)
+  media_filename              String?   @db.VarChar(255)
   created_at                  DateTime  @default(now()) @db.Timestamptz(6)
   updated_at                  DateTime  @default(now()) @db.Timestamptz(6)
   flows                       flows     @relation(fields: [flow_id], references: [id], onDelete: Cascade, onUpdate: NoAction)

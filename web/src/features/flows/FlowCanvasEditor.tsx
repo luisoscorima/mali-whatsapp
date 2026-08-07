@@ -36,6 +36,7 @@ import {
 import {
   emptyNode,
   formatTimeoutBadge,
+  isMediaKind,
   nextClientKey,
   type FlowEditorEdge,
   type FlowEditorNode,
@@ -48,6 +49,9 @@ type CanvasData = {
   kind: FlowNodeKind
   body_text: string
   buttons: { id: string; title: string }[]
+  media_url: string | null
+  media_mime: string | null
+  media_filename: string | null
   timeout_minutes: number | null
   timeout_body_text: string
   timeout_repeat: boolean
@@ -215,16 +219,116 @@ function EndNodeView({ id, selected }: NodeProps<Node<CanvasData>>) {
   )
 }
 
+function MediaNodeView({ id, data, selected }: NodeProps<Node<CanvasData>>) {
+  const isImage = data.kind === 'message_image'
+  return (
+    <div
+      className={`relative min-w-[200px] max-w-[280px] rounded-xl border bg-surface-strong p-3 shadow-sm ${
+        selected ? 'border-accent' : 'border-line'
+      } ${data.isEntry ? 'ring-1 ring-accent/40' : ''}`}
+    >
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="in"
+        className={HANDLE_CLASS}
+        isConnectable
+      />
+      <p className="text-xs font-medium text-muted">
+        {isImage ? 'Imagen' : 'Documento'}
+        {data.isEntry ? ' · Inicio' : ''}
+      </p>
+      {isImage && data.media_url ? (
+        <img
+          src={data.media_url}
+          alt={data.media_filename || 'Imagen'}
+          className="mt-2 max-h-28 w-full rounded-md object-cover"
+        />
+      ) : (
+        <p className="mt-2 truncate text-sm">
+          {data.media_filename || (data.media_url ? 'Archivo listo' : 'Sin archivo')}
+        </p>
+      )}
+      {data.body_text ? (
+        <p className="mt-1 line-clamp-2 text-xs text-muted whitespace-pre-wrap">
+          {data.body_text}
+        </p>
+      ) : null}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="next"
+        className={HANDLE_CLASS}
+        isConnectable
+      />
+      <p className="mt-2 truncate font-mono text-[10px] text-muted">{id}</p>
+    </div>
+  )
+}
+
 const nodeTypes = {
   message: MessageNodeView,
+  image: MediaNodeView,
+  document: MediaNodeView,
   handoff: HandoffNodeView,
   end: EndNodeView,
 }
 
-function toRfKind(kind: FlowNodeKind): 'message' | 'handoff' | 'end' {
+function toRfKind(
+  kind: FlowNodeKind,
+): 'message' | 'image' | 'document' | 'handoff' | 'end' {
   if (kind === 'handoff_human') return 'handoff'
   if (kind === 'end') return 'end'
+  if (kind === 'message_image') return 'image'
+  if (kind === 'message_document') return 'document'
   return 'message'
+}
+
+function resolveEditorKind(n: Node<CanvasData>): FlowNodeKind {
+  if (n.type === 'handoff' || n.data.kind === 'handoff_human') {
+    return 'handoff_human'
+  }
+  if (n.type === 'end' || n.data.kind === 'end') return 'end'
+  if (n.type === 'image' || n.data.kind === 'message_image') {
+    return 'message_image'
+  }
+  if (n.type === 'document' || n.data.kind === 'message_document') {
+    return 'message_document'
+  }
+  if (n.data.buttons.length > 0) return 'message_buttons'
+  return 'message_text'
+}
+
+function mapRfNodeToEditor(
+  n: Node<CanvasData>,
+  sortOrder: number,
+): FlowEditorNode {
+  const kind = resolveEditorKind(n)
+  return {
+    client_key: n.id,
+    kind,
+    body_text: n.data.body_text,
+    buttons: kind === 'message_buttons' ? n.data.buttons : [],
+    media_url: isMediaKind(kind) ? n.data.media_url : null,
+    media_mime: isMediaKind(kind) ? n.data.media_mime : null,
+    media_filename: isMediaKind(kind) ? n.data.media_filename : null,
+    timeout_minutes: kind === 'message_buttons' ? n.data.timeout_minutes : null,
+    timeout_body_text:
+      kind === 'message_buttons' ? n.data.timeout_body_text : '',
+    timeout_repeat: kind === 'message_buttons' ? n.data.timeout_repeat : false,
+    timeout_max_nudges:
+      kind === 'message_buttons' ? n.data.timeout_max_nudges : null,
+    timeout_close_on_silence:
+      kind === 'message_buttons' ? n.data.timeout_close_on_silence : false,
+    timeout_window_guard:
+      kind === 'message_buttons' ? n.data.timeout_window_guard : false,
+    timeout_window_lead_minutes:
+      kind === 'message_buttons' ? n.data.timeout_window_lead_minutes : null,
+    position_x: n.position.x,
+    position_y: n.position.y,
+    handoff_user_id: n.data.handoff_user_id,
+    sort_order: sortOrder,
+  } as FlowEditorNode
 }
 
 export function FlowCanvasEditor(props: FlowCanvasEditorProps) {
@@ -259,6 +363,7 @@ function FlowCanvasEditorInner({
   const [advisors, setAdvisors] = useState<Advisor[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
+  const [mediaUploading, setMediaUploading] = useState(false)
   const suppressSelectionRef = useRef(false)
   const didFitViewRef = useRef(false)
   const { fitView } = useReactFlow()
@@ -279,6 +384,9 @@ function FlowCanvasEditorInner({
           kind: n.kind,
           body_text: n.body_text,
           buttons: n.buttons,
+          media_url: n.media_url ?? null,
+          media_mime: n.media_mime ?? null,
+          media_filename: n.media_filename ?? null,
           timeout_minutes: n.timeout_minutes ?? null,
           timeout_body_text: n.timeout_body_text ?? '',
           timeout_repeat: Boolean(n.timeout_repeat),
@@ -360,44 +468,9 @@ function FlowCanvasEditorInner({
 
   const syncOut = useCallback(
     (nextNodes: Node<CanvasData>[], nextEdges: Edge[]) => {
-      const mapped: FlowEditorNode[] = nextNodes.map((n, i) => {
-        const kind =
-          n.type === 'handoff'
-            ? 'handoff_human'
-            : n.type === 'end'
-              ? 'end'
-              : n.data.buttons.length > 0
-                ? 'message_buttons'
-                : 'message_text'
-        return {
-          client_key: n.id,
-          kind,
-          body_text: n.data.body_text,
-          buttons: kind === 'message_buttons' ? n.data.buttons : [],
-          timeout_minutes:
-            kind === 'message_buttons' ? n.data.timeout_minutes : null,
-          timeout_body_text:
-            kind === 'message_buttons' ? n.data.timeout_body_text : '',
-          timeout_repeat:
-            kind === 'message_buttons' ? n.data.timeout_repeat : false,
-          timeout_max_nudges:
-            kind === 'message_buttons' ? n.data.timeout_max_nudges : null,
-          timeout_close_on_silence:
-            kind === 'message_buttons'
-              ? n.data.timeout_close_on_silence
-              : false,
-          timeout_window_guard:
-            kind === 'message_buttons' ? n.data.timeout_window_guard : false,
-          timeout_window_lead_minutes:
-            kind === 'message_buttons'
-              ? n.data.timeout_window_lead_minutes
-              : null,
-          position_x: n.position.x,
-          position_y: n.position.y,
-          handoff_user_id: n.data.handoff_user_id,
-          sort_order: i,
-        } as FlowEditorNode
-      })
+      const mapped: FlowEditorNode[] = nextNodes.map((n, i) =>
+        mapRfNodeToEditor(n, i),
+      )
       const mappedEdges: FlowEditorEdge[] = nextEdges.map((e) => {
         const handle = String(e.sourceHandle || '')
         const match = handle.startsWith('btn:')
@@ -495,6 +568,9 @@ function FlowCanvasEditorInner({
         kind,
         body_text: blank.body_text,
         buttons: blank.buttons,
+        media_url: blank.media_url,
+        media_mime: blank.media_mime,
+        media_filename: blank.media_filename,
         timeout_minutes: blank.timeout_minutes,
         timeout_body_text: blank.timeout_body_text,
         timeout_repeat: blank.timeout_repeat,
@@ -518,7 +594,10 @@ function FlowCanvasEditorInner({
     const next = rfNodes.map((n) => {
       if (n.id !== selectedId) return n
       const data = { ...n.data, ...patch }
-      if (patch.buttons) {
+      if (
+        patch.buttons &&
+        (n.data.kind === 'message_text' || n.data.kind === 'message_buttons')
+      ) {
         const kind =
           patch.buttons.length > 0 ? 'message_buttons' : 'message_text'
         data.kind = kind as FlowNodeKind
@@ -526,7 +605,12 @@ function FlowCanvasEditorInner({
       return { ...n, data }
     })
     let nextEdges = rfEdges
-    if (patch.buttons && selectedNode) {
+    if (
+      patch.buttons &&
+      selectedNode &&
+      (selectedNode.data.kind === 'message_text' ||
+        selectedNode.data.kind === 'message_buttons')
+    ) {
       const oldButtons = selectedNode.data.buttons
       nextEdges = rfEdges
         .map((e) => {
@@ -602,41 +686,19 @@ function FlowCanvasEditorInner({
   function handleFormSubmit(e: FormEvent) {
     e.preventDefault()
     if (readOnly) return
-    const mapped: FlowEditorNode[] = rfNodes.map((n) => {
-      const kind =
-        n.type === 'handoff'
-          ? ('handoff_human' as const)
-          : n.type === 'end'
-            ? ('end' as const)
-            : n.data.buttons.length > 0
-              ? ('message_buttons' as const)
-              : ('message_text' as const)
-      return {
-        client_key: n.id,
-        kind,
-        body_text: n.data.body_text,
-        buttons: kind === 'message_buttons' ? n.data.buttons : [],
-        timeout_minutes:
-          kind === 'message_buttons' ? n.data.timeout_minutes : null,
-        timeout_body_text:
-          kind === 'message_buttons' ? n.data.timeout_body_text : '',
-        timeout_repeat:
-          kind === 'message_buttons' ? n.data.timeout_repeat : false,
-        timeout_max_nudges:
-          kind === 'message_buttons' ? n.data.timeout_max_nudges : null,
-        timeout_close_on_silence:
-          kind === 'message_buttons' ? n.data.timeout_close_on_silence : false,
-        timeout_window_guard:
-          kind === 'message_buttons' ? n.data.timeout_window_guard : false,
-        timeout_window_lead_minutes:
-          kind === 'message_buttons'
-            ? n.data.timeout_window_lead_minutes
-            : null,
-        position_x: n.position.x,
-        position_y: n.position.y,
-        handoff_user_id: n.data.handoff_user_id,
+    const mapped: FlowEditorNode[] = rfNodes.map((n, i) =>
+      mapRfNodeToEditor(n, i),
+    )
+    for (const n of mapped) {
+      if (isMediaKind(n.kind) && !String(n.media_url || '').trim()) {
+        notify.error(
+          n.kind === 'message_image'
+            ? 'Hay un nodo de imagen sin archivo.'
+            : 'Hay un nodo de documento sin archivo.',
+        )
+        return
       }
-    })
+    }
     const keyCounts = new Map<string, number>()
     for (const n of mapped) {
       for (const b of n.buttons) {
@@ -668,6 +730,34 @@ function FlowCanvasEditorInner({
         ? entryClientKey
         : mapped[0]?.client_key || ''
     onPersist({ nodes: mapped, edges: mappedEdges, entry })
+  }
+
+  async function uploadSelectedMedia(file: File) {
+    if (!selected || !isMediaKind(selected.data.kind)) return
+    const form = new FormData()
+    form.append('file', file)
+    form.append(
+      'kind',
+      selected.data.kind === 'message_image' ? 'image' : 'document',
+    )
+    setMediaUploading(true)
+    const result = await apiClient.postFormData<{
+      url: string
+      mime: string
+      filename: string
+      wa_type: 'image' | 'document'
+    }>('/api/flows/media', form)
+    setMediaUploading(false)
+    if (!result.ok) {
+      notify.error(result.error)
+      return
+    }
+    updateSelected({
+      media_url: result.data.url,
+      media_mime: result.data.mime,
+      media_filename: result.data.filename,
+    })
+    notify.success('Archivo subido')
   }
 
   return (
@@ -734,6 +824,20 @@ function FlowCanvasEditorInner({
             <button
               type="button"
               className="small-btn"
+              onClick={() => addCanvasNode('message_image')}
+            >
+              + Imagen
+            </button>
+            <button
+              type="button"
+              className="small-btn"
+              onClick={() => addCanvasNode('message_document')}
+            >
+              + Archivo
+            </button>
+            <button
+              type="button"
+              className="small-btn"
               onClick={() => addCanvasNode('handoff_human')}
             >
               + Derivar
@@ -772,9 +876,9 @@ function FlowCanvasEditorInner({
       ) : null}
       {readOnly ? null : (
         <p className="text-xs text-muted">
-          Arrastra desde el punto de cada botón (key) hacia el siguiente nodo.
-          Haz clic en un nodo o conector para editarlo en el panel. Cada key debe
-          ser única. Solo cuenta el último mensaje del asistente.
+          Arrastra desde el punto de cada botón (key) o del nodo hacia el
+          siguiente. Imagen/archivo se envían y continúan solos. Cada key de
+          botón debe ser única. Solo cuenta el último mensaje del asistente.
         </p>
       )}
 
@@ -895,7 +999,11 @@ function FlowCanvasEditorInner({
                   ? 'Derivar'
                   : selected?.type === 'end'
                     ? 'Fin'
-                    : 'Mensaje'}
+                    : selected?.type === 'image'
+                      ? 'Imagen'
+                      : selected?.type === 'document'
+                        ? 'Documento'
+                        : 'Mensaje'}
             </SheetTitle>
             <SheetDescription>
               {selectedEdge && !selected
@@ -933,10 +1041,14 @@ function FlowCanvasEditorInner({
                 </label>
                 {selected.type !== 'end' ? (
                   <label className="block text-sm">
-                    <span className="text-muted">Texto</span>
+                    <span className="text-muted">
+                      {isMediaKind(selected.data.kind)
+                        ? 'Pie / caption (opcional)'
+                        : 'Texto'}
+                    </span>
                     <textarea
                       className="mt-1 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
-                      rows={4}
+                      rows={isMediaKind(selected.data.kind) ? 2 : 4}
                       value={selected.data.body_text}
                       onChange={(e) =>
                         updateSelected({ body_text: e.target.value })
@@ -948,6 +1060,51 @@ function FlowCanvasEditorInner({
                     Termina la sesión del flujo sin enviar ni derivar.
                   </p>
                 )}
+                {isMediaKind(selected.data.kind) ? (
+                  <div className="space-y-2 rounded-lg border border-line p-2">
+                    {selected.data.kind === 'message_image' &&
+                    selected.data.media_url ? (
+                      <img
+                        src={selected.data.media_url}
+                        alt={selected.data.media_filename || 'Preview'}
+                        className="max-h-40 w-full rounded-md object-contain"
+                      />
+                    ) : null}
+                    <p className="truncate text-xs text-muted">
+                      {selected.data.media_filename ||
+                        (selected.data.media_url
+                          ? 'Archivo cargado'
+                          : 'Sin archivo')}
+                    </p>
+                    <label className="small-btn inline-flex cursor-pointer">
+                      {mediaUploading
+                        ? 'Subiendo…'
+                        : selected.data.media_url
+                          ? 'Cambiar archivo'
+                          : 'Subir archivo'}
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept={
+                          selected.data.kind === 'message_image'
+                            ? 'image/jpeg,image/png,image/jpg'
+                            : 'application/pdf'
+                        }
+                        disabled={mediaUploading}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          e.target.value = ''
+                          if (file) void uploadSelectedMedia(file)
+                        }}
+                      />
+                    </label>
+                    <p className="text-[11px] text-muted">
+                      {selected.data.kind === 'message_image'
+                        ? 'JPEG o PNG, máx. 5 MB. Se envía y sigue al siguiente nodo.'
+                        : 'PDF, máx. 25 MB. Se envía y sigue al siguiente nodo.'}
+                    </p>
+                  </div>
+                ) : null}
                 {selected.type === 'message' ? (
                   <div className="space-y-2">
                     <p className="text-xs text-muted">

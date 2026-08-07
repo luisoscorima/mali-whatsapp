@@ -58,6 +58,7 @@ import {
   type ChatActionsContext,
 } from './inboxChatActions'
 import { useAssignedInboxBrowserNotify } from './useAssignedInboxBrowserNotify'
+import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 
 const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000
 const WINDOW_MAX_BUCKETS = [2, 6, 12, 24] as const
@@ -781,12 +782,29 @@ export function ConversationsInboxPage() {
   const listPage =
     list && inboxFilterKeyFromResult(list.filters) === activeFilterKey ? list.page : page
 
+  const listMatchesFilters =
+    list != null && inboxFilterKeyFromResult(list.filters) === activeFilterKey
+
+  const hasActiveListFilters =
+    chatFilter !== 'all' ||
+    windowMaxFilter != null ||
+    selectedSegments.length > 0 ||
+    Boolean(searchQuery)
+
+  function clearListFilters() {
+    const next = new URLSearchParams()
+    setSearchInput('')
+    setSearchParams(next)
+  }
+
   const loadDetail = useCallback((conversationId: number) => {
+    const requestId = ++detailRequestIdRef.current
     setLoadingDetail(true)
     setError('')
     return apiClient
       .get<InboxDetail>(`/api/conversations/${conversationId}`)
       .then((result) => {
+        if (requestId !== detailRequestIdRef.current) return
         setLoadingDetail(false)
         if (!result.ok) {
           notify.error(result.error)
@@ -801,6 +819,7 @@ export function ConversationsInboxPage() {
           apiClient
             .get<{ attributes: Record<string, string> }>(`/api/contacts/${cid}`)
             .then((cr) => {
+              if (requestId !== detailRequestIdRef.current) return
               if (cr.ok) setContactAttributes(cr.data.attributes || {})
               else setContactAttributes({})
             })
@@ -840,7 +859,9 @@ export function ConversationsInboxPage() {
 
   const {
     permission: browserNotifyPermission,
+    active: browserNotifyActive,
     enable: enableBrowserNotify,
+    disable: disableBrowserNotify,
     supported: browserNotifySupported,
   } = useAssignedInboxBrowserNotify({
     userId: user?.id,
@@ -864,7 +885,7 @@ export function ConversationsInboxPage() {
       const incomingEvents = result.data.events ?? []
 
       setDetail((prev) => {
-        if (!prev) return prev
+        if (!prev || prev.conversation.id !== conversationId) return prev
         const known = new Set(prev.messages.map((message) => message.id))
         const merged = [...prev.messages]
         for (const message of incoming) {
@@ -964,16 +985,26 @@ export function ConversationsInboxPage() {
 
   useEffect(() => {
     if (selectedId == null || Number.isNaN(selectedId)) {
+      detailRequestIdRef.current += 1
       setDetail(null)
+      setContactAttributes({})
+      setLoadingDetail(false)
+      setError('')
       return
     }
 
+    setDetail(null)
+    setContactAttributes({})
+    setError('')
+    setLoadingDetail(true)
+
     if (selectedId < 0) {
       const contactId = -selectedId
-      setLoadingDetail(true)
+      const requestId = ++detailRequestIdRef.current
       apiClient
         .post<{ id: number }>(`/api/conversations/from-contact/${contactId}`, {})
         .then((result) => {
+          if (requestId !== detailRequestIdRef.current) return
           if (!result.ok) {
             notify.error(result.error)
             setError(result.error)
@@ -985,8 +1016,6 @@ export function ConversationsInboxPage() {
       return
     }
 
-    setLoadingDetail(true)
-    setError('')
     void loadDetail(selectedId)
   }, [selectedId, navigate, loadDetail, conversationPath])
 
@@ -1204,6 +1233,15 @@ export function ConversationsInboxPage() {
   ) {
     const convId = conversationId ?? actionsConversationId ?? selectedId
     if (!convId || convId <= 0) return
+    const switchingToBot = status === 'bot'
+    const ok = await confirm({
+      title: switchingToBot ? 'Pasar a modo Bot' : 'Pasar a modo Asesor',
+      description: switchingToBot
+        ? 'El bot volverá a atender este chat. Las respuestas humanas quedan pausadas hasta que lo pases a Asesor.'
+        : 'El bot dejará de responder en este chat para que puedas escribir libremente.',
+      confirmLabel: switchingToBot ? 'Pasar a Bot' : 'Pasar a Asesor',
+    })
+    if (!ok) return
     const result = await apiClient.patch<{ status: 'bot' | 'human' }>(
       `/api/conversations/${convId}/mode`,
       { status },
@@ -1212,6 +1250,7 @@ export function ConversationsInboxPage() {
       notify.error(result.error)
       return
     }
+    notify.success(switchingToBot ? 'Modo Bot activado' : 'Modo Asesor activado')
     if (selectedId === convId) void loadDetail(convId)
     void loadList()
   }
@@ -1227,6 +1266,7 @@ export function ConversationsInboxPage() {
       notify.error(result.error)
       return
     }
+    notify.success('Marcado como no leído')
     if (selectedId === convId) {
       navigate(`/conversations${filterQuerySuffix}`)
     }
@@ -1247,6 +1287,7 @@ export function ConversationsInboxPage() {
       notify.error(result.error)
       return
     }
+    notify.success(archived ? 'Chat archivado' : 'Chat desarchivado')
     if (selectedId === convId) {
       if (archived || isArchivedChatFilter(chatFilter)) {
         navigate(`/conversations${filterQuerySuffix}`)
@@ -1317,21 +1358,23 @@ export function ConversationsInboxPage() {
     event.preventDefault()
     if (!selectedId || selectedId <= 0 || !detail?.can_reply) return
     const text = replyText.trim()
-    if (!text && !replyFile) {
+    const file = replyFile
+    const replyTo = replyToMessage
+    if (!text && !file) {
       notify.error('Escribe un mensaje o adjunta un archivo')
       return
     }
     setSendingReply(true)
-    const replyPayload = replyToMessage
-      ? { message: text, reply_to_message_id: replyToMessage.id }
+    const replyPayload = replyTo
+      ? { message: text, reply_to_message_id: replyTo.id }
       : { message: text }
-    const result = replyFile
+    const result = file
       ? await (() => {
           const formData = new FormData()
           if (text) formData.append('message', text)
-          formData.append('file', replyFile)
-          if (replyToMessage) {
-            formData.append('reply_to_message_id', String(replyToMessage.id))
+          formData.append('file', file)
+          if (replyTo) {
+            formData.append('reply_to_message_id', String(replyTo.id))
           }
           return apiClient.postFormData<{ messages: InboxMessage[] }>(
             `/api/conversations/${selectedId}/reply`,
@@ -1350,8 +1393,51 @@ export function ConversationsInboxPage() {
     setReplyText('')
     setReplyFile(null)
     setReplyToMessage(null)
-    void loadDetail(selectedId)
-    void loadList()
+
+    const sent = result.data.messages ?? []
+    const convId = selectedId
+    setDetail((prev) => {
+      if (!prev || prev.conversation.id !== convId) return prev
+      const byId = new Map(prev.messages.map((message) => [message.id, message]))
+      for (const message of sent) byId.set(message.id, message)
+      const merged = [...byId.values()].sort((a, b) => a.id - b.id)
+      const last = merged[merged.length - 1]
+      return {
+        ...prev,
+        messages: merged,
+        conversation: {
+          ...prev.conversation,
+          last_message_at: last?.created_at ?? prev.conversation.last_message_at,
+        },
+      }
+    })
+
+    const previewText = text
+      ? text.length > 120
+        ? `${text.slice(0, 120)}…`
+        : text
+      : file
+        ? file.name
+        : ''
+    const nowIso = new Date().toISOString()
+    setList((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        items: prev.items.map((row) =>
+          row.id === convId
+            ? {
+                ...row,
+                preview: previewText || row.preview,
+                last_message_at: nowIso,
+                last_outbound_message_at: nowIso,
+                inbox_unread: false,
+              }
+            : row,
+        ),
+      }
+    })
+    requestAnimationFrame(() => scrollerRef.current?.scrollToBottom('smooth'))
   }
 
   const canAssign =
@@ -1386,6 +1472,9 @@ export function ConversationsInboxPage() {
       return
     }
     setAssignContext(null)
+    notify.success(
+      assignedUserId == null ? 'Chat sin asignar' : 'Chat asignado',
+    )
     if (selectedId === convId) void loadDetail(convId)
     void loadList()
   }
@@ -1487,7 +1576,22 @@ export function ConversationsInboxPage() {
   }
 
   if (error && !list) {
-    return <p className="text-muted p-4">No se pudo cargar</p>
+    return (
+      <div className="space-y-3 p-4">
+        <p className="text-muted">No se pudo cargar</p>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          onClick={() => {
+            setError('')
+            void loadList()
+          }}
+        >
+          Reintentar
+        </Button>
+      </div>
+    )
   }
 
   const filterPills = (
@@ -1650,38 +1754,38 @@ export function ConversationsInboxPage() {
         className="relative conversations-inbox-sidebar"
         actions={
           browserNotifySupported ? (
-            <Button
+            <button
               type="button"
-              size="sm"
-              variant={browserNotifyPermission === 'granted' ? 'default' : 'outline'}
-              className="size-8 rounded-full p-0"
-              disabled={browserNotifyPermission === 'denied'}
-              aria-pressed={browserNotifyPermission === 'granted'}
+              className={`small-btn compact inbox-notify-bell-btn${browserNotifyActive ? ' is-active' : ''}`}
+              aria-pressed={browserNotifyActive}
               aria-label={
-                browserNotifyPermission === 'granted'
-                  ? 'Avisos de Mis chats activos'
-                  : browserNotifyPermission === 'denied'
-                    ? 'Avisos bloqueados en el navegador'
+                browserNotifyPermission === 'denied'
+                  ? 'Avisos bloqueados en el navegador'
+                  : browserNotifyActive
+                    ? 'Desactivar avisos de Mis chats'
                     : 'Activar avisos de Mis chats'
               }
               title={
-                browserNotifyPermission === 'granted'
-                  ? 'Avisos de Mis chats activos'
-                  : browserNotifyPermission === 'denied'
-                    ? 'Avisos bloqueados en el navegador'
+                browserNotifyPermission === 'denied'
+                  ? 'Avisos bloqueados en el navegador. Actívalos en la configuración del sitio.'
+                  : browserNotifyActive
+                    ? 'Avisos activos — clic para desactivar'
                     : 'Activar avisos de Mis chats'
               }
               onClick={() => {
-                if (browserNotifyPermission === 'granted') return
+                if (browserNotifyActive) {
+                  disableBrowserNotify()
+                  return
+                }
                 void enableBrowserNotify()
               }}
             >
-              {browserNotifyPermission === 'denied' ? (
+              {browserNotifyPermission === 'denied' && !browserNotifyActive ? (
                 <InboxNotifyBellOffIcon />
               ) : (
-                <InboxNotifyBellIcon active={browserNotifyPermission === 'granted'} />
+                <InboxNotifyBellIcon active={browserNotifyActive} />
               )}
-            </Button>
+            </button>
           ) : null
         }
         filters={filterPills}
@@ -1700,8 +1804,51 @@ export function ConversationsInboxPage() {
             </Button>
           ) : null
         }
+        footer={
+          listMatchesFilters && listPages > 1 ? (
+            <div className="inbox-chat-list-pager inbox-chat-list-pager--sticky" role="navigation" aria-label="Paginación de chats">
+              <button
+                type="button"
+                disabled={listPage <= 1}
+                onClick={() => goToPage(listPage - 1)}
+                className="small-btn"
+                aria-label="Página anterior"
+              >
+                {'<'}
+              </button>
+              {chatListPageItems(listPage, listPages).map((item, idx) =>
+                item === 'ellipsis' ? (
+                  <span key={`e-${idx}`} className="inbox-chat-list-pager-ellipsis muted">
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={item}
+                    type="button"
+                    className={`small-btn${item === listPage ? ' primary' : ''}`}
+                    aria-current={item === listPage ? 'page' : undefined}
+                    onClick={() => {
+                      if (item !== listPage) goToPage(item)
+                    }}
+                  >
+                    {item}
+                  </button>
+                ),
+              )}
+              <button
+                type="button"
+                disabled={listPage >= listPages}
+                onClick={() => goToPage(listPage + 1)}
+                className="small-btn"
+                aria-label="Página siguiente"
+              >
+                {'>'}
+              </button>
+            </div>
+          ) : null
+        }
       >
-        {canBulkSelect && list && list.items.length > 0 ? (
+        {canBulkSelect && listMatchesFilters && list!.items.length > 0 ? (
           <div className="flex flex-wrap items-center gap-1 border-b border-line px-3 py-1.5 text-xs">
             <button
               type="button"
@@ -1729,12 +1876,23 @@ export function ConversationsInboxPage() {
           </div>
         ) : null}
         <ul className="inbox-chat-list">
-          {!list ? (
+          {!listMatchesFilters ? (
             <li className="inbox-empty-list">Cargando…</li>
-          ) : list.items.length === 0 ? (
-            <li className="inbox-empty-list">No hay conversaciones.</li>
+          ) : list!.items.length === 0 ? (
+            <li className="inbox-empty-list">
+              <span>No hay conversaciones.</span>
+              {hasActiveListFilters ? (
+                <button
+                  type="button"
+                  className="small-btn compact mt-2"
+                  onClick={clearListFilters}
+                >
+                  Limpiar filtros
+                </button>
+              ) : null}
+            </li>
           ) : (
-            list.items.map((item) => {
+            list!.items.map((item) => {
               const active = selectedId === item.id
               const crmName = String(item.contact_name ?? '').trim()
               const waAlias = String(item.wa_profile_name ?? '').trim()
@@ -1746,7 +1904,7 @@ export function ConversationsInboxPage() {
               const hasConversation = !item.is_virtual
               const actionsCtx = chatActionsFromListItem(
                 item,
-                list.ai_area_enabled,
+                list!.ai_area_enabled,
                 name,
               )
               const windowHours = !item.is_virtual
@@ -1885,8 +2043,9 @@ export function ConversationsInboxPage() {
                             />
                           ) : null}
                           <span
-                            className="inbox-chat-msg-times"
+                            className="inbox-chat-msg-times inbox-chat-msg-times--compact"
                             title={[
+                              `Actividad: ${formatChatListTime(item.last_message_at)}`,
                               `Entrante: ${formatChatListTime(item.last_user_message_at)}`,
                               `Saliente: ${formatChatListTime(item.last_outbound_message_at)}`,
                               replyStatus?.title,
@@ -1895,21 +2054,18 @@ export function ConversationsInboxPage() {
                               .join(' · ')}
                           >
                             <span className="inbox-chat-msg-time">
-                              <span aria-hidden>↓</span>
-                              {formatChatListTime(item.last_user_message_at)}
+                              {formatChatListTime(item.last_message_at)}
                             </span>
-                            <span className="inbox-chat-msg-time">
-                              <span aria-hidden>↑</span>
-                              {formatChatListTime(item.last_outbound_message_at)}
-                            </span>
-                            <span
-                              className={`inbox-chat-msg-time inbox-chat-msg-time--lag${
-                                replyStatus?.symbol === '⏳' ? ' is-waiting' : ''
-                              }`}
-                            >
-                              <span aria-hidden>{replyStatus?.symbol ?? '⏱'}</span>
-                              {replyStatus?.label ?? '—'}
-                            </span>
+                            {replyStatus ? (
+                              <span
+                                className={`inbox-chat-msg-time inbox-chat-msg-time--lag${
+                                  replyStatus.symbol === '⏳' ? ' is-waiting' : ''
+                                }`}
+                              >
+                                <span aria-hidden>{replyStatus.symbol}</span>
+                                {replyStatus.label}
+                              </span>
+                            ) : null}
                           </span>
                         </span>
                         <button
@@ -2038,47 +2194,6 @@ export function ConversationsInboxPage() {
               )
             })
           )}
-          {listPages > 1 ? (
-            <li className="inbox-chat-list-pager">
-              <button
-                type="button"
-                disabled={listPage <= 1}
-                onClick={() => goToPage(listPage - 1)}
-                className="small-btn"
-                aria-label="Página anterior"
-              >
-                {'<'}
-              </button>
-              {chatListPageItems(listPage, listPages).map((item, idx) =>
-                item === 'ellipsis' ? (
-                  <span key={`e-${idx}`} className="inbox-chat-list-pager-ellipsis muted">
-                    …
-                  </span>
-                ) : (
-                  <button
-                    key={item}
-                    type="button"
-                    className={`small-btn${item === listPage ? ' primary' : ''}`}
-                    aria-current={item === listPage ? 'page' : undefined}
-                    onClick={() => {
-                      if (item !== listPage) goToPage(item)
-                    }}
-                  >
-                    {item}
-                  </button>
-                ),
-              )}
-              <button
-                type="button"
-                disabled={listPage >= listPages}
-                onClick={() => goToPage(listPage + 1)}
-                className="small-btn"
-                aria-label="Página siguiente"
-              >
-                {'>'}
-              </button>
-            </li>
-          ) : null}
         </ul>
       </WaSidebar>
 
@@ -2088,7 +2203,21 @@ export function ConversationsInboxPage() {
         ) : loadingDetail && !detail ? (
           <WaEmptyPane heading="Cargando chat…" />
         ) : error && !detail ? (
-          <WaEmptyPane heading="No se pudo cargar" />
+          <WaEmptyPane heading="No se pudo cargar">
+            <div className="inbox-empty-hint space-y-3">
+              <h2 className="inbox-empty-heading">No se pudo cargar</h2>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  if (selectedId != null && selectedId > 0) void loadDetail(selectedId)
+                }}
+              >
+                Reintentar
+              </Button>
+            </div>
+          </WaEmptyPane>
         ) : detail ? (
           <>
             <WaMainHeader>
@@ -2200,8 +2329,10 @@ export function ConversationsInboxPage() {
                 onClearReplyTo={() => setReplyToMessage(null)}
                 windowOpen={detail.user_service_window_open}
                 canReply={detail.can_reply}
+                replyBlockedReason={detail.reply_blocked_reason}
                 conversationId={detail.conversation.id}
                 onOpenTemplate={() => setTemplateOpen(true)}
+                onSwitchToHuman={() => void onModeChange('human', detail.conversation.id)}
                 onFlowStarted={() => void loadDetail(detail.conversation.id)}
                 contactAttributes={contactAttributes}
               />
@@ -2311,6 +2442,7 @@ export function ConversationsInboxPage() {
         onApplySegment={applyBulkSegment}
         onApplyAttribute={applyBulkAttribute}
       />
+      {confirmDialog}
     </WaPageContents>
   )
 }

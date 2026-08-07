@@ -3,6 +3,8 @@ export type FlowStatus = 'draft' | 'active' | 'paused';
 export type FlowNodeKind =
   | 'message_text'
   | 'message_buttons'
+  | 'message_image'
+  | 'message_document'
   | 'handoff_human'
   | 'end';
 
@@ -31,6 +33,9 @@ export type FlowNodeDto = {
   kind: FlowNodeKind;
   body_text: string;
   buttons: FlowButton[];
+  media_url: string | null;
+  media_mime: string | null;
+  media_filename: string | null;
   timeout_minutes: number | null;
   timeout_body_text: string;
   timeout_repeat: boolean;
@@ -120,6 +125,9 @@ export type FlowNodeInput = {
   kind: FlowNodeKind;
   body_text?: string;
   buttons?: FlowButton[];
+  media_url?: string | null;
+  media_mime?: string | null;
+  media_filename?: string | null;
   timeout_minutes?: number | null;
   timeout_body_text?: string;
   timeout_repeat?: boolean;

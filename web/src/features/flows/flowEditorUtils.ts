@@ -1,6 +1,8 @@
 export type FlowNodeKind =
   | 'message_text'
   | 'message_buttons'
+  | 'message_image'
+  | 'message_document'
   | 'handoff_human'
   | 'end'
 
@@ -11,6 +13,9 @@ export type FlowEditorNode = {
   kind: FlowNodeKind
   body_text: string
   buttons: FlowButton[]
+  media_url: string | null
+  media_mime: string | null
+  media_filename: string | null
   timeout_minutes: number | null
   timeout_body_text: string
   timeout_repeat: boolean
@@ -73,6 +78,9 @@ export type FlowDetail = {
     kind: FlowNodeKind
     body_text: string
     buttons: FlowButton[]
+    media_url: string | null
+    media_mime: string | null
+    media_filename: string | null
     timeout_minutes: number | null
     timeout_body_text: string
     timeout_repeat: boolean
@@ -117,6 +125,9 @@ export function emptyNode(
       kind === 'message_buttons'
         ? [{ id: 'BTN_A', title: 'Opción A' }]
         : [],
+    media_url: null,
+    media_mime: null,
+    media_filename: null,
     timeout_minutes: null,
     timeout_body_text: '',
     timeout_repeat: false,
@@ -150,6 +161,9 @@ export function detailToEditor(detail: FlowDetail): {
       buttons: n.buttons.length
         ? n.buttons.map((b) => ({ id: b.id, title: b.title }))
         : [],
+      media_url: n.media_url ?? null,
+      media_mime: n.media_mime ?? null,
+      media_filename: n.media_filename ?? null,
       timeout_minutes: n.timeout_minutes ?? null,
       timeout_body_text: n.timeout_body_text ?? '',
       timeout_repeat: Boolean(n.timeout_repeat),
@@ -205,6 +219,14 @@ export function formatTimeoutBadge(n: {
 export const KIND_LABEL: Record<FlowNodeKind, string> = {
   message_text: 'Mensaje',
   message_buttons: 'Mensaje',
+  message_image: 'Imagen',
+  message_document: 'Documento',
   handoff_human: 'Derivar',
   end: 'Fin del flujo',
+}
+
+export function isMediaKind(
+  kind: FlowNodeKind,
+): kind is 'message_image' | 'message_document' {
+  return kind === 'message_image' || kind === 'message_document'
 }

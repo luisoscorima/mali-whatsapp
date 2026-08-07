@@ -43,6 +43,7 @@ export function ConversationsSummaryPane() {
   const [summary, setSummary] = useState<ConversationSummary | null>(null)
   const [assignees, setAssignees] = useState<Assignee[]>([])
   const [error, setError] = useState('')
+  const [reloadToken, setReloadToken] = useState(0)
 
   const days = Number(searchParams.get('kpi_days') ?? 30) || 30
   const advisorId = canViewGlobal ? (searchParams.get('kpi_advisor') ?? '') : ''
@@ -80,7 +81,7 @@ export function ConversationsSummaryPane() {
     return () => {
       cancelled = true
     }
-  }, [area, days, advisorId, canViewGlobal])
+  }, [area, days, advisorId, canViewGlobal, reloadToken])
 
   const chartData = useMemo(
     () =>
@@ -102,8 +103,30 @@ export function ConversationsSummaryPane() {
     })
   }
 
+  if (user && !user.isProvisioned && !user.isMaster) {
+    return (
+      <WaEmptyPane
+        heading="Cuenta sin permisos"
+        text="Tu cuenta está activa, pero aún no tiene áreas ni permisos asignados. Un administrador debe configurarte el acceso en Admin → Usuarios."
+      />
+    )
+  }
+
   if (error) {
-    return <WaEmptyPane heading="No se pudo cargar" />
+    return (
+      <WaEmptyPane>
+        <div className="inbox-empty-hint space-y-3">
+          <h2 className="inbox-empty-heading">No se pudo cargar</h2>
+          <button
+            type="button"
+            className="small-btn"
+            onClick={() => setReloadToken((n) => n + 1)}
+          >
+            Reintentar
+          </button>
+        </div>
+      </WaEmptyPane>
+    )
   }
 
   if (!user || !summary) {

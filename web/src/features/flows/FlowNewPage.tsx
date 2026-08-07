@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
@@ -9,6 +9,7 @@ import {
   type FlowEditorEdge,
   type FlowEditorNode,
 } from './flowEditorUtils'
+import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard'
 
 export function FlowNewPage() {
   const navigate = useNavigate()
@@ -20,6 +21,22 @@ export function FlowNewPage() {
   const [nodes, setNodes] = useState<FlowEditorNode[]>([first])
   const [edges, setEdges] = useState<FlowEditorEdge[]>([])
   const [saving, setSaving] = useState(false)
+
+  const dirty = useMemo(() => {
+    if (name.trim()) return true
+    if (triggerPayload.trim() !== 'INICIAR_FLUJO') return true
+    if (status !== 'draft') return true
+    if (nodes.length !== 1) return true
+    if (edges.length > 0) return true
+    const only = nodes[0]
+    return (
+      Boolean(only?.body_text?.trim()) ||
+      (only?.buttons?.length ?? 0) > 0 ||
+      Boolean(only?.media_url)
+    )
+  }, [name, triggerPayload, status, nodes, edges])
+
+  useUnsavedChangesGuard(dirty && !saving)
 
   async function persist(graph: {
     nodes: FlowEditorNode[]
@@ -40,6 +57,9 @@ export function FlowNewPage() {
         kind: n.kind,
         body_text: n.body_text,
         buttons: n.buttons,
+        media_url: n.media_url,
+        media_mime: n.media_mime,
+        media_filename: n.media_filename,
         timeout_minutes: n.timeout_minutes,
         timeout_body_text: n.timeout_body_text,
         timeout_repeat: n.timeout_repeat,

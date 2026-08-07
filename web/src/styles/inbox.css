@@ -245,6 +245,11 @@ html[data-theme='dark'] .inbox-layout-wa {
   border-top: 1px solid var(--line);
 }
 
+.inbox-chat-list-pager--sticky {
+  border-top: none;
+  padding: 8px;
+}
+
 .inbox-chat-list-pager .small-btn {
   min-width: 2rem;
   padding: 6px 10px;
@@ -302,7 +307,7 @@ html[data-theme='dark'] .inbox-layout-wa {
   flex-direction: column;
   align-items: flex-end;
   gap: 6px;
-  /* gutter horizontal entre contenido y ↓/↑/⏱ */
+  /* gutter horizontal entre contenido y hora */
   padding: 10px 4px 10px 6px;
   margin-left: 0;
 }
@@ -663,6 +668,11 @@ html[data-theme='dark'] .inbox-layout-wa {
   width: max-content;
 }
 
+.inbox-chat-msg-times--compact {
+  max-width: 4.2rem;
+  gap: 2px;
+}
+
 .inbox-chat-msg-time {
   font-size: 0.68rem;
   color: var(--muted);
@@ -861,6 +871,9 @@ html[data-theme='dark'] .inbox-chat-lead-star.is-on {
 }
 
 .inbox-empty-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   padding: 16px;
   margin: 0;
   font-size: 0.9rem;

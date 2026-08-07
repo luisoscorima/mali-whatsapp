@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
+import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard'
 import {
   Dialog,
   DialogClose,
@@ -82,6 +83,15 @@ export function TemplateForm({
   const [builder, setBuilder] = useState<TemplateBuilderState>(initialBuilder)
   const [saving, setSaving] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
+
+  const dirty = useMemo(() => {
+    if (name !== initialName) return true
+    if (language !== initialLanguage) return true
+    if (category !== initialCategory) return true
+    return JSON.stringify(builder) !== JSON.stringify(initialBuilder)
+  }, [name, language, category, builder, initialName, initialLanguage, initialCategory, initialBuilder])
+
+  useUnsavedChangesGuard(dirty && !saving)
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()

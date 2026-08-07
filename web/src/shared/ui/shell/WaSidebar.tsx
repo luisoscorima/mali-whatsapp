@@ -6,6 +6,8 @@ type WaSidebarProps = {
   actions?: ReactNode
   filters?: ReactNode
   floating?: ReactNode
+  /** Pie fijo bajo el scroll (p. ej. paginación). */
+  footer?: ReactNode
   children: ReactNode
   className?: string
   hiddenOnMobile?: boolean
@@ -16,6 +18,7 @@ export function WaSidebar({
   actions,
   filters,
   floating,
+  footer,
   children,
   className = '',
   hiddenOnMobile,
@@ -31,6 +34,7 @@ export function WaSidebar({
       </div>
       {filters ? <div className="inbox-sidebar-filters">{filters}</div> : null}
       <ScrollArea className="inbox-sidebar-scroll min-h-0 flex-1">{children}</ScrollArea>
+      {footer ? <div className="inbox-sidebar-footer">{footer}</div> : null}
       {floating}
     </aside>
   )

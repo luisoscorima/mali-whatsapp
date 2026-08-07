@@ -313,7 +313,8 @@ export async function sendSessionMediaMessage(input: {
   to: string;
   area: unknown;
   waType: ConversationWaType;
-  mediaId: string;
+  mediaId?: string;
+  mediaLink?: string;
   caption?: string;
   documentFilename?: string;
   phoneNumberId?: string | null;
@@ -322,6 +323,12 @@ export async function sendSessionMediaMessage(input: {
     area: input.area,
     phoneNumberId: input.phoneNumberId,
   });
+  const mediaId = String(input.mediaId || '').trim();
+  const mediaLink = String(input.mediaLink || '').trim();
+  if (!mediaId && !mediaLink) {
+    throw new Error('media id o link requerido');
+  }
+  const mediaRef = mediaId ? { id: mediaId } : { link: mediaLink };
   const cap =
     input.caption != null && String(input.caption).trim()
       ? String(input.caption).trim().slice(0, MAX_MEDIA_CAPTION_LEN)
@@ -334,18 +341,19 @@ export async function sendSessionMediaMessage(input: {
   };
 
   if (input.waType === 'image') {
-    payload.image = { id: input.mediaId, ...(cap ? { caption: cap } : {}) };
+    payload.image = { ...mediaRef, ...(cap ? { caption: cap } : {}) };
   } else if (input.waType === 'video') {
-    payload.video = { id: input.mediaId, ...(cap ? { caption: cap } : {}) };
+    payload.video = { ...mediaRef, ...(cap ? { caption: cap } : {}) };
   } else if (input.waType === 'audio') {
-    payload.audio = { id: input.mediaId };
+    if (!mediaId) throw new Error('Audio requiere media id');
+    payload.audio = { id: mediaId };
   } else if (input.waType === 'document') {
     const fn =
       input.documentFilename && String(input.documentFilename).trim()
         ? String(input.documentFilename).trim()
         : 'documento.pdf';
     payload.document = {
-      id: input.mediaId,
+      ...mediaRef,
       filename: fn.slice(0, 240),
       ...(cap ? { caption: cap } : {}),
     };

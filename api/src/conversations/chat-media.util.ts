@@ -122,6 +122,61 @@ export async function saveOutboundChatMediaFile(input: {
   return saveChatMediaFromBuffer({ ...input, direction: 'outbound' });
 }
 
+/** Guarda media de nodos de flujo (reutilizable entre sesiones). */
+export async function saveFlowMediaFile(input: {
+  buffer: Buffer;
+  mimeType: string;
+  filename?: string;
+}): Promise<LocalPreview & { filename: string }> {
+  if (!Buffer.isBuffer(input.buffer) || input.buffer.length === 0) {
+    throw new Error('Buffer vacío');
+  }
+  assertChatMediaS3Configured();
+  const cfg = getChatMediaS3Config();
+  const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
+  const mime = normalizeMime(input.mimeType) || 'application/octet-stream';
+  const ext = extFromMime(mime);
+  const rawName = String(input.filename || '')
+    .replace(/[^\w.\- ()áéíóúñÁÉÍÓÚÑ]/g, '_')
+    .trim()
+    .slice(0, 180);
+  const safeBase = rawName || `archivo${ext}`;
+  const fileName = `f-${Date.now()}-${randomBytes(6).toString('hex')}-${safeBase.endsWith(ext) ? safeBase : `${safeBase}${ext}`}`;
+  const key = `${cfg.folder.replace(/\/$/, '')}/flow-media/${fileName}`;
+
+  const client = new S3Client({
+    region: cfg.region,
+    credentials: {
+      accessKeyId: cfg.accessKeyId,
+      secretAccessKey: cfg.secretAccessKey,
+    },
+  });
+
+  const putInput: {
+    Bucket: string;
+    Key: string;
+    Body: Buffer;
+    ContentType: string;
+    CacheControl: string;
+    ACL?: 'public-read';
+  } = {
+    Bucket: cfg.bucket,
+    Key: key,
+    Body: input.buffer,
+    ContentType: mime,
+    CacheControl: 'public, max-age=31536000',
+  };
+  if (cfg.objectAcl) putInput.ACL = cfg.objectAcl;
+
+  await client.send(new PutObjectCommand(putInput));
+
+  return {
+    url: publicS3ObjectUrl(cfg.bucket, cfg.region, key),
+    mime,
+    filename: safeBase,
+  };
+}
+
 function parseRawPayload(raw: unknown): Record<string, unknown> | null {
   if (raw == null) return null;
   if (typeof raw === 'object') return raw as Record<string, unknown>;

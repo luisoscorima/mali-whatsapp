@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { insertAtSelection, wrapSelection } from '@/shared/textSelection'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/ui/shadcn/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/shadcn/popover'
+import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 import { InboxAttachment } from './InboxAttachment'
 import { InboxAdvisorNotesPopover } from './InboxAdvisorNotesPopover'
 import { cn } from '@/lib/utils'
@@ -70,6 +71,8 @@ export type ReplyToMessage = {
   outbound: boolean
 }
 
+export type ReplyBlockedReason = '24h' | 'bot_mode' | null
+
 type FlowOption = {
   id: number
   name: string
@@ -88,8 +91,10 @@ type InboxComposeBarProps = {
   onClearReplyTo?: () => void
   windowOpen: boolean
   canReply: boolean
+  replyBlockedReason?: ReplyBlockedReason
   conversationId: number
   onOpenTemplate: () => void
+  onSwitchToHuman?: () => void | Promise<void>
   onFlowStarted?: () => void
   contactAttributes?: Record<string, string>
   notesTrigger?: ReactNode
@@ -106,11 +111,14 @@ export function InboxComposeBar({
   onClearReplyTo,
   windowOpen,
   canReply,
+  replyBlockedReason = null,
   conversationId,
   onOpenTemplate,
+  onSwitchToHuman,
   onFlowStarted,
   contactAttributes = {},
 }: InboxComposeBarProps) {
+  const { confirm, confirmDialog } = useConfirmDialog()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [fileAccept, setFileAccept] = useState<string>(ATTACH_OPTIONS[0].accept)
@@ -139,7 +147,14 @@ export function InboxComposeBar({
     wrapSelection(textareaRef.current, marker, replyText, onReplyTextChange)
   }
 
-  async function startFlow(flowId: number) {
+  async function startFlow(flowId: number, flowName: string) {
+    const ok = await confirm({
+      title: 'Iniciar flujo',
+      description: `Se iniciará el flujo «${flowName}» en este chat. El cliente recibirá el mensaje del flujo de inmediato.`,
+      confirmLabel: 'Iniciar flujo',
+    })
+    if (!ok) return
+
     setFlowBusy(true)
     const result = await apiClient.post<{ flow_id: number; flow_name: string }>(
       `/api/conversations/${conversationId}/start-flow`,
@@ -154,197 +169,258 @@ export function InboxComposeBar({
     onFlowStarted?.()
   }
 
-  const showTextarea = canReply
-  const hasSecondary = windowOpen ? flows.length > 0 : true
+  function onTextareaKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== 'Enter') return
+    if (event.shiftKey) return
+    event.preventDefault()
+    if (sendingReply || !canReply) return
+    const form = event.currentTarget.form
+    if (form) form.requestSubmit()
+  }
+
+  const blockedByBot = !canReply && replyBlockedReason === 'bot_mode'
+  const blockedByWindow = !canReply && !blockedByBot
+  const hasSecondary = canReply && (windowOpen ? flows.length > 0 : true)
 
   return (
-    <form
-      onSubmit={(e) => {
-        if (!canReply) {
-          e.preventDefault()
-          return
-        }
-        onSubmit(e)
-      }}
-      className="inbox-compose-stack inbox-compose-stack--with-emoji"
-    >
-      {replyTo && canReply ? (
-        <div className="inbox-compose-reply-to">
-          <div className="inbox-compose-reply-to__body">
-            <span className="inbox-compose-reply-to__label">
-              Respondiendo a {replyTo.outbound ? 'ti' : 'cliente'}
-            </span>
-            <span className="inbox-compose-reply-to__text">{replyTo.preview}</span>
+    <>
+      <form
+        onSubmit={(e) => {
+          if (!canReply) {
+            e.preventDefault()
+            return
+          }
+          onSubmit(e)
+        }}
+        className="inbox-compose-stack inbox-compose-stack--with-emoji"
+      >
+        {replyTo && canReply ? (
+          <div className="inbox-compose-reply-to">
+            <div className="inbox-compose-reply-to__body">
+              <span className="inbox-compose-reply-to__label">
+                Respondiendo a {replyTo.outbound ? 'ti' : 'cliente'}
+              </span>
+              <span className="inbox-compose-reply-to__text">{replyTo.preview}</span>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Cancelar respuesta"
+              title="Cancelar respuesta"
+              onClick={() => onClearReplyTo?.()}
+            >
+              ×
+            </Button>
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Cancelar respuesta"
-            title="Cancelar respuesta"
-            onClick={() => onClearReplyTo?.()}
-          >
-            ×
-          </Button>
-        </div>
-      ) : null}
-      {replyFile && canReply ? (
-        <InboxAttachment filename={replyFile.name} onRemove={() => onReplyFileChange(null)} />
-      ) : null}
+        ) : null}
+        {replyFile && canReply ? (
+          <InboxAttachment filename={replyFile.name} onRemove={() => onReplyFileChange(null)} />
+        ) : null}
 
-      {!canReply ? (
-        <p className="text-xs text-muted px-1 pb-1">
-          {windowOpen
-            ? 'No puedes escribir libremente ahora; puedes iniciar un flujo desde la flecha.'
-            : 'Ventana de 24 h cerrada; envía una plantilla desde la flecha.'}
-        </p>
-      ) : null}
-
-      <div className="inbox-compose-bar">
-        {canReply ? (
-          <>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" variant="ghost" size="icon-sm" title="Adjuntar archivo">
-                  <IconAttach />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                {ATTACH_OPTIONS.map((opt) => (
-                  <DropdownMenuItem key={opt.key} onSelect={() => pickAttachment(opt.accept)}>
-                    {opt.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={fileAccept}
-              className="sr-only"
-              onChange={(e) => onReplyFileChange(e.target.files?.[0] ?? null)}
-            />
-
-            <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
-              <PopoverTrigger asChild>
-                <Button type="button" variant="ghost" size="icon-sm" aria-label="Insertar emoji" title="Emoji">
-                  <IconEmoji />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="start" className="w-auto p-2">
-                <div className="grid grid-cols-5 gap-1">
-                  {COMMON_EMOJIS.map((emoji) => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      className="rounded-md px-1 py-0.5 text-lg hover:bg-accent-soft"
-                      onClick={() => insertEmoji(emoji)}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-
-            <InboxAdvisorNotesPopover
-              triggerIcon={<IconNotes />}
-              contactAttributes={contactAttributes}
-              onInsert={(text) =>
-                insertAtSelection(textareaRef.current, text, replyText, onReplyTextChange)
-              }
-            />
-
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              title="Negrita"
-              aria-label="Negrita"
-              onClick={() => applyFormat('*')}
-            >
-              <strong>B</strong>
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              title="Cursiva"
-              aria-label="Cursiva"
-              onClick={() => applyFormat('_')}
-            >
-              <em>I</em>
-            </Button>
-
-            <textarea
-              ref={textareaRef}
-              value={replyText}
-              onChange={(e) => onReplyTextChange(e.target.value)}
-              rows={2}
-              placeholder="Escribe un mensaje…"
-              className="inbox-compose-textarea inbox-compose-grow"
-            />
-          </>
-        ) : (
-          <div className="inbox-compose-grow min-h-[36px]" />
-        )}
-
-        <div className="inbox-compose-send-split flex shrink-0">
-          <Button
-            type="submit"
-            disabled={sendingReply || !canReply}
-            className={cn(
-              'inbox-compose-send rounded-r-none',
-              hasSecondary ? 'pr-3' : '',
-            )}
-          >
-            {sendingReply ? '…' : 'Enviar'}
-          </Button>
-          {hasSecondary ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+        {!canReply ? (
+          <div className="flex flex-col gap-2 px-1 pb-1">
+            <p className="text-xs text-muted">
+              {blockedByBot
+                ? 'Este chat está en modo Bot. Pásalo a Asesor para escribir libremente.'
+                : windowOpen
+                  ? 'No puedes escribir libremente ahora; inicia un flujo o envía una plantilla.'
+                  : 'Ventana de 24 h cerrada; envía una plantilla para reabrir la conversación.'}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {blockedByBot && onSwitchToHuman ? (
                 <Button
                   type="button"
-                  disabled={flowBusy}
-                  className="inbox-compose-send rounded-l-none border-l border-white/25 px-2"
-                  aria-label="Más acciones de envío"
-                  title="Más acciones"
+                  size="sm"
+                  onClick={() => void onSwitchToHuman()}
                 >
-                  <IconChevronDown />
+                  Pasar a Asesor
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="max-w-xs">
-                {windowOpen
-                  ? flows.map((f) => (
+              ) : null}
+              {blockedByWindow ? (
+                <Button type="button" size="sm" onClick={() => onOpenTemplate()}>
+                  Enviar plantilla
+                </Button>
+              ) : null}
+              {!blockedByBot && windowOpen && flows.length > 0 ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" size="sm" variant="secondary" disabled={flowBusy}>
+                      Iniciar flujo
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="max-w-xs">
+                    {flows.map((f) => (
                       <DropdownMenuItem
                         key={f.id}
                         disabled={flowBusy}
-                        onSelect={() => void startFlow(f.id)}
+                        onSelect={() => void startFlow(f.id, f.name)}
                       >
                         <span className="flex flex-col gap-0.5">
-                          <span>Iniciar flujo: {f.name}</span>
+                          <span>{f.name}</span>
                           <span className="font-mono text-[10px] text-muted">
                             {f.trigger_payload}
                           </span>
                         </span>
                       </DropdownMenuItem>
-                    ))
-                  : (
-                      <DropdownMenuItem onSelect={() => onOpenTemplate()}>
-                        Enviar plantilla
-                      </DropdownMenuItem>
-                    )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="inbox-compose-bar">
+          {canReply ? (
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="ghost" size="icon-sm" title="Adjuntar archivo">
+                    <IconAttach />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  {ATTACH_OPTIONS.map((opt) => (
+                    <DropdownMenuItem key={opt.key} onSelect={() => pickAttachment(opt.accept)}>
+                      {opt.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={fileAccept}
+                className="sr-only"
+                onChange={(e) => onReplyFileChange(e.target.files?.[0] ?? null)}
+              />
+
+              <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="ghost" size="icon-sm" aria-label="Insertar emoji" title="Emoji">
+                    <IconEmoji />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-auto p-2">
+                  <div className="grid grid-cols-5 gap-1">
+                    {COMMON_EMOJIS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        className="rounded-md px-1 py-0.5 text-lg hover:bg-accent-soft"
+                        onClick={() => insertEmoji(emoji)}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              <InboxAdvisorNotesPopover
+                triggerIcon={<IconNotes />}
+                contactAttributes={contactAttributes}
+                onInsert={(text) =>
+                  insertAtSelection(textareaRef.current, text, replyText, onReplyTextChange)
+                }
+              />
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                title="Negrita"
+                aria-label="Negrita"
+                onClick={() => applyFormat('*')}
+              >
+                <strong>B</strong>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                title="Cursiva"
+                aria-label="Cursiva"
+                onClick={() => applyFormat('_')}
+              >
+                <em>I</em>
+              </Button>
+
+              <textarea
+                ref={textareaRef}
+                value={replyText}
+                onChange={(e) => onReplyTextChange(e.target.value)}
+                onKeyDown={onTextareaKeyDown}
+                rows={2}
+                placeholder="Escribe un mensaje… (Enter envía, Shift+Enter nueva línea)"
+                className="inbox-compose-textarea inbox-compose-grow"
+              />
+            </>
+          ) : (
+            <div className="inbox-compose-grow min-h-[36px]" />
+          )}
+
+          {canReply ? (
+            <div className="inbox-compose-send-split flex shrink-0">
+              <Button
+                type="submit"
+                disabled={sendingReply || !canReply}
+                className={cn(
+                  'inbox-compose-send rounded-r-none',
+                  hasSecondary ? 'pr-3' : '',
+                )}
+              >
+                {sendingReply ? '…' : 'Enviar'}
+              </Button>
+              {hasSecondary ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      disabled={flowBusy}
+                      className="inbox-compose-send rounded-l-none border-l border-white/25 px-2"
+                      aria-label="Más acciones de envío"
+                      title="Más acciones"
+                    >
+                      <IconChevronDown />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="max-w-xs">
+                    {windowOpen
+                      ? flows.map((f) => (
+                          <DropdownMenuItem
+                            key={f.id}
+                            disabled={flowBusy}
+                            onSelect={() => void startFlow(f.id, f.name)}
+                          >
+                            <span className="flex flex-col gap-0.5">
+                              <span>Iniciar flujo: {f.name}</span>
+                              <span className="font-mono text-[10px] text-muted">
+                                {f.trigger_payload}
+                              </span>
+                            </span>
+                          </DropdownMenuItem>
+                        ))
+                      : (
+                          <DropdownMenuItem onSelect={() => onOpenTemplate()}>
+                            Enviar plantilla
+                          </DropdownMenuItem>
+                        )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+            </div>
           ) : null}
         </div>
-      </div>
 
-      {showTextarea ? (
-        <p className="inbox-compose-hint-inline muted">
-          WhatsApp: *negrita*, _cursiva_. JPEG/PNG (5 MB), MP4 (16 MB), audio (16 MB), PDF (25 MB).
-        </p>
-      ) : null}
-    </form>
+        {canReply ? (
+          <p className="inbox-compose-hint-inline muted">
+            Enter envía · Shift+Enter nueva línea. WhatsApp: *negrita*, _cursiva_. JPEG/PNG (5 MB), MP4 (16 MB), audio (16 MB), PDF (25 MB).
+          </p>
+        ) : null}
+      </form>
+      {confirmDialog}
+    </>
   )
 }

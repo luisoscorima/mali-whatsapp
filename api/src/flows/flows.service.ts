@@ -10,9 +10,14 @@ import { setMessageSender } from '../conversations/chat-sender.util';
 import {
   INTERACTIVE_BUTTON_TITLE_MAX,
   MAX_INTERACTIVE_BUTTONS,
+  MAX_MEDIA_DOCUMENT_BYTES,
+  MEDIA_TYPE_LABEL,
+  classifyConversationUpload,
   sendSessionInteractiveButtons,
+  sendSessionMediaMessage,
   sendSessionTextMessage,
 } from '../conversations/conversation-whatsapp.util';
+import { saveFlowMediaFile } from '../conversations/chat-media.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { TRANSFER_TO_HUMAN_NOTICE } from '../webhook/ai-response.util';
 import { formatAdvisorLabel } from '../users/advisor-label.util';
@@ -44,6 +49,8 @@ import {
 const VALID_KINDS = new Set<FlowNodeKind>([
   'message_text',
   'message_buttons',
+  'message_image',
+  'message_document',
   'handoff_human',
   'end',
 ]);
@@ -136,6 +143,66 @@ export class FlowsService {
       id: row.id,
       label: formatAdvisorLabel(row),
     }));
+  }
+
+  async uploadMedia(
+    _area: string,
+    file: { buffer: Buffer; mimetype: string; originalname: string },
+    kind: 'image' | 'document',
+  ): Promise<{
+    url: string;
+    mime: string;
+    filename: string;
+    wa_type: 'image' | 'document';
+  }> {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('Archivo vacío');
+    }
+    let waType: 'image' | 'document';
+    try {
+      const classified = classifyConversationUpload(
+        file.mimetype,
+        file.buffer.length,
+      );
+      if (classified.waType !== 'image' && classified.waType !== 'document') {
+        throw new BadRequestException(
+          'Solo se admiten imágenes JPEG/PNG o documentos PDF',
+        );
+      }
+      waType = classified.waType;
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Archivo no válido',
+      );
+    }
+    if (kind === 'image' && waType !== 'image') {
+      throw new BadRequestException('Este nodo requiere una imagen JPEG/PNG');
+    }
+    if (kind === 'document' && waType !== 'document') {
+      throw new BadRequestException('Este nodo requiere un PDF');
+    }
+    if (file.buffer.length > MAX_MEDIA_DOCUMENT_BYTES) {
+      throw new BadRequestException('Archivo demasiado grande');
+    }
+    try {
+      const saved = await saveFlowMediaFile({
+        buffer: file.buffer,
+        mimeType: file.mimetype,
+        filename: file.originalname,
+      });
+      return {
+        url: saved.url,
+        mime: saved.mime || file.mimetype,
+        filename: saved.filename,
+        wa_type: waType,
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo guardar el archivo (revisa S3)',
+      );
+    }
   }
 
   async getDetail(area: string, id: number): Promise<FlowDetail> {
@@ -355,6 +422,7 @@ export class FlowsService {
       client_key: string | null;
       kind: string;
       body_text: string | null;
+      media_filename?: string | null;
     }[],
     sessions: { status: string }[],
   ): Promise<FlowAnalytics> {
@@ -882,6 +950,7 @@ export class FlowsService {
       client_key?: string | null;
       kind: string;
       body_text?: string | null;
+      media_filename?: string | null;
     };
     eventType: FlowEventType;
     matchPayload?: string | null;
@@ -893,7 +962,11 @@ export class FlowsService {
       nodeId: input.node.id,
       clientKey: input.node.client_key,
       nodeKind: input.node.kind,
-      nodeLabel: nodeLabelSnapshot(input.node.kind, input.node.body_text),
+      nodeLabel: nodeLabelSnapshot(
+        input.node.kind,
+        input.node.body_text,
+        input.node.media_filename,
+      ),
       eventType: input.eventType,
       matchPayload: input.matchPayload,
     });
@@ -1148,6 +1221,53 @@ export class FlowsService {
         return;
       }
 
+      if (kind === 'message_image' || kind === 'message_document') {
+        const mediaUrl = String(node.media_url || '').trim();
+        if (!mediaUrl) {
+          this.logger.warn(`Flujo nodo ${node.id}: media sin URL`);
+          await this.closeSession(input.sessionId, 'completed', node.id, {
+            flowId: input.flowId,
+            conversationId: input.conversationId,
+          });
+          return;
+        }
+        await this.sendOutboundMedia({
+          ...input,
+          waType: kind === 'message_image' ? 'image' : 'document',
+          mediaUrl,
+          caption: body,
+          filename: String(node.media_filename || '').trim() || undefined,
+          mime: String(node.media_mime || '').trim() || null,
+        });
+        await this.prisma.flow_sessions.update({
+          where: { id: input.sessionId },
+          data: {
+            current_node_id: node.id,
+            updated_at: new Date(),
+          },
+        });
+
+        const nextMediaEdge = await this.prisma.flow_edges.findFirst({
+          where: {
+            flow_id: input.flowId,
+            from_node_id: node.id,
+          },
+          orderBy: { id: 'asc' },
+        });
+        if (nextMediaEdge) {
+          await this.executeNode({
+            ...input,
+            nodeId: nextMediaEdge.to_node_id,
+          });
+        } else {
+          await this.closeSession(input.sessionId, 'completed', node.id, {
+            flowId: input.flowId,
+            conversationId: input.conversationId,
+          });
+        }
+        return;
+      }
+
       // message_text
       if (body) {
         await this.sendOutboundText({
@@ -1208,6 +1328,7 @@ export class FlowsService {
             client_key: true,
             kind: true,
             body_text: true,
+            media_filename: true,
           },
         },
       },
@@ -1235,7 +1356,7 @@ export class FlowsService {
         clientKey: node?.client_key,
         nodeKind: node?.kind,
         nodeLabel: node
-          ? nodeLabelSnapshot(node.kind, node.body_text)
+          ? nodeLabelSnapshot(node.kind, node.body_text, node.media_filename)
           : null,
         eventType: status === 'handed_off' ? 'handed_off' : 'completed',
       });
@@ -1320,6 +1441,56 @@ export class FlowsService {
     });
   }
 
+  private async sendOutboundMedia(input: {
+    conversationId: number;
+    area: string;
+    phone: string;
+    phoneNumberId: string | null;
+    waType: 'image' | 'document';
+    mediaUrl: string;
+    caption?: string;
+    filename?: string;
+    mime?: string | null;
+  }): Promise<void> {
+    const apiResponse = await sendSessionMediaMessage({
+      to: input.phone,
+      area: input.area,
+      waType: input.waType,
+      mediaLink: input.mediaUrl,
+      caption: input.caption,
+      documentFilename: input.filename,
+      phoneNumberId: input.phoneNumberId,
+    });
+    const msgId = apiResponse.messages?.[0]?.id || null;
+    const label = MEDIA_TYPE_LABEL[input.waType] || 'Archivo';
+    const caption = String(input.caption || '').trim();
+    const bodyText = caption
+      ? caption.slice(0, 8000)
+      : `[${label}] ${input.filename || input.mediaUrl}`.slice(0, 8000);
+    let payload = sanitizeApiResponse(apiResponse) as Record<string, unknown>;
+    payload.source = 'flow';
+    payload.local_preview = {
+      url: input.mediaUrl,
+      mime: input.mime || null,
+    };
+    payload = setMessageSender(payload, 'Flujo');
+    await this.prisma.chat_messages.create({
+      data: {
+        conversation_id: input.conversationId,
+        direction: 'outbound',
+        wa_message_id: msgId,
+        body_text: bodyText,
+        message_type: input.waType,
+        raw_payload: payload as Prisma.InputJsonValue,
+        is_ai: false,
+      },
+    });
+    await this.prisma.conversations.update({
+      where: { id: input.conversationId },
+      data: { last_message_at: new Date(), updated_at: new Date() },
+    });
+  }
+
   private validateGraph(
     dto: Pick<CreateFlowDto, 'nodes' | 'edges' | 'entry_client_key'>,
   ): void {
@@ -1363,6 +1534,15 @@ export class FlowsService {
       }
       if (kind === 'message_text' && !String(node.body_text || '').trim()) {
         throw new BadRequestException('El paso de texto necesita cuerpo');
+      }
+      if (kind === 'message_image' || kind === 'message_document') {
+        if (!String(node.media_url || '').trim()) {
+          throw new BadRequestException(
+            kind === 'message_image'
+              ? 'El paso de imagen necesita un archivo'
+              : 'El paso de documento necesita un archivo',
+          );
+        }
       }
       if (kind === 'message_buttons') {
         const timeoutMinutes = this.parseTimeoutMinutes(node.timeout_minutes);
@@ -1448,6 +1628,18 @@ export class FlowsService {
             node.kind === 'message_buttons'
               ? (parseButtons(node.buttons) as unknown as Prisma.InputJsonValue)
               : undefined,
+          media_url:
+            kind === 'message_image' || kind === 'message_document'
+              ? String(node.media_url || '').trim() || null
+              : null,
+          media_mime:
+            kind === 'message_image' || kind === 'message_document'
+              ? String(node.media_mime || '').trim() || null
+              : null,
+          media_filename:
+            kind === 'message_image' || kind === 'message_document'
+              ? String(node.media_filename || '').trim() || null
+              : null,
           timeout_minutes: timeoutFields.timeout_minutes,
           timeout_body_text: timeoutFields.timeout_body_text,
           timeout_repeat: timeoutFields.timeout_repeat,
@@ -1511,6 +1703,9 @@ export class FlowsService {
         kind: string;
         body_text: string | null;
         buttons_json: unknown;
+        media_url: string | null;
+        media_mime: string | null;
+        media_filename: string | null;
         timeout_minutes: number | null;
         timeout_body_text: string | null;
         timeout_repeat: boolean;
@@ -1539,6 +1734,9 @@ export class FlowsService {
       kind: n.kind as FlowNodeKind,
       body_text: String(n.body_text || ''),
       buttons: parseButtons(n.buttons_json),
+      media_url: n.media_url ? String(n.media_url) : null,
+      media_mime: n.media_mime ? String(n.media_mime) : null,
+      media_filename: n.media_filename ? String(n.media_filename) : null,
       timeout_minutes: n.timeout_minutes ?? null,
       timeout_body_text: String(n.timeout_body_text || ''),
       timeout_repeat: Boolean(n.timeout_repeat),

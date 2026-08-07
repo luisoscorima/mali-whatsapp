@@ -136,9 +136,10 @@ const NAV_ITEMS: NavItem[] = [
 type WaRailProps = {
   user: AuthUser | null
   onUserUpdate?: (user: AuthUser) => void
+  conversationsUnreadCount?: number
 }
 
-export function WaRail({ user, onUserUpdate }: WaRailProps) {
+export function WaRail({ user, onUserUpdate, conversationsUnreadCount = 0 }: WaRailProps) {
   const location = useLocation()
   const { toggleTheme } = useTheme()
   const moreRef = useRef<HTMLDetailsElement>(null)
@@ -187,11 +188,20 @@ export function WaRail({ user, onUserUpdate }: WaRailProps) {
             key={item.key}
             to={item.to}
             className={`wa-rail__item nav-item ${item.mobileSecondary ? 'wa-rail__item--mobile-secondary' : ''} ${nav === item.key ? 'is-active' : ''}`}
-            aria-label={item.label}
+            aria-label={
+              item.key === 'conversations' && conversationsUnreadCount > 0
+                ? `${item.label}, ${conversationsUnreadCount} sin leer`
+                : item.label
+            }
             title={item.label}
           >
             <span className="wa-rail__icon" aria-hidden="true">
               {item.icon}
+              {item.key === 'conversations' && conversationsUnreadCount > 0 ? (
+                <span className="wa-rail__badge">
+                  {conversationsUnreadCount > 99 ? '99+' : conversationsUnreadCount}
+                </span>
+              ) : null}
             </span>
             <span className="wa-rail__label">{item.label}</span>
           </Link>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
@@ -17,6 +17,7 @@ import {
   type FlowEditorNode,
 } from './flowEditorUtils'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
+import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard'
 
 const EMPTY_ANALYTICS: FlowAnalytics = {
   started: 0,
@@ -65,6 +66,18 @@ export function FlowDetailPage() {
   const [drilldownQuery, setDrilldownQuery] = useState<FlowDrilldownQuery | null>(
     null,
   )
+  const baselineRef = useRef('')
+
+  function snapshotEditor(state: {
+    name: string
+    triggerPayload: string
+    status: string
+    entryClientKey: string
+    nodes: FlowEditorNode[]
+    edges: FlowEditorEdge[]
+  }) {
+    return JSON.stringify(state)
+  }
 
   function applyDetail(detail: FlowDetail) {
     const editor = detailToEditor(detail)
@@ -76,7 +89,31 @@ export function FlowDetailPage() {
     setEdges(editor.edges)
     setActiveSessions(detail.metrics.active_sessions)
     setAnalytics(detail.analytics || EMPTY_ANALYTICS)
+    baselineRef.current = snapshotEditor({
+      name: editor.name,
+      triggerPayload: editor.trigger_payload,
+      status: editor.status,
+      entryClientKey: editor.entry_client_key,
+      nodes: editor.nodes,
+      edges: editor.edges,
+    })
   }
+
+  const dirty = useMemo(() => {
+    if (!ready || !baselineRef.current) return false
+    return (
+      snapshotEditor({
+        name,
+        triggerPayload,
+        status,
+        entryClientKey,
+        nodes,
+        edges,
+      }) !== baselineRef.current
+    )
+  }, [ready, name, triggerPayload, status, entryClientKey, nodes, edges])
+
+  useUnsavedChangesGuard(dirty && !saving && !deleting)
 
   useEffect(() => {
     if (!id) return
@@ -123,6 +160,9 @@ export function FlowDetailPage() {
         kind: n.kind,
         body_text: n.body_text,
         buttons: n.buttons,
+        media_url: n.media_url,
+        media_mime: n.media_mime,
+        media_filename: n.media_filename,
         timeout_minutes: n.timeout_minutes,
         timeout_body_text: n.timeout_body_text,
         timeout_repeat: n.timeout_repeat,

@@ -10,11 +10,17 @@ import type {
 export function nodeLabelSnapshot(
   kind: string,
   bodyText: string | null | undefined,
+  mediaFilename?: string | null,
 ): string {
   const body = String(bodyText || '')
     .trim()
     .replace(/\s+/g, ' ');
   if (body) return body.slice(0, 120);
+  const file = String(mediaFilename || '').trim();
+  if (kind === 'message_image') return file ? `Imagen: ${file}` : 'Imagen';
+  if (kind === 'message_document') {
+    return file ? `Archivo: ${file}` : 'Documento';
+  }
   if (kind === 'handoff_human') return 'Derivar a asesor';
   if (kind === 'end') return 'Fin del flujo';
   return 'Mensaje';
@@ -79,6 +85,7 @@ export function buildFlowAnalytics(input: {
     client_key: string | null;
     kind: string;
     body_text: string | null;
+    media_filename?: string | null;
   }[];
   eventAggs: EventAggRow[];
   waitingByKey: WaitingRow[];
@@ -118,7 +125,7 @@ export function buildFlowAnalytics(input: {
   const nodes: FlowNodeAnalytics[] = input.nodes.map((n) => {
     const key = String(n.client_key || `n_${n.id}`);
     currentKeys.add(key);
-    const label = nodeLabelSnapshot(n.kind, n.body_text);
+    const label = nodeLabelSnapshot(n.kind, n.body_text, n.media_filename);
     return {
       client_key: key,
       node_id: n.id,
@@ -159,6 +166,8 @@ export function asFlowNodeKind(value: string): FlowNodeKind {
   if (
     value === 'message_text' ||
     value === 'message_buttons' ||
+    value === 'message_image' ||
+    value === 'message_document' ||
     value === 'handoff_human' ||
     value === 'end'
   ) {

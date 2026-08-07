@@ -92,7 +92,7 @@ export function SettingsShell() {
           </WaMainHeader>
         ) : null}
         <WaMainBody variant="form">
-          <Outlet />
+          <Outlet context={{ modules }} />
         </WaMainBody>
       </WaMainPane>
     </WaPageContents>
