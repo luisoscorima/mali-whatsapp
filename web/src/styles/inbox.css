@@ -250,6 +250,15 @@ html[data-theme='dark'] .inbox-layout-wa {
   padding: 8px;
 }
 
+.inbox-chat-list-scroll-btn {
+  right: 12px;
+  bottom: 12px;
+}
+
+.inbox-chat-list-scroll-btn--above-pager {
+  bottom: 56px;
+}
+
 .inbox-chat-list-pager .small-btn {
   min-width: 2rem;
   padding: 6px 10px;
@@ -2007,15 +2016,31 @@ html[data-theme='dark'] .contact-filter-pill[data-seg-tone='slate'] {
   list-style: none;
 }
 
+.contact-fab--above-pager {
+  bottom: 64px;
+}
+
 .contact-list-scroll-btn {
   right: 22px;
   bottom: 84px;
+}
+
+.contact-list-scroll-btn--above-pager {
+  bottom: 132px;
 }
 
 @media (max-width: 768px) {
   .contact-list-scroll-btn {
     right: 18px;
     bottom: 76px;
+  }
+
+  .contact-fab--above-pager {
+    bottom: 60px;
+  }
+
+  .contact-list-scroll-btn--above-pager {
+    bottom: 120px;
   }
 }
 

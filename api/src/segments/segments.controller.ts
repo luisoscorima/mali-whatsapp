@@ -21,6 +21,7 @@ import { CreateSegmentDto, UpdateSegmentDto } from './dto/segment.dto';
 import { ReorderSegmentsDto } from './dto/reorder-segments.dto';
 import { SegmentsService } from './segments.service';
 import type { SegmentDefinition, SegmentDetail } from './segments.types';
+import type { SegmentSummary } from './segment-analytics.util';
 
 @Controller('segments')
 @UseGuards(JwtAuthGuard, ProvisionedGuard)
@@ -33,6 +34,16 @@ export class SegmentsController {
     @Query('month') month?: string,
   ): Promise<ApiResponse<SegmentDefinition[]>> {
     const data = await this.segmentsService.list(user.area, month);
+    return { ok: true, data };
+  }
+
+  @Get('summary')
+  async summary(
+    @CurrentUser() user: AuthUser,
+    @Query('days') days?: string,
+  ): Promise<ApiResponse<SegmentSummary>> {
+    assertCanManageSegments(user);
+    const data = await this.segmentsService.getSummary(user.area, days);
     return { ok: true, data };
   }
 

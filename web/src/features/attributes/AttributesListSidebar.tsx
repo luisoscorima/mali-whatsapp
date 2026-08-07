@@ -191,7 +191,11 @@ export function AttributesListSidebar({ selectedId }: AttributesListSidebarProps
 
   return (
     <WaSidebar
-      title="Atributos"
+      title={
+        filteredDefinitions != null
+          ? `Atributos (${filteredDefinitions.length})`
+          : 'Atributos'
+      }
       actions={
         <Link to={`/attributes/new${listQuery}`} className="small-btn primary">
           +

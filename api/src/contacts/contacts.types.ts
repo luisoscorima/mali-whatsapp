@@ -95,3 +95,5 @@ export type ContactsImportResult = {
   duplicate_rows_in_file: number;
   duplicate_phone_examples: string[];
 };
+
+export type { ContactSummary } from './contact-analytics.util';

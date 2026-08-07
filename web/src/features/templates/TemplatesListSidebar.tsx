@@ -164,7 +164,11 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
 
   return (
     <WaSidebar
-      title="Plantillas"
+      title={
+        filteredTemplates != null
+          ? `Plantillas (${filteredTemplates.length})`
+          : 'Plantillas'
+      }
       actions={
         <>
           <button

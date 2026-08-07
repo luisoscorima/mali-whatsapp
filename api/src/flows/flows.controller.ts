@@ -26,6 +26,10 @@ import type {
   FlowEventContactRow,
   FlowListItem,
 } from './flows.types';
+import {
+  fetchFlowSummary,
+  type FlowSummary,
+} from './flow-summary.util';
 
 @Controller('flows')
 @UseGuards(JwtAuthGuard, ProvisionedGuard)
@@ -37,6 +41,14 @@ export class FlowsController {
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<FlowListItem[]>> {
     const data = await this.flowsService.list(user.area);
+    return { ok: true, data };
+  }
+
+  @Get('summary')
+  async summary(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<FlowSummary>> {
+    const data = await this.flowsService.getSummary(user.area);
     return { ok: true, data };
   }
 

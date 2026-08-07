@@ -28,6 +28,10 @@ import {
   nodeLabelSnapshot,
   recordFlowEvent,
 } from './flow-analytics.util';
+import {
+  fetchFlowSummary,
+  type FlowSummary,
+} from './flow-summary.util';
 import type {
   FlowAnalytics,
   FlowButton,
@@ -113,6 +117,10 @@ export class FlowsService {
         updated_at: row.updated_at.toISOString(),
       };
     });
+  }
+
+  async getSummary(area: string): Promise<FlowSummary> {
+    return fetchFlowSummary(this.prisma, area);
   }
 
   async listAdvisors(

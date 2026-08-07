@@ -175,7 +175,11 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
 
   return (
     <WaSidebar
-      title="Segmentos"
+      title={
+        filteredSegments != null
+          ? `Segmentos (${filteredSegments.length})`
+          : 'Segmentos'
+      }
       actions={
         <Link to={`/segments/new${listQuery}`} className="small-btn primary">
           +

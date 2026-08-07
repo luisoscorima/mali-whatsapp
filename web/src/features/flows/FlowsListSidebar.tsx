@@ -53,7 +53,11 @@ export function FlowsListSidebar({ selectedId }: FlowsListSidebarProps) {
 
   return (
     <WaSidebar
-      title="Respuestas automatizadas"
+      title={
+        loading && items.length === 0
+          ? 'Respuestas automatizadas'
+          : `Respuestas automatizadas (${items.length})`
+      }
       actions={
         <Link to="/flows/new" className="small-btn primary">
           +

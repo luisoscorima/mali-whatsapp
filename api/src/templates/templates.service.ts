@@ -44,6 +44,10 @@ import {
   resolveWabaId,
   uploadTemplateHeaderHandle,
 } from './whatsapp-meta.util';
+import {
+  fetchTemplateSummary,
+  type TemplateSummary,
+} from './template-analytics.util';
 
 function toIso(value: Date | null | undefined): string | null {
   if (!value) return null;
@@ -78,6 +82,10 @@ export class TemplatesService {
       submitted_at: toIso(row.submitted_at),
       synced_at: row.synced_at.toISOString(),
     }));
+  }
+
+  async getSummary(area: AuthUser['area']): Promise<TemplateSummary> {
+    return fetchTemplateSummary(this.prisma, area);
   }
 
   async getById(

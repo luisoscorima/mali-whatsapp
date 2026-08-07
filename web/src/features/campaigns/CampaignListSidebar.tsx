@@ -50,7 +50,7 @@ export function CampaignListSidebar({ selectedId, onRefresh }: CampaignListSideb
 
   return (
     <WaSidebar
-      title="Campañas"
+      title={campaigns != null ? `Campañas (${campaigns.length})` : 'Campañas'}
       actions={
         <Link to="/campaigns/new" className="small-btn primary">
           +

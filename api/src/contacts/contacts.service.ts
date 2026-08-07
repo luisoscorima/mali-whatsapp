@@ -36,6 +36,10 @@ import type {
   ContactsListResult,
   ListContactsParams,
 } from './contacts.types';
+import {
+  fetchContactSummary,
+  type ContactSummary,
+} from './contact-analytics.util';
 import { AuditEvent } from '../audit/audit-events';
 import { auditActor, phoneMetaTail } from '../audit/audit-actor.util';
 import { AuditLogService } from '../audit/audit-log.service';
@@ -1056,6 +1060,14 @@ export class ContactsService {
         data: { contact_id: contact.id, updated_at: new Date() },
       });
     });
+  }
+
+  async getSummary(
+    area: AuthUser['area'],
+    daysRaw?: string,
+  ): Promise<ContactSummary> {
+    const days = Number(daysRaw ?? 30) || 30;
+    return fetchContactSummary(this.prisma, area, days);
   }
 
   async list(

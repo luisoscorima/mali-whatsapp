@@ -16,50 +16,27 @@ import { WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
 import { chartTooltipProps } from '@/shared/charts/chartTooltip'
 import { MetricsGrid } from '../campaigns/MetricsGrid'
 import type { MetricCard } from '../campaigns/campaignMetricActions'
+import { SEGMENT_NONE } from '../segments/SegmentFilterChips'
 
-type ConversationSummary = {
+type ContactSummary = {
   days: number
-  advisor_id: number | null
   kpis: MetricCard[]
   daily_series: { date: string; count: number }[]
-  top_advisors: { user_id: number; label: string; count: number }[]
 }
 
-type Assignee = { id: number; label: string }
-
-const KPI_FILTER_MAP: Record<string, { chat?: string }> = {
-  'Sin asignar': { chat: 'unassigned' },
-  'Sin responder': { chat: 'unanswered' },
-  'Sin leer': { chat: 'unread' },
-  'Modo Bot': { chat: 'bot' },
-  'Modo Asesor': { chat: 'human' },
+const KPI_FILTER_MAP: Record<string, { segment?: string }> = {
+  'Sin segmento': { segment: SEGMENT_NONE },
 }
 
-export function ConversationsSummaryPane() {
+export function ContactsSummaryPane() {
   const user = useAppUser()
   const area = user?.area
-  const canViewGlobal = Boolean(user?.canViewConversationStats)
   const [searchParams, setSearchParams] = useSearchParams()
-  const [summary, setSummary] = useState<ConversationSummary | null>(null)
-  const [assignees, setAssignees] = useState<Assignee[]>([])
+  const [summary, setSummary] = useState<ContactSummary | null>(null)
   const [error, setError] = useState('')
   const [reloadToken, setReloadToken] = useState(0)
 
   const days = Number(searchParams.get('kpi_days') ?? 30) || 30
-  const advisorId = canViewGlobal ? (searchParams.get('kpi_advisor') ?? '') : ''
-
-  useEffect(() => {
-    setAssignees([])
-    if (!canViewGlobal || !area) return
-
-    let cancelled = false
-    void apiClient.get<{ assignees: Assignee[] }>('/api/conversations/assignees').then((res) => {
-      if (!cancelled && res.ok) setAssignees(res.data.assignees)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [area, canViewGlobal])
 
   useEffect(() => {
     if (!area) return
@@ -67,8 +44,7 @@ export function ConversationsSummaryPane() {
     setError('')
     let cancelled = false
     const qs = new URLSearchParams({ days: String(days) })
-    if (canViewGlobal && advisorId) qs.set('advisor_id', advisorId)
-    void apiClient.get<ConversationSummary>(`/api/conversations/summary?${qs}`).then((res) => {
+    void apiClient.get<ContactSummary>(`/api/contacts/summary?${qs}`).then((res) => {
       if (cancelled) return
       if (!res.ok) {
         notify.error(res.error)
@@ -81,7 +57,7 @@ export function ConversationsSummaryPane() {
     return () => {
       cancelled = true
     }
-  }, [area, days, advisorId, canViewGlobal, reloadToken])
+  }, [area, days, reloadToken])
 
   const chartData = useMemo(
     () =>
@@ -92,13 +68,23 @@ export function ConversationsSummaryPane() {
     [summary],
   )
 
+  const metrics = useMemo(
+    () =>
+      (summary?.kpis ?? []).map((metric) => ({
+        ...metric,
+        interactive: Boolean(KPI_FILTER_MAP[metric.label]),
+      })),
+    [summary],
+  )
+
   function applyKpiFilter(metric: MetricCard) {
     const mapping = KPI_FILTER_MAP[metric.label]
-    if (!mapping?.chat) return
+    if (!mapping?.segment) return
     setSearchParams((sp) => {
       const next = new URLSearchParams(sp)
-      next.set('chat', mapping.chat!)
-      next.delete('id')
+      next.delete('segment')
+      next.append('segment', mapping.segment!)
+      next.delete('page')
       return next
     })
   }
@@ -137,11 +123,9 @@ export function ConversationsSummaryPane() {
     <WaEmptyPane variant="history">
       <div className="space-y-4">
         <div>
-          <h2 className="text-lg font-semibold">Conversaciones</h2>
+          <h2 className="text-lg font-semibold">Contactos</h2>
           <p className="text-sm text-muted">
-            {canViewGlobal
-              ? 'Selecciona un chat de la lista o usa un KPI para filtrar el inbox.'
-              : 'Resumen de tus conversaciones asignadas. Selecciona un chat de la lista.'}
+            Selecciona un contacto de la lista o usa un KPI para filtrar.
           </p>
         </div>
 
@@ -162,42 +146,13 @@ export function ConversationsSummaryPane() {
               {n} días
             </button>
           ))}
-          {canViewGlobal ? (
-            <select
-              value={advisorId}
-              onChange={(e) =>
-                setSearchParams((sp) => {
-                  const next = new URLSearchParams(sp)
-                  const v = e.target.value
-                  if (v) next.set('kpi_advisor', v)
-                  else next.delete('kpi_advisor')
-                  return next
-                })
-              }
-              className="rounded-lg border border-line bg-bg px-2 py-1"
-            >
-              <option value="">Todos los asesores</option>
-              {assignees.map((a) => (
-                <option key={a.id} value={String(a.id)}>
-                  {a.label}
-                </option>
-              ))}
-            </select>
-          ) : null}
         </div>
 
-        <MetricsGrid
-          title={canViewGlobal ? 'Resumen' : 'Mi resumen'}
-          metrics={summary.kpis.map((metric) => ({
-            ...metric,
-            interactive: Boolean(KPI_FILTER_MAP[metric.label]),
-          }))}
-          onMetricClick={(metric) => applyKpiFilter(metric)}
-        />
+        <MetricsGrid title="Resumen" metrics={metrics} onMetricClick={applyKpiFilter} />
 
         {chartData.length > 0 ? (
           <div className="h-56 w-full rounded-xl border border-line bg-surface-strong p-4">
-            <p className="mb-2 text-sm font-medium text-muted">Actividad diaria</p>
+            <p className="mb-2 text-sm font-medium text-muted">Altas diarias</p>
             <ResponsiveContainer width="100%" height="85%">
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />
@@ -216,12 +171,10 @@ export function ConversationsSummaryPane() {
           </div>
         ) : null}
 
-        {canViewGlobal && summary.top_advisors.length > 0 ? (
-          <p className="text-sm text-muted">
-            Top asesores:{' '}
-            {summary.top_advisors.map((row) => `${row.label} (${row.count})`).join(' · ')}
-          </p>
-        ) : null}
+        <p className="text-sm text-muted">
+          Selecciona un contacto de la lista o usa el botón + para añadir uno nuevo,
+          importar o exportar.
+        </p>
       </div>
     </WaEmptyPane>
   )

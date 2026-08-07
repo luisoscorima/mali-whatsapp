@@ -29,6 +29,10 @@ import {
   type SegmentMember,
 } from './segments.types';
 import { parseMonthKey } from '../shared/month-filter.util';
+import {
+  fetchSegmentSummary,
+  type SegmentSummary,
+} from './segment-analytics.util';
 
 function firstSegmentForLegacyColumn(segments: string[]): string | null {
   if (!segments.length) return null;
@@ -74,6 +78,14 @@ export class SegmentsService {
       select: SEGMENT_SELECT,
     });
     return rows.map(mapSegmentRow);
+  }
+
+  async getSummary(
+    area: AuthUser['area'],
+    daysRaw?: string,
+  ): Promise<SegmentSummary> {
+    const days = Number(daysRaw ?? 30) || 30;
+    return fetchSegmentSummary(this.prisma, area, days);
   }
 
   async listForFilters(area: AuthUser['area']): Promise<SegmentDefinition[]> {

@@ -9,20 +9,20 @@ import { MetaAdsShell } from '../features/meta-ads/MetaAdsShell'
 import { MetaAdsEmptyPane } from '../features/meta-ads/MetaAdsEmptyPane'
 import { MetaAdDetailPage } from '../features/meta-ads/MetaAdDetailPage'
 import { AttributesShell } from '../features/attributes/AttributesShell'
-import { AttributesEmptyPane } from '../features/attributes/AttributesEmptyPane'
+import { AttributesSummaryPane } from '../features/attributes/AttributesSummaryPane'
 import { AttributeNewPage } from '../features/attributes/AttributeNewPage'
 import { AttributeDetailPage } from '../features/attributes/AttributeDetailPage'
 import { SegmentsShell } from '../features/segments/SegmentsShell'
-import { SegmentsEmptyPane } from '../features/segments/SegmentsEmptyPane'
+import { SegmentsSummaryPane } from '../features/segments/SegmentsSummaryPane'
 import { SegmentNewPage } from '../features/segments/SegmentNewPage'
 import { SegmentDetailPage } from '../features/segments/SegmentDetailPage'
 import { ContactsShell } from '../features/contacts/ContactsShell'
-import { ContactsEmptyPane } from '../features/contacts/ContactsEmptyPane'
+import { ContactsSummaryPane } from '../features/contacts/ContactsSummaryPane'
 import { ContactImportPage } from '../features/contacts/ContactImportPage'
 import { ContactNewPage } from '../features/contacts/ContactNewPage'
 import { ContactDetailPage } from '../features/contacts/ContactDetailPage'
 import { TemplatesShell } from '../features/templates/TemplatesShell'
-import { TemplatesEmptyPane } from '../features/templates/TemplatesEmptyPane'
+import { TemplatesSummaryPane } from '../features/templates/TemplatesSummaryPane'
 import { TemplateDetailPage } from '../features/templates/TemplateDetailPage'
 import { TemplateNewPage } from '../features/templates/TemplateNewPage'
 import { CampaignsShell } from '../features/campaigns/CampaignsShell'
@@ -30,7 +30,7 @@ import { CampaignsSummaryPane } from '../features/campaigns/CampaignsSummaryPane
 import { CampaignNewPage } from '../features/campaigns/CampaignNewPage'
 import { CampaignDetailPage } from '../features/campaigns/CampaignDetailPage'
 import { FlowsShell } from '../features/flows/FlowsShell'
-import { FlowsEmptyPane } from '../features/flows/FlowsEmptyPane'
+import { FlowsSummaryPane } from '../features/flows/FlowsSummaryPane'
 import { FlowNewPage } from '../features/flows/FlowNewPage'
 import { FlowDetailPage } from '../features/flows/FlowDetailPage'
 import { SettingsShell } from '../features/settings/SettingsShell'
@@ -77,7 +77,7 @@ export function AppRouter() {
                 </RequireUserPermission>
               }
             >
-              <Route index element={<AttributesEmptyPane />} />
+              <Route index element={<AttributesSummaryPane />} />
               <Route path="new" element={<AttributeNewPage />} />
               <Route path=":id" element={<AttributeDetailPage />} />
             </Route>
@@ -89,18 +89,18 @@ export function AppRouter() {
                 </RequireUserPermission>
               }
             >
-              <Route index element={<SegmentsEmptyPane />} />
+              <Route index element={<SegmentsSummaryPane />} />
               <Route path="new" element={<SegmentNewPage />} />
               <Route path=":id" element={<SegmentDetailPage />} />
             </Route>
             <Route path="contacts" element={<ContactsShell />}>
-              <Route index element={<ContactsEmptyPane />} />
+              <Route index element={<ContactsSummaryPane />} />
               <Route path="import" element={<ContactImportPage />} />
               <Route path="new" element={<ContactNewPage />} />
               <Route path=":id" element={<ContactDetailPage />} />
             </Route>
             <Route path="templates" element={<TemplatesShell />}>
-              <Route index element={<TemplatesEmptyPane />} />
+              <Route index element={<TemplatesSummaryPane />} />
               <Route path="new" element={<TemplateNewPage />} />
               <Route path=":id" element={<TemplateDetailPage />} />
             </Route>
@@ -110,7 +110,7 @@ export function AppRouter() {
               <Route path=":id" element={<CampaignDetailPage />} />
             </Route>
             <Route path="flows" element={<FlowsShell />}>
-              <Route index element={<FlowsEmptyPane />} />
+              <Route index element={<FlowsSummaryPane />} />
               <Route path="new" element={<FlowNewPage />} />
               <Route path=":id" element={<FlowDetailPage />} />
             </Route>

@@ -25,7 +25,7 @@ export function MetricsGrid({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {metrics.map((metric) => {
           const action = resolveMetricAction(metric)
-          const clickable = Boolean(action && onMetricClick)
+          const clickable = Boolean(onMetricClick && (action || metric.interactive))
           return (
             <button
               key={metric.label}

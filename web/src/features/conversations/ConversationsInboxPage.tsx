@@ -1743,11 +1743,32 @@ export function ConversationsInboxPage() {
           ))}
         </div>
       ) : null}
-      {listCount != null ? (
-        <p className="px-3 text-xs text-muted">
-          {listCount} chat{listCount === 1 ? '' : 's'}
-          {listPages > 1 ? ` · Pág. ${listPage}/${listPages}` : null}
-        </p>
+      {canBulkSelect ? (
+        <div className="flex flex-wrap items-center gap-1 px-3 py-1 text-xs">
+          <button
+            type="button"
+            className="small-btn compact"
+            onClick={selectAllVisibleContacts}
+          >
+            Todos
+          </button>
+          <button
+            type="button"
+            className="small-btn compact"
+            onClick={clearContactSelection}
+          >
+            Ninguno
+          </button>
+          <button
+            type="button"
+            className="small-btn primary compact"
+            disabled={selectedContactIds.size === 0}
+            onClick={() => setBulkActionsOpen(true)}
+          >
+            Acciones
+            {selectedContactIds.size > 0 ? ` (${selectedContactIds.size})` : ''}
+          </button>
+        </div>
       ) : null}
     </>
   )
@@ -1800,7 +1821,11 @@ export function ConversationsInboxPage() {
               type="button"
               size="sm"
               variant="secondary"
-              className="absolute bottom-3 right-3 z-10 size-8 rounded-full p-0 shadow-md"
+              className={`inbox-chat-list-scroll-btn absolute z-10 size-8 rounded-full p-0 shadow-md${
+                listMatchesFilters && listPages > 1
+                  ? ' inbox-chat-list-scroll-btn--above-pager'
+                  : ''
+              }`}
               onClick={scrollChatListEdge}
               aria-label={listScrollAtEnd ? 'Ir al inicio de la lista' : 'Ir al final de la lista'}
               title={listScrollAtEnd ? 'Ir al inicio' : 'Ir al final'}
@@ -1853,33 +1878,6 @@ export function ConversationsInboxPage() {
           ) : null
         }
       >
-        {canBulkSelect && listMatchesFilters && list!.items.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-1 border-b border-line px-3 py-1.5 text-xs">
-            <button
-              type="button"
-              className="small-btn compact"
-              onClick={selectAllVisibleContacts}
-            >
-              Todos
-            </button>
-            <button
-              type="button"
-              className="small-btn compact"
-              onClick={clearContactSelection}
-            >
-              Ninguno
-            </button>
-            {selectedContactIds.size > 0 ? (
-              <button
-                type="button"
-                className="small-btn primary compact"
-                onClick={() => setBulkActionsOpen(true)}
-              >
-                Acciones ({selectedContactIds.size})
-              </button>
-            ) : null}
-          </div>
-        ) : null}
         <ul className="inbox-chat-list">
           {!listMatchesFilters ? (
             <li className="inbox-empty-list">Cargando…</li>

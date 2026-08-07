@@ -18,6 +18,7 @@ import {
 } from '../auth/permission.util';
 import { AttributeDefinitionsService } from './attribute-definitions.service';
 import type { AttributeDefinition } from './attribute-definitions.types';
+import type { AttributeSummary } from './attribute-analytics.util';
 import {
   CreateAttributeDefinitionDto,
   UpdateAttributeDefinitionDto,
@@ -34,6 +35,15 @@ export class AttributeDefinitionsController {
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<AttributeDefinition[]>> {
     const data = await this.service.listAll(user.area);
+    return { ok: true, data };
+  }
+
+  @Get('summary')
+  async summary(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<AttributeSummary>> {
+    assertCanManageAttributes(user);
+    const data = await this.service.getSummary(user.area);
     return { ok: true, data };
   }
 

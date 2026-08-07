@@ -388,10 +388,12 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
     Boolean(attrKey) ||
     showReplaced
 
+  const showPager = Boolean(result && result.pages > 1)
+
   return (
     <>
     <WaSidebar
-      title="Contactos"
+      title={result != null ? `Contactos (${result.total})` : 'Contactos'}
       className="inbox-sidebar--contacts"
       floating={
         <>
@@ -400,7 +402,9 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
               type="button"
               size="sm"
               variant="secondary"
-              className="contact-list-scroll-btn absolute z-10 size-8 rounded-full p-0 shadow-md"
+              className={`contact-list-scroll-btn absolute z-10 size-8 rounded-full p-0 shadow-md${
+                showPager ? ' contact-list-scroll-btn--above-pager' : ''
+              }`}
               onClick={scrollContactListEdge}
               aria-label={
                 listScrollAtEnd ? 'Ir al inicio de la lista' : 'Ir al final de la lista'
@@ -410,7 +414,10 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
               {listScrollAtEnd ? '↑' : '↓'}
             </Button>
           ) : null}
-          <details ref={fabRef} className="contact-fab">
+          <details
+            ref={fabRef}
+            className={`contact-fab${showPager ? ' contact-fab--above-pager' : ''}`}
+          >
           <summary
             className="contact-fab__trigger"
             title="Añadir, importar o exportar contactos"
@@ -604,13 +611,73 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
             ) : null}
           </div>
 
-          {result ? (
-            <p className="text-xs text-muted">
-              {result.total} contacto(s)
-              {result.pages > 1 ? ` · pág. ${result.page}/${result.pages}` : ''}
-            </p>
+          {canBulkSelect ? (
+            <div className="flex flex-wrap items-center gap-1 py-1 text-xs">
+              <button type="button" className="small-btn compact" onClick={selectAllContacts}>
+                Todos
+              </button>
+              <button type="button" className="small-btn compact" onClick={clearContactSelection}>
+                Ninguno
+              </button>
+              <button
+                type="button"
+                className="small-btn primary compact"
+                disabled={selectedIds.size === 0}
+                onClick={() => setBulkActionsOpen(true)}
+              >
+                Acciones
+                {selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+              </button>
+            </div>
           ) : null}
         </div>
+      }
+      footer={
+        showPager ? (
+          <div
+            className="inbox-chat-list-pager inbox-chat-list-pager--sticky"
+            role="navigation"
+            aria-label="Paginación de contactos"
+          >
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => goToPage(page - 1)}
+              className="small-btn"
+              aria-label="Página anterior"
+            >
+              {'<'}
+            </button>
+            {contactListPageItems(page, result!.pages).map((item, idx) =>
+              item === 'ellipsis' ? (
+                <span key={`e-${idx}`} className="inbox-chat-list-pager-ellipsis muted">
+                  …
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  type="button"
+                  className={`small-btn${item === page ? ' primary' : ''}`}
+                  aria-current={item === page ? 'page' : undefined}
+                  onClick={() => {
+                    if (item !== page) goToPage(item)
+                  }}
+                >
+                  {item}
+                </button>
+              ),
+            )}
+            <button
+              type="button"
+              disabled={page >= result!.pages}
+              onClick={() => goToPage(page + 1)}
+              className="small-btn"
+              aria-label="Página siguiente"
+            >
+              {'>'}
+            </button>
+          </div>
+        ) : null
       }
     >
       {!result ? (
@@ -622,27 +689,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
             : 'No hay contactos en esta área.'}
         </p>
       ) : (
-        <>
-          {canBulkSelect ? (
-            <div className="flex flex-wrap items-center gap-1 border-b border-line px-3 py-1.5 text-xs">
-              <button type="button" className="small-btn compact" onClick={selectAllContacts}>
-                Todos
-              </button>
-              <button type="button" className="small-btn compact" onClick={clearContactSelection}>
-                Ninguno
-              </button>
-              {selectedIds.size > 0 ? (
-                <button
-                  type="button"
-                  className="small-btn primary compact"
-                  onClick={() => setBulkActionsOpen(true)}
-                >
-                  Acciones ({selectedIds.size})
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-          <ul className="inbox-chat-list">
+        <ul className="inbox-chat-list">
             {result.items.map((contact) => {
               const active = selectedId === contact.id
               const displayName = formatContactName(
@@ -775,49 +822,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
                 </li>
               )
             })}
-            {result.pages > 1 ? (
-              <li className="inbox-chat-list-pager">
-                <button
-                  type="button"
-                  disabled={page <= 1}
-                  onClick={() => goToPage(page - 1)}
-                  className="small-btn"
-                  aria-label="Página anterior"
-                >
-                  {'<'}
-                </button>
-                {contactListPageItems(page, result.pages).map((item, idx) =>
-                  item === 'ellipsis' ? (
-                    <span key={`e-${idx}`} className="inbox-chat-list-pager-ellipsis muted">
-                      …
-                    </span>
-                  ) : (
-                    <button
-                      key={item}
-                      type="button"
-                      className={`small-btn${item === page ? ' primary' : ''}`}
-                      aria-current={item === page ? 'page' : undefined}
-                      onClick={() => {
-                        if (item !== page) goToPage(item)
-                      }}
-                    >
-                      {item}
-                    </button>
-                  ),
-                )}
-                <button
-                  type="button"
-                  disabled={page >= result.pages}
-                  onClick={() => goToPage(page + 1)}
-                  className="small-btn"
-                  aria-label="Página siguiente"
-                >
-                  {'>'}
-                </button>
-              </li>
-            ) : null}
-          </ul>
-        </>
+        </ul>
       )}
     </WaSidebar>
     <BulkContactActionsDialog

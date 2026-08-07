@@ -27,6 +27,7 @@ import type {
   TemplateSyncResult,
   TemplateValidateResult,
 } from './templates.types';
+import type { TemplateSummary } from './template-analytics.util';
 
 @Controller('templates')
 @UseGuards(JwtAuthGuard, ProvisionedGuard)
@@ -38,6 +39,14 @@ export class TemplatesController {
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<TemplateListItem[]>> {
     const data = await this.templatesService.list(user.area);
+    return { ok: true, data };
+  }
+
+  @Get('summary')
+  async summary(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<TemplateSummary>> {
+    const data = await this.templatesService.getSummary(user.area);
     return { ok: true, data };
   }
 

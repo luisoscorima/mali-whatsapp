@@ -27,6 +27,7 @@ import type {
   ContactsFilterOptions,
   ContactsImportResult,
   ContactsListResult,
+  ContactSummary,
 } from './contacts.types';
 import { ListContactsQueryDto } from './dto/list-contacts.query.dto';
 import { BulkAddSegmentDto } from './dto/bulk-add-segment.dto';
@@ -169,6 +170,15 @@ export class ContactsController {
       attr_key: query.attr_key,
       attr_value: query.attr_value,
     });
+    return { ok: true, data };
+  }
+
+  @Get('summary')
+  async summary(
+    @CurrentUser() user: AuthUser,
+    @Query('days') days?: string,
+  ): Promise<ApiResponse<ContactSummary>> {
+    const data = await this.contactsService.getSummary(user.area, days);
     return { ok: true, data };
   }
 

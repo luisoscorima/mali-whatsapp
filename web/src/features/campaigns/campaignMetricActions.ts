@@ -11,6 +11,8 @@ export type MetricCard = {
   tone?: string
   tooltip?: string
   action?: MetricAction | null
+  /** When true, MetricsGrid enables click even without a campaign action. */
+  interactive?: boolean
 }
 
 const ACTION_BY_LABEL: Record<string, MetricAction> = {

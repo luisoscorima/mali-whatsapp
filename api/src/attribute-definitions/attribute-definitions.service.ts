@@ -20,6 +20,10 @@ import type {
   CreateAttributeDefinitionDto,
   UpdateAttributeDefinitionDto,
 } from './dto/attribute-definition.dto';
+import {
+  fetchAttributeSummary,
+  type AttributeSummary,
+} from './attribute-analytics.util';
 
 const ATTR_DEF_SELECT = {
   id: true,
@@ -99,6 +103,10 @@ export class AttributeDefinitionsService {
       select: ATTR_DEF_SELECT,
     });
     return rows.map(mapDefinition);
+  }
+
+  async getSummary(area: AuthUser['area']): Promise<AttributeSummary> {
+    return fetchAttributeSummary(this.prisma, area);
   }
 
   async getById(area: AuthUser['area'], id: number): Promise<AttributeDefinition> {
