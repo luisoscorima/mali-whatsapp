@@ -46,13 +46,31 @@ function IconEmoji() {
   )
 }
 
-function IconNotes() {
+function IconPostIt() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="8" y1="13" x2="16" y2="13" />
-      <line x1="8" y1="17" x2="13" y2="17" />
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
+      <path
+        fill="currentColor"
+        opacity="0.2"
+        d="M5.75 2h9.25L20 7.5v11.75A1.75 1.75 0 0 1 18.25 21H5.75A1.75 1.75 0 0 1 4 19.25V3.75A1.75 1.75 0 0 1 5.75 2z"
+      />
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M15 2.5H5.75A1.75 1.75 0 0 0 4 4.25v15A1.75 1.75 0 0 0 5.75 21h12.5A1.75 1.75 0 0 0 20 19.25V8L15 2.5z"
+      />
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M15 2.5V8h5.5"
+      />
+      <path fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" d="M8 12.5h8M8 16h5" />
     </svg>
   )
 }
@@ -132,6 +150,14 @@ export function InboxComposeBar({
       if (res.ok) setFlows(res.data.filter((f) => f.status === 'active'))
     })
   }, [windowOpen, conversationId])
+
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = '0px'
+    const next = Math.min(Math.max(el.scrollHeight, 36), 160)
+    el.style.height = `${next}px`
+  }, [replyText, canReply])
 
   function pickAttachment(accept: string) {
     setFileAccept(accept)
@@ -274,149 +300,151 @@ export function InboxComposeBar({
         <div className="inbox-compose-bar">
           {canReply ? (
             <>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="ghost" size="icon-sm" title="Adjuntar archivo">
-                    <IconAttach />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  {ATTACH_OPTIONS.map((opt) => (
-                    <DropdownMenuItem key={opt.key} onSelect={() => pickAttachment(opt.accept)}>
-                      {opt.label}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={fileAccept}
-                className="sr-only"
-                onChange={(e) => onReplyFileChange(e.target.files?.[0] ?? null)}
-              />
-
-              <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
-                <PopoverTrigger asChild>
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label="Insertar emoji" title="Emoji">
-                    <IconEmoji />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-auto p-2">
-                  <div className="grid grid-cols-5 gap-1">
-                    {COMMON_EMOJIS.map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        className="rounded-md px-1 py-0.5 text-lg hover:bg-accent-soft"
-                        onClick={() => insertEmoji(emoji)}
-                      >
-                        {emoji}
-                      </button>
+              <div className="inbox-compose-tools">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="ghost" size="icon-sm" title="Adjuntar archivo">
+                      <IconAttach />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    {ATTACH_OPTIONS.map((opt) => (
+                      <DropdownMenuItem key={opt.key} onSelect={() => pickAttachment(opt.accept)}>
+                        {opt.label}
+                      </DropdownMenuItem>
                     ))}
-                  </div>
-                </PopoverContent>
-              </Popover>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={fileAccept}
+                  className="sr-only"
+                  onChange={(e) => onReplyFileChange(e.target.files?.[0] ?? null)}
+                />
 
-              <InboxAdvisorNotesPopover
-                triggerIcon={<IconNotes />}
-                contactAttributes={contactAttributes}
-                onInsert={(text) =>
-                  insertAtSelection(textareaRef.current, text, replyText, onReplyTextChange)
-                }
-              />
+                <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+                  <PopoverTrigger asChild>
+                    <Button type="button" variant="ghost" size="icon-sm" aria-label="Insertar emoji" title="Emoji">
+                      <IconEmoji />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-auto p-2">
+                    <div className="grid grid-cols-5 gap-1">
+                      {COMMON_EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          className="rounded-md px-1 py-0.5 text-lg hover:bg-accent-soft"
+                          onClick={() => insertEmoji(emoji)}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
 
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                title="Negrita"
-                aria-label="Negrita"
-                onClick={() => applyFormat('*')}
-              >
-                <strong>B</strong>
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                title="Cursiva"
-                aria-label="Cursiva"
-                onClick={() => applyFormat('_')}
-              >
-                <em>I</em>
-              </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  title="Negrita"
+                  aria-label="Negrita"
+                  onClick={() => applyFormat('*')}
+                >
+                  <strong>B</strong>
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  title="Cursiva"
+                  aria-label="Cursiva"
+                  onClick={() => applyFormat('_')}
+                >
+                  <em>I</em>
+                </Button>
+              </div>
 
               <textarea
                 ref={textareaRef}
                 value={replyText}
                 onChange={(e) => onReplyTextChange(e.target.value)}
                 onKeyDown={onTextareaKeyDown}
-                rows={2}
-                placeholder="Escribe un mensaje… (Enter envía, Shift+Enter nueva línea)"
+                rows={1}
+                placeholder="Escribe un mensaje…"
                 className="inbox-compose-textarea inbox-compose-grow"
               />
+
+              <div className="inbox-compose-actions">
+                <InboxAdvisorNotesPopover
+                  triggerIcon={<IconPostIt />}
+                  contactAttributes={contactAttributes}
+                  onInsert={(text) =>
+                    insertAtSelection(textareaRef.current, text, replyText, onReplyTextChange)
+                  }
+                />
+
+                <div className="inbox-compose-send-split">
+                  <Button
+                    type="submit"
+                    disabled={sendingReply || !canReply}
+                    className={cn(
+                      'inbox-compose-send',
+                      hasSecondary ? 'inbox-compose-send--split-main' : '',
+                    )}
+                  >
+                    {sendingReply ? '…' : 'Enviar'}
+                  </Button>
+                  {hasSecondary ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          disabled={flowBusy}
+                          className="inbox-compose-send inbox-compose-send--split-more"
+                          aria-label="Más acciones de envío"
+                          title="Más acciones"
+                        >
+                          <IconChevronDown />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="max-w-xs">
+                        {windowOpen
+                          ? flows.map((f) => (
+                              <DropdownMenuItem
+                                key={f.id}
+                                disabled={flowBusy}
+                                onSelect={() => void startFlow(f.id, f.name)}
+                              >
+                                <span className="flex flex-col gap-0.5">
+                                  <span>Iniciar flujo: {f.name}</span>
+                                  <span className="font-mono text-[10px] text-muted">
+                                    {f.trigger_payload}
+                                  </span>
+                                </span>
+                              </DropdownMenuItem>
+                            ))
+                          : (
+                              <DropdownMenuItem onSelect={() => onOpenTemplate()}>
+                                Enviar plantilla
+                              </DropdownMenuItem>
+                            )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : null}
+                </div>
+              </div>
             </>
           ) : (
             <div className="inbox-compose-grow min-h-[36px]" />
           )}
-
-          {canReply ? (
-            <div className="inbox-compose-send-split flex shrink-0">
-              <Button
-                type="submit"
-                disabled={sendingReply || !canReply}
-                className={cn(
-                  'inbox-compose-send rounded-r-none',
-                  hasSecondary ? 'pr-3' : '',
-                )}
-              >
-                {sendingReply ? '…' : 'Enviar'}
-              </Button>
-              {hasSecondary ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      disabled={flowBusy}
-                      className="inbox-compose-send rounded-l-none border-l border-white/25 px-2"
-                      aria-label="Más acciones de envío"
-                      title="Más acciones"
-                    >
-                      <IconChevronDown />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="max-w-xs">
-                    {windowOpen
-                      ? flows.map((f) => (
-                          <DropdownMenuItem
-                            key={f.id}
-                            disabled={flowBusy}
-                            onSelect={() => void startFlow(f.id, f.name)}
-                          >
-                            <span className="flex flex-col gap-0.5">
-                              <span>Iniciar flujo: {f.name}</span>
-                              <span className="font-mono text-[10px] text-muted">
-                                {f.trigger_payload}
-                              </span>
-                            </span>
-                          </DropdownMenuItem>
-                        ))
-                      : (
-                          <DropdownMenuItem onSelect={() => onOpenTemplate()}>
-                            Enviar plantilla
-                          </DropdownMenuItem>
-                        )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : null}
-            </div>
-          ) : null}
         </div>
 
         {canReply ? (
           <p className="inbox-compose-hint-inline muted">
-            Enter envía · Shift+Enter nueva línea. WhatsApp: *negrita*, _cursiva_. JPEG/PNG (5 MB), MP4 (16 MB), audio (16 MB), PDF (25 MB).
+            ⏎ envía · ⇧⏎ nueva línea. WhatsApp: *negrita*, _cursiva_. JPEG/PNG (5 MB), MP4 (16 MB), audio (16 MB), PDF (25 MB).
           </p>
         ) : null}
       </form>

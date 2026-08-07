@@ -1536,12 +1536,24 @@ export class FlowsService {
         throw new BadRequestException('El paso de texto necesita cuerpo');
       }
       if (kind === 'message_image' || kind === 'message_document') {
-        if (!String(node.media_url || '').trim()) {
+        const mediaUrl = String(node.media_url || '').trim();
+        if (!mediaUrl) {
           throw new BadRequestException(
             kind === 'message_image'
-              ? 'El paso de imagen necesita un archivo'
-              : 'El paso de documento necesita un archivo',
+              ? 'El paso de imagen necesita un archivo o URL'
+              : 'El paso de documento necesita un archivo o URL',
           );
+        }
+        try {
+          const parsed = new URL(mediaUrl);
+          if (parsed.protocol !== 'https:') {
+            throw new BadRequestException(
+              'La URL de media debe usar HTTPS',
+            );
+          }
+        } catch (error) {
+          if (error instanceof BadRequestException) throw error;
+          throw new BadRequestException('URL de media inválida');
         }
       }
       if (kind === 'message_buttons') {

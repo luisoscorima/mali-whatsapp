@@ -1613,33 +1613,55 @@ html[data-theme='dark'] .chat-bubble__reply-to {
 
 .inbox-compose-bar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 6px;
   padding: 8px 10px;
   border-radius: 12px;
   background: var(--surface-strong);
   border: 1px solid var(--line);
 }
 
+.inbox-compose-tools,
+.inbox-compose-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  min-height: 36px;
+}
+
+.inbox-compose-actions {
+  gap: 6px;
+}
+
 .inbox-compose-textarea {
   flex: 1;
   min-width: 0;
   min-height: 36px;
-  max-height: 120px;
-  resize: vertical;
+  max-height: 160px;
+  resize: none;
+  overflow-y: auto;
   border: none;
   background: transparent;
   font-family: inherit;
   font-size: 0.9rem;
-  line-height: 1.35;
+  line-height: 1.4;
   color: var(--ink);
-  padding: 6px 0;
+  padding: 8px 4px;
   margin: 0;
+  box-sizing: border-box;
 }
 
 .inbox-compose-textarea:focus {
   outline: none;
+}
+
+.inbox-compose-send-split {
+  display: flex;
+  flex-shrink: 0;
+  align-items: stretch;
+  gap: 3px;
 }
 
 .inbox-compose-send {
@@ -1653,6 +1675,18 @@ html[data-theme='dark'] .chat-bubble__reply-to {
   font-weight: 600;
   font-size: 0.85rem;
   cursor: pointer;
+}
+
+.inbox-compose-send--split-main {
+  border-radius: 8px 2px 2px 8px;
+  padding-right: 12px;
+}
+
+.inbox-compose-send--split-more {
+  border-radius: 2px 8px 8px 2px;
+  padding-left: 8px;
+  padding-right: 8px;
+  min-width: 34px;
 }
 
 .inbox-compose-send:hover {
@@ -1692,6 +1726,46 @@ html[data-theme='dark'] .chat-bubble__reply-to {
 .inbox-compose-bar .inbox-compose-grow {
   flex: 1;
   min-width: 120px;
+}
+
+.inbox-compose-notes-btn {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: var(--accent-soft);
+}
+
+.inbox-compose-notes-btn:hover {
+  background: color-mix(in srgb, var(--accent-soft) 80%, var(--accent));
+}
+
+@media (max-width: 520px) {
+  .inbox-compose-notes-btn__label {
+    display: none;
+  }
+
+  .inbox-compose-notes-btn {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .inbox-compose-bar {
+    flex-wrap: wrap;
+  }
+
+  .inbox-compose-grow {
+    order: 1;
+    flex: 1 1 100%;
+    min-width: 100%;
+  }
+
+  .inbox-compose-tools {
+    order: 2;
+  }
+
+  .inbox-compose-actions {
+    order: 3;
+    margin-left: auto;
+  }
 }
 
 .inbox-compose-hint {

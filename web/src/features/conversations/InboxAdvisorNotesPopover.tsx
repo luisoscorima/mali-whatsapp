@@ -150,12 +150,14 @@ export function InboxAdvisorNotesPopover({
       <PopoverTrigger asChild>
         <Button
           type="button"
-          variant="ghost"
-          size="icon-sm"
+          variant="secondary"
+          size="sm"
+          className="inbox-compose-notes-btn shrink-0 gap-1.5 px-2.5"
           title="Mis notas"
           aria-label="Mis notas"
         >
           {triggerIcon ?? <span aria-hidden>N</span>}
+          <span className="inbox-compose-notes-btn__label">Notas</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 p-3">

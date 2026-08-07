@@ -364,7 +364,7 @@ function FlowCanvasEditorInner({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
   const [mediaUploading, setMediaUploading] = useState(false)
-  const suppressSelectionRef = useRef(false)
+  const [mediaUrlDraft, setMediaUrlDraft] = useState('')
   const didFitViewRef = useRef(false)
   const { fitView } = useReactFlow()
 
@@ -422,7 +422,6 @@ function FlowCanvasEditorInner({
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState(initialRfEdges)
 
   function closeInspector() {
-    suppressSelectionRef.current = true
     setSelectedId(null)
     setSelectedEdgeId(null)
     setRfNodes((nodes) =>
@@ -431,9 +430,6 @@ function FlowCanvasEditorInner({
     setRfEdges((edges) =>
       edges.map((e) => (e.selected ? { ...e, selected: false } : e)),
     )
-    window.setTimeout(() => {
-      suppressSelectionRef.current = false
-    }, 0)
   }
 
   useEffect(() => {
@@ -683,6 +679,14 @@ function FlowCanvasEditorInner({
   const selected = rfNodes.find((n) => n.id === selectedId)
   const selectedEdge = rfEdges.find((e) => e.id === selectedEdgeId)
 
+  useEffect(() => {
+    if (selected && isMediaKind(selected.data.kind)) {
+      setMediaUrlDraft(selected.data.media_url || '')
+    } else {
+      setMediaUrlDraft('')
+    }
+  }, [selectedId, selected?.data.kind, selected?.data.media_url])
+
   function handleFormSubmit(e: FormEvent) {
     e.preventDefault()
     if (readOnly) return
@@ -757,7 +761,62 @@ function FlowCanvasEditorInner({
       media_mime: result.data.mime,
       media_filename: result.data.filename,
     })
+    setMediaUrlDraft(result.data.url)
     notify.success('Archivo subido')
+  }
+
+  function applyMediaUrl() {
+    if (!selected || !isMediaKind(selected.data.kind)) return
+    const url = mediaUrlDraft.trim()
+    if (!url) {
+      notify.error('Pega una URL HTTPS')
+      return
+    }
+    let parsed: URL
+    try {
+      parsed = new URL(url)
+    } catch {
+      notify.error('URL inválida')
+      return
+    }
+    if (parsed.protocol !== 'https:') {
+      notify.error('La URL debe ser HTTPS (WhatsApp no acepta http)')
+      return
+    }
+    const pathName = decodeURIComponent(parsed.pathname.split('/').pop() || '')
+    const filename =
+      pathName.replace(/[^\w.\- ()áéíóúñÁÉÍÓÚÑ]+/g, '_').slice(0, 180) ||
+      (selected.data.kind === 'message_image' ? 'imagen.jpg' : 'documento.pdf')
+    const lower = filename.toLowerCase()
+    let mime =
+      selected.data.kind === 'message_image' ? 'image/jpeg' : 'application/pdf'
+    if (lower.endsWith('.png')) mime = 'image/png'
+    else if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) mime = 'image/jpeg'
+    else if (lower.endsWith('.pdf')) mime = 'application/pdf'
+    if (selected.data.kind === 'message_image' && mime === 'application/pdf') {
+      notify.error('Para imagen usa una URL de JPEG/PNG')
+      return
+    }
+    if (selected.data.kind === 'message_document' && mime.startsWith('image/')) {
+      notify.error('Para documento usa una URL de PDF')
+      return
+    }
+    updateSelected({
+      media_url: url,
+      media_mime: mime,
+      media_filename: filename,
+    })
+    notify.success('URL aplicada')
+  }
+
+  function clearMedia() {
+    if (!selected || !isMediaKind(selected.data.kind)) return
+    updateSelected({
+      media_url: null,
+      media_mime: null,
+      media_filename: null,
+    })
+    setMediaUrlDraft('')
   }
 
   return (
@@ -876,9 +935,10 @@ function FlowCanvasEditorInner({
       ) : null}
       {readOnly ? null : (
         <p className="text-xs text-muted">
-          Arrastra desde el punto de cada botón (key) o del nodo hacia el
-          siguiente. Imagen/archivo se envían y continúan solos. Cada key de
-          botón debe ser única. Solo cuenta el último mensaje del asistente.
+          Arrastra nodos y conecta desde el punto de cada botón (key). Doble
+          clic en un nodo o conector para editarlo. Imagen/archivo se envían y
+          continúan solos. Cada key de botón debe ser única. Solo cuenta el
+          último mensaje del asistente.
         </p>
       )}
 
@@ -921,13 +981,20 @@ function FlowCanvasEditorInner({
                 }
           }
           onConnect={readOnly ? undefined : onConnect}
-          onSelectionChange={
+          onNodeDoubleClick={
             readOnly
               ? undefined
-              : ({ nodes: sel, edges: edgeSel }) => {
-                  if (suppressSelectionRef.current) return
-                  setSelectedId(sel[0]?.id ?? null)
-                  setSelectedEdgeId(edgeSel[0]?.id ?? null)
+              : (_e, node) => {
+                  setSelectedEdgeId(null)
+                  setSelectedId(node.id)
+                }
+          }
+          onEdgeDoubleClick={
+            readOnly
+              ? undefined
+              : (_e, edge) => {
+                  setSelectedId(null)
+                  setSelectedEdgeId(edge.id)
                 }
           }
           nodeTypes={nodeTypes}
@@ -1073,8 +1140,8 @@ function FlowCanvasEditorInner({
                     <p className="truncate text-xs text-muted">
                       {selected.data.media_filename ||
                         (selected.data.media_url
-                          ? 'Archivo cargado'
-                          : 'Sin archivo')}
+                          ? 'Media listo'
+                          : 'Sin archivo ni URL')}
                     </p>
                     <label className="small-btn inline-flex cursor-pointer">
                       {mediaUploading
@@ -1098,10 +1165,37 @@ function FlowCanvasEditorInner({
                         }}
                       />
                     </label>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted">O pegar URL HTTPS</p>
+                      <input
+                        className="w-full rounded border border-line bg-surface px-2 py-1 font-mono text-xs"
+                        placeholder="https://…"
+                        value={mediaUrlDraft}
+                        onChange={(e) => setMediaUrlDraft(e.target.value)}
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="small-btn"
+                          onClick={applyMediaUrl}
+                        >
+                          Usar URL
+                        </button>
+                        {selected.data.media_url ? (
+                          <button
+                            type="button"
+                            className="rounded border border-bad px-2 py-0.5 text-xs text-bad"
+                            onClick={clearMedia}
+                          >
+                            Quitar media
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
                     <p className="text-[11px] text-muted">
                       {selected.data.kind === 'message_image'
-                        ? 'JPEG o PNG, máx. 5 MB. Se envía y sigue al siguiente nodo.'
-                        : 'PDF, máx. 25 MB. Se envía y sigue al siguiente nodo.'}
+                        ? 'JPEG/PNG por archivo o URL pública HTTPS. Se envía y sigue al siguiente nodo.'
+                        : 'PDF por archivo o URL pública HTTPS. Se envía y sigue al siguiente nodo.'}
                     </p>
                   </div>
                 ) : null}
