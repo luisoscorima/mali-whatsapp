@@ -373,7 +373,7 @@ export function InboxComposeBar({
                 onChange={(e) => onReplyTextChange(e.target.value)}
                 onKeyDown={onTextareaKeyDown}
                 rows={1}
-                placeholder="Escribe un mensaje…"
+                placeholder="Escribe un mensaje… ⇧+⏎ nueva línea"
                 className="inbox-compose-textarea inbox-compose-grow"
               />
 
@@ -395,7 +395,7 @@ export function InboxComposeBar({
                       hasSecondary ? 'inbox-compose-send--split-main' : '',
                     )}
                   >
-                    {sendingReply ? '…' : 'Enviar'}
+                    {sendingReply ? '…' : 'Enviar ⏎'}
                   </Button>
                   {hasSecondary ? (
                     <DropdownMenu>
