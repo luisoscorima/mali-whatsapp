@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -152,21 +152,20 @@ export function ContactsSummaryPane() {
 
         {chartData.length > 0 ? (
           <div className="h-56 w-full rounded-xl border border-line bg-surface-strong p-4">
-            <p className="mb-2 text-sm font-medium text-muted">Altas diarias</p>
+            <p className="mb-2 text-sm font-medium text-muted">Altas de contactos por día</p>
             <ResponsiveContainer width="100%" height="85%">
-              <LineChart data={chartData}>
+              <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="var(--muted)" />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="var(--muted)" />
                 <Tooltip {...chartTooltipProps} />
-                <Line
-                  type="monotone"
+                <Bar
                   dataKey="count"
-                  stroke="var(--accent)"
-                  strokeWidth={2}
-                  dot={false}
+                  name="Altas"
+                  fill="var(--accent)"
+                  radius={[4, 4, 0, 0]}
                 />
-              </LineChart>
+              </BarChart>
             </ResponsiveContainer>
           </div>
         ) : null}

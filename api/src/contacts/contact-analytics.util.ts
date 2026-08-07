@@ -33,54 +33,53 @@ export async function fetchContactSummary(
         with_chat: number;
         without_chat: number;
         inactive_30d: number;
-        opt_in: number;
-        opt_out: number;
         without_segment: number;
       }[]
     >(Prisma.sql`
+      WITH contact_base AS (
+        SELECT c.id, c.phone, c.created_at
+        FROM contacts c
+        WHERE c.area = ${area}
+          AND c.active = true
+          AND c.replacement_reason IS NULL
+          AND c.replaced_by_contact_id IS NULL
+      ),
+      conv_by_contact AS (
+        SELECT conv.contact_id, MAX(conv.last_message_at) AS last_msg
+        FROM conversations conv
+        WHERE conv.area = ${area}
+          AND conv.contact_id IS NOT NULL
+        GROUP BY conv.contact_id
+      ),
+      conv_by_phone AS (
+        SELECT conv.phone, MAX(conv.last_message_at) AS last_msg
+        FROM conversations conv
+        WHERE conv.area = ${area}
+        GROUP BY conv.phone
+      ),
+      labeled AS (
+        SELECT DISTINCT cs.contact_id
+        FROM contact_segments cs
+        WHERE cs.area = ${area}
+      )
       SELECT
         COUNT(*)::int AS total_active,
-        COUNT(*) FILTER (WHERE c.created_at >= ${since})::int AS new_in_period,
+        COUNT(*) FILTER (WHERE cb.created_at >= ${since})::int AS new_in_period,
         COUNT(*) FILTER (
-          WHERE EXISTS (
-            SELECT 1 FROM conversations conv
-            WHERE conv.area = c.area
-              AND (conv.contact_id = c.id OR conv.phone = c.phone)
-          )
+          WHERE COALESCE(cc.last_msg, cp.last_msg) IS NOT NULL
         )::int AS with_chat,
         COUNT(*) FILTER (
-          WHERE NOT EXISTS (
-            SELECT 1 FROM conversations conv
-            WHERE conv.area = c.area
-              AND (conv.contact_id = c.id OR conv.phone = c.phone)
-          )
+          WHERE COALESCE(cc.last_msg, cp.last_msg) IS NULL
         )::int AS without_chat,
         COUNT(*) FILTER (
-          WHERE EXISTS (
-            SELECT 1 FROM conversations conv
-            WHERE conv.area = c.area
-              AND (conv.contact_id = c.id OR conv.phone = c.phone)
-          )
-          AND (
-            SELECT MAX(conv.last_message_at)
-            FROM conversations conv
-            WHERE conv.area = c.area
-              AND (conv.contact_id = c.id OR conv.phone = c.phone)
-          ) < ${inactiveSince}
+          WHERE COALESCE(cc.last_msg, cp.last_msg) IS NOT NULL
+            AND COALESCE(cc.last_msg, cp.last_msg) < ${inactiveSince}
         )::int AS inactive_30d,
-        COUNT(*) FILTER (WHERE c.opt_in = true)::int AS opt_in,
-        COUNT(*) FILTER (WHERE c.opt_in = false)::int AS opt_out,
-        COUNT(*) FILTER (
-          WHERE NOT EXISTS (
-            SELECT 1 FROM contact_segments cs
-            WHERE cs.contact_id = c.id
-          )
-        )::int AS without_segment
-      FROM contacts c
-      WHERE c.area = ${area}
-        AND c.active = true
-        AND c.replacement_reason IS NULL
-        AND c.replaced_by_contact_id IS NULL
+        COUNT(*) FILTER (WHERE lb.contact_id IS NULL)::int AS without_segment
+      FROM contact_base cb
+      LEFT JOIN conv_by_contact cc ON cc.contact_id = cb.id
+      LEFT JOIN conv_by_phone cp ON cp.phone = cb.phone
+      LEFT JOIN labeled lb ON lb.contact_id = cb.id
     `),
     prisma.$queryRaw<{ day: Date; count: number }[]>(Prisma.sql`
       SELECT date_trunc('day', c.created_at)::date AS day, COUNT(*)::int AS count
@@ -101,8 +100,6 @@ export async function fetchContactSummary(
     with_chat: 0,
     without_chat: 0,
     inactive_30d: 0,
-    opt_in: 0,
-    opt_out: 0,
     without_segment: 0,
   };
 
@@ -136,12 +133,6 @@ export async function fetchContactSummary(
       display: fmt(c.inactive_30d),
       tone: 'problem',
       tooltip: 'Tuvieron chat, pero sin mensajes en los últimos 30 días',
-    },
-    {
-      label: 'Opt-in WA',
-      display: `${fmt(c.opt_in)} / ${fmt(c.opt_out)}`,
-      tone: 'delivered',
-      tooltip: 'Con opt-in / sin opt-in',
     },
     {
       label: 'Sin segmento',

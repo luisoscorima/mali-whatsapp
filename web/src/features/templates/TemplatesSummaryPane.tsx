@@ -15,7 +15,6 @@ const KPI_FILTER_MAP: Record<string, { status?: string; visibility?: string }> =
   Aprobadas: { status: 'APPROVED' },
   Pendientes: { status: 'PENDING' },
   Rechazadas: { status: 'REJECTED' },
-  'Pendientes >7d': { status: 'PENDING' },
 }
 
 export function TemplatesSummaryPane() {

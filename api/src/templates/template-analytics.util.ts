@@ -15,69 +15,53 @@ export async function fetchTemplateSummary(
   },
   area: string,
 ): Promise<TemplateSummary> {
-  const pendingCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
-  const [counts] = await Promise.all([
-    prisma.$queryRaw<
-      {
-        approved: number;
-        pending: number;
-        rejected: number;
-        disabled: number;
-        active: number;
-        inactive: number;
-        pending_old: number;
-        used: number;
-        unused: number;
-      }[]
-    >(Prisma.sql`
-      SELECT
-        COUNT(*) FILTER (
-          WHERE UPPER(TRIM(t.status)) = 'APPROVED'
-        )::int AS approved,
-        COUNT(*) FILTER (
-          WHERE UPPER(TRIM(t.status)) = 'PENDING'
-        )::int AS pending,
-        COUNT(*) FILTER (
-          WHERE UPPER(TRIM(t.status)) = 'REJECTED'
-        )::int AS rejected,
-        COUNT(*) FILTER (
-          WHERE UPPER(TRIM(t.status)) = 'DISABLED'
-        )::int AS disabled,
-        COUNT(*) FILTER (WHERE t.active = true)::int AS active,
-        COUNT(*) FILTER (WHERE t.active = false)::int AS inactive,
-        COUNT(*) FILTER (
-          WHERE UPPER(TRIM(t.status)) = 'PENDING'
-            AND t.submitted_at IS NOT NULL
-            AND t.submitted_at < ${pendingCutoff}
-        )::int AS pending_old,
-        COUNT(*) FILTER (
-          WHERE EXISTS (
-            SELECT 1 FROM campaigns camp
-            WHERE camp.area = t.area
-              AND camp.template_name = t.name
-          )
-        )::int AS used,
-        COUNT(*) FILTER (
-          WHERE NOT EXISTS (
-            SELECT 1 FROM campaigns camp
-            WHERE camp.area = t.area
-              AND camp.template_name = t.name
-          )
-        )::int AS unused
-      FROM whatsapp_templates t
-      WHERE t.area = ${area}
-    `),
-  ]);
+  const counts = await prisma.$queryRaw<
+    {
+      approved: number;
+      pending: number;
+      rejected: number;
+      active: number;
+      inactive: number;
+      used: number;
+      unused: number;
+    }[]
+  >(Prisma.sql`
+    SELECT
+      COUNT(*) FILTER (
+        WHERE UPPER(TRIM(t.status)) = 'APPROVED'
+      )::int AS approved,
+      COUNT(*) FILTER (
+        WHERE UPPER(TRIM(t.status)) = 'PENDING'
+      )::int AS pending,
+      COUNT(*) FILTER (
+        WHERE UPPER(TRIM(t.status)) = 'REJECTED'
+      )::int AS rejected,
+      COUNT(*) FILTER (WHERE t.active = true)::int AS active,
+      COUNT(*) FILTER (WHERE t.active = false)::int AS inactive,
+      COUNT(*) FILTER (
+        WHERE EXISTS (
+          SELECT 1 FROM campaigns camp
+          WHERE camp.area = t.area
+            AND camp.template_name = t.name
+        )
+      )::int AS used,
+      COUNT(*) FILTER (
+        WHERE NOT EXISTS (
+          SELECT 1 FROM campaigns camp
+          WHERE camp.area = t.area
+            AND camp.template_name = t.name
+        )
+      )::int AS unused
+    FROM whatsapp_templates t
+    WHERE t.area = ${area}
+  `);
 
   const c = counts[0] ?? {
     approved: 0,
     pending: 0,
     rejected: 0,
-    disabled: 0,
     active: 0,
     inactive: 0,
-    pending_old: 0,
     used: 0,
     unused: 0,
   };
@@ -106,12 +90,6 @@ export async function fetchTemplateSummary(
       display: `${fmt(c.active)} / ${fmt(c.inactive)}`,
       tone: 'ink',
       tooltip: 'Activas / inactivas',
-    },
-    {
-      label: 'Pendientes >7d',
-      display: fmt(c.pending_old),
-      tone: 'problem',
-      tooltip: 'En revisión desde hace más de 7 días',
     },
     {
       label: 'Usadas / Sin uso',
