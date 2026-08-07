@@ -128,8 +128,8 @@ function ArchiveChatsIcon() {
 function InboxNotifyBellIcon({ active }: { active: boolean }) {
   return (
     <svg
-      width="18"
-      height="18"
+      width="20"
+      height="20"
       viewBox="0 0 24 24"
       fill={active ? 'currentColor' : 'none'}
       stroke="currentColor"
@@ -147,8 +147,8 @@ function InboxNotifyBellIcon({ active }: { active: boolean }) {
 function InboxNotifyBellOffIcon() {
   return (
     <svg
-      width="18"
-      height="18"
+      width="20"
+      height="20"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
