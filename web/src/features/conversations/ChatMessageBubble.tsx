@@ -22,6 +22,19 @@ export type ChatMessage = {
   media_preview?: { url: string; mime?: string | null } | null
   campaign_preview?: CampaignMessagePreviewData | null
   campaign_id?: number | null
+  interactive_buttons?: { id: string; title: string }[]
+}
+
+/** Quita la línea legacy `[Opción] [Opción]` cuando ya se renderizan botones. */
+function bodyWithoutBracketButtons(
+  body: string,
+  buttons: { title: string }[],
+): string {
+  const suffix = buttons.map((b) => `[${b.title}]`).join(' ')
+  if (!suffix) return body
+  const trimmed = body.trimEnd()
+  if (!trimmed.endsWith(suffix)) return body
+  return trimmed.slice(0, -suffix.length).replace(/\n+$/, '')
 }
 
 function mediaIcon(type: string): string {
@@ -98,8 +111,13 @@ export function ChatMessageBubble({
   const showTypeRow =
     isMediaType(mt) || (mt === 'campaign' && !message.campaign_preview)
   const campPreview = message.campaign_preview
+  const interactiveButtons = message.interactive_buttons || []
+  const hasInteractiveButtons = interactiveButtons.length > 0
+  const displayBody = hasInteractiveButtons
+    ? bodyWithoutBracketButtons(message.body_text || '', interactiveButtons)
+    : message.body_text || ''
   const authorLabel = messageAuthorLabel(message)
-  const copyText = message.body_text?.trim() ?? ''
+  const copyText = displayBody.trim() || message.body_text?.trim() || ''
   const showMenu = canInteract && (onReply || onCopy || onReact)
 
   const bubble = (
@@ -147,6 +165,28 @@ export function ChatMessageBubble({
 
       {campPreview ? (
         <ChatCampaignPreview preview={campPreview} campaignId={message.campaign_id} />
+      ) : null}
+
+      {!campPreview && hasInteractiveButtons ? (
+        <div className="chat-campaign-preview">
+          {displayBody.trim() ? (
+            <div className="chat-campaign-preview__body">
+              {renderWhatsAppText(displayBody, highlightQuery)}
+            </div>
+          ) : null}
+          <div className="chat-campaign-preview__buttons">
+            {interactiveButtons.map((btn) => (
+              <div
+                key={btn.id || btn.title}
+                className="chat-campaign-preview__button"
+              >
+                <span className="chat-campaign-preview__button-text">
+                  {btn.title}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : null}
 
       {mediaUrl && (mt === 'image' || mt === 'sticker') ? (
@@ -212,7 +252,7 @@ export function ChatMessageBubble({
         </p>
       ) : null}
 
-      {!campPreview && message.body_text?.trim() ? (
+      {!campPreview && !hasInteractiveButtons && message.body_text?.trim() ? (
         <div className="chat-bubble__text">
           {renderWhatsAppText(message.body_text, highlightQuery)}
         </div>

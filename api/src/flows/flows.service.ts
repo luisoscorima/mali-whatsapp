@@ -1420,16 +1420,12 @@ export class FlowsService {
     payload.source = source;
     payload.flow_buttons = input.buttons;
     payload = setMessageSender(payload, 'Flujo');
-    const preview =
-      input.bodyText +
-      '\n' +
-      input.buttons.map((b) => `[${b.title}]`).join(' ');
     await this.prisma.chat_messages.create({
       data: {
         conversation_id: input.conversationId,
         direction: 'outbound',
         wa_message_id: msgId,
-        body_text: preview.slice(0, 8000),
+        body_text: input.bodyText.slice(0, 8000),
         message_type: 'interactive',
         raw_payload: payload as Prisma.InputJsonValue,
         is_ai: false,

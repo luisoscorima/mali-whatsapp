@@ -60,6 +60,7 @@ import {
 } from './conversation-export.util';
 import {
   extractCampaignPreview,
+  extractInteractiveButtons,
   getLocalPreview,
   hasDownloadableMedia,
   saveOutboundChatMediaFile,
@@ -1320,6 +1321,7 @@ export class ConversationsService {
     const { campaign_preview, campaign_id } = extractCampaignPreview(
       row.raw_payload,
     );
+    const interactive_buttons = extractInteractiveButtons(row.raw_payload);
     const storedReaction = readMessageReaction(row.raw_payload);
     const storedReply = readMessageReplyTo(row.raw_payload);
     return {
@@ -1353,6 +1355,8 @@ export class ConversationsService {
         : null,
       campaign_preview,
       campaign_id,
+      interactive_buttons:
+        interactive_buttons.length > 0 ? interactive_buttons : undefined,
     };
   }
 

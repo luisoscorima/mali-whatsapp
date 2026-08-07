@@ -263,6 +263,28 @@ export function extractCampaignPreview(rawPayload: unknown): {
   };
 }
 
+export type InboxInteractiveButton = {
+  id: string;
+  title: string;
+};
+
+/** Botones de mensaje interactivo de flujo (`raw_payload.flow_buttons`). */
+export function extractInteractiveButtons(
+  rawPayload: unknown,
+): InboxInteractiveButton[] {
+  const p = parseRawPayload(rawPayload);
+  if (!p || !Array.isArray(p.flow_buttons)) return [];
+  return p.flow_buttons
+    .map((item) => {
+      const btn = item as Record<string, unknown>;
+      return {
+        id: String(btn.id ?? '').trim(),
+        title: String(btn.title ?? '').trim(),
+      };
+    })
+    .filter((btn) => btn.title);
+}
+
 function s3KeyFromPreviewUrl(url: string): string | null {
   if (!isChatMediaS3Configured()) return null;
   const u = String(url || '').trim();

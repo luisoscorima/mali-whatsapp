@@ -417,6 +417,7 @@ type InboxMessage = {
     buttons: { type: string; text: string; url: string }[]
   } | null
   campaign_id?: number | null
+  interactive_buttons?: { id: string; title: string }[]
 }
 
 type InboxDetail = {
