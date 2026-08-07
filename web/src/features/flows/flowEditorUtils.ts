@@ -220,7 +220,7 @@ export const KIND_LABEL: Record<FlowNodeKind, string> = {
   message_text: 'Mensaje',
   message_buttons: 'Mensaje',
   message_image: 'Imagen',
-  message_document: 'Documento',
+  message_document: 'PDF',
   handoff_human: 'Derivar',
   end: 'Fin del flujo',
 }

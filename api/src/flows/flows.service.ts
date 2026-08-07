@@ -166,7 +166,7 @@ export class FlowsService {
       );
       if (classified.waType !== 'image' && classified.waType !== 'document') {
         throw new BadRequestException(
-          'Solo se admiten imágenes JPEG/PNG o documentos PDF',
+          'Solo se admiten imágenes JPEG/PNG o PDF',
         );
       }
       waType = classified.waType;
@@ -1541,7 +1541,7 @@ export class FlowsService {
           throw new BadRequestException(
             kind === 'message_image'
               ? 'El paso de imagen necesita un archivo o URL'
-              : 'El paso de documento necesita un archivo o URL',
+              : 'El paso de PDF necesita un archivo o URL',
           );
         }
         try {

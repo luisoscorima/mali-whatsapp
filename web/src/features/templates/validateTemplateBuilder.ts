@@ -75,11 +75,7 @@ export function validateTemplateBuilder(
     const isQr = String(btn.type || '').toLowerCase() === 'quick_reply'
     if (isQr) {
       const payload = String(btn.payload || '').trim()
-      if (!payload) {
-        errors.push(
-          `Trigger del botón ${btnIdx + 1} es obligatorio (debe coincidir con el flujo).`,
-        )
-      } else if (payload.length > 256) {
+      if (payload.length > 256) {
         errors.push(`Trigger del botón ${btnIdx + 1} es demasiado largo.`)
       }
     } else {

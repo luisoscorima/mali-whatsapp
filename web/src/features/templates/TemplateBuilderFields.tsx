@@ -490,8 +490,8 @@ export function TemplateBuilderFields({
         {builder.buttons.length === 0 ? (
           <p className="text-xs text-muted">
             Hasta 3 botones: URL (máx. 2) o respuesta rápida. En respuesta
-            rápida el texto es lo que ve el contacto; el trigger es el payload
-            que inicia el flujo.
+            rápida el texto es lo que ve el contacto; el trigger del flujo es
+            opcional.
           </p>
         ) : null}
 
@@ -561,7 +561,9 @@ export function TemplateBuilderFields({
               {isQr ? (
                 <>
                   <label className="block text-sm">
-                    <span className="text-muted">Trigger del flujo (payload)</span>
+                    <span className="text-muted">
+                      Trigger del flujo (payload, opcional)
+                    </span>
                     <input
                       className="mt-1 w-full rounded-lg border border-line bg-surface-strong px-3 py-2 font-mono text-sm"
                       value={btn.payload || ''}
@@ -569,46 +571,31 @@ export function TemplateBuilderFields({
                         updateButton(index, { payload: e.target.value })
                       }
                       maxLength={256}
-                      required
                       autoComplete="off"
                       placeholder="INICIAR_FLUJO"
-                      list={`flow-triggers-${index}`}
+                      list={
+                        flows.length > 0
+                          ? `flow-triggers-${index}`
+                          : undefined
+                      }
                     />
-                    <datalist id={`flow-triggers-${index}`}>
-                      {flows.map((f) => (
-                        <option
-                          key={f.id}
-                          value={f.trigger_payload}
-                          label={`${f.name} · ${f.trigger_payload}`}
-                        />
-                      ))}
-                    </datalist>
+                    {flows.length > 0 ? (
+                      <datalist id={`flow-triggers-${index}`}>
+                        {flows.map((f) => (
+                          <option
+                            key={f.id}
+                            value={f.trigger_payload}
+                            label={`${f.name} · ${f.trigger_payload}`}
+                          />
+                        ))}
+                      </datalist>
+                    ) : null}
                   </label>
                   <p className="text-xs text-muted">
-                    Debe coincidir con el Trigger key del flujo. El contacto
-                    solo ve el texto de arriba.
+                    Opcional: solo si quieres iniciar un flujo. Debe coincidir
+                    con el Trigger key. Si lo dejas vacío, se usa el texto del
+                    botón. El contacto solo ve el texto de arriba.
                   </p>
-                  {flows.length > 0 ? (
-                    <label className="block text-sm">
-                      <span className="text-muted">Usar trigger de un flujo</span>
-                      <select
-                        className="mt-1 w-full rounded-lg border border-line bg-surface-strong px-3 py-2 text-sm"
-                        value=""
-                        onChange={(e) => {
-                          const trigger = e.target.value
-                          if (!trigger) return
-                          updateButton(index, { payload: trigger })
-                        }}
-                      >
-                        <option value="">Elegir flujo activo…</option>
-                        {flows.map((f) => (
-                          <option key={f.id} value={f.trigger_payload}>
-                            {f.name} · {f.trigger_payload}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : null}
                 </>
               ) : (
                 <>

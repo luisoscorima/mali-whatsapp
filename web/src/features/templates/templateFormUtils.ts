@@ -16,7 +16,7 @@ export type TemplateBuilderState = {
   buttons: {
     type: string
     text: string
-    /** QUICK_REPLY: trigger del flujo (payload de webhook). */
+    /** QUICK_REPLY: trigger del flujo (opcional; si vacío se usa el texto del botón). */
     payload: string
     url: string
     exampleValues: string[]

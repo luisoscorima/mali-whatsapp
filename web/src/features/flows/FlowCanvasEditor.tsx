@@ -33,6 +33,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/shared/ui/shadcn/sheet'
+import { ChatPdfPreview } from '../conversations/ChatPdfPreview'
 import {
   emptyNode,
   formatTimeoutBadge,
@@ -235,7 +236,7 @@ function MediaNodeView({ id, data, selected }: NodeProps<Node<CanvasData>>) {
         isConnectable
       />
       <p className="text-xs font-medium text-muted">
-        {isImage ? 'Imagen' : 'Documento'}
+        {isImage ? 'Imagen' : 'PDF'}
         {data.isEntry ? ' · Inicio' : ''}
       </p>
       {isImage && data.media_url ? (
@@ -244,9 +245,16 @@ function MediaNodeView({ id, data, selected }: NodeProps<Node<CanvasData>>) {
           alt={data.media_filename || 'Imagen'}
           className="mt-2 max-h-28 w-full rounded-md object-cover"
         />
+      ) : !isImage && data.media_url ? (
+        <div className="mt-2">
+          <ChatPdfPreview downloadUrl={data.media_url} />
+          <p className="mt-1 truncate text-xs text-muted">
+            {data.media_filename || 'PDF listo'}
+          </p>
+        </div>
       ) : (
         <p className="mt-2 truncate text-sm">
-          {data.media_filename || (data.media_url ? 'Archivo listo' : 'Sin archivo')}
+          {data.media_filename || (isImage ? 'Sin imagen' : 'Sin PDF')}
         </p>
       )}
       {data.body_text ? (
@@ -698,7 +706,7 @@ function FlowCanvasEditorInner({
         notify.error(
           n.kind === 'message_image'
             ? 'Hay un nodo de imagen sin archivo.'
-            : 'Hay un nodo de documento sin archivo.',
+            : 'Hay un nodo de PDF sin archivo.',
         )
         return
       }
@@ -762,7 +770,9 @@ function FlowCanvasEditorInner({
       media_filename: result.data.filename,
     })
     setMediaUrlDraft(result.data.url)
-    notify.success('Archivo subido')
+    notify.success(
+      selected.data.kind === 'message_image' ? 'Imagen subida' : 'PDF subido',
+    )
   }
 
   function applyMediaUrl() {
@@ -786,7 +796,7 @@ function FlowCanvasEditorInner({
     const pathName = decodeURIComponent(parsed.pathname.split('/').pop() || '')
     const filename =
       pathName.replace(/[^\w.\- ()áéíóúñÁÉÍÓÚÑ]+/g, '_').slice(0, 180) ||
-      (selected.data.kind === 'message_image' ? 'imagen.jpg' : 'documento.pdf')
+      (selected.data.kind === 'message_image' ? 'imagen.jpg' : 'archivo.pdf')
     const lower = filename.toLowerCase()
     let mime =
       selected.data.kind === 'message_image' ? 'image/jpeg' : 'application/pdf'
@@ -798,7 +808,7 @@ function FlowCanvasEditorInner({
       return
     }
     if (selected.data.kind === 'message_document' && mime.startsWith('image/')) {
-      notify.error('Para documento usa una URL de PDF')
+      notify.error('Para PDF usa una URL de PDF')
       return
     }
     updateSelected({
@@ -892,7 +902,7 @@ function FlowCanvasEditorInner({
               className="small-btn"
               onClick={() => addCanvasNode('message_document')}
             >
-              + Archivo
+              + PDF
             </button>
             <button
               type="button"
@@ -936,7 +946,7 @@ function FlowCanvasEditorInner({
       {readOnly ? null : (
         <p className="text-xs text-muted">
           Arrastra nodos y conecta desde el punto de cada botón (key). Doble
-          clic en un nodo o conector para editarlo. Imagen/archivo se envían y
+          clic en un nodo o conector para editarlo. Imagen/PDF se envían y
           continúan solos. Cada key de botón debe ser única. Solo cuenta el
           último mensaje del asistente.
         </p>
@@ -1069,7 +1079,7 @@ function FlowCanvasEditorInner({
                     : selected?.type === 'image'
                       ? 'Imagen'
                       : selected?.type === 'document'
-                        ? 'Documento'
+                        ? 'PDF'
                         : 'Mensaje'}
             </SheetTitle>
             <SheetDescription>
@@ -1137,18 +1147,30 @@ function FlowCanvasEditorInner({
                         className="max-h-40 w-full rounded-md object-contain"
                       />
                     ) : null}
+                    {selected.data.kind === 'message_document' &&
+                    selected.data.media_url ? (
+                      <ChatPdfPreview downloadUrl={selected.data.media_url} />
+                    ) : null}
                     <p className="truncate text-xs text-muted">
                       {selected.data.media_filename ||
                         (selected.data.media_url
-                          ? 'Media listo'
-                          : 'Sin archivo ni URL')}
+                          ? selected.data.kind === 'message_image'
+                            ? 'Imagen lista'
+                            : 'PDF listo'
+                          : selected.data.kind === 'message_image'
+                            ? 'Sin imagen ni URL'
+                            : 'Sin PDF ni URL')}
                     </p>
                     <label className="small-btn inline-flex cursor-pointer">
                       {mediaUploading
                         ? 'Subiendo…'
                         : selected.data.media_url
-                          ? 'Cambiar archivo'
-                          : 'Subir archivo'}
+                          ? selected.data.kind === 'message_image'
+                            ? 'Cambiar imagen'
+                            : 'Cambiar PDF'
+                          : selected.data.kind === 'message_image'
+                            ? 'Subir imagen'
+                            : 'Subir PDF'}
                       <input
                         type="file"
                         className="hidden"
@@ -1187,7 +1209,9 @@ function FlowCanvasEditorInner({
                             className="rounded border border-bad px-2 py-0.5 text-xs text-bad"
                             onClick={clearMedia}
                           >
-                            Quitar media
+                            {selected.data.kind === 'message_image'
+                              ? 'Quitar imagen'
+                              : 'Quitar PDF'}
                           </button>
                         ) : null}
                       </div>

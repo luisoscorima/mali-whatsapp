@@ -42,10 +42,16 @@ export function ChatPdfPreview({ downloadUrl }: ChatPdfPreviewProps) {
     void (async () => {
       try {
         const headers: HeadersInit = {}
-        const token = getToken()
-        if (token) headers.Authorization = `Bearer ${token}`
+        const isAbsolute = /^https?:\/\//i.test(downloadUrl)
+        if (!isAbsolute) {
+          const token = getToken()
+          if (token) headers.Authorization = `Bearer ${token}`
+        }
 
-        const res = await fetch(downloadUrl, { headers, credentials: 'include' })
+        const res = await fetch(downloadUrl, {
+          headers,
+          credentials: isAbsolute ? 'omit' : 'include',
+        })
         if (!res.ok || cancelled) return
 
         const data = await res.arrayBuffer()

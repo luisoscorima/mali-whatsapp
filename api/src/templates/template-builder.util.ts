@@ -13,7 +13,7 @@ export type PlaceholderAliases = {
   headerText: string[];
   bodyText: string[];
   buttons: { index: number; aliases: string[] }[];
-  /** Payload estable de QUICK_REPLY (no va a Meta en el create; sí al enviar). */
+  /** Payload estable de QUICK_REPLY (opcional en builder; si vacío se usa el texto). */
   quickReplyPayloads: { index: number; payload: string }[];
 };
 
@@ -35,7 +35,7 @@ export type TemplateBuilderPayload = {
   buttons: {
     type: string;
     text: string;
-    /** Solo QUICK_REPLY: trigger del flujo / payload de webhook. */
+    /** Solo QUICK_REPLY: trigger del flujo / payload de webhook (opcional). */
     payload: string;
     url: string;
     exampleValues: string[];
@@ -610,11 +610,6 @@ export async function compileTemplateBuilderPayload(
 
     if (type === 'quick_reply') {
       const payload = trimString(button?.payload) || text;
-      if (!payload) {
-        throw new Error(
-          `Trigger/payload del botón ${idx + 1} es obligatorio.`,
-        );
-      }
       if (payload.length > 256) {
         throw new Error(
           `Trigger/payload del botón ${idx + 1} no puede superar 256 caracteres.`,

@@ -19,7 +19,7 @@ export function nodeLabelSnapshot(
   const file = String(mediaFilename || '').trim();
   if (kind === 'message_image') return file ? `Imagen: ${file}` : 'Imagen';
   if (kind === 'message_document') {
-    return file ? `Archivo: ${file}` : 'Documento';
+    return file ? `PDF: ${file}` : 'PDF';
   }
   if (kind === 'handoff_human') return 'Derivar a asesor';
   if (kind === 'end') return 'Fin del flujo';
