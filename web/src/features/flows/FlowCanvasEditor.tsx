@@ -83,6 +83,14 @@ type FlowCanvasEditorProps = {
   metricsNote?: string
   onDelete?: () => void
   deleting?: boolean
+  /** Solo visualizar (pan/zoom); sin editar grafo ni metadatos. */
+  readOnly?: boolean
+}
+
+const STATUS_LABEL: Record<'draft' | 'active' | 'paused', string> = {
+  draft: 'Borrador',
+  active: 'Activo',
+  paused: 'Pausado',
 }
 
 const HANDLE_CLASS = 'flow-canvas-handle'
@@ -246,26 +254,14 @@ function FlowCanvasEditorInner({
   metricsNote,
   onDelete,
   deleting,
+  readOnly = false,
 }: FlowCanvasEditorProps) {
   const [advisors, setAdvisors] = useState<Advisor[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
-  const [viewOnly, setViewOnly] = useState(() =>
-    typeof window !== 'undefined'
-      ? window.matchMedia('(max-width: 768px)').matches
-      : false,
-  )
   const suppressSelectionRef = useRef(false)
   const didFitViewRef = useRef(false)
   const { fitView } = useReactFlow()
-
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 768px)')
-    const onChange = () => setViewOnly(mq.matches)
-    onChange()
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
-  }, [])
 
   const runFitView = useCallback(() => {
     window.requestAnimationFrame(() => {
@@ -605,6 +601,7 @@ function FlowCanvasEditorInner({
 
   function handleFormSubmit(e: FormEvent) {
     e.preventDefault()
+    if (readOnly) return
     const mapped: FlowEditorNode[] = rfNodes.map((n) => {
       const kind =
         n.type === 'handoff'
@@ -675,134 +672,178 @@ function FlowCanvasEditorInner({
 
   return (
     <form className="flex flex-col gap-3 p-3 md:p-4" onSubmit={handleFormSubmit}>
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="block text-sm">
-            <span className="text-muted">Nombre</span>
-            <input
-              className="mt-1 block w-56 rounded-lg border border-line bg-surface-strong px-3 py-2"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              maxLength={150}
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="text-muted">Trigger key</span>
-            <input
-              className="mt-1 block w-56 rounded-lg border border-line bg-surface-strong px-3 py-2 font-mono text-sm"
-              value={triggerPayload}
-              onChange={(e) => setTriggerPayload(e.target.value)}
-              required
-              maxLength={256}
-              placeholder="INICIAR_FLUJO"
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="text-muted">Estado</span>
-            <select
-              className="mt-1 block rounded-lg border border-line bg-surface-strong px-3 py-2"
-              value={status}
-              onChange={(e) =>
-                setStatus(e.target.value as 'draft' | 'active' | 'paused')
-              }
-            >
-              <option value="draft">Borrador</option>
-              <option value="active">Activo</option>
-              <option value="paused">Pausado</option>
-            </select>
-          </label>
+      {readOnly ? (
+        <div>
+          <h1 className="text-lg font-semibold">{name || 'Sin nombre'}</h1>
+          <p className="mt-1 text-sm text-muted">
+            <span className="font-mono">{triggerPayload}</span>
+            {' · '}
+            {STATUS_LABEL[status]}
+          </p>
+          <p className="mt-2 text-xs text-muted">
+            Vista móvil: puedes mover y acercar el diagrama. Edita desde escritorio.
+          </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="small-btn"
-            onClick={() => addCanvasNode('message_buttons')}
-          >
-            + Mensaje
-          </button>
-          <button
-            type="button"
-            className="small-btn"
-            onClick={() => addCanvasNode('handoff_human')}
-          >
-            + Derivar
-          </button>
-          <button
-            type="button"
-            className="small-btn"
-            onClick={() => addCanvasNode('end')}
-          >
-            + Fin
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="submit"
-            className="rounded-lg bg-accent px-4 py-2 text-sm text-white disabled:opacity-60"
-            disabled={saving}
-          >
-            {saving ? 'Guardando…' : submitLabel}
-          </button>
-          {onDelete ? (
+      ) : (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="block text-sm">
+              <span className="text-muted">Nombre</span>
+              <input
+                className="mt-1 block w-56 rounded-lg border border-line bg-surface-strong px-3 py-2"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                maxLength={150}
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="text-muted">Trigger key</span>
+              <input
+                className="mt-1 block w-56 rounded-lg border border-line bg-surface-strong px-3 py-2 font-mono text-sm"
+                value={triggerPayload}
+                onChange={(e) => setTriggerPayload(e.target.value)}
+                required
+                maxLength={256}
+                placeholder="INICIAR_FLUJO"
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="text-muted">Estado</span>
+              <select
+                className="mt-1 block rounded-lg border border-line bg-surface-strong px-3 py-2"
+                value={status}
+                onChange={(e) =>
+                  setStatus(e.target.value as 'draft' | 'active' | 'paused')
+                }
+              >
+                <option value="draft">Borrador</option>
+                <option value="active">Activo</option>
+                <option value="paused">Pausado</option>
+              </select>
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className="rounded-lg border border-bad px-4 py-2 text-sm text-bad disabled:opacity-60"
-              disabled={deleting}
-              onClick={onDelete}
+              className="small-btn"
+              onClick={() => addCanvasNode('message_buttons')}
             >
-              {deleting ? 'Eliminando…' : 'Eliminar'}
+              + Mensaje
             </button>
-          ) : null}
+            <button
+              type="button"
+              className="small-btn"
+              onClick={() => addCanvasNode('handoff_human')}
+            >
+              + Derivar
+            </button>
+            <button
+              type="button"
+              className="small-btn"
+              onClick={() => addCanvasNode('end')}
+            >
+              + Fin
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="submit"
+              className="rounded-lg bg-accent px-4 py-2 text-sm text-white disabled:opacity-60"
+              disabled={saving}
+            >
+              {saving ? 'Guardando…' : submitLabel}
+            </button>
+            {onDelete ? (
+              <button
+                type="button"
+                className="rounded-lg border border-bad px-4 py-2 text-sm text-bad disabled:opacity-60"
+                disabled={deleting}
+                onClick={onDelete}
+              >
+                {deleting ? 'Eliminando…' : 'Eliminar'}
+              </button>
+            ) : null}
+          </div>
         </div>
-      </div>
+      )}
       {metricsNote ? (
         <p className="muted campaign-drilldown-dialog__note text-sm">{metricsNote}</p>
       ) : null}
-      <p className="text-xs text-muted">
-        Arrastra desde el punto de cada botón (key) hacia el siguiente nodo.
-        Haz clic en un nodo o conector para editarlo en el panel. Cada key debe
-        ser única. Solo cuenta el último mensaje del asistente.
-      </p>
+      {readOnly ? null : (
+        <p className="text-xs text-muted">
+          Arrastra desde el punto de cada botón (key) hacia el siguiente nodo.
+          Haz clic en un nodo o conector para editarlo en el panel. Cada key debe
+          ser única. Solo cuenta el último mensaje del asistente.
+        </p>
+      )}
 
-      <div className="flow-canvas h-[min(60vh,640px)] min-h-[420px] overflow-hidden rounded-xl border border-line bg-surface">
+      <div
+        className={`flow-canvas overflow-hidden rounded-xl border border-line bg-surface ${
+          readOnly
+            ? 'h-[min(45vh,420px)] min-h-[260px]'
+            : 'h-[min(60vh,640px)] min-h-[420px]'
+        }`}
+      >
         <ReactFlow
           nodes={rfNodes}
           edges={rfEdges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={(chs) => {
-            onEdgesChange(chs)
-            if (chs.some((c) => c.type === 'remove')) {
-              setSelectedEdgeId(null)
-            }
-          }}
-          onEdgesDelete={(deleted) => {
-            const deletedIds = new Set(deleted.map((e) => e.id))
-            const nextEdges = rfEdges.filter((e) => !deletedIds.has(e.id))
-            syncOut(rfNodes, nextEdges)
-            setSelectedEdgeId(null)
-          }}
-          onNodeDragStop={(_e, _node, nodes) => {
-            syncOut(nodes as Node<CanvasData>[], rfEdges)
-          }}
-          onConnect={onConnect}
-          onSelectionChange={({ nodes: sel, edges: edgeSel }) => {
-            if (suppressSelectionRef.current) return
-            setSelectedId(sel[0]?.id ?? null)
-            setSelectedEdgeId(edgeSel[0]?.id ?? null)
-          }}
+          onNodesChange={readOnly ? undefined : onNodesChange}
+          onEdgesChange={
+            readOnly
+              ? undefined
+              : (chs) => {
+                  onEdgesChange(chs)
+                  if (chs.some((c) => c.type === 'remove')) {
+                    setSelectedEdgeId(null)
+                  }
+                }
+          }
+          onEdgesDelete={
+            readOnly
+              ? undefined
+              : (deleted) => {
+                  const deletedIds = new Set(deleted.map((e) => e.id))
+                  const nextEdges = rfEdges.filter((e) => !deletedIds.has(e.id))
+                  syncOut(rfNodes, nextEdges)
+                  setSelectedEdgeId(null)
+                }
+          }
+          onNodeDragStop={
+            readOnly
+              ? undefined
+              : (_e, _node, nodes) => {
+                  syncOut(nodes as Node<CanvasData>[], rfEdges)
+                }
+          }
+          onConnect={readOnly ? undefined : onConnect}
+          onSelectionChange={
+            readOnly
+              ? undefined
+              : ({ nodes: sel, edges: edgeSel }) => {
+                  if (suppressSelectionRef.current) return
+                  setSelectedId(sel[0]?.id ?? null)
+                  setSelectedEdgeId(edgeSel[0]?.id ?? null)
+                }
+          }
           nodeTypes={nodeTypes}
           fitView
           fitViewOptions={{ padding: 0.2 }}
           onInit={() => runFitView()}
-          snapToGrid
+          snapToGrid={!readOnly}
           snapGrid={[16, 16]}
           connectionMode={ConnectionMode.Loose}
           connectionRadius={40}
-          nodesConnectable
-          edgesFocusable
-          elementsSelectable
-          deleteKeyCode={['Backspace', 'Delete']}
+          nodesDraggable={!readOnly}
+          nodesConnectable={!readOnly}
+          nodesFocusable={!readOnly}
+          edgesFocusable={!readOnly}
+          edgesReconnectable={!readOnly}
+          elementsSelectable={!readOnly}
+          panOnDrag
+          zoomOnScroll
+          zoomOnPinch
+          deleteKeyCode={readOnly ? null : ['Backspace', 'Delete']}
           multiSelectionKeyCode={null}
           proOptions={{ hideAttribution: true }}
           defaultEdgeOptions={{
@@ -812,17 +853,19 @@ function FlowCanvasEditorInner({
         >
           <Background color="var(--line)" gap={16} />
           <Controls showInteractive={false} />
-          <MiniMap
-            pannable
-            zoomable={false}
-            nodeStrokeWidth={0}
-            maskColor="color-mix(in srgb, var(--ink) 18%, transparent)"
-          />
+          {readOnly ? null : (
+            <MiniMap
+              pannable
+              zoomable={false}
+              nodeStrokeWidth={0}
+              maskColor="color-mix(in srgb, var(--ink) 18%, transparent)"
+            />
+          )}
         </ReactFlow>
       </div>
 
       <Sheet
-        open={Boolean(selected || selectedEdge)}
+        open={!readOnly && Boolean(selected || selectedEdge)}
         onOpenChange={(open) => {
           if (!open) closeInspector()
         }}

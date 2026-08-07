@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { FlowCanvasEditor } from './FlowCanvasEditor'
@@ -68,22 +68,35 @@ export function FlowNewPage() {
   }
 
   return (
-    <FlowCanvasEditor
-      name={name}
-      setName={setName}
-      triggerPayload={triggerPayload}
-      setTriggerPayload={setTriggerPayload}
-      status={status}
-      setStatus={setStatus}
-      entryClientKey={entryClientKey}
-      setEntryClientKey={setEntryClientKey}
-      nodes={nodes}
-      setNodes={setNodes}
-      edges={edges}
-      setEdges={setEdges}
-      saving={saving}
-      onPersist={persist}
-      submitLabel="Crear flujo"
-    />
+    <div className="flex flex-col gap-2">
+      <div className="px-3 pt-3 md:px-4 md:pt-4">
+        <Link to="/flows" className="inbox-back-mobile">
+          ← Flujos
+        </Link>
+        <Link
+          to="/flows"
+          className="text-sm text-accent hover:underline max-md:hidden"
+        >
+          ← Flujos
+        </Link>
+      </div>
+      <FlowCanvasEditor
+        name={name}
+        setName={setName}
+        triggerPayload={triggerPayload}
+        setTriggerPayload={setTriggerPayload}
+        status={status}
+        setStatus={setStatus}
+        entryClientKey={entryClientKey}
+        setEntryClientKey={setEntryClientKey}
+        nodes={nodes}
+        setNodes={setNodes}
+        edges={edges}
+        setEdges={setEdges}
+        saving={saving}
+        onPersist={persist}
+        submitLabel="Crear flujo"
+      />
+    </div>
   )
 }

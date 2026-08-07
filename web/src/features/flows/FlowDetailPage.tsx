@@ -27,10 +27,27 @@ const EMPTY_ANALYTICS: FlowAnalytics = {
   nodes: [],
 }
 
+function useIsMobileViewport(breakpointPx = 768) {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined'
+      ? window.matchMedia(`(max-width: ${breakpointPx}px)`).matches
+      : false,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpointPx}px)`)
+    const onChange = () => setIsMobile(mq.matches)
+    onChange()
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [breakpointPx])
+  return isMobile
+}
+
 export function FlowDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { confirm, confirmDialog } = useConfirmDialog()
+  const isMobile = useIsMobileViewport()
   const [name, setName] = useState('')
   const [triggerPayload, setTriggerPayload] = useState('')
   const [status, setStatus] = useState<'draft' | 'active' | 'paused'>('draft')
@@ -158,7 +175,20 @@ export function FlowDetailPage() {
   }
 
   if (loadFailed) {
-    return <p className="muted p-4">No se pudo cargar el flujo.</p>
+    return (
+      <div className="space-y-3 p-4">
+        <Link to="/flows" className="inbox-back-mobile">
+          ← Flujos
+        </Link>
+        <Link
+          to="/flows"
+          className="text-sm text-accent hover:underline max-md:hidden"
+        >
+          ← Flujos
+        </Link>
+        <p className="muted">No se pudo cargar el flujo.</p>
+      </div>
+    )
   }
   if (!ready) {
     return <p className="muted p-4">Cargando…</p>
@@ -171,6 +201,12 @@ export function FlowDetailPage() {
       {confirmDialog}
       <div className="px-3 pt-3 md:px-4 md:pt-4">
         <Link to="/flows" className="inbox-back-mobile">
+          ← Flujos
+        </Link>
+        <Link
+          to="/flows"
+          className="text-sm text-accent hover:underline max-md:hidden"
+        >
           ← Flujos
         </Link>
       </div>
@@ -191,8 +227,9 @@ export function FlowDetailPage() {
         saving={saving}
         onPersist={persist}
         submitLabel="Guardar"
-        onDelete={onDelete}
+        onDelete={isMobile ? undefined : onDelete}
         deleting={deleting}
+        readOnly={isMobile}
       />
       <div className="relative z-10 space-y-3 border-t border-line bg-[var(--wa-chat-bg,var(--surface))] px-3 pb-4 pt-4 md:px-4">
         <h2 className="text-sm font-medium text-muted">Historial del flujo</h2>
