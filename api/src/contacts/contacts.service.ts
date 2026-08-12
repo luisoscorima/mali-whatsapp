@@ -244,6 +244,13 @@ export class ContactsService {
           AND ca.attr_key = ${attrKey}
           AND ca.attr_value ILIKE ${attrPat} ESCAPE '!'
       )`);
+    } else if (attrKey) {
+      conditions.push(Prisma.sql`EXISTS (
+        SELECT 1 FROM contact_attributes ca
+        WHERE ca.contact_id = c.id
+          AND ca.attr_key = ${attrKey}
+          AND TRIM(COALESCE(ca.attr_value, '')) <> ''
+      )`);
     }
 
     return Prisma.join(conditions, ' AND ');

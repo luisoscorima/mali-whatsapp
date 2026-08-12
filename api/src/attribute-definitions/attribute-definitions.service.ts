@@ -37,17 +37,20 @@ const ATTR_DEF_SELECT = {
   active: true,
 } as const;
 
-function mapDefinition(row: {
-  id: number;
-  segment_slug: string | null;
-  slug: string;
-  label: string;
-  field_type: string;
-  options: Prisma.JsonValue | null;
-  sort_order: number;
-  required: boolean;
-  active: boolean;
-}): AttributeDefinition {
+function mapDefinition(
+  row: {
+    id: number;
+    segment_slug: string | null;
+    slug: string;
+    label: string;
+    field_type: string;
+    options: Prisma.JsonValue | null;
+    sort_order: number;
+    required: boolean;
+    active: boolean;
+  },
+  usageCount = 0,
+): AttributeDefinition {
   return {
     id: row.id,
     segment_slug: row.segment_slug,
@@ -58,6 +61,7 @@ function mapDefinition(row: {
     sort_order: row.sort_order,
     required: row.required,
     active: row.active,
+    usage_count: usageCount,
   };
 }
 
@@ -79,30 +83,69 @@ function resolveOptionsForFieldType(
 export class AttributeDefinitionsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async loadUsageCounts(
+    area: AuthUser['area'],
+  ): Promise<Map<string, number>> {
+    const rows = await this.prisma.$queryRaw<{ attr_key: string; usage_count: number }[]>(
+      Prisma.sql`
+        SELECT ca.attr_key, COUNT(DISTINCT ca.contact_id)::int AS usage_count
+        FROM contact_attributes ca
+        JOIN contacts c ON c.id = ca.contact_id
+        WHERE c.area = ${area}
+          AND TRIM(COALESCE(ca.attr_value, '')) <> ''
+        GROUP BY ca.attr_key
+      `,
+    );
+    return new Map(rows.map((row) => [row.attr_key, row.usage_count]));
+  }
+
+  private async countUsage(
+    area: AuthUser['area'],
+    slug: string,
+  ): Promise<number> {
+    const rows = await this.prisma.$queryRaw<{ usage_count: number }[]>(
+      Prisma.sql`
+        SELECT COUNT(DISTINCT ca.contact_id)::int AS usage_count
+        FROM contact_attributes ca
+        JOIN contacts c ON c.id = ca.contact_id
+        WHERE c.area = ${area}
+          AND ca.attr_key = ${slug}
+          AND TRIM(COALESCE(ca.attr_value, '')) <> ''
+      `,
+    );
+    return rows[0]?.usage_count ?? 0;
+  }
+
   async list(area: AuthUser['area']): Promise<AttributeDefinition[]> {
-    const rows = await this.prisma.contact_attribute_definitions.findMany({
-      where: { area, active: true },
-      orderBy: [
-        { segment_slug: { sort: 'asc', nulls: 'first' } },
-        { sort_order: 'asc' },
-        { slug: 'asc' },
-      ],
-      select: ATTR_DEF_SELECT,
-    });
-    return rows.map(mapDefinition);
+    const [rows, usage] = await Promise.all([
+      this.prisma.contact_attribute_definitions.findMany({
+        where: { area, active: true },
+        orderBy: [
+          { segment_slug: { sort: 'asc', nulls: 'first' } },
+          { sort_order: 'asc' },
+          { slug: 'asc' },
+        ],
+        select: ATTR_DEF_SELECT,
+      }),
+      this.loadUsageCounts(area),
+    ]);
+    return rows.map((row) => mapDefinition(row, usage.get(row.slug) ?? 0));
   }
 
   async listAll(area: AuthUser['area']): Promise<AttributeDefinition[]> {
-    const rows = await this.prisma.contact_attribute_definitions.findMany({
-      where: { area },
-      orderBy: [
-        { segment_slug: { sort: 'asc', nulls: 'first' } },
-        { sort_order: 'asc' },
-        { slug: 'asc' },
-      ],
-      select: ATTR_DEF_SELECT,
-    });
-    return rows.map(mapDefinition);
+    const [rows, usage] = await Promise.all([
+      this.prisma.contact_attribute_definitions.findMany({
+        where: { area },
+        orderBy: [
+          { segment_slug: { sort: 'asc', nulls: 'first' } },
+          { sort_order: 'asc' },
+          { slug: 'asc' },
+        ],
+        select: ATTR_DEF_SELECT,
+      }),
+      this.loadUsageCounts(area),
+    ]);
+    return rows.map((row) => mapDefinition(row, usage.get(row.slug) ?? 0));
   }
 
   async getSummary(area: AuthUser['area']): Promise<AttributeSummary> {
@@ -117,7 +160,8 @@ export class AttributeDefinitionsService {
     if (!row) {
       throw new NotFoundException('Atributo no encontrado');
     }
-    return mapDefinition(row);
+    const usageCount = await this.countUsage(area, row.slug);
+    return mapDefinition(row, usageCount);
   }
 
   async listSegments(area: AuthUser['area']) {
@@ -170,7 +214,7 @@ export class AttributeDefinitionsService {
         },
         select: ATTR_DEF_SELECT,
       });
-      return mapDefinition(row);
+      return mapDefinition(row, 0);
     } catch (error) {
       if (
         error &&
@@ -189,7 +233,7 @@ export class AttributeDefinitionsService {
     id: number,
     dto: UpdateAttributeDefinitionDto,
   ) {
-    await this.getById(area, id);
+    const existing = await this.getById(area, id);
     const label = String(dto.label).trim().slice(0, 120);
     if (!label) {
       throw new BadRequestException('La etiqueta es obligatoria');
@@ -210,12 +254,34 @@ export class AttributeDefinitionsService {
       },
       select: ATTR_DEF_SELECT,
     });
-    return mapDefinition(row);
+    return mapDefinition(row, existing.usage_count);
   }
 
-  async remove(area: AuthUser['area'], id: number): Promise<void> {
-    await this.getById(area, id);
-    await this.prisma.contact_attribute_definitions.delete({ where: { id } });
+  async remove(
+    area: AuthUser['area'],
+    id: number,
+    deleteValues = false,
+  ): Promise<{ deleted: true; values_deleted: number }> {
+    const existing = await this.getById(area, id);
+    if (existing.usage_count > 0 && !deleteValues) {
+      throw new ConflictException(
+        `Hay ${existing.usage_count} contacto(s) con valor en este atributo. Confirma delete_values=true para borrar también esos valores, o desactiva el atributo.`,
+      );
+    }
+
+    const valuesDeleted = await this.prisma.$transaction(async (tx) => {
+      const deleted = await tx.$executeRaw`
+        DELETE FROM contact_attributes ca
+        USING contacts c
+        WHERE ca.contact_id = c.id
+          AND c.area = ${area}
+          AND ca.attr_key = ${existing.slug}
+      `;
+      await tx.contact_attribute_definitions.delete({ where: { id } });
+      return deleted;
+    });
+
+    return { deleted: true, values_deleted: Number(valuesDeleted) || 0 };
   }
 
   async reorder(area: AuthUser['area'], orderedIds: number[]): Promise<void> {

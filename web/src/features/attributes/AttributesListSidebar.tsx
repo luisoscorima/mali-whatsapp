@@ -30,6 +30,7 @@ type AttributeDefinition = {
   sort_order: number
   required: boolean
   active: boolean
+  usage_count: number
 }
 
 type SegmentOption = {
@@ -286,7 +287,12 @@ function renderAttributeRow(
             </span>
           </span>
           <span className="inbox-chat-preview font-mono">{def.slug}</span>
-          <span className="inbox-chat-preview">{scopeLabel(def, segments)}</span>
+          <span className="inbox-chat-preview">
+            {scopeLabel(def, segments)}
+            {def.usage_count > 0
+              ? ` · ${def.usage_count} contacto${def.usage_count === 1 ? '' : 's'}`
+              : ''}
+          </span>
         </span>
       </Link>
     </div>

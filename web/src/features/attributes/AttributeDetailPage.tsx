@@ -13,6 +13,7 @@ type AttributeDefinition = {
   sort_order: number
   required: boolean
   active: boolean
+  usage_count: number
 }
 
 type SegmentOption = {
@@ -24,6 +25,11 @@ function scopeLabel(def: AttributeDefinition, segments: SegmentOption[]): string
   if (!def.segment_slug) return 'Área'
   const seg = segments.find((s) => s.slug === def.segment_slug)
   return `Segmento · ${seg?.label ?? def.segment_slug}`
+}
+
+function usageLabel(count: number): string {
+  if (count <= 0) return 'Sin valores en contactos'
+  return count === 1 ? '1 contacto con valor' : `${count} contactos con valor`
 }
 
 export function AttributeDetailPage() {
@@ -94,23 +100,32 @@ export function AttributeDetailPage() {
   }
 
   async function onDelete() {
-    if (!id) return
-    if (
-      !(await confirm({
-        title: 'Eliminar definición',
-        description:
-          '¿Eliminar esta definición? Los valores guardados en contactos permanecen en la base de datos.',
-        confirmLabel: 'Eliminar',
-        tone: 'danger',
-      }))
-    ) {
-      return
-    }
-    const result = await apiClient.delete(`/api/attribute-definitions/${id}`)
+    if (!id || !def) return
+    const usage = def.usage_count ?? 0
+    const ok = await confirm({
+      title: 'Eliminar definición',
+      description:
+        usage > 0
+          ? `${usageLabel(usage)}.\n\nSe eliminará la definición y se borrarán esos valores.\nSi solo quieres ocultarlo, cancela y desactiva el atributo.`
+          : '¿Eliminar esta definición? No hay valores en contactos.',
+      confirmLabel: usage > 0 ? 'Eliminar definición y valores' : 'Eliminar',
+      tone: 'danger',
+    })
+    if (!ok) return
+
+    const qs = usage > 0 ? '?delete_values=true' : ''
+    const result = await apiClient.delete<{ deleted: true; values_deleted: number }>(
+      `/api/attribute-definitions/${id}${qs}`,
+    )
     if (!result.ok) {
       notify.error(result.error)
       return
     }
+    notify.success(
+      result.data.values_deleted > 0
+        ? `Eliminado (${result.data.values_deleted} valor(es) borrados).`
+        : 'Definición eliminada.',
+    )
     navigate('/attributes')
   }
 
@@ -132,6 +147,20 @@ export function AttributeDetailPage() {
         <h1 className="mt-2 text-2xl font-semibold">{def.label}</h1>
         <p className="font-mono text-sm text-muted">
           {def.slug} · {scopeLabel(def, segments)}
+        </p>
+        <p className="mt-1 text-sm text-muted">
+          {usageLabel(def.usage_count)}
+          {def.usage_count > 0 ? (
+            <>
+              {' · '}
+              <Link
+                to={`/contacts?attr_key=${encodeURIComponent(def.slug)}`}
+                className="text-accent hover:underline"
+              >
+                Ver contactos
+              </Link>
+            </>
+          ) : null}
         </p>
       </div>
 

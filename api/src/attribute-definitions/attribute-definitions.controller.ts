@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -98,9 +99,14 @@ export class AttributeDefinitionsController {
   async remove(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
-  ): Promise<ApiResponse<{ deleted: true }>> {
+    @Query('delete_values') deleteValuesRaw?: string,
+  ): Promise<ApiResponse<{ deleted: true; values_deleted: number }>> {
     assertCanManageAttributes(user);
-    await this.service.remove(user.area, id);
-    return { ok: true, data: { deleted: true } };
+    const deleteValues =
+      deleteValuesRaw === '1' ||
+      deleteValuesRaw === 'true' ||
+      deleteValuesRaw === 'yes';
+    const data = await this.service.remove(user.area, id, deleteValues);
+    return { ok: true, data };
   }
 }
