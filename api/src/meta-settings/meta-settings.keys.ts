@@ -4,4 +4,6 @@ export const META_SETTING_KEYS = {
   whatsappToken: 'meta.whatsapp_token',
   phoneNumberId: 'meta.phone_number_id',
   wabaId: 'meta.waba_id',
+  pageAccessToken: 'meta.page_access_token',
+  pageId: 'meta.page_id',
 } as const;

@@ -292,7 +292,7 @@ function ProfileBlock({
           <p className="inbox-chat-sub muted">
             Anuncio:{' '}
             {canManageAnuncios ? (
-              <Link to={`/anuncios/${detail.meta_ad.id}`}>
+              <Link to={`/leads/meta-ctwa/${detail.meta_ad.id}`}>
                 {detail.meta_ad.display_name ?? 'Anuncio'}
               </Link>
             ) : (

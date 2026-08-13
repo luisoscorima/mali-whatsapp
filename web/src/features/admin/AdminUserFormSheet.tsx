@@ -42,7 +42,7 @@ const PERM_FIELDS = [
   { key: 'can_assign_conversations', label: 'Asignar conversaciones' },
   { key: 'can_manage_attributes', label: 'Gestionar atributos' },
   { key: 'can_manage_segments', label: 'Gestionar segmentos' },
-  { key: 'can_manage_anuncios', label: 'Gestionar anuncios' },
+  { key: 'can_manage_anuncios', label: 'Gestionar leads' },
   { key: 'can_view_conversation_stats', label: 'Ver stats globales de conversaciones' },
   { key: 'can_view_campaign_stats', label: 'Ver stats de campañas' },
 ] as const

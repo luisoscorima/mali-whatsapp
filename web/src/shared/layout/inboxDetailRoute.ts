@@ -5,7 +5,7 @@ export function hasInboxDetailRoute(pathname: string): boolean {
   if (/^\/segments\/(\d+|new)/.test(pathname)) return true
   if (/^\/templates\/(\d+|new)/.test(pathname)) return true
   if (/^\/attributes\/(\d+|new)/.test(pathname)) return true
-  if (/^\/anuncios\/\d+/.test(pathname)) return true
+  if (/^\/leads\/meta-ctwa\/\d+/.test(pathname)) return true
   if (/^\/campaigns\/(\d+|new)/.test(pathname)) return true
   if (/^\/flows\/(\d+|new)/.test(pathname)) return true
   if (/^\/admin\/.+/.test(pathname)) return true

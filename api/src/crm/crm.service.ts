@@ -28,7 +28,7 @@ export type CrmAudienceRecipient = {
   email: string;
   name: string;
   last_name: string;
-  phone: string;
+  phone: string | null;
   attributes: Record<string, string>;
 };
 
@@ -45,7 +45,7 @@ export type CrmContactRow = {
   contact_id: number;
   name: string;
   last_name: string;
-  phone: string;
+  phone: string | null;
   email: string | null;
   dni: string | null;
   opt_in: boolean;
@@ -69,7 +69,7 @@ export type CrmContactsResult = {
 export type CrmSyncResult = {
   contact_id: number;
   area: string;
-  phone: string;
+  phone: string | null;
   email: string | null;
   created: boolean;
 };
@@ -109,8 +109,8 @@ export class CrmService {
       attributes.dni = dni;
     }
 
-    const existing = await this.prisma.contacts.findUnique({
-      where: { area_phone: { area, phone } },
+    const existing = await this.prisma.contacts.findFirst({
+      where: { area, phone, replaced_at: null },
     });
 
     const contact = await this.prisma.$transaction(async (tx) => {

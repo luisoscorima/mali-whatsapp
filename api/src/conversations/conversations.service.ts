@@ -1216,7 +1216,10 @@ export class ConversationsService {
     const existing = await this.prisma.conversations.findFirst({
       where: {
         area,
-        OR: [{ contact_id: contactId }, { phone: contact.phone }],
+        OR: [
+          { contact_id: contactId },
+          ...(contact.phone ? [{ phone: contact.phone }] : []),
+        ],
       },
       orderBy: { id: 'asc' },
       select: { id: true, contact_id: true },
@@ -1230,6 +1233,12 @@ export class ConversationsService {
         });
       }
       return { id: existing.id };
+    }
+
+    if (!contact.phone) {
+      throw new BadRequestException(
+        'El contacto no tiene teléfono; no se puede abrir conversación WhatsApp',
+      );
     }
 
     const created = await this.prisma.conversations.create({

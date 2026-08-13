@@ -155,7 +155,7 @@ model contacts {
   id                     Int                  @id @default(autoincrement())
   name                   String               @db.VarChar(150)
   last_name              String               @default("") @db.VarChar(150)
-  phone                  String               @db.VarChar(20)
+  phone                  String?              @db.VarChar(20)
   email                  String?              @db.VarChar(255)
   dni                    String?              @db.VarChar(32)
   segment                String?              @db.VarChar(50)
@@ -166,24 +166,109 @@ model contacts {
   created_at             DateTime             @default(now()) @db.Timestamp(6)
   updated_at             DateTime             @default(now()) @db.Timestamp(6)
   lead_score             Int?                 @db.SmallInt
+  lead_status_id         Int?
+  lead_status_updated_at DateTime?            @db.Timestamptz(6)
   replaced_by_contact_id Int?
   replaced_at            DateTime?            @db.Timestamptz(6)
   replacement_reason     String?              @db.VarChar(64)
   campaign_logs          campaign_logs[]
   contact_attributes     contact_attributes[]
   contact_segments       contact_segments[]
+  contact_origins        contact_origins[]
   contacts               contacts?            @relation("contactsTocontacts", fields: [replaced_by_contact_id], references: [id], onUpdate: NoAction, map: "contacts_replaced_by_contact_fkey")
   other_contacts         contacts[]           @relation("contactsTocontacts")
   conversations          conversations[]
   meta_ctwa_ad_leads     meta_ctwa_ad_leads[]
+  meta_leadgen_leads     meta_leadgen_leads[]
+  lead_status            lead_status_definitions? @relation(fields: [lead_status_id], references: [id], onUpdate: NoAction, onDelete: SetNull)
 
-  @@unique([area, phone])
   @@index([area], map: "idx_contacts_area")
   @@index([area, email], map: "idx_contacts_area_email")
   @@index([area, dni], map: "idx_contacts_area_dni")
+  @@index([lead_status_id], map: "idx_contacts_lead_status")
   @@index([replaced_at(sort: Desc)], map: "idx_contacts_replaced_at")
   @@index([replaced_by_contact_id], map: "idx_contacts_replaced_by_contact")
   @@index([segment], map: "idx_contacts_segment")
+}
+
+model lead_status_definitions {
+  id          Int       @id @default(autoincrement())
+  area        String    @db.VarChar(20)
+  slug        String    @db.VarChar(50)
+  label       String    @db.VarChar(120)
+  sort_order  Int       @default(0)
+  is_default  Boolean   @default(false)
+  is_terminal Boolean   @default(false)
+  active      Boolean   @default(true)
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime  @default(now()) @db.Timestamptz(6)
+  contacts    contacts[]
+
+  @@unique([area, slug])
+  @@index([area], map: "idx_lead_status_definitions_area")
+}
+
+model contact_origins {
+  id               Int            @id @default(autoincrement())
+  area             String         @db.VarChar(32)
+  contact_id       Int?
+  channel          String         @db.VarChar(32)
+  external_id      String         @db.VarChar(128)
+  source_key       String?        @db.VarChar(128)
+  source_label     String?        @db.VarChar(200)
+  payload          Json?
+  phone            String?        @db.VarChar(32)
+  dni              String?        @db.VarChar(32)
+  email            String?        @db.VarChar(255)
+  conversation_id  Int?
+  first_seen_at    DateTime       @default(now()) @db.Timestamptz(6)
+  last_seen_at     DateTime       @default(now()) @db.Timestamptz(6)
+  created_at       DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime       @default(now()) @db.Timestamptz(6)
+  contacts         contacts?      @relation(fields: [contact_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  conversations    conversations? @relation(fields: [conversation_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  meta_leadgen_leads meta_leadgen_leads[]
+
+  @@unique([area, channel, external_id], map: "contact_origins_area_channel_external_uq")
+  @@index([contact_id], map: "idx_contact_origins_contact")
+  @@index([area, channel], map: "idx_contact_origins_area_channel")
+}
+
+model meta_lead_forms {
+  id           Int       @id @default(autoincrement())
+  area         String    @db.VarChar(32)
+  form_id      String    @db.VarChar(64)
+  name         String?   @db.VarChar(200)
+  page_id      String?   @db.VarChar(64)
+  lead_count   Int       @default(0)
+  last_sync_at DateTime? @db.Timestamptz(6)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@unique([area, form_id], map: "meta_lead_forms_area_form_uq")
+  @@index([area], map: "idx_meta_lead_forms_area")
+}
+
+model meta_leadgen_leads {
+  id                 Int              @id @default(autoincrement())
+  area               String           @db.VarChar(32)
+  leadgen_id         String           @unique(map: "meta_leadgen_leads_leadgen_uq") @db.VarChar(64)
+  form_id            String           @db.VarChar(64)
+  page_id            String?          @db.VarChar(64)
+  ad_id              String?          @db.VarChar(64)
+  adgroup_id         String?          @db.VarChar(64)
+  field_data         Json?
+  raw                Json?
+  contact_id         Int?
+  contact_origin_id  Int?
+  created_time       DateTime?        @db.Timestamptz(6)
+  created_at         DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime         @default(now()) @db.Timestamptz(6)
+  contacts           contacts?        @relation(fields: [contact_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  contact_origins    contact_origins? @relation(fields: [contact_origin_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([area, form_id], map: "idx_meta_leadgen_leads_area_form")
+  @@index([contact_id], map: "idx_meta_leadgen_leads_contact")
 }
 
 model conversation_tags {
@@ -221,6 +306,7 @@ model conversations {
   wa_profile_name              String?              @db.VarChar(150)
   chat_messages                chat_messages[]
   conversation_tags            conversation_tags[]
+  contact_origins              contact_origins[]
   flow_sessions                flow_sessions[]
   contacts                     contacts?            @relation(fields: [contact_id], references: [id], onUpdate: NoAction)
   meta_ctwa_ads                meta_ctwa_ads?       @relation(fields: [meta_ctwa_ad_id], references: [id], onUpdate: NoAction)

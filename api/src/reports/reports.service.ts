@@ -201,7 +201,7 @@ export class ReportsService {
         select: { id: true, phone: true },
       });
       for (const contact of contacts) {
-        contactPhones.set(contact.id, contact.phone);
+        if (contact.phone) contactPhones.set(contact.id, contact.phone);
       }
     }
 

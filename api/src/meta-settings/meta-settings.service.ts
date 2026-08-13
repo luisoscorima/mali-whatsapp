@@ -53,6 +53,8 @@ export class MetaSettingsService implements OnModuleInit {
             whatsapp_token?: string;
             phone_number_id?: string;
             waba_id?: string;
+            page_access_token?: string;
+            page_id?: string;
           }
         >
       >;
@@ -84,6 +86,12 @@ export class MetaSettingsService implements OnModuleInit {
         row.phone_number_id,
       );
       await this.upsertSetting(area, META_SETTING_KEYS.wabaId, row.waba_id);
+      await this.upsertSetting(
+        area,
+        META_SETTING_KEYS.pageAccessToken,
+        row.page_access_token,
+      );
+      await this.upsertSetting(area, META_SETTING_KEYS.pageId, row.page_id);
     }
 
     await this.refresh();
@@ -106,14 +114,26 @@ export class MetaSettingsService implements OnModuleInit {
     global: { verify_token: string; app_secret: string };
     areas: Record<
       (typeof BUSINESS_AREAS)[number],
-      { whatsapp_token: string; phone_number_id: string; waba_id: string }
+      {
+        whatsapp_token: string;
+        phone_number_id: string;
+        waba_id: string;
+        page_access_token: string;
+        page_id: string;
+      }
     >;
   } {
     const rows = getStoredMetaRows();
     const global = rows.global;
     const areas = {} as Record<
       (typeof BUSINESS_AREAS)[number],
-      { whatsapp_token: string; phone_number_id: string; waba_id: string }
+      {
+        whatsapp_token: string;
+        phone_number_id: string;
+        waba_id: string;
+        page_access_token: string;
+        page_id: string;
+      }
     >;
     for (const area of BUSINESS_AREAS) {
       const row = rows[area];
@@ -121,6 +141,8 @@ export class MetaSettingsService implements OnModuleInit {
         whatsapp_token: row[META_SETTING_KEYS.whatsappToken] ?? '',
         phone_number_id: row[META_SETTING_KEYS.phoneNumberId] ?? '',
         waba_id: row[META_SETTING_KEYS.wabaId] ?? '',
+        page_access_token: row[META_SETTING_KEYS.pageAccessToken] ?? '',
+        page_id: row[META_SETTING_KEYS.pageId] ?? '',
       };
     }
     return {

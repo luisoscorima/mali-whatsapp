@@ -23,6 +23,7 @@ La **arquitectura de la app, Docker, Nginx, variables generales y uso del panel*
 13. [WhatsApp Manager: plantillas y estados](#13-whatsapp-manager-plantillas-y-estados)
 14. [Errores frecuentes (Meta y webhook)](#14-errores-frecuentes-meta-y-webhook)
 15. [Troubleshooting webhook (mensajes entrantes)](#15-troubleshooting-webhook-mensajes-entrantes)
+16. [Lead Ads / Instant Forms (`leadgen`)](#16-lead-ads--instant-forms-leadgen)
 
 ---
 
@@ -326,3 +327,45 @@ Desde el ecosistema Meta / Business: **WhatsApp Manager** — crear plantillas, 
 7. App Secret.  
 8. HTTPS público → Webhook + Verify token.  
 9. Plantillas aprobadas → panel **Sincronizar plantillas**.
+
+---
+
+## 16. Lead Ads / Instant Forms (`leadgen`)
+
+Esto es **distinto** de CTWA (Click-to-WhatsApp). Los Instant Forms no llegan por el webhook de mensajes WA; usan el objeto **Page** y el campo **`leadgen`**. Ownership de producto: [docs/OWNERSHIP-LEADS.md](docs/OWNERSHIP-LEADS.md).
+
+### Caso de uso en Developers
+
+1. App → **Agregar casos de uso** → **Anuncios y monetización**.
+2. Activar **Captar y administrar clientes potenciales de anuncios con la API de marketing**.
+3. Si el portal no permite combinarlo con WhatsApp Business en la misma app → crear app **MALI Marketing** solo Ads.
+4. App Review típico: `leads_retrieval`, `pages_manage_ads`, `pages_show_list`, `pages_read_engagement` (a menudo también `ads_management`).
+5. Business Verification si Meta lo exige.
+
+### Token y Página
+
+- Usa un **Page access token** de larga duración (no el `whatsapp_token`).
+- En la app (Admin / settings leads): guardar `meta.page_access_token` y `meta.page_id` (por área o global).
+- Suscribir la Página a la app:
+
+```bash
+curl -X POST "https://graph.facebook.com/v23.0/{PAGE_ID}/subscribed_apps" \
+  -d "subscribed_fields=leadgen" \
+  -d "access_token={PAGE_ACCESS_TOKEN}"
+```
+
+### Webhook
+
+1. Mismo callback HTTPS de la app (o el configurado para Page).
+2. Objeto **Page** → suscribir campo **`leadgen`**.
+3. Mali procesa el aviso, lee `leadgen_id` y hace `GET /{leadgen_id}` con el Page token para obtener `field_data`.
+
+### Bulk / histórico
+
+```bash
+curl -G "https://graph.facebook.com/v23.0/{FORM_ID}/leads" \
+  -d "access_token={PAGE_ACCESS_TOKEN}" \
+  -d "fields=created_time,id,ad_id,form_id,field_data"
+```
+
+En la API Mali: endpoint de backfill por `form_id` (área + token configurado).

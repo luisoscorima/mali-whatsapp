@@ -7,7 +7,13 @@ type MetaView = {
   global: { verify_token: string; app_secret: string }
   areas: Record<
     string,
-    { whatsapp_token: string; phone_number_id: string; waba_id: string }
+    {
+      whatsapp_token: string
+      phone_number_id: string
+      waba_id: string
+      page_access_token: string
+      page_id: string
+    }
   >
 }
 
@@ -42,7 +48,12 @@ export function AdminMetaPage() {
 
   function updateArea(
     area: string,
-    field: 'whatsapp_token' | 'phone_number_id' | 'waba_id',
+    field:
+      | 'whatsapp_token'
+      | 'phone_number_id'
+      | 'waba_id'
+      | 'page_access_token'
+      | 'page_id',
     value: string,
   ) {
     setData((current) => {
@@ -76,6 +87,8 @@ export function AdminMetaPage() {
     whatsapp_token: '',
     phone_number_id: '',
     waba_id: '',
+    page_access_token: '',
+    page_id: '',
   }
 
   return (
@@ -164,6 +177,26 @@ export function AdminMetaPage() {
             type="text"
             value={areaRow.waba_id}
             onChange={(e) => updateArea(selectedArea, 'waba_id', e.target.value)}
+            className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-sm">Page access token (Lead Ads)</span>
+          <input
+            type={showSecrets ? 'text' : 'password'}
+            value={areaRow.page_access_token}
+            onChange={(e) =>
+              updateArea(selectedArea, 'page_access_token', e.target.value)
+            }
+            className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-sm">Page ID (Lead Ads)</span>
+          <input
+            type="text"
+            value={areaRow.page_id}
+            onChange={(e) => updateArea(selectedArea, 'page_id', e.target.value)}
             className="w-full rounded-lg border border-line px-3 py-2 text-sm"
           />
         </label>

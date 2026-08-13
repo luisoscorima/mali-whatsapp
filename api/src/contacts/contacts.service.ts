@@ -631,7 +631,7 @@ export class ContactsService {
       id: number;
       name: string;
       last_name: string;
-      phone: string;
+      phone: string | null;
       email: string | null;
       dni: string | null;
       opt_in: boolean;
@@ -1028,32 +1028,38 @@ export class ContactsService {
     );
 
     await this.prisma.$transaction(async (tx) => {
-      const contact = await tx.contacts.upsert({
-        where: { area_phone: { area, phone: row.phone } },
-        create: {
-          name: row.name,
-          last_name: row.last_name,
-          phone: row.phone,
-          email: row.email ?? null,
-          dni: row.dni ?? null,
-          segment: firstSegmentForLegacyColumn(row.segments),
-          area,
-          opt_in: true,
-          active: true,
-        },
-        update: {
-          name: row.name,
-          last_name: row.last_name,
-          ...(row.email !== undefined ? { email: row.email } : {}),
-          ...(row.dni !== undefined ? { dni: row.dni } : {}),
-          segment: firstSegmentForLegacyColumn(row.segments),
-          active: true,
-          replaced_by_contact_id: null,
-          replaced_at: null,
-          replacement_reason: null,
-          updated_at: new Date(),
-        },
+      const existing = await tx.contacts.findFirst({
+        where: { area, phone: row.phone, replaced_at: null },
       });
+      const contact = existing
+        ? await tx.contacts.update({
+            where: { id: existing.id },
+            data: {
+              name: row.name,
+              last_name: row.last_name,
+              ...(row.email !== undefined ? { email: row.email } : {}),
+              ...(row.dni !== undefined ? { dni: row.dni } : {}),
+              segment: firstSegmentForLegacyColumn(row.segments),
+              active: true,
+              replaced_by_contact_id: null,
+              replaced_at: null,
+              replacement_reason: null,
+              updated_at: new Date(),
+            },
+          })
+        : await tx.contacts.create({
+            data: {
+              name: row.name,
+              last_name: row.last_name,
+              phone: row.phone,
+              email: row.email ?? null,
+              dni: row.dni ?? null,
+              segment: firstSegmentForLegacyColumn(row.segments),
+              area,
+              opt_in: true,
+              active: true,
+            },
+          });
 
       await this.replaceContactSegments(tx, contact.id, area, row.segments);
       if (Object.keys(attrs).length > 0) {

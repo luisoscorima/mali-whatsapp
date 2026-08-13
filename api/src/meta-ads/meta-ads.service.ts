@@ -58,7 +58,30 @@ export class MetaAdsService {
         phone: true,
         first_message_at: true,
         conversation_id: true,
-        contacts: { select: { name: true } },
+        contact_id: true,
+        contacts: {
+          select: {
+            id: true,
+            name: true,
+            last_name: true,
+            email: true,
+            lead_score: true,
+            lead_status: { select: { id: true, slug: true, label: true } },
+            contact_segments: { select: { segment_slug: true } },
+          },
+        },
+        conversations: {
+          select: {
+            id: true,
+            status: true,
+            archived: true,
+            last_message_at: true,
+            assigned_user_id: true,
+            assigned_user: {
+              select: { id: true, email: true, first_name: true, last_name: true },
+            },
+          },
+        },
       },
     });
 
@@ -87,8 +110,31 @@ export class MetaAdsService {
       leads: leads.map((lead) => ({
         phone: lead.phone,
         first_message_at: lead.first_message_at,
-        contact_name: lead.contacts?.name ?? null,
+        contact_name: lead.contacts
+          ? [lead.contacts.name, lead.contacts.last_name].filter(Boolean).join(' ')
+          : null,
+        contact_id: lead.contacts?.id ?? lead.contact_id ?? null,
+        contact_email: lead.contacts?.email ?? null,
+        lead_score: lead.contacts?.lead_score ?? null,
+        lead_status: lead.contacts?.lead_status ?? null,
+        segment_slugs:
+          lead.contacts?.contact_segments.map((s) => s.segment_slug) ?? [],
         conversation_id: lead.conversation_id,
+        conversation_status: lead.conversations?.status ?? null,
+        conversation_archived: lead.conversations?.archived ?? false,
+        last_message_at: lead.conversations?.last_message_at ?? null,
+        assigned_user: lead.conversations?.assigned_user
+          ? {
+              id: lead.conversations.assigned_user.id,
+              email: lead.conversations.assigned_user.email,
+              name: [
+                lead.conversations.assigned_user.first_name,
+                lead.conversations.assigned_user.last_name,
+              ]
+                .filter(Boolean)
+                .join(' '),
+            }
+          : null,
       })),
     };
   }

@@ -26,6 +26,37 @@ Misma clave en:
 
 ## Endpoints
 
+### `POST /api/crm/origins`
+
+Ingestión de **evento de lead** (widget Educación, etc.). Match de persona: **phone → dni → email** (al menos uno). No escribe attrs de origen de campaña.
+
+```json
+{
+  "area": "educacion_ep",
+  "channel": "widget",
+  "external_id": "educacion-lead-cuid",
+  "source_key": "lead-form",
+  "source_label": "Conversemos",
+  "name": "Ana",
+  "last_name": "Pérez",
+  "phone": "51999888777",
+  "email": "ana@example.com",
+  "dni": "12345678",
+  "opt_in": true,
+  "opt_in_email": true,
+  "payload": {
+    "curso": "Historia del arte",
+    "curso_url": "https://…",
+    "fuente": "Web MALI Educación",
+    "programa": "extensionprofesional"
+  }
+}
+```
+
+Respuesta: `{ contact_id, origin_id, created }`.
+
+Ownership leads: [OWNERSHIP-LEADS.md](./OWNERSHIP-LEADS.md).
+
 ### `POST /api/crm/sync`
 
 Upsert de contacto desde producto (`PamRegistration`).

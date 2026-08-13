@@ -19,18 +19,56 @@ import { CrmAudienceBodyDto } from './dto/crm-audience-body.dto';
 import { CrmAudienceQueryDto } from './dto/crm-audience-query.dto';
 import { CrmContactsQueryDto } from './dto/crm-contacts-query.dto';
 import { CrmEnsureAttributeDefinitionsDto } from './dto/crm-ensure-attribute-definitions.dto';
+import { CrmIngestOriginDto } from './dto/crm-ingest-origin.dto';
 import { CrmPatchContactDto } from './dto/crm-patch-contact.dto';
 import { CrmSyncContactDto } from './dto/crm-sync-contact.dto';
+import { LeadsService } from '../leads/leads.service';
+import type { LeadChannel } from '../leads/leads.types';
+import { BadRequestException } from '@nestjs/common';
+import { LEAD_CHANNELS } from '../leads/leads.types';
 
 @Controller('crm')
 @UseGuards(CrmServiceTokenGuard)
 export class CrmController {
-  constructor(private readonly crm: CrmService) {}
+  constructor(
+    private readonly crm: CrmService,
+    private readonly leads: LeadsService,
+  ) {}
 
   /** Upsert contact from MALI ONE product (PamRegistration). */
   @Post('sync')
   async sync(@Body() body: CrmSyncContactDto) {
     const data = await this.crm.syncFromProduct(body);
+    return { ok: true, data };
+  }
+
+  /**
+   * Ingest lead origin (widget / multichannel). No lead-campaign attributes.
+   * Match: phone → dni → email.
+   */
+  @Post('origins')
+  async ingestOrigin(@Body() body: CrmIngestOriginDto) {
+    const channel = String(body.channel || '').trim() as LeadChannel;
+    if (!(LEAD_CHANNELS as readonly string[]).includes(channel)) {
+      throw new BadRequestException(`channel inválido: ${body.channel}`);
+    }
+    const data = await this.leads.upsertOrigin({
+      area: body.area || 'ti',
+      channel,
+      external_id: body.external_id,
+      source_key: body.source_key,
+      source_label: body.source_label,
+      payload: body.payload,
+      contact: {
+        name: body.name,
+        last_name: body.last_name,
+        phone: body.phone,
+        email: body.email,
+        dni: body.dni,
+        opt_in: body.opt_in,
+        opt_in_email: body.opt_in_email,
+      },
+    });
     return { ok: true, data };
   }
 

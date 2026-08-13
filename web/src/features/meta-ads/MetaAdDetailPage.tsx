@@ -25,7 +25,12 @@ type MetaAdLead = {
   phone: string
   first_message_at: string | null
   contact_name: string | null
+  contact_id: number | null
+  contact_email: string | null
+  lead_status: { label: string } | null
   conversation_id: number | null
+  conversation_status: string | null
+  assigned_user: { name: string; email: string } | null
 }
 
 type DetailPayload = {
@@ -84,11 +89,11 @@ export function MetaAdDetailPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Link to="/anuncios" className="inbox-back-mobile">
-          ← Anuncios
+        <Link to="/leads/meta-ctwa" className="inbox-back-mobile">
+          ← CTWA
         </Link>
-        <Link to="/anuncios" className="text-sm text-accent hover:underline max-md:hidden">
-          ← Anuncios
+        <Link to="/leads/meta-ctwa" className="text-sm text-accent hover:underline max-md:hidden">
+          ← CTWA
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">{ad.display_label}</h1>
         <p className="font-mono text-sm text-muted">
@@ -152,6 +157,23 @@ export function MetaAdDetailPage() {
             </dd>
           </div>
           <div className="sm:col-span-2">
+            <dt className="text-muted">Creativo</dt>
+            <dd className="mt-1">
+              {ad.image_url ? (
+                <img
+                  src={ad.image_url}
+                  alt=""
+                  className="max-h-48 rounded-lg border border-line object-contain"
+                />
+              ) : (
+                '—'
+              )}
+              {ad.media_type ? (
+                <span className="mt-1 block text-muted">{ad.media_type}</span>
+              ) : null}
+            </dd>
+          </div>
+          <div className="sm:col-span-2">
             <dt className="text-muted">Headline</dt>
             <dd>{ad.headline || '—'}</dd>
           </div>
@@ -183,6 +205,8 @@ export function MetaAdDetailPage() {
                 <tr>
                   <th className="px-2 py-2 font-medium">Nombre</th>
                   <th className="px-2 py-2 font-medium">Teléfono</th>
+                  <th className="px-2 py-2 font-medium">Estado</th>
+                  <th className="px-2 py-2 font-medium">Asignado</th>
                   <th className="px-2 py-2 font-medium">Primer mensaje</th>
                   <th className="px-2 py-2 font-medium">
                     <span className="sr-only">Chat</span>
@@ -192,8 +216,26 @@ export function MetaAdDetailPage() {
               <tbody>
                 {leads.map((lead) => (
                   <tr key={lead.phone} className="border-b border-line last:border-0">
-                    <td className="px-2 py-2">{lead.contact_name || '—'}</td>
+                    <td className="px-2 py-2">
+                      {lead.contact_id ? (
+                        <Link
+                          to={`/contacts/${lead.contact_id}`}
+                          className="text-accent hover:underline"
+                        >
+                          {lead.contact_name || '—'}
+                        </Link>
+                      ) : (
+                        lead.contact_name || '—'
+                      )}
+                    </td>
                     <td className="px-2 py-2 font-mono">{lead.phone}</td>
+                    <td className="px-2 py-2">{lead.lead_status?.label || '—'}</td>
+                    <td className="px-2 py-2">
+                      {lead.assigned_user?.name ||
+                        lead.assigned_user?.email ||
+                        lead.conversation_status ||
+                        '—'}
+                    </td>
                     <td className="px-2 py-2">{formatDateTime(lead.first_message_at)}</td>
                     <td className="px-2 py-2">
                       {lead.conversation_id ? (

@@ -9,7 +9,7 @@ export type ContactListItem = {
   id: number;
   name: string;
   last_name: string;
-  phone: string;
+  phone: string | null;
   email: string | null;
   dni: string | null;
   opt_in: boolean;
@@ -51,7 +51,7 @@ export type ContactDetail = {
   id: number;
   name: string;
   last_name: string;
-  phone: string;
+  phone: string | null;
   email: string | null;
   dni: string | null;
   opt_in: boolean;

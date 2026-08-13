@@ -74,7 +74,7 @@ export type CampaignExcludedContact = {
   id: number;
   name: string;
   last_name: string;
-  phone: string;
+  phone: string | null;
 };
 
 export type CampaignDetail = {

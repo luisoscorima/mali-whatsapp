@@ -14,7 +14,7 @@ En producción: **[https://whatsapp.mali.pe](https://whatsapp.mali.pe)**.
 - **Segmentación y atributos:** contactos con segmentos; definiciones de atributos por área; importación CSV/Excel; campañas con exclusiones y variables por contacto.
 - **Seguridad y gobernanza:** Google OAuth `@mali.pe` + JWT, permisos por módulo, bitácora de auditoría con retención configurable, usuarios y áreas desde Admin.
 - **IA asistida (Groq):** respuestas en ventana de 24 h en modo **Bot**; el master activa o desactiva el bot por área desde Ajustes.
-- **Leads CTWA:** detección de anuncios Click-to-WhatsApp (`referral`) → Facebook/Instagram, globo en el chat y listado en `/anuncios`.
+- **Leads multicanal:** Instant Forms (Lead Ads), CTWA, widgets (vía MALI ONE). CRM en `/leads` con orígenes y estados editables. Ver [docs/OWNERSHIP-LEADS.md](docs/OWNERSHIP-LEADS.md).
 
 ## Funcionalidades
 
@@ -27,7 +27,7 @@ En producción: **[https://whatsapp.mali.pe](https://whatsapp.mali.pe)**.
 | **Segmentos** | Definición y mantenimiento de audiencias. |
 | **Atributos** | Definiciones por área (`/attributes`) para formularios, importación y variables `{{n}}` en campañas. |
 | **Plantillas** | Sync desde Graph; alta vía app (`/templates/new`); estados PENDING/APPROVED/REJECTED; preview en vivo. |
-| **Anuncios Meta** | Listado CTWA en `/anuncios` por `source_id`; leads; nombre editable. |
+| **Leads** | Hub `/leads` por canal; Instant Forms + CTWA (`/leads/meta-forms`, `/leads/meta-ctwa`); estados editables. |
 | **Ajustes** | Integración; IA por área; fuera de horario; bitácora; reportería. |
 | **Admin** | Usuarios y permisos; áreas; credenciales Meta; auditoría global (solo master). |
 | **API / sistema** | `GET /health`, webhook `GET/POST /webhook`, APIs de campañas, contactos, conversaciones y settings. |
@@ -102,7 +102,7 @@ docker compose -f docker-compose.dev.yml up --build
 - `GET /segments` · `/segments/new` · `/segments/:id`
 - `GET /attributes` · `/attributes/new` · `/attributes/:id`
 - `GET /templates` · `/templates/new` · `/templates/:id`
-- `GET /anuncios` · `/anuncios/:id`
+- `GET /leads` · `/leads/meta-forms` · `/leads/meta-ctwa` · `/leads/meta-ctwa/:id`
 - `GET /settings` · `/settings/integracion` · `/settings/ia` · `/settings/fuera-de-horario` · `/settings/bitacora` · `/settings/reporteria`
 - `GET /admin` · `/admin/users` · `/admin/areas` · `/admin/meta` · `/admin/audit-logs` (master)
 
@@ -136,13 +136,13 @@ Errores frecuentes: `132001` (plantilla/idioma), `132000` (parámetros), `131030
 
 En Meta Developers, suscribe el webhook a **`message_template_status_update`** además de mensajes y estados.
 
-## CTWA (Click-to-WhatsApp)
+## Leads Meta (Instant Forms + CTWA)
 
-1. Pauta CTWA en Meta Ads Manager.
-2. Al llegar `referral` (o `context.referral`), la app registra el anuncio por `source_id`, infiere Facebook o Instagram y muestra headline/body en el hilo.
-3. En **Anuncios** (`/anuncios`) aparecen IDs, creativo y leads; el nombre visible es editable.
+1. **Instant Forms:** caso de uso Lead Ads + webhook Page `leadgen` ([CONFIGURACION_META.md § 16](CONFIGURACION_META.md)).
+2. **CTWA:** pauta Click-to-WhatsApp; al llegar `referral` se registra el anuncio y se vincula la conversación.
+3. Operación en **Leads** (`/leads`); ownership en [docs/OWNERSHIP-LEADS.md](docs/OWNERSHIP-LEADS.md).
 
-La **inversión de la pauta** (spend Ads) no se muestra; el costo en detalle de campaña es el del **envío masivo de plantillas** (WABA).
+La **inversión de la pauta** (spend Ads) no se muestra aquí; el costo en detalle de campaña WA es el del **envío masivo de plantillas** (WABA).
 
 ## Guía de producción y operación
 

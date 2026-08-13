@@ -41,7 +41,20 @@ export type MetaCtwaAdLead = {
   phone: string;
   first_message_at: Date;
   contact_name: string | null;
+  contact_id: number | null;
+  contact_email: string | null;
+  lead_score: number | null;
+  lead_status: { id: number; slug: string; label: string } | null;
+  segment_slugs: string[];
   conversation_id: number;
+  conversation_status: string | null;
+  conversation_archived: boolean;
+  last_message_at: Date | null;
+  assigned_user: {
+    id: number;
+    email: string;
+    name: string;
+  } | null;
 };
 
 export function formatAdPlatformLabel(platform: string): string {

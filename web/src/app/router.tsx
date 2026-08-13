@@ -8,6 +8,9 @@ import { ChangePasswordPage } from '../features/auth/ChangePasswordPage'
 import { MetaAdsShell } from '../features/meta-ads/MetaAdsShell'
 import { MetaAdsEmptyPane } from '../features/meta-ads/MetaAdsEmptyPane'
 import { MetaAdDetailPage } from '../features/meta-ads/MetaAdDetailPage'
+import { LeadsHubPage } from '../features/leads/LeadsHubPage'
+import { MetaFormsPage } from '../features/leads/MetaFormsPage'
+import { LeadsShell } from '../features/leads/LeadsShell'
 import { AttributesShell } from '../features/attributes/AttributesShell'
 import { AttributesSummaryPane } from '../features/attributes/AttributesSummaryPane'
 import { AttributeNewPage } from '../features/attributes/AttributeNewPage'
@@ -59,15 +62,19 @@ export function AppRouter() {
             <Route element={<WaAppShell />}>
             <Route index element={<Navigate to="/conversations" replace />} />
             <Route
-              path="anuncios"
+              path="leads"
               element={
                 <RequireUserPermission allowed={(u) => u.canManageAnuncios}>
-                  <MetaAdsShell />
+                  <LeadsShell />
                 </RequireUserPermission>
               }
             >
-              <Route index element={<MetaAdsEmptyPane />} />
-              <Route path=":id" element={<MetaAdDetailPage />} />
+              <Route index element={<LeadsHubPage />} />
+              <Route path="meta-forms" element={<MetaFormsPage />} />
+              <Route path="meta-ctwa" element={<MetaAdsShell />}>
+                <Route index element={<MetaAdsEmptyPane />} />
+                <Route path=":id" element={<MetaAdDetailPage />} />
+              </Route>
             </Route>
             <Route
               path="attributes"

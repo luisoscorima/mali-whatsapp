@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AttributeDefinitionsModule } from './attribute-definitions/attribute-definitions.module';
 import { MetaAdsModule } from './meta-ads/meta-ads.module';
+import { LeadsModule } from './leads/leads.module';
 import { ContactsModule } from './contacts/contacts.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { ReportsModule } from './reports/reports.module';
@@ -33,6 +34,7 @@ import { AdvisorNotesModule } from './advisor-notes/advisor-notes.module';
     AuthModule,
     DashboardModule,
     MetaAdsModule,
+    LeadsModule,
     AttributeDefinitionsModule,
     SegmentsModule,
     ContactsModule,

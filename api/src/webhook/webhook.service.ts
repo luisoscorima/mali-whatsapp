@@ -11,6 +11,8 @@ import {
   normalizePhone,
 } from '../contacts/contacts-validation.utils';
 import { FlowsService } from '../flows/flows.service';
+import { MetaLeadgenService } from '../leads/meta-leadgen.service';
+import { LeadsService } from '../leads/leads.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   isBusinessHoursConfigOperational,
@@ -53,6 +55,8 @@ export class WebhookService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly flowsService: FlowsService,
+    private readonly metaLeadgen: MetaLeadgenService,
+    private readonly leadsService: LeadsService,
   ) {}
 
   handleVerification(
@@ -80,6 +84,14 @@ export class WebhookService {
     if (!verifyWebhookSignature(req)) {
       this.logger.warn('Webhook POST: firma invalida o APP_SECRET ausente');
       throw new UnauthorizedException('Invalid webhook signature');
+    }
+
+    if (body?.object === 'page') {
+      const n = await this.metaLeadgen.processPageLeadgenWebhook(
+        body as unknown as Record<string, unknown>,
+      );
+      this.logger.log(`Webhook Page leadgen procesados=${n}`);
+      return;
     }
 
     const webhookDebug =
@@ -544,6 +556,28 @@ export class WebhookService {
           phone: from,
           msg: record,
         });
+        const referral = (record as { referral?: { source_id?: string; ctwa_clid?: string } })
+          .referral;
+        const sourceId =
+          String(referral?.source_id || '').trim() ||
+          (referral?.ctwa_clid
+            ? `clid:${String(referral.ctwa_clid).slice(0, 120)}`
+            : '');
+        if (sourceId) {
+          await this.leadsService.upsertOrigin({
+            area,
+            channel: 'meta_ctwa',
+            external_id: `${sourceId}:${conversation.id}`,
+            source_key: sourceId,
+            payload: referral ?? record,
+            phone: from,
+            conversation_id: conversation.id,
+            contact: {
+              phone: from,
+              name: undefined,
+            },
+          });
+        }
       } catch (error) {
         this.logger.warn(
           `Meta ad referral failed: ${error instanceof Error ? error.message : error}`,

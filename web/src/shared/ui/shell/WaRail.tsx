@@ -6,7 +6,7 @@ import { useTheme } from '@/shared/theme/useTheme'
 
 import { WaAccountMenu } from '@/shared/ui/shell/WaAccountMenu'
 
-const MORE_NAV = ['templates', 'flows', 'segments', 'attributes', 'anuncios'] as const
+const MORE_NAV = ['templates', 'flows', 'segments', 'attributes', 'leads'] as const
 
 export function navFromPath(pathname: string): string {
   if (pathname.startsWith('/conversations')) return 'conversations'
@@ -16,7 +16,7 @@ export function navFromPath(pathname: string): string {
   if (pathname.startsWith('/templates')) return 'templates'
   if (pathname.startsWith('/segments')) return 'segments'
   if (pathname.startsWith('/attributes')) return 'attributes'
-  if (pathname.startsWith('/anuncios')) return 'anuncios'
+  if (pathname.startsWith('/leads')) return 'leads'
   if (pathname.startsWith('/settings')) return 'settings'
   if (pathname.startsWith('/admin')) return 'admin'
   if (pathname === '/') return 'conversations'
@@ -120,9 +120,9 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
-    key: 'anuncios',
-    to: '/anuncios',
-    label: 'Anuncios',
+    key: 'leads',
+    to: '/leads',
+    label: 'Leads',
     mobileSecondary: true,
     icon: (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -168,7 +168,7 @@ export function WaRail({ user, onUserUpdate, conversationsUnreadCount = 0 }: WaR
   const visibleItems = provisionedItems.filter((item) => {
     if (item.key === 'attributes') return Boolean(user?.canManageAttributes)
     if (item.key === 'segments') return Boolean(user?.canManageSegments)
-    if (item.key === 'anuncios') return Boolean(user?.canManageAnuncios)
+    if (item.key === 'leads') return Boolean(user?.canManageAnuncios)
     return true
   })
 

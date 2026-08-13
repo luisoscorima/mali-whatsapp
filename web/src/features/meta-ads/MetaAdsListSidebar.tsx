@@ -68,7 +68,7 @@ export function MetaAdsListSidebar({ selectedId }: MetaAdsListSidebarProps) {
 
             return (
               <li key={ad.id} className={`inbox-chat-item ${active ? 'is-active' : ''}`}>
-                <Link to={`/anuncios/${ad.id}`} className="inbox-chat-link">
+                <Link to={`/leads/meta-ctwa/${ad.id}`} className="inbox-chat-link">
                   <span className="inbox-chat-link-main">
                     <span className="inbox-chat-row-top">
                       <span className="inbox-chat-title">{ad.display_label}</span>
