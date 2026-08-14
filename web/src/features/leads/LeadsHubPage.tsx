@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { type FormEvent, useEffect, useState } from 'react'
 import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
@@ -39,6 +39,17 @@ const CHANNEL_META: Record<
     enabled: false,
   },
 }
+
+const CHANNEL_FILTER_OPTIONS = [
+  { value: '', label: 'Todos' },
+  { value: 'widget', label: 'Widget web' },
+  { value: 'meta_lead_form', label: 'Instant Forms' },
+  { value: 'meta_ctwa', label: 'Click-to-WhatsApp' },
+  { value: 'organic_wa', label: 'WhatsApp orgánico' },
+  { value: 'manual', label: 'Manual' },
+  { value: 'import', label: 'Import' },
+  { value: 'other', label: 'Otros' },
+] as const
 
 export function LeadsHubPage() {
   const [rows, setRows] = useState<ChannelSummary[]>([])
@@ -97,7 +108,7 @@ export function LeadsHubPage() {
                   to={meta.to}
                   className="mt-3 inline-block text-sm text-accent hover:underline"
                 >
-                  Abrir →
+                  {channel === 'widget' ? 'Ver listado →' : 'Abrir →'}
                 </Link>
               ) : (
                 <p className="mt-3 text-sm text-muted">No disponible aún</p>
@@ -114,6 +125,11 @@ export function LeadsHubPage() {
 }
 
 function LeadsUnifiedList() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const channel = (searchParams.get('channel') || '').trim()
+  const channelLabel =
+    CHANNEL_FILTER_OPTIONS.find((o) => o.value === channel)?.label || channel
+
   const [items, setItems] = useState<
     Array<{
       id: number
@@ -132,18 +148,51 @@ function LeadsUnifiedList() {
   >([])
 
   useEffect(() => {
+    const qs = new URLSearchParams({ limit: '40' })
+    if (channel) qs.set('channel', channel)
     void apiClient
-      .get<{ items: typeof items }>('/api/leads/origins?limit=40')
+      .get<{ items: typeof items }>(`/api/leads/origins?${qs}`)
       .then((r) => {
         if (r.ok) setItems(r.data.items)
       })
-  }, [])
+  }, [channel])
+
+  function onChannelChange(value: string) {
+    const next = new URLSearchParams(searchParams)
+    if (value) next.set('channel', value)
+    else next.delete('channel')
+    setSearchParams(next, { replace: true })
+  }
 
   return (
     <section className="rounded-xl border border-line bg-surface-strong p-4">
-      <h2 className="mb-3 font-medium">Recientes (todos los canales)</h2>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-medium">
+          {channel
+            ? `Recientes · ${channelLabel}`
+            : 'Recientes (todos los canales)'}
+        </h2>
+        <label className="text-sm">
+          <span className="sr-only">Canal</span>
+          <select
+            className="rounded-lg border border-line bg-bg px-2 py-1.5"
+            value={channel}
+            onChange={(e) => onChannelChange(e.target.value)}
+          >
+            {CHANNEL_FILTER_OPTIONS.map((o) => (
+              <option key={o.value || 'all'} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       {items.length === 0 ? (
-        <p className="text-sm text-muted">Aún no hay orígenes registrados.</p>
+        <p className="text-sm text-muted">
+          {channel
+            ? 'No hay orígenes para este canal.'
+            : 'Aún no hay orígenes registrados.'}
+        </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
