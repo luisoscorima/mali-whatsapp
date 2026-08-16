@@ -1,3 +1,4 @@
+import { Transform } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
@@ -9,6 +10,18 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator';
+
+function cleanOptionalEmail(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const cleaned = String(value)
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\u00A0/g, '')
+    .trim()
+    .replace(/^["']+|["']+$/g, '')
+    .toLowerCase();
+  return cleaned === '' ? null : cleaned;
+}
 
 export class UpsertContactDto {
   @IsString()
@@ -34,6 +47,7 @@ export class UpsertContactDto {
   phone_local?: string;
 
   @IsOptional()
+  @Transform(({ value }) => cleanOptionalEmail(value))
   @ValidateIf((_, v) => v != null && String(v).trim() !== '')
   @IsEmail()
   @MaxLength(255)

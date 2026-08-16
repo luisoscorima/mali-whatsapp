@@ -1162,7 +1162,10 @@ export class ContactsService {
 
   private normalizeOptionalEmail(value: unknown): string | null {
     const email = String(value ?? '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .replace(/\u00A0/g, '')
       .trim()
+      .replace(/^["']+|["']+$/g, '')
       .toLowerCase();
     if (!email) return null;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {

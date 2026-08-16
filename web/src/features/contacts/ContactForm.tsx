@@ -42,6 +42,19 @@ type ContactFormProps = {
 
 const NATIVE_ATTR_SLUGS = new Set(['dni', 'email', 'correo'])
 
+/** Quita espacios invisibles / NBSP que rompen type=email del navegador. */
+function sanitizeEmailInput(value: string): string {
+  return value
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\u00A0/g, '')
+}
+
+function normalizeEmailForSubmit(value: string): string {
+  return sanitizeEmailInput(value)
+    .trim()
+    .replace(/^["']+|["']+$/g, '')
+}
+
 export function ContactForm({
   mode,
   segments,
@@ -60,7 +73,7 @@ export function ContactForm({
   const [lastName, setLastName] = useState(initial.last_name)
   const [phonePrefix, setPhonePrefix] = useState(initial.phone_prefix)
   const [phoneLocal, setPhoneLocal] = useState(initial.phone_local)
-  const [email, setEmail] = useState(initial.email)
+  const [email, setEmail] = useState(() => normalizeEmailForSubmit(initial.email))
   const [dni, setDni] = useState(initial.dni)
   const [selectedSegments, setSelectedSegments] = useState<string[]>(
     initial.segments,
@@ -120,7 +133,7 @@ export function ContactForm({
       phone: `${prefixDigits}${localDigits}`,
       phone_prefix: phonePrefix,
       phone_local: phoneLocal,
-      email,
+      email: normalizeEmailForSubmit(email),
       dni,
       segments: selectedSegments,
       attributes,
@@ -185,11 +198,13 @@ export function ContactForm({
       <label className="block text-sm">
         <span className="text-muted">Email (opcional)</span>
         <input
-          type="email"
+          type="text"
+          inputMode="email"
+          autoComplete="email"
           maxLength={255}
           value={email}
           disabled={disabled}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => setEmail(sanitizeEmailInput(e.target.value))}
           className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
         />
       </label>
