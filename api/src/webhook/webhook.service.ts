@@ -574,7 +574,7 @@ export class WebhookService {
             conversation_id: conversation.id,
             contact: {
               phone: from,
-              name: undefined,
+              name: waProfileName ?? undefined,
             },
           });
         }

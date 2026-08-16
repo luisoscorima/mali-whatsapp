@@ -128,7 +128,7 @@ export class LeadsService {
     const name =
       String(input.name ?? '').trim() ||
       (email ? email.split('@')[0] : '') ||
-      'Lead';
+      '';
     const last_name = String(input.last_name ?? '').trim();
     const defaultStatusId = await this.getDefaultStatusId(areaNorm);
 
@@ -139,12 +139,10 @@ export class LeadsService {
       if (!existing.phone && phone) data.phone = phone;
       if (!existing.dni && dni) data.dni = dni;
       if (!existing.email && email) data.email = email;
-      if (
-        (!existing.name || existing.name === 'Lead') &&
-        input.name &&
-        String(input.name).trim()
-      ) {
-        data.name = String(input.name).trim();
+      const incomingName = String(input.name ?? '').trim();
+      if (!existing.name || existing.name === 'Lead') {
+        // Vacío (o limpiar placeholder) para que Chats use wa_profile_name / teléfono
+        data.name = incomingName || name || '';
       }
       if (!existing.last_name && last_name) data.last_name = last_name;
       if (existing.lead_status_id == null && defaultStatusId) {
