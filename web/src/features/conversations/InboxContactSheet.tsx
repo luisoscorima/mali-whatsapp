@@ -37,7 +37,16 @@ type ContactDetail = {
   replaced_by_contact_id: number | null
   replacement_reason: string | null
   segment_slugs: string[]
+  lead_status_id: number | null
+  lead_status: { id: number; slug: string; label: string } | null
   attributes: Record<string, string>
+}
+
+type LeadStatusOption = {
+  id: number
+  slug: string
+  label: string
+  active: boolean
 }
 
 type FilterOptions = {
@@ -76,6 +85,8 @@ export function InboxContactSheet({
   const [segments, setSegments] = useState<FilterOptions['segments']>([])
   const [selectedSegmentSlugs, setSelectedSegmentSlugs] = useState<string[]>([])
   const [attributeDefinitions, setAttributeDefinitions] = useState<AttributeDefinition[]>([])
+  const [leadStatuses, setLeadStatuses] = useState<LeadStatusOption[]>([])
+  const [leadStatusBusy, setLeadStatusBusy] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -96,10 +107,11 @@ export function InboxContactSheet({
 
     async function load() {
       if (mode === 'edit' && contactId) {
-        const [detail, opts, activeSegs] = await Promise.all([
+        const [detail, opts, activeSegs, statuses] = await Promise.all([
           apiClient.get<ContactDetail>(`/api/contacts/${contactId}`),
           apiClient.get<FilterOptions>('/api/contacts/filter-options'),
           apiClient.get<ApiSegment[]>('/api/segments/active'),
+          apiClient.get<LeadStatusOption[]>('/api/leads/statuses'),
         ])
         if (cancelled) return
         if (!detail.ok) {
@@ -121,6 +133,7 @@ export function InboxContactSheet({
         setSelectedSegmentSlugs(
           pruneSegmentSlugsToOptions(detail.data.segment_slugs, options),
         )
+        if (statuses.ok) setLeadStatuses(statuses.data)
         setLoading(false)
         return
       }
@@ -214,6 +227,31 @@ export function InboxContactSheet({
     onSaved()
   }
 
+  async function onLeadStatusChange(statusId: number) {
+    if (!contactId || !contact) return
+    setLeadStatusBusy(true)
+    const result = await apiClient.patch<{
+      lead_status_id: number | null
+      lead_status: ContactDetail['lead_status']
+    }>(`/api/leads/contacts/${contactId}/status`, { status_id: statusId })
+    setLeadStatusBusy(false)
+    if (!result.ok) {
+      notify.error(result.error)
+      return
+    }
+    setContact((prev) =>
+      prev
+        ? {
+            ...prev,
+            lead_status_id: result.data.lead_status_id,
+            lead_status: result.data.lead_status,
+          }
+        : prev,
+    )
+    notify.success('Estado actualizado')
+    onSaved()
+  }
+
   const formKey =
     mode === 'edit'
       ? `edit-${contact?.id ?? contactId ?? 'pending'}-${selectedSegmentSlugs.join(',')}-${segments.map((s) => s.slug).join(',')}`
@@ -223,6 +261,13 @@ export function InboxContactSheet({
     !loading &&
     !loadFailed &&
     (mode === 'create' || contact != null)
+
+  const statusOptions =
+    mode === 'edit' && contact
+      ? leadStatuses
+          .filter((s) => s.active || s.id === contact.lead_status_id)
+          .map((s) => ({ id: s.id, label: s.label }))
+      : []
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -287,6 +332,16 @@ export function InboxContactSheet({
                 }
                 saving={saving}
                 onSubmit={onSubmit}
+                leadStatusOptions={
+                  mode === 'edit' ? statusOptions : undefined
+                }
+                leadStatusId={contact?.lead_status_id ?? null}
+                leadStatusBusy={leadStatusBusy}
+                onLeadStatusChange={
+                  mode === 'edit'
+                    ? (statusId) => void onLeadStatusChange(statusId)
+                    : undefined
+                }
               />
               {mode === 'edit' && contactId ? (
                 <p className="mt-4 text-sm">

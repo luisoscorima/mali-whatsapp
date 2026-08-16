@@ -29,7 +29,7 @@ type AdminUserDetail = {
   can_manage_segments: boolean
   can_view_conversation_stats: boolean
   can_view_campaign_stats: boolean
-  can_manage_anuncios: boolean
+  can_manage_leads: boolean
   extra_areas: string[]
 }
 
@@ -42,7 +42,7 @@ const PERM_FIELDS = [
   { key: 'can_assign_conversations', label: 'Asignar conversaciones' },
   { key: 'can_manage_attributes', label: 'Gestionar atributos' },
   { key: 'can_manage_segments', label: 'Gestionar segmentos' },
-  { key: 'can_manage_anuncios', label: 'Gestionar leads' },
+  { key: 'can_manage_leads', label: 'Gestionar leads' },
   { key: 'can_view_conversation_stats', label: 'Ver stats globales de conversaciones' },
   { key: 'can_view_campaign_stats', label: 'Ver stats de campañas' },
 ] as const
@@ -58,7 +58,7 @@ const EMPTY_PERMS: Record<string, boolean> = {
   can_manage_segments: false,
   can_view_conversation_stats: false,
   can_view_campaign_stats: false,
-  can_manage_anuncios: false,
+  can_manage_leads: false,
 }
 
 export type AdminUserFormSheetProps = {
@@ -135,7 +135,7 @@ export function AdminUserFormSheet({
         can_manage_segments: user.can_manage_segments,
         can_view_conversation_stats: user.can_view_conversation_stats,
         can_view_campaign_stats: user.can_view_campaign_stats,
-        can_manage_anuncios: user.can_manage_anuncios,
+        can_manage_leads: user.can_manage_leads,
       })
     })
 

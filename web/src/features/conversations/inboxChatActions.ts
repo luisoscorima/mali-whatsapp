@@ -5,6 +5,8 @@ export type ChatActionsContext = {
   contactId: number | null
   waProfileName: string
   leadScore: number | null
+  leadStatusId: number | null
+  leadStatusLabel: string | null
   aiAreaEnabled: boolean
   conversationStatus: string | null
   assignedUserId: number | null
@@ -39,6 +41,7 @@ type DetailLike = {
   }
   contact: {
     lead_score: number | null
+    lead_status?: { id: number; slug: string; label: string } | null
   } | null
 }
 
@@ -55,6 +58,8 @@ export function chatActionsFromListItem(
     contactId: item.contact_id,
     waProfileName: crmName ? '' : String(item.wa_profile_name ?? '').trim(),
     leadScore: item.contact_lead_score,
+    leadStatusId: null,
+    leadStatusLabel: null,
     aiAreaEnabled,
     conversationStatus: item.conversation_status,
     assignedUserId: item.is_virtual ? null : item.assigned_user_id,
@@ -77,6 +82,8 @@ export function chatActionsFromDetail(
       ? ''
       : String(detail.conversation.wa_profile_name ?? '').trim(),
     leadScore: detail.contact?.lead_score ?? null,
+    leadStatusId: detail.contact?.lead_status?.id ?? null,
+    leadStatusLabel: detail.contact?.lead_status?.label ?? null,
     aiAreaEnabled,
     conversationStatus: detail.conversation.status,
     assignedUserId: detail.conversation.assigned_user_id,

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
 import { useTheme } from '@/shared/theme/useTheme'
@@ -30,12 +30,15 @@ type InboxChatActionsDialogProps = {
   phone: string
   contactId: number | null
   leadScore: number | null
+  leadStatusId: number | null
+  leadStatusLabel: string | null
   aiAreaEnabled: boolean
   conversationStatus: string | null
   canAssign: boolean
   assignableSegments: SegmentOption[]
   currentSegmentSlugs: string[]
   onLeadScore: (score: number | null) => void
+  onLeadStatus: (statusId: number) => void | Promise<void>
   onMarkUnread: () => void
   onSetArchived?: (archived: boolean) => void
   archived?: boolean
@@ -55,12 +58,15 @@ export function InboxChatActionsDialog({
   phone,
   contactId,
   leadScore,
+  leadStatusId,
+  leadStatusLabel,
   aiAreaEnabled,
   conversationStatus,
   canAssign,
   assignableSegments,
   currentSegmentSlugs,
   onLeadScore,
+  onLeadStatus,
   onMarkUnread,
   onSetArchived,
   archived = false,
@@ -73,6 +79,10 @@ export function InboxChatActionsDialog({
 }: InboxChatActionsDialogProps) {
   const { theme } = useTheme()
   const [segmentBusy, setSegmentBusy] = useState('')
+  const [statusOptions, setStatusOptions] = useState<
+    Array<{ id: number; slug: string; label: string; active: boolean }>
+  >([])
+  const [statusBusy, setStatusBusy] = useState(false)
   const current = leadScore ?? 0
   const hasConversation = conversationId != null && conversationId > 0
   const status = String(conversationStatus ?? '').toLowerCase()
@@ -83,6 +93,17 @@ export function InboxChatActionsDialog({
   const activeAssignableSlugs = new Set(
     currentSegmentSlugs.filter((slug) => assignableSlugs.has(slug)),
   )
+
+  useEffect(() => {
+    if (!open || !contactId) return
+    void apiClient
+      .get<Array<{ id: number; slug: string; label: string; active: boolean }>>(
+        '/api/leads/statuses',
+      )
+      .then((r) => {
+        if (r.ok) setStatusOptions(r.data)
+      })
+  }, [open, contactId])
 
   const groupedAssignable = useMemo(() => {
     const groups = new Map<string, SegmentOption[]>()
@@ -166,6 +187,33 @@ export function InboxChatActionsDialog({
 
           {hasConversation && contactId ? (
             <div className="inbox-lead-score-form">
+              <label className="block text-sm">
+                <span className="text-muted">Estado del lead</span>
+                <select
+                  className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
+                  value={leadStatusId ?? ''}
+                  disabled={statusBusy || statusOptions.length === 0}
+                  onChange={(e) => {
+                    const id = Number(e.target.value)
+                    if (id <= 0) return
+                    setStatusBusy(true)
+                    void Promise.resolve(onLeadStatus(id)).finally(() =>
+                      setStatusBusy(false),
+                    )
+                  }}
+                >
+                  <option value="" disabled>
+                    {leadStatusLabel || 'Elegir estado'}
+                  </option>
+                  {statusOptions
+                    .filter((s) => s.active || s.id === leadStatusId)
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.label}
+                      </option>
+                    ))}
+                </select>
+              </label>
               <div className="inbox-lead-score-row">
                 <span className="inbox-lead-score-label" id="inbox-actions-lead-label">
                   Calificación del lead

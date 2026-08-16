@@ -34,6 +34,10 @@ type ContactFormProps = {
   saving?: boolean
   actions?: ReactNode
   onSubmit: (values: ContactFormValues) => void
+  leadStatusOptions?: Array<{ id: number; label: string }>
+  leadStatusId?: number | null
+  leadStatusBusy?: boolean
+  onLeadStatusChange?: (statusId: number) => void
 }
 
 const NATIVE_ATTR_SLUGS = new Set(['dni', 'email', 'correo'])
@@ -47,6 +51,10 @@ export function ContactForm({
   saving = false,
   actions,
   onSubmit,
+  leadStatusOptions,
+  leadStatusId = null,
+  leadStatusBusy = false,
+  onLeadStatusChange,
 }: ContactFormProps) {
   const [name, setName] = useState(initial.name)
   const [lastName, setLastName] = useState(initial.last_name)
@@ -219,6 +227,30 @@ export function ContactForm({
           <p className="text-xs text-bad">{segmentsError}</p>
         ) : null}
       </fieldset>
+
+      {leadStatusOptions && leadStatusOptions.length > 0 && onLeadStatusChange ? (
+        <label className="block text-sm">
+          <span className="text-muted">Estado del lead</span>
+          <select
+            value={leadStatusId ?? ''}
+            disabled={disabled || leadStatusBusy}
+            onChange={(e) => {
+              const id = Number(e.target.value)
+              if (id > 0) onLeadStatusChange(id)
+            }}
+            className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
+          >
+            <option value="" disabled>
+              {leadStatusId ? '—' : 'Elegir estado'}
+            </option>
+            {leadStatusOptions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
 
       <div className="space-y-3">
         <p className="text-sm font-medium">

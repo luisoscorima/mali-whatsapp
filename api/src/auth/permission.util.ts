@@ -13,9 +13,9 @@ export function assertCanManageSegments(user: AuthUser): void {
   }
 }
 
-export function assertCanManageAnuncios(user: AuthUser): void {
-  if (!user.canManageAnuncios) {
-    throw new ForbiddenException('No tienes permiso para gestionar anuncios');
+export function assertCanManageLeads(user: AuthUser): void {
+  if (!user.canManageLeads) {
+    throw new ForbiddenException('No tienes permiso para gestionar leads');
   }
 }
 

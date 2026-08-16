@@ -215,7 +215,7 @@ export class AuthService {
     can_manage_segments: boolean;
     can_view_conversation_stats: boolean;
     can_view_campaign_stats: boolean;
-    can_manage_anuncios: boolean;
+    can_manage_leads: boolean;
     picture?: string;
   }> {
     this.config.assertJwtSecret();
@@ -295,7 +295,7 @@ export class AuthService {
       can_manage_segments?: boolean;
       can_view_conversation_stats?: boolean;
       can_view_campaign_stats?: boolean;
-      can_manage_anuncios?: boolean;
+      can_manage_leads?: boolean;
       picture?: string;
     },
     clientIp?: string | null,
@@ -474,7 +474,7 @@ export class AuthService {
       can_manage_attributes?: boolean;
       can_manage_segments?: boolean;
       can_view_conversation_stats?: boolean;
-      can_manage_anuncios?: boolean;
+      can_manage_leads?: boolean;
       can_view_campaign_stats?: boolean;
     },
     sessionArea: unknown,
@@ -539,8 +539,8 @@ export class AuthService {
         Boolean(row.can_view_conversation_stats),
       canViewCampaignStats:
         isBootstrapAdmin || isMaster || Boolean(row.can_view_campaign_stats),
-      canManageAnuncios:
-        isBootstrapAdmin || isMaster || Boolean(row.can_manage_anuncios),
+      canManageLeads:
+        isBootstrapAdmin || isMaster || Boolean(row.can_manage_leads),
       ...(picture ? { picture } : {}),
     };
   }

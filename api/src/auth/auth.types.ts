@@ -19,7 +19,7 @@ export interface AuthUser {
   canManageSegments: boolean;
   canViewConversationStats: boolean;
   canViewCampaignStats: boolean;
-  canManageAnuncios: boolean;
+  canManageLeads: boolean;
   picture?: string;
   /** Id de login_logs de esta sesión (presencia “en línea”). */
   loginLogId?: number;

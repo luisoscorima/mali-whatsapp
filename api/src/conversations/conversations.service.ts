@@ -965,6 +965,9 @@ export class ConversationsService {
           email: string | null;
           dni: string | null;
           lead_score: number | null;
+          lead_status_id: number | null;
+          lead_status_slug: string | null;
+          lead_status_label: string | null;
           segment_slugs: string[];
         }[]
       >(Prisma.sql`
@@ -975,6 +978,9 @@ export class ConversationsService {
           c.email,
           c.dni,
           c.lead_score,
+          c.lead_status_id,
+          ls.slug AS lead_status_slug,
+          ls.label AS lead_status_label,
           COALESCE((
             SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
             FROM contact_segments cs
@@ -982,9 +988,29 @@ export class ConversationsService {
             WHERE cs.contact_id = c.id
           ), ARRAY[]::varchar[]) AS segment_slugs
         FROM contacts c
+        LEFT JOIN lead_status_definitions ls ON ls.id = c.lead_status_id
         WHERE c.id = ${activeConversation.contact_id}
       `);
-      contact = rows[0] ?? null;
+      const row = rows[0];
+      contact = row
+        ? {
+            name: row.name,
+            last_name: row.last_name,
+            phone: row.phone,
+            email: row.email,
+            dni: row.dni,
+            lead_score: row.lead_score,
+            lead_status:
+              row.lead_status_id != null && row.lead_status_label
+                ? {
+                    id: Number(row.lead_status_id),
+                    slug: String(row.lead_status_slug ?? ''),
+                    label: String(row.lead_status_label),
+                  }
+                : null,
+            segment_slugs: row.segment_slugs,
+          }
+        : null;
     } else if (activeConversation.phone) {
       const rows = await this.prisma.$queryRaw<
         {
@@ -994,6 +1020,9 @@ export class ConversationsService {
           email: string | null;
           dni: string | null;
           lead_score: number | null;
+          lead_status_id: number | null;
+          lead_status_slug: string | null;
+          lead_status_label: string | null;
           segment_slugs: string[];
         }[]
       >(Prisma.sql`
@@ -1004,6 +1033,9 @@ export class ConversationsService {
           c.email,
           c.dni,
           c.lead_score,
+          c.lead_status_id,
+          ls.slug AS lead_status_slug,
+          ls.label AS lead_status_label,
           COALESCE((
             SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
             FROM contact_segments cs
@@ -1011,11 +1043,31 @@ export class ConversationsService {
             WHERE cs.contact_id = c.id
           ), ARRAY[]::varchar[]) AS segment_slugs
         FROM contacts c
+        LEFT JOIN lead_status_definitions ls ON ls.id = c.lead_status_id
         WHERE c.phone = ${activeConversation.phone}
         ORDER BY CASE WHEN c.area = ${area} THEN 0 ELSE 1 END, c.updated_at DESC NULLS LAST
         LIMIT 1
       `);
-      contact = rows[0] ?? null;
+      const row = rows[0];
+      contact = row
+        ? {
+            name: row.name,
+            last_name: row.last_name,
+            phone: row.phone,
+            email: row.email,
+            dni: row.dni,
+            lead_score: row.lead_score,
+            lead_status:
+              row.lead_status_id != null && row.lead_status_label
+                ? {
+                    id: Number(row.lead_status_id),
+                    slug: String(row.lead_status_slug ?? ''),
+                    label: String(row.lead_status_label),
+                  }
+                : null,
+            segment_slugs: row.segment_slugs,
+          }
+        : null;
     }
 
     const messageRows = await this.prisma.chat_messages.findMany({

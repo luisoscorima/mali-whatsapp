@@ -13,7 +13,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
-import { assertCanManageAnuncios } from '../auth/permission.util';
+import { assertCanManageLeads } from '../auth/permission.util';
 import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { LeadsService } from './leads.service';
 import { MetaLeadgenService } from './meta-leadgen.service';
@@ -86,7 +86,7 @@ export class LeadsController {
   async summary(
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<unknown>> {
-    assertCanManageAnuncios(user);
+    assertCanManageLeads(user);
     const data = await this.leadsService.channelSummary(user.area);
     return { ok: true, data };
   }
@@ -98,7 +98,7 @@ export class LeadsController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ): Promise<ApiResponse<unknown>> {
-    assertCanManageAnuncios(user);
+    assertCanManageLeads(user);
     const data = await this.leadsService.listOrigins({
       area: user.area,
       channel,
@@ -108,11 +108,11 @@ export class LeadsController {
     return { ok: true, data };
   }
 
+  /** Catálogo de estados: lectura para asesores y gestores (asignar status). */
   @Get('statuses')
   async listStatuses(
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<unknown>> {
-    assertCanManageAnuncios(user);
     const data = await this.leadsService.listStatuses(user.area);
     return { ok: true, data };
   }
@@ -122,7 +122,7 @@ export class LeadsController {
     @CurrentUser() user: AuthUser,
     @Body() body: CreateLeadStatusDto,
   ): Promise<ApiResponse<unknown>> {
-    assertCanManageAnuncios(user);
+    assertCanManageLeads(user);
     const data = await this.leadsService.createStatus(user.area, body);
     return { ok: true, data };
   }
@@ -133,18 +133,18 @@ export class LeadsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateLeadStatusDto,
   ): Promise<ApiResponse<unknown>> {
-    assertCanManageAnuncios(user);
+    assertCanManageLeads(user);
     const data = await this.leadsService.updateStatus(user.area, id, body);
     return { ok: true, data };
   }
 
+  /** Asignar estado del lead: asesores y gestores (ProvisionedGuard). */
   @Patch('contacts/:contactId/status')
   async setContactStatus(
     @CurrentUser() user: AuthUser,
     @Param('contactId', ParseIntPipe) contactId: number,
     @Body() body: SetContactStatusDto,
   ): Promise<ApiResponse<unknown>> {
-    assertCanManageAnuncios(user);
     const data = await this.leadsService.setContactStatus(
       user.area,
       contactId,
@@ -157,7 +157,7 @@ export class LeadsController {
   async listForms(
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<unknown>> {
-    assertCanManageAnuncios(user);
+    assertCanManageLeads(user);
     const data = await this.metaLeadgen.listForms(user.area);
     return { ok: true, data };
   }
@@ -168,7 +168,7 @@ export class LeadsController {
     @Query('form_id') formId?: string,
     @Query('limit') limit?: string,
   ): Promise<ApiResponse<unknown>> {
-    assertCanManageAnuncios(user);
+    assertCanManageLeads(user);
     const data = await this.metaLeadgen.listFormLeads(
       user.area,
       formId,
@@ -182,7 +182,7 @@ export class LeadsController {
     @CurrentUser() user: AuthUser,
     @Body() body: BackfillFormDto,
   ): Promise<ApiResponse<unknown>> {
-    assertCanManageAnuncios(user);
+    assertCanManageLeads(user);
     const data = await this.metaLeadgen.backfillForm(user.area, body.form_id);
     return { ok: true, data };
   }
@@ -192,7 +192,7 @@ export class LeadsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<unknown>> {
-    assertCanManageAnuncios(user);
+    assertCanManageLeads(user);
     const data = await this.metaLeadgen.getLead(user.area, id);
     return { ok: true, data };
   }

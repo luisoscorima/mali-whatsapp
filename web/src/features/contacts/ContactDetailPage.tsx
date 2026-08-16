@@ -19,6 +19,8 @@ type ContactDetail = {
   replaced_by_contact_id: number | null
   replacement_reason: string | null
   segment_slugs: string[]
+  lead_status_id: number | null
+  lead_status: { id: number; slug: string; label: string } | null
   attributes: Record<string, string>
   attribute_definitions: Array<{
     id: number
@@ -30,6 +32,13 @@ type ContactDetail = {
     sort_order: number
     required: boolean
   }>
+}
+
+type LeadStatusOption = {
+  id: number
+  slug: string
+  label: string
+  active: boolean
 }
 
 type FilterOptions = {
@@ -56,6 +65,8 @@ export function ContactDetailPage() {
   const [allAttributeDefs, setAllAttributeDefs] = useState<
     ContactDetail['attribute_definitions']
   >([])
+  const [leadStatuses, setLeadStatuses] = useState<LeadStatusOption[]>([])
+  const [leadStatusBusy, setLeadStatusBusy] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
   const [saving, setSaving] = useState(false)
   const [chatBusy, setChatBusy] = useState(false)
@@ -66,7 +77,8 @@ export function ContactDetailPage() {
       apiClient.get<ContactDetail>(`/api/contacts/${id}`),
       apiClient.get<FilterOptions>('/api/contacts/filter-options'),
       apiClient.get<ApiSegment[]>('/api/segments/active'),
-    ]).then(([detail, opts, activeSegs]) => {
+      apiClient.get<LeadStatusOption[]>('/api/leads/statuses'),
+    ]).then(([detail, opts, activeSegs, statuses]) => {
       if (!detail.ok) {
         notify.error(detail.error)
         setLoadFailed(true)
@@ -85,6 +97,7 @@ export function ContactDetailPage() {
       setSelectedSegmentSlugs(
         pruneSegmentSlugsToOptions(detail.data.segment_slugs, options),
       )
+      if (statuses.ok) setLeadStatuses(statuses.data)
     })
   }, [id])
 
@@ -185,6 +198,30 @@ export function ContactDetailPage() {
     navigate(`/conversations/${result.data.id}`)
   }
 
+  async function onLeadStatusChange(statusId: number) {
+    if (!id || !contact) return
+    setLeadStatusBusy(true)
+    const result = await apiClient.patch<{
+      lead_status_id: number | null
+      lead_status: ContactDetail['lead_status']
+    }>(`/api/leads/contacts/${id}/status`, { status_id: statusId })
+    setLeadStatusBusy(false)
+    if (!result.ok) {
+      notify.error(result.error)
+      return
+    }
+    setContact((prev) =>
+      prev
+        ? {
+            ...prev,
+            lead_status_id: result.data.lead_status_id,
+            lead_status: result.data.lead_status,
+          }
+        : prev,
+    )
+    notify.success('Estado actualizado')
+  }
+
   if (loadFailed) {
     return <p className="text-muted">No se pudo cargar</p>
   }
@@ -195,6 +232,9 @@ export function ContactDetailPage() {
 
   const phoneParts = splitPhoneForForm(contact.phone)
   const listHref = `/contacts${location.search}`
+  const statusOptions = leadStatuses
+    .filter((s) => s.active || s.id === contact.lead_status_id)
+    .map((s) => ({ id: s.id, label: s.label }))
 
   return (
     <div className="space-y-4">
@@ -238,6 +278,10 @@ export function ContactDetailPage() {
           }}
           saving={saving}
           onSubmit={onSubmit}
+          leadStatusOptions={statusOptions}
+          leadStatusId={contact.lead_status_id}
+          leadStatusBusy={leadStatusBusy}
+          onLeadStatusChange={(statusId) => void onLeadStatusChange(statusId)}
           actions={
             <>
               <button

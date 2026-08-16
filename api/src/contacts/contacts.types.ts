@@ -47,6 +47,12 @@ export type AttributeFieldDefinition = {
   required: boolean;
 };
 
+export type ContactLeadStatus = {
+  id: number;
+  slug: string;
+  label: string;
+};
+
 export type ContactDetail = {
   id: number;
   name: string;
@@ -62,6 +68,8 @@ export type ContactDetail = {
   replacement_reason: string | null;
   created_at: string;
   segment_slugs: string[];
+  lead_status_id: number | null;
+  lead_status: ContactLeadStatus | null;
   attributes: Record<string, string>;
   attribute_definitions: AttributeFieldDefinition[];
 };

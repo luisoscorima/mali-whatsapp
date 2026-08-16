@@ -641,6 +641,8 @@ export class ContactsService {
       replaced_at: Date | null;
       replacement_reason: string | null;
       created_at: Date;
+      lead_status_id: number | null;
+      lead_status: { id: number; slug: string; label: string } | null;
     },
     segmentSlugs: string[],
   ): Promise<ContactDetail> {
@@ -661,6 +663,8 @@ export class ContactsService {
       replacement_reason: row.replacement_reason,
       created_at: row.created_at.toISOString(),
       segment_slugs: segmentSlugs,
+      lead_status_id: row.lead_status_id,
+      lead_status: row.lead_status,
       attributes,
       attribute_definitions: getApplicableAttributeDefinitions(
         allDefs,
@@ -672,6 +676,9 @@ export class ContactsService {
   async getById(area: AuthUser['area'], id: number): Promise<ContactDetail> {
     const row = await this.prisma.contacts.findFirst({
       where: { id, area },
+      include: {
+        lead_status: { select: { id: true, slug: true, label: true } },
+      },
     });
     if (!row) {
       throw new NotFoundException('Contacto no encontrado');

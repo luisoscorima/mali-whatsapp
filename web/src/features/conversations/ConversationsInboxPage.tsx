@@ -243,7 +243,7 @@ function ProfileBlock({
   onOpenContact: () => void
 }) {
   const user = useAppUser()
-  const canManageAnuncios = Boolean(user?.canManageAnuncios)
+  const canManageLeads = Boolean(user?.canManageLeads)
   const contactId = detail.conversation.contact_id
   const contactMode = contactId ? 'edit' : 'create'
   const contactActionLabel = contactId ? 'Editar contacto' : 'Añadir contacto'
@@ -255,6 +255,7 @@ function ProfileBlock({
   const isWaAlias = !crmName && Boolean(waAlias)
   const heading = crmName || waAlias || detail.conversation.phone
   const leadScore = detail.contact?.lead_score
+  const leadStatusLabel = detail.contact?.lead_status?.label
   return (
     <>
       <span className="inbox-chat-avatar inbox-chat-avatar--header" aria-hidden>
@@ -287,11 +288,17 @@ function ProfileBlock({
               <LeadStars score={leadScore} />
             </>
           ) : null}
+          {leadStatusLabel ? (
+            <>
+              {' '}
+              · {leadStatusLabel}
+            </>
+          ) : null}
         </p>
         {detail.meta_ad ? (
           <p className="inbox-chat-sub muted">
             Anuncio:{' '}
-            {canManageAnuncios ? (
+            {canManageLeads ? (
               <Link to={`/leads/meta-ctwa/${detail.meta_ad.id}`}>
                 {detail.meta_ad.display_name ?? 'Anuncio'}
               </Link>
@@ -442,6 +449,7 @@ type InboxDetail = {
     email: string | null
     dni: string | null
     lead_score: number | null
+    lead_status: { id: number; slug: string; label: string } | null
     segment_slugs: string[]
   } | null
   meta_ad: {
@@ -1318,6 +1326,32 @@ export function ConversationsInboxPage() {
     }
     if (selectedId === convId) void loadDetail(convId)
     void loadList()
+  }
+
+  async function onLeadStatus(statusId: number) {
+    const contactId =
+      actionsContext?.contactId ??
+      detail?.conversation.contact_id ??
+      null
+    if (!contactId) return
+    const result = await apiClient.patch<{
+      lead_status_id: number | null
+      lead_status: { id: number; slug: string; label: string } | null
+    }>(`/api/leads/contacts/${contactId}/status`, { status_id: statusId })
+    if (!result.ok) {
+      notify.error(result.error)
+      return
+    }
+    setActionsContext((prev) =>
+      prev
+        ? {
+            ...prev,
+            leadStatusId: result.data.lead_status_id,
+            leadStatusLabel: result.data.lead_status?.label ?? null,
+          }
+        : prev,
+    )
+    if (selectedId) void loadDetail(selectedId)
   }
 
   function onMessageCopy(message: InboxMessage) {
@@ -2368,6 +2402,8 @@ export function ConversationsInboxPage() {
           phone={actionsContext.phone}
           contactId={actionsContext.contactId}
           leadScore={actionsContext.leadScore}
+          leadStatusId={actionsContext.leadStatusId}
+          leadStatusLabel={actionsContext.leadStatusLabel}
           aiAreaEnabled={actionsContext.aiAreaEnabled}
           conversationStatus={actionsContext.conversationStatus}
           canAssign={canAssign}
@@ -2379,6 +2415,7 @@ export function ConversationsInboxPage() {
             []
           }
           onLeadScore={onLeadScore}
+          onLeadStatus={onLeadStatus}
           onMarkUnread={() => void onMarkUnread(actionsContext.conversationId)}
           onSetArchived={(archived) =>
             void onSetArchived(archived, actionsContext.conversationId)

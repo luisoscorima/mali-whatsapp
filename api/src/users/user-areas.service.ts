@@ -112,7 +112,7 @@ export class UserAreasService {
     canManageSegments: boolean;
     canViewConversationStats: boolean;
     canViewCampaignStats: boolean;
-    canManageAnuncios: boolean;
+    canManageLeads: boolean;
   } {
     const area = normalizeArea(this.config.devArea);
     return {
@@ -134,7 +134,7 @@ export class UserAreasService {
       canManageSegments: true,
       canViewConversationStats: true,
       canViewCampaignStats: true,
-      canManageAnuncios: true,
+      canManageLeads: true,
     };
   }
 }

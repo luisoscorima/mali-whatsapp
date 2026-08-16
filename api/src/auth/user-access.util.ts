@@ -31,7 +31,7 @@ export function bootstrapAdminUserData() {
     can_manage_segments: true,
     can_view_conversation_stats: true,
     can_view_campaign_stats: true,
-    can_manage_anuncios: true,
+    can_manage_leads: true,
   };
 }
 
@@ -52,7 +52,7 @@ export function newGoogleUserData(passwordHash: string) {
     can_manage_segments: false,
     can_view_conversation_stats: false,
     can_view_campaign_stats: false,
-    can_manage_anuncios: false,
+    can_manage_leads: false,
   };
 }
 

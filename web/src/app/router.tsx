@@ -64,7 +64,7 @@ export function AppRouter() {
             <Route
               path="leads"
               element={
-                <RequireUserPermission allowed={(u) => u.canManageAnuncios}>
+                <RequireUserPermission allowed={(u) => u.canManageLeads}>
                   <LeadsShell />
                 </RequireUserPermission>
               }

@@ -118,6 +118,7 @@ export type InboxContact = {
   email: string | null;
   dni: string | null;
   lead_score: number | null;
+  lead_status: { id: number; slug: string; label: string } | null;
   segment_slugs: string[];
 };
 

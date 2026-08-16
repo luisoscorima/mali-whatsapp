@@ -72,7 +72,7 @@ export class CreateAdminUserDto {
 
   @IsOptional()
   @IsBoolean()
-  can_manage_anuncios?: boolean;
+  can_manage_leads?: boolean;
 
   @IsOptional()
   @IsArray()
@@ -140,7 +140,7 @@ export class UpdateAdminUserDto {
 
   @IsOptional()
   @IsBoolean()
-  can_manage_anuncios?: boolean;
+  can_manage_leads?: boolean;
 
   @IsOptional()
   @IsArray()

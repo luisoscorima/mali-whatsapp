@@ -168,7 +168,7 @@ export function WaRail({ user, onUserUpdate, conversationsUnreadCount = 0 }: WaR
   const visibleItems = provisionedItems.filter((item) => {
     if (item.key === 'attributes') return Boolean(user?.canManageAttributes)
     if (item.key === 'segments') return Boolean(user?.canManageSegments)
-    if (item.key === 'leads') return Boolean(user?.canManageAnuncios)
+    if (item.key === 'leads') return Boolean(user?.canManageLeads)
     return true
   })
 
