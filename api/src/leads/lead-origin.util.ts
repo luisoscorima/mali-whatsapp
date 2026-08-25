@@ -1,9 +1,8 @@
 import type { LeadChannel } from './leads.types';
 
-/** Canales donde la captación es solo contacto (formulario, import, etc.), sin inbound WA al registrar el origen. */
+/** Canales que nunca captan con conversación WA al registrar el origen (formulario Meta, import, etc.). */
 export const CONTACT_ONLY_LEAD_CHANNELS = new Set<LeadChannel>([
   'meta_lead_form',
-  'widget',
   'tiktok',
   'import',
   'manual',
@@ -11,14 +10,24 @@ export const CONTACT_ONLY_LEAD_CHANNELS = new Set<LeadChannel>([
 ]);
 
 /**
- * true si este origen se vinculó a una conversación WA en el momento de captación
- * (p. ej. CTWA u orgánico con conversation_id en contact_origins).
+ * true si el origen vino con conversación / inbound al captar (no solo contacto).
+ * - CTWA / orgánico: conversation_id en el origen.
+ * - Widget: conversación resuelta (el widget puede abrir WA con chat).
+ * - Form / import / manual: siempre false (aunque luego exista chat).
  */
 export function originCameWithInbound(
   channel: string,
   originConversationId: number | null | undefined,
+  resolvedChatConversationId?: number | null | undefined,
 ): boolean {
-  if (CONTACT_ONLY_LEAD_CHANNELS.has(channel as LeadChannel)) return false;
+  const ch = channel as LeadChannel;
+  if (ch === 'meta_ctwa' || ch === 'organic_wa') {
+    return originConversationId != null;
+  }
+  if (ch === 'widget') {
+    return resolvedChatConversationId != null;
+  }
+  if (CONTACT_ONLY_LEAD_CHANNELS.has(ch)) return false;
   return originConversationId != null;
 }
 
@@ -56,6 +65,10 @@ export function resolveLeadChatEnrichment(
 
   return {
     chat_conversation_id: chatConversationId,
-    came_with_inbound: originCameWithInbound(channel, row.conversation_id),
+    came_with_inbound: originCameWithInbound(
+      channel,
+      row.conversation_id,
+      chatConversationId,
+    ),
   };
 }

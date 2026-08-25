@@ -39,7 +39,9 @@ export function LeadOpenChatButton({
   const [busy, setBusy] = useState(false)
 
   const title = cameWithInbound
-    ? 'Abrir chat (entró con mensaje por WhatsApp)'
+    ? conversationId
+      ? 'Abrir chat'
+      : 'Abrir o crear chat'
     : conversationId
       ? 'Abrir chat (captado solo como contacto)'
       : contactId
