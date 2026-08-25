@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
 import { notify } from '@/shared/notify'
+import { LeadOpenChatButton } from './LeadOpenChatButton'
 
 type FormRow = {
   id: number
@@ -17,6 +18,8 @@ type LeadRow = {
   leadgen_id: string
   form_id: string
   created_time: string | null
+  chat_conversation_id: number | null
+  came_with_inbound: boolean
   contacts: {
     id: number
     name: string
@@ -126,6 +129,7 @@ export function MetaFormsPage() {
                   <th className="px-2 py-2">Contacto</th>
                   <th className="px-2 py-2">Form</th>
                   <th className="px-2 py-2">Estado</th>
+                  <th className="px-2 py-2">Chat</th>
                   <th className="px-2 py-2">Fecha</th>
                 </tr>
               </thead>
@@ -153,6 +157,13 @@ export function MetaFormsPage() {
                     <td className="px-2 py-2 font-mono">{lead.form_id}</td>
                     <td className="px-2 py-2">
                       {lead.contacts?.lead_status?.label || '—'}
+                    </td>
+                    <td className="px-2 py-2">
+                      <LeadOpenChatButton
+                        contactId={lead.contacts?.id}
+                        conversationId={lead.chat_conversation_id}
+                        cameWithInbound={lead.came_with_inbound}
+                      />
                     </td>
                     <td className="px-2 py-2">
                       {formatDateTime(lead.created_time)}

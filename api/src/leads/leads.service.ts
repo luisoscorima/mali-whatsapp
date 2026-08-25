@@ -16,6 +16,10 @@ import {
 } from '../contacts/contacts-validation.utils';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  type LeadChatEnrichInput,
+  resolveLeadChatEnrichment,
+} from './lead-origin.util';
+import {
   DEFAULT_LEAD_STATUSES,
   type ContactIdentityInput,
   type LeadChannel,
@@ -425,7 +429,84 @@ export class LeadsService {
         },
       }),
     ]);
-    return { total, items, limit: take, offset: skip };
+
+    const enriched = await this.enrichLeadRowsWithChat(areaNorm, items);
+
+    return { total, items: enriched, limit: take, offset: skip };
+  }
+
+  /** Enriquece filas de leads con conversación para abrir chat e indicador de inbound al captar. */
+  async enrichLeadRowsWithChat<T extends LeadChatEnrichInput>(
+    area: string,
+    rows: T[],
+  ): Promise<Array<T & { chat_conversation_id: number | null; came_with_inbound: boolean }>> {
+    const chatMaps = await this.loadConversationMaps(area, rows);
+    return rows.map((row) => ({
+      ...row,
+      ...resolveLeadChatEnrichment(row, chatMaps),
+    }));
+  }
+
+  /** Resuelve conversación WhatsApp vinculada al contacto/origen. */
+  private async loadConversationMaps(
+    area: string,
+    rows: LeadChatEnrichInput[],
+  ): Promise<{
+    byId: Map<number, number>;
+    byContact: Map<number, number>;
+    byPhone: Map<string, number>;
+  }> {
+    const convIds = new Set<number>();
+    const contactIds = new Set<number>();
+    const phones = new Set<string>();
+
+    for (const row of rows) {
+      if (row.conversation_id != null) convIds.add(row.conversation_id);
+      const contactId = row.contact_id ?? row.contacts?.id;
+      if (contactId) contactIds.add(contactId);
+      const phone = row.contacts?.phone?.trim();
+      if (phone) phones.add(phone);
+    }
+
+    const or: Prisma.conversationsWhereInput[] = [];
+    if (convIds.size > 0) {
+      or.push({ id: { in: [...convIds] } });
+    }
+    if (contactIds.size > 0) {
+      or.push({ contact_id: { in: [...contactIds] } });
+    }
+    if (phones.size > 0) {
+      or.push({ phone: { in: [...phones] } });
+    }
+
+    const empty = {
+      byId: new Map<number, number>(),
+      byContact: new Map<number, number>(),
+      byPhone: new Map<string, number>(),
+    };
+    if (or.length === 0) return empty;
+
+    const convs = await this.prisma.conversations.findMany({
+      where: { area, OR: or },
+      select: { id: true, contact_id: true, phone: true },
+      orderBy: { id: 'asc' },
+    });
+
+    const byId = new Map<number, number>();
+    const byContact = new Map<number, number>();
+    const byPhone = new Map<string, number>();
+
+    for (const conv of convs) {
+      byId.set(conv.id, conv.id);
+      if (conv.contact_id && !byContact.has(conv.contact_id)) {
+        byContact.set(conv.contact_id, conv.id);
+      }
+      if (conv.phone && !byPhone.has(conv.phone)) {
+        byPhone.set(conv.phone, conv.id);
+      }
+    }
+
+    return { byId, byContact, byPhone };
   }
 
   async seedAllAreas(): Promise<void> {

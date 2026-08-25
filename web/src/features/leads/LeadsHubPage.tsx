@@ -9,6 +9,7 @@ import {
   originPrimaryFields,
   originSecondaryFields,
 } from './originDisplay'
+import { LeadOpenChatButton } from './LeadOpenChatButton'
 
 type ChannelSummary = {
   channel: string
@@ -131,6 +132,8 @@ export function LeadsHubPage() {
 }
 
 type OriginRow = ContactOriginSummary & {
+  chat_conversation_id: number | null
+  came_with_inbound: boolean
   contacts: {
     id: number
     name: string
@@ -204,6 +207,7 @@ function LeadsUnifiedList() {
                 <th className="px-2 py-2">Curso</th>
                 <th className="px-2 py-2">Fuente</th>
                 <th className="px-2 py-2">Estado</th>
+                <th className="px-2 py-2">Chat</th>
                 <th className="px-2 py-2">Último</th>
               </tr>
             </thead>
@@ -255,6 +259,13 @@ function LeadsUnifiedList() {
                     </td>
                     <td className="px-2 py-2">
                       {o.contacts?.lead_status?.label || '—'}
+                    </td>
+                    <td className="px-2 py-2">
+                      <LeadOpenChatButton
+                        contactId={o.contacts?.id}
+                        conversationId={o.chat_conversation_id}
+                        cameWithInbound={o.came_with_inbound}
+                      />
                     </td>
                     <td className="px-2 py-2">
                       {formatDateTime(o.last_seen_at)}

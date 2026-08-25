@@ -345,9 +345,10 @@ export class MetaLeadgenService {
   }
 
   async listFormLeads(area: string, formId?: string, limit = 50) {
-    return this.prisma.meta_leadgen_leads.findMany({
+    const areaNorm = normalizeArea(area);
+    const items = await this.prisma.meta_leadgen_leads.findMany({
       where: {
-        area: normalizeArea(area),
+        area: areaNorm,
         ...(formId ? { form_id: formId } : {}),
       },
       orderBy: { created_time: 'desc' },
@@ -364,8 +365,23 @@ export class MetaLeadgenService {
             lead_status: true,
           },
         },
+        contact_origins: {
+          select: {
+            channel: true,
+            conversation_id: true,
+          },
+        },
       },
     });
+
+    return this.leads.enrichLeadRowsWithChat(
+      areaNorm,
+      items.map((row) => ({
+        ...row,
+        channel: row.contact_origins?.channel ?? 'meta_lead_form',
+        conversation_id: row.contact_origins?.conversation_id ?? null,
+      })),
+    );
   }
 
   async getLead(area: string, id: number) {
