@@ -53,6 +53,17 @@ export type ContactLeadStatus = {
   label: string;
 };
 
+export type ContactOriginSummary = {
+  id: number;
+  channel: string;
+  external_id: string;
+  source_key: string | null;
+  source_label: string | null;
+  payload: unknown;
+  first_seen_at: string;
+  last_seen_at: string;
+};
+
 export type ContactDetail = {
   id: number;
   name: string;
@@ -72,6 +83,8 @@ export type ContactDetail = {
   lead_status: ContactLeadStatus | null;
   attributes: Record<string, string>;
   attribute_definitions: AttributeFieldDefinition[];
+  /** Orígenes de captación (widget, Meta, etc.); payload JSON completo. */
+  origins: ContactOriginSummary[];
 };
 
 export type ContactsFilterOptions = {

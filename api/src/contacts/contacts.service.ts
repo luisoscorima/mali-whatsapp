@@ -648,6 +648,21 @@ export class ContactsService {
   ): Promise<ContactDetail> {
     const allDefs = await this.loadAttributeDefinitions(area);
     const attributes = await this.loadContactAttributes(row.id);
+    const originRows = await this.prisma.contact_origins.findMany({
+      where: { contact_id: row.id, area },
+      orderBy: { last_seen_at: 'desc' },
+      take: 20,
+      select: {
+        id: true,
+        channel: true,
+        external_id: true,
+        source_key: true,
+        source_label: true,
+        payload: true,
+        first_seen_at: true,
+        last_seen_at: true,
+      },
+    });
     return {
       id: row.id,
       name: row.name,
@@ -670,6 +685,16 @@ export class ContactsService {
         allDefs,
         segmentSlugs,
       ).filter((d) => d.slug !== 'dni'),
+      origins: originRows.map((o) => ({
+        id: o.id,
+        channel: o.channel,
+        external_id: o.external_id,
+        source_key: o.source_key,
+        source_label: o.source_label,
+        payload: o.payload,
+        first_seen_at: o.first_seen_at.toISOString(),
+        last_seen_at: o.last_seen_at.toISOString(),
+      })),
     };
   }
 

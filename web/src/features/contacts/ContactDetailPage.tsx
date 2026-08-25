@@ -8,6 +8,13 @@ import { segmentOptionsForAssignment, pruneSegmentSlugsToOptions } from '../segm
 
 import { formatContactName } from './contactName'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
+import { formatDateTime } from '../../shared/format'
+import {
+  channelLabel,
+  type ContactOriginSummary,
+  originPrimaryFields,
+  originSecondaryFields,
+} from '../leads/originDisplay'
 
 type ContactDetail = {
   id: number
@@ -32,6 +39,8 @@ type ContactDetail = {
     sort_order: number
     required: boolean
   }>
+  opt_in_email: boolean
+  origins: ContactOriginSummary[]
 }
 
 type LeadStatusOption = {
@@ -312,6 +321,80 @@ export function ContactDetailPage() {
           }
         />
       </div>
+
+      <p className="text-sm">
+        <span className="text-muted">Opt-in marketing:</span>{' '}
+        {contact.opt_in_email ? 'Sí' : 'No'}
+      </p>
+
+      {contact.origins.length > 0 ? (
+        <section className="rounded-xl border border-line bg-surface-strong p-4">
+          <h2 className="mb-3 font-medium">Orígenes de captación</h2>
+          <ul className="space-y-3">
+            {contact.origins.map((origin) => {
+              const primary = originPrimaryFields(origin)
+              const secondary = originSecondaryFields(origin)
+              return (
+                <li
+                  key={origin.id}
+                  className="rounded-lg border border-line bg-bg px-3 py-3 text-sm"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="font-medium">
+                      {channelLabel(origin.channel)}
+                    </span>
+                    <span className="text-xs text-muted">
+                      {formatDateTime(origin.last_seen_at)}
+                    </span>
+                  </div>
+                  {primary.curso ? (
+                    <p className="mt-2">
+                      <span className="text-muted">Curso:</span> {primary.curso}
+                      {primary.cursoUrl ? (
+                        <>
+                          {' '}
+                          <a
+                            href={primary.cursoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-accent hover:underline"
+                          >
+                            Ver ficha
+                          </a>
+                        </>
+                      ) : null}
+                    </p>
+                  ) : null}
+                  {primary.fuente ? (
+                    <p className="mt-1">
+                      <span className="text-muted">Fuente:</span> {primary.fuente}
+                    </p>
+                  ) : null}
+                  {primary.programa ? (
+                    <p className="mt-1">
+                      <span className="text-muted">Programa:</span>{' '}
+                      {primary.programa}
+                    </p>
+                  ) : null}
+                  {(secondary.source || secondary.leadId) && (
+                    <details className="mt-2 text-xs text-muted">
+                      <summary className="cursor-pointer">Más detalle</summary>
+                      <ul className="mt-1 space-y-0.5 pl-1">
+                        {secondary.source ? (
+                          <li>Source: {secondary.source}</li>
+                        ) : null}
+                        {secondary.leadId ? (
+                          <li>Lead ID: {secondary.leadId}</li>
+                        ) : null}
+                      </ul>
+                    </details>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      ) : null}
     </div>
   )
 }

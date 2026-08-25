@@ -3,6 +3,12 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
 import { notify } from '@/shared/notify'
+import {
+  channelLabel,
+  type ContactOriginSummary,
+  originPrimaryFields,
+  originSecondaryFields,
+} from './originDisplay'
 
 type ChannelSummary = {
   channel: string
@@ -124,34 +130,29 @@ export function LeadsHubPage() {
   )
 }
 
+type OriginRow = ContactOriginSummary & {
+  contacts: {
+    id: number
+    name: string
+    phone: string | null
+    email: string | null
+    lead_status: { label: string } | null
+  } | null
+}
+
 function LeadsUnifiedList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const channel = (searchParams.get('channel') || '').trim()
-  const channelLabel =
+  const channelFilterLabel =
     CHANNEL_FILTER_OPTIONS.find((o) => o.value === channel)?.label || channel
 
-  const [items, setItems] = useState<
-    Array<{
-      id: number
-      channel: string
-      external_id: string
-      source_label: string | null
-      last_seen_at: string
-      contacts: {
-        id: number
-        name: string
-        phone: string | null
-        email: string | null
-        lead_status: { label: string } | null
-      } | null
-    }>
-  >([])
+  const [items, setItems] = useState<OriginRow[]>([])
 
   useEffect(() => {
     const qs = new URLSearchParams({ limit: '40' })
     if (channel) qs.set('channel', channel)
     void apiClient
-      .get<{ items: typeof items }>(`/api/leads/origins?${qs}`)
+      .get<{ items: OriginRow[] }>(`/api/leads/origins?${qs}`)
       .then((r) => {
         if (r.ok) setItems(r.data.items)
       })
@@ -169,7 +170,7 @@ function LeadsUnifiedList() {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-medium">
           {channel
-            ? `Recientes · ${channelLabel}`
+            ? `Recientes · ${channelFilterLabel}`
             : 'Recientes (todos los canales)'}
         </h2>
         <label className="text-sm">
@@ -200,34 +201,67 @@ function LeadsUnifiedList() {
               <tr>
                 <th className="px-2 py-2">Canal</th>
                 <th className="px-2 py-2">Contacto</th>
+                <th className="px-2 py-2">Curso</th>
+                <th className="px-2 py-2">Fuente</th>
                 <th className="px-2 py-2">Estado</th>
                 <th className="px-2 py-2">Último</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((o) => (
-                <tr key={o.id} className="border-b border-line last:border-0">
-                  <td className="px-2 py-2">{o.channel}</td>
-                  <td className="px-2 py-2">
-                    {o.contacts ? (
-                      <Link
-                        to={`/contacts/${o.contacts.id}`}
-                        className="text-accent hover:underline"
-                      >
-                        {o.contacts.name}
-                        {o.contacts.phone ? ` · ${o.contacts.phone}` : ''}
-                        {o.contacts.email ? ` · ${o.contacts.email}` : ''}
-                      </Link>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                  <td className="px-2 py-2">
-                    {o.contacts?.lead_status?.label || '—'}
-                  </td>
-                  <td className="px-2 py-2">{formatDateTime(o.last_seen_at)}</td>
-                </tr>
-              ))}
+              {items.map((o) => {
+                const primary = originPrimaryFields(o)
+                const secondary = originSecondaryFields(o)
+                return (
+                  <tr key={o.id} className="border-b border-line last:border-0">
+                    <td className="px-2 py-2">{channelLabel(o.channel)}</td>
+                    <td className="px-2 py-2">
+                      {o.contacts ? (
+                        <Link
+                          to={`/contacts/${o.contacts.id}`}
+                          className="text-accent hover:underline"
+                        >
+                          {o.contacts.name}
+                          {o.contacts.phone ? ` · ${o.contacts.phone}` : ''}
+                          {o.contacts.email ? ` · ${o.contacts.email}` : ''}
+                        </Link>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className="px-2 py-2">
+                      {primary.curso ? (
+                        <div>
+                          <div>{primary.curso}</div>
+                          {primary.cursoUrl ? (
+                            <a
+                              href={primary.cursoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-accent hover:underline"
+                            >
+                              Ver ficha
+                            </a>
+                          ) : null}
+                        </div>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className="px-2 py-2">
+                      {primary.fuente || '—'}
+                      {secondary.source ? (
+                        <div className="text-xs text-muted">{secondary.source}</div>
+                      ) : null}
+                    </td>
+                    <td className="px-2 py-2">
+                      {o.contacts?.lead_status?.label || '—'}
+                    </td>
+                    <td className="px-2 py-2">
+                      {formatDateTime(o.last_seen_at)}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
