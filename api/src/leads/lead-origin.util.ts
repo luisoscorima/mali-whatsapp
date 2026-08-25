@@ -9,23 +9,28 @@ export const CONTACT_ONLY_LEAD_CHANNELS = new Set<LeadChannel>([
   'other',
 ]);
 
+export type ConversationHint = {
+  id: number;
+  has_inbound: boolean;
+};
+
 /**
  * true si el origen vino con conversación / inbound al captar (no solo contacto).
  * - CTWA / orgánico: conversation_id en el origen.
- * - Widget: conversación resuelta (el widget puede abrir WA con chat).
+ * - Widget: conversación con al menos un mensaje inbound del lead.
  * - Form / import / manual: siempre false (aunque luego exista chat).
  */
 export function originCameWithInbound(
   channel: string,
   originConversationId: number | null | undefined,
-  resolvedChatConversationId?: number | null | undefined,
+  resolvedHasInbound?: boolean,
 ): boolean {
   const ch = channel as LeadChannel;
   if (ch === 'meta_ctwa' || ch === 'organic_wa') {
     return originConversationId != null;
   }
   if (ch === 'widget') {
-    return resolvedChatConversationId != null;
+    return Boolean(resolvedHasInbound);
   }
   if (CONTACT_ONLY_LEAD_CHANNELS.has(ch)) return false;
   return originConversationId != null;
@@ -46,29 +51,30 @@ export type LeadChatEnrichResult = {
 export function resolveLeadChatEnrichment(
   row: LeadChatEnrichInput,
   convMaps: {
-    byId: Map<number, number>;
-    byContact: Map<number, number>;
-    byPhone: Map<string, number>;
+    byId: Map<number, ConversationHint>;
+    byContact: Map<number, ConversationHint>;
+    byPhone: Map<string, ConversationHint>;
   },
 ): LeadChatEnrichResult {
   const channel = row.channel ?? 'other';
   const contactId = row.contact_id ?? row.contacts?.id ?? null;
   const phone = row.contacts?.phone?.trim() || null;
-  const chatConversationId =
+  const convHint =
     (row.conversation_id != null
       ? convMaps.byId.get(row.conversation_id)
       : undefined) ??
     (contactId != null ? convMaps.byContact.get(contactId) : undefined) ??
-    (phone ? convMaps.byPhone.get(phone) : undefined) ??
-    row.conversation_id ??
-    null;
+    (phone ? convMaps.byPhone.get(phone) : undefined);
+
+  const chatConversationId =
+    convHint?.id ?? row.conversation_id ?? null;
 
   return {
     chat_conversation_id: chatConversationId,
     came_with_inbound: originCameWithInbound(
       channel,
       row.conversation_id,
-      chatConversationId,
+      convHint?.has_inbound,
     ),
   };
 }

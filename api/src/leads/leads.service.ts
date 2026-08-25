@@ -17,6 +17,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import {
   type LeadChatEnrichInput,
+  type ConversationHint,
   resolveLeadChatEnrichment,
 } from './lead-origin.util';
 import {
@@ -452,9 +453,9 @@ export class LeadsService {
     area: string,
     rows: LeadChatEnrichInput[],
   ): Promise<{
-    byId: Map<number, number>;
-    byContact: Map<number, number>;
-    byPhone: Map<string, number>;
+    byId: Map<number, ConversationHint>;
+    byContact: Map<number, ConversationHint>;
+    byPhone: Map<string, ConversationHint>;
   }> {
     const convIds = new Set<number>();
     const contactIds = new Set<number>();
@@ -480,29 +481,38 @@ export class LeadsService {
     }
 
     const empty = {
-      byId: new Map<number, number>(),
-      byContact: new Map<number, number>(),
-      byPhone: new Map<string, number>(),
+      byId: new Map<number, ConversationHint>(),
+      byContact: new Map<number, ConversationHint>(),
+      byPhone: new Map<string, ConversationHint>(),
     };
     if (or.length === 0) return empty;
 
     const convs = await this.prisma.conversations.findMany({
       where: { area, OR: or },
-      select: { id: true, contact_id: true, phone: true },
+      select: {
+        id: true,
+        contact_id: true,
+        phone: true,
+        last_user_message_at: true,
+      },
       orderBy: { id: 'asc' },
     });
 
-    const byId = new Map<number, number>();
-    const byContact = new Map<number, number>();
-    const byPhone = new Map<string, number>();
+    const byId = new Map<number, ConversationHint>();
+    const byContact = new Map<number, ConversationHint>();
+    const byPhone = new Map<string, ConversationHint>();
 
     for (const conv of convs) {
-      byId.set(conv.id, conv.id);
+      const entry: ConversationHint = {
+        id: conv.id,
+        has_inbound: conv.last_user_message_at != null,
+      };
+      byId.set(conv.id, entry);
       if (conv.contact_id && !byContact.has(conv.contact_id)) {
-        byContact.set(conv.contact_id, conv.id);
+        byContact.set(conv.contact_id, entry);
       }
       if (conv.phone && !byPhone.has(conv.phone)) {
-        byPhone.set(conv.phone, conv.id);
+        byPhone.set(conv.phone, entry);
       }
     }
 
