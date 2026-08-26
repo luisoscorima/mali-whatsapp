@@ -253,6 +253,11 @@ function LeadsUnifiedList() {
                     </td>
                     <td className="px-2 py-2">
                       {primary.fuente || '—'}
+                      {primary.programa ? (
+                        <div className="text-xs text-muted">
+                          {primary.programa}
+                        </div>
+                      ) : null}
                       {secondary.source ? (
                         <div className="text-xs text-muted">{secondary.source}</div>
                       ) : null}
