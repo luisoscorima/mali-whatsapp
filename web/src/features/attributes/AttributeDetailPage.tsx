@@ -38,6 +38,8 @@ export function AttributeDetailPage() {
   const { confirm, confirmDialog } = useConfirmDialog()
   const [def, setDef] = useState<AttributeDefinition | null>(null)
   const [segments, setSegments] = useState<SegmentOption[]>([])
+  const [scope, setScope] = useState<'area' | 'segment'>('area')
+  const [segmentSlug, setSegmentSlug] = useState('')
   const [label, setLabel] = useState('')
   const [fieldType, setFieldType] = useState('text')
   const [optionsText, setOptionsText] = useState('')
@@ -58,6 +60,8 @@ export function AttributeDetailPage() {
         return
       }
       setDef(detail.data)
+      setScope(detail.data.segment_slug ? 'segment' : 'area')
+      setSegmentSlug(detail.data.segment_slug ?? '')
       setLabel(detail.data.label)
       setFieldType(detail.data.field_type)
       setOptionsText((detail.data.options ?? []).join('\n'))
@@ -70,6 +74,10 @@ export function AttributeDetailPage() {
   async function onSave(e: FormEvent) {
     e.preventDefault()
     if (!id || !def) return
+    if (scope === 'segment' && !segmentSlug.trim()) {
+      notify.error('Selecciona un segmento')
+      return
+    }
     setSaving(true)
     const options =
       fieldType === 'select'
@@ -82,6 +90,8 @@ export function AttributeDetailPage() {
       `/api/attribute-definitions/${id}`,
       {
         label,
+        scope,
+        segment_slug: scope === 'segment' ? segmentSlug : undefined,
         field_type: fieldType,
         options,
         sort_order: def.sort_order,
@@ -95,6 +105,8 @@ export function AttributeDetailPage() {
       return
     }
     setDef(result.data)
+    setScope(result.data.segment_slug ? 'segment' : 'area')
+    setSegmentSlug(result.data.segment_slug ?? '')
     setOptionsText((result.data.options ?? []).join('\n'))
     notify.success('Guardado.')
   }
@@ -169,9 +181,49 @@ export function AttributeDetailPage() {
         className="max-w-lg space-y-4 rounded-xl border border-line bg-surface-strong p-4"
       >
         <p className="text-sm text-muted">
-          El slug <code className="font-mono">{def.slug}</code> y el ámbito no se pueden
-          cambiar.
+          El slug <code className="font-mono">{def.slug}</code> no se puede cambiar.
         </p>
+
+        <fieldset className="space-y-2 text-sm">
+          <legend className="font-medium">Ámbito</legend>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="scope"
+              checked={scope === 'area'}
+              onChange={() => setScope('area')}
+            />
+            Todo el área
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="scope"
+              checked={scope === 'segment'}
+              onChange={() => setScope('segment')}
+            />
+            Solo un segmento
+          </label>
+        </fieldset>
+
+        {scope === 'segment' ? (
+          <label className="block text-sm">
+            <span className="text-muted">Segmento</span>
+            <select
+              value={segmentSlug}
+              onChange={(e) => setSegmentSlug(e.target.value)}
+              required
+              className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
+            >
+              <option value="">—</option>
+              {segments.map((s) => (
+                <option key={s.slug} value={s.slug}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
         <label className="block text-sm">
           <span className="text-muted">Etiqueta visible</span>

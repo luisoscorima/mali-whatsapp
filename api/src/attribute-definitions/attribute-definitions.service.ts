@@ -241,20 +241,54 @@ export class AttributeDefinitionsService {
     const fieldType = normalizeFieldType(dto.field_type);
     const options = resolveOptionsForFieldType(fieldType, dto.options);
 
-    const row = await this.prisma.contact_attribute_definitions.update({
-      where: { id },
-      data: {
-        label,
-        field_type: fieldType,
-        options: options ?? Prisma.JsonNull,
-        sort_order: Number(dto.sort_order ?? 0) || 0,
-        required: Boolean(dto.required),
-        active: dto.active !== false,
-        updated_at: new Date(),
-      },
-      select: ATTR_DEF_SELECT,
-    });
-    return mapDefinition(row, existing.usage_count);
+    let segmentSlug = existing.segment_slug;
+    if (dto.scope !== undefined) {
+      segmentSlug =
+        dto.scope === 'segment'
+          ? String(dto.segment_slug ?? '').trim() || null
+          : null;
+      if (dto.scope === 'segment' && !segmentSlug) {
+        throw new BadRequestException('Selecciona un segmento');
+      }
+      if (segmentSlug) {
+        const seg = await this.prisma.segment_definitions.findFirst({
+          where: { area, slug: segmentSlug },
+        });
+        if (!seg) {
+          throw new BadRequestException('Segmento no válido');
+        }
+      }
+    }
+
+    try {
+      const row = await this.prisma.contact_attribute_definitions.update({
+        where: { id },
+        data: {
+          label,
+          segment_slug: segmentSlug,
+          field_type: fieldType,
+          options: options ?? Prisma.JsonNull,
+          sort_order: Number(dto.sort_order ?? 0) || 0,
+          required: Boolean(dto.required),
+          active: dto.active !== false,
+          updated_at: new Date(),
+        },
+        select: ATTR_DEF_SELECT,
+      });
+      return mapDefinition(row, existing.usage_count);
+    } catch (error) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException(
+          'Ya existe un atributo con ese slug en el ámbito elegido',
+        );
+      }
+      throw error;
+    }
   }
 
   async remove(

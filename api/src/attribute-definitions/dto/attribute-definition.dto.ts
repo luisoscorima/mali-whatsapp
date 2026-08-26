@@ -57,6 +57,15 @@ export class UpdateAttributeDefinitionDto {
   label!: string;
 
   @IsOptional()
+  @IsIn(['area', 'segment'])
+  scope?: 'area' | 'segment';
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  segment_slug?: string;
+
+  @IsOptional()
   @IsIn(FIELD_TYPES)
   field_type?: string;
 
