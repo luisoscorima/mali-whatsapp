@@ -23,7 +23,7 @@ import type {
   CampaignRetryActionResult,
   CampaignSummary,
   RecipientsPreviewResult,
-  SendCampaignResult,
+  SendCampaignOutcome,
 } from './campaigns.types';
 
 @Controller('campaigns')
@@ -63,7 +63,7 @@ export class CampaignsController {
   async send(
     @CurrentUser() user: AuthUser,
     @Body() body: Record<string, unknown>,
-  ): Promise<ApiResponse<SendCampaignResult>> {
+  ): Promise<ApiResponse<SendCampaignOutcome>> {
     const data = await this.campaignsService.sendCampaign(user, body);
     return { ok: true, data };
   }

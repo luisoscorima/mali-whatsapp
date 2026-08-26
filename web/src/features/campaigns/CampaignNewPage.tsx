@@ -330,8 +330,23 @@ export function CampaignNewPage() {
     })
     if (!ok) return
 
-    setBusy('send')
-    const payload = buildSendPayload({
+    type SendOutcome =
+      | {
+          kind: 'sent'
+          campaignId: number
+          redirect: string
+        }
+      | {
+          kind: 'missing_params'
+          code: 'MISSING_TEMPLATE_PARAMS'
+          total: number
+          ready: number
+          missing: number
+          byField: Array<{ label: string; count: number }>
+          sample: Array<{ phone: string; name: string; missing: string[] }>
+        }
+
+    const basePayload = buildSendPayload({
       segments: [...includeSegments],
       selectedIds: [...selectedIds].sort((a, b) => a - b),
       excludeSegments: [...excludeSegments],
@@ -345,14 +360,66 @@ export function CampaignNewPage() {
       form: templateForm,
     })
 
-    const result = await apiClient.post<{
-      campaignId: number
-      redirect: string
-    }>('/api/campaigns/send', payload)
+    setBusy('send')
+    let result = await apiClient.post<SendOutcome>(
+      '/api/campaigns/send',
+      basePayload,
+    )
+
+    if (
+      result.ok &&
+      result.data.kind === 'missing_params'
+    ) {
+      setBusy('')
+      const report = result.data
+      const fieldLines = report.byField
+        .slice(0, 6)
+        .map((f) => `· ${f.label}: ${f.count}`)
+        .join('\n')
+      const sampleLines = report.sample
+        .slice(0, 5)
+        .map((s) => {
+          const who = formatContactName(s.name, '', s.phone)
+          return `· ${who} (${s.missing.join(', ')})`
+        })
+        .join('\n')
+      const proceed = await confirm({
+        title: 'Faltan datos en la plantilla',
+        description:
+          `${report.total} destinatarios\n` +
+          `Listos: ${report.ready}\n` +
+          `Sin datos: ${report.missing}\n\n` +
+          (fieldLines ? `${fieldLines}\n\n` : '') +
+          (sampleLines ? `Ejemplos:\n${sampleLines}\n\n` : '') +
+          (report.ready > 0
+            ? `¿Excluir los ${report.missing} y ${scheduleMode === 'scheduled' ? 'programar' : 'enviar'} ${report.ready}?`
+            : 'No se puede enviar: ningún destinatario tiene los datos completos.'),
+        confirmLabel:
+          report.ready > 0
+            ? scheduleMode === 'scheduled'
+              ? `Excluir y programar ${report.ready}`
+              : `Excluir y enviar ${report.ready}`
+            : 'Entendido',
+        tone: report.ready > 0 ? 'default' : 'danger',
+      })
+      if (!proceed || report.ready <= 0) return
+
+      setBusy('send')
+      result = await apiClient.post<SendOutcome>('/api/campaigns/send', {
+        ...basePayload,
+        excludeMissingParams: true,
+      })
+    }
+
     setBusy('')
 
     if (!result.ok) {
       notify.error(result.error)
+      return
+    }
+
+    if (result.data.kind !== 'sent') {
+      notify.error('No se pudo crear la campaña')
       return
     }
 

@@ -15,6 +15,7 @@ import {
   fetchContactAttributesMap,
   type StaticTemplateParams,
 } from './contact-template-params.util';
+import { listEmptyResolvedParamLabels } from './campaign-param-gaps.util';
 import type { ParamMapping } from '../templates/template-definition.util';
 import {
   fetchRecipientsUnion,
@@ -258,6 +259,33 @@ export class CampaignSenderService {
                   attrsMap.get(contact.id),
                 )
               : staticParams;
+
+            const emptySlots = listEmptyResolvedParamLabels(resolvedParams, {
+              needsHeaderMedia: def.needsHeaderMedia,
+            });
+            if (emptySlots.length > 0) {
+              await this.prisma.campaign_logs.create({
+                data: {
+                  campaign_id: campaignId,
+                  contact_id: contact.id,
+                  phone: phoneNorm,
+                  status: 'error',
+                  response: {
+                    skipped: true,
+                    code: 'MISSING_TEMPLATE_PARAMS',
+                    message: `Parámetro vacío (no enviado a Meta): ${emptySlots.join(', ')}`,
+                    missing: emptySlots,
+                  },
+                  retryable: true,
+                  attempt: 1,
+                },
+              });
+              this.logger.warn(
+                `Campaña #${campaignId}: skip Meta (${phoneNorm}) por params vacíos: ${emptySlots.join(', ')}`,
+              );
+              continue;
+            }
+
             const components = buildWhatsappGraphComponents(def, resolvedParams);
 
             const apiResponse = await sendTemplateWithComponents({

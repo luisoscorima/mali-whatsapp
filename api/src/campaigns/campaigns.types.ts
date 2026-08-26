@@ -55,12 +55,31 @@ export type RecipientsPreviewResult = {
 };
 
 export type SendCampaignResult = {
+  kind: 'sent';
   campaignId: number;
   redirect: string;
   status: string;
   totalRecipients: number;
   isScheduled: boolean;
 };
+
+export type SendCampaignMissingParams = {
+  kind: 'missing_params';
+  code: 'MISSING_TEMPLATE_PARAMS';
+  total: number;
+  ready: number;
+  missing: number;
+  missingContactIds: number[];
+  byField: Array<{ source: string; label: string; count: number }>;
+  sample: Array<{
+    id: number;
+    phone: string;
+    name: string;
+    missing: string[];
+  }>;
+};
+
+export type SendCampaignOutcome = SendCampaignResult | SendCampaignMissingParams;
 
 export type CampaignRetryActionResult = {
   retried: number;

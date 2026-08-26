@@ -151,6 +151,17 @@ export function classifyCampaignDeliveryIncident(
     .trim()
     .toLowerCase();
 
+  if (
+    response &&
+    typeof response === 'object' &&
+    (response as Record<string, unknown>).code === 'MISSING_TEMPLATE_PARAMS'
+  ) {
+    return {
+      incidentType: 'undeliverable',
+      incidentLabel: 'Mensajes no entregables',
+    };
+  }
+
   if (hasAnyTextHint(text, EXPERIMENT_TEXT_HINTS)) {
     return { incidentType: 'experiment', incidentLabel: 'Experimentos' };
   }

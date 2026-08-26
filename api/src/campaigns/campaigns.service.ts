@@ -75,9 +75,11 @@ import type {
   CampaignSummary,
   CampaignSummaryMonthlyPoint,
   RecipientsPreviewResult,
-  SendCampaignResult,
+  SendCampaignOutcome,
 } from './campaigns.types';
 import { formatCampaignSegmentDisplay, parseCampaignPayload } from './campaign-payload.util';
+import { analyzeRecipientTemplateParams } from './campaign-param-gaps.util';
+import { fetchContactAttributesMap } from './contact-template-params.util';
 
 const SALIDA_OK_IN = sqlInList(SALIDA_OK_STATUSES);
 const ERROR_IN = sqlInList(ERROR_STATUSES);
@@ -933,7 +935,7 @@ export class CampaignsService {
   async sendCampaign(
     user: AuthUser,
     body: Record<string, unknown>,
-  ): Promise<SendCampaignResult> {
+  ): Promise<SendCampaignOutcome> {
     const area = user.area;
     const segmentSet = await this.getSegmentSlugSet(area);
     const templateSyncId = parseInt(String(body.templateSyncId || '').trim(), 10);
@@ -1034,6 +1036,52 @@ export class CampaignsService {
       throw new BadRequestException('No hay destinatarios con los filtros actuales');
     }
 
+    const staticParams = {
+      headerParams: values.headerParams,
+      bodyParams: values.bodyParams,
+      buttonParams: values.buttonParams,
+      headerMediaUrl: values.headerMediaUrl,
+    };
+
+    const excludeMissingParams = body.excludeMissingParams === true;
+    const slotCount =
+      staticParams.headerParams.length +
+      staticParams.bodyParams.length +
+      staticParams.buttonParams.length;
+
+    if (slotCount > 0) {
+      const attrsMap = paramMapping
+        ? await fetchContactAttributesMap(
+            this.prisma,
+            recipients.map((r) => r.id),
+          )
+        : new Map<number, Record<string, string>>();
+      const gapReport = analyzeRecipientTemplateParams(
+        recipients,
+        staticParams,
+        paramMapping,
+        attrsMap,
+      );
+
+      if (gapReport.missing > 0 && !excludeMissingParams) {
+        return {
+          kind: 'missing_params',
+          code: 'MISSING_TEMPLATE_PARAMS',
+          ...gapReport,
+        };
+      }
+
+      if (gapReport.missing > 0 && excludeMissingParams) {
+        const skip = new Set(gapReport.missingContactIds);
+        recipients = recipients.filter((r) => !skip.has(r.id));
+        if (!recipients.length) {
+          throw new BadRequestException(
+            'Ningún destinatario tiene completos los datos de la plantilla',
+          );
+        }
+      }
+    }
+
     const templateSnapshot = {
       id: tRow.id,
       name: tRow.name,
@@ -1041,13 +1089,6 @@ export class CampaignsService {
       category: tRow.category,
       components_json: tRow.components_json,
       placeholder_aliases_json: tRow.placeholder_aliases_json,
-    };
-
-    const staticParams = {
-      headerParams: values.headerParams,
-      bodyParams: values.bodyParams,
-      buttonParams: values.buttonParams,
-      headerMediaUrl: values.headerMediaUrl,
     };
 
     const campaignPayload: CampaignJobPayload = {
@@ -1058,15 +1099,17 @@ export class CampaignsService {
       paramMapping,
       batchSize,
       batchDelayMs,
+      // Fija la audiencia final (p. ej. tras excluir faltantes de params).
+      recipientContactIds: recipients.map((r) => r.id),
     };
 
     if (
-      audienceMode === 'multi' &&
-      recipientContactIds &&
-      recipientContactIds.length > 0
+      !(
+        audienceMode === 'multi' &&
+        recipientContactIds &&
+        recipientContactIds.length > 0
+      )
     ) {
-      campaignPayload.recipientContactIds = recipientContactIds;
-    } else {
       campaignPayload.segment = segments[0];
     }
     if (excludeContactIds.length > 0) {
@@ -1123,6 +1166,7 @@ export class CampaignsService {
     });
 
     return {
+      kind: 'sent',
       campaignId: campaign.id,
       redirect: `/campaigns/${campaign.id}`,
       status: campaignStatus,

@@ -19,6 +19,7 @@ import {
   buildParamsForContact,
   fetchContactAttributesMap,
 } from './contact-template-params.util';
+import { listEmptyResolvedParamLabels } from './campaign-param-gaps.util';
 import type { CampaignJobPayload } from './campaign-sender.service';
 import {
   applyCampaignImageFallback,
@@ -441,6 +442,32 @@ export class CampaignRetryService {
       }
 
       try {
+        const emptySlots = listEmptyResolvedParamLabels(resolvedParams, {
+          needsHeaderMedia: sendCtx.def.needsHeaderMedia,
+        });
+        if (emptySlots.length > 0) {
+          await this.prisma.campaign_logs.update({
+            where: { id: claimed.id },
+            data: {
+              status: 'error',
+              response: {
+                skipped: true,
+                code: 'MISSING_TEMPLATE_PARAMS',
+                message: `Parámetro vacío (no enviado a Meta): ${emptySlots.join(', ')}`,
+                missing: emptySlots,
+              },
+              attempt: nextAttempt,
+              retryable: true,
+              last_retry_at: new Date(),
+            },
+          });
+          this.logger.warn(
+            `Reintento campaña #${campaignId}: skip Meta (${phoneNorm}) por params vacíos: ${emptySlots.join(', ')}`,
+          );
+          stillFailed += 1;
+          continue;
+        }
+
         const components = buildWhatsappGraphComponents(
           sendCtx.def,
           resolvedParams,
