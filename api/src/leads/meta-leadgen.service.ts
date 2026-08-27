@@ -135,6 +135,9 @@ export class MetaLeadgenService {
       if (key && value) raw[key] = value;
     }
 
+    const norm = (s: string) =>
+      s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+
     const pick = (...keys: string[]) => {
       for (const k of keys) {
         if (raw[k]) return raw[k];
@@ -142,18 +145,64 @@ export class MetaLeadgenService {
       return undefined;
     };
 
-    return {
-      phone: pick(
+    const pickMatch = (pred: (normKey: string) => boolean) => {
+      for (const [k, v] of Object.entries(raw)) {
+        if (pred(norm(k))) return v;
+      }
+      return undefined;
+    };
+
+    const phoneRaw =
+      pick(
         'phone_number',
         'phone',
         'celular',
         'mobile',
         'teléfono',
         'telefono',
-      ),
-      email: pick('email', 'correo', 'e-mail'),
-      dni: pick('dni', 'document_number', 'documento', 'national_id'),
-      name: pick('full_name', 'nombre', 'first_name', 'nombres'),
+        'número_de_teléfono',
+        'numero_de_telefono',
+      ) ||
+      pickMatch(
+        (k) =>
+          k.includes('telefono') ||
+          k.includes('phone') ||
+          k.includes('celular') ||
+          k.includes('whatsapp'),
+      );
+    const phone = phoneRaw?.replace(/^p:/i, '').trim() || phoneRaw;
+
+    const email =
+      pick(
+        'email',
+        'correo',
+        'e-mail',
+        'correo_electrónico',
+        'correo_electronico',
+      ) || pickMatch((k) => k.includes('correo') || k.includes('email'));
+
+    const fullName =
+      pick(
+        'full_name',
+        'nombre',
+        'first_name',
+        'nombres',
+        'nombre_y_apellidos',
+        'nombre_y_apellido',
+      ) ||
+      pickMatch(
+        (k) =>
+          k.includes('nombre') &&
+          (k.includes('apellido') || k === 'nombre' || k.includes('full_name')),
+      );
+
+    return {
+      phone,
+      email,
+      dni:
+        pick('dni', 'document_number', 'documento', 'national_id') ||
+        pickMatch((k) => k.includes('dni') || k.includes('documento')),
+      name: fullName,
       last_name: pick('last_name', 'apellidos', 'apellido'),
       raw,
     };
