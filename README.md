@@ -22,7 +22,7 @@ En producción: **[https://whatsapp.mali.pe](https://whatsapp.mali.pe)**.
 |--------|-------------|
 | **Conversaciones** | Inbox master–detail; búsqueda; chips de segmento y anuncio; asignación; envío de plantilla; marcado no leído; adjuntos y descarga; exportación; bot / asesor. |
 | **Campañas** | Plantillas sync o creadas en la app; parámetros por contacto; preview con exclusiones; cola Redis; programación; fallidos + CSV; respondieron (7 días); reintento auto/manual; costo WABA. |
-| **Contactos** | Alta, edición, filtros (número, nombre, email, atributos); importación masiva CSV/Excel; segmentos; ejemplo en `/contacts/sample.xlsx`. CRM canónico para PAM (sync desde MALI ONE). |
+| **Contactos** | Alta, edición, filtros (número, nombre, email, atributos); importación masiva CSV/Excel; segmentos; ejemplo en `/contacts/sample.xlsx`. Alta manual: selector de **prefijo con bandera** (default **🇵🇪 +51**) y celular solo numérico — mismos países que el widget Educación (MALI ONE). Banderas en `web/public/flags/`. CRM canónico para PAM (sync desde MALI ONE). |
 | **CRM interno** | `POST /api/crm/sync`, `GET /api/crm/audience` con `CRM_SERVICE_TOKEN` para mailing en MALI ONE. |
 | **Segmentos** | Definición y mantenimiento de audiencias. |
 | **Atributos** | Definiciones por área (`/attributes`) para formularios, importación y variables `{{n}}` en campañas. |

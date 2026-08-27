@@ -5,6 +5,12 @@ import {
   inputTypeForField,
   type AttributeFieldDefinition,
 } from './contactFormUtils'
+import { PhonePrefixSelect } from './PhonePrefixSelect'
+import {
+  DEFAULT_PHONE_PREFIX,
+  digitsOnly,
+  validatePhoneLocal,
+} from './phonePrefixOptions'
 
 type SegmentOption = {
   id: number
@@ -71,8 +77,10 @@ export function ContactForm({
 }: ContactFormProps) {
   const [name, setName] = useState(initial.name)
   const [lastName, setLastName] = useState(initial.last_name)
-  const [phonePrefix, setPhonePrefix] = useState(initial.phone_prefix)
-  const [phoneLocal, setPhoneLocal] = useState(initial.phone_local)
+  const [phonePrefix, setPhonePrefix] = useState(
+    () => digitsOnly(initial.phone_prefix) || DEFAULT_PHONE_PREFIX,
+  )
+  const [phoneLocal, setPhoneLocal] = useState(() => digitsOnly(initial.phone_local))
   const [email, setEmail] = useState(() => normalizeEmailForSubmit(initial.email))
   const [dni, setDni] = useState(initial.dni)
   const [selectedSegments, setSelectedSegments] = useState<string[]>(
@@ -82,6 +90,7 @@ export function ContactForm({
     initial.attributes,
   )
   const [segmentsError, setSegmentsError] = useState('')
+  const [phoneError, setPhoneError] = useState('')
 
   const applicableDefs = useMemo(
     () =>
@@ -125,14 +134,20 @@ export function ContactForm({
       return
     }
     setSegmentsError('')
-    const prefixDigits = phonePrefix.replace(/\D/g, '')
-    const localDigits = phoneLocal.replace(/\D/g, '')
+    const prefixDigits = digitsOnly(phonePrefix)
+    const localDigits = digitsOnly(phoneLocal)
+    const phoneValidation = validatePhoneLocal(prefixDigits, localDigits)
+    if (phoneValidation) {
+      setPhoneError(phoneValidation)
+      return
+    }
+    setPhoneError('')
     onSubmit({
       name,
       last_name: lastName,
       phone: `${prefixDigits}${localDigits}`,
-      phone_prefix: phonePrefix,
-      phone_local: phoneLocal,
+      phone_prefix: prefixDigits,
+      phone_local: localDigits,
       email: normalizeEmailForSubmit(email),
       dni,
       segments: selectedSegments,
@@ -168,30 +183,32 @@ export function ContactForm({
       </label>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <label className="block text-sm sm:col-span-1">
+        <div className="block text-sm sm:col-span-1">
           <span className="text-muted">Prefijo país</span>
-          <input
-            type="text"
-            maxLength={4}
-            inputMode="numeric"
+          <PhonePrefixSelect
             value={phonePrefix}
             disabled={disabled}
-            onChange={(e) => setPhonePrefix(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
+            onChange={setPhonePrefix}
           />
-        </label>
+        </div>
         <label className="block text-sm sm:col-span-2">
-          <span className="text-muted">Número (sin +51)</span>
+          <span className="text-muted">Celular</span>
           <input
             type="text"
             required
             inputMode="numeric"
-            placeholder="982160981"
+            placeholder="987654321"
             value={phoneLocal}
             disabled={disabled}
-            onChange={(e) => setPhoneLocal(e.target.value)}
+            onChange={(e) => {
+              setPhoneLocal(digitsOnly(e.target.value))
+              if (phoneError) setPhoneError('')
+            }}
             className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
           />
+          {phoneError ? (
+            <p className="mt-1 text-xs text-bad">{phoneError}</p>
+          ) : null}
         </label>
       </div>
 

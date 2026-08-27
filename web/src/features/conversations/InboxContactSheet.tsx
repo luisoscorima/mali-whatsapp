@@ -95,6 +95,10 @@ export function InboxContactSheet({
     () => splitPhoneForForm(prefillPhone),
     [prefillPhone],
   )
+  const contactPhoneParts = useMemo(
+    () => (contact ? splitPhoneForForm(contact.phone) : null),
+    [contact],
+  )
 
   useEffect(() => {
     if (!open) return
@@ -306,13 +310,13 @@ export function InboxContactSheet({
                 attributeDefinitions={attributeDefinitions}
                 isReplaced={isReplaced}
                 initial={
-                  mode === 'edit' && contact
+                  mode === 'edit' && contact && contactPhoneParts
                     ? {
                         name: contact.name,
                         last_name: contact.last_name,
                         phone: contact.phone,
-                        phone_prefix: splitPhoneForForm(contact.phone).prefix,
-                        phone_local: splitPhoneForForm(contact.phone).local,
+                        phone_prefix: contactPhoneParts.prefix,
+                        phone_local: contactPhoneParts.local,
                         email: contact.email ?? '',
                         dni: contact.dni ?? contact.attributes.dni ?? '',
                         segments: selectedSegmentSlugs,
