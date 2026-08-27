@@ -63,43 +63,61 @@ Tabla `meta_lead_form_routes` (`form_id` → `area`):
 - Token: page access token del área, o WhatsApp token.
 - Botón en sidebar CTWA: **Sincronizar nombres desde Meta**.
 
-### Meta Developers / operación (en curso, no solo código)
+### Meta Developers / operación
 
 - Caso de uso Lead Ads + WhatsApp en la misma app.
 - Webhook Page + `leadgen` + verify token (ya validado con curl 200).
 - Page ID MALI Educación: `1684299678482303`.
-- Page access token: generación vía usuario sistema **sistemas API** (pendiente aprobación Business en el momento del handoff).
+- Flujo de token y `subscribed_apps` (hecho en prod): ver abajo + [CONFIGURACION_META.md](../CONFIGURACION_META.md) §16.
 
-### Dónde poner el Page token y el Page ID (cuando aprueben)
+### System User ≠ Page token (error frecuente `#210`)
 
-**Respuesta corta:** en **Admin → Meta** (`/admin/meta`), no hace falta una variable `.env` por área. Es **un solo** Page ID y **un solo** Page access token (misma Página MALI Educación para CA/EP/Educación).
+| Qué tienes | Debugger “Tipo” | ¿Va en `/admin/meta` Lead Ads? | ¿Sirve en `POST /{page-id}/subscribed_apps`? |
+|------------|-----------------|--------------------------------|-----------------------------------------------|
+| Token **sistemas API** (system user) | **System User** | **No** | **No** → `(#210) A page access token is required` |
+| Token de **MALI Educación** | **Page** | **Sí** | **Sí** → `{"success":true}` |
+
+El system user **solo** sirve para **obtener** el Page token:
+
+```bash
+curl -G "https://graph.facebook.com/v23.0/1684299678482303" \
+  -d "fields=access_token,name,id" \
+  -d "access_token={SYSTEM_USER_TOKEN}"
+# → usa el access_token del JSON (Tipo: Page)
+```
+
+Detalle y `me/accounts`: [CONFIGURACION_META.md](../CONFIGURACION_META.md) §16.
+
+### Dónde poner el Page token y el Page ID
+
+**Respuesta corta:** en **Admin → Meta** (`/admin/meta`), el **Page** token (no el system user ni el WhatsApp). Un solo Page ID + un solo Page access token (MALI Educación) para CA/EP/Educación.
 
 | Qué | Dónde | Valor |
 |-----|--------|--------|
-| Page access token (Lead Ads) | Admin → Meta → selector de área | El token de larga duración de la Página (no el WhatsApp token) |
+| Page access token (Lead Ads) | Admin → Meta → selector de área | Token **Tipo: Page** de `1684299678482303` |
 | Page ID (Lead Ads) | Mismo panel | `1684299678482303` |
 
 **Cómo (recomendado):**
 
-1. Ir a **`/admin/meta`**.
-2. En el selector de área, elegir **`educacion`**, pegar token + Page ID, Guardar.
-3. Repetir lo **mismo** en **`educacion_ca`** y **`educacion_ep`** (mismos valores). Así sync/backfill y CTWA nombres funcionan sin depender del área activa.
-4. No hace falta ponerlos en `ti` ni en otras áreas.
+1. Obtener Page token desde el system user (tabla arriba / CONFIGURACION_META §16).
+2. Ir a **`/admin/meta`**.
+3. En **`educacion`**, pegar Page token + Page ID, Guardar.
+4. Repetir lo **mismo** en **`educacion_ca`** y **`educacion_ep`**.
+5. Suscribir: `POST .../1684299678482303/subscribed_apps` con `subscribed_fields=leadgen` y el **Page** token.
+6. Lead de prueba.
 
 **Por qué no basta solo `.env`:** el webhook busca el Page ID en BD (`app_settings`) para asociar la Página a un área. Si solo está en env, ese lookup falla y el fallback es `ti` (luego el `form_id` aún puede corregir el área, pero es frágil). Prioridad de lectura: **área en Admin → env**.
 
 **`.env` (opcional, respaldo global — no por área):**
 
 ```env
-META_PAGE_ACCESS_TOKEN=...
+META_PAGE_ACCESS_TOKEN=...   # Page token, no system user
 META_PAGE_ID=1684299678482303
 ```
 
 No existen `META_PAGE_*_CA` / `_EP`: CA/EP se separan por **form_id** (Instant Forms) o **phone_number_id** (CTWA), no por otro Page token.
 
-**No confundir:** el WhatsApp token / Phone number ID sí son **por área** (líneas distintas). El Page token es de la **Página de Facebook**, compartido.
-
-Tras guardar: `subscribed_apps` con `leadgen` (ver CONFIGURACION_META §16) y un lead de prueba.
+**No confundir:** WhatsApp token / Phone number ID = **por área**. Page token = **Página de Facebook**, compartido. System user token = **herramienta** para generar el Page token, no el valor final.
 
 ---
 
@@ -116,7 +134,7 @@ Anuncios Instant Form: destino formulario + a menudo “chatear en WhatsApp” a
 
 ## Pendiente / siguiente (prioridad sugerida)
 
-1. **Operación Meta:** aprobar token sistemas API → pegar Page token + Page ID en `/admin/meta` (educacion + ca + ep) → `subscribed_apps` `leadgen` → lead de prueba.
+1. **Operación Meta:** ~~Page token + `subscribed_apps` leadgen~~ (hecho). Confirmar Page token en `/admin/meta` (educacion + ca + ep) si aún no está el **Page** token → lead de prueba.
 2. **Servidor:** `npx prisma migrate deploy` (tabla rutas) si aún no está en prod.
 3. **Históricos forms:** sync forms + backfill por `form_id` clave (espejo del Sheet).
 4. **CTWA:** sync nombres en cada área con anuncios sin `display_name`.

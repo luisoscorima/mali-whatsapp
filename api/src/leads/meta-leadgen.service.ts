@@ -27,10 +27,15 @@ type GraphLead = {
   id?: string;
   created_time?: string;
   ad_id?: string;
-  adgroup_id?: string;
+  /** Meta renombró adgroup → adset; Graph ya no acepta `adgroup_id` en fields. */
+  adset_id?: string;
   form_id?: string;
   field_data?: LeadgenField[];
 };
+
+/** Campos Lead válidos en Graph v23 (no usar `adgroup_id`). */
+const LEAD_GRAPH_FIELDS =
+  'created_time,id,ad_id,adset_id,form_id,field_data';
 
 type GraphLeadgenForm = {
   id?: string;
@@ -159,10 +164,7 @@ export class MetaLeadgenService {
     token: string,
   ): Promise<GraphLead> {
     const url = new URL(`${GRAPH_BASE}/${encodeURIComponent(leadgenId)}`);
-    url.searchParams.set(
-      'fields',
-      'created_time,id,ad_id,adgroup_id,form_id,field_data',
-    );
+    url.searchParams.set('fields', LEAD_GRAPH_FIELDS);
     url.searchParams.set('access_token', token);
     const res = await fetch(url);
     const json = (await res.json()) as GraphLead & {
@@ -464,7 +466,7 @@ export class MetaLeadgenService {
         form_id: formId,
         page_id: params.pageId || null,
         ad_id: params.adId || graph.ad_id || null,
-        adgroup_id: params.adgroupId || graph.adgroup_id || null,
+        adgroup_id: params.adgroupId || graph.adset_id || null,
         field_data: (graph.field_data ?? null) as Prisma.InputJsonValue,
         raw: graph as Prisma.InputJsonValue,
         contact_id: origin.contact_id,
@@ -524,9 +526,11 @@ export class MetaLeadgenService {
             formId,
             pageId,
             adId: value.ad_id ? String(value.ad_id) : undefined,
-            adgroupId: value.adgroup_id
-              ? String(value.adgroup_id)
-              : undefined,
+            adgroupId: value.adset_id
+              ? String(value.adset_id)
+              : value.adgroup_id
+                ? String(value.adgroup_id)
+                : undefined,
           });
           ingested += 1;
         } catch (err) {
@@ -580,10 +584,7 @@ export class MetaLeadgenService {
       const url = new URL(
         `${GRAPH_BASE}/${encodeURIComponent(formIdNorm)}/leads`,
       );
-      url.searchParams.set(
-        'fields',
-        'created_time,id,ad_id,adgroup_id,form_id,field_data',
-      );
+      url.searchParams.set('fields', LEAD_GRAPH_FIELDS);
       url.searchParams.set('access_token', token);
       url.searchParams.set('limit', '50');
       if (after) url.searchParams.set('after', after);
@@ -613,7 +614,7 @@ export class MetaLeadgenService {
             formId: leadFormId,
             pageId: pageIdHint || undefined,
             adId: lead.ad_id,
-            adgroupId: lead.adgroup_id,
+            adgroupId: lead.adset_id,
           });
           if (result.created) imported += 1;
         } catch (err) {

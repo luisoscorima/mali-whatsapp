@@ -294,6 +294,7 @@ Desde el ecosistema Meta / Business: **WhatsApp Manager** — crear plantillas, 
 | **136024** (subcódigo 2388366) | «Número ya verificado» al pedir SMS | Normal: seguir con **`register`** |
 | `Invalid webhook signature` | Secreto o cuerpo incorrecto | `APP_SECRET`, `REQUIRE_WEBHOOK_SIGNATURE` |
 | No llegan **mensajes entrantes** pero sí envíos | `subscribed_apps` vacío para esa WABA | [Sección 7](#7-suscribir-la-app-al-waba-subscribed_apps--crítico-para-webhooks) |
+| **210** `A page access token is required` (Lead Ads) | Se usó system user / user token en `/{page-id}/subscribed_apps` | [§16](#16-lead-ads--instant-forms-leadgen): obtener **Page** token y usarlo ahí y en `/admin/meta` |
 | No llegan estados | Webhook, red o suscripción | URL HTTPS, campos `messages`, firma |
 | **132000** / **132001** | Plantilla | [DESPLIEGUE_PRODUCCION_APP.md](./DESPLIEGUE_PRODUCCION_APP.md) |
 
@@ -342,18 +343,74 @@ Esto es **distinto** de CTWA (Click-to-WhatsApp). Los Instant Forms no llegan po
 4. App Review típico: `leads_retrieval`, `pages_manage_ads`, `pages_show_list`, `pages_read_engagement` (a menudo también `ads_management`).
 5. Business Verification si Meta lo exige.
 
-### Token y Página
+### Token y Página — no confundir System User vs Page
 
-- Usa un **Page access token** de larga duración (no el `whatsapp_token`).
-- **Dónde guardarlo (recomendado):** panel **`/admin/meta`** → campos *Page access token (Lead Ads)* y *Page ID (Lead Ads)*.
-- Es **una** Página (`1684299678482303` MALI Educación) → **un** token y **un** Page ID. Pégalos en las áreas **`educacion`**, **`educacion_ca`** y **`educacion_ep`** (mismos valores). No hace falta una variable por área en `.env`.
-- Respaldo opcional en `.env`: `META_PAGE_ACCESS_TOKEN` / `META_PAGE_ID` (prioridad: Admin/BD sobre env). Si solo usas env, el lookup de Página→área puede caer en `ti`.
-- Detalle operativo: [docs/LEADS-ESTADO.md](./docs/LEADS-ESTADO.md) § “Dónde poner el Page token”.
-- Suscribir la Página a la app:
+Hay **dos tokens distintos**. El error más común es usar el del system user donde Meta exige el de Página.
+
+| Token | Tipo en [Access Token Debugger](https://developers.facebook.com/tools/debug/accesstoken/) | ¿Para qué sirve? |
+|-------|------------------------------------------------------------------------------------------|------------------|
+| **System user** (p. ej. *sistemas API*) | **Tipo: System User** | Generar tokens de Página, WhatsApp, activos del Business. **No** sirve solo para `POST /{page-id}/subscribed_apps` ni para guardar en Admin Lead Ads. |
+| **Page access token** (MALI Educación) | **Tipo: Page** + Page ID `1684299678482303` | Suscribir `leadgen`, leer leads, backfill, y campo *Page access token* en **`/admin/meta`**. |
+
+Si usas el system user en `subscribed_apps`, Meta responde:
+
+```text
+(#210) A page access token is required to request this resource.
+```
+
+Aunque el system user tenga `leads_retrieval` / `pages_manage_metadata`, Graph **exige** un token con **Tipo: Page**.
+
+#### Paso A — System user → Page access token
+
+Con el token del usuario de sistema (Business Manager → Usuarios del sistema → *sistemas API* → generar token):
 
 ```bash
-curl -X POST "https://graph.facebook.com/v23.0/{PAGE_ID}/subscribed_apps" \
+curl -G "https://graph.facebook.com/v23.0/1684299678482303" \
+  -d "fields=access_token,name,id" \
+  -d "access_token={SYSTEM_USER_TOKEN}"
+```
+
+Respuesta esperada (el `access_token` del JSON **es** el Page token):
+
+```json
+{"access_token":"EAAxxxx...","name":"MALI Educación","id":"1684299678482303"}
+```
+
+Alternativa: listar páginas del system user y copiar el `access_token` de la fila `1684299678482303`:
+
+```bash
+curl -G "https://graph.facebook.com/v23.0/me/accounts" \
+  -d "access_token={SYSTEM_USER_TOKEN}"
+```
+
+Si `data` está vacío o no aparece la Página: en Business Manager asigna el activo **Página MALI Educación** al system user (tareas que incluyan leads / gestionar).
+
+**Comprobar** el token nuevo en el Debugger: debe decir **Tipo: Page**, Página **MALI Educación** (`1684299678482303`), caducidad **Nunca** si viene de system user de larga duración.
+
+#### Paso B — Guardar en Mali
+
+- **Dónde:** panel **`/admin/meta`** → *Page access token (Lead Ads)* y *Page ID (Lead Ads)*.
+- Pega el **Page** token del paso A (no el system user, no el WhatsApp token).
+- Es **una** Página → **un** token y **un** Page ID. Repite los mismos valores en **`educacion`**, **`educacion_ca`** y **`educacion_ep`**.
+- Respaldo opcional en `.env`: `META_PAGE_ACCESS_TOKEN` / `META_PAGE_ID` (prioridad: Admin/BD sobre env).
+- Detalle: [docs/LEADS-ESTADO.md](./docs/LEADS-ESTADO.md) § “Dónde poner el Page token”.
+
+#### Paso C — Suscribir la Página a la app (`leadgen`)
+
+Usa **solo** el Page access token:
+
+```bash
+curl -X POST "https://graph.facebook.com/v23.0/1684299678482303/subscribed_apps" \
   -d "subscribed_fields=leadgen" \
+  -d "access_token={PAGE_ACCESS_TOKEN}"
+```
+
+Éxito: `{"success":true}`.
+
+Verificar:
+
+```bash
+curl -G "https://graph.facebook.com/v23.0/1684299678482303/subscribed_apps" \
   -d "access_token={PAGE_ACCESS_TOKEN}"
 ```
 
@@ -386,7 +443,8 @@ Contraste: **CTWA** enruta por `phone_number_id` de la línea WA (902… CA, 922
 ```bash
 curl -G "https://graph.facebook.com/v23.0/{FORM_ID}/leads" \
   -d "access_token={PAGE_ACCESS_TOKEN}" \
-  -d "fields=created_time,id,ad_id,form_id,field_data"
+  -d "fields=created_time,id,ad_id,adset_id,form_id,field_data"
 ```
 
+**Nota:** no pedir `adgroup_id` — Graph responde `(#100) Tried accessing nonexisting field (adgroup_id)`. El equivalente actual es `adset_id`.
 En la API Mali: backfill por `form_id` (resuelve área vía rutas) y `POST /api/leads/meta-forms/sync-forms`.
