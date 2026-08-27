@@ -68,6 +68,12 @@ class BackfillFormDto {
   form_id!: string;
 }
 
+class UpdateFormRouteDto {
+  @IsString()
+  @MaxLength(32)
+  area!: string;
+}
+
 class SetContactStatusDto {
   @IsInt()
   @Min(1)
@@ -159,6 +165,35 @@ export class LeadsController {
   ): Promise<ApiResponse<unknown>> {
     assertCanManageLeads(user);
     const data = await this.metaLeadgen.listForms(user.area);
+    return { ok: true, data };
+  }
+
+  @Get('meta-forms/routes')
+  async listFormRoutes(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<unknown>> {
+    assertCanManageLeads(user);
+    const data = await this.metaLeadgen.listFormRoutes();
+    return { ok: true, data };
+  }
+
+  @Patch('meta-forms/routes/:formId')
+  async updateFormRoute(
+    @CurrentUser() user: AuthUser,
+    @Param('formId') formId: string,
+    @Body() body: UpdateFormRouteDto,
+  ): Promise<ApiResponse<unknown>> {
+    assertCanManageLeads(user);
+    const data = await this.metaLeadgen.updateFormRoute(formId, body);
+    return { ok: true, data };
+  }
+
+  @Post('meta-forms/sync-forms')
+  async syncForms(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<unknown>> {
+    assertCanManageLeads(user);
+    const data = await this.metaLeadgen.syncFormsFromGraph(user.area);
     return { ok: true, data };
   }
 

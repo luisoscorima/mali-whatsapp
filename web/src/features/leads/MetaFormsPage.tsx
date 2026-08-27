@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
 import { notify } from '@/shared/notify'
+import { AREA_OPTIONS } from '../admin/areaLabels'
 import { LeadOpenChatButton } from './LeadOpenChatButton'
 
 type FormRow = {
@@ -11,6 +12,16 @@ type FormRow = {
   name: string | null
   lead_count: number
   last_sync_at: string | null
+}
+
+type FormRouteRow = {
+  id: number
+  form_id: string
+  area: string
+  form_name: string | null
+  page_id: string | null
+  area_locked: boolean
+  last_synced_at: string | null
 }
 
 type LeadRow = {
@@ -29,18 +40,27 @@ type LeadRow = {
   } | null
 }
 
+const ROUTE_AREA_OPTIONS = AREA_OPTIONS.filter((o) =>
+  ['educacion', 'educacion_ca', 'educacion_ep'].includes(o.slug),
+)
+
 export function MetaFormsPage() {
   const [forms, setForms] = useState<FormRow[]>([])
+  const [routes, setRoutes] = useState<FormRouteRow[]>([])
   const [leads, setLeads] = useState<LeadRow[]>([])
   const [formId, setFormId] = useState('')
   const [busy, setBusy] = useState(false)
+  const [syncBusy, setSyncBusy] = useState(false)
+  const [routeBusyId, setRouteBusyId] = useState<string | null>(null)
 
   async function reload() {
-    const [f, l] = await Promise.all([
+    const [f, r, l] = await Promise.all([
       apiClient.get<FormRow[]>('/api/leads/meta-forms'),
+      apiClient.get<FormRouteRow[]>('/api/leads/meta-forms/routes'),
       apiClient.get<LeadRow[]>('/api/leads/meta-forms/leads?limit=80'),
     ])
     if (f.ok) setForms(f.data)
+    if (r.ok) setRoutes(r.data)
     if (l.ok) setLeads(l.data)
   }
 
@@ -51,17 +71,52 @@ export function MetaFormsPage() {
   async function onBackfill(e: FormEvent) {
     e.preventDefault()
     setBusy(true)
-    const r = await apiClient.post<{ imported: number }>(
+    const res = await apiClient.post<{ imported: number }>(
       '/api/leads/meta-forms/backfill',
       { form_id: formId.trim() },
     )
     setBusy(false)
-    if (!r.ok) {
-      notify.error(r.error)
+    if (!res.ok) {
+      notify.error(res.error)
       return
     }
-    notify.success(`Importados: ${r.data.imported}`)
+    notify.success(`Importados: ${res.data.imported}`)
     void reload()
+  }
+
+  async function onSyncForms() {
+    setSyncBusy(true)
+    const res = await apiClient.post<{
+      synced: number
+      created: number
+      updated: number
+    }>('/api/leads/meta-forms/sync-forms', {})
+    setSyncBusy(false)
+    if (!res.ok) {
+      notify.error(res.error)
+      return
+    }
+    notify.success(
+      `Sync: ${res.data.synced} forms (${res.data.created} nuevos, ${res.data.updated} actualizados)`,
+    )
+    void reload()
+  }
+
+  async function onRouteAreaChange(formIdValue: string, area: string) {
+    setRouteBusyId(formIdValue)
+    const res = await apiClient.patch<FormRouteRow>(
+      `/api/leads/meta-forms/routes/${encodeURIComponent(formIdValue)}`,
+      { area },
+    )
+    setRouteBusyId(null)
+    if (!res.ok) {
+      notify.error(res.error)
+      return
+    }
+    setRoutes((prev) =>
+      prev.map((row) => (row.form_id === formIdValue ? res.data : row)),
+    )
+    notify.success('Área actualizada (manual)')
   }
 
   return (
@@ -72,9 +127,90 @@ export function MetaFormsPage() {
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">Instant Forms</h1>
         <p className="text-sm text-muted">
-          Leads de formularios Meta (Lead Ads). Requiere Page token configurado.
+          Leads de formularios Meta (Lead Ads). El área se decide por form_id
+          (CA / EP / Educación). Requiere Page token para sync e ingestión.
         </p>
       </div>
+
+      <section className="rounded-xl border border-line bg-surface-strong p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="font-medium">Rutas form → área</h2>
+            <p className="text-xs text-muted">
+              Reglas: «Cursos de Arte…» → CA · «[FORM EP]» → EP · resto →
+              Educación. Un cambio manual queda bloqueado al sincronizar.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={syncBusy}
+            onClick={() => void onSyncForms()}
+            className="rounded-lg border border-line bg-bg px-3 py-1.5 text-sm disabled:opacity-60"
+          >
+            {syncBusy ? 'Sincronizando…' : 'Sincronizar forms desde Meta'}
+          </button>
+        </div>
+        {routes.length === 0 ? (
+          <p className="text-sm text-muted">
+            Aún no hay rutas. Sync desde Meta o espera el primer lead.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-line text-muted">
+                <tr>
+                  <th className="px-2 py-2">Form ID</th>
+                  <th className="px-2 py-2">Nombre</th>
+                  <th className="px-2 py-2">Área</th>
+                  <th className="px-2 py-2">Sync</th>
+                </tr>
+              </thead>
+              <tbody>
+                {routes.map((row) => (
+                  <tr
+                    key={row.form_id}
+                    className="border-b border-line last:border-0"
+                  >
+                    <td className="px-2 py-2 font-mono text-xs">
+                      {row.form_id}
+                    </td>
+                    <td className="px-2 py-2">
+                      {row.form_name || '—'}
+                      {row.area_locked ? (
+                        <span className="ml-2 text-xs text-muted">manual</span>
+                      ) : null}
+                    </td>
+                    <td className="px-2 py-2">
+                      <select
+                        className="rounded-lg border border-line bg-bg px-2 py-1"
+                        value={row.area}
+                        disabled={routeBusyId === row.form_id}
+                        onChange={(e) =>
+                          void onRouteAreaChange(row.form_id, e.target.value)
+                        }
+                      >
+                        {ROUTE_AREA_OPTIONS.map((o) => (
+                          <option key={o.slug} value={o.slug}>
+                            {o.label}
+                          </option>
+                        ))}
+                        {!ROUTE_AREA_OPTIONS.some((o) => o.slug === row.area) ? (
+                          <option value={row.area}>{row.area}</option>
+                        ) : null}
+                      </select>
+                    </td>
+                    <td className="px-2 py-2 text-xs text-muted">
+                      {row.last_synced_at
+                        ? formatDateTime(row.last_synced_at)
+                        : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <form
         onSubmit={onBackfill}
@@ -99,7 +235,7 @@ export function MetaFormsPage() {
       </form>
 
       <section className="rounded-xl border border-line bg-surface-strong p-4">
-        <h2 className="mb-3 font-medium">Formularios</h2>
+        <h2 className="mb-3 font-medium">Formularios (área actual)</h2>
         {forms.length === 0 ? (
           <p className="text-sm text-muted">Ninguno aún.</p>
         ) : (
@@ -135,7 +271,10 @@ export function MetaFormsPage() {
               </thead>
               <tbody>
                 {leads.map((lead) => (
-                  <tr key={lead.id} className="border-b border-line last:border-0">
+                  <tr
+                    key={lead.id}
+                    className="border-b border-line last:border-0"
+                  >
                     <td className="px-2 py-2">
                       {lead.contacts ? (
                         <Link

@@ -249,6 +249,21 @@ model meta_lead_forms {
   @@index([area], map: "idx_meta_lead_forms_area")
 }
 
+/// Mapa Instant Form (form_id) → área Mali. Sync Graph / reglas por nombre.
+model meta_lead_form_routes {
+  id             Int       @id @default(autoincrement())
+  form_id        String    @unique(map: "meta_lead_form_routes_form_uq") @db.VarChar(64)
+  area           String    @db.VarChar(32)
+  form_name      String?   @db.VarChar(200)
+  page_id        String?   @db.VarChar(64)
+  area_locked    Boolean   @default(false)
+  last_synced_at DateTime? @db.Timestamptz(6)
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([area], map: "idx_meta_lead_form_routes_area")
+}
+
 model meta_leadgen_leads {
   id                 Int              @id @default(autoincrement())
   area               String           @db.VarChar(32)

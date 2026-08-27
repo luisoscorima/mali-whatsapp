@@ -23,27 +23,63 @@ type MetaAdsListSidebarProps = {
 export function MetaAdsListSidebar({ selectedId }: MetaAdsListSidebarProps) {
   const [ads, setAds] = useState<MetaAdListItem[] | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
+  const [syncBusy, setSyncBusy] = useState(false)
+
+  async function reload() {
+    const result = await apiClient.get<MetaAdListItem[]>('/api/meta-ads')
+    if (!result.ok) {
+      notify.error(result.error)
+      setLoadFailed(true)
+      setAds([])
+      return
+    }
+    setAds(result.data)
+    setLoadFailed(false)
+  }
 
   useEffect(() => {
-    void apiClient.get<MetaAdListItem[]>('/api/meta-ads').then((result) => {
-      if (!result.ok) {
-        notify.error(result.error)
-        setLoadFailed(true)
-        setAds([])
-        return
-      }
-      setAds(result.data)
-      setLoadFailed(false)
-    })
+    void reload()
   }, [])
+
+  async function onSyncNames() {
+    setSyncBusy(true)
+    const result = await apiClient.post<{
+      checked: number
+      updated: number
+      failed: number
+      skipped: number
+    }>('/api/meta-ads/sync-names', {})
+    setSyncBusy(false)
+    if (!result.ok) {
+      notify.error(result.error)
+      return
+    }
+    const { updated, failed, skipped, checked } = result.data
+    notify.success(
+      `Nombres: ${updated} actualizados · ${checked} revisados` +
+        (failed ? ` · ${failed} sin nombre en Meta` : '') +
+        (skipped ? ` · ${skipped} omitidos` : ''),
+    )
+    void reload()
+  }
 
   return (
     <WaSidebar
       title="Anuncios"
       filters={
-        <p className="px-3 pb-2 text-xs text-muted">
-          Leads desde Click-to-WhatsApp en Facebook o Instagram.
-        </p>
+        <div className="space-y-2 px-3 pb-2">
+          <p className="text-xs text-muted">
+            Leads desde Click-to-WhatsApp en Facebook o Instagram.
+          </p>
+          <button
+            type="button"
+            disabled={syncBusy || !ads?.length}
+            onClick={() => void onSyncNames()}
+            className="w-full rounded-lg border border-line bg-bg px-2 py-1.5 text-xs disabled:opacity-60"
+          >
+            {syncBusy ? 'Sincronizando…' : 'Sincronizar nombres desde Meta'}
+          </button>
+        </div>
       }
     >
       {!ads ? (

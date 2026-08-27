@@ -16,6 +16,13 @@ WhatsApp **reemplaza el Excel** de leads. ONE **no** es un segundo CRM de prospe
 | Acción del usuario | Abre WhatsApp y escribe | Llena formulario en FB/IG |
 | Ingestión | Webhook WA `referral` | Webhook Page `leadgen` + Graph `GET /{leadgen_id}` |
 | Canal en CRM | `meta_ctwa` | `meta_lead_form` |
+| **Área Mali** | Por **`phone_number_id`** de la línea WA (Educación / CA / EP) | Por **`form_id`** → tabla `meta_lead_form_routes` (reglas de nombre del form; sync Graph en `/leads/meta-forms`) |
+
+Misma Página Facebook para CA y EP: el Page ID **no** separa áreas. Convención de nombres:
+
+- `Cursos de Arte…` → `educacion_ca`
+- `[FORM EP]…` → `educacion_ep`
+- resto → `educacion`
 
 ## Modelo en WhatsApp
 
@@ -25,6 +32,7 @@ WhatsApp **reemplaza el Excel** de leads. ONE **no** es un segundo CRM de prospe
 | `contact_origins` | Evento/touch de captura (verdad del lead) |
 | `lead_status_definitions` | Catálogo editable por área |
 | `meta_leadgen_*` / `meta_ctwa_*` | Detalle por canal Meta |
+| `meta_lead_form_routes` | Instant Form `form_id` → área (CA/EP/Educación); override manual bloquea resync |
 | `contact_attributes` | Datos durables de **persona** (PAM, demografía) — **no** origen de campaña |
 
 ### Identidad (match)
@@ -48,3 +56,7 @@ Módulo **`/leads`** (hub por canal + listado). La ruta `/anuncios` ya no existe
 ## App Meta (Lead Ads)
 
 Ver [CONFIGURACION_META.md](../CONFIGURACION_META.md) § Lead Ads / Instant Forms. Caso de uso *Captar clientes potenciales…*; Page token distinto del WhatsApp token. Si no cabe en la app WA → app Marketing aparte.
+
+## Estado de implementación (handoff)
+
+Resumen de lo hecho, pendientes y decisiones: **[LEADS-ESTADO.md](LEADS-ESTADO.md)**.

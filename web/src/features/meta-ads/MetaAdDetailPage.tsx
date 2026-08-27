@@ -104,7 +104,8 @@ export function MetaAdDetailPage() {
       <section className="rounded-xl border border-line bg-surface-strong p-4">
         <h2 className="mb-2 font-medium">Nombre del anuncio</h2>
         <p className="mb-3 text-sm text-muted">
-          Opcional. Más adelante se podrá sincronizar desde la API de Meta Ads.
+          Opcional. Puedes rellenar en lote con «Sincronizar nombres desde Meta»
+          en la lista (solo ids sin nombre; no pisa nombres manuales).
         </p>
         <form onSubmit={onSaveName} className="flex max-w-md flex-col gap-3">
           <label className="text-sm">

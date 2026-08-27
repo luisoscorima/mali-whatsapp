@@ -141,6 +141,7 @@ En Meta Developers, suscribe el webhook a **`message_template_status_update`** a
 1. **Instant Forms:** caso de uso Lead Ads + webhook Page `leadgen` ([CONFIGURACION_META.md § 16](CONFIGURACION_META.md)).
 2. **CTWA:** pauta Click-to-WhatsApp; al llegar `referral` se registra el anuncio y se vincula la conversación.
 3. Operación en **Leads** (`/leads`); ownership en [docs/OWNERSHIP-LEADS.md](docs/OWNERSHIP-LEADS.md).
+4. **Handoff / estado actual:** [docs/LEADS-ESTADO.md](docs/LEADS-ESTADO.md) (rutas form→área, backfill, sync nombres CTWA, pendientes Meta).
 
 La **inversión de la pauta** (spend Ads) no se muestra aquí; el costo en detalle de campaña WA es el del **envío masivo de plantillas** (WABA).
 

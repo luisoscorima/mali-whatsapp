@@ -5,6 +5,7 @@ import {
   Param,
   ParseIntPipe,
   Patch,
+  Post,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -12,7 +13,11 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
 import { assertCanManageLeads } from '../auth/permission.util';
-import type { MetaCtwaAdDetail, MetaCtwaAdLead, MetaCtwaAdListItem } from './meta-ads.types';
+import type {
+  MetaCtwaAdDetail,
+  MetaCtwaAdLead,
+  MetaCtwaAdListItem,
+} from './meta-ads.types';
 import { UpdateMetaAdDto } from './dto/update-meta-ad.dto';
 import { MetaAdsService } from './meta-ads.service';
 
@@ -22,9 +27,29 @@ export class MetaAdsController {
   constructor(private readonly metaAdsService: MetaAdsService) {}
 
   @Get()
-  async list(@CurrentUser() user: AuthUser): Promise<ApiResponse<MetaCtwaAdListItem[]>> {
+  async list(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<MetaCtwaAdListItem[]>> {
     assertCanManageLeads(user);
     const data = await this.metaAdsService.list(user.area);
+    return { ok: true, data };
+  }
+
+  @Post('sync-names')
+  async syncNames(
+    @CurrentUser() user: AuthUser,
+  ): Promise<
+    ApiResponse<{
+      checked: number;
+      updated: number;
+      failed: number;
+      skipped: number;
+    }>
+  > {
+    assertCanManageLeads(user);
+    const data = await this.metaAdsService.syncDisplayNamesFromGraph(
+      user.area,
+    );
     return { ok: true, data };
   }
 

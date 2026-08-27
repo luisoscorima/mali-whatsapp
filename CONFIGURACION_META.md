@@ -345,7 +345,10 @@ Esto es **distinto** de CTWA (Click-to-WhatsApp). Los Instant Forms no llegan po
 ### Token y Página
 
 - Usa un **Page access token** de larga duración (no el `whatsapp_token`).
-- En la app (Admin / settings leads): guardar `meta.page_access_token` y `meta.page_id` (por área o global).
+- **Dónde guardarlo (recomendado):** panel **`/admin/meta`** → campos *Page access token (Lead Ads)* y *Page ID (Lead Ads)*.
+- Es **una** Página (`1684299678482303` MALI Educación) → **un** token y **un** Page ID. Pégalos en las áreas **`educacion`**, **`educacion_ca`** y **`educacion_ep`** (mismos valores). No hace falta una variable por área en `.env`.
+- Respaldo opcional en `.env`: `META_PAGE_ACCESS_TOKEN` / `META_PAGE_ID` (prioridad: Admin/BD sobre env). Si solo usas env, el lookup de Página→área puede caer en `ti`.
+- Detalle operativo: [docs/LEADS-ESTADO.md](./docs/LEADS-ESTADO.md) § “Dónde poner el Page token”.
 - Suscribir la Página a la app:
 
 ```bash
@@ -360,6 +363,24 @@ curl -X POST "https://graph.facebook.com/v23.0/{PAGE_ID}/subscribed_apps" \
 2. Objeto **Page** → suscribir campo **`leadgen`**.
 3. Mali procesa el aviso, lee `leadgen_id` y hace `GET /{leadgen_id}` con el Page token para obtener `field_data`.
 
+### Enrutado a área (CA / EP / Educación)
+
+La Página de Facebook es **una** (MALI Educación). El área Mali se decide por **`form_id`**, no por el Page ID:
+
+| Nombre del Instant Form | Área |
+|-------------------------|------|
+| Empieza con `Cursos de Arte` | `educacion_ca` |
+| Contiene `[FORM EP]` o `FORM EP` | `educacion_ep` |
+| Resto | `educacion` |
+
+Tabla **`meta_lead_form_routes`**: `form_id` → `area` (+ nombre). Lookup local en cada lead.
+
+- **Sincronizar forms** en `/leads/meta-forms`: Graph `GET /{page-id}/leadgen_forms` actualiza nombres y reaplica reglas (no pisa rutas marcadas como **manual**).
+- Si llega un `form_id` nuevo y hay token: se pide el nombre a Graph una vez y se guarda la ruta.
+- Seeds iniciales (Sheets): form `1678089499945954` → CA; `1577538393930907` → EP.
+
+Contraste: **CTWA** enruta por `phone_number_id` de la línea WA (902… CA, 922… EP).
+
 ### Bulk / histórico
 
 ```bash
@@ -368,4 +389,4 @@ curl -G "https://graph.facebook.com/v23.0/{FORM_ID}/leads" \
   -d "fields=created_time,id,ad_id,form_id,field_data"
 ```
 
-En la API Mali: endpoint de backfill por `form_id` (área + token configurado).
+En la API Mali: backfill por `form_id` (resuelve área vía rutas) y `POST /api/leads/meta-forms/sync-forms`.
