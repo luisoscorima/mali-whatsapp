@@ -78,7 +78,8 @@ Upsert de contacto desde producto (`PamRegistration`).
     "mp_status": "approved",
     "expiry": "2027-07-21",
     "payment_id": "clx..."
-  }
+  },
+  "segment_slugs": ["amigo"]
 }
 ```
 
@@ -86,6 +87,24 @@ Upsert de contacto desde producto (`PamRegistration`).
 - Match: `(area, phone)`.
 - Columnas nativas: `name`, `last_name`, `email`, `dni` (opcional).
 - Atributos se upsertan en `contact_attributes` (incl. `mali_one_id` si hay `external_id`).
+- `segment_slugs`: asigna segmentos del contacto (p. ej. plan PAM → `amigo`, `circulo`, `comunidad`).
+
+### `POST /api/crm/send-template`
+
+Envía plantilla WhatsApp **APPROVED** (p. ej. bienvenida PAM desde MALI ONE).
+
+```json
+{
+  "area": "pam",
+  "phone": "51999888777",
+  "template_name": "bienvenida_pam",
+  "idempotency_key": "clx...",
+  "body_params": ["Ana"]
+}
+```
+
+- Idempotente por `idempotency_key` (attr `pam_wa_template_sent` en contacto).
+- Requiere contacto existente con ese teléfono en el área.
 
 ### `PATCH /api/crm/contacts/:id?area=pam`
 

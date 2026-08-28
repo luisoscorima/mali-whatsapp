@@ -12,7 +12,14 @@ import {
   firstSegmentForLegacyColumn,
   normalizePhone,
 } from '../contacts/contacts-validation.utils';
+import { buildCampaignMessagePreview } from '../campaigns/campaign-message-preview.util';
+import { persistCampaignChatMessage } from '../campaigns/campaign-chat-message.util';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  buildTemplateDefinition,
+  buildWhatsappGraphComponents,
+} from '../templates/template-definition.util';
+import { sendTemplateWithComponents } from '../templates/whatsapp-meta.util';
 import { CrmAudienceQueryDto } from './dto/crm-audience-query.dto';
 import type {
   CrmCreateAttributeDefinitionDto,
@@ -20,6 +27,7 @@ import type {
 } from './dto/crm-attribute-definition.dto';
 import type { CrmPatchContactDto } from './dto/crm-patch-contact.dto';
 import { CrmSyncContactDto } from './dto/crm-sync-contact.dto';
+import type { CrmSendTemplateDto } from './dto/crm-send-template.dto';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -74,6 +82,15 @@ export type CrmSyncResult = {
   created: boolean;
 };
 
+export type CrmSendTemplateResult = {
+  skipped: boolean;
+  reason?: string;
+  message_id?: string | null;
+  campaign_id?: number;
+};
+
+const PAM_WA_IDEMPOTENCY_ATTR = 'pam_wa_template_sent';
+
 @Injectable()
 export class CrmService {
   private readonly logger = new Logger(CrmService.name);
@@ -113,6 +130,11 @@ export class CrmService {
       where: { area, phone, replaced_at: null },
     });
 
+    let segmentSlugs = dto.segment_slugs;
+    if (segmentSlugs?.length) {
+      segmentSlugs = await this.filterValidSegmentSlugs(area, segmentSlugs);
+    }
+
     const contact = await this.prisma.$transaction(async (tx) => {
       const row = existing
         ? await tx.contacts.update({
@@ -128,6 +150,9 @@ export class CrmService {
               replaced_by_contact_id: null,
               replaced_at: null,
               replacement_reason: null,
+              ...(segmentSlugs
+                ? { segment: firstSegmentForLegacyColumn(segmentSlugs) }
+                : {}),
               updated_at: new Date(),
             },
           })
@@ -142,9 +167,15 @@ export class CrmService {
               opt_in,
               opt_in_email,
               active: true,
-              segment: null,
+              segment: segmentSlugs
+                ? firstSegmentForLegacyColumn(segmentSlugs)
+                : null,
             },
           });
+
+      if (segmentSlugs) {
+        await this.applyContactSegmentsTx(tx, row.id, area, segmentSlugs);
+      }
 
       for (const [attr_key, attr_value] of Object.entries(attributes)) {
         await tx.contact_attributes.upsert({
@@ -175,6 +206,200 @@ export class CrmService {
       email: contact.email,
       created: !existing,
     };
+  }
+
+  /**
+   * Envía plantilla WhatsApp aprobada (p. ej. bienvenida PAM desde MALI ONE).
+   * Idempotente por `idempotency_key` (attr `pam_wa_template_sent` en contacto).
+   */
+  async sendProductTemplate(
+    dto: CrmSendTemplateDto,
+  ): Promise<CrmSendTemplateResult> {
+    const area = this.normalizeArea(dto.area ?? 'pam');
+    const phone = normalizePhone(dto.phone);
+    if (!E164_NO_PLUS_REGEX.test(phone)) {
+      throw new BadRequestException(
+        'Teléfono inválido. Usa formato E.164 sin +',
+      );
+    }
+
+    const templateName = String(dto.template_name ?? '').trim();
+    if (!templateName) {
+      throw new BadRequestException('template_name requerido');
+    }
+
+    const contact = await this.prisma.contacts.findFirst({
+      where: { area, phone, replaced_at: null, active: true },
+      select: { id: true, name: true, phone: true },
+    });
+    if (!contact?.phone) {
+      throw new NotFoundException(
+        'Contacto no encontrado para enviar plantilla',
+      );
+    }
+
+    const idempotencyKey = String(dto.idempotency_key ?? '').trim();
+    if (idempotencyKey) {
+      const sent = await this.prisma.contact_attributes.findFirst({
+        where: {
+          contact_id: contact.id,
+          attr_key: PAM_WA_IDEMPOTENCY_ATTR,
+          attr_value: idempotencyKey,
+        },
+      });
+      if (sent) {
+        return { skipped: true, reason: 'already_sent' };
+      }
+    }
+
+    const templateRow = await this.prisma.whatsapp_templates.findFirst({
+      where: { area, name: templateName, status: 'APPROVED' },
+      select: {
+        id: true,
+        name: true,
+        language: true,
+        category: true,
+        status: true,
+        components_json: true,
+        placeholder_aliases_json: true,
+      },
+    });
+    if (!templateRow) {
+      throw new BadRequestException(
+        `Plantilla "${templateName}" no encontrada o no aprobada en ${area}`,
+      );
+    }
+
+    const def = buildTemplateDefinition(templateRow);
+    const staticParams = {
+      headerParams: (dto.header_params ?? []).map((v) => String(v).trim()),
+      bodyParams: (dto.body_params ?? [contact.name]).map((v) =>
+        String(v).trim(),
+      ),
+      buttonParams: [] as string[],
+      headerMediaUrl: '',
+    };
+    const components = buildWhatsappGraphComponents(def, staticParams);
+    const preview = buildCampaignMessagePreview(
+      def,
+      templateRow.components_json,
+      staticParams,
+    );
+
+    const campaign = await this.prisma.campaigns.create({
+      data: {
+        area,
+        segment: 'product_automation',
+        template_name: templateRow.name,
+        message_text: preview.bodyText || preview.headerText || templateRow.name,
+        status: 'sending',
+        total_recipients: 1,
+        send_mode: 'direct',
+        campaign_payload: {
+          source: 'crm_product_template',
+          contact_id: contact.id,
+          template_sync_id: templateRow.id,
+          idempotency_key: idempotencyKey || null,
+        },
+      },
+      select: { id: true },
+    });
+
+    let messageId: string | null = null;
+    let logStatus = 'failed';
+    let apiResponse: unknown = null;
+
+    try {
+      const result = await sendTemplateWithComponents({
+        to: phone,
+        templateName: templateRow.name,
+        languageCode: templateRow.language,
+        components,
+        area,
+      });
+      messageId = result.messages?.[0]?.id ?? null;
+      logStatus = messageId ? 'sent' : 'failed';
+      apiResponse = result;
+    } catch (error) {
+      apiResponse = {
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+
+    await this.prisma.campaign_logs.create({
+      data: {
+        campaign_id: campaign.id,
+        contact_id: contact.id,
+        phone,
+        whatsapp_message_id: messageId,
+        status: logStatus,
+        response: apiResponse as Prisma.InputJsonValue,
+      },
+    });
+
+    await this.prisma.campaigns.update({
+      where: { id: campaign.id },
+      data: { status: logStatus === 'sent' ? 'completed' : 'failed' },
+    });
+
+    if (logStatus === 'sent') {
+      await persistCampaignChatMessage(this.prisma, {
+        area,
+        campaignId: campaign.id,
+        templateName: templateRow.name,
+        contactId: contact.id,
+        phone,
+        waMessageId: messageId,
+        preview,
+        apiResponse,
+      });
+
+      await this.prisma.conversations.upsert({
+        where: {
+          area_phone: { area, phone },
+        },
+        create: {
+          area,
+          phone,
+          contact_id: contact.id,
+          status: 'human',
+        },
+        update: {
+          contact_id: contact.id,
+          updated_at: new Date(),
+        },
+      });
+
+      if (idempotencyKey) {
+        await this.prisma.contact_attributes.upsert({
+          where: {
+            contact_id_attr_key: {
+              contact_id: contact.id,
+              attr_key: PAM_WA_IDEMPOTENCY_ATTR,
+            },
+          },
+          create: {
+            contact_id: contact.id,
+            attr_key: PAM_WA_IDEMPOTENCY_ATTR,
+            attr_value: idempotencyKey,
+          },
+          update: {
+            attr_value: idempotencyKey,
+            updated_at: new Date(),
+          },
+        });
+      }
+
+      return {
+        skipped: false,
+        message_id: messageId,
+        campaign_id: campaign.id,
+      };
+    }
+
+    throw new BadRequestException(
+      'No se pudo enviar la plantilla WhatsApp. Revisa logs de campaña.',
+    );
   }
 
   async listAudience(
@@ -501,12 +726,7 @@ export class CrmService {
 
     let segmentSlugs = dto.segment_slugs;
     if (segmentSlugs) {
-      const valid = await this.prisma.segment_definitions.findMany({
-        where: { area, slug: { in: segmentSlugs } },
-        select: { slug: true },
-      });
-      const validSet = new Set(valid.map((s) => s.slug));
-      segmentSlugs = segmentSlugs.filter((s) => validSet.has(s));
+      segmentSlugs = await this.filterValidSegmentSlugs(area, segmentSlugs);
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -531,16 +751,7 @@ export class CrmService {
       });
 
       if (segmentSlugs) {
-        await tx.contact_segments.deleteMany({ where: { contact_id: id } });
-        if (segmentSlugs.length > 0) {
-          await tx.contact_segments.createMany({
-            data: segmentSlugs.map((segment_slug) => ({
-              contact_id: id,
-              area,
-              segment_slug,
-            })),
-          });
-        }
+        await this.applyContactSegmentsTx(tx, id, area, segmentSlugs);
       }
 
       for (const [attr_key, attr_value] of Object.entries(attributes)) {
@@ -636,5 +847,35 @@ export class CrmService {
       out[k] = String(value ?? '').trim().slice(0, 500);
     }
     return out;
+  }
+
+  private async filterValidSegmentSlugs(
+    area: string,
+    segmentSlugs: string[],
+  ): Promise<string[]> {
+    const valid = await this.prisma.segment_definitions.findMany({
+      where: { area, slug: { in: segmentSlugs } },
+      select: { slug: true },
+    });
+    const validSet = new Set(valid.map((s) => s.slug));
+    return segmentSlugs.filter((s) => validSet.has(s));
+  }
+
+  private async applyContactSegmentsTx(
+    tx: Prisma.TransactionClient,
+    contactId: number,
+    area: string,
+    segmentSlugs: string[],
+  ): Promise<void> {
+    await tx.contact_segments.deleteMany({ where: { contact_id: contactId } });
+    if (segmentSlugs.length > 0) {
+      await tx.contact_segments.createMany({
+        data: segmentSlugs.map((segment_slug) => ({
+          contact_id: contactId,
+          area,
+          segment_slug,
+        })),
+      });
+    }
   }
 }

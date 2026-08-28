@@ -22,6 +22,7 @@ import { CrmEnsureAttributeDefinitionsDto } from './dto/crm-ensure-attribute-def
 import { CrmIngestOriginDto } from './dto/crm-ingest-origin.dto';
 import { CrmPatchContactDto } from './dto/crm-patch-contact.dto';
 import { CrmSyncContactDto } from './dto/crm-sync-contact.dto';
+import { CrmSendTemplateDto } from './dto/crm-send-template.dto';
 import { LeadsService } from '../leads/leads.service';
 import type { LeadChannel } from '../leads/leads.types';
 import { BadRequestException } from '@nestjs/common';
@@ -39,6 +40,13 @@ export class CrmController {
   @Post('sync')
   async sync(@Body() body: CrmSyncContactDto) {
     const data = await this.crm.syncFromProduct(body);
+    return { ok: true, data };
+  }
+
+  /** Plantilla WhatsApp transaccional (p. ej. bienvenida PAM desde MALI ONE). */
+  @Post('send-template')
+  async sendTemplate(@Body() body: CrmSendTemplateDto) {
+    const data = await this.crm.sendProductTemplate(body);
     return { ok: true, data };
   }
 

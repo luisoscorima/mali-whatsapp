@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsBoolean,
   IsEmail,
   IsObject,
@@ -58,4 +59,10 @@ export class CrmSyncContactDto {
   @IsString()
   @MaxLength(64)
   external_id?: string;
+
+  /** Segmentos del contacto (ej. amigo, circulo, comunidad en área pam). */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  segment_slugs?: string[];
 }
