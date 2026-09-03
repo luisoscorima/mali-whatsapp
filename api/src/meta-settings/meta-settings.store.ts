@@ -162,6 +162,14 @@ export function getWabaIdOverrideForArea(area: unknown): string {
   return String(process.env[envKeys.waba] || fallbackWaba).trim();
 }
 
+/** Display phone (+51…) guardado en BD tras sync Graph; vacío si aún no se sincronizó. */
+export function getStoredDisplayPhoneNumber(area: unknown): string {
+  const norm = normalizeArea(area);
+  return String(
+    cache[norm]?.[META_SETTING_KEYS.displayPhoneNumber] || '',
+  ).trim();
+}
+
 export function getStoredMetaRows(): MetaCache {
   return cache;
 }

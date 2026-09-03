@@ -1,11 +1,32 @@
-import { Global, Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import type { AuthUser } from '../auth/auth.types';
 import { AuditEvent } from '../audit/audit-events';
 import { AuditLogService } from '../audit/audit-log.service';
-import { BUSINESS_AREAS } from '../config/areas';
+import {
+  AREA_LABELS,
+  BUSINESS_AREAS,
+  isValidBusinessArea,
+  normalizeArea,
+  type BusinessArea,
+} from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  fetchDisplayPhoneNumber,
+  getWhatsAppCredentialsForArea,
+} from '../templates/whatsapp-meta.util';
 import { META_SETTING_KEYS } from './meta-settings.keys';
-import { setMetaSettingsCache, getStoredMetaRows } from './meta-settings.store';
+import {
+  getStoredDisplayPhoneNumber,
+  getStoredMetaRows,
+  setMetaSettingsCache,
+} from './meta-settings.store';
+
+export type AreaLineInfo = {
+  area: BusinessArea;
+  label: string;
+  phone_number_id: string;
+  display_phone_number: string | null;
+};
 
 @Injectable()
 export class MetaSettingsService implements OnModuleInit {
@@ -16,6 +37,40 @@ export class MetaSettingsService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     await this.refresh();
+    // No bloquear el arranque: rellena display_phone_number faltantes en background.
+    void this.syncMissingDisplayPhoneNumbersOnBoot();
+  }
+
+  /** Solo áreas con token+PID y sin display en BD (números ya existentes). */
+  private async syncMissingDisplayPhoneNumbersOnBoot(): Promise<void> {
+    const missing = BUSINESS_AREAS.filter((area) => {
+      const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
+      return (
+        !!token &&
+        !!phoneNumberId &&
+        !getStoredDisplayPhoneNumber(area)
+      );
+    });
+    if (!missing.length) return;
+
+    try {
+      await this.syncDisplayPhoneNumbersFromGraph(missing);
+      console.info(
+        JSON.stringify({
+          level: 'info',
+          message: 'display_phone_number sincronizado al arranque',
+          areas: missing,
+        }),
+      );
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          level: 'warn',
+          message: 'Falló sync de display_phone_number al arranque',
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
   }
 
   async refresh(): Promise<void> {
@@ -40,6 +95,92 @@ export class MetaSettingsService implements OnModuleInit {
       where: { area_key: { area, key } },
       create: { area, key, value, updated_at: new Date() },
       update: { value, updated_at: new Date() },
+    });
+  }
+
+  /**
+   * Consulta Graph una vez por área con credenciales y guarda
+   * meta.display_phone_number en BD. Fallos de Meta no abortan el save.
+   */
+  async syncDisplayPhoneNumbersFromGraph(
+    areas: readonly BusinessArea[] = BUSINESS_AREAS,
+  ): Promise<void> {
+    const updates: { area: BusinessArea; display: string }[] = [];
+
+    await Promise.all(
+      areas.map(async (area) => {
+        const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
+        if (!phoneNumberId) {
+          updates.push({ area, display: '' });
+          return;
+        }
+        if (!token) return;
+
+        try {
+          const display = await fetchDisplayPhoneNumber(phoneNumberId, token);
+          if (display) {
+            updates.push({ area, display });
+          }
+        } catch (err) {
+          console.warn(
+            JSON.stringify({
+              level: 'warn',
+              message: 'No se pudo sincronizar display_phone_number desde Graph',
+              area,
+              phone_number_id: phoneNumberId,
+              error: err instanceof Error ? err.message : String(err),
+            }),
+          );
+        }
+      }),
+    );
+
+    if (!updates.length) return;
+
+    await Promise.all(
+      updates.map(({ area, display }) =>
+        this.upsertSetting(
+          area,
+          META_SETTING_KEYS.displayPhoneNumber,
+          display,
+        ),
+      ),
+    );
+    await this.refresh();
+  }
+
+  /** Líneas WA de las áreas indicadas; si falta display en BD, rellena desde Graph una vez. */
+  async listAreaLines(areas: BusinessArea[]): Promise<AreaLineInfo[]> {
+    const unique = [
+      ...new Set(
+        areas
+          .map((a) => normalizeArea(a))
+          .filter((a): a is BusinessArea => isValidBusinessArea(a)),
+      ),
+    ];
+
+    const missing = unique.filter((area) => {
+      const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
+      return (
+        !!token &&
+        !!phoneNumberId &&
+        !getStoredDisplayPhoneNumber(area)
+      );
+    });
+
+    if (missing.length) {
+      await this.syncDisplayPhoneNumbersFromGraph(missing);
+    }
+
+    return unique.map((area) => {
+      const { phoneNumberId } = getWhatsAppCredentialsForArea(area);
+      const display = getStoredDisplayPhoneNumber(area);
+      return {
+        area,
+        label: AREA_LABELS[area],
+        phone_number_id: phoneNumberId || '',
+        display_phone_number: display || null,
+      };
     });
   }
 
@@ -75,6 +216,10 @@ export class MetaSettingsService implements OnModuleInit {
 
     for (const area of BUSINESS_AREAS) {
       const row = input.areas?.[area] ?? {};
+      const prevPid = String(
+        getStoredMetaRows()[area]?.[META_SETTING_KEYS.phoneNumberId] || '',
+      ).trim();
+      const nextPid = String(row.phone_number_id ?? '').trim();
       await this.upsertSetting(
         area,
         META_SETTING_KEYS.whatsappToken,
@@ -92,9 +237,17 @@ export class MetaSettingsService implements OnModuleInit {
         row.page_access_token,
       );
       await this.upsertSetting(area, META_SETTING_KEYS.pageId, row.page_id);
+      if (prevPid !== nextPid) {
+        await this.upsertSetting(
+          area,
+          META_SETTING_KEYS.displayPhoneNumber,
+          '',
+        );
+      }
     }
 
     await this.refresh();
+    await this.syncDisplayPhoneNumbersFromGraph();
 
     if (actor) {
       await this.auditLog.write({

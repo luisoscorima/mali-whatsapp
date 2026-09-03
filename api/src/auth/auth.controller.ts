@@ -16,6 +16,10 @@ import { LoginDto } from './dto/login.dto';
 import { SwitchAreaDto } from './dto/switch-area.dto';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import {
+  MetaSettingsService,
+  type AreaLineInfo,
+} from '../meta-settings/meta-settings.service';
 import { AuthService } from './auth.service';
 import type { ApiResponse, AuthUser } from './auth.types';
 
@@ -24,6 +28,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly config: AppConfigService,
+    private readonly metaSettings: MetaSettingsService,
   ) {}
 
   @Post('auth/login')
@@ -140,6 +145,17 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: AuthUser): ApiResponse<AuthUser> {
     return { ok: true, data: user };
+  }
+
+  @Get('account/area-lines')
+  @UseGuards(JwtAuthGuard)
+  async areaLines(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<AreaLineInfo[]>> {
+    const areas =
+      user.allowedAreas.length > 0 ? user.allowedAreas : [user.area];
+    const data = await this.metaSettings.listAreaLines(areas);
+    return { ok: true, data };
   }
 
   @Post('account/switch-area')

@@ -152,6 +152,22 @@ export async function resolveWabaId(
   return fetchWabaIdFromPhoneNumberId(phoneNumberId, token);
 }
 
+/** Número E.164/formato Meta del Phone Number ID (p. ej. "+51 902 043 388"). */
+export async function fetchDisplayPhoneNumber(
+  phoneNumberId: string,
+  token: string,
+): Promise<string | null> {
+  const idStr = String(phoneNumberId || '').trim();
+  if (!idStr || !token) return null;
+  const data = await graphGet<{ display_phone_number?: string }>(
+    idStr,
+    token,
+    { fields: 'display_phone_number' },
+  );
+  const display = String(data?.display_phone_number ?? '').trim();
+  return display || null;
+}
+
 export type MetaMessageTemplate = {
   id?: string;
   name?: string;

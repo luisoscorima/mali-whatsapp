@@ -1,6 +1,7 @@
 import { clearToken, getToken, setToken } from './token';
 import type {
   ApiResponse,
+  AreaLineInfo,
   AuthUser,
   HealthResult,
   LoginResult,
@@ -277,6 +278,10 @@ export const apiClient = {
     });
   },
 
+  getAreaLines(): Promise<ApiResponse<AreaLineInfo[]>> {
+    return request<AreaLineInfo[]>('/api/account/area-lines');
+  },
+
   async getHealth(): Promise<HealthResult> {
     const res = await fetch('/health');
     const body = (await res.json()) as HealthResult;
@@ -284,4 +289,4 @@ export const apiClient = {
   },
 };
 
-export type { ApiResponse, AuthUser, LoginResult, HealthResult };
+export type { ApiResponse, AuthUser, AreaLineInfo, LoginResult, HealthResult };

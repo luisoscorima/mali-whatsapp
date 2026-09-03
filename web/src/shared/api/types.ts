@@ -43,3 +43,10 @@ export type HealthResult = {
   db?: string;
   error?: string;
 };
+
+export type AreaLineInfo = {
+  area: string;
+  label: string;
+  phone_number_id: string;
+  display_phone_number: string | null;
+};

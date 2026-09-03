@@ -1,9 +1,14 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { apiClient, type AuthUser } from '@/shared/api'
+import { apiClient, type AreaLineInfo, type AuthUser } from '@/shared/api'
 import { areaLabel } from '@/features/admin/areaLabels'
 import { PalettePicker } from '@/shared/theme/PalettePicker'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/shadcn/popover'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/shared/ui/shadcn/tooltip'
 
 type WaAccountMenuProps = {
   user: AuthUser
@@ -13,20 +18,29 @@ type WaAccountMenuProps = {
 export function WaAccountMenu({ user, onUserUpdate }: WaAccountMenuProps) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
-  const [pendingArea, setPendingArea] = useState(user.area)
-  const [switching, setSwitching] = useState(false)
+  const [switching, setSwitching] = useState<string | null>(null)
+  const [areaLines, setAreaLines] = useState<AreaLineInfo[]>([])
   const railInitial = user.email ? user.email.charAt(0).toUpperCase() : '?'
   const showAreaSwitch = user.isMaster || user.allowedAreas.length > 1
 
   useEffect(() => {
-    setPendingArea(user.area)
-  }, [user.area])
+    if (!open || !showAreaSwitch) return
+    let cancelled = false
+    void (async () => {
+      const result = await apiClient.getAreaLines()
+      if (cancelled || !result.ok) return
+      setAreaLines(result.data)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [open, showAreaSwitch])
 
-  async function onConfirmAreaChange() {
-    if (!pendingArea || pendingArea === user.area) return
-    setSwitching(true)
-    const result = await apiClient.switchArea(pendingArea)
-    setSwitching(false)
+  async function onSelectArea(area: string) {
+    if (!area || area === user.area || switching) return
+    setSwitching(area)
+    const result = await apiClient.switchArea(area)
+    setSwitching(null)
     if (result.ok) {
       onUserUpdate?.(result.data.user)
       setOpen(false)
@@ -39,6 +53,8 @@ export function WaAccountMenu({ user, onUserUpdate }: WaAccountMenuProps) {
     await apiClient.logout()
     navigate('/login', { replace: true })
   }
+
+  const linesByArea = new Map(areaLines.map((line) => [line.area, line]))
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -82,26 +98,58 @@ export function WaAccountMenu({ user, onUserUpdate }: WaAccountMenuProps) {
 
         {showAreaSwitch ? (
           <div className="border-b border-line px-4 py-3">
-            <label className="block text-xs font-medium text-muted">Cambiar área</label>
-            <select
-              value={pendingArea}
-              onChange={(e) => setPendingArea(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-line bg-input px-2 py-1.5 text-sm"
-            >
-              {user.allowedAreas.map((area) => (
-                <option key={area} value={area}>
-                  {areaLabel(area)}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              disabled={switching || pendingArea === user.area}
-              onClick={() => void onConfirmAreaChange()}
-              className="small-btn primary mt-2 w-full"
-            >
-              {switching ? 'Cambiando…' : 'Cambiar área'}
-            </button>
+            <p className="mb-1.5 text-xs font-medium text-muted">Cambiar área</p>
+            <ul className="flex flex-col gap-0.5">
+              {user.allowedAreas.map((area) => {
+                const line = linesByArea.get(area)
+                const label = line?.label || areaLabel(area)
+                const phone = line?.display_phone_number?.trim() || ''
+                const phoneId = line?.phone_number_id?.trim() || ''
+                const isCurrent = area === user.area
+                const isBusy = switching === area
+                const tipLines = [
+                  label,
+                  phone || null,
+                  phoneId ? `ID: ${phoneId}` : null,
+                ].filter(Boolean)
+
+                return (
+                  <li key={area}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          disabled={!!switching || isCurrent}
+                          onClick={() => void onSelectArea(area)}
+                          className={
+                            isCurrent
+                              ? 'w-full rounded-md bg-accent-soft px-2 py-1.5 text-left text-sm'
+                              : 'w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent-soft disabled:opacity-60'
+                          }
+                        >
+                          <span className="block font-medium">{label}</span>
+                          {phone ? (
+                            <span className="mt-0.5 block text-xs text-muted">
+                              {phone}
+                            </span>
+                          ) : null}
+                          {isBusy ? (
+                            <span className="mt-0.5 block text-xs text-muted">
+                              Cambiando…
+                            </span>
+                          ) : null}
+                        </button>
+                      </TooltipTrigger>
+                      {tipLines.length > 1 ? (
+                        <TooltipContent side="right" className="max-w-xs whitespace-pre-line">
+                          {tipLines.join('\n')}
+                        </TooltipContent>
+                      ) : null}
+                    </Tooltip>
+                  </li>
+                )
+              })}
+            </ul>
           </div>
         ) : null}
 
