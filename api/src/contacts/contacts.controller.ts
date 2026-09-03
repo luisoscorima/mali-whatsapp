@@ -25,6 +25,7 @@ import { ContactsService } from './contacts.service';
 import type {
   ContactDetail,
   ContactsFilterOptions,
+  ContactsImportPreview,
   ContactsImportResult,
   ContactsListResult,
   ContactSummary,
@@ -73,6 +74,30 @@ export class ContactsController {
       'attachment; filename="contactos-ejemplo.xlsx"',
     );
     res.send(buffer);
+  }
+
+  @Post('import/preview')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: MAX_CSV_BYTES },
+    }),
+  )
+  async importPreview(
+    @CurrentUser() user: AuthUser,
+    @UploadedFile() file: { buffer: Buffer; originalname: string } | undefined,
+  ): Promise<ApiResponse<ContactsImportPreview>> {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('Selecciona un archivo CSV o Excel');
+    }
+    if (!isImportFileName(file.originalname ?? '')) {
+      throw new BadRequestException('Solo archivos .csv o .xlsx');
+    }
+    const data = await this.contactsService.previewImport(
+      user.area,
+      file.buffer,
+      file.originalname,
+    );
+    return { ok: true, data };
   }
 
   @Post('import')

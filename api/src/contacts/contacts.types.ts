@@ -117,4 +117,16 @@ export type ContactsImportResult = {
   duplicate_phone_examples: string[];
 };
 
+export type ContactsImportPreview = {
+  ready_to_import: number;
+  will_update: number;
+  will_create: number;
+  duplicate_emails_skipped: number;
+  parse_errors: number;
+  error_samples: Array<{ line: number; message: string }>;
+  duplicate_phones_in_file: number;
+  duplicate_rows_in_file: number;
+  duplicate_phone_examples: string[];
+};
+
 export type { ContactSummary } from './contact-analytics.util';

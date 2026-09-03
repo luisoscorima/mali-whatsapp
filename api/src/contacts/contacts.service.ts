@@ -994,6 +994,84 @@ export class ContactsService {
     return this.getById(area, id);
   }
 
+  async previewImport(
+    area: string,
+    buffer: Buffer,
+    filename: string,
+  ): Promise<import('./contacts.types').ContactsImportPreview> {
+    const segmentSet = await this.getSegmentSlugSet(area);
+    const lower = String(filename ?? '').toLowerCase();
+    const parsed = lower.endsWith('.xlsx')
+      ? parseContactXlsxBuffer(buffer, segmentSet)
+      : parseContactCsvBuffer(buffer, segmentSet);
+
+    if (parsed.rows.length === 0 && parsed.errors.length === 0) {
+      throw new BadRequestException('Archivo sin datos');
+    }
+    if (parsed.rows.length > MAX_CSV_ROWS) {
+      throw new BadRequestException(
+        `Demasiadas filas (${parsed.rows.length}). Máximo ${MAX_CSV_ROWS}`,
+      );
+    }
+
+    const phones = parsed.rows.map((r) => r.phone);
+    const existingContacts = await this.prisma.contacts.findMany({
+      where: { area, phone: { in: phones }, replaced_at: null },
+      select: { phone: true, email: true },
+    });
+    const existingByPhone = new Map(
+      existingContacts.map((c) => [c.phone, c]),
+    );
+
+    let willUpdate = 0;
+    let willCreate = 0;
+    let duplicateEmailsSkipped = 0;
+
+    const allEmails = await this.prisma.contacts.findMany({
+      where: {
+        area,
+        email: {
+          in: parsed.rows
+            .map((r) => r.email)
+            .filter((e): e is string => !!e),
+        },
+        replaced_at: null,
+      },
+      select: { phone: true, email: true },
+    });
+    const emailOwnerPhone = new Map(
+      allEmails.map((c) => [c.email, c.phone]),
+    );
+
+    for (const row of parsed.rows) {
+      const existing = existingByPhone.get(row.phone);
+      if (existing) {
+        willUpdate++;
+      } else {
+        willCreate++;
+      }
+      if (
+        row.email &&
+        emailOwnerPhone.has(row.email) &&
+        emailOwnerPhone.get(row.email) !== row.phone
+      ) {
+        duplicateEmailsSkipped++;
+      }
+    }
+
+    return {
+      ready_to_import: parsed.rows.length,
+      will_update: willUpdate,
+      will_create: willCreate,
+      duplicate_emails_skipped: duplicateEmailsSkipped,
+      parse_errors: parsed.errors.length,
+      error_samples: parsed.errors.slice(0, 10),
+      duplicate_phones_in_file: parsed.duplicate_phones_in_file,
+      duplicate_rows_in_file: parsed.duplicate_rows_in_file,
+      duplicate_phone_examples: parsed.duplicate_phone_examples,
+    };
+  }
+
   async importFromBuffer(
     user: AuthUser,
     buffer: Buffer,
@@ -1063,13 +1141,25 @@ export class ContactsService {
       const existing = await tx.contacts.findFirst({
         where: { area, phone: row.phone, replaced_at: null },
       });
+
+      let safeEmail: string | null | undefined = row.email;
+      if (safeEmail) {
+        const emailOwner = await tx.contacts.findFirst({
+          where: { area, email: safeEmail, replaced_at: null },
+          select: { id: true },
+        });
+        if (emailOwner && emailOwner.id !== existing?.id) {
+          safeEmail = undefined;
+        }
+      }
+
       const contact = existing
         ? await tx.contacts.update({
             where: { id: existing.id },
             data: {
               name: row.name,
               last_name: row.last_name,
-              ...(row.email !== undefined ? { email: row.email } : {}),
+              ...(safeEmail !== undefined ? { email: safeEmail } : {}),
               ...(row.dni !== undefined ? { dni: row.dni } : {}),
               segment: firstSegmentForLegacyColumn(row.segments),
               active: true,
@@ -1084,7 +1174,7 @@ export class ContactsService {
               name: row.name,
               last_name: row.last_name,
               phone: row.phone,
-              email: row.email ?? null,
+              email: safeEmail ?? null,
               dni: row.dni ?? null,
               segment: firstSegmentForLegacyColumn(row.segments),
               area,
