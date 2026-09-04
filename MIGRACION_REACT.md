@@ -43,7 +43,7 @@ La rama `main` sigue siendo el sistema en producción actual. La rama **`migrate
 ## Estructura del repo (v2)
 
 ```txt
-mali-whatsapp-mvp/          # rama migrate/v2
+mali-whatsapp/              # rama migrate/v2
   app/                      # DEPRECADO — ver app/DEPRECATED.md
   api/                      # NestJS + Prisma
     src/modules/            # auth, dashboard, campaigns…

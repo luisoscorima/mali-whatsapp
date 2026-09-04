@@ -1,6 +1,6 @@
 # CRM API — contrato interno (MALI ONE ↔ WhatsApp)
 
-Fuente de verdad de **personas PAM**: `mali-whatsapp-mvp` (`contacts`, área `pam`).
+Fuente de verdad de **personas PAM**: `mali-whatsapp` (`contacts`, área `pam`).
 
 MALI ONE es dueño del **producto** (membresías, pagos) y del **mailing** (SES). No mantiene una BD paralela de clientes.
 

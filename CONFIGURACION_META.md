@@ -61,7 +61,7 @@ Entorno: [Meta for Developers](https://developers.facebook.com/). Conviene tener
 
 En el menú lateral: **WhatsApp** → **Introducción** / **API Setup** / **Configuración de la API**.
 
-| En la pantalla de Meta | Uso en el MVP |
+| En la pantalla de Meta | Uso en la app |
 |------------------------|----------------|
 | **Token de acceso** (temporal ~24 h o de larga duración) | `WHATSAPP_TOKEN` o `WHATSAPP_TOKEN_PAM` / `WHATSAPP_TOKEN_PATRONATO` / `WHATSAPP_TOKEN_EDUCACION` |
 | **Phone number ID** (ID numérico largo; **no** es el +51…) | `PHONE_NUMBER_ID` o `PHONE_NUMBER_ID_PAM` / `PHONE_NUMBER_ID_PATRONATO` / `PHONE_NUMBER_ID_EDUCACION` |

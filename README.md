@@ -51,7 +51,7 @@ En producción: **[https://whatsapp.mali.pe](https://whatsapp.mali.pe)**.
 | Auth | Google OAuth `@mali.pe` + JWT |
 
 ```txt
-mali-whatsapp-mvp/
+mali-whatsapp/
   api/                 # NestJS + Prisma + BullMQ
   web/                 # React + Vite + Tailwind
   docker-compose.yml   # Producción: api + web + postgres + redis

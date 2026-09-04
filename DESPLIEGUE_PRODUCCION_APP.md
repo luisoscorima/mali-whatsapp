@@ -1,4 +1,4 @@
-# Despliegue y operación de la aplicación (MALI WhatsApp MVP)
+# Despliegue y operación de la aplicación (MALI WhatsApp)
 
 Guía centrada en **arquitectura, infraestructura, despliegue, variables de entorno, roles, Docker, proxy y uso del panel**. La integración con Meta (Developers, Business Manager, webhooks, `subscribed_apps`, SMS/register manual) está en **[CONFIGURACION_META.md](./CONFIGURACION_META.md)**.
 
@@ -29,7 +29,7 @@ Guía centrada en **arquitectura, infraestructura, despliegue, variables de ento
 
 ## 1. Objetivo, alcance y principios operativos
 
-- Operar campañas con WhatsApp Cloud API usando el MVP actual.
+- Operar campañas con WhatsApp Cloud API usando la aplicación actual.
 - Dejar operativos: **Enviar campaña** (sincronización de plantillas Meta), **Contactos**, **Historial**, **Ajustes** (segmentos).
 - Validar un flujo real: prueba → piloto → envío masivo controlado.
 
@@ -249,7 +249,7 @@ Panel en **`http://localhost:3000`** (puertos publicados; no usa la red NPM).
 
 ## 9. Despliegue: Nginx Proxy Manager
 
-URL pública del MVP: **`https://whatsapp.mali.pe`**.
+URL pública: **`https://whatsapp.mali.pe`**.
 
 Crea un **Proxy Host** para `whatsapp.mali.pe` que apunte al contenedor **`mali-whatsapp-app:3000`** (misma red Docker que NPM). Con dominio dedicado suele bastar el formulario de NPM (**Forward Hostname / IP** + puerto), sin subruta.
 

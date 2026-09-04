@@ -1,5 +1,5 @@
 {
-  "name": "mali-whatsapp-mvp",
+  "name": "mali-whatsapp",
   "private": true,
   "workspaces": ["api", "web"],
   "scripts": {
