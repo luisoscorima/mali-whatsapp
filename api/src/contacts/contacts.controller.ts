@@ -20,6 +20,13 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
+import {
+  assertCanExportContacts,
+  assertCanImportContacts,
+  assertCanManageContacts,
+  assertPermission,
+} from '../auth/permission.util';
+import { PERMISSION } from '../auth/roles';
 import { buildContactImportSampleXlsxBuffer, MAX_CSV_BYTES } from './contacts-import.utils';
 import { ContactsService } from './contacts.service';
 import type {
@@ -58,12 +65,17 @@ export class ContactsController {
   async filterOptions(
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<ContactsFilterOptions>> {
+    assertCanManageContacts(user);
     const data = await this.contactsService.getFilterOptions(user.area);
     return { ok: true, data };
   }
 
   @Get('import/sample')
-  downloadSample(@Res() res: Response): void {
+  downloadSample(
+    @CurrentUser() user: AuthUser,
+    @Res() res: Response,
+  ): void {
+    assertCanImportContacts(user);
     const buffer = buildContactImportSampleXlsxBuffer();
     res.setHeader(
       'Content-Type',
@@ -86,6 +98,7 @@ export class ContactsController {
     @CurrentUser() user: AuthUser,
     @UploadedFile() file: { buffer: Buffer; originalname: string } | undefined,
   ): Promise<ApiResponse<ContactsImportPreview>> {
+    assertCanImportContacts(user);
     if (!file?.buffer?.length) {
       throw new BadRequestException('Selecciona un archivo CSV o Excel');
     }
@@ -110,6 +123,7 @@ export class ContactsController {
     @CurrentUser() user: AuthUser,
     @UploadedFile() file: { buffer: Buffer; originalname: string } | undefined,
   ): Promise<ApiResponse<ContactsImportResult>> {
+    assertCanImportContacts(user);
     if (!file?.buffer?.length) {
       throw new BadRequestException('Selecciona un archivo CSV o Excel');
     }
@@ -130,6 +144,7 @@ export class ContactsController {
     @Query() query: ListContactsQueryDto,
     @Res() res: Response,
   ): Promise<void> {
+    assertCanExportContacts(user);
     const { buffer, filename } = await this.contactsService.exportFiltered(
       user.area,
       {
@@ -157,6 +172,7 @@ export class ContactsController {
     @CurrentUser() user: AuthUser,
     @Body() body: BulkAddSegmentDto,
   ): Promise<ApiResponse<{ updated: number }>> {
+    assertPermission(user, PERMISSION.SEGMENTS_ASSIGN_BULK);
     const data = await this.contactsService.bulkAddSegment(
       user,
       body.segment_slug,
@@ -171,6 +187,7 @@ export class ContactsController {
     @CurrentUser() user: AuthUser,
     @Body() body: BulkSetAttributeDto,
   ): Promise<ApiResponse<{ updated: number }>> {
+    assertPermission(user, PERMISSION.ATTRIBUTES_ASSIGN_BULK);
     const data = await this.contactsService.bulkSetAttribute(
       user,
       body.attr_key,
@@ -185,6 +202,7 @@ export class ContactsController {
     @CurrentUser() user: AuthUser,
     @Query() query: ListContactsQueryDto,
   ): Promise<ApiResponse<ContactsListResult>> {
+    assertCanManageContacts(user);
     const data = await this.contactsService.list(user.area, {
       page: query.page,
       limit: query.limit,
@@ -203,6 +221,7 @@ export class ContactsController {
     @CurrentUser() user: AuthUser,
     @Query('days') days?: string,
   ): Promise<ApiResponse<ContactSummary>> {
+    assertCanManageContacts(user);
     const data = await this.contactsService.getSummary(user.area, days);
     return { ok: true, data };
   }
@@ -212,6 +231,7 @@ export class ContactsController {
     @CurrentUser() user: AuthUser,
     @Body() body: UpsertContactDto,
   ): Promise<ApiResponse<ContactDetail>> {
+    assertCanManageContacts(user);
     const data = await this.contactsService.create(user, body);
     return { ok: true, data };
   }
@@ -221,6 +241,7 @@ export class ContactsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<ContactDetail>> {
+    assertCanManageContacts(user);
     const data = await this.contactsService.getById(user.area, id);
     return { ok: true, data };
   }
@@ -231,6 +252,7 @@ export class ContactsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: SetAssignableSegmentDto,
   ): Promise<ApiResponse<{ segment_slugs: string[] }>> {
+    assertPermission(user, PERMISSION.SEGMENTS_ASSIGN);
     const data = await this.contactsService.setAssignableSegment(
       user,
       id,
@@ -245,6 +267,7 @@ export class ContactsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpsertContactDto,
   ): Promise<ApiResponse<ContactDetail>> {
+    assertCanManageContacts(user);
     const data = await this.contactsService.update(user, id, body);
     return { ok: true, data };
   }
@@ -254,6 +277,7 @@ export class ContactsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<{ deleted: true }>> {
+    assertCanManageContacts(user);
     await this.contactsService.remove(user, id);
     return { ok: true, data: { deleted: true } };
   }
@@ -263,6 +287,7 @@ export class ContactsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<ContactDetail>> {
+    assertCanManageContacts(user);
     const data = await this.contactsService.reactivate(user.area, id);
     return { ok: true, data };
   }

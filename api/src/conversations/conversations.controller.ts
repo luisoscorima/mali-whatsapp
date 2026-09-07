@@ -18,6 +18,13 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
+import {
+  assertCanExportConversation,
+  assertCanManageConversations,
+  assertPermission,
+  hasPermission,
+} from '../auth/permission.util';
+import { PERMISSION } from '../auth/roles';
 import { MAX_MEDIA_DOCUMENT_BYTES } from './conversation-whatsapp.util';
 import { ConversationsService } from './conversations.service';
 import type {
@@ -51,6 +58,13 @@ export class ConversationsController {
     @Query('days') days?: string,
     @Query('advisor_id') advisorId?: string,
   ) {
+    if (
+      !hasPermission(user, PERMISSION.CONVERSATIONS_STATS_GLOBAL) &&
+      !hasPermission(user, PERMISSION.CONVERSATIONS_STATS_OWN) &&
+      !hasPermission(user, PERMISSION.CONVERSATIONS_MANAGE)
+    ) {
+      assertPermission(user, PERMISSION.CONVERSATIONS_STATS_OWN);
+    }
     const data = await this.conversationsService.getSummary(user, days, advisorId);
     return { ok: true, data };
   }
@@ -60,6 +74,7 @@ export class ConversationsController {
     @CurrentUser() user: AuthUser,
     @Query() query: Record<string, string | string[] | undefined>,
   ): Promise<ApiResponse<InboxListResult>> {
+    assertCanManageConversations(user);
     const data = await this.conversationsService.list(user, query);
     return { ok: true, data };
   }
@@ -68,6 +83,7 @@ export class ConversationsController {
   async listAssignees(
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<ConversationAssigneesResult>> {
+    assertCanManageConversations(user);
     const data = await this.conversationsService.listAssignees(user);
     return { ok: true, data };
   }
@@ -77,6 +93,7 @@ export class ConversationsController {
     @CurrentUser() user: AuthUser,
     @Param('contactId', ParseIntPipe) contactId: number,
   ): Promise<ApiResponse<EnsureConversationResult>> {
+    assertCanManageConversations(user);
     const data = await this.conversationsService.ensureFromContact(
       user,
       contactId,
@@ -90,6 +107,7 @@ export class ConversationsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: Record<string, unknown>,
   ) {
+    assertCanManageConversations(user);
     const data = await this.conversationsService.sendDirectTemplate(user, id, body);
     return { ok: true, data };
   }
@@ -100,6 +118,7 @@ export class ConversationsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { flow_id?: number },
   ) {
+    assertCanManageConversations(user);
     const flowId = Number(body?.flow_id);
     const data = await this.conversationsService.startFlow(user, id, flowId);
     return { ok: true, data };
@@ -118,6 +137,7 @@ export class ConversationsController {
     @UploadedFile()
     file?: { buffer: Buffer; mimetype: string; originalname: string },
   ): Promise<ApiResponse<ReplyResult>> {
+    assertCanManageConversations(user);
     const replyToId =
       body.reply_to_message_id != null && body.reply_to_message_id !== ''
         ? Number(body.reply_to_message_id)
@@ -138,6 +158,7 @@ export class ConversationsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: AssignConversationDto,
   ): Promise<ApiResponse<AssignConversationResult>> {
+    assertCanManageConversations(user);
     const raw = body.assigned_user_id;
     const assignedUserId =
       raw === null || raw === undefined ? null : Number(raw);
@@ -155,6 +176,7 @@ export class ConversationsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateConversationModeDto,
   ): Promise<ApiResponse<UpdateConversationModeResult>> {
+    assertCanManageConversations(user);
     const data = await this.conversationsService.updateMode(
       user,
       id,
@@ -168,6 +190,7 @@ export class ConversationsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<{ ok: true }>> {
+    assertCanManageConversations(user);
     const data = await this.conversationsService.markUnread(user, id);
     return { ok: true, data };
   }
@@ -178,6 +201,7 @@ export class ConversationsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: ArchiveConversationDto,
   ): Promise<ApiResponse<{ archived: boolean }>> {
+    assertCanManageConversations(user);
     const data = await this.conversationsService.setArchived(
       user,
       id,
@@ -192,6 +216,7 @@ export class ConversationsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: LeadScoreDto,
   ): Promise<ApiResponse<{ lead_score: number | null }>> {
+    assertCanManageConversations(user);
     const clear = String(body.lead_score_clear ?? '').trim() === '1';
     const data = await this.conversationsService.setLeadScore(
       user,
@@ -208,6 +233,7 @@ export class ConversationsController {
     @Param('id', ParseIntPipe) id: number,
     @Res() res: Response,
   ): Promise<void> {
+    assertCanExportConversation(user);
     const { buffer, filename } =
       await this.conversationsService.exportConversation(user, id);
     res.setHeader(
@@ -225,6 +251,7 @@ export class ConversationsController {
     @Param('messageId', ParseIntPipe) messageId: number,
     @Body() body: MessageReactionDto,
   ): Promise<ApiResponse<MessageReactionResult>> {
+    assertCanManageConversations(user);
     const data = await this.conversationsService.reactToMessage(
       user,
       id,
@@ -241,6 +268,7 @@ export class ConversationsController {
     @Param('messageId', ParseIntPipe) messageId: number,
     @Res() res: Response,
   ): Promise<void> {
+    assertCanManageConversations(user);
     await this.conversationsService.downloadMessageMedia(
       user,
       id,
@@ -256,6 +284,7 @@ export class ConversationsController {
     @Query('after_message_id') afterMessageId?: string,
     @Query('after_audit_id') afterAuditId?: string,
   ): Promise<ApiResponse<InboxConversationUpdates>> {
+    assertCanManageConversations(user);
     const afterId = Number(afterMessageId ?? 0) || 0;
     const auditAfter = BigInt(afterAuditId ?? 0) || BigInt(0);
     const data = await this.conversationsService.getUpdates(
@@ -272,6 +301,7 @@ export class ConversationsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<InboxDetail>> {
+    assertCanManageConversations(user);
     const data = await this.conversationsService.getDetail(user, id);
     return { ok: true, data };
   }

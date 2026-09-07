@@ -16,6 +16,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { UserAreasService } from '../users/user-areas.service';
 import type { AuthUser, JwtPayload } from './auth.types';
 import {
+  isRoleSlug,
+  legacyFlagsFromPermissions,
+  permissionsForRole,
+  permissionsFromLegacyFlags,
+  type PermissionCode,
+  type RoleSlug,
+} from './roles';
+import {
   bootstrapAdminUserData,
   isBootstrapAdminEmail,
   newGoogleUserData,
@@ -462,6 +470,7 @@ export class AuthService {
       id: number;
       email: string;
       area: string;
+      role_slug?: string | null;
       is_master: boolean;
       is_provisioned: boolean;
       must_change_password: boolean;
@@ -508,39 +517,55 @@ export class AuthService {
         )
       : primaryArea;
 
+    const roleSlug: RoleSlug | null = isRoleSlug(row.role_slug)
+      ? row.role_slug
+      : null;
+
+    let permissions: PermissionCode[];
+    if (isBootstrapAdmin || isMaster || roleSlug === 'master') {
+      permissions = permissionsForRole('master');
+    } else if (roleSlug) {
+      permissions = permissionsForRole(roleSlug);
+    } else {
+      permissions = permissionsFromLegacyFlags({
+        can_edit_ai_prompt: row.can_edit_ai_prompt,
+        can_view_audit_logs: row.can_view_audit_logs,
+        can_view_integration: row.can_view_integration,
+        can_edit_business_hours: row.can_edit_business_hours,
+        can_view_reports: row.can_view_reports,
+        can_assign_conversations: row.can_assign_conversations,
+        can_manage_attributes: row.can_manage_attributes,
+        can_manage_segments: row.can_manage_segments,
+        can_view_conversation_stats: row.can_view_conversation_stats,
+        can_view_campaign_stats: row.can_view_campaign_stats,
+        can_manage_leads: row.can_manage_leads,
+      });
+    }
+
+    const legacy = legacyFlagsFromPermissions(permissions);
+
     return {
       id: row.id,
       email: row.email,
       area,
       allowedAreas,
+      roleSlug: isMaster || isBootstrapAdmin ? 'master' : roleSlug,
+      permissions,
       isMaster,
       isProvisioned,
       isBootstrapAdmin,
       mustChangePassword: Boolean(row.must_change_password),
-      canEditAiPrompt:
-        isBootstrapAdmin || isMaster || Boolean(row.can_edit_ai_prompt),
-      canViewAuditLogs:
-        isBootstrapAdmin || isMaster || Boolean(row.can_view_audit_logs),
-      canViewIntegration:
-        isBootstrapAdmin || isMaster || Boolean(row.can_view_integration),
-      canEditBusinessHours:
-        isBootstrapAdmin || isMaster || Boolean(row.can_edit_business_hours),
-      canViewReports:
-        isBootstrapAdmin || isMaster || Boolean(row.can_view_reports),
-      canAssignConversations:
-        isBootstrapAdmin || isMaster || Boolean(row.can_assign_conversations),
-      canManageAttributes:
-        isBootstrapAdmin || isMaster || Boolean(row.can_manage_attributes),
-      canManageSegments:
-        isBootstrapAdmin || isMaster || Boolean(row.can_manage_segments),
-      canViewConversationStats:
-        isBootstrapAdmin ||
-        isMaster ||
-        Boolean(row.can_view_conversation_stats),
-      canViewCampaignStats:
-        isBootstrapAdmin || isMaster || Boolean(row.can_view_campaign_stats),
-      canManageLeads:
-        isBootstrapAdmin || isMaster || Boolean(row.can_manage_leads),
+      canEditAiPrompt: legacy.can_edit_ai_prompt,
+      canViewAuditLogs: legacy.can_view_audit_logs,
+      canViewIntegration: legacy.can_view_integration,
+      canEditBusinessHours: legacy.can_edit_business_hours,
+      canViewReports: legacy.can_view_reports,
+      canAssignConversations: legacy.can_assign_conversations,
+      canManageAttributes: legacy.can_manage_attributes,
+      canManageSegments: legacy.can_manage_segments,
+      canViewConversationStats: legacy.can_view_conversation_stats,
+      canViewCampaignStats: legacy.can_view_campaign_stats,
+      canManageLeads: legacy.can_manage_leads,
       ...(picture ? { picture } : {}),
     };
   }

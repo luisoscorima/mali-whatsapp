@@ -1,5 +1,6 @@
 import { Navigate, useOutletContext } from 'react-router-dom'
 import type { AuthUser } from '@/shared/api'
+import { defaultHomePath } from '@/shared/auth/permissions'
 
 export type AppShellOutletContext = {
   user: AuthUser | null
@@ -15,14 +16,19 @@ type RequireUserPermissionProps = {
   children: React.ReactNode
 }
 
-/** Redirige a /conversations si el usuario cargó y no tiene el permiso. */
+/** Redirige al home permitido si el usuario no tiene el permiso. */
 export function RequireUserPermission({
   allowed,
   children,
 }: RequireUserPermissionProps) {
   const user = useAppUser()
   if (user && !allowed(user)) {
-    return <Navigate to="/conversations" replace />
+    return <Navigate to={defaultHomePath(user)} replace />
   }
   return <>{children}</>
+}
+
+export function HomeRedirect() {
+  const user = useAppUser()
+  return <Navigate to={defaultHomePath(user)} replace />
 }

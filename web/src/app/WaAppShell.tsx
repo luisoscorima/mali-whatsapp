@@ -1,6 +1,7 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { apiClient, onUnauthorized, type AuthUser } from '@/shared/api'
+import { areaLabel } from '@/features/admin/areaLabels'
 import { hasInboxDetailRoute } from '@/shared/layout/inboxDetailRoute'
 import { TooltipProvider } from '@/shared/ui/shadcn/tooltip'
 import { WaLayout } from '@/shared/ui/shell/WaLayout'
@@ -8,6 +9,7 @@ import { WaRail } from '@/shared/ui/shell/WaRail'
 import type { AppShellOutletContext } from './appOutletContext'
 
 const UNREAD_POLL_MS = 8000
+const APP_TITLE = 'MALI WhatsApp'
 
 export function WaAppShell() {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -22,6 +24,17 @@ export function WaAppShell() {
       if (result.ok) setUser(result.data)
     })
   }, [])
+
+  useEffect(() => {
+    if (!user?.area) {
+      document.title = APP_TITLE
+      return
+    }
+    document.title = `${areaLabel(user.area)} · ${APP_TITLE}`
+    return () => {
+      document.title = APP_TITLE
+    }
+  }, [user?.area])
 
   useEffect(() => {
     if (!user) {

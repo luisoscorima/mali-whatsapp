@@ -18,6 +18,12 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
+import {
+  assertCanListFlows,
+  assertCanManageFlows,
+  hasPermission,
+} from '../auth/permission.util';
+import { PERMISSION } from '../auth/roles';
 import { MAX_MEDIA_DOCUMENT_BYTES } from '../conversations/conversation-whatsapp.util';
 import { CreateFlowDto, UpdateFlowDto } from './dto/flow.dto';
 import { FlowsService } from './flows.service';
@@ -40,6 +46,7 @@ export class FlowsController {
   async list(
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<FlowListItem[]>> {
+    assertCanListFlows(user);
     const data = await this.flowsService.list(user.area);
     return { ok: true, data };
   }
@@ -48,6 +55,7 @@ export class FlowsController {
   async summary(
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<FlowSummary>> {
+    assertCanListFlows(user);
     const data = await this.flowsService.getSummary(user.area);
     return { ok: true, data };
   }
@@ -56,6 +64,7 @@ export class FlowsController {
   async advisors(
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<{ id: number; label: string }[]>> {
+    assertCanListFlows(user);
     const data = await this.flowsService.listAdvisors(user.area);
     return { ok: true, data };
   }
@@ -81,6 +90,7 @@ export class FlowsController {
       wa_type: 'image' | 'document';
     }>
   > {
+    assertCanManageFlows(user);
     const kindRaw = String(body?.kind || 'image').trim().toLowerCase();
     const kind = kindRaw === 'document' ? 'document' : 'image';
     if (!file) {
@@ -97,6 +107,7 @@ export class FlowsController {
     @Query('client_key') clientKey?: string,
     @Query('event_type') eventType?: string,
   ): Promise<ApiResponse<FlowEventContactRow[]>> {
+    assertCanListFlows(user);
     const data = await this.flowsService.listEventContacts(user.area, id, {
       client_key: clientKey,
       event_type: eventType,
@@ -109,6 +120,7 @@ export class FlowsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<FlowDetail>> {
+    assertCanListFlows(user);
     const data = await this.flowsService.getDetail(user.area, id);
     return { ok: true, data };
   }
@@ -118,6 +130,7 @@ export class FlowsController {
     @CurrentUser() user: AuthUser,
     @Body() body: CreateFlowDto,
   ): Promise<ApiResponse<FlowDetail>> {
+    assertCanManageFlows(user);
     const data = await this.flowsService.create(user.area, body);
     return { ok: true, data };
   }
@@ -128,6 +141,12 @@ export class FlowsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateFlowDto,
   ): Promise<ApiResponse<FlowDetail>> {
+    if (
+      !hasPermission(user, PERMISSION.FLOWS_MANAGE) &&
+      !hasPermission(user, PERMISSION.FLOWS_TOGGLE)
+    ) {
+      assertCanManageFlows(user);
+    }
     const data = await this.flowsService.update(user.area, id, body);
     return { ok: true, data };
   }
@@ -137,6 +156,7 @@ export class FlowsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<{ deleted: true }>> {
+    assertCanManageFlows(user);
     await this.flowsService.remove(user.area, id);
     return { ok: true, data: { deleted: true } };
   }

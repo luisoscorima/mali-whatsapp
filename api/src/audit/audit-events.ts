@@ -19,6 +19,7 @@ export const AuditEvent = {
   CONTACT_LEAD_SCORE: 'contact.lead_score',
   CONTACT_DELETED: 'contact.deleted',
   CAMPAIGN_CREATED: 'campaign.created',
+  CAMPAIGN_ARCHIVE_RECIPIENTS: 'campaign.archive_recipients',
   CAMPAIGN_RETRY_MANUAL: 'campaign.retry_manual',
   TEMPLATE_SYNC: 'template.sync',
   CONVERSATION_MODE: 'conversation.mode',

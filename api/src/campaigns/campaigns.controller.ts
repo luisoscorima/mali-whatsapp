@@ -14,7 +14,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
-import { assertCanViewCampaignStats } from '../auth/permission.util';
+import { assertCanCreateCampaigns, assertCanListCampaigns, assertCanViewCampaignStats } from '../auth/permission.util';
 import { CampaignsService } from './campaigns.service';
 import { RecipientsPreviewDto } from './dto/recipients-preview.dto';
 import type {
@@ -36,6 +36,7 @@ export class CampaignsController {
     @CurrentUser() user: AuthUser,
     @Query('month') month?: string,
   ): Promise<ApiResponse<CampaignListItem[]>> {
+    assertCanListCampaigns(user);
     const data = await this.campaignsService.list(user.area, month);
     return { ok: true, data };
   }
@@ -55,6 +56,7 @@ export class CampaignsController {
     @CurrentUser() user: AuthUser,
     @Body() body: RecipientsPreviewDto,
   ): Promise<ApiResponse<RecipientsPreviewResult>> {
+    assertCanCreateCampaigns(user);
     const data = await this.campaignsService.previewRecipients(user.area, body);
     return { ok: true, data };
   }
@@ -64,6 +66,7 @@ export class CampaignsController {
     @CurrentUser() user: AuthUser,
     @Body() body: Record<string, unknown>,
   ): Promise<ApiResponse<SendCampaignOutcome>> {
+    assertCanCreateCampaigns(user);
     const data = await this.campaignsService.sendCampaign(user, body);
     return { ok: true, data };
   }
@@ -168,6 +171,7 @@ export class CampaignsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<CampaignRetryActionResult>> {
+    assertCanCreateCampaigns(user);
     const data = await this.campaignsService.retryFailed(user, id);
     return { ok: true, data };
   }
@@ -177,6 +181,7 @@ export class CampaignsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<CampaignDetail>> {
+    assertCanListCampaigns(user);
     const data = await this.campaignsService.getById(user.area, id);
     return { ok: true, data };
   }

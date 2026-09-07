@@ -1,4 +1,5 @@
 export type AdminUserPermissions = {
+  role_slug: string | null;
   can_edit_ai_prompt: boolean;
   can_view_audit_logs: boolean;
   can_view_integration: boolean;

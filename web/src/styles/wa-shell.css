@@ -359,6 +359,17 @@
   margin-right: 6px;
 }
 
+.area-pill--rail {
+  max-width: 64px;
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.15;
+  padding: 4px 5px;
+  font-size: 0.62rem;
+  border-radius: 8px;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -801,6 +812,13 @@
     padding-top: 0;
     width: auto;
     justify-self: end;
+  }
+
+  .wa-layout--inbox .area-pill--rail,
+  .wa-layout--simple .area-pill--rail {
+    max-width: 56px;
+    font-size: 0.58rem;
+    padding: 3px 4px;
   }
 
   .wa-layout--inbox .wa-rail__theme,

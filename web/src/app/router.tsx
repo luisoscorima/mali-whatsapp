@@ -2,7 +2,8 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { WaAppShell } from './WaAppShell'
 import { RequireAuth } from './RequireAuth'
 import { RequirePasswordChanged } from './RequirePasswordChanged'
-import { RequireUserPermission } from './appOutletContext'
+import { RequireUserPermission, HomeRedirect } from './appOutletContext'
+import { PERMISSION, userHasPermission } from '@/shared/auth/permissions'
 import { LoginPage } from '../features/auth/LoginPage'
 import { ChangePasswordPage } from '../features/auth/ChangePasswordPage'
 import { MetaAdsShell } from '../features/meta-ads/MetaAdsShell'
@@ -60,11 +61,13 @@ export function AppRouter() {
           <Route path="account/change-password" element={<ChangePasswordPage />} />
           <Route element={<RequirePasswordChanged />}>
             <Route element={<WaAppShell />}>
-            <Route index element={<Navigate to="/conversations" replace />} />
+            <Route index element={<HomeRedirect />} />
             <Route
               path="leads"
               element={
-                <RequireUserPermission allowed={(u) => u.canManageLeads}>
+                <RequireUserPermission
+                  allowed={(u) => userHasPermission(u, PERMISSION.LEADS_LIST)}
+                >
                   <LeadsShell />
                 </RequireUserPermission>
               }
@@ -79,7 +82,12 @@ export function AppRouter() {
             <Route
               path="attributes"
               element={
-                <RequireUserPermission allowed={(u) => u.canManageAttributes}>
+                <RequireUserPermission
+                  allowed={(u) =>
+                    userHasPermission(u, PERMISSION.ATTRIBUTES_LIST) ||
+                    userHasPermission(u, PERMISSION.ATTRIBUTES_MANAGE)
+                  }
+                >
                   <AttributesShell />
                 </RequireUserPermission>
               }
@@ -91,7 +99,12 @@ export function AppRouter() {
             <Route
               path="segments"
               element={
-                <RequireUserPermission allowed={(u) => u.canManageSegments}>
+                <RequireUserPermission
+                  allowed={(u) =>
+                    userHasPermission(u, PERMISSION.SEGMENTS_LIST) ||
+                    userHasPermission(u, PERMISSION.SEGMENTS_MANAGE)
+                  }
+                >
                   <SegmentsShell />
                 </RequireUserPermission>
               }
@@ -100,29 +113,93 @@ export function AppRouter() {
               <Route path="new" element={<SegmentNewPage />} />
               <Route path=":id" element={<SegmentDetailPage />} />
             </Route>
-            <Route path="contacts" element={<ContactsShell />}>
+            <Route
+              path="contacts"
+              element={
+                <RequireUserPermission
+                  allowed={(u) =>
+                    userHasPermission(u, PERMISSION.CONTACTS_MANAGE)
+                  }
+                >
+                  <ContactsShell />
+                </RequireUserPermission>
+              }
+            >
               <Route index element={<ContactsSummaryPane />} />
               <Route path="import" element={<ContactImportPage />} />
               <Route path="new" element={<ContactNewPage />} />
               <Route path=":id" element={<ContactDetailPage />} />
             </Route>
-            <Route path="templates" element={<TemplatesShell />}>
+            <Route
+              path="templates"
+              element={
+                <RequireUserPermission
+                  allowed={(u) =>
+                    userHasPermission(u, PERMISSION.TEMPLATES_LIST)
+                  }
+                >
+                  <TemplatesShell />
+                </RequireUserPermission>
+              }
+            >
               <Route index element={<TemplatesSummaryPane />} />
               <Route path="new" element={<TemplateNewPage />} />
               <Route path=":id" element={<TemplateDetailPage />} />
             </Route>
-            <Route path="campaigns" element={<CampaignsShell />}>
+            <Route
+              path="campaigns"
+              element={
+                <RequireUserPermission
+                  allowed={(u) =>
+                    userHasPermission(u, PERMISSION.CAMPAIGNS_LIST)
+                  }
+                >
+                  <CampaignsShell />
+                </RequireUserPermission>
+              }
+            >
               <Route index element={<CampaignsSummaryPane />} />
               <Route path="new" element={<CampaignNewPage />} />
               <Route path=":id" element={<CampaignDetailPage />} />
             </Route>
-            <Route path="flows" element={<FlowsShell />}>
+            <Route
+              path="flows"
+              element={
+                <RequireUserPermission
+                  allowed={(u) => userHasPermission(u, PERMISSION.FLOWS_LIST)}
+                >
+                  <FlowsShell />
+                </RequireUserPermission>
+              }
+            >
               <Route index element={<FlowsSummaryPane />} />
               <Route path="new" element={<FlowNewPage />} />
               <Route path=":id" element={<FlowDetailPage />} />
             </Route>
-            <Route path="conversations" element={<ConversationsInboxPage />} />
-            <Route path="conversations/:id" element={<ConversationsInboxPage />} />
+            <Route
+              path="conversations"
+              element={
+                <RequireUserPermission
+                  allowed={(u) =>
+                    userHasPermission(u, PERMISSION.CONVERSATIONS_MANAGE)
+                  }
+                >
+                  <ConversationsInboxPage />
+                </RequireUserPermission>
+              }
+            />
+            <Route
+              path="conversations/:id"
+              element={
+                <RequireUserPermission
+                  allowed={(u) =>
+                    userHasPermission(u, PERMISSION.CONVERSATIONS_MANAGE)
+                  }
+                >
+                  <ConversationsInboxPage />
+                </RequireUserPermission>
+              }
+            />
             <Route element={<RequireMaster />}>
               <Route path="admin" element={<AdminShell />}>
                 <Route index element={<AdminIndexPage />} />

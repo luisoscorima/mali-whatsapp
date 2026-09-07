@@ -3,6 +3,7 @@ import { apiClient } from '@/shared/api'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { AdminUserFormSheet } from './AdminUserFormSheet'
 import { areaLabel } from './areaLabels'
+import { ROLE_OPTIONS } from '@/shared/auth/permissions'
 
 const ONLINE_POLL_MS = 20_000
 
@@ -10,6 +11,7 @@ type AdminUserListItem = {
   id: number
   email: string
   area: string
+  role_slug: string | null
   is_master: boolean
 }
 
@@ -97,6 +99,9 @@ export function AdminUsersShell() {
                     </span>
                     <span className="inbox-chat-preview">
                       {areaLabel(user.area)}
+                      {user.role_slug
+                        ? ` · ${ROLE_OPTIONS.find((r) => r.slug === user.role_slug)?.label ?? user.role_slug}`
+                        : ''}
                       {user.is_master ? ' · Master' : ''}
                     </span>
                   </span>

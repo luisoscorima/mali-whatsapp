@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { notify } from '@/shared/notify'
 import { apiClient } from '@/shared/api'
+import { ROLE_OPTIONS } from '@/shared/auth/permissions'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 import {
   Sheet,
@@ -18,6 +19,7 @@ type AdminUserDetail = {
   id: number
   email: string
   area: string
+  role_slug: string | null
   is_master: boolean
   can_edit_ai_prompt: boolean
   can_view_audit_logs: boolean
@@ -31,34 +33,6 @@ type AdminUserDetail = {
   can_view_campaign_stats: boolean
   can_manage_leads: boolean
   extra_areas: string[]
-}
-
-const PERM_FIELDS = [
-  { key: 'can_view_integration', label: 'Ver integración' },
-  { key: 'can_edit_ai_prompt', label: 'Editar prompt IA' },
-  { key: 'can_edit_business_hours', label: 'Editar horario' },
-  { key: 'can_view_audit_logs', label: 'Ver bitácora' },
-  { key: 'can_view_reports', label: 'Ver reportería' },
-  { key: 'can_assign_conversations', label: 'Asignar conversaciones' },
-  { key: 'can_manage_attributes', label: 'Gestionar atributos' },
-  { key: 'can_manage_segments', label: 'Gestionar segmentos' },
-  { key: 'can_manage_leads', label: 'Gestionar leads' },
-  { key: 'can_view_conversation_stats', label: 'Ver stats globales de conversaciones' },
-  { key: 'can_view_campaign_stats', label: 'Ver stats de campañas' },
-] as const
-
-const EMPTY_PERMS: Record<string, boolean> = {
-  can_view_integration: false,
-  can_edit_ai_prompt: false,
-  can_edit_business_hours: false,
-  can_view_audit_logs: false,
-  can_view_reports: false,
-  can_assign_conversations: false,
-  can_manage_attributes: false,
-  can_manage_segments: false,
-  can_view_conversation_stats: false,
-  can_view_campaign_stats: false,
-  can_manage_leads: false,
 }
 
 export type AdminUserFormSheetProps = {
@@ -84,9 +58,9 @@ export function AdminUserFormSheet({
   const [loadFailed, setLoadFailed] = useState(false)
   const [email, setEmail] = useState('')
   const [area, setArea] = useState('ti')
+  const [roleSlug, setRoleSlug] = useState('asesor_comercial')
   const [isMaster, setIsMaster] = useState(false)
   const [extraAreas, setExtraAreas] = useState<string[]>([])
-  const [perms, setPerms] = useState<Record<string, boolean>>(EMPTY_PERMS)
 
   useEffect(() => {
     if (!open) return
@@ -99,9 +73,9 @@ export function AdminUserFormSheet({
       setLoading(false)
       setEmail('')
       setArea('ti')
+      setRoleSlug('asesor_comercial')
       setIsMaster(false)
       setExtraAreas([])
-      setPerms({ ...EMPTY_PERMS })
       return
     }
 
@@ -123,20 +97,14 @@ export function AdminUserFormSheet({
       setEmail(user.email)
       setArea(user.area)
       setIsMaster(user.is_master)
+      setRoleSlug(
+        user.is_master
+          ? 'master'
+          : user.role_slug && ROLE_OPTIONS.some((r) => r.slug === user.role_slug)
+            ? user.role_slug
+            : 'asesor_comercial',
+      )
       setExtraAreas(user.extra_areas)
-      setPerms({
-        can_view_integration: user.can_view_integration,
-        can_edit_ai_prompt: user.can_edit_ai_prompt,
-        can_edit_business_hours: user.can_edit_business_hours,
-        can_view_audit_logs: user.can_view_audit_logs,
-        can_view_reports: user.can_view_reports,
-        can_assign_conversations: user.can_assign_conversations,
-        can_manage_attributes: user.can_manage_attributes,
-        can_manage_segments: user.can_manage_segments,
-        can_view_conversation_stats: user.can_view_conversation_stats,
-        can_view_campaign_stats: user.can_view_campaign_stats,
-        can_manage_leads: user.can_manage_leads,
-      })
     })
 
     return () => {
@@ -155,11 +123,12 @@ export function AdminUserFormSheet({
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
     setSaving(true)
+    const effectiveRole = isMaster ? 'master' : roleSlug
     const body = {
       area,
-      is_master: isMaster,
+      is_master: isMaster || effectiveRole === 'master',
+      role_slug: effectiveRole,
       extra_areas: extraAreas.filter((slug) => slug !== area),
-      ...perms,
     }
 
     const result = isNew
@@ -211,8 +180,8 @@ export function AdminUserFormSheet({
             <SheetTitle>{isNew ? 'Nuevo usuario' : 'Editar usuario'}</SheetTitle>
             <SheetDescription>
               {isNew
-                ? 'El usuario entrará con Google Workspace (@mali.pe).'
-                : 'Actualiza área y permisos. El login sigue siendo con Google.'}
+                ? 'El usuario entrará con Google Workspace (@mali.pe). El rol define los permisos.'
+                : 'Área, áreas adicionales y rol. Los permisos salen de la plantilla del rol.'}
             </SheetDescription>
           </SheetHeader>
 
@@ -273,35 +242,44 @@ export function AdminUserFormSheet({
                   </div>
                 </fieldset>
 
+                <label className="block space-y-1">
+                  <span className="text-sm font-medium">Rol</span>
+                  <select
+                    value={isMaster ? 'master' : roleSlug}
+                    disabled={isMaster}
+                    onChange={(e) => {
+                      const next = e.target.value
+                      setRoleSlug(next)
+                      if (next === 'master') setIsMaster(true)
+                    }}
+                    className="w-full rounded-lg border border-line px-3 py-2 text-sm disabled:opacity-60"
+                  >
+                    {ROLE_OPTIONS.map((item) => (
+                      <option key={item.slug} value={item.slug}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-xs text-muted">
+                    Detalle de permisos: docs/ROLES-PERMISOS.md
+                  </span>
+                </label>
+
                 <fieldset className="space-y-2">
                   <legend className="text-sm font-medium">Opciones</legend>
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
                       checked={isMaster}
-                      onChange={(e) => setIsMaster(e.target.checked)}
+                      onChange={(e) => {
+                        const checked = e.target.checked
+                        setIsMaster(checked)
+                        if (checked) setRoleSlug('master')
+                        else if (roleSlug === 'master') setRoleSlug('coordinador')
+                      }}
                     />
-                    Master
+                    Master (todos los permisos + admin)
                   </label>
-                </fieldset>
-
-                <fieldset className="space-y-2">
-                  <legend className="text-sm font-medium">Permisos de ajustes</legend>
-                  {PERM_FIELDS.map((field) => (
-                    <label key={field.key} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={perms[field.key]}
-                        onChange={(e) =>
-                          setPerms((current) => ({
-                            ...current,
-                            [field.key]: e.target.checked,
-                          }))
-                        }
-                      />
-                      {field.label}
-                    </label>
-                  ))}
                 </fieldset>
               </form>
             )}

@@ -6,6 +6,10 @@ import {
   normalizeArea,
   type BusinessArea,
 } from '../config/areas';
+import {
+  permissionsForRole,
+  type PermissionCode,
+} from '../auth/roles';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -98,6 +102,8 @@ export class UserAreasService {
     email: string;
     area: BusinessArea;
     allowedAreas: BusinessArea[];
+    roleSlug: 'coordinador';
+    permissions: PermissionCode[];
     isMaster: boolean;
     isProvisioned: boolean;
     isBootstrapAdmin: boolean;
@@ -115,20 +121,23 @@ export class UserAreasService {
     canManageLeads: boolean;
   } {
     const area = normalizeArea(this.config.devArea);
+    const permissions = permissionsForRole('coordinador');
     return {
       id: 0,
       email: 'dev@mali.pe',
       area,
       allowedAreas: [area],
+      roleSlug: 'coordinador',
+      permissions,
       isMaster: false,
       isProvisioned: true,
       isBootstrapAdmin: false,
       mustChangePassword: false,
-      canEditAiPrompt: false,
-      canViewAuditLogs: false,
-      canViewIntegration: false,
-      canEditBusinessHours: false,
-      canViewReports: false,
+      canEditAiPrompt: true,
+      canViewAuditLogs: true,
+      canViewIntegration: true,
+      canEditBusinessHours: true,
+      canViewReports: true,
       canAssignConversations: true,
       canManageAttributes: true,
       canManageSegments: true,

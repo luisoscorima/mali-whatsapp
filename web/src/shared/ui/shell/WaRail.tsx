@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import type { AuthUser } from '@/shared/api'
+import { areaLabel } from '@/features/admin/areaLabels'
+import { PERMISSION, defaultHomePath, userHasPermission } from '@/shared/auth/permissions'
 import { MALI_LOGO_URL } from '@/shared/brand'
 import { useTheme } from '@/shared/theme/useTheme'
 
@@ -166,16 +168,43 @@ export function WaRail({ user, onUserUpdate, conversationsUnreadCount = 0 }: WaR
       : NAV_ITEMS.filter((item) => item.key === 'campaigns' || item.key === 'conversations')
 
   const visibleItems = provisionedItems.filter((item) => {
-    if (item.key === 'attributes') return Boolean(user?.canManageAttributes)
-    if (item.key === 'segments') return Boolean(user?.canManageSegments)
-    if (item.key === 'leads') return Boolean(user?.canManageLeads)
+    if (item.key === 'conversations') {
+      return userHasPermission(user, PERMISSION.CONVERSATIONS_MANAGE)
+    }
+    if (item.key === 'contacts') {
+      return userHasPermission(user, PERMISSION.CONTACTS_MANAGE)
+    }
+    if (item.key === 'campaigns') {
+      return userHasPermission(user, PERMISSION.CAMPAIGNS_LIST)
+    }
+    if (item.key === 'templates') {
+      return userHasPermission(user, PERMISSION.TEMPLATES_LIST)
+    }
+    if (item.key === 'flows') {
+      return userHasPermission(user, PERMISSION.FLOWS_LIST)
+    }
+    if (item.key === 'attributes') {
+      return (
+        userHasPermission(user, PERMISSION.ATTRIBUTES_LIST) ||
+        userHasPermission(user, PERMISSION.ATTRIBUTES_MANAGE)
+      )
+    }
+    if (item.key === 'segments') {
+      return (
+        userHasPermission(user, PERMISSION.SEGMENTS_LIST) ||
+        userHasPermission(user, PERMISSION.SEGMENTS_MANAGE)
+      )
+    }
+    if (item.key === 'leads') {
+      return userHasPermission(user, PERMISSION.LEADS_LIST)
+    }
     return true
   })
 
   return (
     <aside className="wa-rail" aria-label="Navegación principal">
       <div className="wa-rail__brand">
-        <Link to="/conversations" className="wa-rail__logo-link" title="MALI WhatsApp" aria-label="Inicio">
+        <Link to={defaultHomePath(user)} className="wa-rail__logo-link" title="MALI WhatsApp" aria-label="Inicio">
           <span className="wa-rail__logo-wrap" aria-hidden="true">
             <img className="wa-rail__logo" src={MALI_LOGO_URL} alt="MALI" width="40" height="40" decoding="async" />
           </span>
@@ -239,6 +268,15 @@ export function WaRail({ user, onUserUpdate, conversationsUnreadCount = 0 }: WaR
       </nav>
 
       <div className="wa-rail__footer">
+        {user?.area ? (
+          <span
+            className="area-pill area-pill--rail"
+            title={`Área activa: ${areaLabel(user.area)}`}
+          >
+            {areaLabel(user.area)}
+          </span>
+        ) : null}
+
         <button
           type="button"
           className="wa-rail__theme theme-toggle"

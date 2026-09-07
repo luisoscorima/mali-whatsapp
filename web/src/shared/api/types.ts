@@ -15,6 +15,8 @@ export type AuthUser = {
   email: string;
   area: string;
   allowedAreas: string[];
+  roleSlug: string | null;
+  permissions: string[];
   isMaster: boolean;
   isProvisioned: boolean;
   isBootstrapAdmin: boolean;

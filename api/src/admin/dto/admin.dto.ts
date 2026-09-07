@@ -6,8 +6,12 @@ import {
   IsOptional,
   IsString,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
+import { ROLE_SLUGS } from '../../auth/roles';
 import { BUSINESS_AREAS } from '../../config/areas';
+
+const ROLE_SLUG_VALUES = [...ROLE_SLUGS];
 
 export class CreateAdminUserDto {
   @IsEmail()
@@ -21,6 +25,12 @@ export class CreateAdminUserDto {
   @IsString()
   @IsIn([...BUSINESS_AREAS])
   area!: string;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v != null && v !== '')
+  @IsString()
+  @IsIn(ROLE_SLUG_VALUES)
+  role_slug?: string | null;
 
   @IsOptional()
   @IsBoolean()
@@ -89,6 +99,12 @@ export class UpdateAdminUserDto {
   @IsString()
   @MinLength(6)
   password?: string;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v != null && v !== '')
+  @IsString()
+  @IsIn(ROLE_SLUG_VALUES)
+  role_slug?: string | null;
 
   @IsOptional()
   @IsBoolean()

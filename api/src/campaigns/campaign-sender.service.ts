@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { AuditEvent } from '../audit/audit-events';
+import { AuditLogService } from '../audit/audit-log.service';
 import { normalizeArea } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
 import { CampaignQueueService } from '../queues/campaign-queue.service';
@@ -8,6 +10,7 @@ import {
   buildWhatsappGraphComponents,
 } from '../templates/template-definition.util';
 import { sendTemplateWithComponents } from '../templates/whatsapp-meta.util';
+import { archiveCampaignRecipientConversations } from './archive-campaign-recipients.util';
 import { classifyCampaignSendError } from './campaign-incident.util';
 import { readCampaignAutoRetryDelayMinutes, readCampaignPhoneMinGapMs } from './campaign-config.util';
 import {
@@ -78,6 +81,7 @@ export class CampaignSenderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly campaignQueue: CampaignQueueService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
   enqueueSendJob(campaignId: number, payload: CampaignJobPayload): void {
@@ -214,6 +218,24 @@ export class CampaignSenderService {
       await this.prisma.campaigns.update({
         where: { id: campaignId },
         data: { total_recipients: allRecipients.length },
+      });
+
+      const { archivedCount, recipientCount } =
+        await archiveCampaignRecipientConversations(
+          this.prisma,
+          area,
+          allRecipients,
+        );
+      await this.auditLog.write({
+        event_type: AuditEvent.CAMPAIGN_ARCHIVE_RECIPIENTS,
+        message: `Campaña #${campaignId}: ${archivedCount} conversaciones archivadas`,
+        actor: { area, email: 'system:campaign-sender' },
+        meta: {
+          campaign_id: campaignId,
+          archived_count: archivedCount,
+          recipient_count: recipientCount,
+          source: 'campaign_send',
+        },
       });
 
       const processedState = await this.fetchProcessedRecipientState(campaignId);

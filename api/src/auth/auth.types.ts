@@ -1,10 +1,16 @@
 import type { BusinessArea } from '../config/areas';
+import type { PermissionCode } from './roles/permission-codes';
+import type { RoleSlug } from './roles/role-permissions';
 
 export interface AuthUser {
   id: number;
   email: string;
   area: BusinessArea;
   allowedAreas: BusinessArea[];
+  /** Rol de plantilla; null si aún no migrado. */
+  roleSlug: RoleSlug | null;
+  /** Permisos efectivos (desde rol o flags legacy). */
+  permissions: PermissionCode[];
   isMaster: boolean;
   isProvisioned: boolean;
   isBootstrapAdmin: boolean;

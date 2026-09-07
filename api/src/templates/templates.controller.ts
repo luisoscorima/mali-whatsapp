@@ -13,6 +13,12 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
 import {
+  assertCanCreateTemplates,
+  assertCanListTemplates,
+  assertPermission,
+} from '../auth/permission.util';
+import { PERMISSION } from '../auth/roles';
+import {
   CreateTemplateDto,
   UpdateTemplateDto,
   UpdateTemplateFlagsDto,
@@ -38,6 +44,7 @@ export class TemplatesController {
   async list(
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<TemplateListItem[]>> {
+    assertCanListTemplates(user);
     const data = await this.templatesService.list(user.area);
     return { ok: true, data };
   }
@@ -46,6 +53,7 @@ export class TemplatesController {
   async summary(
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<TemplateSummary>> {
+    assertPermission(user, PERMISSION.TEMPLATES_STATS);
     const data = await this.templatesService.getSummary(user.area);
     return { ok: true, data };
   }
@@ -54,6 +62,7 @@ export class TemplatesController {
   async sync(
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<TemplateSyncResult>> {
+    assertPermission(user, PERMISSION.TEMPLATES_SYNC);
     const data = await this.templatesService.sync(user);
     return { ok: true, data };
   }
@@ -63,6 +72,7 @@ export class TemplatesController {
     @CurrentUser() user: AuthUser,
     @Body() body: ValidateTemplateDto,
   ): Promise<ApiResponse<TemplateValidateResult>> {
+    assertCanCreateTemplates(user);
     const data = await this.templatesService.validateBuilder(user.area, body);
     return { ok: true, data };
   }
@@ -72,6 +82,7 @@ export class TemplatesController {
     @CurrentUser() user: AuthUser,
     @Body() body: CreateTemplateDto,
   ): Promise<ApiResponse<TemplateCreateResult>> {
+    assertCanCreateTemplates(user);
     const data = await this.templatesService.create(user.area, user.id, body);
     return { ok: true, data };
   }
@@ -81,6 +92,7 @@ export class TemplatesController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<TemplateDefinition>> {
+    assertCanListTemplates(user);
     const data = await this.templatesService.getDefinition(user.area, id);
     return { ok: true, data };
   }
@@ -90,6 +102,7 @@ export class TemplatesController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<TemplateDetail>> {
+    assertCanListTemplates(user);
     const data = await this.templatesService.getById(user.area, id);
     return { ok: true, data };
   }
@@ -100,6 +113,7 @@ export class TemplatesController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateTemplateFlagsDto,
   ): Promise<ApiResponse<TemplateDetail>> {
+    assertPermission(user, PERMISSION.TEMPLATES_TOGGLE);
     const data = await this.templatesService.updateFlags(
       user.area,
       id,
@@ -114,6 +128,7 @@ export class TemplatesController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateTemplateDto,
   ): Promise<ApiResponse<TemplateCreateResult>> {
+    assertCanCreateTemplates(user);
     const data = await this.templatesService.update(
       user.area,
       user.id,
