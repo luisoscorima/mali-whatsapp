@@ -42,9 +42,9 @@ const CHANNEL_META: Record<
   },
   tiktok: {
     title: 'TikTok',
-    blurb: 'Próximamente',
-    to: '/leads',
-    enabled: false,
+    blurb: 'Instant Forms de TikTok Ads (webhook)',
+    to: '/leads?channel=tiktok',
+    enabled: true,
   },
 }
 
@@ -53,6 +53,7 @@ const CHANNEL_FILTER_OPTIONS = [
   { value: 'widget', label: 'Widget web' },
   { value: 'meta_lead_form', label: 'Instant Forms' },
   { value: 'meta_ctwa', label: 'Click-to-WhatsApp' },
+  { value: 'tiktok', label: 'TikTok' },
   { value: 'organic_wa', label: 'WhatsApp orgánico' },
   { value: 'manual', label: 'Manual' },
   { value: 'import', label: 'Import' },

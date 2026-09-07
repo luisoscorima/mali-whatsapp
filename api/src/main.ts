@@ -1,7 +1,7 @@
 import { config } from 'dotenv';
 import path from 'node:path';
 import cookieParser from 'cookie-parser';
-import { ValidationPipe } from '@nestjs/common';
+import { RequestMethod, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
@@ -9,7 +9,13 @@ config({ path: path.resolve(__dirname, '../../.env') });
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
-  app.setGlobalPrefix('api', { exclude: ['health', 'webhook'] });
+  app.setGlobalPrefix('api', {
+    exclude: [
+      'health',
+      { path: 'webhook', method: RequestMethod.ALL },
+      { path: 'webhook/(.*)', method: RequestMethod.ALL },
+    ],
+  });
   app.use(cookieParser());
   app.enableCors({ origin: true, credentials: true });
   app.useGlobalPipes(

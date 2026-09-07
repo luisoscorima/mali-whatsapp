@@ -239,7 +239,8 @@ export class LeadsService {
       this.assertHasIdentity(identity);
       const resolved = await this.resolveContact(area, identity, {
         // Instant Form trae nombre real; no dejar el alias WA que a veces se guardó en CTWA
-        overwriteName: input.channel === 'meta_lead_form',
+        overwriteName:
+          input.channel === 'meta_lead_form' || input.channel === 'tiktok',
       });
       contact_id = resolved.contact_id;
     } catch (err) {

@@ -4,11 +4,12 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { LeadsController } from './leads.controller';
 import { LeadsService } from './leads.service';
 import { MetaLeadgenService } from './meta-leadgen.service';
+import { TikTokLeadgenService } from './tiktok-leadgen.service';
 
 @Module({
   imports: [AuthModule, PrismaModule],
   controllers: [LeadsController],
-  providers: [LeadsService, MetaLeadgenService],
-  exports: [LeadsService, MetaLeadgenService],
+  providers: [LeadsService, MetaLeadgenService, TikTokLeadgenService],
+  exports: [LeadsService, MetaLeadgenService, TikTokLeadgenService],
 })
 export class LeadsModule {}

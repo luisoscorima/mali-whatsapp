@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Post,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -176,5 +177,33 @@ export class AuthController {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
     return { ok: true, data: { user: nextUser } };
+  }
+
+  /**
+   * Redirect URI registrada en TikTok Marketing API.
+   * Por ahora solo confirma recepción del auth_code; el intercambio por token se hará luego.
+   */
+  @Get('auth/tiktok/callback')
+  tiktokOAuthCallback(
+    @Query('auth_code') authCode: string | undefined,
+    @Query('code') code: string | undefined,
+    @Query('state') state: string | undefined,
+    @Res() res: Response,
+  ): void {
+    const value = String(authCode || code || '').trim();
+    res
+      .status(200)
+      .type('html')
+      .send(
+        `<!doctype html><html><body style="font-family:sans-serif;padding:2rem">
+<h1>TikTok OAuth</h1>
+<p>${
+          value
+            ? 'Código recibido. Guárdalo y complétalo en Admin / env cuando el flujo de token esté listo.'
+            : 'Sin auth_code en la URL.'
+        }</p>
+<p style="color:#666;font-size:12px">state=${state || '—'}</p>
+</body></html>`,
+      );
   }
 }
