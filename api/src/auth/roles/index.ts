@@ -14,7 +14,12 @@ export {
   type RoleSlug,
   type LegacyPermissionFlags,
 } from './role-permissions';
-export { hasPermission, assertPermission } from './has-permission';
+export {
+  hasPermission,
+  assertPermission,
+  hasAnyPermission,
+  assertAnyPermission,
+} from './has-permission';
 export { OPERATIONAL_ROLE_USERS } from './operational-users';
 export {
   buildAdminRolesCatalog,

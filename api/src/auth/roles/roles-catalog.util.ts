@@ -16,6 +16,8 @@ export const PERMISSION_LABELS: Record<PermissionCode, string> = {
   'conversations.stats_own': 'Estadísticas personales de conversaciones',
   'conversations.export': 'Exportar conversación (Excel)',
   'contacts.manage': 'Gestionar contactos',
+  'contacts.create': 'Crear contactos',
+  'contacts.update': 'Editar contactos',
   'contacts.import': 'Importar contactos',
   'contacts.export': 'Exportar contactos',
   'segments.list': 'Listar segmentos',
@@ -77,7 +79,13 @@ export const PERMISSION_GROUPS: {
   {
     id: 'contacts',
     label: 'Contactos',
-    codes: ['contacts.manage', 'contacts.import', 'contacts.export'],
+    codes: [
+      'contacts.manage',
+      'contacts.create',
+      'contacts.update',
+      'contacts.import',
+      'contacts.export',
+    ],
   },
   {
     id: 'segments',

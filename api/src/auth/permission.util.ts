@@ -1,7 +1,12 @@
 import { ForbiddenException } from '@nestjs/common';
 import type { AuthUser } from './auth.types';
 import { PERMISSION } from './roles/permission-codes';
-import { assertPermission, hasPermission } from './roles/has-permission';
+import {
+  assertAnyPermission,
+  assertPermission,
+  hasAnyPermission,
+  hasPermission,
+} from './roles/has-permission';
 
 export function assertCanManageAttributes(user: AuthUser): void {
   assertPermission(
@@ -56,6 +61,35 @@ export function assertCanManageContacts(user: AuthUser): void {
     user,
     PERMISSION.CONTACTS_MANAGE,
     'No tienes permiso para gestionar contactos',
+  );
+}
+
+export function assertCanCreateContacts(user: AuthUser): void {
+  assertAnyPermission(
+    user,
+    [PERMISSION.CONTACTS_MANAGE, PERMISSION.CONTACTS_CREATE],
+    'No tienes permiso para crear contactos',
+  );
+}
+
+export function assertCanUpdateContacts(user: AuthUser): void {
+  assertAnyPermission(
+    user,
+    [PERMISSION.CONTACTS_MANAGE, PERMISSION.CONTACTS_UPDATE],
+    'No tienes permiso para editar contactos',
+  );
+}
+
+/** Lectura auxiliar del formulario (detalle / filter-options). */
+export function assertCanReadContactForWrite(user: AuthUser): void {
+  assertAnyPermission(
+    user,
+    [
+      PERMISSION.CONTACTS_MANAGE,
+      PERMISSION.CONTACTS_CREATE,
+      PERMISSION.CONTACTS_UPDATE,
+    ],
+    'No tienes permiso para ver contactos',
   );
 }
 
@@ -123,4 +157,4 @@ export function assertCanManageFlows(user: AuthUser): void {
   );
 }
 
-export { hasPermission, assertPermission, ForbiddenException };
+export { hasPermission, assertPermission, ForbiddenException, hasAnyPermission, assertAnyPermission };

@@ -47,6 +47,7 @@ type InboxChatActionsDialogProps = {
   onExport: () => void
   onAssign: () => void
   onOpenContact: () => void
+  canOpenContact?: boolean
   onSegmentAdded?: () => void
 }
 
@@ -75,6 +76,7 @@ export function InboxChatActionsDialog({
   onExport,
   onAssign,
   onOpenContact,
+  canOpenContact = true,
   onSegmentAdded,
 }: InboxChatActionsDialogProps) {
   const { theme } = useTheme()
@@ -283,17 +285,19 @@ export function InboxChatActionsDialog({
                 Asignar chat
               </Button>
             ) : null}
-            <Button
-              type="button"
-              variant="secondary"
-              className="w-full justify-start"
-              onClick={() => {
-                onOpenContact()
-                onOpenChange(false)
-              }}
-            >
-              {contactId ? 'Editar contacto' : 'Guardar contacto'}
-            </Button>
+            {canOpenContact ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full justify-start"
+                onClick={() => {
+                  onOpenContact()
+                  onOpenChange(false)
+                }}
+              >
+                {contactId ? 'Editar contacto' : 'Guardar contacto'}
+              </Button>
+            ) : null}
             {canArchive && onSetArchived ? (
               <Button
                 type="button"

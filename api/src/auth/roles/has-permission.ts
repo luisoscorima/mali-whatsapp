@@ -21,3 +21,22 @@ export function assertPermission(
     );
   }
 }
+
+export function hasAnyPermission(
+  user: Pick<AuthUser, 'permissions' | 'isMaster' | 'isBootstrapAdmin'>,
+  codes: readonly PermissionCode[],
+): boolean {
+  return codes.some((code) => hasPermission(user, code));
+}
+
+export function assertAnyPermission(
+  user: Pick<AuthUser, 'permissions' | 'isMaster' | 'isBootstrapAdmin'>,
+  codes: readonly PermissionCode[],
+  message?: string,
+): void {
+  if (!hasAnyPermission(user, codes)) {
+    throw new ForbiddenException(
+      message || 'No tienes permiso para esta acción',
+    );
+  }
+}

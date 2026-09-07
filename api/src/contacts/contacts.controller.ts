@@ -21,9 +21,12 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
 import {
+  assertCanCreateContacts,
   assertCanExportContacts,
   assertCanImportContacts,
   assertCanManageContacts,
+  assertCanReadContactForWrite,
+  assertCanUpdateContacts,
   assertPermission,
 } from '../auth/permission.util';
 import { PERMISSION } from '../auth/roles';
@@ -65,7 +68,7 @@ export class ContactsController {
   async filterOptions(
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<ContactsFilterOptions>> {
-    assertCanManageContacts(user);
+    assertCanReadContactForWrite(user);
     const data = await this.contactsService.getFilterOptions(user.area);
     return { ok: true, data };
   }
@@ -231,7 +234,7 @@ export class ContactsController {
     @CurrentUser() user: AuthUser,
     @Body() body: UpsertContactDto,
   ): Promise<ApiResponse<ContactDetail>> {
-    assertCanManageContacts(user);
+    assertCanCreateContacts(user);
     const data = await this.contactsService.create(user, body);
     return { ok: true, data };
   }
@@ -241,7 +244,7 @@ export class ContactsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ApiResponse<ContactDetail>> {
-    assertCanManageContacts(user);
+    assertCanReadContactForWrite(user);
     const data = await this.contactsService.getById(user.area, id);
     return { ok: true, data };
   }
@@ -267,7 +270,7 @@ export class ContactsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpsertContactDto,
   ): Promise<ApiResponse<ContactDetail>> {
-    assertCanManageContacts(user);
+    assertCanUpdateContacts(user);
     const data = await this.contactsService.update(user, id, body);
     return { ok: true, data };
   }

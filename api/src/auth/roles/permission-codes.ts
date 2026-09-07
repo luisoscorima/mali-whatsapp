@@ -7,6 +7,8 @@ export const PERMISSION = {
   CONVERSATIONS_EXPORT: 'conversations.export',
 
   CONTACTS_MANAGE: 'contacts.manage',
+  CONTACTS_CREATE: 'contacts.create',
+  CONTACTS_UPDATE: 'contacts.update',
   CONTACTS_IMPORT: 'contacts.import',
   CONTACTS_EXPORT: 'contacts.export',
 

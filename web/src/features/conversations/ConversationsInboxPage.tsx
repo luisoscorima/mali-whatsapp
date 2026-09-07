@@ -4,6 +4,10 @@ import { useAppUser } from '@/app/appOutletContext'
 import { apiClient } from '../../shared/api'
 import { formatChatListTime, chatListReplyStatus } from '../../shared/format'
 import { notify } from '@/shared/notify'
+import {
+  userCanCreateContacts,
+  userCanUpdateContacts,
+} from '@/shared/auth/permissions'
 import { WaPageContents } from '@/shared/ui/shell/WaLayout'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import {
@@ -247,6 +251,9 @@ function ProfileBlock({
   const contactId = detail.conversation.contact_id
   const contactMode = contactId ? 'edit' : 'create'
   const contactActionLabel = contactId ? 'Editar contacto' : 'Añadir contacto'
+  const canOpenContact = contactId
+    ? userCanUpdateContacts(user)
+    : userCanCreateContacts(user)
   const crmName = formatContactName(
     detail.contact?.name,
     detail.contact?.last_name,
@@ -266,15 +273,17 @@ function ProfileBlock({
           <h1 className={`inbox-chat-heading${isWaAlias ? ' muted' : ''}`}>
             {heading}
           </h1>
-          <button
-            type="button"
-            className="inbox-chat-contact-icon-btn"
-            title={contactActionLabel}
-            aria-label={contactActionLabel}
-            onClick={onOpenContact}
-          >
-            <ContactSheetIcon mode={contactMode} />
-          </button>
+          {canOpenContact ? (
+            <button
+              type="button"
+              className="inbox-chat-contact-icon-btn"
+              title={contactActionLabel}
+              aria-label={contactActionLabel}
+              onClick={onOpenContact}
+            >
+              <ContactSheetIcon mode={contactMode} />
+            </button>
+          ) : null}
         </div>
         <ConversationBadges
           status={detail.conversation.status}
@@ -1482,6 +1491,9 @@ export function ConversationsInboxPage() {
   const canAssign =
     detail?.can_assign_conversations ?? list?.can_assign_conversations ?? false
 
+  const canOpenListContact = (contactId: number | null | undefined) =>
+    contactId ? userCanUpdateContacts(user) : userCanCreateContacts(user)
+
   useEffect(() => {
     if (!assignContext || !canAssign) return
     setAssigneesLoading(true)
@@ -2125,20 +2137,22 @@ export function ConversationsInboxPage() {
                       <ContextMenuLabel className="truncate normal-case">
                         {name}
                       </ContextMenuLabel>
-                      <ContextMenuItem
-                        onSelect={() =>
-                          openAfterContextMenu(() =>
-                            openContactSheet({
-                              mode: item.contact_id ? 'edit' : 'create',
-                              contactId: item.contact_id,
-                              phone: item.phone,
-                              prefillName: waAlias,
-                            }),
-                          )
-                        }
-                      >
-                        {item.contact_id ? 'Editar contacto' : 'Guardar contacto'}
-                      </ContextMenuItem>
+                      {canOpenListContact(item.contact_id) ? (
+                        <ContextMenuItem
+                          onSelect={() =>
+                            openAfterContextMenu(() =>
+                              openContactSheet({
+                                mode: item.contact_id ? 'edit' : 'create',
+                                contactId: item.contact_id,
+                                phone: item.phone,
+                                prefillName: waAlias,
+                              }),
+                            )
+                          }
+                        >
+                          {item.contact_id ? 'Editar contacto' : 'Guardar contacto'}
+                        </ContextMenuItem>
+                      ) : null}
                       {hasConversation && canAssign ? (
                         <ContextMenuItem
                           onSelect={() =>
@@ -2424,6 +2438,7 @@ export function ConversationsInboxPage() {
           lastUserMessageAt={actionsContext.lastUserMessageAt}
           onModeChange={onModeChange}
           onAssign={() => openAssignFromActions(actionsContext)}
+          canOpenContact={canOpenListContact(actionsContext.contactId)}
           onOpenContact={() =>
             openContactSheet({
               mode: actionsContext.contactId ? 'edit' : 'create',

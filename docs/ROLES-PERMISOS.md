@@ -19,7 +19,7 @@ Fuente de verdad del mapa rol→permisos: `api/src/auth/roles/role-permissions.t
 |------|----------|
 | Gestor e inbox | Sin `conversations.manage` |
 | Asesor export chat | Sin `conversations.export` |
-| Segmentos/attrs chat vs contactos | Mismos `segments.assign` / `attributes.assign` (+ `_bulk`). Asesor sin `contacts.manage` (solo desde chat) |
+| Segmentos/attrs chat vs contactos | Mismos `segments.assign` / `attributes.assign` (+ `_bulk`). Asesor con `contacts.create` / `contacts.update` (desde chat); sin `contacts.manage` |
 | Coordinador TMK / PAM / Patronato | Mismo rol `coordinador`; cambian las áreas |
 | Leads | `leads.list` para todos **excepto** `asesor_comercial` |
 

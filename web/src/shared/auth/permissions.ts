@@ -7,6 +7,8 @@ export const PERMISSION = {
   CONVERSATIONS_STATS_GLOBAL: 'conversations.stats_global',
   CONVERSATIONS_EXPORT: 'conversations.export',
   CONTACTS_MANAGE: 'contacts.manage',
+  CONTACTS_CREATE: 'contacts.create',
+  CONTACTS_UPDATE: 'contacts.update',
   CONTACTS_IMPORT: 'contacts.import',
   CONTACTS_EXPORT: 'contacts.export',
   SEGMENTS_LIST: 'segments.list',
@@ -70,6 +72,24 @@ export function userHasPermission(
   if (code === PERMISSION.SETTINGS_REPORTS) return Boolean(user.canViewReports)
   // Sin rol migrado: acceso histórico amplio
   return true
+}
+
+export function userCanCreateContacts(
+  user: AuthUser | null | undefined,
+): boolean {
+  return (
+    userHasPermission(user, PERMISSION.CONTACTS_MANAGE) ||
+    userHasPermission(user, PERMISSION.CONTACTS_CREATE)
+  )
+}
+
+export function userCanUpdateContacts(
+  user: AuthUser | null | undefined,
+): boolean {
+  return (
+    userHasPermission(user, PERMISSION.CONTACTS_MANAGE) ||
+    userHasPermission(user, PERMISSION.CONTACTS_UPDATE)
+  )
 }
 
 export function defaultHomePath(user: AuthUser | null | undefined): string {
