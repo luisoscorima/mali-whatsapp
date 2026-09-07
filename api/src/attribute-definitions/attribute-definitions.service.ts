@@ -35,6 +35,8 @@ const ATTR_DEF_SELECT = {
   sort_order: true,
   required: true,
   active: true,
+  created_at: true,
+  updated_at: true,
 } as const;
 
 function mapDefinition(
@@ -48,6 +50,8 @@ function mapDefinition(
     sort_order: number;
     required: boolean;
     active: boolean;
+    created_at: Date;
+    updated_at: Date;
   },
   usageCount = 0,
 ): AttributeDefinition {
@@ -61,6 +65,8 @@ function mapDefinition(
     sort_order: row.sort_order,
     required: row.required,
     active: row.active,
+    created_at: row.created_at.toISOString(),
+    updated_at: row.updated_at.toISOString(),
     usage_count: usageCount,
   };
 }

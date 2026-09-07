@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
+import { formatDateTime } from '../../shared/format'
 import { formatContactName } from '../contacts/contactName'
 import { segmentToneClass } from './segmentColors'
 import { SegmentColorPicker } from './SegmentColorPicker'
@@ -18,7 +19,7 @@ type SegmentDefinition = {
   assignable: boolean
   assignment_group: string | null
   created_at: string
-  updated_at?: string
+  updated_at: string
 }
 
 type SegmentMember = {
@@ -192,6 +193,11 @@ export function SegmentDetailPage() {
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">{label}</h1>
         <p className="font-mono text-sm text-muted">{slug}</p>
+        <p className="mt-1 text-sm text-muted">
+          Creado: {formatDateTime(payload.segment.created_at)}
+          <br />
+          Últ. modificación: {formatDateTime(payload.segment.updated_at)}
+        </p>
       </div>
 
       <section className="rounded-xl border border-line bg-surface-strong p-4">

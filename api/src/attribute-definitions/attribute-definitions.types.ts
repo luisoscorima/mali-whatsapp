@@ -56,6 +56,8 @@ export type AttributeDefinition = {
   sort_order: number;
   required: boolean;
   active: boolean;
+  created_at: string;
+  updated_at: string;
   /** Contactos del área con valor no vacío en este slug. */
   usage_count: number;
 };

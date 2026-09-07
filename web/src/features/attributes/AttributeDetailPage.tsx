@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
+import { formatDateTime } from '../../shared/format'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 type AttributeDefinition = {
   id: number
@@ -13,6 +14,8 @@ type AttributeDefinition = {
   sort_order: number
   required: boolean
   active: boolean
+  created_at: string
+  updated_at: string
   usage_count: number
 }
 
@@ -173,6 +176,11 @@ export function AttributeDetailPage() {
               </Link>
             </>
           ) : null}
+        </p>
+        <p className="mt-1 text-sm text-muted">
+          Creado: {formatDateTime(def.created_at)}
+          <br />
+          Últ. modificación: {formatDateTime(def.updated_at)}
         </p>
       </div>
 
