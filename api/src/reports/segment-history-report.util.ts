@@ -7,11 +7,14 @@ import { resolveReportDateRange } from './report-date-range.util';
 export const SEGMENT_HISTORY_HEADERS = [
   'Fecha',
   'Contacto ID',
-  'Teléfono',
+  'Número',
   'Nombre',
+  'Apellido',
+  'DNI',
+  'Email',
   'Agregados',
   'Quitados',
-  'Segmentos resultantes',
+  'Segmentos Resultantes',
   'Actor',
 ] as const;
 
@@ -22,6 +25,9 @@ export type SegmentHistoryRow = {
   contact_id: number | null;
   phone: string;
   name: string;
+  last_name: string;
+  dni: string;
+  email: string;
   added: string;
   removed: string;
   segments: string;
@@ -44,7 +50,14 @@ export async function fetchSegmentHistoryReport(
     $queryRawUnsafe: <T>(query: string, ...params: unknown[]) => Promise<T>;
     contacts: {
       findMany: (args: unknown) => Promise<
-        { id: number; phone: string | null; name: string; last_name: string }[]
+        {
+          id: number;
+          phone: string | null;
+          name: string;
+          last_name: string;
+          dni: string | null;
+          email: string | null;
+        }[]
       >;
     };
   },
@@ -91,7 +104,14 @@ export async function fetchSegmentHistoryReport(
     contactIds.size > 0
       ? await prisma.contacts.findMany({
           where: { id: { in: [...contactIds] } },
-          select: { id: true, phone: true, name: true, last_name: true },
+          select: {
+            id: true,
+            phone: true,
+            name: true,
+            last_name: true,
+            dni: true,
+            email: true,
+          },
         })
       : [];
   const byId = new Map(contacts.map((c) => [c.id, c]));
@@ -107,16 +127,16 @@ export async function fetchSegmentHistoryReport(
         Number.isFinite(contactId) && contactId > 0 ? byId.get(contactId) : undefined;
       const phone =
         String(meta.phone ?? '').trim() || contact?.phone || '';
-      const name = contact
-        ? [contact.name, contact.last_name].filter(Boolean).join(' ').trim()
-        : '';
       return {
         id: String(row.id),
         created_at: new Date(row.created_at).toISOString(),
         created_display: formatExportDate(row.created_at) || '—',
         contact_id: Number.isFinite(contactId) && contactId > 0 ? contactId : null,
         phone,
-        name,
+        name: contact?.name || '',
+        last_name: contact?.last_name || '',
+        dni: contact?.dni || '',
+        email: contact?.email || '',
         added: listField(meta, 'added'),
         removed: listField(meta, 'removed'),
         segments: listField(meta, 'segments'),
@@ -134,6 +154,9 @@ export function buildSegmentHistoryXlsxBuffer(rows: SegmentHistoryRow[]): Buffer
       r.contact_id != null ? String(r.contact_id) : '',
       r.phone,
       r.name,
+      r.last_name,
+      r.dni,
+      r.email,
       r.added,
       r.removed,
       r.segments,

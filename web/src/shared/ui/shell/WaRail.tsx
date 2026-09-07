@@ -1,12 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import type { AuthUser } from '@/shared/api'
-import { areaLabel } from '@/features/admin/areaLabels'
 import { PERMISSION, defaultHomePath, userHasPermission } from '@/shared/auth/permissions'
 import { MALI_LOGO_URL } from '@/shared/brand'
 import { useTheme } from '@/shared/theme/useTheme'
 
 import { WaAccountMenu } from '@/shared/ui/shell/WaAccountMenu'
+import { WaAreaSwitchPill } from '@/shared/ui/shell/WaAreaSwitchPill'
 
 const MORE_NAV = ['templates', 'flows', 'segments', 'attributes', 'leads'] as const
 
@@ -210,12 +210,7 @@ export function WaRail({ user, onUserUpdate, conversationsUnreadCount = 0 }: WaR
           </span>
         </Link>
         {user?.area ? (
-          <span
-            className="area-pill area-pill--rail"
-            title={`Área activa: ${areaLabel(user.area)}`}
-          >
-            {areaLabel(user.area)}
-          </span>
+          <WaAreaSwitchPill user={user} onUserUpdate={onUserUpdate} />
         ) : null}
       </div>
 

@@ -16,19 +16,20 @@ export const REPORT_HEADERS = [
   'Apellido',
   'Email',
   'DNI',
-  '1er msj cliente',
-  'Fecha 1er msj cliente',
-  'Últ msj cliente',
-  'Fecha últ msj cliente',
-  'Asesor 1er msj',
-  '1er msj asesor',
-  'Fecha 1er msj asesor',
-  'Asesor últ msj',
-  'Últ msj asesor',
-  'Fecha últ msj asesor',
   'Segmentos actuales',
   'Origen',
+  '1era comunicación por',
   'Últ comunicación por',
+  'Cliente Texto 1er msj',
+  'Cliente Fecha 1er msj',
+  'Cliente Texto Últ msj',
+  'Cliente Fecha últ msj',
+  'Asesor Usuario 1er msj',
+  'Asesor Texto 1er msj',
+  'Asesor Fecha 1er msj',
+  'Asesor Usuario últ msj',
+  'Asesor Texto Últ msj',
+  'Asesor Fecha últ msj',
   'Estado de Lead',
   'Calificación del Lead',
 ] as const;
@@ -39,6 +40,7 @@ export type ContactCommunicationRow = {
   last_name: string;
   email: string;
   dni: string;
+  initiated_by: string;
   first_client_message: string;
   first_client_message_at: string | null;
   first_client_message_display: string;
@@ -81,6 +83,7 @@ type MessageRow = {
   raw_payload: unknown;
   created_at: Date;
   id: number;
+  rn_abs_asc: number;
   rn_abs_desc: number;
   rn_in_asc: number;
   rn_in_desc: number;
@@ -98,7 +101,7 @@ function truncateForPreview(text: string, max = PREVIEW_TRUNCATE): string {
   return `${s.slice(0, max - 1)}…`;
 }
 
-function lastCommunicationByLabel(msg: MessageRow | undefined): string {
+function communicationByLabel(msg: MessageRow | undefined): string {
   if (!msg) return '';
   if (msg.direction === 'inbound') return 'Cliente';
   return (
@@ -135,6 +138,7 @@ function buildRowFromMessages(
   },
   msgs: MessageRow[],
 ): ContactCommunicationRow {
+  const firstAbs = msgs.find((m) => Number(m.rn_abs_asc) === 1);
   const lastAbs = msgs.find((m) => Number(m.rn_abs_desc) === 1);
   const firstClient = msgs.find((m) => Number(m.rn_in_asc) === 1);
   const lastClient = msgs.find((m) => Number(m.rn_in_desc) === 1);
@@ -152,6 +156,7 @@ function buildRowFromMessages(
     last_name: contact.last_name,
     email: contact.email,
     dni: contact.dni,
+    initiated_by: communicationByLabel(firstAbs),
     first_client_message: firstClientText,
     first_client_message_at: isoAt(firstClient),
     first_client_message_display: displayAt(firstClient),
@@ -170,7 +175,7 @@ function buildRowFromMessages(
     last_advisor_message_display: displayAt(lastAdvisor),
     segments: contact.segments,
     origins: contact.origins,
-    last_communication_by: lastCommunicationByLabel(lastAbs),
+    last_communication_by: communicationByLabel(lastAbs),
     last_communication_at: isoAt(lastAbs),
     last_communication_display: displayAt(lastAbs),
     lead_status: contact.lead_status,
@@ -349,6 +354,10 @@ async function fetchMessagesForConversations(
         m.id,
         ROW_NUMBER() OVER (
           PARTITION BY m.conversation_id
+          ORDER BY m.created_at ASC, m.id ASC
+        ) AS rn_abs_asc,
+        ROW_NUMBER() OVER (
+          PARTITION BY m.conversation_id
           ORDER BY m.created_at DESC, m.id DESC
         ) AS rn_abs_desc,
         ROW_NUMBER() OVER (
@@ -398,13 +407,14 @@ async function fetchMessagesForConversations(
     )
     SELECT
       conversation_id, direction, body_text, message_type, is_ai, raw_payload,
-      created_at, id, rn_abs_desc,
+      created_at, id, rn_abs_asc, rn_abs_desc,
       COALESCE(rn_in_asc, 0) AS rn_in_asc,
       COALESCE(rn_in_desc, 0) AS rn_in_desc,
       COALESCE(rn_adv_asc, 0) AS rn_adv_asc,
       COALESCE(rn_adv_desc, 0) AS rn_adv_desc
     FROM advisor_ranked
-    WHERE rn_abs_desc = 1
+    WHERE rn_abs_asc = 1
+       OR rn_abs_desc = 1
        OR (direction = 'inbound' AND (rn_in_asc = 1 OR rn_in_desc = 1))
        OR (is_advisor AND (rn_adv_asc = 1 OR rn_adv_desc = 1))
   `);
@@ -481,6 +491,10 @@ export function reportRowToExportCells(row: ContactCommunicationRow): string[] {
     row.last_name,
     row.email,
     row.dni,
+    row.segments,
+    row.origins,
+    row.initiated_by,
+    row.last_communication_by,
     row.first_client_message,
     row.first_client_message_display,
     row.last_client_message,
@@ -491,9 +505,6 @@ export function reportRowToExportCells(row: ContactCommunicationRow): string[] {
     row.last_advisor_user,
     row.last_advisor_message,
     row.last_advisor_message_display,
-    row.segments,
-    row.origins,
-    row.last_communication_by,
     row.lead_status,
     row.lead_score,
   ];

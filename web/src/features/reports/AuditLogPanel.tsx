@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { notify } from '@/shared/notify'
 import { apiClient } from '../../shared/api'
+import { ReportScrollableTable } from '@/shared/ui/InboxListPager'
 import { defaultReportDateRange } from './reportDateRange'
 
 type FilterOption = { value: string; label: string }
@@ -58,6 +59,7 @@ export function AuditLogPanel({
   } | null>(null)
   const [data, setData] = useState<AuditResult | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
+  const [listLoading, setListLoading] = useState(false)
   const [busy, setBusy] = useState('')
   const [rangeReady, setRangeReady] = useState(false)
 
@@ -99,7 +101,9 @@ export function AuditLogPanel({
 
   useEffect(() => {
     if (!rangeReady || !query.from || !query.to) return
+    let cancelled = false
     setLoadFailed(false)
+    setListLoading(true)
     const qs = new URLSearchParams()
     if (query.level) qs.set('level', query.level)
     if (query.event) qs.set('event', query.event)
@@ -109,13 +113,19 @@ export function AuditLogPanel({
 
     const suffix = qs.toString()
     apiClient.get<AuditResult>(`${listPath}${suffix ? `?${suffix}` : ''}`).then((result) => {
+      if (cancelled) return
       if (!result.ok) {
         notify.error(result.error)
         setLoadFailed(true)
         return
       }
       setData(result.data)
+    }).finally(() => {
+      if (!cancelled) setListLoading(false)
     })
+    return () => {
+      cancelled = true
+    }
   }, [query, listPath, rangeReady])
 
   function updateFilter(key: string, value: string) {
@@ -136,6 +146,7 @@ export function AuditLogPanel({
 
   async function handleExport() {
     setBusy('export')
+    notify.info('Generando Excel… puede tardar según el volumen.')
     const qs = new URLSearchParams()
     if (query.level) qs.set('level', query.level)
     if (query.event) qs.set('event', query.event)
@@ -146,6 +157,7 @@ export function AuditLogPanel({
     const result = await apiClient.download(path)
     setBusy('')
     if (!result.ok) notify.error(result.error)
+    else notify.success('Excel listo')
   }
 
   if (loadFailed && !data) {
@@ -240,10 +252,17 @@ export function AuditLogPanel({
           <p className="text-sm text-muted">
             {data.pagination.total} evento(s) · página {data.pagination.page} de{' '}
             {data.pagination.total_pages}
+            {listLoading ? ' · actualizando…' : ''}
           </p>
-          <div className="overflow-x-auto rounded-lg border border-line">
+          <ReportScrollableTable
+            page={data.pagination.page}
+            totalPages={data.pagination.total_pages}
+            onPageChange={(p) => updateFilter('page', p <= 1 ? '' : String(p))}
+            ariaLabel="Paginación de bitácora"
+            syncKey={data.pagination.total}
+          >
             <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-line bg-surface text-xs text-muted">
+              <thead className="sticky top-0 border-b border-line bg-surface text-xs text-muted">
                 <tr>
                   <th className="px-3 py-2">Fecha</th>
                   <th className="px-3 py-2">Nivel</th>
@@ -289,31 +308,7 @@ export function AuditLogPanel({
                 )}
               </tbody>
             </table>
-          </div>
-          <div className="flex gap-2 text-sm">
-            {data.pagination.page > 1 ? (
-              <button
-                type="button"
-                className="rounded-lg border border-line px-2 py-1 hover:bg-surface"
-                onClick={() =>
-                  updateFilter('page', String(data.pagination.page - 1))
-                }
-              >
-                ← Anterior
-              </button>
-            ) : null}
-            {data.pagination.page < data.pagination.total_pages ? (
-              <button
-                type="button"
-                className="rounded-lg border border-line px-2 py-1 hover:bg-surface"
-                onClick={() =>
-                  updateFilter('page', String(data.pagination.page + 1))
-                }
-              >
-                Siguiente →
-              </button>
-            ) : null}
-          </div>
+          </ReportScrollableTable>
         </>
       )}
     </section>

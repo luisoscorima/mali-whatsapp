@@ -4,6 +4,7 @@ import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import { defaultReportDateRange } from '../reports/reportDateRange'
+import { ReportScrollableTable } from '@/shared/ui/InboxListPager'
 
 type TabId = 'communications' | 'segments' | 'chat'
 
@@ -18,6 +19,7 @@ type CommRow = {
   last_name: string
   email: string
   dni: string
+  initiated_by: string
   first_client_message_display: string
   first_client_message_preview: string
   last_client_message_display: string
@@ -53,6 +55,9 @@ type SegmentHistRow = {
   contact_id: number | null
   phone: string
   name: string
+  last_name: string
+  dni: string
+  email: string
   added: string
   removed: string
   segments: string
@@ -70,10 +75,15 @@ type SegmentHistResult = {
 type ChatHistRow = {
   id: string
   created_display: string
+  phone: string
+  name: string
+  last_name: string
+  dni: string
+  email: string
+  segments: string
+  origins: string
   event_type: string
   message: string
-  phone: string
-  conversation_id: number | null
   from_user: string
   to_user: string
   actor_email: string
@@ -100,6 +110,7 @@ export function SettingsReporteriaPage() {
   const [segData, setSegData] = useState<SegmentHistResult | null>(null)
   const [chatData, setChatData] = useState<ChatHistResult | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
+  const [listLoading, setListLoading] = useState(false)
   const [busy, setBusy] = useState('')
   const [rangeReady, setRangeReady] = useState(false)
 
@@ -110,6 +121,11 @@ export function SettingsReporteriaPage() {
   const selectedSegments = searchParams.getAll('segment')
   const attrKey = searchParams.get('attr_key') ?? ''
   const attrValue = searchParams.get('attr_value') ?? ''
+  const [attrValueDraft, setAttrValueDraft] = useState(attrValue)
+
+  useEffect(() => {
+    setAttrValueDraft(attrValue)
+  }, [attrValue])
 
   useEffect(() => {
     const hasFrom = Boolean(searchParams.get('from'))
@@ -132,6 +148,21 @@ export function SettingsReporteriaPage() {
     })
   }, [])
 
+  // Debounce valor de atributo: no refetch en cada tecla (preview ágil).
+  useEffect(() => {
+    if (attrValueDraft === attrValue) return
+    const t = window.setTimeout(() => {
+      setSearchParams((prev) => {
+        const sp = new URLSearchParams(prev)
+        if (attrValueDraft) sp.set('attr_value', attrValueDraft)
+        else sp.delete('attr_value')
+        sp.delete('page')
+        return sp
+      })
+    }, 400)
+    return () => window.clearTimeout(t)
+  }, [attrValueDraft, attrValue, setSearchParams])
+
   const filterQs = useMemo(() => {
     const qs = new URLSearchParams()
     if (from) qs.set('from', from)
@@ -145,12 +176,20 @@ export function SettingsReporteriaPage() {
 
   useEffect(() => {
     if (!rangeReady || !from || !to) return
+    let cancelled = false
     setLoadFailed(false)
+    setListLoading(true)
+
+    function done() {
+      if (!cancelled) setListLoading(false)
+    }
+
     if (tab === 'communications') {
       const qs = filterQs.toString()
       apiClient
         .get<CommResult>(`/api/reports/communications${qs ? `?${qs}` : ''}`)
         .then((result) => {
+          if (cancelled) return
           if (!result.ok) {
             notify.error(result.error)
             setLoadFailed(true)
@@ -158,7 +197,10 @@ export function SettingsReporteriaPage() {
           }
           setCommData(result.data)
         })
-      return
+        .finally(done)
+      return () => {
+        cancelled = true
+      }
     }
     const qs = new URLSearchParams()
     qs.set('from', from)
@@ -169,6 +211,7 @@ export function SettingsReporteriaPage() {
       apiClient
         .get<SegmentHistResult>(`/api/reports/segment-history${suffix}`)
         .then((result) => {
+          if (cancelled) return
           if (!result.ok) {
             notify.error(result.error)
             setLoadFailed(true)
@@ -176,11 +219,15 @@ export function SettingsReporteriaPage() {
           }
           setSegData(result.data)
         })
-      return
+        .finally(done)
+      return () => {
+        cancelled = true
+      }
     }
     apiClient
       .get<ChatHistResult>(`/api/reports/conversation-history${suffix}`)
       .then((result) => {
+        if (cancelled) return
         if (!result.ok) {
           notify.error(result.error)
           setLoadFailed(true)
@@ -188,6 +235,10 @@ export function SettingsReporteriaPage() {
         }
         setChatData(result.data)
       })
+      .finally(done)
+    return () => {
+      cancelled = true
+    }
   }, [tab, filterQs, from, to, page, rangeReady])
 
   function setTab(next: TabId) {
@@ -228,6 +279,7 @@ export function SettingsReporteriaPage() {
 
   async function handleExport() {
     setBusy('export')
+    notify.info('Generando Excel… puede tardar según el volumen.')
     let path = '/api/reports/communications/export'
     const qs = new URLSearchParams()
     qs.set('from', from)
@@ -244,6 +296,7 @@ export function SettingsReporteriaPage() {
     const result = await apiClient.download(`${path}?${qs.toString()}`)
     setBusy('')
     if (!result.ok) notify.error(result.error)
+    else notify.success('Excel listo')
   }
 
   function setPage(nextPage: number) {
@@ -359,9 +412,9 @@ export function SettingsReporteriaPage() {
                 <input
                   type="search"
                   className="mt-1 block rounded-lg border border-line bg-surface px-2 py-1.5"
-                  value={attrValue}
+                  value={attrValueDraft}
                   placeholder="Valor…"
-                  onChange={(e) => updateParam('attr_value', e.target.value)}
+                  onChange={(e) => setAttrValueDraft(e.target.value)}
                 />
               </label>
             ) : null}
@@ -388,8 +441,8 @@ export function SettingsReporteriaPage() {
       {tab === 'communications' && commData ? (
         <p className="text-sm text-muted">
           Contactos del área <strong>{commData.area_label}</strong> con última
-          interacción del cliente en el rango. Vista previa paginada; Excel hasta
-          25 000 filas.
+          interacción del cliente en el rango. Vista previa ligera (paginada);
+          el Excel puede tardar (hasta 25 000 filas).
         </p>
       ) : null}
       {tab === 'segments' && segData ? (
@@ -410,27 +463,33 @@ export function SettingsReporteriaPage() {
           <p className="text-sm text-muted">
             {pagination.total} registro(s) · página {pagination.page} de{' '}
             {pagination.total_pages}
+            {listLoading ? ' · actualizando…' : ''}
           </p>
 
+          <ReportScrollableTable
+            page={pagination.page}
+            totalPages={pagination.total_pages}
+            onPageChange={setPage}
+            ariaLabel="Paginación de reportería"
+            syncKey={`${tab}:${pagination.total}`}
+          >
           {tab === 'communications' && commData ? (
-            <div className="overflow-x-auto rounded-lg border border-line">
               <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-line bg-surface text-xs text-muted">
+                <thead className="sticky top-0 border-b border-line bg-surface text-xs text-muted">
                   <tr>
                     <th className="px-3 py-2">Número</th>
                     <th className="px-3 py-2">Cliente</th>
-                    <th className="px-3 py-2">1er / últ cliente</th>
-                    <th className="px-3 py-2">1er / últ asesor</th>
-                    <th className="px-3 py-2">Segmentos</th>
-                    <th className="px-3 py-2">Origen</th>
-                    <th className="px-3 py-2">Últ. por</th>
+                    <th className="px-3 py-2">Segmentos / Origen</th>
+                    <th className="px-3 py-2">1era / últ por</th>
+                    <th className="px-3 py-2">Cliente 1er / últ</th>
+                    <th className="px-3 py-2">Asesor 1er / últ</th>
                     <th className="px-3 py-2">Lead</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
                   {commData.rows.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-3 py-4 text-muted">
+                      <td colSpan={7} className="px-3 py-4 text-muted">
                         No hay contactos en el rango.
                       </td>
                     </tr>
@@ -446,6 +505,16 @@ export function SettingsReporteriaPage() {
                             {row.email || '—'} · {row.dni || '—'}
                           </span>
                         </td>
+                        <td className="max-w-[10rem] px-3 py-2 text-xs">
+                          {row.segments || '—'}
+                          <br />
+                          <span className="text-muted">{row.origins || '—'}</span>
+                        </td>
+                        <td className="px-3 py-2 text-xs">
+                          {row.initiated_by || '—'}
+                          <br />
+                          {row.last_communication_by || '—'}
+                        </td>
                         <td className="px-3 py-2 text-xs">
                           {row.first_client_message_display}
                           <br />
@@ -458,17 +527,6 @@ export function SettingsReporteriaPage() {
                           {row.last_advisor_user || '—'} ·{' '}
                           {row.last_advisor_message_display}
                         </td>
-                        <td className="max-w-[10rem] px-3 py-2 text-xs">
-                          {row.segments || '—'}
-                        </td>
-                        <td className="max-w-[10rem] px-3 py-2 text-xs">
-                          {row.origins || '—'}
-                        </td>
-                        <td className="px-3 py-2 text-xs">
-                          {row.last_communication_by || '—'}
-                          <br />
-                          {row.last_communication_display}
-                        </td>
                         <td className="px-3 py-2 text-xs">
                           {row.lead_status || '—'}
                           {row.lead_score ? ` · ${row.lead_score}` : ''}
@@ -478,16 +536,15 @@ export function SettingsReporteriaPage() {
                   )}
                 </tbody>
               </table>
-            </div>
           ) : null}
 
           {tab === 'segments' && segData ? (
-            <div className="overflow-x-auto rounded-lg border border-line">
               <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-line bg-surface text-xs text-muted">
+                <thead className="sticky top-0 border-b border-line bg-surface text-xs text-muted">
                   <tr>
                     <th className="px-3 py-2">Fecha</th>
-                    <th className="px-3 py-2">Contacto</th>
+                    <th className="px-3 py-2">Número</th>
+                    <th className="px-3 py-2">Cliente</th>
                     <th className="px-3 py-2">Agregados</th>
                     <th className="px-3 py-2">Quitados</th>
                     <th className="px-3 py-2">Resultantes</th>
@@ -497,7 +554,7 @@ export function SettingsReporteriaPage() {
                 <tbody className="divide-y divide-line">
                   {segData.rows.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-3 py-4 text-muted">
+                      <td colSpan={7} className="px-3 py-4 text-muted">
                         Sin eventos de segmentos en el rango.
                       </td>
                     </tr>
@@ -507,10 +564,16 @@ export function SettingsReporteriaPage() {
                         <td className="whitespace-nowrap px-3 py-2 text-xs">
                           {row.created_display}
                         </td>
-                        <td className="px-3 py-2 text-xs">
+                        <td className="px-3 py-2 font-mono text-xs">
                           {row.phone || '—'}
+                        </td>
+                        <td className="px-3 py-2 text-xs">
+                          {[row.name, row.last_name].filter(Boolean).join(' ') ||
+                            '—'}
                           <br />
-                          {row.name || '—'}
+                          <span className="text-muted">
+                            {row.dni || '—'} · {row.email || '—'}
+                          </span>
                         </td>
                         <td className="px-3 py-2 text-xs">{row.added || '—'}</td>
                         <td className="px-3 py-2 text-xs">{row.removed || '—'}</td>
@@ -523,17 +586,17 @@ export function SettingsReporteriaPage() {
                   )}
                 </tbody>
               </table>
-            </div>
           ) : null}
 
           {tab === 'chat' && chatData ? (
-            <div className="overflow-x-auto rounded-lg border border-line">
               <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-line bg-surface text-xs text-muted">
+                <thead className="sticky top-0 border-b border-line bg-surface text-xs text-muted">
                   <tr>
                     <th className="px-3 py-2">Fecha</th>
+                    <th className="px-3 py-2">Número</th>
+                    <th className="px-3 py-2">Cliente</th>
+                    <th className="px-3 py-2">Segmentos / Origen</th>
                     <th className="px-3 py-2">Tipo</th>
-                    <th className="px-3 py-2">Teléfono</th>
                     <th className="px-3 py-2">De → A</th>
                     <th className="px-3 py-2">Actor</th>
                     <th className="px-3 py-2">Mensaje</th>
@@ -542,7 +605,7 @@ export function SettingsReporteriaPage() {
                 <tbody className="divide-y divide-line">
                   {chatData.rows.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-3 py-4 text-muted">
+                      <td colSpan={8} className="px-3 py-4 text-muted">
                         Sin eventos de chat en el rango.
                       </td>
                     </tr>
@@ -552,17 +615,30 @@ export function SettingsReporteriaPage() {
                         <td className="whitespace-nowrap px-3 py-2 text-xs">
                           {row.created_display}
                         </td>
-                        <td className="px-3 py-2 text-xs">{row.event_type}</td>
                         <td className="px-3 py-2 font-mono text-xs">
                           {row.phone || '—'}
                         </td>
+                        <td className="px-3 py-2 text-xs">
+                          {[row.name, row.last_name].filter(Boolean).join(' ') ||
+                            '—'}
+                          <br />
+                          <span className="text-muted">
+                            {row.dni || '—'} · {row.email || '—'}
+                          </span>
+                        </td>
+                        <td className="max-w-[10rem] px-3 py-2 text-xs">
+                          {row.segments || '—'}
+                          <br />
+                          <span className="text-muted">{row.origins || '—'}</span>
+                        </td>
+                        <td className="px-3 py-2 text-xs">{row.event_type}</td>
                         <td className="px-3 py-2 text-xs">
                           {row.from_user || '—'} → {row.to_user || '—'}
                         </td>
                         <td className="px-3 py-2 text-xs">
                           {row.actor_email || '—'}
                         </td>
-                        <td className="max-w-[16rem] px-3 py-2 text-xs text-muted">
+                        <td className="max-w-[14rem] px-3 py-2 text-xs text-muted">
                           {row.message}
                         </td>
                       </tr>
@@ -570,29 +646,8 @@ export function SettingsReporteriaPage() {
                   )}
                 </tbody>
               </table>
-            </div>
           ) : null}
-
-          <div className="flex gap-2 text-sm">
-            {pagination.page > 1 ? (
-              <button
-                type="button"
-                className="rounded-lg border border-line px-2 py-1 hover:bg-surface"
-                onClick={() => setPage(pagination.page - 1)}
-              >
-                ← Anterior
-              </button>
-            ) : null}
-            {pagination.page < pagination.total_pages ? (
-              <button
-                type="button"
-                className="rounded-lg border border-line px-2 py-1 hover:bg-surface"
-                onClick={() => setPage(pagination.page + 1)}
-              >
-                Siguiente →
-              </button>
-            ) : null}
-          </div>
+          </ReportScrollableTable>
         </>
       )}
     </section>

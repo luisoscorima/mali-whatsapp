@@ -46,8 +46,8 @@ import type {
   SegmentHistoryReportResult,
 } from './reports.types';
 
-const AUDIT_PAGE_SIZE = 50;
-const REPORT_PAGE_SIZE = 50;
+const AUDIT_PAGE_SIZE = 25;
+const REPORT_PAGE_SIZE = 25;
 const REPORT_EXPORT_MAX = 25000;
 
 type AuditDbRow = AuditLogExportRow & { id: bigint | number };
