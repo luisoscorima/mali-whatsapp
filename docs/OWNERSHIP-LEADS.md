@@ -4,10 +4,13 @@
 
 | Capa | Dónde | Rol |
 |------|--------|-----|
-| **CRM operativo de leads** | mali-whatsapp (`/leads`) | Persona, `lead_status`, orígenes, operación, campañas WA |
+| **CRM operativo de leads** (fuente de verdad) | mali-whatsapp (`/leads` + API) | Persona, `lead_status`, orígenes, ownership/asignación, campañas WA |
+| **Vitrina CRM Educación** | MALI ONE (panel futuro) | UI para gestionar leads; consume WhatsApp — **sin** BD paralela de prospectos |
 | **Captura web + dinero** | MALI ONE | Widget → `EducacionLead` (ingestión/reintento); pagos, ROI |
 
-WhatsApp **reemplaza el Excel** de leads. ONE **no** es un segundo CRM de prospectos.
+WhatsApp **reemplaza el Excel** de leads. ONE **no** es un segundo CRM de prospectos (sí puede ser la vitrina operativa, como CRM PAM).
+
+Reemplazo del Sheet BBDD EP (verificar / distribuir / reportes): **[LEADS-CRM-EDUCACION.md](LEADS-CRM-EDUCACION.md)**.
 
 ## CTWA vs Instant Forms
 
