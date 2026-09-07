@@ -21,6 +21,10 @@ import {
   resolveLeadChatEnrichment,
 } from './lead-origin.util';
 import {
+  buildLeadsOriginsExportBuffer,
+  leadsOriginsExportFilename,
+} from './leads-export.util';
+import {
   DEFAULT_LEAD_STATUSES,
   type ContactIdentityInput,
   type LeadChannel,
@@ -408,15 +412,45 @@ export class LeadsService {
   async listOrigins(params: {
     area: string;
     channel?: string;
+    q?: string;
     limit?: number;
     offset?: number;
   }) {
     const areaNorm = normalizeArea(params.area);
     const take = Math.min(Math.max(params.limit ?? 50, 1), 200);
     const skip = Math.max(params.offset ?? 0, 0);
+    const q = String(params.q ?? '').trim();
     const where: Prisma.contact_originsWhereInput = {
       area: areaNorm,
       ...(params.channel ? { channel: params.channel } : {}),
+      ...(q
+        ? {
+            OR: [
+              { phone: { contains: q } },
+              { email: { contains: q, mode: 'insensitive' } },
+              { dni: { contains: q, mode: 'insensitive' } },
+              { source_label: { contains: q, mode: 'insensitive' } },
+              { source_key: { contains: q, mode: 'insensitive' } },
+              { external_id: { contains: q } },
+              {
+                contacts: {
+                  name: { contains: q, mode: 'insensitive' },
+                },
+              },
+              {
+                contacts: {
+                  last_name: { contains: q, mode: 'insensitive' },
+                },
+              },
+              { contacts: { phone: { contains: q } } },
+              {
+                contacts: {
+                  email: { contains: q, mode: 'insensitive' },
+                },
+              },
+            ],
+          }
+        : {}),
     };
     const [total, items] = await Promise.all([
       this.prisma.contact_origins.count({ where }),
@@ -445,6 +479,53 @@ export class LeadsService {
     const enriched = await this.enrichLeadRowsWithChat(areaNorm, items);
 
     return { total, items: enriched, limit: take, offset: skip };
+  }
+
+  async exportOrigins(params: {
+    area: string;
+    channel?: string;
+    q?: string;
+  }): Promise<{ buffer: Buffer; filename: string }> {
+    const areaNorm = normalizeArea(params.area);
+    const listed = await this.listOrigins({
+      area: areaNorm,
+      channel: params.channel,
+      q: params.q,
+      limit: 5000,
+      offset: 0,
+    });
+
+    const rows = listed.items.map((o) => {
+      const payload =
+        o.payload && typeof o.payload === 'object' && !Array.isArray(o.payload)
+          ? (o.payload as Record<string, unknown>)
+          : {};
+      const contactName = o.contacts
+        ? [o.contacts.name, o.contacts.last_name].filter(Boolean).join(' ')
+        : '';
+      return {
+        channel: o.channel,
+        contact_name: contactName,
+        phone: o.contacts?.phone || o.phone || '',
+        email: o.contacts?.email || o.email || '',
+        dni: o.contacts?.dni || o.dni || '',
+        lead_status: o.contacts?.lead_status?.label || '',
+        source_label: o.source_label || '',
+        source_key: o.source_key || '',
+        curso: String(payload.curso ?? '').trim(),
+        fuente: String(payload.fuente ?? '').trim(),
+        programa: String(payload.programa ?? '').trim(),
+        external_id: o.external_id,
+        last_seen_at: o.last_seen_at
+          ? new Date(o.last_seen_at).toISOString()
+          : '',
+      };
+    });
+
+    return {
+      buffer: buildLeadsOriginsExportBuffer(rows),
+      filename: leadsOriginsExportFilename(areaNorm),
+    };
   }
 
   /** Enriquece filas de leads con conversación para abrir chat e indicador de inbound al captar. */

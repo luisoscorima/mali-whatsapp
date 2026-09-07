@@ -3,6 +3,7 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
 import { notify } from '@/shared/notify'
+import { InboxListPager } from '@/shared/ui/InboxListPager'
 import {
   channelLabel,
   type ContactOriginSummary,
@@ -149,23 +150,63 @@ function LeadsUnifiedList() {
   const channelFilterLabel =
     CHANNEL_FILTER_OPTIONS.find((o) => o.value === channel)?.label || channel
 
+  const PAGE_SIZE = 25
   const [items, setItems] = useState<OriginRow[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [qInput, setQInput] = useState('')
+  const [qApplied, setQApplied] = useState('')
+  const [exportBusy, setExportBusy] = useState(false)
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const pageSafe = Math.min(page, totalPages)
 
   useEffect(() => {
-    const qs = new URLSearchParams({ limit: '40' })
-    if (channel) qs.set('channel', channel)
-    void apiClient
-      .get<{ items: OriginRow[] }>(`/api/leads/origins?${qs}`)
-      .then((r) => {
-        if (r.ok) setItems(r.data.items)
-      })
+    setPage(1)
   }, [channel])
+
+  useEffect(() => {
+    const qs = new URLSearchParams({
+      limit: String(PAGE_SIZE),
+      offset: String((pageSafe - 1) * PAGE_SIZE),
+    })
+    if (channel) qs.set('channel', channel)
+    if (qApplied.trim()) qs.set('q', qApplied.trim())
+    void apiClient
+      .get<{ items: OriginRow[]; total: number }>(`/api/leads/origins?${qs}`)
+      .then((r) => {
+        if (r.ok) {
+          setItems(r.data.items)
+          setTotal(r.data.total)
+        }
+      })
+  }, [channel, pageSafe, qApplied])
 
   function onChannelChange(value: string) {
     const next = new URLSearchParams(searchParams)
     if (value) next.set('channel', value)
     else next.delete('channel')
     setSearchParams(next, { replace: true })
+  }
+
+  function onSearch(e: FormEvent) {
+    e.preventDefault()
+    setQApplied(qInput)
+    setPage(1)
+  }
+
+  async function onExport() {
+    setExportBusy(true)
+    const qs = new URLSearchParams()
+    if (channel) qs.set('channel', channel)
+    if (qApplied.trim()) qs.set('q', qApplied.trim())
+    const path = qs.toString()
+      ? `/api/leads/origins/export?${qs}`
+      : '/api/leads/origins/export'
+    const res = await apiClient.download(path)
+    setExportBusy(false)
+    if (!res.ok) notify.error(res.error)
+    else notify.success('Excel descargado')
   }
 
   return (
@@ -176,10 +217,23 @@ function LeadsUnifiedList() {
             ? `Recientes · ${channelFilterLabel}`
             : 'Recientes (todos los canales)'}
         </h2>
+        <button
+          type="button"
+          disabled={exportBusy || total === 0}
+          onClick={() => void onExport()}
+          className="rounded-lg border border-line bg-bg px-3 py-1.5 text-sm disabled:opacity-60"
+        >
+          {exportBusy ? 'Exportando…' : 'Exportar Excel'}
+        </button>
+      </div>
+      <form
+        onSubmit={onSearch}
+        className="mb-3 flex flex-wrap items-end gap-2"
+      >
         <label className="text-sm">
-          <span className="sr-only">Canal</span>
+          <span className="text-muted">Origen</span>
           <select
-            className="rounded-lg border border-line bg-bg px-2 py-1.5"
+            className="mt-1 block rounded-lg border border-line bg-bg px-2 py-2"
             value={channel}
             onChange={(e) => onChannelChange(e.target.value)}
           >
@@ -190,97 +244,125 @@ function LeadsUnifiedList() {
             ))}
           </select>
         </label>
-      </div>
+        <label className="text-sm">
+          <span className="text-muted">Buscar</span>
+          <input
+            className="mt-1 block w-64 max-w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm"
+            value={qInput}
+            onChange={(e) => setQInput(e.target.value)}
+            placeholder="Nombre, tel, email, fuente…"
+          />
+        </label>
+        <button
+          type="submit"
+          className="rounded-lg border border-line bg-bg px-3 py-2 text-sm"
+        >
+          Buscar
+        </button>
+        <p className="pb-2 text-xs text-muted">
+          {total} origen(es) · página {pageSafe} / {totalPages}
+        </p>
+      </form>
       {items.length === 0 ? (
         <p className="text-sm text-muted">
-          {channel
-            ? 'No hay orígenes para este canal.'
+          {channel || qApplied
+            ? 'No hay orígenes para este filtro.'
             : 'Aún no hay orígenes registrados.'}
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-line text-muted">
-              <tr>
-                <th className="px-2 py-2">Canal</th>
-                <th className="px-2 py-2">Contacto</th>
-                <th className="px-2 py-2">Curso</th>
-                <th className="px-2 py-2">Fuente</th>
-                <th className="px-2 py-2">Estado</th>
-                <th className="px-2 py-2">Chat</th>
-                <th className="px-2 py-2">Último</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((o) => {
-                const primary = originPrimaryFields(o)
-                const secondary = originSecondaryFields(o)
-                return (
-                  <tr key={o.id} className="border-b border-line last:border-0">
-                    <td className="px-2 py-2">{channelLabel(o.channel)}</td>
-                    <td className="px-2 py-2">
-                      {o.contacts ? (
-                        <Link
-                          to={`/contacts/${o.contacts.id}`}
-                          className="text-accent hover:underline"
-                        >
-                          {o.contacts.name}
-                          {o.contacts.phone ? ` · ${o.contacts.phone}` : ''}
-                          {o.contacts.email ? ` · ${o.contacts.email}` : ''}
-                        </Link>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="px-2 py-2">
-                      {primary.curso ? (
-                        <div>
-                          <div>{primary.curso}</div>
-                          {primary.cursoUrl ? (
-                            <a
-                              href={primary.cursoUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-accent hover:underline"
-                            >
-                              Ver ficha
-                            </a>
-                          ) : null}
-                        </div>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="px-2 py-2">
-                      {primary.fuente || '—'}
-                      {primary.programa ? (
-                        <div className="text-xs text-muted">
-                          {primary.programa}
-                        </div>
-                      ) : null}
-                      {secondary.source ? (
-                        <div className="text-xs text-muted">{secondary.source}</div>
-                      ) : null}
-                    </td>
-                    <td className="px-2 py-2">
-                      {o.contacts?.lead_status?.label || '—'}
-                    </td>
-                    <td className="px-2 py-2">
-                      <LeadOpenChatButton
-                        contactId={o.contacts?.id}
-                        conversationId={o.chat_conversation_id}
-                        cameWithInbound={o.came_with_inbound}
-                      />
-                    </td>
-                    <td className="px-2 py-2">
-                      {formatDateTime(o.last_seen_at)}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-line text-muted">
+                <tr>
+                  <th className="px-2 py-2">Canal</th>
+                  <th className="px-2 py-2">Contacto</th>
+                  <th className="px-2 py-2">Curso</th>
+                  <th className="px-2 py-2">Fuente</th>
+                  <th className="px-2 py-2">Estado</th>
+                  <th className="px-2 py-2">Chat</th>
+                  <th className="px-2 py-2">Último</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((o) => {
+                  const primary = originPrimaryFields(o)
+                  const secondary = originSecondaryFields(o)
+                  return (
+                    <tr key={o.id} className="border-b border-line last:border-0">
+                      <td className="px-2 py-2">{channelLabel(o.channel)}</td>
+                      <td className="px-2 py-2">
+                        {o.contacts ? (
+                          <Link
+                            to={`/contacts/${o.contacts.id}`}
+                            className="text-accent hover:underline"
+                          >
+                            {o.contacts.name}
+                            {o.contacts.phone ? ` · ${o.contacts.phone}` : ''}
+                            {o.contacts.email ? ` · ${o.contacts.email}` : ''}
+                          </Link>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="px-2 py-2">
+                        {primary.curso ? (
+                          <div>
+                            <div>{primary.curso}</div>
+                            {primary.cursoUrl ? (
+                              <a
+                                href={primary.cursoUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-accent hover:underline"
+                              >
+                                Ver ficha
+                              </a>
+                            ) : null}
+                          </div>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="px-2 py-2">
+                        {primary.fuente || '—'}
+                        {primary.programa ? (
+                          <div className="text-xs text-muted">
+                            {primary.programa}
+                          </div>
+                        ) : null}
+                        {secondary.source ? (
+                          <div className="text-xs text-muted">
+                            {secondary.source}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="px-2 py-2">
+                        {o.contacts?.lead_status?.label || '—'}
+                      </td>
+                      <td className="px-2 py-2">
+                        <LeadOpenChatButton
+                          contactId={o.contacts?.id}
+                          conversationId={o.chat_conversation_id}
+                          cameWithInbound={o.came_with_inbound}
+                        />
+                      </td>
+                      <td className="px-2 py-2">
+                        {formatDateTime(o.last_seen_at)}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <InboxListPager
+            page={pageSafe}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            ariaLabel="Paginación de leads"
+          />
+        </>
       )}
     </section>
   )

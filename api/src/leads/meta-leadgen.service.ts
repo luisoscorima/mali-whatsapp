@@ -17,6 +17,10 @@ import {
 } from '../meta-settings/meta-settings.store';
 import { PrismaService } from '../prisma/prisma.service';
 import { inferAreaFromFormName } from './lead-form-area.util';
+import {
+  buildMetaFormLeadsExportBuffer,
+  metaFormLeadsExportFilename,
+} from './leads-export.util';
 import { LeadsService } from './leads.service';
 
 const GRAPH_BASE = 'https://graph.facebook.com/v23.0';
@@ -721,44 +725,187 @@ export class MetaLeadgenService {
     });
   }
 
-  async listFormLeads(area: string, formId?: string, limit = 50) {
+  async listFormLeads(
+    area: string,
+    opts: {
+      formId?: string;
+      formName?: string;
+      q?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ) {
     const areaNorm = normalizeArea(area);
-    const items = await this.prisma.meta_leadgen_leads.findMany({
-      where: {
-        area: areaNorm,
-        ...(formId ? { form_id: formId } : {}),
-      },
-      orderBy: { created_time: 'desc' },
-      take: Math.min(limit, 200),
-      include: {
-        contacts: {
-          select: {
-            id: true,
-            name: true,
-            last_name: true,
-            phone: true,
-            email: true,
-            dni: true,
-            lead_status: true,
-          },
-        },
-        contact_origins: {
-          select: {
-            channel: true,
-            conversation_id: true,
-          },
-        },
-      },
-    });
+    const take = Math.min(Math.max(opts.limit ?? 25, 1), 200);
+    const skip = Math.max(opts.offset ?? 0, 0);
+    const formId = String(opts.formId ?? '').trim();
+    const formNameQ = String(opts.formName ?? '').trim();
+    const q = String(opts.q ?? '').trim();
 
-    return this.leads.enrichLeadRowsWithChat(
+    let formIdsFromName: string[] | undefined;
+    if (formNameQ) {
+      const [routes, forms] = await Promise.all([
+        this.prisma.meta_lead_form_routes.findMany({
+          where: {
+            form_name: { contains: formNameQ, mode: 'insensitive' },
+          },
+          select: { form_id: true },
+        }),
+        this.prisma.meta_lead_forms.findMany({
+          where: {
+            area: areaNorm,
+            name: { contains: formNameQ, mode: 'insensitive' },
+          },
+          select: { form_id: true },
+        }),
+      ]);
+      formIdsFromName = [
+        ...new Set([
+          ...routes.map((r) => r.form_id),
+          ...forms.map((f) => f.form_id),
+        ]),
+      ];
+      if (formIdsFromName.length === 0) {
+        return { total: 0, items: [], limit: take, offset: skip };
+      }
+    }
+
+    let formIdFilter: Prisma.StringFilter | string | { in: string[] } | undefined;
+    if (formId && formIdsFromName) {
+      if (!formIdsFromName.includes(formId)) {
+        return { total: 0, items: [], limit: take, offset: skip };
+      }
+      formIdFilter = formId;
+    } else if (formId) {
+      formIdFilter = formId;
+    } else if (formIdsFromName) {
+      formIdFilter = { in: formIdsFromName };
+    }
+
+    const where: Prisma.meta_leadgen_leadsWhereInput = {
+      area: areaNorm,
+      ...(formIdFilter ? { form_id: formIdFilter } : {}),
+      ...(q
+        ? {
+            OR: [
+              { form_id: { contains: q } },
+              { leadgen_id: { contains: q } },
+              {
+                contacts: {
+                  name: { contains: q, mode: 'insensitive' },
+                },
+              },
+              {
+                contacts: {
+                  last_name: { contains: q, mode: 'insensitive' },
+                },
+              },
+              { contacts: { phone: { contains: q } } },
+              {
+                contacts: {
+                  email: { contains: q, mode: 'insensitive' },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+
+    const [total, items] = await Promise.all([
+      this.prisma.meta_leadgen_leads.count({ where }),
+      this.prisma.meta_leadgen_leads.findMany({
+        where,
+        orderBy: { created_time: 'desc' },
+        take,
+        skip,
+        include: {
+          contacts: {
+            select: {
+              id: true,
+              name: true,
+              last_name: true,
+              phone: true,
+              email: true,
+              dni: true,
+              lead_status: true,
+            },
+          },
+          contact_origins: {
+            select: {
+              channel: true,
+              conversation_id: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    const formIds = [...new Set(items.map((i) => i.form_id))];
+    const nameByFormId = new Map<string, string>();
+    if (formIds.length > 0) {
+      const [routes, forms] = await Promise.all([
+        this.prisma.meta_lead_form_routes.findMany({
+          where: { form_id: { in: formIds } },
+          select: { form_id: true, form_name: true },
+        }),
+        this.prisma.meta_lead_forms.findMany({
+          where: { area: areaNorm, form_id: { in: formIds } },
+          select: { form_id: true, name: true },
+        }),
+      ]);
+      for (const f of forms) {
+        if (f.name) nameByFormId.set(f.form_id, f.name);
+      }
+      for (const r of routes) {
+        if (r.form_name) nameByFormId.set(r.form_id, r.form_name);
+      }
+    }
+
+    const enriched = await this.leads.enrichLeadRowsWithChat(
       areaNorm,
       items.map((row) => ({
         ...row,
+        form_name: nameByFormId.get(row.form_id) ?? null,
         channel: row.contact_origins?.channel ?? 'meta_lead_form',
         conversation_id: row.contact_origins?.conversation_id ?? null,
       })),
     );
+
+    return { total, items: enriched, limit: take, offset: skip };
+  }
+
+  async exportFormLeads(
+    area: string,
+    opts: { formId?: string; formName?: string; q?: string } = {},
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    const areaNorm = normalizeArea(area);
+    const listed = await this.listFormLeads(areaNorm, {
+      ...opts,
+      limit: 5000,
+      offset: 0,
+    });
+    const rows = listed.items.map((row) => {
+      const contactName = row.contacts
+        ? [row.contacts.name, row.contacts.last_name].filter(Boolean).join(' ')
+        : '';
+      return {
+        contact_name: contactName,
+        phone: row.contacts?.phone || '',
+        email: row.contacts?.email || '',
+        dni: row.contacts?.dni || '',
+        lead_status: row.contacts?.lead_status?.label || '',
+        form_id: row.form_id,
+        form_name: row.form_name || '',
+        leadgen_id: row.leadgen_id,
+        created_time: row.created_time
+          ? new Date(row.created_time).toISOString()
+          : '',
+      };
+    });
+    return {
+      buffer: buildMetaFormLeadsExportBuffer(rows),
+      filename: metaFormLeadsExportFilename(areaNorm),
+    };
   }
 
   async getLead(area: string, id: number) {

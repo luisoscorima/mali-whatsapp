@@ -31,6 +31,7 @@ type LeadRow = {
   id: number
   leadgen_id: string
   form_id: string
+  form_name?: string | null
   created_time: string | null
   chat_conversation_id: number | null
   came_with_inbound: boolean
@@ -47,16 +48,25 @@ const ROUTE_AREA_OPTIONS = AREA_OPTIONS.filter((o) =>
   ['educacion', 'educacion_ca', 'educacion_ep'].includes(o.slug),
 )
 
+const LEADS_PAGE_SIZE = 25
+
 export function MetaFormsPage() {
   const [forms, setForms] = useState<FormRow[]>([])
   const [routes, setRoutes] = useState<FormRouteRow[]>([])
   const [leads, setLeads] = useState<LeadRow[]>([])
+  const [leadsTotal, setLeadsTotal] = useState(0)
   const [formId, setFormId] = useState('')
   const [busy, setBusy] = useState(false)
   const [syncBusy, setSyncBusy] = useState(false)
+  const [exportBusy, setExportBusy] = useState(false)
   const [routeBusyId, setRouteBusyId] = useState<string | null>(null)
   const [routeQuery, setRouteQuery] = useState('')
   const [routePage, setRoutePage] = useState(1)
+  const [leadQuery, setLeadQuery] = useState('')
+  const [leadQueryApplied, setLeadQueryApplied] = useState('')
+  const [leadFormName, setLeadFormName] = useState('')
+  const [leadFormNameApplied, setLeadFormNameApplied] = useState('')
+  const [leadPage, setLeadPage] = useState(1)
 
   const filteredRoutes = useMemo(() => {
     const q = routeQuery.trim().toLowerCase()
@@ -78,20 +88,62 @@ export function MetaFormsPage() {
     routePageSafe * ROUTES_PAGE_SIZE,
   )
 
-  async function reload() {
-    const [f, r, l] = await Promise.all([
+  const leadTotalPages = Math.max(1, Math.ceil(leadsTotal / LEADS_PAGE_SIZE))
+  const leadPageSafe = Math.min(leadPage, leadTotalPages)
+
+  const formNameOptions = useMemo(() => {
+    const names = new Set<string>()
+    for (const r of routes) {
+      if (r.form_name?.trim()) names.add(r.form_name.trim())
+    }
+    for (const f of forms) {
+      if (f.name?.trim()) names.add(f.name.trim())
+    }
+    return [...names].sort((a, b) => a.localeCompare(b, 'es'))
+  }, [routes, forms])
+
+  async function reloadCatalog() {
+    const [f, r] = await Promise.all([
       apiClient.get<FormRow[]>('/api/leads/meta-forms'),
       apiClient.get<FormRouteRow[]>('/api/leads/meta-forms/routes'),
-      apiClient.get<LeadRow[]>('/api/leads/meta-forms/leads?limit=80'),
     ])
     if (f.ok) setForms(f.data)
     if (r.ok) setRoutes(r.data)
-    if (l.ok) setLeads(l.data)
+  }
+
+  async function reloadLeads(page = leadPageSafe) {
+    const qs = new URLSearchParams({
+      limit: String(LEADS_PAGE_SIZE),
+      offset: String((page - 1) * LEADS_PAGE_SIZE),
+    })
+    if (leadQueryApplied.trim()) qs.set('q', leadQueryApplied.trim())
+    if (leadFormNameApplied.trim()) {
+      qs.set('form_name', leadFormNameApplied.trim())
+    }
+    const l = await apiClient.get<{
+      items: LeadRow[]
+      total: number
+    }>(`/api/leads/meta-forms/leads?${qs}`)
+    if (l.ok) {
+      setLeads(l.data.items)
+      setLeadsTotal(l.data.total)
+    }
+  }
+
+  async function reload() {
+    await reloadCatalog()
+    await reloadLeads(1)
+    setLeadPage(1)
   }
 
   useEffect(() => {
-    void reload()
+    void reloadCatalog()
   }, [])
+
+  useEffect(() => {
+    void reloadLeads(leadPageSafe)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- filtros aplicados disparan reset de página
+  }, [leadPageSafe, leadQueryApplied, leadFormNameApplied])
 
   async function onBackfill(e: FormEvent) {
     e.preventDefault()
@@ -134,6 +186,29 @@ export function MetaFormsPage() {
     }
     notify.success(`Sync: ${parts.join(' · ')}`)
     void reload()
+  }
+
+  async function onExportLeads() {
+    setExportBusy(true)
+    const qs = new URLSearchParams()
+    if (leadQueryApplied.trim()) qs.set('q', leadQueryApplied.trim())
+    if (leadFormNameApplied.trim()) {
+      qs.set('form_name', leadFormNameApplied.trim())
+    }
+    const path = qs.toString()
+      ? `/api/leads/meta-forms/leads/export?${qs}`
+      : '/api/leads/meta-forms/leads/export'
+    const res = await apiClient.download(path)
+    setExportBusy(false)
+    if (!res.ok) notify.error(res.error)
+    else notify.success('Excel descargado')
+  }
+
+  function applyLeadFilters(e?: FormEvent) {
+    e?.preventDefault()
+    setLeadQueryApplied(leadQuery)
+    setLeadFormNameApplied(leadFormName)
+    setLeadPage(1)
   }
 
   async function onRouteAreaChange(formIdValue: string, area: string) {
@@ -328,64 +403,125 @@ export function MetaFormsPage() {
       </section>
 
       <section className="rounded-xl border border-line bg-surface-strong p-4">
-        <h2 className="mb-3 font-medium">Leads recientes</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-medium">Leads recientes</h2>
+          <button
+            type="button"
+            disabled={exportBusy || leadsTotal === 0}
+            onClick={() => void onExportLeads()}
+            className="rounded-lg border border-line bg-bg px-3 py-1.5 text-sm disabled:opacity-60"
+          >
+            {exportBusy ? 'Exportando…' : 'Exportar Excel'}
+          </button>
+        </div>
+        <form
+          onSubmit={applyLeadFilters}
+          className="mb-3 flex flex-wrap items-end gap-2"
+        >
+          <label className="text-sm">
+            <span className="text-muted">Buscar</span>
+            <input
+              className="mt-1 block w-56 max-w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm"
+              value={leadQuery}
+              onChange={(e) => setLeadQuery(e.target.value)}
+              placeholder="Nombre, tel, email, form ID"
+            />
+          </label>
+          <label className="text-sm">
+            <span className="text-muted">Nombre de form</span>
+            <input
+              className="mt-1 block w-64 max-w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm"
+              list="meta-form-name-options"
+              value={leadFormName}
+              onChange={(e) => setLeadFormName(e.target.value)}
+              placeholder="Ej. Cursos de Arte…"
+            />
+            <datalist id="meta-form-name-options">
+              {formNameOptions.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+          </label>
+          <button
+            type="submit"
+            className="rounded-lg border border-line bg-bg px-3 py-2 text-sm"
+          >
+            Filtrar
+          </button>
+          <p className="pb-2 text-xs text-muted">
+            {leadsTotal} lead(s) · página {leadPageSafe} / {leadTotalPages}
+          </p>
+        </form>
         {leads.length === 0 ? (
           <p className="text-sm text-muted">Sin leads.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-line text-muted">
-                <tr>
-                  <th className="px-2 py-2">Contacto</th>
-                  <th className="px-2 py-2">Form</th>
-                  <th className="px-2 py-2">Estado</th>
-                  <th className="px-2 py-2">Chat</th>
-                  <th className="px-2 py-2">Fecha</th>
-                </tr>
-              </thead>
-              <tbody>
-                {leads.map((lead) => (
-                  <tr
-                    key={lead.id}
-                    className="border-b border-line last:border-0"
-                  >
-                    <td className="px-2 py-2">
-                      {lead.contacts ? (
-                        <Link
-                          to={`/contacts/${lead.contacts.id}`}
-                          className="text-accent hover:underline"
-                        >
-                          {lead.contacts.name}
-                          {lead.contacts.phone
-                            ? ` · ${lead.contacts.phone}`
-                            : ''}
-                          {lead.contacts.email
-                            ? ` · ${lead.contacts.email}`
-                            : ''}
-                        </Link>
-                      ) : (
-                        lead.leadgen_id
-                      )}
-                    </td>
-                    <td className="px-2 py-2 font-mono">{lead.form_id}</td>
-                    <td className="px-2 py-2">
-                      {lead.contacts?.lead_status?.label || '—'}
-                    </td>
-                    <td className="px-2 py-2">
-                      <LeadOpenChatButton
-                        contactId={lead.contacts?.id}
-                        conversationId={lead.chat_conversation_id}
-                        cameWithInbound={lead.came_with_inbound}
-                      />
-                    </td>
-                    <td className="px-2 py-2">
-                      {formatDateTime(lead.created_time)}
-                    </td>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-line text-muted">
+                  <tr>
+                    <th className="px-2 py-2">Contacto</th>
+                    <th className="px-2 py-2">Form</th>
+                    <th className="px-2 py-2">Estado</th>
+                    <th className="px-2 py-2">Chat</th>
+                    <th className="px-2 py-2">Fecha</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {leads.map((lead) => (
+                    <tr
+                      key={lead.id}
+                      className="border-b border-line last:border-0"
+                    >
+                      <td className="px-2 py-2">
+                        {lead.contacts ? (
+                          <Link
+                            to={`/contacts/${lead.contacts.id}`}
+                            className="text-accent hover:underline"
+                          >
+                            {lead.contacts.name}
+                            {lead.contacts.phone
+                              ? ` · ${lead.contacts.phone}`
+                              : ''}
+                            {lead.contacts.email
+                              ? ` · ${lead.contacts.email}`
+                              : ''}
+                          </Link>
+                        ) : (
+                          lead.leadgen_id
+                        )}
+                      </td>
+                      <td className="px-2 py-2">
+                        <div>{lead.form_name || '—'}</div>
+                        <div className="font-mono text-xs text-muted">
+                          {lead.form_id}
+                        </div>
+                      </td>
+                      <td className="px-2 py-2">
+                        {lead.contacts?.lead_status?.label || '—'}
+                      </td>
+                      <td className="px-2 py-2">
+                        <LeadOpenChatButton
+                          contactId={lead.contacts?.id}
+                          conversationId={lead.chat_conversation_id}
+                          cameWithInbound={lead.came_with_inbound}
+                        />
+                      </td>
+                      <td className="px-2 py-2">
+                        {formatDateTime(lead.created_time)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <InboxListPager
+              page={leadPageSafe}
+              totalPages={leadTotalPages}
+              onPageChange={setLeadPage}
+              ariaLabel="Paginación de leads Instant Forms"
+            />
+          </>
         )}
       </section>
     </div>

@@ -7,8 +7,10 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
@@ -101,6 +103,7 @@ export class LeadsController {
   async origins(
     @CurrentUser() user: AuthUser,
     @Query('channel') channel?: string,
+    @Query('q') q?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ): Promise<ApiResponse<unknown>> {
@@ -108,10 +111,32 @@ export class LeadsController {
     const data = await this.leadsService.listOrigins({
       area: user.area,
       channel,
+      q,
       limit: limit ? Number(limit) : undefined,
       offset: offset ? Number(offset) : undefined,
     });
     return { ok: true, data };
+  }
+
+  @Get('origins/export')
+  async exportOrigins(
+    @CurrentUser() user: AuthUser,
+    @Res() res: Response,
+    @Query('channel') channel?: string,
+    @Query('q') q?: string,
+  ): Promise<void> {
+    assertCanManageLeads(user);
+    const { buffer, filename } = await this.leadsService.exportOrigins({
+      area: user.area,
+      channel,
+      q,
+    });
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
   }
 
   /** Catálogo de estados: lectura para asesores y gestores (asignar status). */
@@ -201,15 +226,41 @@ export class LeadsController {
   async listFormLeads(
     @CurrentUser() user: AuthUser,
     @Query('form_id') formId?: string,
+    @Query('form_name') formName?: string,
+    @Query('q') q?: string,
     @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
   ): Promise<ApiResponse<unknown>> {
     assertCanManageLeads(user);
-    const data = await this.metaLeadgen.listFormLeads(
-      user.area,
+    const data = await this.metaLeadgen.listFormLeads(user.area, {
       formId,
-      limit ? Number(limit) : 50,
-    );
+      formName,
+      q,
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
     return { ok: true, data };
+  }
+
+  @Get('meta-forms/leads/export')
+  async exportFormLeads(
+    @CurrentUser() user: AuthUser,
+    @Res() res: Response,
+    @Query('form_id') formId?: string,
+    @Query('form_name') formName?: string,
+    @Query('q') q?: string,
+  ): Promise<void> {
+    assertCanManageLeads(user);
+    const { buffer, filename } = await this.metaLeadgen.exportFormLeads(
+      user.area,
+      { formId, formName, q },
+    );
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
   }
 
   @Post('meta-forms/backfill')
