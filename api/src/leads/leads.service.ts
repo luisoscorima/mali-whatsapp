@@ -97,10 +97,12 @@ export class LeadsService {
 
   /**
    * Resolve contact by phone → dni → email within area. Creates if missing.
+   * `overwriteName`: Instant Form / fuentes con nombre declarado pisan alias de WA.
    */
   async resolveContact(
     area: string,
     input: ContactIdentityInput,
+    opts?: { overwriteName?: boolean },
   ): Promise<{ contact_id: number; created: boolean }> {
     const areaNorm = normalizeArea(area);
     this.assertHasIdentity(input);
@@ -145,11 +147,17 @@ export class LeadsService {
       if (!existing.dni && dni) data.dni = dni;
       if (!existing.email && email) data.email = email;
       const incomingName = String(input.name ?? '').trim();
-      if (!existing.name || existing.name === 'Lead') {
+      if (opts?.overwriteName && incomingName) {
+        // Formulario / fuente explícita: gana sobre alias WA guardado en el contacto
+        data.name = incomingName.slice(0, 150);
+        if (last_name) data.last_name = last_name.slice(0, 150);
+      } else if (!existing.name || existing.name === 'Lead') {
         // Vacío (o limpiar placeholder) para que Chats use wa_profile_name / teléfono
         data.name = incomingName || name || '';
+        if (!existing.last_name && last_name) data.last_name = last_name;
+      } else if (!existing.last_name && last_name) {
+        data.last_name = last_name;
       }
-      if (!existing.last_name && last_name) data.last_name = last_name;
       if (existing.lead_status_id == null && defaultStatusId) {
         data.lead_status = { connect: { id: defaultStatusId } };
         data.lead_status_updated_at = new Date();
@@ -206,7 +214,10 @@ export class LeadsService {
     let contact_id: number | null = null;
     try {
       this.assertHasIdentity(identity);
-      const resolved = await this.resolveContact(area, identity);
+      const resolved = await this.resolveContact(area, identity, {
+        // Instant Form trae nombre real; no dejar el alias WA que a veces se guardó en CTWA
+        overwriteName: input.channel === 'meta_lead_form',
+      });
       contact_id = resolved.contact_id;
     } catch (err) {
       if (!(err instanceof BadRequestException)) throw err;

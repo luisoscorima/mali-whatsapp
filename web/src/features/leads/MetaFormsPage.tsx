@@ -1,10 +1,13 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
 import { notify } from '@/shared/notify'
+import { InboxListPager } from '@/shared/ui/InboxListPager'
 import { AREA_OPTIONS } from '../admin/areaLabels'
 import { LeadOpenChatButton } from './LeadOpenChatButton'
+
+const ROUTES_PAGE_SIZE = 25
 
 type FormRow = {
   id: number
@@ -52,6 +55,28 @@ export function MetaFormsPage() {
   const [busy, setBusy] = useState(false)
   const [syncBusy, setSyncBusy] = useState(false)
   const [routeBusyId, setRouteBusyId] = useState<string | null>(null)
+  const [routeQuery, setRouteQuery] = useState('')
+  const [routePage, setRoutePage] = useState(1)
+
+  const filteredRoutes = useMemo(() => {
+    const q = routeQuery.trim().toLowerCase()
+    if (!q) return routes
+    return routes.filter((row) => {
+      const id = row.form_id.toLowerCase()
+      const name = (row.form_name || '').toLowerCase()
+      return id.includes(q) || name.includes(q)
+    })
+  }, [routes, routeQuery])
+
+  const routeTotalPages = Math.max(
+    1,
+    Math.ceil(filteredRoutes.length / ROUTES_PAGE_SIZE),
+  )
+  const routePageSafe = Math.min(routePage, routeTotalPages)
+  const pagedRoutes = filteredRoutes.slice(
+    (routePageSafe - 1) * ROUTES_PAGE_SIZE,
+    routePageSafe * ROUTES_PAGE_SIZE,
+  )
 
   async function reload() {
     const [f, r, l] = await Promise.all([
@@ -90,15 +115,24 @@ export function MetaFormsPage() {
       synced: number
       created: number
       updated: number
+      skipped_inactive?: number
+      deleted?: number
     }>('/api/leads/meta-forms/sync-forms', {})
     setSyncBusy(false)
     if (!res.ok) {
       notify.error(res.error)
       return
     }
-    notify.success(
-      `Sync: ${res.data.synced} forms (${res.data.created} nuevos, ${res.data.updated} actualizados)`,
-    )
+    const parts = [
+      `${res.data.synced} activos`,
+      `${res.data.created} nuevos`,
+      `${res.data.updated} actualizados`,
+    ]
+    if (res.data.deleted) parts.push(`${res.data.deleted} rutas viejas eliminadas`)
+    if (res.data.skipped_inactive) {
+      parts.push(`${res.data.skipped_inactive} inactivos omitidos`)
+    }
+    notify.success(`Sync: ${parts.join(' · ')}`)
     void reload()
   }
 
@@ -137,8 +171,9 @@ export function MetaFormsPage() {
           <div>
             <h2 className="font-medium">Rutas form → área</h2>
             <p className="text-xs text-muted">
-              Reglas: «Cursos de Arte…» → CA · «[FORM EP]» → EP · resto →
-              Educación. Un cambio manual queda bloqueado al sincronizar.
+              Reglas: «Cursos de Arte…» / «[FORM CA]» / prefijo «CA …» → CA ·
+              «[FORM EP]» → EP · resto → Educación. Un cambio manual queda
+              bloqueado al sincronizar.
             </p>
           </div>
           <button
@@ -147,7 +182,7 @@ export function MetaFormsPage() {
             onClick={() => void onSyncForms()}
             className="rounded-lg border border-line bg-bg px-3 py-1.5 text-sm disabled:opacity-60"
           >
-            {syncBusy ? 'Sincronizando…' : 'Sincronizar forms desde Meta'}
+            {syncBusy ? 'Sincronizando…' : 'Sincronizar forms activos'}
           </button>
         </div>
         {routes.length === 0 ? (
@@ -155,59 +190,98 @@ export function MetaFormsPage() {
             Aún no hay rutas. Sync desde Meta o espera el primer lead.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-line text-muted">
-                <tr>
-                  <th className="px-2 py-2">Form ID</th>
-                  <th className="px-2 py-2">Nombre</th>
-                  <th className="px-2 py-2">Área</th>
-                  <th className="px-2 py-2">Sync</th>
-                </tr>
-              </thead>
-              <tbody>
-                {routes.map((row) => (
-                  <tr
-                    key={row.form_id}
-                    className="border-b border-line last:border-0"
-                  >
-                    <td className="px-2 py-2 font-mono text-xs">
-                      {row.form_id}
-                    </td>
-                    <td className="px-2 py-2">
-                      {row.form_name || '—'}
-                      {row.area_locked ? (
-                        <span className="ml-2 text-xs text-muted">manual</span>
-                      ) : null}
-                    </td>
-                    <td className="px-2 py-2">
-                      <select
-                        className="rounded-lg border border-line bg-bg px-2 py-1"
-                        value={row.area}
-                        disabled={routeBusyId === row.form_id}
-                        onChange={(e) =>
-                          void onRouteAreaChange(row.form_id, e.target.value)
-                        }
-                      >
-                        {ROUTE_AREA_OPTIONS.map((o) => (
-                          <option key={o.slug} value={o.slug}>
-                            {o.label}
-                          </option>
-                        ))}
-                        {!ROUTE_AREA_OPTIONS.some((o) => o.slug === row.area) ? (
-                          <option value={row.area}>{row.area}</option>
-                        ) : null}
-                      </select>
-                    </td>
-                    <td className="px-2 py-2 text-xs text-muted">
-                      {row.last_synced_at
-                        ? formatDateTime(row.last_synced_at)
-                        : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="text-sm">
+                <span className="text-muted">Buscar Form ID o nombre</span>
+                <input
+                  className="mt-1 block w-72 max-w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm"
+                  value={routeQuery}
+                  onChange={(e) => {
+                    setRouteQuery(e.target.value)
+                    setRoutePage(1)
+                  }}
+                  placeholder="Ej. 1678089… o Cursos de Arte"
+                />
+              </label>
+              <p className="pb-2 text-xs text-muted">
+                {filteredRoutes.length} de {routes.length} · página{' '}
+                {routePageSafe} / {routeTotalPages}
+              </p>
+            </div>
+            {filteredRoutes.length === 0 ? (
+              <p className="text-sm text-muted">Sin coincidencias.</p>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="border-b border-line text-muted">
+                      <tr>
+                        <th className="px-2 py-2">Form ID</th>
+                        <th className="px-2 py-2">Nombre</th>
+                        <th className="px-2 py-2">Área</th>
+                        <th className="px-2 py-2">Sync</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagedRoutes.map((row) => (
+                        <tr
+                          key={row.form_id}
+                          className="border-b border-line last:border-0"
+                        >
+                          <td className="px-2 py-2 font-mono text-xs">
+                            {row.form_id}
+                          </td>
+                          <td className="px-2 py-2">
+                            {row.form_name || '—'}
+                            {row.area_locked ? (
+                              <span className="ml-2 text-xs text-muted">
+                                manual
+                              </span>
+                            ) : null}
+                          </td>
+                          <td className="px-2 py-2">
+                            <select
+                              className="rounded-lg border border-line bg-bg px-2 py-1"
+                              value={row.area}
+                              disabled={routeBusyId === row.form_id}
+                              onChange={(e) =>
+                                void onRouteAreaChange(
+                                  row.form_id,
+                                  e.target.value,
+                                )
+                              }
+                            >
+                              {ROUTE_AREA_OPTIONS.map((o) => (
+                                <option key={o.slug} value={o.slug}>
+                                  {o.label}
+                                </option>
+                              ))}
+                              {!ROUTE_AREA_OPTIONS.some(
+                                (o) => o.slug === row.area,
+                              ) ? (
+                                <option value={row.area}>{row.area}</option>
+                              ) : null}
+                            </select>
+                          </td>
+                          <td className="px-2 py-2 text-xs text-muted">
+                            {row.last_synced_at
+                              ? formatDateTime(row.last_synced_at)
+                              : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <InboxListPager
+                  page={routePageSafe}
+                  totalPages={routeTotalPages}
+                  onPageChange={setRoutePage}
+                  ariaLabel="Paginación de rutas form"
+                />
+              </>
+            )}
           </div>
         )}
       </section>

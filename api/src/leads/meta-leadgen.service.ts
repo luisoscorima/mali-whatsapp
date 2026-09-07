@@ -342,6 +342,8 @@ export class MetaLeadgenService {
     synced: number;
     created: number;
     updated: number;
+    skipped_inactive: number;
+    deleted: number;
   }> {
     const { token, pageId } = this.peekPageCredentials(areaHint);
     if (!token) {
@@ -358,6 +360,8 @@ export class MetaLeadgenService {
     let synced = 0;
     let created = 0;
     let updated = 0;
+    let skippedInactive = 0;
+    const activeIds = new Set<string>();
     let after: string | undefined;
 
     do {
@@ -367,6 +371,13 @@ export class MetaLeadgenService {
       url.searchParams.set('fields', 'id,name,status');
       url.searchParams.set('access_token', token);
       url.searchParams.set('limit', '50');
+      // Solo ACTIVE (Meta a veces ignora filtering; también filtramos abajo)
+      url.searchParams.set(
+        'filtering',
+        JSON.stringify([
+          { field: 'status', operator: 'EQUAL', value: 'ACTIVE' },
+        ]),
+      );
       if (after) url.searchParams.set('after', after);
 
       const res = await fetch(url);
@@ -384,6 +395,14 @@ export class MetaLeadgenService {
       for (const form of json.data ?? []) {
         const formId = String(form.id ?? '').trim();
         if (!formId) continue;
+        const status = String(form.status ?? '')
+          .trim()
+          .toUpperCase();
+        if (status && status !== 'ACTIVE') {
+          skippedInactive += 1;
+          continue;
+        }
+        activeIds.add(formId);
         const formName = String(form.name ?? '').trim() || null;
         const inferred = inferAreaFromFormName(formName);
         const existing = await this.prisma.meta_lead_form_routes.findUnique({
@@ -422,7 +441,22 @@ export class MetaLeadgenService {
       after = json.paging?.next ? json.paging?.cursors?.after : undefined;
     } while (after);
 
-    return { synced, created, updated };
+    // Quitar rutas que ya no están ACTIVE en Meta (no toca leads/contactos)
+    let deleted = 0;
+    if (activeIds.size > 0) {
+      const prune = await this.prisma.meta_lead_form_routes.deleteMany({
+        where: { form_id: { notIn: [...activeIds] } },
+      });
+      deleted = prune.count;
+    }
+
+    return {
+      synced,
+      created,
+      updated,
+      skipped_inactive: skippedInactive,
+      deleted,
+    };
   }
 
   async ingestLeadgenId(params: {
