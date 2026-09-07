@@ -22,21 +22,9 @@ export function buildContactCommunicationXlsxBuffer(
     ...rows.map((r) => reportRowToExportCells(r)),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [
-    { wch: 16 },
-    { wch: 28 },
-    { wch: 28 },
-    { wch: 16 },
-    { wch: 22 },
-    { wch: 12 },
-    { wch: 48 },
-    { wch: 48 },
-    { wch: 22 },
-    { wch: 18 },
-    { wch: 48 },
-    { wch: 48 },
-    { wch: 14 },
-  ];
+  ws['!cols'] = REPORT_HEADERS.map((h) => ({
+    wch: Math.min(48, Math.max(12, h.length + 2)),
+  }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Comunicaciones');
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;

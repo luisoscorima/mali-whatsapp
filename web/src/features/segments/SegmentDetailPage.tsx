@@ -18,6 +18,7 @@ type SegmentDefinition = {
   assignable: boolean
   assignment_group: string | null
   created_at: string
+  updated_at?: string
 }
 
 type SegmentMember = {

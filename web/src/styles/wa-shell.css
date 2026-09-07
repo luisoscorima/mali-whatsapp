@@ -68,6 +68,10 @@
 }
 
 .wa-rail__brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   margin-bottom: 8px;
 }
 
@@ -812,13 +816,6 @@
     padding-top: 0;
     width: auto;
     justify-self: end;
-  }
-
-  .wa-layout--inbox .area-pill--rail,
-  .wa-layout--simple .area-pill--rail {
-    max-width: 56px;
-    font-size: 0.58rem;
-    padding: 3px 4px;
   }
 
   .wa-layout--inbox .wa-rail__theme,

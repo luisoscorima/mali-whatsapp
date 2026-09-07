@@ -209,6 +209,14 @@ export function WaRail({ user, onUserUpdate, conversationsUnreadCount = 0 }: WaR
             <img className="wa-rail__logo" src={MALI_LOGO_URL} alt="MALI" width="40" height="40" decoding="async" />
           </span>
         </Link>
+        {user?.area ? (
+          <span
+            className="area-pill area-pill--rail"
+            title={`Área activa: ${areaLabel(user.area)}`}
+          >
+            {areaLabel(user.area)}
+          </span>
+        ) : null}
       </div>
 
       <nav className="wa-rail__nav" aria-label="Secciones">
@@ -268,15 +276,6 @@ export function WaRail({ user, onUserUpdate, conversationsUnreadCount = 0 }: WaR
       </nav>
 
       <div className="wa-rail__footer">
-        {user?.area ? (
-          <span
-            className="area-pill area-pill--rail"
-            title={`Área activa: ${areaLabel(user.area)}`}
-          >
-            {areaLabel(user.area)}
-          </span>
-        ) : null}
-
         <button
           type="button"
           className="wa-rail__theme theme-toggle"

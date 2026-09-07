@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { notify } from '@/shared/notify'
 import { apiClient } from '../../shared/api'
+import { defaultReportDateRange } from './reportDateRange'
 
 type FilterOption = { value: string; label: string }
 
@@ -58,6 +59,22 @@ export function AuditLogPanel({
   const [data, setData] = useState<AuditResult | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
   const [busy, setBusy] = useState('')
+  const [rangeReady, setRangeReady] = useState(false)
+
+  useEffect(() => {
+    const hasFrom = Boolean(searchParams.get('from'))
+    const hasTo = Boolean(searchParams.get('to'))
+    if (hasFrom && hasTo) {
+      setRangeReady(true)
+      return
+    }
+    const { from, to } = defaultReportDateRange()
+    const next = new URLSearchParams(searchParams)
+    if (!hasFrom) next.set('from', from)
+    if (!hasTo) next.set('to', to)
+    setSearchParams(next, { replace: true })
+    setRangeReady(true)
+  }, [searchParams, setSearchParams])
 
   const query = useMemo(
     () => ({
@@ -81,12 +98,13 @@ export function AuditLogPanel({
   }, [optionsPath])
 
   useEffect(() => {
+    if (!rangeReady || !query.from || !query.to) return
     setLoadFailed(false)
     const qs = new URLSearchParams()
     if (query.level) qs.set('level', query.level)
     if (query.event) qs.set('event', query.event)
-    if (query.from) qs.set('from', query.from)
-    if (query.to) qs.set('to', query.to)
+    qs.set('from', query.from)
+    qs.set('to', query.to)
     if (query.page !== '1') qs.set('page', query.page)
 
     const suffix = qs.toString()
@@ -98,7 +116,7 @@ export function AuditLogPanel({
       }
       setData(result.data)
     })
-  }, [query, listPath])
+  }, [query, listPath, rangeReady])
 
   function updateFilter(key: string, value: string) {
     const next = new URLSearchParams(searchParams)
@@ -109,7 +127,11 @@ export function AuditLogPanel({
   }
 
   function clearFilters() {
-    setSearchParams(new URLSearchParams())
+    const { from, to } = defaultReportDateRange()
+    const next = new URLSearchParams()
+    next.set('from', from)
+    next.set('to', to)
+    setSearchParams(next)
   }
 
   async function handleExport() {

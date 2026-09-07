@@ -5,7 +5,12 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
 import { ReportsService } from './reports.service';
-import type { AuditLogListResult, CommunicationReportResult } from './reports.types';
+import type {
+  AuditLogListResult,
+  CommunicationReportResult,
+  ConversationHistoryReportResult,
+  SegmentHistoryReportResult,
+} from './reports.types';
 
 @Controller('reports')
 @UseGuards(JwtAuthGuard, ProvisionedGuard)
@@ -47,7 +52,7 @@ export class ReportsController {
   @Get('communications')
   async communications(
     @CurrentUser() user: AuthUser,
-    @Query() query: Record<string, string | undefined>,
+    @Query() query: Record<string, string | string[] | undefined>,
   ): Promise<ApiResponse<CommunicationReportResult>> {
     const data = await this.reportsService.listCommunications(user, query);
     return { ok: true, data };
@@ -56,10 +61,61 @@ export class ReportsController {
   @Get('communications/export')
   async exportCommunications(
     @CurrentUser() user: AuthUser,
+    @Query() query: Record<string, string | string[] | undefined>,
     @Res() res: Response,
   ): Promise<void> {
     const { buffer, filename } =
-      await this.reportsService.exportCommunications(user);
+      await this.reportsService.exportCommunications(user, query);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  }
+
+  @Get('segment-history')
+  async segmentHistory(
+    @CurrentUser() user: AuthUser,
+    @Query() query: Record<string, string | undefined>,
+  ): Promise<ApiResponse<SegmentHistoryReportResult>> {
+    const data = await this.reportsService.listSegmentHistory(user, query);
+    return { ok: true, data };
+  }
+
+  @Get('segment-history/export')
+  async exportSegmentHistory(
+    @CurrentUser() user: AuthUser,
+    @Query() query: Record<string, string | undefined>,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { buffer, filename } =
+      await this.reportsService.exportSegmentHistory(user, query);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  }
+
+  @Get('conversation-history')
+  async conversationHistory(
+    @CurrentUser() user: AuthUser,
+    @Query() query: Record<string, string | undefined>,
+  ): Promise<ApiResponse<ConversationHistoryReportResult>> {
+    const data = await this.reportsService.listConversationHistory(user, query);
+    return { ok: true, data };
+  }
+
+  @Get('conversation-history/export')
+  async exportConversationHistory(
+    @CurrentUser() user: AuthUser,
+    @Query() query: Record<string, string | undefined>,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { buffer, filename } =
+      await this.reportsService.exportConversationHistory(user, query);
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

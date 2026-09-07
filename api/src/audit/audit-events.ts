@@ -16,6 +16,7 @@ export const AuditEvent = {
   CONTACT_BULK_SEGMENT: 'contact.bulk_segment',
   CONTACT_BULK_ATTRIBUTE: 'contact.bulk_attribute',
   CONTACT_UPDATED: 'contact.updated',
+  CONTACT_SEGMENT_CHANGE: 'contact.segment_change',
   CONTACT_LEAD_SCORE: 'contact.lead_score',
   CONTACT_DELETED: 'contact.deleted',
   CAMPAIGN_CREATED: 'campaign.created',

@@ -68,6 +68,11 @@ Primaria = primera área de la lista (o la ya existente si sigue permitida).
 - Pestañas con áreas distintas
 - Overrides de permisos por usuario (más allá del rol)
 - Borrar columnas `can_*` (se derivan / sincronizan desde el rol)
+- Editor de roles (los cambios van por código / deploy)
+
+## Consulta en UI (solo lectura)
+
+Master → **Admin → Roles** (`/admin/roles`): catálogo desde `GET /api/admin/roles` (`buildAdminRolesCatalog`).
 
 ## Flags legacy (`can_*`)
 

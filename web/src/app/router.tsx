@@ -51,6 +51,7 @@ import { AdminIndexPage } from '../features/admin/AdminIndexPage'
 import { AdminMetaPage } from '../features/admin/AdminMetaPage'
 import { AdminAuditPage } from '../features/admin/AdminAuditPage'
 import { AdminAreasPage } from '../features/admin/AdminAreasPage'
+import { AdminRolesPage } from '../features/admin/AdminRolesPage'
 
 export function AppRouter() {
   return (
@@ -206,6 +207,7 @@ export function AppRouter() {
                 <Route path="users" element={<AdminUsersShell />} />
                 <Route path="users/new" element={<Navigate to="/admin/users" replace />} />
                 <Route path="users/:id" element={<Navigate to="/admin/users" replace />} />
+                <Route path="roles" element={<AdminRolesPage />} />
                 <Route path="areas" element={<AdminAreasPage />} />
                 <Route path="meta" element={<AdminMetaPage />} />
                 <Route path="audit-logs" element={<AdminAuditPage />} />

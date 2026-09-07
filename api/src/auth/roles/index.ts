@@ -16,3 +16,10 @@ export {
 } from './role-permissions';
 export { hasPermission, assertPermission } from './has-permission';
 export { OPERATIONAL_ROLE_USERS } from './operational-users';
+export {
+  buildAdminRolesCatalog,
+  PERMISSION_LABELS,
+  PERMISSION_GROUPS,
+  type AdminRolesCatalog,
+} from './roles-catalog.util';
+

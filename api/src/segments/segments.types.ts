@@ -49,6 +49,7 @@ export type SegmentDefinition = {
   assignable: boolean;
   assignment_group: string | null;
   created_at: string;
+  updated_at: string;
 };
 
 export const SEGMENT_SELECT = {
@@ -62,6 +63,7 @@ export const SEGMENT_SELECT = {
   assignable: true,
   assignment_group: true,
   created_at: true,
+  updated_at: true,
 } as const;
 
 export function mapSegmentRow(row: {
@@ -75,10 +77,12 @@ export function mapSegmentRow(row: {
   assignable: boolean;
   assignment_group: string | null;
   created_at: Date;
+  updated_at: Date;
 }): SegmentDefinition {
   return {
     ...row,
     created_at: row.created_at.toISOString(),
+    updated_at: row.updated_at.toISOString(),
   };
 }
 

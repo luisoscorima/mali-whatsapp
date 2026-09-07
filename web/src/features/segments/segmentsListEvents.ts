@@ -9,6 +9,7 @@ type SegmentListItem = {
   assignable: boolean
   assignment_group: string | null
   created_at: string
+  updated_at?: string
 }
 
 /** Refresco completo de la lista (crear / borrar). */

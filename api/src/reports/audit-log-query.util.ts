@@ -1,12 +1,10 @@
-const DISPLAY_TIMEZONE =
-  String(process.env.DISPLAY_TIMEZONE || 'America/Lima').trim() ||
-  'America/Lima';
+import {
+  getReportDisplayTimeZone,
+  resolveReportDateRange,
+} from './report-date-range.util';
 
 export function getAuditDisplayTimeZone(): string {
-  if (!/^[A-Za-z0-9_/+-]+$/.test(DISPLAY_TIMEZONE)) {
-    return 'America/Lima';
-  }
-  return DISPLAY_TIMEZONE;
+  return getReportDisplayTimeZone();
 }
 
 export function auditCreatedDateSql(): string {
@@ -137,8 +135,7 @@ export function buildAuditLogWhere(
     .trim()
     .toLowerCase();
   const event = String(q.event || '').trim();
-  const from = String(q.from || '').trim();
-  const to = String(q.to || '').trim();
+  const { from, to } = resolveReportDateRange(q.from, q.to);
   const areaScope = opts.areaScope
     ? String(opts.areaScope).trim().toLowerCase()
     : '';
@@ -183,16 +180,12 @@ export function buildAuditLogWhere(
     }
   }
   const dateExpr = auditCreatedDateSql();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(from)) {
-    where.push(`${dateExpr} >= $${n}::date`);
-    params.push(from);
-    n += 1;
-  }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(to)) {
-    where.push(`${dateExpr} <= $${n}::date`);
-    params.push(to);
-    n += 1;
-  }
+  where.push(`${dateExpr} >= $${n}::date`);
+  params.push(from);
+  n += 1;
+  where.push(`${dateExpr} <= $${n}::date`);
+  params.push(to);
+  n += 1;
 
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   return {

@@ -33,6 +33,10 @@ import {
   UpdateAdminUserDto,
 } from './dto/admin.dto';
 import { MasterGuard } from './guards/master.guard';
+import {
+  buildAdminRolesCatalog,
+  type AdminRolesCatalog,
+} from '../auth/roles';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, MasterGuard)
@@ -43,6 +47,11 @@ export class AdminController {
     private readonly metaSettingsService: MetaSettingsService,
     private readonly reportsService: ReportsService,
   ) {}
+
+  @Get('roles')
+  listRoles(): ApiResponse<AdminRolesCatalog> {
+    return { ok: true, data: buildAdminRolesCatalog() };
+  }
 
   @Get('areas')
   async listAreas(): Promise<ApiResponse<AdminAreaSummary[]>> {

@@ -1,45 +1,75 @@
+import { escapeForLikePattern } from '../contacts/contacts-filter.utils';
 import { Prisma } from '@prisma/client';
 import { formatExportDate } from '../campaigns/campaign-format.util';
-import { parseBusinessHoursConfig } from '../settings/business-hours.util';
+import {
+  isHumanAdvisorOutboundMessage,
+  readMessageSenderLabel,
+} from '../conversations/chat-sender.util';
+import { getReportDisplayTimeZone } from './report-date-range.util';
 
 const PREVIEW_TRUNCATE = 120;
+const SEGMENT_NONE = '__none__';
 
 export const REPORT_HEADERS = [
   'Número',
   'Nombre',
+  'Apellido',
   'Email',
   'DNI',
-  'Fecha primera comunicación',
-  'Iniciada por',
-  'Mensaje 1 (inicio)',
-  'Mensaje 2 (inicio)',
-  'Fecha última comunicación',
-  'Última comunicación por',
-  'Último mensaje cliente',
-  'Último mensaje equipo',
-  'Tipo último mensaje equipo',
+  '1er msj cliente',
+  'Fecha 1er msj cliente',
+  'Últ msj cliente',
+  'Fecha últ msj cliente',
+  'Asesor 1er msj',
+  '1er msj asesor',
+  'Fecha 1er msj asesor',
+  'Asesor últ msj',
+  'Últ msj asesor',
+  'Fecha últ msj asesor',
+  'Segmentos actuales',
+  'Origen',
+  'Últ comunicación por',
+  'Estado de Lead',
+  'Calificación del Lead',
 ] as const;
 
 export type ContactCommunicationRow = {
   phone: string;
   name: string;
+  last_name: string;
   email: string;
   dni: string;
-  first_communication_at: string | null;
-  first_communication_display: string;
-  initiated_by: string;
-  message1: string;
-  message2: string;
-  message1_preview: string;
-  message2_preview: string;
+  first_client_message: string;
+  first_client_message_at: string | null;
+  first_client_message_display: string;
+  last_client_message: string;
+  last_client_message_at: string | null;
+  last_client_message_display: string;
+  first_client_message_preview: string;
+  last_client_message_preview: string;
+  first_advisor_user: string;
+  first_advisor_message: string;
+  first_advisor_message_at: string | null;
+  first_advisor_message_display: string;
+  last_advisor_user: string;
+  last_advisor_message: string;
+  last_advisor_message_at: string | null;
+  last_advisor_message_display: string;
+  segments: string;
+  origins: string;
+  last_communication_by: string;
   last_communication_at: string | null;
   last_communication_display: string;
-  last_communication_by: string;
-  last_client_message: string;
-  last_team_message: string;
-  last_team_message_by: string;
-  last_client_message_preview: string;
-  last_team_message_preview: string;
+  lead_status: string;
+  lead_score: string;
+};
+
+export type CommunicationReportFilters = {
+  from: string;
+  to: string;
+  segment_slugs: string[];
+  attr_key: string;
+  attr_value: string;
 };
 
 type MessageRow = {
@@ -51,48 +81,15 @@ type MessageRow = {
   raw_payload: unknown;
   created_at: Date;
   id: number;
-  rn_asc: number;
-  rn_desc: number;
-  rn_dir: number;
+  rn_abs_desc: number;
+  rn_in_asc: number;
+  rn_in_desc: number;
+  rn_adv_asc: number;
+  rn_adv_desc: number;
 };
-
-function parseRawPayload(raw: unknown): Record<string, unknown> | null {
-  if (raw == null) return null;
-  if (typeof raw === 'object') return raw as Record<string, unknown>;
-  try {
-    return JSON.parse(String(raw)) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
 
 function messageText(msg: MessageRow | undefined): string {
   return String(msg?.body_text || '').trim();
-}
-
-function classifyAuthor(
-  msg: MessageRow | undefined,
-  outsideHoursMessage: string,
-): string {
-  if (!msg) return '';
-  if (msg.direction === 'inbound') return 'Cliente';
-  if (msg.is_ai) return 'IA';
-  const raw = parseRawPayload(msg.raw_payload);
-  if (msg.message_type === 'campaign' || raw?.source === 'campaign_send') {
-    return 'Sistema';
-  }
-  if (raw?.source === 'outside_hours') return 'Sistema';
-  const text = messageText(msg);
-  if (outsideHoursMessage && text && text === outsideHoursMessage) {
-    return 'Sistema';
-  }
-  return 'Agente';
-}
-
-function classifyInitiator(firstMsg: MessageRow | undefined): string {
-  if (!firstMsg) return '';
-  if (firstMsg.direction === 'inbound') return 'Cliente';
-  return 'Sistema';
 }
 
 function truncateForPreview(text: string, max = PREVIEW_TRUNCATE): string {
@@ -101,89 +98,175 @@ function truncateForPreview(text: string, max = PREVIEW_TRUNCATE): string {
   return `${s.slice(0, max - 1)}…`;
 }
 
-function buildRowFromMessages(
-  contact: { phone: string; name: string; email: string; dni: string },
-  msgs: MessageRow[],
-  outsideHoursMessage: string,
-): ContactCommunicationRow {
-  const first1 = msgs.find((m) => Number(m.rn_asc) === 1);
-  const first2 = msgs.find((m) => Number(m.rn_asc) === 2);
-  const lastAbs = msgs.find((m) => Number(m.rn_desc) === 1);
-  const lastInbound = msgs.find(
-    (m) => m.direction === 'inbound' && Number(m.rn_dir) === 1,
+function lastCommunicationByLabel(msg: MessageRow | undefined): string {
+  if (!msg) return '';
+  if (msg.direction === 'inbound') return 'Cliente';
+  return (
+    readMessageSenderLabel(msg.raw_payload, msg.is_ai, msg.message_type) || ''
   );
-  const lastOutbound = msgs.find(
-    (m) => m.direction === 'outbound' && Number(m.rn_dir) === 1,
-  );
+}
 
-  const message1 = messageText(first1);
-  const message2 = messageText(first2);
-  const lastClientMessage = messageText(lastInbound);
-  const lastTeamMessage = messageText(lastOutbound);
-  const lastTeamBy = classifyAuthor(lastOutbound, outsideHoursMessage);
+function advisorLabel(msg: MessageRow | undefined): string {
+  if (!msg) return '';
+  return (
+    readMessageSenderLabel(msg.raw_payload, msg.is_ai, msg.message_type) || ''
+  );
+}
+
+function displayAt(msg: MessageRow | undefined): string {
+  return msg ? formatExportDate(msg.created_at) || '—' : '—';
+}
+
+function isoAt(msg: MessageRow | undefined): string | null {
+  return msg?.created_at?.toISOString() ?? null;
+}
+
+function buildRowFromMessages(
+  contact: {
+    phone: string;
+    name: string;
+    last_name: string;
+    email: string;
+    dni: string;
+    segments: string;
+    origins: string;
+    lead_status: string;
+    lead_score: string;
+  },
+  msgs: MessageRow[],
+): ContactCommunicationRow {
+  const lastAbs = msgs.find((m) => Number(m.rn_abs_desc) === 1);
+  const firstClient = msgs.find((m) => Number(m.rn_in_asc) === 1);
+  const lastClient = msgs.find((m) => Number(m.rn_in_desc) === 1);
+  const firstAdvisor = msgs.find((m) => Number(m.rn_adv_asc) === 1);
+  const lastAdvisor = msgs.find((m) => Number(m.rn_adv_desc) === 1);
+
+  const firstClientText = messageText(firstClient);
+  const lastClientText = messageText(lastClient);
+  const firstAdvisorText = messageText(firstAdvisor);
+  const lastAdvisorText = messageText(lastAdvisor);
 
   return {
     phone: contact.phone,
     name: contact.name,
+    last_name: contact.last_name,
     email: contact.email,
     dni: contact.dni,
-    first_communication_at: first1?.created_at?.toISOString() ?? null,
-    first_communication_display: first1
-      ? formatExportDate(first1.created_at) || '—'
-      : '—',
-    initiated_by: classifyInitiator(first1),
-    message1,
-    message2,
-    message1_preview: truncateForPreview(message1),
-    message2_preview: truncateForPreview(message2),
-    last_communication_at: lastAbs?.created_at?.toISOString() ?? null,
-    last_communication_display: lastAbs
-      ? formatExportDate(lastAbs.created_at) || '—'
-      : '—',
-    last_communication_by: classifyAuthor(lastAbs, outsideHoursMessage),
-    last_client_message: lastClientMessage,
-    last_team_message: lastTeamMessage,
-    last_team_message_by: lastTeamBy,
-    last_client_message_preview: truncateForPreview(lastClientMessage),
-    last_team_message_preview: lastTeamMessage
-      ? `[${lastTeamBy}] ${truncateForPreview(lastTeamMessage)}`
-      : '—',
+    first_client_message: firstClientText,
+    first_client_message_at: isoAt(firstClient),
+    first_client_message_display: displayAt(firstClient),
+    last_client_message: lastClientText,
+    last_client_message_at: isoAt(lastClient),
+    last_client_message_display: displayAt(lastClient),
+    first_client_message_preview: truncateForPreview(firstClientText),
+    last_client_message_preview: truncateForPreview(lastClientText),
+    first_advisor_user: advisorLabel(firstAdvisor),
+    first_advisor_message: firstAdvisorText,
+    first_advisor_message_at: isoAt(firstAdvisor),
+    first_advisor_message_display: displayAt(firstAdvisor),
+    last_advisor_user: advisorLabel(lastAdvisor),
+    last_advisor_message: lastAdvisorText,
+    last_advisor_message_at: isoAt(lastAdvisor),
+    last_advisor_message_display: displayAt(lastAdvisor),
+    segments: contact.segments,
+    origins: contact.origins,
+    last_communication_by: lastCommunicationByLabel(lastAbs),
+    last_communication_at: isoAt(lastAbs),
+    last_communication_display: displayAt(lastAbs),
+    lead_status: contact.lead_status,
+    lead_score: contact.lead_score,
   };
 }
 
-async function loadOutsideHoursMessage(
-  prisma: { app_settings: { findUnique: (args: unknown) => Promise<{ value: string } | null> } },
+function lastClientMessageDateSql(): string {
+  const tz = getReportDisplayTimeZone().replace(/'/g, "''");
+  return `(conv.last_user_message_at AT TIME ZONE '${tz}')::date`;
+}
+
+function buildContactFilterSql(
   area: string,
-): Promise<string> {
-  const row = await prisma.app_settings.findUnique({
-    where: { area_key: { area, key: 'business_hours' } },
-    select: { value: true },
-  });
-  const cfg = parseBusinessHoursConfig(row?.value);
-  return String(cfg?.outside_hours_message || '').trim();
+  filters: CommunicationReportFilters,
+): Prisma.Sql {
+  const conditions: Prisma.Sql[] = [
+    Prisma.sql`c.area = ${area}`,
+    Prisma.sql`EXISTS (SELECT 1 FROM chat_messages cm WHERE cm.conversation_id = conv.id)`,
+    Prisma.sql`conv.last_user_message_at IS NOT NULL`,
+  ];
+
+  const dateExpr = Prisma.raw(lastClientMessageDateSql());
+  conditions.push(Prisma.sql`${dateExpr} >= CAST(${filters.from} AS date)`);
+  conditions.push(Prisma.sql`${dateExpr} <= CAST(${filters.to} AS date)`);
+
+  const slugs = filters.segment_slugs.filter((s) => s && s !== SEGMENT_NONE);
+  const includeNone = filters.segment_slugs.includes(SEGMENT_NONE);
+  const segmentClauses: Prisma.Sql[] = [];
+  if (slugs.length > 0) {
+    segmentClauses.push(Prisma.sql`EXISTS (
+      SELECT 1 FROM contact_segments csf
+      WHERE csf.contact_id = c.id AND csf.segment_slug = ANY(${slugs}::varchar[])
+    )`);
+  }
+  if (includeNone) {
+    segmentClauses.push(Prisma.sql`NOT EXISTS (
+      SELECT 1 FROM contact_segments csn WHERE csn.contact_id = c.id
+    )`);
+  }
+  if (segmentClauses.length > 0) {
+    conditions.push(Prisma.sql`(${Prisma.join(segmentClauses, ' OR ')})`);
+  }
+
+  const attrKey = String(filters.attr_key || '')
+    .trim()
+    .toLowerCase();
+  const attrValue = String(filters.attr_value || '').trim();
+  if (attrKey && attrValue) {
+    const attrPat = `%${escapeForLikePattern(attrValue)}%`;
+    conditions.push(Prisma.sql`EXISTS (
+      SELECT 1 FROM contact_attributes ca
+      WHERE ca.contact_id = c.id
+        AND ca.attr_key = ${attrKey}
+        AND ca.attr_value ILIKE ${attrPat} ESCAPE '!'
+    )`);
+  } else if (attrKey) {
+    conditions.push(Prisma.sql`EXISTS (
+      SELECT 1 FROM contact_attributes ca
+      WHERE ca.contact_id = c.id
+        AND ca.attr_key = ${attrKey}
+        AND TRIM(COALESCE(ca.attr_value, '')) <> ''
+    )`);
+  }
+
+  return Prisma.join(conditions, ' AND ');
 }
 
 async function fetchContactIdsForReport(
   prisma: { $queryRaw: <T>(query: Prisma.Sql) => Promise<T> },
   area: string,
+  filters: CommunicationReportFilters,
   opts: { limit?: number; offset?: number },
 ): Promise<{
   total: number;
   contacts: {
     id: number;
     name: string;
+    last_name: string;
     phone: string;
     email: string;
     dni: string;
     conversation_id: number;
+    segments: string;
+    origins: string;
+    lead_status: string;
+    lead_score: string;
   }[];
 }> {
+  const where = buildContactFilterSql(area, filters);
+
   const countRows = await prisma.$queryRaw<{ c: number }[]>(Prisma.sql`
     SELECT COUNT(*)::int AS c
     FROM contacts c
     INNER JOIN conversations conv ON conv.area = c.area AND conv.phone = c.phone
-    WHERE c.area = ${area}
-      AND EXISTS (SELECT 1 FROM chat_messages cm WHERE cm.conversation_id = conv.id)
+    WHERE ${where}
   `);
   const total = Number(countRows[0]?.c || 0);
 
@@ -200,23 +283,45 @@ async function fetchContactIdsForReport(
     {
       id: number;
       name: string;
+      last_name: string;
       phone: string;
       email: string;
       dni: string;
       conversation_id: number;
+      segments: string;
+      origins: string;
+      lead_status: string;
+      lead_score: string;
     }[]
   >(Prisma.sql`
     SELECT
       c.id,
       c.name,
+      COALESCE(c.last_name, '') AS last_name,
       c.phone,
       COALESCE(c.email, '') AS email,
       COALESCE(c.dni, '') AS dni,
-      conv.id AS conversation_id
+      conv.id AS conversation_id,
+      COALESCE((
+        SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
+        FROM contact_segments cs
+        JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+        WHERE cs.contact_id = c.id AND cs.area = c.area
+      ), '') AS segments,
+      COALESCE((
+        SELECT string_agg(
+          DISTINCT COALESCE(NULLIF(TRIM(co.source_label), ''), co.channel),
+          ', '
+        )
+        FROM contact_origins co
+        WHERE co.contact_id = c.id AND co.area = c.area
+      ), '') AS origins,
+      COALESCE(ls.label, '') AS lead_status,
+      COALESCE(c.lead_score::text, '') AS lead_score
     FROM contacts c
     INNER JOIN conversations conv ON conv.area = c.area AND conv.phone = c.phone
-    WHERE c.area = ${area}
-      AND EXISTS (SELECT 1 FROM chat_messages cm WHERE cm.conversation_id = conv.id)
+    LEFT JOIN lead_status_definitions ls ON ls.id = c.lead_status_id
+    WHERE ${where}
     ORDER BY COALESCE(NULLIF(c.name, ''), c.phone) ASC, c.id ASC
     ${limitSql}
     ${offsetSql}
@@ -242,15 +347,66 @@ async function fetchMessagesForConversations(
         m.raw_payload,
         m.created_at,
         m.id,
-        ROW_NUMBER() OVER (PARTITION BY m.conversation_id ORDER BY m.created_at ASC, m.id ASC) AS rn_asc,
-        ROW_NUMBER() OVER (PARTITION BY m.conversation_id ORDER BY m.created_at DESC, m.id DESC) AS rn_desc,
-        ROW_NUMBER() OVER (PARTITION BY m.conversation_id, m.direction ORDER BY m.created_at DESC, m.id DESC) AS rn_dir
+        ROW_NUMBER() OVER (
+          PARTITION BY m.conversation_id
+          ORDER BY m.created_at DESC, m.id DESC
+        ) AS rn_abs_desc,
+        ROW_NUMBER() OVER (
+          PARTITION BY m.conversation_id
+          ORDER BY CASE WHEN m.direction = 'inbound' THEN 0 ELSE 1 END,
+                   m.created_at ASC, m.id ASC
+        ) AS rn_in_asc_raw,
+        ROW_NUMBER() OVER (
+          PARTITION BY m.conversation_id
+          ORDER BY CASE WHEN m.direction = 'inbound' THEN 0 ELSE 1 END,
+                   m.created_at DESC, m.id DESC
+        ) AS rn_in_desc_raw,
+        CASE
+          WHEN m.direction = 'outbound'
+            AND COALESCE(m.is_ai, false) = false
+            AND LOWER(COALESCE(m.message_type, '')) <> 'campaign'
+            AND COALESCE(m.raw_payload->>'source', '') NOT IN ('campaign_send', 'flow', 'flow_handoff')
+            AND (
+              m.raw_payload->'_mali_sender'->>'label' IS NULL
+              OR LOWER(TRIM(m.raw_payload->'_mali_sender'->>'label'))
+                 NOT IN ('ia', 'campaña', 'automatico', 'automático', 'flujo')
+            )
+          THEN true
+          ELSE false
+        END AS is_advisor
       FROM chat_messages m
       WHERE m.conversation_id = ANY(${conversationIds}::int[])
+    ),
+    advisor_ranked AS (
+      SELECT
+        *,
+        CASE WHEN direction = 'inbound' THEN rn_in_asc_raw ELSE NULL END AS rn_in_asc,
+        CASE WHEN direction = 'inbound' THEN rn_in_desc_raw ELSE NULL END AS rn_in_desc,
+        CASE WHEN is_advisor THEN
+          ROW_NUMBER() OVER (
+            PARTITION BY conversation_id, is_advisor
+            ORDER BY created_at ASC, id ASC
+          )
+        ELSE NULL END AS rn_adv_asc,
+        CASE WHEN is_advisor THEN
+          ROW_NUMBER() OVER (
+            PARTITION BY conversation_id, is_advisor
+            ORDER BY created_at DESC, id DESC
+          )
+        ELSE NULL END AS rn_adv_desc
+      FROM ranked
     )
-    SELECT conversation_id, direction, body_text, message_type, is_ai, raw_payload, created_at, id, rn_asc, rn_desc, rn_dir
-    FROM ranked
-    WHERE rn_asc <= 2 OR rn_desc = 1 OR rn_dir = 1
+    SELECT
+      conversation_id, direction, body_text, message_type, is_ai, raw_payload,
+      created_at, id, rn_abs_desc,
+      COALESCE(rn_in_asc, 0) AS rn_in_asc,
+      COALESCE(rn_in_desc, 0) AS rn_in_desc,
+      COALESCE(rn_adv_asc, 0) AS rn_adv_asc,
+      COALESCE(rn_adv_desc, 0) AS rn_adv_desc
+    FROM advisor_ranked
+    WHERE rn_abs_desc = 1
+       OR (direction = 'inbound' AND (rn_in_asc = 1 OR rn_in_desc = 1))
+       OR (is_advisor AND (rn_adv_asc = 1 OR rn_adv_desc = 1))
   `);
 
   const byConv = new Map<number, MessageRow[]>();
@@ -261,26 +417,59 @@ async function fetchMessagesForConversations(
   return byConv;
 }
 
+/**
+ * Post-filter advisor rows with shared util (SQL heuristic may include edge cases
+ * without _mali_sender — those stay for ranking but label stays empty per product rule).
+ */
+function pickAdvisor(
+  msgs: MessageRow[],
+  which: 'first' | 'last',
+): MessageRow | undefined {
+  const advisors = msgs
+    .filter((m) =>
+      isHumanAdvisorOutboundMessage(m.raw_payload, m.is_ai, m.message_type),
+    )
+    .sort((a, b) => {
+      const t = a.created_at.getTime() - b.created_at.getTime();
+      return which === 'first' ? t : -t;
+    });
+  return advisors[0];
+}
+
 export async function fetchContactCommunicationReport(
   prisma: {
-    app_settings: { findUnique: (args: unknown) => Promise<{ value: string } | null> };
     $queryRaw: <T>(query: Prisma.Sql) => Promise<T>;
   },
   area: string,
+  filters: CommunicationReportFilters,
   opts: { limit?: number; offset?: number } = {},
 ): Promise<{ total: number; rows: ContactCommunicationRow[] }> {
-  const outsideHoursMessage = await loadOutsideHoursMessage(prisma, area);
-  const { total, contacts } = await fetchContactIdsForReport(prisma, area, opts);
+  const { total, contacts } = await fetchContactIdsForReport(
+    prisma,
+    area,
+    filters,
+    opts,
+  );
   const convIds = contacts.map((c) => c.conversation_id);
   const byConv = await fetchMessagesForConversations(prisma, convIds);
 
-  const rows = contacts.map((contact) =>
-    buildRowFromMessages(
-      contact,
-      byConv.get(contact.conversation_id) || [],
-      outsideHoursMessage,
-    ),
-  );
+  const rows = contacts.map((contact) => {
+    const msgs = byConv.get(contact.conversation_id) || [];
+    const base = buildRowFromMessages(contact, msgs);
+    const firstAdv = pickAdvisor(msgs, 'first');
+    const lastAdv = pickAdvisor(msgs, 'last');
+    return {
+      ...base,
+      first_advisor_user: advisorLabel(firstAdv),
+      first_advisor_message: messageText(firstAdv),
+      first_advisor_message_at: isoAt(firstAdv),
+      first_advisor_message_display: displayAt(firstAdv),
+      last_advisor_user: advisorLabel(lastAdv),
+      last_advisor_message: messageText(lastAdv),
+      last_advisor_message_at: isoAt(lastAdv),
+      last_advisor_message_display: displayAt(lastAdv),
+    };
+  });
 
   return { total, rows };
 }
@@ -289,16 +478,23 @@ export function reportRowToExportCells(row: ContactCommunicationRow): string[] {
   return [
     row.phone,
     row.name,
+    row.last_name,
     row.email,
     row.dni,
-    row.first_communication_display,
-    row.initiated_by,
-    row.message1,
-    row.message2,
-    row.last_communication_display,
-    row.last_communication_by,
+    row.first_client_message,
+    row.first_client_message_display,
     row.last_client_message,
-    row.last_team_message,
-    row.last_team_message_by,
+    row.last_client_message_display,
+    row.first_advisor_user,
+    row.first_advisor_message,
+    row.first_advisor_message_display,
+    row.last_advisor_user,
+    row.last_advisor_message,
+    row.last_advisor_message_display,
+    row.segments,
+    row.origins,
+    row.last_communication_by,
+    row.lead_status,
+    row.lead_score,
   ];
 }

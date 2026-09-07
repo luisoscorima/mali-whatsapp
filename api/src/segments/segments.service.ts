@@ -136,7 +136,7 @@ export class SegmentsService {
       ids.map((id, index) =>
         this.prisma.segment_definitions.update({
           where: { id },
-          data: { sort_order: index },
+          data: { sort_order: index, updated_at: new Date() },
         }),
       ),
     );
@@ -307,6 +307,7 @@ export class SegmentsService {
           show_in_filter: showInFilter,
           assignable,
           assignment_group: assignmentGroup,
+          updated_at: new Date(),
         },
         select: SEGMENT_SELECT,
       });
@@ -343,6 +344,7 @@ export class SegmentsService {
             show_in_filter: showInFilter,
             assignable,
             assignment_group: assignmentGroup,
+            updated_at: new Date(),
           },
           select: SEGMENT_SELECT,
         });

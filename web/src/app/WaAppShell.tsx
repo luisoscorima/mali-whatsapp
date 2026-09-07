@@ -9,7 +9,7 @@ import { WaRail } from '@/shared/ui/shell/WaRail'
 import type { AppShellOutletContext } from './appOutletContext'
 
 const UNREAD_POLL_MS = 8000
-const APP_TITLE = 'MALI WhatsApp'
+const APP_TITLE = 'MALI ONE WhatsApp'
 
 export function WaAppShell() {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -30,7 +30,7 @@ export function WaAppShell() {
       document.title = APP_TITLE
       return
     }
-    document.title = `${areaLabel(user.area)} · ${APP_TITLE}`
+    document.title = `${areaLabel(user.area)} | ${APP_TITLE}`
     return () => {
       document.title = APP_TITLE
     }

@@ -25,11 +25,30 @@ import {
   contactCommunicationExportFilename,
 } from './contact-communication-export.util';
 import { fetchContactCommunicationReport } from './contact-communication-report.util';
-import type { AuditLogListResult, CommunicationReportResult } from './reports.types';
+import {
+  buildConversationHistoryXlsxBuffer,
+  conversationHistoryExportFilename,
+  fetchConversationHistoryReport,
+} from './conversation-history-report.util';
+import {
+  parseSegmentQueryParam,
+  resolveReportDateRange,
+} from './report-date-range.util';
+import {
+  buildSegmentHistoryXlsxBuffer,
+  fetchSegmentHistoryReport,
+  segmentHistoryExportFilename,
+} from './segment-history-report.util';
+import type {
+  AuditLogListResult,
+  CommunicationReportResult,
+  ConversationHistoryReportResult,
+  SegmentHistoryReportResult,
+} from './reports.types';
 
 const AUDIT_PAGE_SIZE = 50;
 const REPORT_PAGE_SIZE = 50;
-const AUDIT_EXPORT_MAX = 25000;
+const REPORT_EXPORT_MAX = 25000;
 
 type AuditDbRow = AuditLogExportRow & { id: bigint | number };
 
@@ -164,7 +183,7 @@ export class ReportsService {
     filenamePrefix: string,
   ): Promise<{ buffer: Buffer; filename: string }> {
     const { whereSql, params } = buildAuditLogWhere(query, opts);
-    const exportParams = [...params, AUDIT_EXPORT_MAX];
+    const exportParams = [...params, REPORT_EXPORT_MAX];
     const limIdx = params.length + 1;
 
     const rows = await this.prisma.$queryRawUnsafe<AuditDbRow[]>(
@@ -218,16 +237,36 @@ export class ReportsService {
     return { contactPhones, conversationPhones };
   }
 
+  private parseCommunicationFilters(
+    query: Record<string, string | string[] | undefined>,
+  ) {
+    const { from, to } = resolveReportDateRange(
+      typeof query.from === 'string' ? query.from : undefined,
+      typeof query.to === 'string' ? query.to : undefined,
+    );
+    const segment_slugs = parseSegmentQueryParam(
+      query.segment as string | string[] | undefined,
+    );
+    const attr_key = String(query.attr_key || '').trim();
+    const attr_value = String(query.attr_value || '').trim();
+    return { from, to, segment_slugs, attr_key, attr_value };
+  }
+
   async listCommunications(
     user: AuthUser,
-    query: Record<string, string | undefined>,
+    query: Record<string, string | string[] | undefined>,
   ): Promise<CommunicationReportResult> {
     this.assertReportsAccess(user);
     const area = user.area;
-    const page = Math.max(1, parseInt(String(query.page || '1'), 10) || 1);
+    const filters = this.parseCommunicationFilters(query);
+    const page = Math.max(
+      1,
+      parseInt(String(query.page || '1'), 10) || 1,
+    );
     const { total, rows } = await fetchContactCommunicationReport(
       this.prisma,
       area,
+      filters,
       {
         limit: REPORT_PAGE_SIZE,
         offset: (page - 1) * REPORT_PAGE_SIZE,
@@ -244,18 +283,130 @@ export class ReportsService {
         total,
       },
       area_label: AREA_LABELS[area] || area,
+      filters: {
+        from: filters.from,
+        to: filters.to,
+        segment: filters.segment_slugs,
+        attr_key: filters.attr_key,
+        attr_value: filters.attr_value,
+      },
     };
   }
 
   async exportCommunications(
     user: AuthUser,
+    query: Record<string, string | string[] | undefined>,
   ): Promise<{ buffer: Buffer; filename: string }> {
     this.assertReportsAccess(user);
     const area = user.area;
-    const { rows } = await fetchContactCommunicationReport(this.prisma, area, {});
+    const filters = this.parseCommunicationFilters(query);
+    const { rows } = await fetchContactCommunicationReport(
+      this.prisma,
+      area,
+      filters,
+      { limit: REPORT_EXPORT_MAX, offset: 0 },
+    );
     return {
       buffer: buildContactCommunicationXlsxBuffer(rows),
       filename: contactCommunicationExportFilename(area),
+    };
+  }
+
+  async listSegmentHistory(
+    user: AuthUser,
+    query: Record<string, string | undefined>,
+  ): Promise<SegmentHistoryReportResult> {
+    this.assertReportsAccess(user);
+    const area = user.area;
+    const page = Math.max(1, parseInt(String(query.page || '1'), 10) || 1);
+    const { total, rows, from, to } = await fetchSegmentHistoryReport(
+      this.prisma,
+      area,
+      query,
+      {
+        limit: REPORT_PAGE_SIZE,
+        offset: (page - 1) * REPORT_PAGE_SIZE,
+      },
+    );
+    const totalPages = Math.max(1, Math.ceil(total / REPORT_PAGE_SIZE));
+    const pageClamped = Math.min(page, totalPages);
+    return {
+      rows,
+      pagination: {
+        page: pageClamped,
+        total_pages: totalPages,
+        total,
+      },
+      area_label: AREA_LABELS[area] || area,
+      filters: { from, to },
+      note: 'Histórico desde la instrumentación (sin datos anteriores al deploy).',
+    };
+  }
+
+  async exportSegmentHistory(
+    user: AuthUser,
+    query: Record<string, string | undefined>,
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    this.assertReportsAccess(user);
+    const area = user.area;
+    const { rows } = await fetchSegmentHistoryReport(this.prisma, area, query, {
+      limit: REPORT_EXPORT_MAX,
+      offset: 0,
+    });
+    return {
+      buffer: buildSegmentHistoryXlsxBuffer(rows),
+      filename: segmentHistoryExportFilename(area),
+    };
+  }
+
+  async listConversationHistory(
+    user: AuthUser,
+    query: Record<string, string | undefined>,
+  ): Promise<ConversationHistoryReportResult> {
+    this.assertReportsAccess(user);
+    const area = user.area;
+    const page = Math.max(1, parseInt(String(query.page || '1'), 10) || 1);
+    const { total, rows, from, to } = await fetchConversationHistoryReport(
+      this.prisma,
+      area,
+      query,
+      {
+        limit: REPORT_PAGE_SIZE,
+        offset: (page - 1) * REPORT_PAGE_SIZE,
+      },
+    );
+    const totalPages = Math.max(1, Math.ceil(total / REPORT_PAGE_SIZE));
+    const pageClamped = Math.min(page, totalPages);
+    const retention = readAuditRetentionDays();
+    return {
+      rows,
+      pagination: {
+        page: pageClamped,
+        total_pages: totalPages,
+        total,
+      },
+      area_label: AREA_LABELS[area] || area,
+      filters: { from, to },
+      retention_days: retention,
+      note: `Reasignaciones y lectura/no lectura según bitácora (retención ~${retention} días).`,
+    };
+  }
+
+  async exportConversationHistory(
+    user: AuthUser,
+    query: Record<string, string | undefined>,
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    this.assertReportsAccess(user);
+    const area = user.area;
+    const { rows } = await fetchConversationHistoryReport(
+      this.prisma,
+      area,
+      query,
+      { limit: REPORT_EXPORT_MAX, offset: 0 },
+    );
+    return {
+      buffer: buildConversationHistoryXlsxBuffer(rows),
+      filename: conversationHistoryExportFilename(area),
     };
   }
 }

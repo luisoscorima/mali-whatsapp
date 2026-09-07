@@ -35,6 +35,7 @@ export function RequireMaster() {
 
 const ADMIN_LINKS = [
   { to: '/admin/users', label: 'Usuarios' },
+  { to: '/admin/roles', label: 'Roles' },
   { to: '/admin/areas', label: 'Áreas' },
   { to: '/admin/meta', label: 'Credenciales Meta' },
   { to: '/admin/audit-logs', label: 'Bitácora' },

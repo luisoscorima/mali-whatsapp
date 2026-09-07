@@ -41,4 +41,36 @@ export type CommunicationReportResult = {
     total: number;
   };
   area_label: string;
+  filters: {
+    from: string;
+    to: string;
+    segment: string[];
+    attr_key: string;
+    attr_value: string;
+  };
+};
+
+export type SegmentHistoryReportResult = {
+  rows: import('./segment-history-report.util').SegmentHistoryRow[];
+  pagination: {
+    page: number;
+    total_pages: number;
+    total: number;
+  };
+  area_label: string;
+  filters: { from: string; to: string };
+  note: string;
+};
+
+export type ConversationHistoryReportResult = {
+  rows: import('./conversation-history-report.util').ConversationHistoryRow[];
+  pagination: {
+    page: number;
+    total_pages: number;
+    total: number;
+  };
+  area_label: string;
+  filters: { from: string; to: string };
+  retention_days: number;
+  note: string;
 };

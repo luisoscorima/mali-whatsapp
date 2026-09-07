@@ -316,6 +316,10 @@ export class ContactsService {
     }
 
     let updated = 0;
+    const pendingAudits: {
+      contactId: number;
+      change: { added: string[]; removed: string[]; next: string[] };
+    }[] = [];
     await this.prisma.$transaction(async (tx) => {
       for (const cid of ids) {
         const own = await tx.contacts.findFirst({
@@ -329,35 +333,38 @@ export class ContactsService {
         });
         if (!own) continue;
 
+        const current = await tx.contact_segments.findMany({
+          where: { contact_id: cid, area },
+          select: { segment_slug: true },
+        });
+        let nextSlugs = current.map((row) => row.segment_slug);
+
         if (assignableOnly && targetGroup) {
-          const current = await tx.contact_segments.findMany({
-            where: { contact_id: cid, area },
-            select: { segment_slug: true },
+          nextSlugs = nextSlugs.filter((s) => {
+            const g = assignableBySlug.get(s);
+            return !(g && g === targetGroup && s !== slug);
           });
-          const sameGroupSlugs = current
-            .map((row) => row.segment_slug)
-            .filter((s) => {
-              const g = assignableBySlug.get(s);
-              return g && g === targetGroup && s !== slug;
-            });
-          if (sameGroupSlugs.length > 0) {
-            await tx.contact_segments.deleteMany({
-              where: {
-                contact_id: cid,
-                area,
-                segment_slug: { in: sameGroupSlugs },
-              },
-            });
-          }
+        }
+        if (!nextSlugs.includes(slug)) {
+          nextSlugs = [...nextSlugs, slug];
         }
 
-        await tx.contact_segments.createMany({
-          data: [{ contact_id: cid, area, segment_slug: slug }],
-          skipDuplicates: true,
-        });
-        updated += 1;
+        const change = await this.replaceContactSegments(
+          tx,
+          cid,
+          area,
+          nextSlugs,
+        );
+        if (change.added.length || change.removed.length) {
+          pendingAudits.push({ contactId: cid, change });
+          updated += 1;
+        }
       }
     });
+
+    for (const item of pendingAudits) {
+      await this.auditSegmentChange(user, item.contactId, area, item.change);
+    }
 
     await this.auditLog.write({
       event_type: AuditEvent.CONTACT_BULK_SEGMENT,
@@ -510,6 +517,11 @@ export class ContactsService {
         ];
     const nextSlugs = [...otherSlugs, ...nextAssignable];
 
+    let segmentChange: {
+      added: string[];
+      removed: string[];
+      next: string[];
+    } | null = null;
     await this.prisma.$transaction(async (tx) => {
       await tx.contacts.update({
         where: { id: contactId },
@@ -518,8 +530,17 @@ export class ContactsService {
           updated_at: new Date(),
         },
       });
-      await this.replaceContactSegments(tx, contactId, area, nextSlugs);
+      segmentChange = await this.replaceContactSegments(
+        tx,
+        contactId,
+        area,
+        nextSlugs,
+      );
     });
+
+    if (segmentChange) {
+      await this.auditSegmentChange(user, contactId, area, segmentChange);
+    }
 
     await this.auditLog.write({
       event_type: AuditEvent.CONTACT_UPDATED,
@@ -597,15 +618,57 @@ export class ContactsService {
     contactId: number,
     area: string,
     slugs: string[],
-  ): Promise<void> {
+  ): Promise<{
+    previous: string[];
+    next: string[];
+    added: string[];
+    removed: string[];
+  }> {
+    const prevRows = await tx.contact_segments.findMany({
+      where: { contact_id: contactId },
+      select: { segment_slug: true },
+    });
+    const previous = [
+      ...new Set(prevRows.map((r) => r.segment_slug)),
+    ].sort();
+    const next = [...new Set(slugs.map((s) => String(s).trim()).filter(Boolean))].sort();
+    const prevSet = new Set(previous);
+    const nextSet = new Set(next);
+    const added = next.filter((s) => !prevSet.has(s));
+    const removed = previous.filter((s) => !nextSet.has(s));
+
     await tx.contact_segments.deleteMany({ where: { contact_id: contactId } });
-    if (!slugs.length) return;
-    await tx.contact_segments.createMany({
-      data: slugs.map((segment_slug) => ({
+    if (next.length) {
+      await tx.contact_segments.createMany({
+        data: next.map((segment_slug) => ({
+          contact_id: contactId,
+          area,
+          segment_slug,
+        })),
+      });
+    }
+    return { previous, next, added, removed };
+  }
+
+  private async auditSegmentChange(
+    user: AuthUser,
+    contactId: number,
+    area: string,
+    change: { added: string[]; removed: string[]; next: string[] },
+    phone?: string | null,
+  ): Promise<void> {
+    if (!change.added.length && !change.removed.length) return;
+    await this.auditLog.write({
+      event_type: AuditEvent.CONTACT_SEGMENT_CHANGE,
+      message: `Segmentos contacto ${contactId}: +${change.added.join(',') || '—'} / -${change.removed.join(',') || '—'}`,
+      actor: auditActor(user),
+      meta: {
         contact_id: contactId,
-        area,
-        segment_slug,
-      })),
+        added: change.added,
+        removed: change.removed,
+        segments: change.next,
+        ...(phone ? { phone, phone_tail: phoneMetaTail(phone) } : {}),
+      },
     });
   }
 
@@ -741,7 +804,7 @@ export class ContactsService {
       dto.opt_in_email !== undefined ? Boolean(dto.opt_in_email) : true;
 
     try {
-      const contactId = await this.prisma.$transaction(async (tx) => {
+      const created = await this.prisma.$transaction(async (tx) => {
         const contact = await tx.contacts.create({
           data: {
             name,
@@ -756,7 +819,12 @@ export class ContactsService {
             active: true,
           },
         });
-        await this.replaceContactSegments(tx, contact.id, area, segments);
+        const change = await this.replaceContactSegments(
+          tx,
+          contact.id,
+          area,
+          segments,
+        );
         await this.upsertContactAttributes(tx, contact.id, attrs);
         if (dni) {
           await this.upsertContactAttributes(tx, contact.id, { dni });
@@ -765,14 +833,14 @@ export class ContactsService {
           where: { area, phone },
           data: { contact_id: contact.id, updated_at: new Date() },
         });
-        return contact.id;
+        return { contactId: contact.id, change };
       });
       await this.auditLog.write({
         event_type: AuditEvent.CONTACT_CREATED,
-        message: `Contacto creado (id ${contactId})`,
+        message: `Contacto creado (id ${created.contactId})`,
         actor: auditActor(user),
         meta: {
-          contact_id: contactId,
+          contact_id: created.contactId,
           phone,
           phone_tail: phoneMetaTail(phone),
           email,
@@ -780,7 +848,14 @@ export class ContactsService {
           segments: validation.value.segments,
         },
       });
-      return this.getById(area, contactId);
+      await this.auditSegmentChange(
+        user,
+        created.contactId,
+        area,
+        created.change,
+        phone,
+      );
+      return this.getById(area, created.contactId);
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -859,7 +934,7 @@ export class ContactsService {
     const phoneChanged = String(current.phone) !== String(phone);
 
     if (!phoneChanged) {
-      await this.prisma.$transaction(async (tx) => {
+      const change = await this.prisma.$transaction(async (tx) => {
         await tx.contacts.update({
           where: { id },
           data: {
@@ -877,14 +952,21 @@ export class ContactsService {
             updated_at: new Date(),
           },
         });
-        await this.replaceContactSegments(tx, id, area, segments);
+        const segmentChange = await this.replaceContactSegments(
+          tx,
+          id,
+          area,
+          segments,
+        );
         await this.upsertContactAttributes(tx, id, attrs);
         if (dto.dni !== undefined) {
           await this.upsertContactAttributes(tx, id, {
             dni: dni ?? '',
           });
         }
+        return segmentChange;
       });
+      await this.auditSegmentChange(user, id, area, change, phone);
       await this.auditLog.write({
         event_type: AuditEvent.CONTACT_UPDATED,
         message: `Contacto actualizado (id ${id})`,
@@ -902,7 +984,7 @@ export class ContactsService {
       return this.getById(area, id);
     }
 
-    const newContactId = await this.prisma.$transaction(async (tx) => {
+    const replaced = await this.prisma.$transaction(async (tx) => {
       const created = await tx.contacts.create({
         data: {
           name,
@@ -917,7 +999,12 @@ export class ContactsService {
           active: true,
         },
       });
-      await this.replaceContactSegments(tx, created.id, area, segments);
+      const change = await this.replaceContactSegments(
+        tx,
+        created.id,
+        area,
+        segments,
+      );
       await this.upsertContactAttributes(tx, created.id, attrs);
       if (dni) {
         await this.upsertContactAttributes(tx, created.id, { dni });
@@ -936,16 +1023,24 @@ export class ContactsService {
         where: { area, phone },
         data: { contact_id: created.id, updated_at: new Date() },
       });
-      return created.id;
+      return { newContactId: created.id, change };
     });
+
+    await this.auditSegmentChange(
+      user,
+      replaced.newContactId,
+      area,
+      replaced.change,
+      phone,
+    );
 
     await this.auditLog.write({
       event_type: AuditEvent.CONTACT_UPDATED,
-      message: `Contacto actualizado (id ${id}, nuevo id ${newContactId} por cambio de teléfono)`,
+      message: `Contacto actualizado (id ${id}, nuevo id ${replaced.newContactId} por cambio de teléfono)`,
       actor: auditActor(user),
         meta: {
           contact_id: id,
-          new_contact_id: newContactId,
+          new_contact_id: replaced.newContactId,
           phone,
           phone_tail: phoneMetaTail(phone),
         segments,
@@ -953,7 +1048,7 @@ export class ContactsService {
       },
     });
 
-    return this.getById(area, newContactId);
+    return this.getById(area, replaced.newContactId);
   }
 
   async remove(user: AuthUser, id: number): Promise<void> {
@@ -1098,7 +1193,7 @@ export class ContactsService {
 
     let imported = 0;
     for (const row of parsed.rows) {
-      await this.importSingleRow(area, row, allDefs);
+      await this.importSingleRow(user, area, row, allDefs);
       imported += 1;
     }
 
@@ -1127,6 +1222,7 @@ export class ContactsService {
   }
 
   private async importSingleRow(
+    user: AuthUser,
     area: string,
     row: ImportContactRow,
     allDefs: Awaited<ReturnType<ContactsService['loadAttributeDefinitions']>>,
@@ -1137,7 +1233,7 @@ export class ContactsService {
       applicable,
     );
 
-    await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.contacts.findFirst({
         where: { area, phone: row.phone, replaced_at: null },
       });
@@ -1183,7 +1279,12 @@ export class ContactsService {
             },
           });
 
-      await this.replaceContactSegments(tx, contact.id, area, row.segments);
+      const change = await this.replaceContactSegments(
+        tx,
+        contact.id,
+        area,
+        row.segments,
+      );
       if (Object.keys(attrs).length > 0) {
         await this.upsertContactAttributes(tx, contact.id, attrs);
       }
@@ -1194,7 +1295,16 @@ export class ContactsService {
         where: { area, phone: row.phone },
         data: { contact_id: contact.id, updated_at: new Date() },
       });
+      return { contactId: contact.id, change };
     });
+
+    await this.auditSegmentChange(
+      user,
+      result.contactId,
+      area,
+      result.change,
+      row.phone,
+    );
   }
 
   async getSummary(
