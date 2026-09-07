@@ -37,4 +37,10 @@ export class CrmSendTemplateDto {
   @IsArray()
   @IsString({ each: true })
   header_params?: string[];
+
+  /** URL pública si la plantilla tiene cabecera IMAGE/VIDEO/DOCUMENT. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  header_media_url?: string;
 }

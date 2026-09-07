@@ -99,12 +99,16 @@ Envía plantilla WhatsApp **APPROVED** (p. ej. bienvenida PAM desde MALI ONE).
   "phone": "51999888777",
   "template_name": "bienvenida_pam",
   "idempotency_key": "clx...",
-  "body_params": ["Ana"]
+  "body_params": ["Ana", "Amigo"],
+  "header_media_url": "https://…/logo.png"
 }
 ```
 
 - Idempotente por `idempotency_key` (attr `pam_wa_template_sent` en contacto).
 - Requiere contacto existente con ese teléfono en el área.
+- Bienvenida PAM: `body_params` = `[Nombre, Plan]` (= contacto.name + attr CRM `plan`).
+- `header_media_url` solo si la plantilla tiene cabecera IMAGE/VIDEO/DOCUMENT.
+- Si Meta falla, la respuesta 400 incluye el mensaje de error de Graph (también en `campaign_logs.response`).
 
 ### `PATCH /api/crm/contacts/:id?area=pam`
 

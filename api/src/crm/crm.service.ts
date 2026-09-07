@@ -277,8 +277,31 @@ export class CrmService {
         String(v).trim(),
       ),
       buttonParams: [] as string[],
-      headerMediaUrl: '',
+      headerMediaUrl: String(dto.header_media_url ?? '').trim(),
     };
+
+    if (def.needsHeaderMedia && !staticParams.headerMediaUrl) {
+      throw new BadRequestException(
+        `La plantilla "${templateName}" requiere media en cabecera (header_media_url)`,
+      );
+    }
+    if (
+      def.needsHeaderText &&
+      staticParams.headerParams.length < def.headerParamDefs.length
+    ) {
+      throw new BadRequestException(
+        `La plantilla "${templateName}" requiere ${def.headerParamDefs.length} param(s) de cabecera; se enviaron ${staticParams.headerParams.length}`,
+      );
+    }
+    if (
+      def.needsBody &&
+      staticParams.bodyParams.length < def.bodyParamDefs.length
+    ) {
+      throw new BadRequestException(
+        `La plantilla "${templateName}" requiere ${def.bodyParamDefs.length} param(s) de cuerpo; se enviaron ${staticParams.bodyParams.length}`,
+      );
+    }
+
     const components = buildWhatsappGraphComponents(def, staticParams);
     const preview = buildCampaignMessagePreview(
       def,
@@ -308,6 +331,7 @@ export class CrmService {
     let messageId: string | null = null;
     let logStatus = 'failed';
     let apiResponse: unknown = null;
+    let sendErrorMessage = '';
 
     try {
       const result = await sendTemplateWithComponents({
@@ -320,10 +344,14 @@ export class CrmService {
       messageId = result.messages?.[0]?.id ?? null;
       logStatus = messageId ? 'sent' : 'failed';
       apiResponse = result;
+      if (!messageId) {
+        sendErrorMessage =
+          'WhatsApp no devolvió un id de mensaje. Revisa credenciales/plantilla.';
+      }
     } catch (error) {
-      apiResponse = {
-        error: error instanceof Error ? error.message : String(error),
-      };
+      sendErrorMessage =
+        error instanceof Error ? error.message : String(error);
+      apiResponse = { error: sendErrorMessage };
     }
 
     await this.prisma.campaign_logs.create({
@@ -397,8 +425,13 @@ export class CrmService {
       };
     }
 
+    this.logger.warn(
+      `CRM send-template falló area=${area} template=${templateName} phone=${phone}: ${sendErrorMessage || 'sin detalle'}`,
+    );
     throw new BadRequestException(
-      'No se pudo enviar la plantilla WhatsApp. Revisa logs de campaña.',
+      sendErrorMessage
+        ? `No se pudo enviar la plantilla WhatsApp: ${sendErrorMessage}`
+        : 'No se pudo enviar la plantilla WhatsApp. Revisa logs de campaña.',
     );
   }
 
