@@ -252,6 +252,22 @@ export class ConversationsService {
     return Prisma.sql`NULLIF(TRIM(CONCAT(COALESCE(${Prisma.raw(alias)}.name, ''), ' ', COALESCE(${Prisma.raw(alias)}.last_name, ''))), '')`;
   }
 
+  /** Contacto enlazado, o el de misma área/teléfono si la conversación aún no tiene contact_id. */
+  private inboxResolvedContactJoinSql(area: string): Prisma.Sql {
+    return Prisma.sql`LEFT JOIN contacts ct ON ct.id = COALESCE(
+      c.contact_id,
+      (
+        SELECT ct_phone.id
+        FROM contacts ct_phone
+        WHERE ct_phone.phone = c.phone
+          AND ct_phone.area = ${area}
+          AND ct_phone.replaced_by_contact_id IS NULL
+        ORDER BY ct_phone.updated_at DESC NULLS LAST
+        LIMIT 1
+      )
+    )`;
+  }
+
   private buildInboxSegmentSearchSql(searchPat: string): Prisma.Sql {
     return Prisma.sql` OR EXISTS (
       SELECT 1 FROM contact_segments cs
@@ -429,9 +445,9 @@ export class ConversationsService {
           WHERE tg.conversation_id = c.id
         ), ARRAY[]::varchar[]) AS conversation_tags,
         ${matchedMessageSql} AS matched_message_id,
-        c.contact_id
+        ct.id AS contact_id
       FROM conversations c
-      LEFT JOIN contacts ct ON ct.id = c.contact_id
+      ${this.inboxResolvedContactJoinSql(area)}
       LEFT JOIN users au ON au.id = c.assigned_user_id
       WHERE c.area = ${area}
       ${segmentSql}
@@ -527,7 +543,7 @@ export class ConversationsService {
     const rows = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
       SELECT COUNT(*)::int AS n
       FROM conversations c
-      LEFT JOIN contacts ct ON ct.id = c.contact_id
+      ${this.inboxResolvedContactJoinSql(area)}
       WHERE c.area = ${area}
       ${segmentSql}
       ${searchSql}
@@ -587,7 +603,7 @@ export class ConversationsService {
     const rows = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
       SELECT COUNT(*)::int AS n
       FROM conversations c
-      LEFT JOIN contacts ct ON ct.id = c.contact_id
+      ${this.inboxResolvedContactJoinSql(area)}
       WHERE c.area = ${area}
         AND c.inbox_unread = TRUE
         AND c.archived = FALSE
@@ -605,7 +621,7 @@ export class ConversationsService {
     const rows = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
       SELECT COUNT(*)::int AS n
       FROM conversations c
-      LEFT JOIN contacts ct ON ct.id = c.contact_id
+      ${this.inboxResolvedContactJoinSql(area)}
       WHERE c.area = ${area}
         AND (c.archived = TRUE OR c.last_user_message_at IS NULL)
       ${segmentSql}
@@ -955,8 +971,31 @@ export class ConversationsService {
 
     await this.clearInboxUnreadOnOpen(user, conversationId, area);
 
+    let resolvedContactId = activeConversation.contact_id
+      ? Number(activeConversation.contact_id)
+      : null;
+
+    if (!resolvedContactId && activeConversation.phone) {
+      const byPhone = await this.prisma.contacts.findFirst({
+        where: {
+          area,
+          phone: activeConversation.phone,
+          replaced_by_contact_id: null,
+        },
+        orderBy: { updated_at: 'desc' },
+        select: { id: true },
+      });
+      if (byPhone) {
+        resolvedContactId = byPhone.id;
+        await this.prisma.conversations.update({
+          where: { id: conversationId },
+          data: { contact_id: byPhone.id, updated_at: new Date() },
+        });
+      }
+    }
+
     let contact: InboxDetail['contact'] = null;
-    if (activeConversation.contact_id) {
+    if (resolvedContactId) {
       const rows = await this.prisma.$queryRaw<
         {
           name: string | null;
@@ -989,7 +1028,7 @@ export class ConversationsService {
           ), ARRAY[]::varchar[]) AS segment_slugs
         FROM contacts c
         LEFT JOIN lead_status_definitions ls ON ls.id = c.lead_status_id
-        WHERE c.id = ${activeConversation.contact_id}
+        WHERE c.id = ${resolvedContactId}
       `);
       const row = rows[0];
       contact = row
@@ -1092,7 +1131,7 @@ export class ConversationsService {
     const events = await this.loadConversationTimelineEvents(
       area,
       conversationId,
-      activeConversation.contact_id,
+      resolvedContactId,
     );
 
     const windowOpen = isWithinUserServiceWindow(
@@ -1118,7 +1157,7 @@ export class ConversationsService {
           activeConversation.last_user_message_at?.toISOString() ?? null,
         inbox_unread: false,
         archived: Boolean(activeConversation.archived),
-        contact_id: activeConversation.contact_id,
+        contact_id: resolvedContactId,
         wa_profile_name:
           String(activeConversation.wa_profile_name ?? '').trim() || null,
         meta_ctwa_ad_id: activeConversation.meta_ctwa_ad_id,

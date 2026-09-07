@@ -173,6 +173,10 @@ export class LeadsService {
         where: { id: existing.id },
         data,
       });
+      const linkPhone = phone || existing.phone;
+      if (linkPhone) {
+        await this.linkConversationsToContact(areaNorm, linkPhone, existing.id);
+      }
       return { contact_id: existing.id, created: false };
     }
 
@@ -191,7 +195,22 @@ export class LeadsService {
         updated_at: new Date(),
       },
     });
+    if (phone) {
+      await this.linkConversationsToContact(areaNorm, phone, created.id);
+    }
     return { contact_id: created.id, created: true };
+  }
+
+  /** Enlaza chats del área con el mismo teléfono que aún no tienen contact_id. */
+  private async linkConversationsToContact(
+    area: string,
+    phone: string,
+    contactId: number,
+  ): Promise<void> {
+    await this.prisma.conversations.updateMany({
+      where: { area, phone, contact_id: null },
+      data: { contact_id: contactId, updated_at: new Date() },
+    });
   }
 
   async upsertOrigin(input: UpsertOriginInput): Promise<{
