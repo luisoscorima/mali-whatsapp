@@ -219,6 +219,32 @@ export function parseStaticParamsFromMessageText(
   return { headerParams, bodyParams, buttonParams, headerMediaUrl };
 }
 
+/**
+ * `message_text` a veces guarda el cuerpo YA renderizado (CRM product / inbox),
+ * no la lista `param1|param2`. Detectar eso evita reinyectar el texto entero en {{1}}.
+ */
+export function isRenderedCampaignMessageText(
+  def: ReturnType<typeof buildTemplateDefinition>,
+  messageText: string | null | undefined,
+): boolean {
+  const mt = String(messageText || '').trim();
+  if (!mt) return false;
+  if (/\{\{\d+\}\}/.test(mt)) return false;
+  const expectedSlots =
+    (def.headerTextSlotCount || 0) +
+    (def.bodySlotCount || 0) +
+    (def.totalButtonParams || 0);
+  if (expectedSlots <= 0) return false;
+  // Lista corta tipo "Ana|amigo" vs cuerpo largo de plantilla
+  if (mt.includes('|')) {
+    const parts = mt.split('|').map((s) => s.trim()).filter(Boolean);
+    const mediaOffset = parts[0] && /^media:/i.test(parts[0]) ? 1 : 0;
+    return parts.length - mediaOffset !== expectedSlots;
+  }
+  // Sin pipes: si espera params y el texto es largo, es cuerpo renderizado
+  return mt.length > 80 || mt.includes('\n');
+}
+
 export function applyCampaignImageFallback(
   preview: CampaignMessagePreview,
   imageUrl: string | null | undefined,
@@ -313,6 +339,49 @@ export function buildCampaignDetailPreviewFromRow(
   const sendCtx = buildSendContextFromCampaign(campaignRow, templateRow);
   if (!sendCtx) {
     return { preview: null, templateId: null };
+  }
+
+  const payload = parseCampaignPayload(campaignRow.campaign_payload);
+  const hasStoredStatic =
+    payload?.staticParams && typeof payload.staticParams === 'object';
+
+  // Envíos CRM/product guardaban el cuerpo ya renderizado en message_text sin
+  // staticParams; parseStaticParamsFromMessageText lo metía entero en {{1}}.
+  if (
+    !hasStoredStatic &&
+    isRenderedCampaignMessageText(sendCtx.def, campaignRow.message_text)
+  ) {
+    let preview = buildCampaignMessagePreview(
+      sendCtx.def,
+      sendCtx.templateSnapshot.components_json,
+      {
+        headerParams: [],
+        bodyParams: [],
+        buttonParams: [],
+        headerMediaUrl: String(campaignRow.image_url || '').trim(),
+      },
+    );
+    preview = {
+      ...preview,
+      bodyText: String(campaignRow.message_text || '').trim(),
+    };
+    preview = applyCampaignImageFallback(preview, campaignRow.image_url);
+
+    const hasContent =
+      preview.headerText ||
+      preview.bodyText ||
+      preview.footerText ||
+      preview.headerMediaUrl ||
+      preview.buttons.length > 0;
+    if (!hasContent) {
+      return { preview: null, templateId: null };
+    }
+
+    let templateId: number | null = Number(sendCtx.templateSnapshot.id);
+    if (!Number.isInteger(templateId) || templateId <= 0) {
+      templateId = templateRow?.id ?? null;
+    }
+    return { preview, templateId };
   }
 
   const displayParams = buildDetailPreviewParams(
