@@ -44,7 +44,7 @@ Al menos uno de `phone`, `dni`, `email`. Orden: **phone → dni → email** → 
 
 ### Canales (`contact_origins.channel`)
 
-`meta_lead_form` · `meta_ctwa` · `widget` · `tiktok` · `import` · `manual` · `organic_wa` · `other`
+`meta_lead_form` · `meta_ctwa` · `widget` · `mali_one_link` · `tiktok` · `import` · `manual` · `organic_wa` · `other`
 
 ## MALI ONE (widget Educación)
 

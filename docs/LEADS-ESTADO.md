@@ -24,7 +24,13 @@ Misma persona = mismo **teléfono / dni / email** en la **misma área**. CTWA e 
 - `/leads/meta-forms` — Instant Forms: rutas form→área, sync Graph, backfill, leads recientes + abrir chat.
 - `/leads/meta-ctwa` — anuncios CTWA; nombre manual o sync Graph; detalle + leads.
 - Ficha contacto: orígenes de captación + opt-in marketing.
-- Indicador chat: `came_with_inbound` (por origen: CTWA con `conversation_id`; widget con inbound real; Instant Form = solo contacto).
+- Indicador chat: `came_with_inbound` (por origen: CTWA / Links MALI ONE con `conversation_id`; widget con inbound real; Instant Form = solo contacto).
+
+### Links / QR MALI ONE (`mali_one_link`)
+
+- Origen al **enviar** el WhatsApp prellenado (no en el click del acortador).
+- Match: `ref:{slug}` automático en el texto (MALI ONE) o texto normalizado vs catálogo.
+- Área: por línea WA (`phone_number_id`), como CTWA.
 
 ### Instant Forms → área (CA / EP / Educación)
 

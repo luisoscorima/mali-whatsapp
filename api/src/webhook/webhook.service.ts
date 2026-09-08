@@ -13,6 +13,8 @@ import {
 import { FlowsService } from '../flows/flows.service';
 import { MetaLeadgenService } from '../leads/meta-leadgen.service';
 import { LeadsService } from '../leads/leads.service';
+import { MaliOneLinksCatalogService } from '../leads/mali-one-links-catalog.service';
+import { matchMaliOneWhatsappLink } from '../leads/mali-one-link-match.util';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   isBusinessHoursConfigOperational,
@@ -57,6 +59,7 @@ export class WebhookService {
     private readonly flowsService: FlowsService,
     private readonly metaLeadgen: MetaLeadgenService,
     private readonly leadsService: LeadsService,
+    private readonly maliOneLinksCatalog: MaliOneLinksCatalogService,
   ) {}
 
   handleVerification(
@@ -577,6 +580,14 @@ export class WebhookService {
               name: waProfileName ?? undefined,
             },
           });
+        } else if (bodyText.trim()) {
+          await this.maybeAttributeMaliOneLinkOrigin({
+            area,
+            conversationId: conversation.id,
+            phone: from,
+            bodyText,
+            waProfileName,
+          });
         }
       } catch (error) {
         this.logger.warn(
@@ -663,6 +674,45 @@ export class WebhookService {
     } else if (messages.length > 0) {
       this.logger.warn(
         `Webhook inbound: ningun mensaje insertado (area=${area}, count=${messages.length})`,
+      );
+    }
+  }
+
+  private async maybeAttributeMaliOneLinkOrigin(input: {
+    area: string;
+    conversationId: number;
+    phone: string;
+    bodyText: string;
+    waProfileName: string | null;
+  }): Promise<void> {
+    try {
+      const catalog = await this.maliOneLinksCatalog.getCatalog();
+      const matched = matchMaliOneWhatsappLink(input.bodyText, catalog);
+      if (!matched) return;
+
+      const primaryTag = matched.tags[0] ?? null;
+      await this.leadsService.upsertOrigin({
+        area: input.area,
+        channel: 'mali_one_link',
+        external_id: `${matched.slug}:${input.conversationId}`,
+        source_key: matched.slug,
+        source_label: primaryTag || matched.slug,
+        conversation_id: input.conversationId,
+        phone: input.phone,
+        payload: {
+          slug: matched.slug,
+          tags: matched.tags,
+          match: matched.match,
+          ambiguous: matched.ambiguous,
+        },
+        contact: {
+          phone: input.phone,
+          name: input.waProfileName ?? undefined,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Atribución mali_one_link falló: ${error instanceof Error ? error.message : error}`,
       );
     }
   }

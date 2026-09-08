@@ -26,7 +26,7 @@ export function originCameWithInbound(
   resolvedHasInbound?: boolean,
 ): boolean {
   const ch = channel as LeadChannel;
-  if (ch === 'meta_ctwa' || ch === 'organic_wa') {
+  if (ch === 'meta_ctwa' || ch === 'organic_wa' || ch === 'mali_one_link') {
     return originConversationId != null;
   }
   if (ch === 'widget') {

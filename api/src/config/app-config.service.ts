@@ -51,6 +51,16 @@ export class AppConfigService {
     process.env.CRM_SERVICE_TOKEN || '',
   ).trim();
 
+  /** Base URL de MALI ONE API (sin barra final) para catálogo de links WHATSAPP. */
+  readonly maliOneApiBaseUrl = String(process.env.MALI_ONE_API_URL || '')
+    .trim()
+    .replace(/\/$/, '');
+
+  /** Mismo valor que LINKS_CATALOG_SERVICE_TOKEN en MALI ONE. */
+  readonly maliOneLinksServiceToken = String(
+    process.env.MALI_ONE_LINKS_SERVICE_TOKEN || '',
+  ).trim();
+
   get googleAuthEnabled(): boolean {
     return Boolean(
       this.googleClientId &&

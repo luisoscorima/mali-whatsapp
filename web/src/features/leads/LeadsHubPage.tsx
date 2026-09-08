@@ -40,6 +40,12 @@ const CHANNEL_META: Record<
     to: '/leads?channel=widget',
     enabled: true,
   },
+  mali_one_link: {
+    title: 'Links / QR MALI ONE',
+    blurb: 'Acortador, QR y WhatsApp prellenado',
+    to: '/leads?channel=mali_one_link',
+    enabled: true,
+  },
   tiktok: {
     title: 'TikTok',
     blurb: 'Instant Forms de TikTok Ads (webhook)',
@@ -51,6 +57,7 @@ const CHANNEL_META: Record<
 const CHANNEL_FILTER_OPTIONS = [
   { value: '', label: 'Todos' },
   { value: 'widget', label: 'Widget web' },
+  { value: 'mali_one_link', label: 'Links / QR MALI ONE' },
   { value: 'meta_lead_form', label: 'Instant Forms' },
   { value: 'meta_ctwa', label: 'Click-to-WhatsApp' },
   { value: 'tiktok', label: 'TikTok' },

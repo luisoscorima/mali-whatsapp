@@ -1,4 +1,4 @@
-/** Campos útiles del payload de orígenes (widget Educación, etc.). */
+/** Campos útiles del payload de orígenes (widget Educación, links MALI ONE, etc.). */
 export type OriginPayload = {
   curso?: unknown
   curso_url?: unknown
@@ -6,6 +6,10 @@ export type OriginPayload = {
   source?: unknown
   programa?: unknown
   educacion_lead_id?: unknown
+  slug?: unknown
+  tags?: unknown
+  match?: unknown
+  ambiguous?: unknown
 }
 
 export type OriginLike = {
@@ -52,9 +56,13 @@ export function originPrimaryFields(origin: OriginLike) {
 /** Secundarios: siguen en BD; se muestran con menos énfasis. */
 export function originSecondaryFields(origin: OriginLike) {
   const p = parseOriginPayload(origin.payload)
+  const tags = Array.isArray(p.tags)
+    ? p.tags.map((t) => String(t)).filter(Boolean).join(', ')
+    : ''
   return {
-    source: asText(p.source) || asText(origin.source_key),
+    source: asText(p.source) || asText(p.slug) || asText(origin.source_key),
     leadId: asText(p.educacion_lead_id),
+    tags,
   }
 }
 
@@ -64,6 +72,7 @@ export function channelLabel(channel: string): string {
     meta_lead_form: 'Instant Forms',
     meta_ctwa: 'Click-to-WhatsApp',
     organic_wa: 'WhatsApp orgánico',
+    mali_one_link: 'Links / QR MALI ONE',
     manual: 'Manual',
     import: 'Import',
     tiktok: 'TikTok',
