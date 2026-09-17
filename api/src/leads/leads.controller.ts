@@ -19,6 +19,7 @@ import { assertCanManageLeads } from '../auth/permission.util';
 import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { LeadsService } from './leads.service';
 import { MetaLeadgenService } from './meta-leadgen.service';
+import { TikTokLeadgenService } from './tiktok-leadgen.service';
 
 class CreateLeadStatusDto {
   @IsString()
@@ -88,6 +89,7 @@ export class LeadsController {
   constructor(
     private readonly leadsService: LeadsService,
     private readonly metaLeadgen: MetaLeadgenService,
+    private readonly tiktokLeadgen: TikTokLeadgenService,
   ) {}
 
   @Get('summary')
@@ -280,6 +282,65 @@ export class LeadsController {
   ): Promise<ApiResponse<unknown>> {
     assertCanManageLeads(user);
     const data = await this.metaLeadgen.getLead(user.area, id);
+    return { ok: true, data };
+  }
+
+  @Get('tiktok-forms/routes')
+  async listTikTokFormRoutes(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<unknown>> {
+    assertCanManageLeads(user);
+    const data = await this.tiktokLeadgen.listFormRoutes();
+    return { ok: true, data };
+  }
+
+  @Patch('tiktok-forms/routes/:formId')
+  async updateTikTokFormRoute(
+    @CurrentUser() user: AuthUser,
+    @Param('formId') formId: string,
+    @Body() body: UpdateFormRouteDto,
+  ): Promise<ApiResponse<unknown>> {
+    assertCanManageLeads(user);
+    const data = await this.tiktokLeadgen.updateFormRoute(formId, body);
+    return { ok: true, data };
+  }
+
+  @Post('tiktok-forms/sync-forms')
+  async syncTikTokForms(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<unknown>> {
+    assertCanManageLeads(user);
+    const data = await this.tiktokLeadgen.syncFormsFromTikTok();
+    return { ok: true, data };
+  }
+
+  @Get('tiktok-forms/leads')
+  async listTikTokFormLeads(
+    @CurrentUser() user: AuthUser,
+    @Query('form_id') formId?: string,
+    @Query('form_name') formName?: string,
+    @Query('q') q?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ): Promise<ApiResponse<unknown>> {
+    assertCanManageLeads(user);
+    const data = await this.tiktokLeadgen.listFormLeads(user.area, {
+      formId,
+      formName,
+      q,
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
+    return { ok: true, data };
+  }
+
+  @Post('tiktok-forms/backfill')
+  async backfillTikTok(
+    @CurrentUser() user: AuthUser,
+    @Body() body: BackfillFormDto,
+  ): Promise<ApiResponse<unknown>> {
+    assertCanManageLeads(user);
+    const data = await this.tiktokLeadgen.backfillForm(body.form_id);
     return { ok: true, data };
   }
 }

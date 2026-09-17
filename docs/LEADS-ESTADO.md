@@ -150,12 +150,13 @@ Anuncios Instant Form: destino formulario + a menudo “chatear en WhatsApp” a
 ### TikTok Instant Forms (en curso)
 
 - App Marketing API `Mali One Whatsapp` en `business-api.tiktok.com` (aprobada).
-- Cuenta leads: **MALI Cursos de Arte y Extensión Profesional** (`TIKTOK_ADVERTISER_ID`). CA y EP en la misma cuenta; área por nombre del form (`Cursos de Arte…` / `[FORM EP]`) o ruta `form_id`.
-- Webhook: `POST/GET {APP_BASE_URL}/webhook/tiktok` → `TikTokLeadgenService` → `channel=tiktok`.
-- Tablas: `tiktok_leads`, `tiktok_lead_form_routes` (migración `20260908010000_tiktok_leads`).
-- Env: `TIKTOK_ACCESS_TOKEN`, `TIKTOK_ADVERTISER_ID`, `TIKTOK_WEBHOOK_SECRET` (ver `.env.example`).
-- Redirect OAuth: `{APP_BASE_URL}/api/auth/tiktok/callback` (auth_code recibido; canje a token manual por ahora).
-- **Siguiente ops:** canjear auth_code → token en env → Connect CRM / webhook → lead de prueba. UI dedicada tipo meta-forms y backfill: después.
+- Cuenta leads: **MALI Cursos de Arte y Extensión Profesional** (`TIKTOK_ADVERTISER_ID`). CA y EP en la misma cuenta.
+- Área por nombre del form: «Cursos de Arte…» → `educacion_ca`; «[FORM EP]» → `educacion_ep`; resto → `educacion` (misma regla que Meta). Override manual con `area_locked`.
+- UI `/leads/tiktok-forms`: sync forms (`page/get` LEAD_GEN) → rutas `tiktok_lead_form_routes`; backfill por `form_id` (`page/lead/task` + download); lista leads del área.
+- Webhook: `POST/GET {APP_BASE_URL}/webhook/tiktok` → `TikTokLeadgenService` → `channel=tiktok` (sin `TIKTOK_WEBHOOK_SECRET`: TikTok no envía Bearer).
+- Env: `TIKTOK_ACCESS_TOKEN`, `TIKTOK_ADVERTISER_ID`, `TIKTOK_APP_ID` / `SECRET` (OAuth manual).
+- Redirect OAuth: `{APP_BASE_URL}/api/auth/tiktok/callback`.
+- **Ops:** suscripción LEAD activa; sync + backfill desde UI. Token Admin con permiso de leads si `lead/get` / download fallan.
 
 ---
 
@@ -170,5 +171,6 @@ Anuncios Instant Form: destino formulario + a menudo “chatear en WhatsApp” a
 | CTWA sync nombres | `api/src/meta-ads/meta-ads.service.ts` |
 | TikTok ingest | `api/src/leads/tiktok-leadgen.service.ts` |
 | UI forms | `web/src/features/leads/MetaFormsPage.tsx` |
+| UI TikTok forms | `web/src/features/leads/TikTokFormsPage.tsx` |
 | UI CTWA | `web/src/features/meta-ads/*` |
 | Display orígenes | `web/src/features/leads/originDisplay.ts` |

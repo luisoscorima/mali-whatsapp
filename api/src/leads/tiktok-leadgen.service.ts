@@ -2,11 +2,12 @@ import {
   BadRequestException,
   Injectable,
   Logger,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { Request } from 'express';
-import { normalizeArea } from '../config/areas';
+import { BUSINESS_AREAS, normalizeArea } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
 import { inferAreaFromFormName } from './lead-form-area.util';
 import { LeadsService } from './leads.service';
@@ -270,7 +271,7 @@ export class TikTokLeadgenService {
   }
 
   /**
-   * Área: ruta form_id → nombre del form (CA / EP) → educacion.
+   * Área: ruta bloqueada → nombre del form (CA / EP) → ruta libre → educacion.
    * No se usa advertiser_id: CA y EP viven en la misma cuenta publicitaria.
    */
   private async resolveArea(params: {
@@ -278,15 +279,57 @@ export class TikTokLeadgenService {
     formName?: string | null;
   }): Promise<string> {
     const formId = String(params.formId || '').trim();
+    let route: { area: string; area_locked: boolean } | null = null;
     if (formId) {
-      const route = await this.prisma.tiktok_lead_form_routes.findUnique({
+      route = await this.prisma.tiktok_lead_form_routes.findUnique({
         where: { form_id: formId },
+        select: { area: true, area_locked: true },
       });
-      if (route) return normalizeArea(route.area);
+      if (route?.area_locked) return normalizeArea(route.area);
     }
 
     if (params.formName) return inferAreaFromFormName(params.formName);
+    if (route) return normalizeArea(route.area);
     return 'educacion';
+  }
+
+  /** Título del Instant Form vía page/get (lista LEAD_GEN y busca page_id). */
+  private async fetchFormTitle(params: {
+    advertiserId: string;
+    formId: string;
+  }): Promise<string | null> {
+    const token = this.peekAccessToken();
+    if (!token || !params.advertiserId || !params.formId) return null;
+
+    try {
+      const url = new URL(`${TT_API_BASE}/page/get/`);
+      url.searchParams.set('advertiser_id', params.advertiserId);
+      url.searchParams.set('business_type', 'LEAD_GEN');
+      url.searchParams.set('page', '1');
+      url.searchParams.set('page_size', '100');
+
+      const res = await fetch(url, {
+        headers: { 'Access-Token': token },
+      });
+      const json = (await res.json()) as {
+        code?: number;
+        data?: { list?: Array<{ page_id?: string | number; title?: string }> };
+      };
+      if (!res.ok || json.code !== 0) return null;
+
+      const hit = (json.data?.list || []).find(
+        (p) => String(p.page_id || '').trim() === params.formId,
+      );
+      const title = String(hit?.title || '').trim();
+      return title || null;
+    } catch (err) {
+      this.logger.warn(
+        `TikTok page/get falló form=${params.formId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return null;
+    }
   }
 
   async fetchLeadFromApi(params: {
@@ -398,13 +441,21 @@ export class TikTokLeadgenService {
     if (!formId) formId = 'unknown';
 
     const mapped = this.mapFieldData(leadData);
-    const formName =
-      (
-        await this.prisma.tiktok_lead_form_routes.findUnique({
+    const existingRoute = formId
+      ? await this.prisma.tiktok_lead_form_routes.findUnique({
           where: { form_id: formId },
-          select: { form_name: true },
+          select: { form_name: true, area_locked: true },
         })
-      )?.form_name || null;
+      : null;
+
+    let formName = existingRoute?.form_name || null;
+
+    if (!formName && advertiserId) {
+      formName = await this.fetchFormTitle({
+        advertiserId,
+        formId,
+      });
+    }
 
     const area = await this.resolveArea({
       formId,
@@ -422,6 +473,8 @@ export class TikTokLeadgenService {
       },
       update: {
         advertiser_id: advertiserId || undefined,
+        form_name: formName || undefined,
+        ...(existingRoute?.area_locked ? {} : { area }),
         updated_at: new Date(),
       },
     });
@@ -484,6 +537,532 @@ export class TikTokLeadgenService {
     };
   }
 
+  async listFormRoutes() {
+    return this.prisma.tiktok_lead_form_routes.findMany({
+      orderBy: [{ area: 'asc' }, { form_name: 'asc' }, { form_id: 'asc' }],
+    });
+  }
+
+  async updateFormRoute(formId: string, body: { area: string }) {
+    const formIdNorm = String(formId ?? '').trim();
+    if (!formIdNorm) throw new BadRequestException('form_id requerido');
+    const area = normalizeArea(body.area);
+    if (!(BUSINESS_AREAS as readonly string[]).includes(area)) {
+      throw new BadRequestException(`area inválida: ${body.area}`);
+    }
+
+    const existing = await this.prisma.tiktok_lead_form_routes.findUnique({
+      where: { form_id: formIdNorm },
+    });
+    if (!existing) {
+      throw new NotFoundException('Ruta de formulario no encontrada');
+    }
+
+    return this.prisma.tiktok_lead_form_routes.update({
+      where: { form_id: formIdNorm },
+      data: {
+        area,
+        area_locked: true,
+        updated_at: new Date(),
+      },
+    });
+  }
+
+  async syncFormsFromTikTok(): Promise<{
+    synced: number;
+    created: number;
+    updated: number;
+    deleted: number;
+  }> {
+    const token = this.peekAccessToken();
+    const advertiserId = this.defaultAdvertiserId();
+    if (!token) {
+      throw new BadRequestException(
+        'Falta TIKTOK_ACCESS_TOKEN para sincronizar forms',
+      );
+    }
+    if (!advertiserId) {
+      throw new BadRequestException(
+        'Falta TIKTOK_ADVERTISER_ID para sincronizar forms',
+      );
+    }
+
+    let synced = 0;
+    let created = 0;
+    let updated = 0;
+    const activeIds = new Set<string>();
+    let page = 1;
+    let totalPage = 1;
+
+    do {
+      const url = new URL(`${TT_API_BASE}/page/get/`);
+      url.searchParams.set('advertiser_id', advertiserId);
+      url.searchParams.set('business_type', 'LEAD_GEN');
+      url.searchParams.set('page', String(page));
+      url.searchParams.set('page_size', '100');
+
+      const res = await fetch(url, {
+        headers: { 'Access-Token': token },
+      });
+      const json = (await res.json()) as {
+        code?: number;
+        message?: string;
+        data?: {
+          list?: Array<{
+            page_id?: string | number;
+            title?: string;
+            status?: string;
+          }>;
+          page_info?: { page?: number; total_page?: number };
+        };
+      };
+      if (!res.ok || json.code !== 0) {
+        throw new BadRequestException(
+          json.message ||
+            `TikTok page/get error code=${json.code ?? res.status}`,
+        );
+      }
+
+      for (const form of json.data?.list || []) {
+        const formId = String(form.page_id ?? '').trim();
+        if (!formId) continue;
+        activeIds.add(formId);
+        const formName = String(form.title ?? '').trim() || null;
+        const inferred = inferAreaFromFormName(formName);
+        const existing = await this.prisma.tiktok_lead_form_routes.findUnique({
+          where: { form_id: formId },
+        });
+
+        if (!existing) {
+          await this.prisma.tiktok_lead_form_routes.create({
+            data: {
+              form_id: formId,
+              area: inferred,
+              form_name: formName,
+              advertiser_id: advertiserId,
+              area_locked: false,
+              last_synced_at: new Date(),
+              updated_at: new Date(),
+            },
+          });
+          created += 1;
+        } else {
+          await this.prisma.tiktok_lead_form_routes.update({
+            where: { form_id: formId },
+            data: {
+              form_name: formName ?? existing.form_name,
+              advertiser_id: advertiserId,
+              area: existing.area_locked ? existing.area : inferred,
+              last_synced_at: new Date(),
+              updated_at: new Date(),
+            },
+          });
+          updated += 1;
+        }
+        synced += 1;
+      }
+
+      totalPage = Number(json.data?.page_info?.total_page || 1) || 1;
+      page += 1;
+    } while (page <= totalPage);
+
+    let deleted = 0;
+    if (activeIds.size > 0) {
+      const prune = await this.prisma.tiktok_lead_form_routes.deleteMany({
+        where: { form_id: { notIn: [...activeIds] } },
+      });
+      deleted = prune.count;
+    }
+
+    return { synced, created, updated, deleted };
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private parseCsvRows(text: string): Record<string, string>[] {
+    const lines = text
+      .replace(/^\uFEFF/, '')
+      .split(/\r?\n/)
+      .filter((l) => l.trim());
+    if (lines.length < 2) return [];
+
+    const splitLine = (line: string): string[] => {
+      const out: string[] = [];
+      let cur = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i += 1) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            cur += '"';
+            i += 1;
+          } else {
+            inQuotes = !inQuotes;
+          }
+          continue;
+        }
+        if (ch === ',' && !inQuotes) {
+          out.push(cur);
+          cur = '';
+          continue;
+        }
+        cur += ch;
+      }
+      out.push(cur);
+      return out;
+    };
+
+    const headers = splitLine(lines[0]).map((h) => h.trim());
+    const rows: Record<string, string>[] = [];
+    for (let i = 1; i < lines.length; i += 1) {
+      const cols = splitLine(lines[i]);
+      const row: Record<string, string> = {};
+      headers.forEach((h, idx) => {
+        if (!h) return;
+        row[h] = String(cols[idx] ?? '').trim();
+      });
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  private rowToLeadNotice(
+    row: Record<string, unknown>,
+    defaults: { formId: string; advertiserId: string },
+  ): LeadNotice | null {
+    const pick = (...keys: string[]) => {
+      for (const k of keys) {
+        const direct = row[k];
+        if (direct != null && String(direct).trim()) return String(direct).trim();
+        const found = Object.entries(row).find(
+          ([rk]) => rk.toLowerCase() === k.toLowerCase(),
+        );
+        if (found?.[1] != null && String(found[1]).trim()) {
+          return String(found[1]).trim();
+        }
+      }
+      return '';
+    };
+
+    const leadId = pick('lead_id', 'Lead ID', 'leadId', 'id');
+    if (!leadId) return null;
+
+    const metaKeys = new Set(
+      [
+        'lead_id',
+        'Lead ID',
+        'leadId',
+        'id',
+        'page_id',
+        'form_id',
+        'advertiser_id',
+        'ad_id',
+        'adgroup_id',
+        'campaign_id',
+        'create_time',
+        'created_time',
+        'Created Time',
+      ].map((k) => k.toLowerCase()),
+    );
+    const inline: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(row)) {
+      if (!k || metaKeys.has(k.toLowerCase())) continue;
+      if (v == null || String(v).trim() === '') continue;
+      inline[k] = v;
+    }
+
+    return {
+      lead_id: leadId,
+      form_id:
+        pick('page_id', 'form_id', 'Page ID') || defaults.formId || undefined,
+      advertiser_id:
+        pick('advertiser_id') || defaults.advertiserId || undefined,
+      ad_id: pick('ad_id', 'Ad ID') || undefined,
+      created_time: pick('create_time', 'created_time', 'Created Time') || undefined,
+      inline_fields: Object.keys(inline).length ? inline : undefined,
+      raw: row,
+    };
+  }
+
+  async backfillForm(formId: string): Promise<{ imported: number }> {
+    const formIdNorm = String(formId ?? '').trim();
+    if (!formIdNorm) throw new BadRequestException('form_id requerido');
+
+    const token = this.peekAccessToken();
+    if (!token) {
+      throw new BadRequestException(
+        'Falta TIKTOK_ACCESS_TOKEN para backfill',
+      );
+    }
+
+    const route = await this.prisma.tiktok_lead_form_routes.findUnique({
+      where: { form_id: formIdNorm },
+    });
+    const advertiserId =
+      String(route?.advertiser_id || '').trim() || this.defaultAdvertiserId();
+    if (!advertiserId) {
+      throw new BadRequestException(
+        'Falta advertiser_id (ruta o TIKTOK_ADVERTISER_ID)',
+      );
+    }
+
+    const createRes = await fetch(`${TT_API_BASE}/page/lead/task/`, {
+      method: 'POST',
+      headers: {
+        'Access-Token': token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        advertiser_id: advertiserId,
+        page_id: formIdNorm,
+      }),
+    });
+    const createJson = (await createRes.json()) as {
+      code?: number;
+      message?: string;
+      data?: { task_id?: string | number; status?: string };
+    };
+    if (!createRes.ok || createJson.code !== 0) {
+      throw new BadRequestException(
+        createJson.message ||
+          `TikTok lead/task create error code=${createJson.code ?? createRes.status}`,
+      );
+    }
+    const taskId = String(createJson.data?.task_id ?? '').trim();
+    if (!taskId) {
+      throw new BadRequestException('TikTok no devolvió task_id');
+    }
+
+    let status = String(createJson.data?.status || '').toUpperCase();
+    for (let attempt = 0; attempt < 45 && status !== 'SUCCEED'; attempt += 1) {
+      if (status === 'FAILED' || status === 'CANCEL') {
+        throw new BadRequestException(
+          `TikTok lead/task falló status=${status}`,
+        );
+      }
+      await this.sleep(2000);
+      const pollRes = await fetch(`${TT_API_BASE}/page/lead/task/`, {
+        method: 'POST',
+        headers: {
+          'Access-Token': token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          advertiser_id: advertiserId,
+          task_id: taskId,
+        }),
+      });
+      const pollJson = (await pollRes.json()) as {
+        code?: number;
+        message?: string;
+        data?: { status?: string };
+      };
+      if (!pollRes.ok || pollJson.code !== 0) {
+        throw new BadRequestException(
+          pollJson.message ||
+            `TikTok lead/task poll error code=${pollJson.code ?? pollRes.status}`,
+        );
+      }
+      status = String(pollJson.data?.status || '').toUpperCase();
+    }
+    if (status !== 'SUCCEED') {
+      throw new BadRequestException(
+        `TikTok lead/task timeout status=${status || 'unknown'}`,
+      );
+    }
+
+    const dlUrl = new URL(`${TT_API_BASE}/page/lead/task/download/`);
+    dlUrl.searchParams.set('advertiser_id', advertiserId);
+    dlUrl.searchParams.set('task_id', taskId);
+    const dlRes = await fetch(dlUrl, {
+      headers: { 'Access-Token': token },
+    });
+    const contentType = String(dlRes.headers.get('content-type') || '');
+    const rawText = await dlRes.text();
+    if (!dlRes.ok) {
+      throw new BadRequestException(
+        `TikTok lead/task/download HTTP ${dlRes.status}`,
+      );
+    }
+
+    let notices: LeadNotice[] = [];
+    if (contentType.includes('json') || rawText.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(rawText) as {
+          code?: number;
+          message?: string;
+          data?: unknown;
+        };
+        if (parsed.code != null && parsed.code !== 0) {
+          throw new BadRequestException(
+            parsed.message || `download error code=${parsed.code}`,
+          );
+        }
+        const data = parsed.data;
+        const list = Array.isArray(data)
+          ? data
+          : Array.isArray((data as { list?: unknown })?.list)
+            ? ((data as { list: unknown[] }).list)
+            : Array.isArray((data as { leads?: unknown })?.leads)
+              ? ((data as { leads: unknown[] }).leads)
+              : [];
+        for (const item of list) {
+          const row = (item && typeof item === 'object'
+            ? item
+            : {}) as Record<string, unknown>;
+          const leadData =
+            (row.lead_data as Record<string, unknown>) ||
+            (row.field_data as Record<string, unknown>) ||
+            row;
+          const meta = (row.meta_data as Record<string, unknown>) || {};
+          const notice = this.rowToLeadNotice(
+            {
+              ...leadData,
+              lead_id: row.lead_id ?? meta.lead_id,
+              page_id: row.page_id ?? meta.page_id ?? formIdNorm,
+              advertiser_id: row.advertiser_id ?? advertiserId,
+              ad_id: row.ad_id ?? meta.ad_id,
+              create_time: row.create_time ?? meta.create_time,
+            },
+            { formId: formIdNorm, advertiserId },
+          );
+          if (notice) notices.push(notice);
+        }
+      } catch (err) {
+        if (err instanceof BadRequestException) throw err;
+        notices = this.parseCsvRows(rawText)
+          .map((row) =>
+            this.rowToLeadNotice(row, {
+              formId: formIdNorm,
+              advertiserId,
+            }),
+          )
+          .filter((n): n is LeadNotice => Boolean(n));
+      }
+    } else {
+      notices = this.parseCsvRows(rawText)
+        .map((row) =>
+          this.rowToLeadNotice(row, {
+            formId: formIdNorm,
+            advertiserId,
+          }),
+        )
+        .filter((n): n is LeadNotice => Boolean(n));
+    }
+
+    let imported = 0;
+    for (const notice of notices) {
+      try {
+        const result = await this.ingestLead(notice);
+        if (result.created) imported += 1;
+      } catch (err) {
+        this.logger.warn(
+          `TikTok backfill skip ${notice.lead_id}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
+    return { imported };
+  }
+
+  async listFormLeads(
+    area: string,
+    opts: {
+      formId?: string;
+      formName?: string;
+      q?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ) {
+    const areaNorm = normalizeArea(area);
+    const take = Math.min(Math.max(opts.limit ?? 25, 1), 200);
+    const skip = Math.max(opts.offset ?? 0, 0);
+    const formId = String(opts.formId ?? '').trim();
+    const formNameQ = String(opts.formName ?? '').trim();
+    const q = String(opts.q ?? '').trim();
+
+    let formIdsFromName: string[] | undefined;
+    if (formNameQ) {
+      const routes = await this.prisma.tiktok_lead_form_routes.findMany({
+        where: {
+          form_name: { contains: formNameQ, mode: 'insensitive' },
+        },
+        select: { form_id: true },
+      });
+      formIdsFromName = routes.map((r) => r.form_id);
+      if (formIdsFromName.length === 0) {
+        return { items: [], total: 0 };
+      }
+    }
+
+    const where: Prisma.tiktok_leadsWhereInput = {
+      area: areaNorm,
+    };
+    if (formId && formIdsFromName) {
+      where.form_id = formIdsFromName.includes(formId)
+        ? formId
+        : { in: [] };
+    } else if (formId) {
+      where.form_id = formId;
+    } else if (formIdsFromName) {
+      where.form_id = { in: formIdsFromName };
+    }
+    if (q) {
+      where.OR = [
+        { lead_id: { contains: q } },
+        { form_id: { contains: q } },
+        { contacts: { name: { contains: q, mode: 'insensitive' } } },
+        { contacts: { phone: { contains: q } } },
+        { contacts: { email: { contains: q, mode: 'insensitive' } } },
+      ];
+    }
+
+    const [total, rows, routes] = await Promise.all([
+      this.prisma.tiktok_leads.count({ where }),
+      this.prisma.tiktok_leads.findMany({
+        where,
+        orderBy: [{ created_time: 'desc' }, { id: 'desc' }],
+        take,
+        skip,
+        include: {
+          contacts: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              email: true,
+              lead_status: { select: { label: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.tiktok_lead_form_routes.findMany({
+        select: { form_id: true, form_name: true },
+      }),
+    ]);
+
+    const nameByForm = new Map(
+      routes.map((r) => [r.form_id, r.form_name] as const),
+    );
+
+    const items = rows.map((row) => ({
+      id: row.id,
+      lead_id: row.lead_id,
+      form_id: row.form_id,
+      form_name: nameByForm.get(row.form_id) || null,
+      created_time: row.created_time,
+      chat_conversation_id: null as number | null,
+      came_with_inbound: false,
+      contacts: row.contacts,
+    }));
+
+    return { items, total };
+  }
+
   async processWebhook(body: unknown): Promise<number> {
     const notices = this.extractLeadNotices(body);
     if (notices.length === 0) {
@@ -501,7 +1080,16 @@ export class TikTokLeadgenService {
     for (const notice of notices) {
       try {
         const result = await this.ingestLead(notice);
-        if (result.created) ingested += 1;
+        if (result.created) {
+          ingested += 1;
+          this.logger.log(
+            `TikTok lead ingestado ${result.lead_id} contact=${result.contact_id}`,
+          );
+        } else {
+          this.logger.log(
+            `TikTok lead ya existía ${result.lead_id} contact=${result.contact_id}`,
+          );
+        }
       } catch (err) {
         this.logger.warn(
           `TikTok ingest failed ${notice.lead_id}: ${

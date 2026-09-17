@@ -11,6 +11,7 @@ import { MetaAdsEmptyPane } from '../features/meta-ads/MetaAdsEmptyPane'
 import { MetaAdDetailPage } from '../features/meta-ads/MetaAdDetailPage'
 import { LeadsHubPage } from '../features/leads/LeadsHubPage'
 import { MetaFormsPage } from '../features/leads/MetaFormsPage'
+import { TikTokFormsPage } from '../features/leads/TikTokFormsPage'
 import { LeadsShell } from '../features/leads/LeadsShell'
 import { AttributesShell } from '../features/attributes/AttributesShell'
 import { AttributesSummaryPane } from '../features/attributes/AttributesSummaryPane'
@@ -75,6 +76,7 @@ export function AppRouter() {
             >
               <Route index element={<LeadsHubPage />} />
               <Route path="meta-forms" element={<MetaFormsPage />} />
+              <Route path="tiktok-forms" element={<TikTokFormsPage />} />
               <Route path="meta-ctwa" element={<MetaAdsShell />}>
                 <Route index element={<MetaAdsEmptyPane />} />
                 <Route path=":id" element={<MetaAdDetailPage />} />

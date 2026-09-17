@@ -49,7 +49,7 @@ const CHANNEL_META: Record<
   tiktok: {
     title: 'TikTok',
     blurb: 'Instant Forms de TikTok Ads (webhook)',
-    to: '/leads?channel=tiktok',
+    to: '/leads/tiktok-forms',
     enabled: true,
   },
 }
