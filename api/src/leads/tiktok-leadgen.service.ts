@@ -80,17 +80,9 @@ export class TikTokLeadgenService {
     return String(process.env.TIKTOK_ACCESS_TOKEN || '').trim();
   }
 
-  private advertiserAreaMap(): Record<string, string> {
-    const map: Record<string, string> = {};
-    const put = (id: string | undefined, area: string) => {
-      const v = String(id || '').trim();
-      if (v) map[v] = area;
-    };
-    put(process.env.TIKTOK_ADVERTISER_ID, 'educacion');
-    put(process.env.TIKTOK_ADVERTISER_ID_CA, 'educacion_ca');
-    put(process.env.TIKTOK_ADVERTISER_ID_EP, 'educacion_ep');
-    put(process.env.TIKTOK_ADVERTISER_ID_EDUCACION, 'educacion');
-    return map;
+  /** Fallback si el webhook no trae advertiser_id (CA y EP comparten la misma cuenta). */
+  private defaultAdvertiserId(): string {
+    return String(process.env.TIKTOK_ADVERTISER_ID || '').trim();
   }
 
   mapFieldData(input: Record<string, unknown> | undefined): MappedFields {
@@ -277,10 +269,13 @@ export class TikTokLeadgenService {
     });
   }
 
+  /**
+   * Área: ruta form_id → nombre del form (CA / EP) → educacion.
+   * No se usa advertiser_id: CA y EP viven en la misma cuenta publicitaria.
+   */
   private async resolveArea(params: {
     formId?: string;
     formName?: string | null;
-    advertiserId?: string;
   }): Promise<string> {
     const formId = String(params.formId || '').trim();
     if (formId) {
@@ -289,10 +284,6 @@ export class TikTokLeadgenService {
       });
       if (route) return normalizeArea(route.area);
     }
-
-    const byAdvertiser = this.advertiserAreaMap();
-    const adv = String(params.advertiserId || '').trim();
-    if (adv && byAdvertiser[adv]) return byAdvertiser[adv];
 
     if (params.formName) return inferAreaFromFormName(params.formName);
     return 'educacion';
@@ -380,11 +371,7 @@ export class TikTokLeadgenService {
 
     if (!hasInlineIdentity) {
       if (!advertiserId) {
-        advertiserId = String(
-          process.env.TIKTOK_ADVERTISER_ID ||
-            process.env.TIKTOK_ADVERTISER_ID_EDUCACION ||
-            '',
-        ).trim();
+        advertiserId = this.defaultAdvertiserId();
       }
       if (!advertiserId) {
         throw new BadRequestException(
@@ -422,7 +409,6 @@ export class TikTokLeadgenService {
     const area = await this.resolveArea({
       formId,
       formName,
-      advertiserId: advertiserId || undefined,
     });
 
     await this.prisma.tiktok_lead_form_routes.upsert({

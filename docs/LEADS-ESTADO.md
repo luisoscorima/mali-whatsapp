@@ -149,12 +149,13 @@ Anuncios Instant Form: destino formulario + a menudo “chatear en WhatsApp” a
 
 ### TikTok Instant Forms (en curso)
 
-- App Marketing API `MALI ONE Whatsapp` en `business-api.tiktok.com` (Pending / review).
+- App Marketing API `Mali One Whatsapp` en `business-api.tiktok.com` (aprobada).
+- Cuenta leads: **MALI Cursos de Arte y Extensión Profesional** (`TIKTOK_ADVERTISER_ID`). CA y EP en la misma cuenta; área por nombre del form (`Cursos de Arte…` / `[FORM EP]`) o ruta `form_id`.
 - Webhook: `POST/GET {APP_BASE_URL}/webhook/tiktok` → `TikTokLeadgenService` → `channel=tiktok`.
 - Tablas: `tiktok_leads`, `tiktok_lead_form_routes` (migración `20260908010000_tiktok_leads`).
-- Env: `TIKTOK_ACCESS_TOKEN`, `TIKTOK_ADVERTISER_ID*` , `TIKTOK_WEBHOOK_SECRET` (ver `.env.example`).
-- Redirect OAuth registrada: `{APP_BASE_URL}/api/auth/tiktok/callback`.
-- **Siguiente ops:** aprobar app → token + advertisers → Connect CRM / suscripción con URL del webhook → lead de prueba. UI dedicada tipo meta-forms y backfill: después.
+- Env: `TIKTOK_ACCESS_TOKEN`, `TIKTOK_ADVERTISER_ID`, `TIKTOK_WEBHOOK_SECRET` (ver `.env.example`).
+- Redirect OAuth: `{APP_BASE_URL}/api/auth/tiktok/callback` (auth_code recibido; canje a token manual por ahora).
+- **Siguiente ops:** canjear auth_code → token en env → Connect CRM / webhook → lead de prueba. UI dedicada tipo meta-forms y backfill: después.
 
 ---
 
