@@ -487,7 +487,13 @@ export class TikTokLeadgenService {
   async processWebhook(body: unknown): Promise<number> {
     const notices = this.extractLeadNotices(body);
     if (notices.length === 0) {
-      this.logger.warn('Webhook TikTok: sin lead_id reconocible en el body');
+      const keys =
+        body && typeof body === 'object' && !Array.isArray(body)
+          ? Object.keys(body as object).join(',')
+          : typeof body;
+      this.logger.warn(
+        `Webhook TikTok: sin lead_id reconocible en el body (keys/type=${keys || 'empty'})`,
+      );
       return 0;
     }
 

@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   HttpCode,
@@ -11,6 +12,24 @@ import type { Request, Response } from 'express';
 import { TikTokLeadgenService } from '../leads/tiktok-leadgen.service';
 import { WebhookService } from './webhook.service';
 import type { MetaWebhookBody } from './webhook.types';
+
+function resolveJsonBody(req: Request, body?: unknown): unknown {
+  const hasKeys = (v: unknown) =>
+    !!v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length > 0;
+
+  if (hasKeys(body)) return body;
+  if (hasKeys(req.body)) return req.body;
+
+  const raw = (req as Request & { rawBody?: Buffer }).rawBody;
+  if (Buffer.isBuffer(raw) && raw.length > 0) {
+    try {
+      return JSON.parse(raw.toString('utf8')) as unknown;
+    } catch {
+      /* ignore */
+    }
+  }
+  return body ?? req.body ?? {};
+}
 
 @Controller('webhook')
 export class WebhookController {
@@ -63,10 +82,12 @@ export class WebhookController {
   @HttpCode(200)
   async receiveTikTok(
     @Req() req: Request,
+    @Body() body: unknown,
     @Res() res: Response,
   ): Promise<void> {
     this.tiktokLeadgen.assertWebhookAuth(req);
-    const n = await this.tiktokLeadgen.processWebhook(req.body);
+    const payload = resolveJsonBody(req, body);
+    const n = await this.tiktokLeadgen.processWebhook(payload);
     res.status(200).json({ ok: true, ingested: n });
   }
 }
