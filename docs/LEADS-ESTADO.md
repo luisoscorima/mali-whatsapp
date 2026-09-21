@@ -152,11 +152,11 @@ Anuncios Instant Form: destino formulario + a menudo “chatear en WhatsApp” a
 - App Marketing API `Mali One Whatsapp` en `business-api.tiktok.com` (aprobada).
 - Cuenta leads: **MALI Cursos de Arte y Extensión Profesional** (`TIKTOK_ADVERTISER_ID`). CA y EP en la misma cuenta.
 - Área por nombre del form: «Cursos de Arte…» → `educacion_ca`; «[FORM EP]» → `educacion_ep`; resto → `educacion` (misma regla que Meta). Override manual con `area_locked`.
-- UI `/leads/tiktok-forms`: sync forms (`page/get` LEAD_GEN) → rutas `tiktok_lead_form_routes`; backfill por `form_id` (`page/lead/task` + download); lista leads del área.
-- Webhook: `POST/GET {APP_BASE_URL}/webhook/tiktok` → `TikTokLeadgenService` → `channel=tiktok` (sin `TIKTOK_WEBHOOK_SECRET`: TikTok no envía Bearer).
-- Env: `TIKTOK_ACCESS_TOKEN`, `TIKTOK_ADVERTISER_ID`, `TIKTOK_APP_ID` / `SECRET` (OAuth manual).
-- Redirect OAuth: `{APP_BASE_URL}/api/auth/tiktok/callback`.
-- **Ops:** suscripción LEAD activa; sync + backfill desde UI. Token Admin con permiso de leads si `lead/get` / download fallan.
+- UI `/leads/tiktok-forms`: sync decora forms sembrados vía `GET /page/field/get/`; backfill `page/lead/task`; lista leads.
+- Lead Management v2 **no lista** Instant Forms: seeds en `20260917140000_tiktok_lead_form_routes_seeds` (9 form IDs del Lead Center). Forms nuevos: alta automática por webhook (`page_id`).
+- Webhook: `POST/GET {APP_BASE_URL}/webhook/tiktok` → `TikTokLeadgenService` → `channel=tiktok`.
+- Env: `TIKTOK_ACCESS_TOKEN`, `TIKTOK_ADVERTISER_ID`, `TIKTOK_APP_ID` / `SECRET`.
+- **Ops:** `prisma migrate deploy` (seeds) → Sync forms → lead de prueba / Connect CRM.
 
 ---
 

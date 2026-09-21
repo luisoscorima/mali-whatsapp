@@ -153,6 +153,7 @@ export function TikTokFormsPage() {
       created: number
       updated: number
       deleted?: number
+      failed?: number
     }>('/api/leads/tiktok-forms/sync-forms', {})
     setSyncBusy(false)
     if (!res.ok) {
@@ -164,7 +165,7 @@ export function TikTokFormsPage() {
       `${res.data.created} nuevos`,
       `${res.data.updated} actualizados`,
     ]
-    if (res.data.deleted) parts.push(`${res.data.deleted} rutas viejas eliminadas`)
+    if (res.data.failed) parts.push(`${res.data.failed} sin nombre API`)
     notify.success(`Sync: ${parts.join(' · ')}`)
     void reload()
   }

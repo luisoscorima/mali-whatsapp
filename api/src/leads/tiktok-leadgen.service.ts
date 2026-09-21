@@ -293,43 +293,99 @@ export class TikTokLeadgenService {
     return 'educacion';
   }
 
-  /** Título del Instant Form vía page/get (lista LEAD_GEN y busca page_id). */
-  private async fetchFormTitle(params: {
+  /**
+   * Nombre + meta del Instant Form vía /page/field/get/
+   * (Lead Management — Get the fields of an Instant Form).
+   */
+  private async fetchFormMeta(params: {
     advertiserId: string;
     formId: string;
-  }): Promise<string | null> {
+  }): Promise<{ formName: string | null; ok: boolean; message?: string }> {
     const token = this.peekAccessToken();
-    if (!token || !params.advertiserId || !params.formId) return null;
+    if (!token || !params.advertiserId || !params.formId) {
+      return { formName: null, ok: false, message: 'Faltan credenciales' };
+    }
 
     try {
-      const url = new URL(`${TT_API_BASE}/page/get/`);
+      const url = new URL(`${TT_API_BASE}/page/field/get/`);
       url.searchParams.set('advertiser_id', params.advertiserId);
-      url.searchParams.set('business_type', 'LEAD_GEN');
-      url.searchParams.set('page', '1');
-      url.searchParams.set('page_size', '100');
+      url.searchParams.set('page_id', params.formId);
 
       const res = await fetch(url, {
         headers: { 'Access-Token': token },
       });
       const json = (await res.json()) as {
         code?: number;
-        data?: { list?: Array<{ page_id?: string | number; title?: string }> };
+        message?: string;
+        data?: { meta_data?: { page_name?: string } };
       };
-      if (!res.ok || json.code !== 0) return null;
-
-      const hit = (json.data?.list || []).find(
-        (p) => String(p.page_id || '').trim() === params.formId,
-      );
-      const title = String(hit?.title || '').trim();
-      return title || null;
+      if (!res.ok || json.code !== 0) {
+        return {
+          formName: null,
+          ok: false,
+          message:
+            json.message ||
+            `TikTok page/field/get error code=${json.code ?? res.status}`,
+        };
+      }
+      return {
+        formName:
+          String(json.data?.meta_data?.page_name || '').trim() || null,
+        ok: true,
+      };
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       this.logger.warn(
-        `TikTok page/get falló form=${params.formId}: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
+        `TikTok page/field/get falló form=${params.formId}: ${message}`,
       );
-      return null;
+      return { formName: null, ok: false, message };
     }
+  }
+
+  private async fetchFormTitle(params: {
+    advertiserId: string;
+    formId: string;
+  }): Promise<string | null> {
+    const meta = await this.fetchFormMeta(params);
+    return meta.formName;
+  }
+
+  private async upsertFormRoute(params: {
+    formId: string;
+    formName: string | null;
+    advertiserId: string;
+  }): Promise<'created' | 'updated'> {
+    const inferred = inferAreaFromFormName(params.formName);
+    const existing = await this.prisma.tiktok_lead_form_routes.findUnique({
+      where: { form_id: params.formId },
+    });
+
+    if (!existing) {
+      await this.prisma.tiktok_lead_form_routes.create({
+        data: {
+          form_id: params.formId,
+          area: inferred,
+          form_name: params.formName,
+          advertiser_id: params.advertiserId,
+          area_locked: false,
+          last_synced_at: new Date(),
+          updated_at: new Date(),
+        },
+      });
+      return 'created';
+    }
+
+    await this.prisma.tiktok_lead_form_routes.update({
+      where: { form_id: params.formId },
+      data: {
+        form_name: params.formName ?? existing.form_name,
+        advertiser_id: params.advertiserId,
+        area: existing.area_locked ? existing.area : inferred,
+        last_synced_at: new Date(),
+        updated_at: new Date(),
+      },
+    });
+    return 'updated';
   }
 
   async fetchLeadFromApi(params: {
@@ -568,11 +624,18 @@ export class TikTokLeadgenService {
     });
   }
 
+  /**
+   * Sync con Lead Management v2 (sin listado de forms):
+   * toma form_id ya sembrados / conocidos en `tiktok_lead_form_routes`
+   * y decora nombre vía GET /page/field/get/.
+   * Forms nuevos entran solos por webhook (page_id del lead).
+   */
   async syncFormsFromTikTok(): Promise<{
     synced: number;
     created: number;
     updated: number;
     deleted: number;
+    failed: number;
   }> {
     const token = this.peekAccessToken();
     const advertiserId = this.defaultAdvertiserId();
@@ -587,94 +650,51 @@ export class TikTokLeadgenService {
       );
     }
 
+    const routes = await this.prisma.tiktok_lead_form_routes.findMany({
+      select: { form_id: true },
+      orderBy: { form_id: 'asc' },
+    });
+    if (routes.length === 0) {
+      throw new BadRequestException(
+        'No hay forms en tiktok_lead_form_routes. Corre la migración de seeds o espera el primer lead por webhook.',
+      );
+    }
+
     let synced = 0;
     let created = 0;
     let updated = 0;
-    const activeIds = new Set<string>();
-    let page = 1;
-    let totalPage = 1;
+    let failed = 0;
 
-    do {
-      const url = new URL(`${TT_API_BASE}/page/get/`);
-      url.searchParams.set('advertiser_id', advertiserId);
-      url.searchParams.set('business_type', 'LEAD_GEN');
-      url.searchParams.set('page', String(page));
-      url.searchParams.set('page_size', '100');
+    for (const row of routes) {
+      const formId = String(row.form_id || '').trim();
+      if (!formId) continue;
 
-      const res = await fetch(url, {
-        headers: { 'Access-Token': token },
-      });
-      const json = (await res.json()) as {
-        code?: number;
-        message?: string;
-        data?: {
-          list?: Array<{
-            page_id?: string | number;
-            title?: string;
-            status?: string;
-          }>;
-          page_info?: { page?: number; total_page?: number };
-        };
-      };
-      if (!res.ok || json.code !== 0) {
-        throw new BadRequestException(
-          json.message ||
-            `TikTok page/get error code=${json.code ?? res.status}`,
+      const meta = await this.fetchFormMeta({ advertiserId, formId });
+      if (!meta.ok) {
+        failed += 1;
+        this.logger.warn(
+          `Sync TikTok form=${formId}: ${meta.message || 'error'}`,
         );
-      }
-
-      for (const form of json.data?.list || []) {
-        const formId = String(form.page_id ?? '').trim();
-        if (!formId) continue;
-        activeIds.add(formId);
-        const formName = String(form.title ?? '').trim() || null;
-        const inferred = inferAreaFromFormName(formName);
-        const existing = await this.prisma.tiktok_lead_form_routes.findUnique({
-          where: { form_id: formId },
+        // Aun sin nombre, refresca advertiser_id / last_synced.
+        await this.upsertFormRoute({
+          formId,
+          formName: null,
+          advertiserId,
         });
-
-        if (!existing) {
-          await this.prisma.tiktok_lead_form_routes.create({
-            data: {
-              form_id: formId,
-              area: inferred,
-              form_name: formName,
-              advertiser_id: advertiserId,
-              area_locked: false,
-              last_synced_at: new Date(),
-              updated_at: new Date(),
-            },
-          });
-          created += 1;
-        } else {
-          await this.prisma.tiktok_lead_form_routes.update({
-            where: { form_id: formId },
-            data: {
-              form_name: formName ?? existing.form_name,
-              advertiser_id: advertiserId,
-              area: existing.area_locked ? existing.area : inferred,
-              last_synced_at: new Date(),
-              updated_at: new Date(),
-            },
-          });
-          updated += 1;
-        }
-        synced += 1;
+        continue;
       }
 
-      totalPage = Number(json.data?.page_info?.total_page || 1) || 1;
-      page += 1;
-    } while (page <= totalPage);
-
-    let deleted = 0;
-    if (activeIds.size > 0) {
-      const prune = await this.prisma.tiktok_lead_form_routes.deleteMany({
-        where: { form_id: { notIn: [...activeIds] } },
+      const action = await this.upsertFormRoute({
+        formId,
+        formName: meta.formName,
+        advertiserId,
       });
-      deleted = prune.count;
+      if (action === 'created') created += 1;
+      else updated += 1;
+      synced += 1;
     }
 
-    return { synced, created, updated, deleted };
+    return { synced, created, updated, deleted: 0, failed };
   }
 
   private sleep(ms: number): Promise<void> {
