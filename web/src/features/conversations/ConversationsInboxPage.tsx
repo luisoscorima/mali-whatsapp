@@ -2493,6 +2493,7 @@ export function ConversationsInboxPage() {
           heading={assignContext.heading}
           phone={assignContext.phone}
           currentAssigneeId={assignContext.assignedUserId}
+          allowUnassign={!['educacion', 'educacion_ca', 'educacion_ep'].includes(user?.area ?? '')}
           assignees={assignees}
           loading={assigneesLoading}
           saving={assignSaving}

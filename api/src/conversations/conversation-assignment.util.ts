@@ -194,25 +194,49 @@ export async function autoAssignConversationIfUnassigned(
 ): Promise<boolean> {
   const conversation = await prisma.conversations.findFirst({
     where: { id: conversationId, area },
-    select: { id: true, assigned_user_id: true },
+    select: { id: true, assigned_user_id: true, contact_id: true },
   });
   if (!conversation || conversation.assigned_user_id) return false;
+  let leadOwner: { userId: number; label: string } | null = null;
+  if (conversation.contact_id && ['educacion', 'educacion_ca', 'educacion_ep'].includes(area)) {
+    const cycle = await prisma.education_lead_cycles.findFirst({
+      where: { contact_id: conversation.contact_id, area },
+      orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+    });
+    if (cycle?.requires_review) return false;
+    if (cycle?.assigned_user_id) {
+      const owner = await findAssigneeInArea(prisma, area, cycle.assigned_user_id);
+      if (!owner) return false;
+      leadOwner = { userId: owner.id, label: formatAdvisorLabel(owner) };
+    }
+  }
 
   const assignee =
-    explicit ?? (await resolveFirstHumanAdvisorUserId(prisma, area, conversationId));
+    leadOwner ?? explicit ?? (await resolveFirstHumanAdvisorUserId(prisma, area, conversationId));
   if (!assignee) return false;
 
   const valid = await findAssigneeInArea(prisma, area, assignee.userId);
   if (!valid) return false;
 
-  await prisma.conversations.update({
-    where: { id: conversationId },
+  const updated = await prisma.conversations.updateMany({
+    where: { id: conversationId, assigned_user_id: null },
     data: {
       assigned_user_id: assignee.userId,
       assigned_at: new Date(),
       updated_at: new Date(),
     },
   });
+  if (!updated.count) return false;
+  if (conversation.contact_id && ['educacion', 'educacion_ca', 'educacion_ep'].includes(area)) {
+    const cycle = await prisma.education_lead_cycles.findFirst({
+      where: { contact_id: conversation.contact_id, area },
+      orderBy: [{ started_at: 'desc' }, { id: 'desc' }], select: { id: true },
+    });
+    if (cycle) await prisma.education_lead_cycles.updateMany({
+      where: { id: cycle.id, assigned_user_id: null, requires_review: false },
+      data: { assigned_user_id: assignee.userId, updated_at: new Date() },
+    });
+  }
 
   await auditLog.write({
     event_type: AuditEvent.CONVERSATION_ASSIGN,
@@ -223,7 +247,7 @@ export async function autoAssignConversationIfUnassigned(
       from_user_id: null,
       to_user_id: assignee.userId,
       to_user_label: assignee.label,
-      source,
+      source: leadOwner ? 'lead_owner' : source,
     },
   });
 

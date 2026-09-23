@@ -25,7 +25,7 @@ WhatsApp **reemplaza el Excel**. ONE es la **vitrina** para gestionar; no un seg
 
 Menú Apps Script sobre hojas `Subir leads` → `Condensado` → hojas por asesora (DHAYANIS, VALENTINA, …):
 
-1. **Verificar números** — busca teléfono en bases; regla ~3 meses (mismo asesor / reasignable / nuevo); colorea resultado.
+1. **Verificar números** — busca teléfono en bases; la regla operativa vigente usa 60 días exactos desde la última interacción válida.
 2. **Copiar al Condensado** — staging → BD operativa (campaña fija tipo `C7`).
 3. **Distribuir a asesores** — copia a hoja de asesora + fórmulas enlazadas + email.
 4. **Alertas** — leads con asesor y estado vacío +N días.
@@ -42,12 +42,12 @@ Acceso restringido a correos de jefatura; notificaciones por Gmail.
 |-----------------|-----------------|
 | Ingest / “Subir leads” | Webhook Instant Forms, backfill, CTWA, widget ONE → `POST /crm/origins` |
 | Identidad por teléfono | Match phone → dni → email por área |
-| Condensado (BD central) | `contacts` + `contact_origins` + `lead_status` |
+| Condensado (BD central) | `contacts` + `contact_origins` + `education_lead_entries` + `education_lead_cycles` |
 | Acceso | Roles / `leads.list` |
 | Fuente / curso | Payload del origen + export |
 | UI captura Meta | `/leads`, `/leads/meta-forms`, `/leads/meta-ctwa` |
 
-**Parcial:** asignación de **conversación** (`conversations.assigned_user_id`), no ownership del lead en el contacto. Estados CRM genéricos (taxonomía distinta a `VENTA EXITOSA` / `NO CONTESTA` del Sheet).
+**Actualizado:** CRM Educación gestiona un asesor por ciclo de lead (`education_lead_cycles.assigned_user_id`) y refleja la asignación en el chat. Cada mensaje sigue identificado por su remitente. Los estados siguen siendo CRM genéricos; la taxonomía del Sheet requiere alineación.
 
 ---
 
@@ -57,9 +57,10 @@ El CRM Educación de MALI ONE ya ofrece una vista inicial de Contactos y Leads d
 
 | Capacidad | Estado | Notas |
 |-----------|--------|--------|
-| Ownership del lead en contacto | Falta | No solo asignar el chat |
-| Verificar lote + regla 3 meses | Falta | Lookup teléfono + última gestión + UI (nuevo / mismo asesor / reasignable) |
-| Distribuir en lote + historial | Falta | Quién recibió cuántos, cuándo |
+| Ownership del ciclo de lead | Implementado | Un asesor por ciclo; los ciclos futuros conservan estado y calificación. La migración no puede reconstruir snapshots antiguos. |
+| Ventana de 60 días y clasificación | Implementado | Nuevos muestra todas las entradas del periodo; número nuevo, duplicado/mismo asesor, puede reasignarse y conflicto se distinguen por área de entrada |
+| Distribuir números sin historial | Implementado | Solo teléfonos sin historial en ese número se reparten por carga reciente de ciclos abiertos; regresos de más de 60 días conservan al asesor anterior y requieren confirmarlo o cambiarlo directamente; auditoría en `audit_logs` |
+| Reglas adicionales de conflicto | Pendiente | Primeras reglas: convertido/venta exitosa y no interesado reciente |
 | Alerta sin gestionar (+N días) | Falta | Job o disparo desde ONE |
 | Reportes por fuente + email | Falta | Datos en orígenes; envío: SES en ONE encaja bien |
 | Infra email saliente en WA | No | Preferible SES desde ONE (como CRM PAM) |
@@ -71,20 +72,20 @@ El CRM Educación de MALI ONE ya ofrece una vista inicial de Contactos y Leads d
 ```text
 Captura (Meta / widget / import)
         ↓
-WhatsApp: contacto + origen (+ lead_status)
+WhatsApp: contacto + origen + entrada + ciclo
         ↓
 Cola / bandeja “por asignar”
         ↓
-Verificar (teléfono + regla 3 meses)     ← API WhatsApp
+Clasificar por ventana de 60 días        ← API WhatsApp
         ↓
-Asignar asesora (ownership en contacto) ← API WhatsApp
+Asignar asesora (ownership del ciclo)   ← API WhatsApp
         ↓
 UI CRM Educación (MALI ONE)             ← vitrina
         + reportes / emails (ONE + SES)
         + chat / campañas (WhatsApp inbox)
 ```
 
-No replicar pestañas “DHAYANIS / Condensado”. Un contacto, un ownership, orígenes multicanal.
+No replicar pestañas “DHAYANIS / Condensado”. Un contacto puede tener varios ciclos históricos; solo el ciclo actual tiene un asesor responsable vigente.
 
 ---
 
@@ -106,16 +107,16 @@ No replicar pestañas “DHAYANIS / Condensado”. Un contacto, un ownership, or
 
 ### Fase 1 — Mínimo para dejar de depender del Sheet
 
-1. `assigned_user_id` (o equivalente) en contacto / lead.
-2. Endpoint + UI de **verificar** (sugerencia: nuevo / mismo asesor / reasignable).
-3. Asignación en lote + filtro “sin gestionar”.
-4. Alinear o mapear estados EP del Sheet al catálogo del área.
+1. Ciclos con `assigned_user_id` y entradas con clasificación — implementado.
+2. Ventana exacta de 60 días, filtro de duplicados/conflictos y revisión manual — implementado para reglas iniciales.
+3. Asignación equitativa en lote de números sin historial y sin asesor — implementado; los regresos de más de 60 días requieren decisión humana.
+4. Alinear o mapear estados EP del Sheet al catálogo del área — pendiente.
 
-Consumible desde WhatsApp `/leads`; la vitrina ONE ya muestra contactos y orígenes, mientras verificación y asignación siguen pendientes.
+Consumible desde WhatsApp `/leads`; la vitrina ONE muestra contactos y entradas, y permite asignar y revisar los casos iniciales. Quedan pendientes reglas adicionales y reportes.
 
 ### Fase 2 — Operación completa
 
-1. Ampliar CRM Educación en ONE (lista ya disponible; faltan asignar y detalle operativo) vía [CRM-API](./CRM-API.md).
+1. Ampliar CRM Educación en ONE con reglas adicionales de conflicto, alertas y detalle operativo vía [CRM-API](./CRM-API.md).
 2. Reportes por fuente (semana / mes / año / rango) + email SES a jefes/asesoras.
 3. Cron alerta sin gestionar.
 4. Apagar espejo Sheet (`EDUCACION_LEADS_SHEETS_ENABLED=false` en ONE) y el Apps Script BBDD cuando el flujo diario ya no lo use.

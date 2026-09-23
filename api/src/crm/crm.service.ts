@@ -64,6 +64,11 @@ export type CrmContactRow = {
   attributes: Record<string, string>;
   created_at: string;
   updated_at: string;
+  assigned_user_id?: number | null;
+  assigned_user_label?: string | null;
+  requires_review?: boolean;
+  lead_status_id?: number | null;
+  lead_status_label?: string | null;
 };
 
 export type CrmContactsResult = {
@@ -709,6 +714,14 @@ export class CrmService {
             select: { segment_slug: true },
             orderBy: { segment_slug: 'asc' },
           },
+          education_lead_cycles: {
+            orderBy: [{ started_at: 'desc' }, { id: 'desc' }], take: 1,
+            include: {
+              assigned_user: { select: { first_name: true, last_name: true, email: true } },
+              lead_status: { select: { label: true } },
+            },
+          },
+          lead_status: { select: { label: true } },
         },
       }),
     ]);
@@ -730,6 +743,15 @@ export class CrmService {
       ),
       created_at: row.created_at.toISOString(),
       updated_at: row.updated_at.toISOString(),
+      assigned_user_id: row.education_lead_cycles[0]?.assigned_user_id ?? null,
+      requires_review: row.education_lead_cycles[0]?.requires_review ?? false,
+      assigned_user_label: row.education_lead_cycles[0]?.assigned_user
+        ? [row.education_lead_cycles[0].assigned_user.first_name,
+          row.education_lead_cycles[0].assigned_user.last_name].filter(Boolean).join(' ')
+          || row.education_lead_cycles[0].assigned_user.email : null,
+      lead_status_id: row.education_lead_cycles[0]?.lead_status_id ?? row.lead_status_id,
+      lead_status_label: row.education_lead_cycles[0]?.lead_status?.label
+        ?? row.lead_status?.label ?? null,
     }));
 
     const pages = total > 0 ? Math.ceil(total / limit) : 0;

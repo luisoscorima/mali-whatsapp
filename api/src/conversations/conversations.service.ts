@@ -923,7 +923,6 @@ export class ConversationsService {
     if (!conversation) {
       throw new NotFoundException('Conversacion no encontrada');
     }
-
     let activeConversation = conversation;
     if (!activeConversation.assigned_user_id) {
       const assigned = await autoAssignConversationIfUnassigned(
@@ -1228,13 +1227,17 @@ export class ConversationsService {
     const area = user.area;
     const conversation = await this.prisma.conversations.findFirst({
       where: { id: conversationId, area },
-      select: { id: true, assigned_user_id: true },
+      select: { id: true, assigned_user_id: true, contact_id: true },
     });
     if (!conversation) {
       throw new NotFoundException('Conversacion no encontrada');
     }
 
     let assigneeLabel: string | null = null;
+    if (['educacion', 'educacion_ca', 'educacion_ep'].includes(area) &&
+        assignedUserId === null) {
+      throw new BadRequestException('Para reasignar, selecciona otro asesor');
+    }
     if (assignedUserId != null) {
       if (!Number.isInteger(assignedUserId) || assignedUserId <= 0) {
         throw new BadRequestException('Asesor invalido');
@@ -1257,13 +1260,26 @@ export class ConversationsService {
       assigneeLabel = formatAdvisorLabel(assignee);
     }
 
-    await this.prisma.conversations.update({
-      where: { id: conversationId },
-      data: {
-        assigned_user_id: assignedUserId,
-        assigned_at: assignedUserId ? new Date() : null,
-        updated_at: new Date(),
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.conversations.update({
+        where: { id: conversationId },
+        data: {
+          assigned_user_id: assignedUserId,
+          assigned_at: assignedUserId ? new Date() : null,
+          updated_at: new Date(),
+        },
+      });
+      if (conversation.contact_id && ['educacion', 'educacion_ca', 'educacion_ep'].includes(area)) {
+        const cycle = await tx.education_lead_cycles.findFirst({
+          where: { contact_id: conversation.contact_id, area },
+          orderBy: [{ started_at: 'desc' }, { id: 'desc' }], select: { id: true },
+        });
+        if (cycle) await tx.education_lead_cycles.update({
+          where: { id: cycle.id },
+          data: { assigned_user_id: assignedUserId,
+            requires_review: assignedUserId === null, updated_at: new Date() },
+        });
+      }
     });
 
     await this.auditLog.write({
@@ -1317,10 +1333,19 @@ export class ConversationsService {
     });
 
     if (existing) {
-      if (!existing.contact_id) {
+      const cycle = ['educacion', 'educacion_ca', 'educacion_ep'].includes(area)
+        ? await this.prisma.education_lead_cycles.findFirst({
+            where: { contact_id: contactId, area },
+            orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+            select: { assigned_user_id: true },
+          }) : null;
+      if (!existing.contact_id || cycle) {
         await this.prisma.conversations.update({
           where: { id: existing.id },
-          data: { contact_id: contactId, updated_at: new Date() },
+          data: { contact_id: contactId, updated_at: new Date(),
+            ...(cycle ? { assigned_user_id: cycle.assigned_user_id,
+              assigned_at: cycle.assigned_user_id ? new Date() : null } : {}),
+          },
         });
       }
       return { id: existing.id };
@@ -1338,6 +1363,13 @@ export class ConversationsService {
         phone: contact.phone,
         contact_id: contactId,
         status: 'human',
+        ...(['educacion', 'educacion_ca', 'educacion_ep'].includes(area)
+          ? { assigned_user_id: (await this.prisma.education_lead_cycles.findFirst({
+              where: { contact_id: contactId, area },
+              orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+              select: { assigned_user_id: true },
+            }))?.assigned_user_id ?? null }
+          : {}),
       },
       select: { id: true },
     });
@@ -1800,6 +1832,28 @@ export class ConversationsService {
       String(conversation.whatsapp_phone_number_id || '').trim() || undefined;
     const createdMessages: InboxMessage[] = [];
     const wasUnassigned = !conversation.assigned_user_id;
+    const currentLeadCycle = conversation.contact_id &&
+      ['educacion', 'educacion_ca', 'educacion_ep'].includes(area)
+      ? await this.prisma.education_lead_cycles.findFirst({
+          where: { contact_id: conversation.contact_id, area },
+          orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+        }) : null;
+    if (wasUnassigned && currentLeadCycle?.assigned_user_id) {
+      const inherited = await this.prisma.conversations.updateMany({
+        where: { id: conversationId, assigned_user_id: null },
+        data: { assigned_user_id: currentLeadCycle.assigned_user_id,
+          assigned_at: new Date(), updated_at: new Date() },
+      });
+      if (inherited.count) await this.auditLog.write({
+        event_type: AuditEvent.CONVERSATION_ASSIGN,
+        message: `Conversación ${conversationId} asignada al responsable del lead`,
+        actor: { area, email: 'system@mali' },
+        meta: { conversation_id: conversationId, from_user_id: null,
+          to_user_id: currentLeadCycle.assigned_user_id, source: 'lead_owner' },
+      });
+    }
+    const assignOnReply = wasUnassigned && !currentLeadCycle?.requires_review &&
+      !currentLeadCycle?.assigned_user_id;
     const senderProfile = await this.prisma.users.findFirst({
       where: { id: user.id },
       select: { first_name: true, last_name: true, email: true },
@@ -1972,18 +2026,26 @@ export class ConversationsService {
         createdMessages.push(this.mapMessageRow(mediaRow));
       }
 
+      const replyAssignment = assignOnReply
+        ? await this.prisma.conversations.updateMany({
+            where: { id: conversationId, assigned_user_id: null },
+            data: { assigned_user_id: user.id, assigned_at: new Date(), updated_at: new Date() },
+          }) : { count: 0 };
       await this.prisma.conversations.update({
         where: { id: conversationId },
         data: {
           last_message_at: new Date(),
           updated_at: new Date(),
-          ...(conversation.assigned_user_id
-            ? {}
-            : { assigned_user_id: user.id, assigned_at: new Date() }),
         },
       });
 
-      if (wasUnassigned) {
+      if (replyAssignment.count && currentLeadCycle) {
+        await this.prisma.education_lead_cycles.updateMany({
+          where: { id: currentLeadCycle.id, assigned_user_id: null, requires_review: false },
+          data: { assigned_user_id: user.id, updated_at: new Date() },
+        });
+      }
+      if (replyAssignment.count) {
         await this.auditLog.write({
           event_type: AuditEvent.CONVERSATION_ASSIGN,
           message: `Conversación ${conversationId} autoasignada a ${actorLabel}`,
@@ -2253,6 +2315,15 @@ export class ConversationsService {
       where: { id: conv.contact_id, area },
       data: { lead_score: clear ? null : score, updated_at: new Date() },
     });
+    if (['educacion', 'educacion_ca', 'educacion_ep'].includes(area)) {
+      const cycle = await this.prisma.education_lead_cycles.findFirst({
+        where: { contact_id: conv.contact_id, area },
+        orderBy: [{ started_at: 'desc' }, { id: 'desc' }], select: { id: true },
+      });
+      if (cycle) await this.prisma.education_lead_cycles.update({
+        where: { id: cycle.id }, data: { lead_score: clear ? null : score, updated_at: new Date() },
+      });
+    }
     await this.auditLog.write({
       event_type: AuditEvent.CONTACT_LEAD_SCORE,
       message: clear

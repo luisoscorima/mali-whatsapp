@@ -15,6 +15,7 @@ import {
   normalizePhone,
 } from '../contacts/contacts-validation.utils';
 import { PrismaService } from '../prisma/prisma.service';
+import { EducationLeadWorkflowService } from './education-lead-workflow.service';
 import {
   type LeadChatEnrichInput,
   type ConversationHint,
@@ -33,7 +34,10 @@ import {
 
 @Injectable()
 export class LeadsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly educationWorkflow: EducationLeadWorkflowService,
+  ) {}
 
   private educationAreas(area?: string): string[] {
     const allowed = ['educacion', 'educacion_ca', 'educacion_ep'];
@@ -111,6 +115,7 @@ export class LeadsService {
     phone: string;
     name?: string | null;
     seenAt: Date;
+    messageId?: number;
   }): Promise<void> {
     if (!this.educationAreas().includes(input.area)) return;
     const attribution = await this.prisma.contact_origins.findFirst({
@@ -122,15 +127,16 @@ export class LeadsService {
           ...(input.contactId ? [{ contact_id: input.contactId }] : []),
         ],
       },
-      select: { id: true },
+      orderBy: { last_seen_at: 'desc' },
+      select: { id: true, contact_id: true, channel: true,
+        source_key: true, source_label: true, last_seen_at: true },
     });
-    if (attribution) return;
     const firstInbound = await this.prisma.chat_messages.findFirst({
       where: { conversation_id: input.conversationId, direction: 'inbound' },
       orderBy: { created_at: 'asc' },
       select: { created_at: true },
     });
-    await this.upsertOrigin({
+    const result = attribution ? null : await this.upsertOrigin({
       area: input.area,
       channel: 'organic_wa',
       external_id: `conversation:${input.conversationId}`,
@@ -139,6 +145,22 @@ export class LeadsService {
       first_seen_at: firstInbound?.created_at ?? input.seenAt,
       last_seen_at: input.seenAt,
       contact: { phone: input.phone, name: input.name },
+    });
+    const message = input.messageId ? { id: input.messageId } : await this.prisma.chat_messages.findFirst({
+      where: { conversation_id: input.conversationId, direction: 'inbound', created_at: input.seenAt },
+      orderBy: { id: 'desc' }, select: { id: true },
+    });
+    const recentAttribution = attribution &&
+      input.seenAt.getTime() - attribution.last_seen_at.getTime() < 24 * 60 * 60 * 1000
+      ? attribution : null;
+    if (message) await this.educationWorkflow.recordInbound({
+      area: input.area, contactId: result?.contact_id ?? input.contactId ?? attribution?.contact_id ?? null,
+      conversationId: input.conversationId, messageId: message.id,
+      originId: result?.origin_id ?? recentAttribution?.id,
+      channel: recentAttribution?.channel ?? 'organic_wa',
+      sourceKey: recentAttribution?.source_key,
+      sourceLabel: recentAttribution?.source_label,
+      occurredAt: input.seenAt,
     });
   }
 
@@ -398,6 +420,9 @@ export class LeadsService {
           updated_at: new Date(),
         },
       });
+      if (input.channel !== 'organic_wa') {
+        await this.educationWorkflow.recordOrigin(row.id);
+      }
       return { origin_id: row.id, contact_id: row.contact_id, created: false };
     }
 
@@ -418,6 +443,9 @@ export class LeadsService {
         ...(input.last_seen_at ? { last_seen_at: input.last_seen_at } : {}),
       },
     });
+    if (input.channel !== 'organic_wa') {
+      await this.educationWorkflow.recordOrigin(row.id);
+    }
     return { origin_id: row.id, contact_id: row.contact_id, created: true };
   }
 
@@ -514,14 +542,27 @@ export class LeadsService {
       where: { id: statusId, area: areaNorm, active: true },
     });
     if (!status) throw new NotFoundException('Estado no encontrado');
-    return this.prisma.contacts.update({
-      where: { id: contactId },
-      data: {
-        lead_status_id: statusId,
-        lead_status_updated_at: new Date(),
-        updated_at: new Date(),
-      },
-      include: { lead_status: true },
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(20260924, ${contactId})`;
+      const updated = await tx.contacts.update({
+        where: { id: contactId },
+        data: {
+          lead_status_id: statusId,
+          lead_status_updated_at: new Date(),
+          updated_at: new Date(),
+        },
+        include: { lead_status: true },
+      });
+      if (this.educationAreas().includes(areaNorm)) {
+        const cycle = await tx.education_lead_cycles.findFirst({
+          where: { contact_id: contactId, area: areaNorm },
+          orderBy: [{ started_at: 'desc' }, { id: 'desc' }], select: { id: true },
+        });
+        if (cycle) await tx.education_lead_cycles.update({
+          where: { id: cycle.id }, data: { lead_status_id: statusId, updated_at: new Date() },
+        });
+      }
+      return updated;
     });
   }
 

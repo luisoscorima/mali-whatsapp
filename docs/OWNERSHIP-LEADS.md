@@ -5,7 +5,7 @@
 | Capa | Dónde | Rol |
 |------|--------|-----|
 | **CRM operativo de leads** (fuente de verdad) | mali-whatsapp (`/leads` + API) | Persona, `lead_status`, orígenes, ownership/asignación, campañas WA |
-| **Vitrina CRM Educación** | MALI ONE | Contactos y leads de las tres áreas; consume WhatsApp — **sin** BD paralela de prospectos. Verificación, asignación y reportes siguen pendientes. |
+| **Vitrina CRM Educación** | MALI ONE | Contactos y entradas de los últimos 60 días de las tres áreas; consume WhatsApp — **sin** BD paralela de prospectos. Permite gestionar asesor/estado, distribuir automáticamente solo números sin historial en su área, revisar regresos y conflictos. Reportes y alertas siguen pendientes. |
 | **Captura web + dinero** | MALI ONE | Widget → `EducacionLead` (ingestión/reintento); pagos, ROI |
 
 WhatsApp **reemplaza el Excel** de leads. ONE **no** es un segundo CRM de prospectos (sí puede ser la vitrina operativa, como CRM PAM).
@@ -31,8 +31,10 @@ Misma Página Facebook para CA y EP: el Page ID **no** separa áreas. Convenció
 
 | Pieza | Qué es |
 |-------|--------|
-| `contacts` | Persona + `lead_status_id` |
-| `contact_origins` | Evento/touch de captura (verdad del lead) |
+| `contacts` | Persona y estado actual visible también en WhatsApp |
+| `contact_origins` | Fuente/canal de la captación |
+| `education_lead_entries` | Cada entrada gestionable, clasificada con ventana de 60 días |
+| `education_lead_cycles` | Periodo de atención con un asesor, estado y calificación; conserva historial |
 | `lead_status_definitions` | Catálogo editable por área |
 | `meta_leadgen_*` / `meta_ctwa_*` | Detalle por canal Meta |
 | `meta_lead_form_routes` | Instant Form `form_id` → área (CA/EP/Educación); override manual bloquea resync |

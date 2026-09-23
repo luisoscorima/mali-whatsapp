@@ -23,6 +23,7 @@ type InboxAssignDialogProps = {
   heading: string
   phone: string
   currentAssigneeId: number | null
+  allowUnassign?: boolean
   assignees: ConversationAssignee[]
   loading: boolean
   saving: boolean
@@ -35,6 +36,7 @@ export function InboxAssignDialog({
   heading,
   phone,
   currentAssigneeId,
+  allowUnassign = true,
   assignees,
   loading,
   saving,
@@ -60,7 +62,7 @@ export function InboxAssignDialog({
             <p className="text-sm text-muted">Cargando asesores…</p>
           ) : (
             <div className="flex flex-col gap-1" role="radiogroup" aria-label="Asesor">
-              <label className="inbox-assign-option">
+              {allowUnassign && <label className="inbox-assign-option">
                 <input
                   type="radio"
                   name="assignee"
@@ -68,7 +70,7 @@ export function InboxAssignDialog({
                   onChange={() => setSelectedId(null)}
                 />
                 <span>Sin asignar</span>
-              </label>
+              </label>}
               {assignees.map((assignee) => (
                 <label key={assignee.id} className="inbox-assign-option">
                   <input
@@ -90,7 +92,7 @@ export function InboxAssignDialog({
           <DialogClose disabled={saving}>Cancelar</DialogClose>
           <Button
             type="button"
-            disabled={loading || saving}
+            disabled={loading || saving || (!allowUnassign && selectedId === null)}
             onClick={() => onSave(selectedId)}
           >
             {saving ? 'Guardando…' : 'Guardar'}

@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class CrmEducationLeadsQueryDto {
   @IsOptional()
@@ -16,6 +16,15 @@ export class CrmEducationLeadsQueryDto {
   @IsString()
   @MaxLength(120)
   q?: string;
+
+  @IsOptional()
+  @IsIn(['recent', 'new_number', 'duplicate', 'reassignable', 'conflict', 'in_progress', 'all'])
+  view?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  unassigned?: boolean;
 
   @IsOptional()
   @Transform(({ value }) => (value === undefined ? 1 : Number(value)))

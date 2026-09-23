@@ -628,6 +628,7 @@ export class WebhookService {
             phone: from,
             name: waProfileName,
             seenAt: chatMessage.created_at,
+            messageId: chatMessage.id,
           });
         } catch (error) {
           this.logger.warn(

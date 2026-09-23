@@ -6,11 +6,13 @@ describe('CRM Educación', () => {
     const rows = [
       { id: 9, area: 'educacion_ca', name: 'Ana', last_name: '', phone: '51911',
         email: null, dni: null, opt_in: true, opt_in_email: false, active: true,
-        contact_attributes: [], contact_segments: [],
+        contact_attributes: [], contact_segments: [], education_lead_cycles: [],
+        lead_status_id: null, lead_status: null,
         created_at: new Date('2026-01-01'), updated_at: new Date('2026-01-01') },
       { id: 8, area: 'educacion_ep', name: 'Ana', last_name: '', phone: '51911',
         email: null, dni: null, opt_in: true, opt_in_email: false, active: true,
-        contact_attributes: [], contact_segments: [],
+        contact_attributes: [], contact_segments: [], education_lead_cycles: [],
+        lead_status_id: null, lead_status: null,
         created_at: new Date('2026-01-01'), updated_at: new Date('2026-01-01') },
     ];
     const prisma = {
@@ -34,14 +36,18 @@ describe('CRM Educación', () => {
   });
 
   it('solo registra un chat orgánico si no hay otro origen atribuible', async () => {
-    const findFirst = jest.fn().mockResolvedValueOnce({ id: 1 }).mockResolvedValueOnce(null);
     const firstSeen = new Date('2026-01-03T10:00:00Z');
     const seenAt = new Date('2026-01-05T10:00:00Z');
-    const firstInbound = jest.fn().mockResolvedValue({ created_at: firstSeen });
+    const findFirst = jest.fn().mockResolvedValueOnce({ id: 1, contact_id: 10,
+      channel: 'meta_lead_form', source_key: null, source_label: 'Formulario',
+      last_seen_at: seenAt }).mockResolvedValueOnce(null);
+    const firstInbound = jest.fn().mockImplementation(({ orderBy }) =>
+      Promise.resolve(orderBy?.id ? { id: 3 } : { created_at: firstSeen }));
+    const recordInbound = jest.fn();
     const service = new LeadsService({
       contact_origins: { findFirst },
       chat_messages: { findFirst: firstInbound },
-    } as never);
+    } as never, { recordInbound } as never);
     const upsert = jest.spyOn(service, 'upsertOrigin').mockResolvedValue({
       origin_id: 5, contact_id: 10, created: true,
     });
@@ -56,5 +62,6 @@ describe('CRM Educación', () => {
     }));
     await service.recordEducationOrganicOrigin({ ...input, area: 'pam' });
     expect(upsert).toHaveBeenCalledTimes(1);
+    expect(recordInbound).toHaveBeenCalledTimes(2);
   });
 });

@@ -25,9 +25,29 @@ import { CrmPatchContactDto } from './dto/crm-patch-contact.dto';
 import { CrmSyncContactDto } from './dto/crm-sync-contact.dto';
 import { CrmSendTemplateDto } from './dto/crm-send-template.dto';
 import { LeadsService } from '../leads/leads.service';
+import { EducationLeadWorkflowService } from '../leads/education-lead-workflow.service';
+import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import type { LeadChannel } from '../leads/leads.types';
 import { BadRequestException } from '@nestjs/common';
 import { LEAD_CHANNELS } from '../leads/leads.types';
+
+class EducationManagementDto {
+  @IsOptional() @IsInt() @Min(1) assigned_user_id?: number | null;
+  @IsOptional() @IsInt() @Min(1) lead_status_id?: number | null;
+  @IsOptional() @IsString() @MaxLength(120) actor_email?: string;
+}
+
+class EducationReviewDto {
+  @IsIn(['open_new', 'keep_existing', 'dismiss']) action!: 'open_new' | 'keep_existing' | 'dismiss';
+  @IsOptional() @IsString() @MaxLength(120) actor_email?: string;
+}
+
+class EducationDistributeDto {
+  @IsIn(['all', 'educacion', 'educacion_ca', 'educacion_ep']) area!: string;
+  @IsOptional() @IsIn(LEAD_CHANNELS) channel?: string;
+  @IsOptional() @IsString() @MaxLength(120) q?: string;
+  @IsOptional() @IsString() @MaxLength(120) actor_email?: string;
+}
 
 @Controller('crm')
 @UseGuards(CrmServiceTokenGuard)
@@ -35,6 +55,7 @@ export class CrmController {
   constructor(
     private readonly crm: CrmService,
     private readonly leads: LeadsService,
+    private readonly educationWorkflow: EducationLeadWorkflowService,
   ) {}
 
   /** Upsert contact from MALI ONE product (PamRegistration). */
@@ -107,8 +128,36 @@ export class CrmController {
 
   @Get('education/leads')
   async educationLeads(@Query() query: CrmEducationLeadsQueryDto) {
-    const data = await this.leads.listEducationOrigins(query);
+    const data = await this.educationWorkflow.listEntries(query);
     return { ok: true, data };
+  }
+
+  @Get('education/management-catalogs')
+  async educationManagementCatalogs() {
+    return { ok: true, data: await this.educationWorkflow.catalogs() };
+  }
+
+  @Patch('education/contacts/:id/management')
+  async educationManagement(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('area') area: string,
+    @Body() body: EducationManagementDto,
+  ) {
+    return { ok: true, data: await this.educationWorkflow.updateManagement(id, area, body) };
+  }
+
+  @Post('education/distribute')
+  async educationDistribute(@Body() body: EducationDistributeDto) {
+    return { ok: true, data: await this.educationWorkflow.distribute(body) };
+  }
+
+  @Patch('education/entries/:id/review')
+  async educationReview(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('area') area: string,
+    @Body() body: EducationReviewDto,
+  ) {
+    return { ok: true, data: await this.educationWorkflow.reviewEntry(id, area, body.action, body.actor_email) };
   }
 
   /** Full PAM contact list for MALI ONE CRM view. */
