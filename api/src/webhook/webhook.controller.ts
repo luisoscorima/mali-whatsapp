@@ -31,6 +31,27 @@ function resolveJsonBody(req: Request, body?: unknown): unknown {
   return body ?? req.body ?? {};
 }
 
+function resolveTikTokJsonBody(req: Request, body?: unknown): unknown {
+  const raw = (req as Request & { rawBody?: Buffer }).rawBody;
+  if (Buffer.isBuffer(raw) && raw.length > 0) {
+    try {
+      // TikTok IDs arrive as JSON numbers and exceed Number.MAX_SAFE_INTEGER.
+      // Quote identifier values before JSON.parse so their decimal digits are
+      // preserved exactly all the way into the database and form-route lookup.
+      const losslessJson = raw
+        .toString('utf8')
+        .replace(
+          /(\"(?:id|lead_id|leadId|page_id|pageId|form_id|advertiser_id|advertiserId|adv_id|ad_id|adgroup_id|campaign_id)\"\s*:\s*)(\d+)(?=\s*[,}])/g,
+          '$1"$2"',
+        );
+      return JSON.parse(losslessJson) as unknown;
+    } catch {
+      /* Fall back to Express's parsed body for malformed or non-JSON input. */
+    }
+  }
+  return resolveJsonBody(req, body);
+}
+
 @Controller('webhook')
 export class WebhookController {
   constructor(
@@ -86,7 +107,7 @@ export class WebhookController {
     @Res() res: Response,
   ): Promise<void> {
     this.tiktokLeadgen.assertWebhookAuth(req);
-    const payload = resolveJsonBody(req, body);
+    const payload = resolveTikTokJsonBody(req, body);
     const n = await this.tiktokLeadgen.processWebhook(payload);
     res.status(200).json({ ok: true, ingested: n });
   }
