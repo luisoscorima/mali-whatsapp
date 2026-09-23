@@ -51,6 +51,7 @@ export type CrmAudienceResult = {
 
 export type CrmContactRow = {
   contact_id: number;
+  area: string;
   name: string;
   last_name: string;
   phone: string | null;
@@ -579,12 +580,49 @@ export class CrmService {
     limit?: number;
   }): Promise<CrmContactsResult> {
     const area = this.normalizeArea(query.area ?? 'pam');
+    return this.listContactsForAreas(query, [area], area);
+  }
+
+  async listEducationContacts(query: {
+    area?: string;
+    q?: string;
+    segment?: string;
+    has_email?: boolean;
+    opt_in_email?: boolean;
+    attr_key?: string;
+    attr_value?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<CrmContactsResult> {
+    const allowed = ['educacion', 'educacion_ca', 'educacion_ep'];
+    const selected = query.area?.trim().toLowerCase() || 'all';
+    if (selected !== 'all' && !allowed.includes(selected)) {
+      throw new BadRequestException(`Área de educación inválida: ${query.area}`);
+    }
+    const areas = selected === 'all' ? allowed : [selected];
+    return this.listContactsForAreas(query, areas, selected);
+  }
+
+  private async listContactsForAreas(
+    query: {
+      q?: string;
+      segment?: string;
+      has_email?: boolean;
+      opt_in_email?: boolean;
+      attr_key?: string;
+      attr_value?: string;
+      page?: number;
+      limit?: number;
+    },
+    areas: string[],
+    resultArea: string,
+  ): Promise<CrmContactsResult> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 100;
     const offset = (page - 1) * limit;
 
     const where: Prisma.contactsWhereInput = {
-      area,
+      area: { in: areas },
       active: true,
       OR: [{ replacement_reason: null }, { replacement_reason: '' }],
       replaced_by_contact_id: null,
@@ -598,7 +636,7 @@ export class CrmService {
     }
     if (query.segment) {
       where.contact_segments = {
-        some: { area, segment_slug: query.segment.trim() },
+        some: { area: { in: areas }, segment_slug: query.segment.trim() },
       };
     }
 
@@ -643,7 +681,7 @@ export class CrmService {
           {
             contact_segments: {
               some: {
-                area,
+                area: { in: areas },
                 segment_slug: { contains: q, mode: 'insensitive' },
               },
             },
@@ -677,6 +715,7 @@ export class CrmService {
 
     const items: CrmContactRow[] = rows.map((row) => ({
       contact_id: row.id,
+      area: row.area,
       name: row.name,
       last_name: row.last_name,
       phone: row.phone,
@@ -694,7 +733,7 @@ export class CrmService {
     }));
 
     const pages = total > 0 ? Math.ceil(total / limit) : 0;
-    return { area, items, total, page, limit, pages };
+    return { area: resultArea, items, total, page, limit, pages };
   }
 
   async listAttributeDefinitions(areaRaw?: string) {
@@ -820,6 +859,7 @@ export class CrmService {
 
     return {
       contact_id: updated.id,
+      area: updated.area,
       name: updated.name,
       last_name: updated.last_name,
       phone: updated.phone,

@@ -1,6 +1,6 @@
 # CRM API — contrato interno (MALI ONE ↔ WhatsApp)
 
-Fuente de verdad de **personas PAM**: `mali-whatsapp` (`contacts`, área `pam`).
+Fuente de verdad de **personas PAM y Educación**: `mali-whatsapp` (`contacts` por área). La captación multicanal de Educación vive en `contact_origins`.
 
 MALI ONE es dueño del **producto** (membresías, pagos) y del **mailing** (SES). No mantiene una BD paralela de clientes.
 
@@ -119,6 +119,20 @@ Edición parcial de persona + attrs + `segment_slugs` (bidireccional desde MALI 
 Listado CRM (contactos activos del área). Incluye `dni`, `email`, `segment_slugs`, `attributes`.
 
 Query: `area`, `q`, `segment`, `has_email`, `opt_in_email`, `attr_key`, `attr_value`, `page`, `limit`.
+
+### `GET /api/crm/education/contacts`
+
+Listado unificado para CRM Educación en MALI ONE. `area=all` (por defecto) consulta **únicamente** `educacion`, `educacion_ca` y `educacion_ep`; también se puede indicar una de esas tres áreas. La búsqueda, los filtros, el total y la paginación se aplican sobre la unión de las tres áreas, ordenada por ID de contacto descendente. Admite `q`, `segment`, `has_email`, `opt_in_email`, `attr_key`, `attr_value`, `page` y `limit` (máximo 2000).
+
+Respuesta: `{ ok: true, data: { area, items, total, page, limit, pages } }`. Cada item tiene `contact_id`, **`area`**, nombre, teléfono, email, DNI, consentimientos, `segment_slugs`, `attributes` y fechas. La columna **Número** de MALI ONE representa `area`, no el teléfono del contacto. Si una persona existe en dos áreas, hay dos filas y cada edición usa su `contact_id` y `area` mediante `PATCH /api/crm/contacts/:id?area=…`.
+
+### `GET /api/crm/education/leads`
+
+Orígenes de captación de las mismas tres áreas, con una fila por `contact_origins.id`. `area=all` es el valor por defecto; admite una de las tres áreas, además de `channel`, `q`, `page` y `limit` (máximo 200). La búsqueda incluye teléfono, email, DNI, nombre y fuente. Orden global por `last_seen_at` descendente e ID descendente.
+
+Respuesta: `{ ok: true, data: { items, total, page, limit, pages } }`. Cada item incluye `id`, `area`, `channel`, `source_key`, `source_label`, `phone`, `email`, `contact_id`, `first_seen_at`, `last_seen_at` y el contacto vinculado con su estado de lead. Un contacto puede tener varios orígenes.
+
+Para `organic_wa`, el webhook registra una captación solo si no hay otro origen atribuible al contacto o conversación. El identificador `conversation:{id}` evita duplicados y `first_seen_at` toma la fecha del primer mensaje entrante. La migración `20260923200000_education_organic_origins` incorpora chats históricos de las tres áreas con el mismo criterio; se aplica al desplegar las migraciones, no al consultar el endpoint.
 
 ### `GET /api/crm/audience`
 

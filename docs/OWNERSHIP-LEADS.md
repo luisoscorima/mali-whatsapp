@@ -5,7 +5,7 @@
 | Capa | Dónde | Rol |
 |------|--------|-----|
 | **CRM operativo de leads** (fuente de verdad) | mali-whatsapp (`/leads` + API) | Persona, `lead_status`, orígenes, ownership/asignación, campañas WA |
-| **Vitrina CRM Educación** | MALI ONE (panel futuro) | UI para gestionar leads; consume WhatsApp — **sin** BD paralela de prospectos |
+| **Vitrina CRM Educación** | MALI ONE | Contactos y leads de las tres áreas; consume WhatsApp — **sin** BD paralela de prospectos. Verificación, asignación y reportes siguen pendientes. |
 | **Captura web + dinero** | MALI ONE | Widget → `EducacionLead` (ingestión/reintento); pagos, ROI |
 
 WhatsApp **reemplaza el Excel** de leads. ONE **no** es un segundo CRM de prospectos (sí puede ser la vitrina operativa, como CRM PAM).

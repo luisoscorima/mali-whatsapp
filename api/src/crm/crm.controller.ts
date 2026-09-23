@@ -18,6 +18,7 @@ import {
 import { CrmAudienceBodyDto } from './dto/crm-audience-body.dto';
 import { CrmAudienceQueryDto } from './dto/crm-audience-query.dto';
 import { CrmContactsQueryDto } from './dto/crm-contacts-query.dto';
+import { CrmEducationLeadsQueryDto } from './dto/crm-education-leads-query.dto';
 import { CrmEnsureAttributeDefinitionsDto } from './dto/crm-ensure-attribute-definitions.dto';
 import { CrmIngestOriginDto } from './dto/crm-ingest-origin.dto';
 import { CrmPatchContactDto } from './dto/crm-patch-contact.dto';
@@ -94,6 +95,19 @@ export class CrmController {
   @Post('audience')
   async audiencePost(@Body() body: CrmAudienceBodyDto) {
     const data = await this.crm.listAudience(body);
+    return { ok: true, data };
+  }
+
+  /** Full PAM contact list for MALI ONE CRM view. */
+  @Get('education/contacts')
+  async educationContacts(@Query() query: CrmContactsQueryDto) {
+    const data = await this.crm.listEducationContacts(query);
+    return { ok: true, data };
+  }
+
+  @Get('education/leads')
+  async educationLeads(@Query() query: CrmEducationLeadsQueryDto) {
+    const data = await this.leads.listEducationOrigins(query);
     return { ok: true, data };
   }
 

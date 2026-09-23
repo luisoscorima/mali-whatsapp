@@ -620,6 +620,21 @@ export class WebhookService {
         });
         saved += 1;
 
+        try {
+          await this.leadsService.recordEducationOrganicOrigin({
+            area,
+            conversationId: conversation.id,
+            contactId,
+            phone: from,
+            name: waProfileName,
+            seenAt: chatMessage.created_at,
+          });
+        } catch (error) {
+          this.logger.warn(
+            `Origen orgánico no registrado: ${error instanceof Error ? error.message : error}`,
+          );
+        }
+
         await this.tryStoreInboundMedia({
           chatMessageId: chatMessage.id,
           msg: record,

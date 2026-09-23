@@ -35,6 +35,113 @@ import {
 export class LeadsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private educationAreas(area?: string): string[] {
+    const allowed = ['educacion', 'educacion_ca', 'educacion_ep'];
+    const selected = String(area ?? 'all').trim().toLowerCase() || 'all';
+    if (selected !== 'all' && !allowed.includes(selected)) {
+      throw new BadRequestException(`Área de educación inválida: ${area}`);
+    }
+    return selected === 'all' ? allowed : [selected];
+  }
+
+  async listEducationOrigins(params: {
+    area?: string;
+    channel?: string;
+    q?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const areas = this.educationAreas(params.area);
+    const page = params.page ?? 1;
+    const limit = params.limit ?? 50;
+    const q = String(params.q ?? '').trim();
+    const where: Prisma.contact_originsWhereInput = {
+      area: { in: areas },
+      ...(params.channel ? { channel: params.channel } : {}),
+      ...(q ? {
+        OR: [
+          { phone: { contains: q } },
+          { email: { contains: q, mode: 'insensitive' } },
+          { dni: { contains: q, mode: 'insensitive' } },
+          { source_key: { contains: q, mode: 'insensitive' } },
+          { source_label: { contains: q, mode: 'insensitive' } },
+          { contacts: { is: { name: { contains: q, mode: 'insensitive' } } } },
+          { contacts: { is: { last_name: { contains: q, mode: 'insensitive' } } } },
+        ],
+      } : {}),
+    };
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.contact_origins.count({ where }),
+      this.prisma.contact_origins.findMany({
+        where,
+        orderBy: [{ last_seen_at: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          area: true,
+          channel: true,
+          source_key: true,
+          source_label: true,
+          phone: true,
+          email: true,
+          contact_id: true,
+          first_seen_at: true,
+          last_seen_at: true,
+          contacts: {
+            select: {
+              id: true,
+              name: true,
+              last_name: true,
+              phone: true,
+              email: true,
+              lead_status: { select: { label: true } },
+            },
+          },
+        },
+      }),
+    ]);
+    return { items, total, page, limit, pages: Math.ceil(total / limit) };
+  }
+
+  async recordEducationOrganicOrigin(input: {
+    area: string;
+    conversationId: number;
+    contactId: number | null;
+    phone: string;
+    name?: string | null;
+    seenAt: Date;
+  }): Promise<void> {
+    if (!this.educationAreas().includes(input.area)) return;
+    const attribution = await this.prisma.contact_origins.findFirst({
+      where: {
+        area: input.area,
+        channel: { not: 'organic_wa' },
+        OR: [
+          { conversation_id: input.conversationId },
+          ...(input.contactId ? [{ contact_id: input.contactId }] : []),
+        ],
+      },
+      select: { id: true },
+    });
+    if (attribution) return;
+    const firstInbound = await this.prisma.chat_messages.findFirst({
+      where: { conversation_id: input.conversationId, direction: 'inbound' },
+      orderBy: { created_at: 'asc' },
+      select: { created_at: true },
+    });
+    await this.upsertOrigin({
+      area: input.area,
+      channel: 'organic_wa',
+      external_id: `conversation:${input.conversationId}`,
+      source_label: 'WhatsApp orgánico',
+      conversation_id: input.conversationId,
+      first_seen_at: firstInbound?.created_at ?? input.seenAt,
+      last_seen_at: input.seenAt,
+      contact: { phone: input.phone, name: input.name },
+    });
+  }
+
   normalizeOptionalPhone(value: unknown): string | null {
     const phone = normalizePhone(value);
     if (!phone) return null;
@@ -285,7 +392,9 @@ export class LeadsService {
           email: email ?? existing.email,
           conversation_id:
             input.conversation_id ?? existing.conversation_id,
-          last_seen_at: new Date(),
+          first_seen_at: input.first_seen_at && input.first_seen_at < existing.first_seen_at
+            ? input.first_seen_at : existing.first_seen_at,
+          last_seen_at: input.last_seen_at ?? new Date(),
           updated_at: new Date(),
         },
       });
@@ -305,6 +414,8 @@ export class LeadsService {
         dni,
         email,
         conversation_id: input.conversation_id ?? null,
+        ...(input.first_seen_at ? { first_seen_at: input.first_seen_at } : {}),
+        ...(input.last_seen_at ? { last_seen_at: input.last_seen_at } : {}),
       },
     });
     return { origin_id: row.id, contact_id: row.contact_id, created: true };

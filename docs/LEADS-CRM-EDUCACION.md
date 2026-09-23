@@ -53,6 +53,8 @@ Acceso restringido a correos de jefatura; notificaciones por Gmail.
 
 ## Gaps para apagar el Sheet
 
+El CRM Educación de MALI ONE ya ofrece una vista inicial de Contactos y Leads de los tres números. Pagos y Campañas siguen como «Próximamente». Este MVP no sustituye todavía el flujo diario del Sheet: faltan las capacidades operativas listadas abajo.
+
 | Capacidad | Estado | Notas |
 |-----------|--------|--------|
 | Ownership del lead en contacto | Falta | No solo asignar el chat |
@@ -109,11 +111,11 @@ No replicar pestañas “DHAYANIS / Condensado”. Un contacto, un ownership, or
 3. Asignación en lote + filtro “sin gestionar”.
 4. Alinear o mapear estados EP del Sheet al catálogo del área.
 
-Consumible desde WhatsApp `/leads` y, cuando exista, desde la vitrina ONE.
+Consumible desde WhatsApp `/leads`; la vitrina ONE ya muestra contactos y orígenes, mientras verificación y asignación siguen pendientes.
 
 ### Fase 2 — Operación completa
 
-1. CRM Educación en ONE (lista, asignar, detalle) vía [CRM-API](./CRM-API.md).
+1. Ampliar CRM Educación en ONE (lista ya disponible; faltan asignar y detalle operativo) vía [CRM-API](./CRM-API.md).
 2. Reportes por fuente (semana / mes / año / rango) + email SES a jefes/asesoras.
 3. Cron alerta sin gestionar.
 4. Apagar espejo Sheet (`EDUCACION_LEADS_SHEETS_ENABLED=false` en ONE) y el Apps Script BBDD cuando el flujo diario ya no lo use.
