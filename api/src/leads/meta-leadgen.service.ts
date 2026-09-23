@@ -311,17 +311,29 @@ export class MetaLeadgenService {
     return area;
   }
 
-  async listFormRoutes() {
+  async listFormRoutes(area?: string, operationalOnly = true) {
     return this.prisma.meta_lead_form_routes.findMany({
+      where: {
+        ...(area ? { area: normalizeArea(area) } : {}),
+        ...(operationalOnly ? { is_operational: true } : {}),
+      },
       orderBy: [{ area: 'asc' }, { form_name: 'asc' }, { form_id: 'asc' }],
     });
   }
 
-  async updateFormRoute(formId: string, body: { area: string }) {
+  async updateFormRoute(
+    formId: string,
+    body: { area?: string; is_operational?: boolean },
+  ) {
     const formIdNorm = String(formId ?? '').trim();
     if (!formIdNorm) throw new BadRequestException('form_id requerido');
-    const area = normalizeArea(body.area);
-    if (!(BUSINESS_AREAS as readonly string[]).includes(area)) {
+    if (body.area === undefined && body.is_operational === undefined) {
+      throw new BadRequestException('area o is_operational requerido');
+    }
+    if (
+      body.area !== undefined &&
+      !(BUSINESS_AREAS as readonly string[]).includes(body.area)
+    ) {
       throw new BadRequestException(`area inválida: ${body.area}`);
     }
 
@@ -335,8 +347,12 @@ export class MetaLeadgenService {
     return this.prisma.meta_lead_form_routes.update({
       where: { form_id: formIdNorm },
       data: {
-        area,
-        area_locked: true,
+        ...(body.area !== undefined
+          ? { area: body.area, area_locked: true }
+          : {}),
+        ...(typeof body.is_operational === 'boolean'
+          ? { is_operational: body.is_operational }
+          : {}),
         updated_at: new Date(),
       },
     });
@@ -365,7 +381,6 @@ export class MetaLeadgenService {
     let created = 0;
     let updated = 0;
     let skippedInactive = 0;
-    const activeIds = new Set<string>();
     let after: string | undefined;
 
     do {
@@ -406,7 +421,6 @@ export class MetaLeadgenService {
           skippedInactive += 1;
           continue;
         }
-        activeIds.add(formId);
         const formName = String(form.name ?? '').trim() || null;
         const inferred = inferAreaFromFormName(formName);
         const existing = await this.prisma.meta_lead_form_routes.findUnique({
@@ -421,6 +435,7 @@ export class MetaLeadgenService {
               form_name: formName,
               page_id: pageId,
               area_locked: false,
+              is_operational: false,
               last_synced_at: new Date(),
               updated_at: new Date(),
             },
@@ -445,14 +460,9 @@ export class MetaLeadgenService {
       after = json.paging?.next ? json.paging?.cursors?.after : undefined;
     } while (after);
 
-    // Quitar rutas que ya no están ACTIVE en Meta (no toca leads/contactos)
-    let deleted = 0;
-    if (activeIds.size > 0) {
-      const prune = await this.prisma.meta_lead_form_routes.deleteMany({
-        where: { form_id: { notIn: [...activeIds] } },
-      });
-      deleted = prune.count;
-    }
+    // No borrar rutas ausentes: ACTIVE en Meta no significa "vigente para MALI"
+    // y las rutas históricas siguen siendo necesarias para interpretar leads.
+    const deleted = 0;
 
     return {
       synced,
@@ -719,8 +729,16 @@ export class MetaLeadgenService {
   }
 
   async listForms(area: string) {
+    const areaNorm = normalizeArea(area);
+    const operationalRoutes = await this.prisma.meta_lead_form_routes.findMany({
+      where: { area: areaNorm, is_operational: true },
+      select: { form_id: true },
+    });
     return this.prisma.meta_lead_forms.findMany({
-      where: { area: normalizeArea(area) },
+      where: {
+        area: areaNorm,
+        form_id: { in: operationalRoutes.map((route) => route.form_id) },
+      },
       orderBy: { updated_at: 'desc' },
     });
   }

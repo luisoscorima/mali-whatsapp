@@ -24,6 +24,7 @@ type FormRouteRow = {
   form_name: string | null
   page_id: string | null
   area_locked: boolean
+  is_operational: boolean
   last_synced_at: string | null
 }
 
@@ -61,6 +62,7 @@ export function MetaFormsPage() {
   const [exportBusy, setExportBusy] = useState(false)
   const [routeBusyId, setRouteBusyId] = useState<string | null>(null)
   const [routeQuery, setRouteQuery] = useState('')
+  const [showAllRoutes, setShowAllRoutes] = useState(false)
   const [routePage, setRoutePage] = useState(1)
   const [leadQuery, setLeadQuery] = useState('')
   const [leadQueryApplied, setLeadQueryApplied] = useState('')
@@ -102,10 +104,12 @@ export function MetaFormsPage() {
     return [...names].sort((a, b) => a.localeCompare(b, 'es'))
   }, [routes, forms])
 
-  async function reloadCatalog() {
+  async function reloadCatalog(includeAll = showAllRoutes) {
     const [f, r] = await Promise.all([
       apiClient.get<FormRow[]>('/api/leads/meta-forms'),
-      apiClient.get<FormRouteRow[]>('/api/leads/meta-forms/routes'),
+      apiClient.get<FormRouteRow[]>(
+        includeAll ? '/api/leads/meta-forms/routes?all=true' : '/api/leads/meta-forms/routes',
+      ),
     ])
     if (f.ok) setForms(f.data)
     if (r.ok) setRoutes(r.data)
@@ -137,8 +141,9 @@ export function MetaFormsPage() {
   }
 
   useEffect(() => {
-    void reloadCatalog()
-  }, [])
+    void reloadCatalog(showAllRoutes)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- la vista seleccionada determina el catálogo
+  }, [showAllRoutes])
 
   useEffect(() => {
     void reloadLeads(leadPageSafe)
@@ -228,6 +233,21 @@ export function MetaFormsPage() {
     notify.success('Área actualizada (manual)')
   }
 
+  async function onRouteOperationalChange(row: FormRouteRow) {
+    setRouteBusyId(row.form_id)
+    const res = await apiClient.patch<FormRouteRow>(
+      `/api/leads/meta-forms/routes/${encodeURIComponent(row.form_id)}`,
+      { is_operational: !row.is_operational },
+    )
+    setRouteBusyId(null)
+    if (!res.ok) {
+      notify.error(res.error)
+      return
+    }
+    await reloadCatalog()
+    notify.success(res.data.is_operational ? 'Formulario activado' : 'Formulario pasado a histórico')
+  }
+
   return (
     <div className="space-y-6 p-4 md:p-6">
       <div>
@@ -248,7 +268,7 @@ export function MetaFormsPage() {
             <p className="text-xs text-muted">
               Reglas: «Cursos de Arte…» / «[FORM CA]» / prefijo «CA …» → CA ·
               «[FORM EP]» → EP · resto → Educación. Un cambio manual queda
-              bloqueado al sincronizar.
+              bloqueado al sincronizar. Solo los operativos aparecen en la vista principal.
             </p>
           </div>
           <button
@@ -260,9 +280,29 @@ export function MetaFormsPage() {
             {syncBusy ? 'Sincronizando…' : 'Sincronizar forms activos'}
           </button>
         </div>
+        <div className="mb-3 flex gap-2 text-sm" role="group" aria-label="Vista de formularios Meta">
+          <button
+            type="button"
+            aria-pressed={!showAllRoutes}
+            onClick={() => { setShowAllRoutes(false); setRoutePage(1) }}
+            className="rounded-lg border border-line bg-bg px-3 py-1.5 aria-pressed:border-accent"
+          >
+            Operativos
+          </button>
+          <button
+            type="button"
+            aria-pressed={showAllRoutes}
+            onClick={() => { setShowAllRoutes(true); setRoutePage(1) }}
+            className="rounded-lg border border-line bg-bg px-3 py-1.5 aria-pressed:border-accent"
+          >
+            Todos los formularios
+          </button>
+        </div>
         {routes.length === 0 ? (
           <p className="text-sm text-muted">
-            Aún no hay rutas. Sync desde Meta o espera el primer lead.
+            {showAllRoutes
+              ? 'Aún no hay rutas. Sincroniza desde Meta o espera el primer lead.'
+              : 'No hay formularios operativos. Abre “Todos los formularios” para activar uno.'}
           </p>
         ) : (
           <div className="space-y-3">
@@ -295,6 +335,7 @@ export function MetaFormsPage() {
                         <th className="px-2 py-2">Form ID</th>
                         <th className="px-2 py-2">Nombre</th>
                         <th className="px-2 py-2">Área</th>
+                        <th className="px-2 py-2">Catálogo</th>
                         <th className="px-2 py-2">Sync</th>
                       </tr>
                     </thead>
@@ -338,6 +379,17 @@ export function MetaFormsPage() {
                                 <option value={row.area}>{row.area}</option>
                               ) : null}
                             </select>
+                          </td>
+                          <td className="px-2 py-2">
+                            <button
+                              type="button"
+                              disabled={routeBusyId === row.form_id}
+                              onClick={() => void onRouteOperationalChange(row)}
+                              className="rounded-lg border border-line bg-bg px-2 py-1 text-xs disabled:opacity-60"
+                              aria-label={`${row.is_operational ? 'Pasar a histórico' : 'Activar'} formulario ${row.form_id}`}
+                            >
+                              {row.is_operational ? 'Operativo · Desactivar' : 'No operativo · Activar'}
+                            </button>
                           </td>
                           <td className="px-2 py-2 text-xs text-muted">
                             {row.last_synced_at

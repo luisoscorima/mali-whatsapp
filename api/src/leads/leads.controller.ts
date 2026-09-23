@@ -71,10 +71,21 @@ class BackfillFormDto {
   form_id!: string;
 }
 
-class UpdateFormRouteDto {
+class UpdateTikTokFormRouteDto {
   @IsString()
   @MaxLength(32)
   area!: string;
+}
+
+class UpdateMetaFormRouteDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  area?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  is_operational?: boolean;
 }
 
 class SetContactStatusDto {
@@ -198,9 +209,12 @@ export class LeadsController {
   @Get('meta-forms/routes')
   async listFormRoutes(
     @CurrentUser() user: AuthUser,
+    @Query('all') all?: string,
   ): Promise<ApiResponse<unknown>> {
     assertCanManageLeads(user);
-    const data = await this.metaLeadgen.listFormRoutes();
+    // La Página de Meta es compartida por CA, EP y Educación; el catálogo
+    // operativo debe mostrar los forms aprobados de las tres rutas.
+    const data = await this.metaLeadgen.listFormRoutes(undefined, all !== 'true');
     return { ok: true, data };
   }
 
@@ -208,7 +222,7 @@ export class LeadsController {
   async updateFormRoute(
     @CurrentUser() user: AuthUser,
     @Param('formId') formId: string,
-    @Body() body: UpdateFormRouteDto,
+    @Body() body: UpdateMetaFormRouteDto,
   ): Promise<ApiResponse<unknown>> {
     assertCanManageLeads(user);
     const data = await this.metaLeadgen.updateFormRoute(formId, body);
@@ -298,7 +312,7 @@ export class LeadsController {
   async updateTikTokFormRoute(
     @CurrentUser() user: AuthUser,
     @Param('formId') formId: string,
-    @Body() body: UpdateFormRouteDto,
+    @Body() body: UpdateTikTokFormRouteDto,
   ): Promise<ApiResponse<unknown>> {
     assertCanManageLeads(user);
     const data = await this.tiktokLeadgen.updateFormRoute(formId, body);

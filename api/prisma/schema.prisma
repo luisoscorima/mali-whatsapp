@@ -259,6 +259,7 @@ model meta_lead_form_routes {
   form_name      String?   @db.VarChar(200)
   page_id        String?   @db.VarChar(64)
   area_locked    Boolean   @default(false)
+  is_operational Boolean   @default(false)
   last_synced_at DateTime? @db.Timestamptz(6)
   created_at     DateTime  @default(now()) @db.Timestamptz(6)
   updated_at     DateTime  @default(now()) @db.Timestamptz(6)
