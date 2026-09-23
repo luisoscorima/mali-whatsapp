@@ -154,6 +154,7 @@ Anuncios Instant Form: destino formulario + a menudo “chatear en WhatsApp” a
 - Área por nombre del form: «Cursos de Arte…» → `educacion_ca`; «[FORM EP]» → `educacion_ep`; resto → `educacion` (misma regla que Meta). Override manual con `area_locked`.
 - UI `/leads/tiktok-forms`: sync forms (`page/get` LEAD_GEN) → rutas `tiktok_lead_form_routes`; backfill por `form_id` (`page/lead/task` + download); lista leads del área.
 - Webhook: `POST/GET {APP_BASE_URL}/webhook/tiktok` → `TikTokLeadgenService` → `channel=tiktok` (sin `TIKTOK_WEBHOOK_SECRET`: TikTok no envía Bearer).
+- Para `/subscription/subscribe/`, el body usa `subscribe_entity: "LEAD"` y `callback_url` (además de `app_id`, `secret` y `subscription_detail`). El payload entrante del webhook es otro contrato: puede traer `object: 1` y `entry[].id/page_id/changes[]`. No confundir ambos formatos. El endpoint debe devolver 2xx solo después de persistir el lead.
 - Env: `TIKTOK_ACCESS_TOKEN`, `TIKTOK_ADVERTISER_ID`, `TIKTOK_APP_ID` / `SECRET` (OAuth manual).
 - Redirect OAuth: `{APP_BASE_URL}/api/auth/tiktok/callback`.
 - **Ops:** suscripción LEAD activa; sync + backfill desde UI. Token Admin con permiso de leads si `lead/get` / download fallan.

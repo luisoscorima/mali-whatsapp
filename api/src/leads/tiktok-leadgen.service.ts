@@ -192,16 +192,40 @@ export class TikTokLeadgenService {
     const push = (row: Record<string, unknown>, wrapRaw?: unknown) => {
       const leadId = this.pickLeadId(row);
       if (!leadId) return;
+      const changes = Array.isArray(row.changes) ? row.changes : [];
+      const changedFields: Record<string, unknown> = {};
+      for (const change of changes) {
+        const item = this.asRecord(change);
+        const field = String(item?.field ?? '').trim();
+        if (!field || item?.value == null) continue;
+
+        // Official TikTok Lead webhook shape: changes[].value is normally a
+        // scalar, but some integrations wrap it in { value } or send an
+        // object containing the field values.
+        const value = this.asRecord(item.value);
+        if (value && Object.prototype.hasOwnProperty.call(value, 'value')) {
+          changedFields[field] = value.value;
+        } else if (value) {
+          Object.assign(changedFields, value);
+        } else {
+          changedFields[field] = item.value;
+        }
+      }
       const leadData =
         this.asRecord(row.lead_data) ||
         this.asRecord(row.field_data) ||
         this.asRecord(row.answers) ||
-        undefined;
+        (Object.keys(changedFields).length > 0 ? changedFields : undefined);
       const meta = this.asRecord(row.meta_data) || {};
       out.push({
         lead_id: leadId,
         advertiser_id: String(
-          row.advertiser_id ?? meta.advertiser_id ?? '',
+          row.advertiser_id ??
+            row.advertiserId ??
+            row.adv_id ??
+            meta.advertiser_id ??
+            meta.adv_id ??
+            '',
         ).trim() || undefined,
         form_id:
           String(
@@ -1073,7 +1097,12 @@ export class TikTokLeadgenService {
       this.logger.warn(
         `Webhook TikTok: sin lead_id reconocible en el body (keys/type=${keys || 'empty'})`,
       );
-      return 0;
+      // This endpoint is dedicated to LEAD notifications. Acknowledge only
+      // payloads that we can identify; otherwise TikTok would consider a
+      // malformed or newly changed payload delivered successfully.
+      throw new BadRequestException(
+        'Webhook TikTok: payload sin lead_id reconocible',
+      );
     }
 
     let ingested = 0;
@@ -1096,6 +1125,10 @@ export class TikTokLeadgenService {
             err instanceof Error ? err.message : String(err)
           }`,
         );
+        // Do not acknowledge a notification that was not persisted. TikTok
+        // can retry non-2xx deliveries; returning 200 here permanently loses
+        // the lead when lead/get or the database has a transient failure.
+        throw err;
       }
     }
     return ingested;
