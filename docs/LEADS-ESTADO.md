@@ -158,6 +158,11 @@ Anuncios Instant Form: destino formulario + a menudo “chatear en WhatsApp” a
 - Env: `TIKTOK_ACCESS_TOKEN`, `TIKTOK_ADVERTISER_ID`, `TIKTOK_APP_ID` / `SECRET` (OAuth manual).
 - Redirect OAuth: `{APP_BASE_URL}/api/auth/tiktok/callback`.
 - **Ops:** suscripción LEAD activa; sync + backfill desde UI. Token Admin con permiso de leads si `lead/get` / download fallan.
+- UI `/leads/tiktok-forms`: sync decora forms sembrados vía `GET /page/field/get/`; backfill `page/lead/task`; lista leads.
+- Lead Management v2 **no lista** Instant Forms: seeds en `20260917140000_tiktok_lead_form_routes_seeds` (9 form IDs del Lead Center). Forms nuevos: alta automática por webhook (`page_id`).
+- Webhook: `POST/GET {APP_BASE_URL}/webhook/tiktok` → `TikTokLeadgenService` → `channel=tiktok`.
+- Env: `TIKTOK_ACCESS_TOKEN`, `TIKTOK_ADVERTISER_ID`, `TIKTOK_APP_ID` / `SECRET`.
+- **Ops:** `prisma migrate deploy` (seeds) → Sync forms → lead de prueba / Connect CRM.
 
 ---
 
