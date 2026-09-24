@@ -40,6 +40,11 @@ export class UpsertContactDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(132)
+  whatsapp_user_id?: string;
+
+  @IsOptional()
+  @IsString()
   phone_prefix?: string;
 
   @IsOptional()

@@ -133,7 +133,7 @@ export class CrmService {
     }
 
     const existing = await this.prisma.contacts.findFirst({
-      where: { area, phone, replaced_at: null },
+      where: { area, phone },
     });
 
     let segmentSlugs = dto.segment_slugs;
@@ -153,9 +153,6 @@ export class CrmService {
               opt_in,
               opt_in_email,
               active: true,
-              replaced_by_contact_id: null,
-              replaced_at: null,
-              replacement_reason: null,
               ...(segmentSlugs
                 ? { segment: firstSegmentForLegacyColumn(segmentSlugs) }
                 : {}),
@@ -235,7 +232,7 @@ export class CrmService {
     }
 
     const contact = await this.prisma.contacts.findFirst({
-      where: { area, phone, replaced_at: null, active: true },
+      where: { area, phone, active: true },
       select: { id: true, name: true, phone: true },
     });
     if (!contact?.phone) {
@@ -477,8 +474,6 @@ export class CrmService {
       area,
       active: true,
       email: { not: null },
-      OR: [{ replacement_reason: null }, { replacement_reason: '' }],
-      replaced_by_contact_id: null,
     };
 
     if (requireOptInEmail) {
@@ -629,8 +624,6 @@ export class CrmService {
     const where: Prisma.contactsWhereInput = {
       area: { in: areas },
       active: true,
-      OR: [{ replacement_reason: null }, { replacement_reason: '' }],
-      replaced_by_contact_id: null,
     };
 
     if (query.has_email === true) {

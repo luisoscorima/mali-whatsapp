@@ -30,10 +30,6 @@ export class ListContactsQueryDto {
 
   @IsOptional()
   @IsString()
-  show_replaced?: string;
-
-  @IsOptional()
-  @IsString()
   attr_key?: string;
 
   @IsOptional()

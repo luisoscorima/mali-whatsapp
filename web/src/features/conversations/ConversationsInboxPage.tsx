@@ -62,6 +62,7 @@ import {
   type ChatActionsContext,
 } from './inboxChatActions'
 import { useAssignedInboxBrowserNotify } from './useAssignedInboxBrowserNotify'
+import { chatDisplayName, chatSecondaryLabel, isContactPhone } from './whatsappIdentity'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 
 const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000
@@ -259,14 +260,19 @@ function ProfileBlock({
     detail.contact?.last_name,
   )
   const waAlias = String(detail.conversation.wa_profile_name ?? '').trim()
-  const isWaAlias = !crmName && Boolean(waAlias)
-  const heading = crmName || waAlias || detail.conversation.phone
+  const isWaAlias = !crmName && Boolean(waAlias || detail.conversation.wa_username)
+  const heading = chatDisplayName({
+    phone: detail.conversation.phone,
+    contactName: crmName,
+    profileName: waAlias,
+    username: detail.conversation.wa_username,
+  })
   const leadScore = detail.contact?.lead_score
   const leadStatusLabel = detail.contact?.lead_status?.label
   return (
     <>
       <span className="inbox-chat-avatar inbox-chat-avatar--header" aria-hidden>
-        {inboxInitials(crmName || waAlias, detail.conversation.phone)}
+        {inboxInitials(heading, detail.conversation.phone)}
       </span>
       <div className="inbox-chat-header-identity">
         <div className="inbox-chat-heading-row">
@@ -290,7 +296,7 @@ function ProfileBlock({
           assignedUserLabel={detail.conversation.assigned_user_label}
         />
         <p className="inbox-chat-sub">
-          {detail.conversation.phone}
+          {chatSecondaryLabel(detail.conversation.phone)}
           {leadScore ? (
             <>
               {' '}
@@ -356,7 +362,9 @@ type SegmentOption = {
 
 type InboxListItem = {
   id: number
-  phone: string
+  phone: string | null
+  whatsapp_user_id: string | null
+  recipient: string
   last_message_at: string | null
   inbox_unread: boolean
   conversation_status: string | null
@@ -365,6 +373,7 @@ type InboxListItem = {
   automation_touched_at: string | null
   contact_name: string
   wa_profile_name: string | null
+  wa_username: string | null
   contact_lead_score: number | null
   contact_segment_slugs: string[]
   preview: string
@@ -439,7 +448,9 @@ type InboxMessage = {
 type InboxDetail = {
   conversation: {
     id: number
-    phone: string
+    phone: string | null
+    whatsapp_user_id: string | null
+    recipient: string
     status: string
     last_message_at: string | null
     last_user_message_at?: string | null
@@ -447,6 +458,7 @@ type InboxDetail = {
     archived?: boolean
     contact_id: number | null
     wa_profile_name: string | null
+    wa_username: string | null
     assigned_user_id: number | null
     assigned_user_label: string | null
     automation_touched_at: string | null
@@ -537,8 +549,9 @@ function inboxFilterKeyFromResult(filters: InboxListResult['filters']): string {
   return `${filters.q}\n${filters.chat}\n${windowMax}\n${segments.sort().join('\0')}`
 }
 
-function inboxInitials(contactName: string, phone: string): string {
+function inboxInitials(contactName: string, phone: string | null): string {
   const name = contactName.trim()
+  if (!phone && name === 'Usuario de WhatsApp') return 'WA'
   if (name) {
     const parts = name.split(/\s+/).filter(Boolean)
     if (parts.length >= 2) {
@@ -546,6 +559,7 @@ function inboxInitials(contactName: string, phone: string): string {
     }
     return name.slice(0, 2).toUpperCase()
   }
+  if (!phone) return 'WA'
   const digits = phone.replace(/\D/g, '')
   return digits.slice(-2) || '?'
 }
@@ -688,6 +702,7 @@ export function ConversationsInboxPage() {
   const [contactSheetMode, setContactSheetMode] = useState<'edit' | 'create'>('edit')
   const [contactSheetContactId, setContactSheetContactId] = useState<number | null>(null)
   const [contactSheetPhone, setContactSheetPhone] = useState('')
+  const [contactSheetUserId, setContactSheetUserId] = useState<string | null>(null)
   const [contactSheetPrefillName, setContactSheetPrefillName] = useState('')
   const [replyToMessage, setReplyToMessage] = useState<ReplyToMessage | null>(null)
   const [contactAttributes, setContactAttributes] = useState<Record<string, string>>({})
@@ -1067,8 +1082,12 @@ export function ConversationsInboxPage() {
           detail.contact?.name,
           detail.contact?.last_name,
         )
-        const waAlias = String(detail.conversation.wa_profile_name ?? '').trim()
-        return crmName || waAlias || detail.conversation.phone
+        return chatDisplayName({
+          phone: detail.conversation.phone,
+          contactName: crmName,
+          profileName: detail.conversation.wa_profile_name,
+          username: detail.conversation.wa_username,
+        })
       })()
     : ''
 
@@ -1106,11 +1125,13 @@ export function ConversationsInboxPage() {
     mode: 'edit' | 'create'
     contactId?: number | null
     phone: string
+    whatsappUserId?: string | null
     prefillName?: string
   }) {
     setContactSheetMode(opts.mode)
     setContactSheetContactId(opts.contactId ?? null)
     setContactSheetPhone(opts.phone)
+    setContactSheetUserId(opts.whatsappUserId ?? null)
     setContactSheetPrefillName(
       opts.mode === 'create' ? String(opts.prefillName ?? '').trim() : '',
     )
@@ -1491,7 +1512,7 @@ export function ConversationsInboxPage() {
   const canAssign =
     detail?.can_assign_conversations ?? list?.can_assign_conversations ?? false
 
-  const canOpenListContact = (contactId: number | null | undefined) =>
+  const canOpenListContact = (contactId: number | null | undefined, _phone: string | null) =>
     contactId ? userCanUpdateContacts(user) : userCanCreateContacts(user)
 
   useEffect(() => {
@@ -1622,8 +1643,12 @@ export function ConversationsInboxPage() {
 
   const displayName = (item: InboxListItem) => {
     const crmName = String(item.contact_name ?? '').trim()
-    const waAlias = String(item.wa_profile_name ?? '').trim()
-    return crmName || waAlias || item.phone
+    return chatDisplayName({
+      phone: item.phone,
+      contactName: crmName,
+      profileName: item.wa_profile_name,
+      username: item.wa_username,
+    })
   }
 
   if (error && !list) {
@@ -1947,8 +1972,8 @@ export function ConversationsInboxPage() {
               const waAlias = String(item.wa_profile_name ?? '').trim()
               const name = displayName(item)
               const hasContactName = Boolean(crmName)
-              const hasWaAlias = !hasContactName && Boolean(waAlias)
-              const showPhoneRow = hasContactName || hasWaAlias
+              const hasWaAlias = !hasContactName && Boolean(waAlias || item.wa_username)
+              const showPhoneRow = hasContactName || hasWaAlias || !item.phone
               const leadScore = item.contact_lead_score
               const hasConversation = !item.is_virtual
               const actionsCtx = chatActionsFromListItem(
@@ -2016,7 +2041,7 @@ export function ConversationsInboxPage() {
                                   : undefined
                               }
                             >
-                              {inboxInitials(crmName || waAlias, item.phone)}
+                              {inboxInitials(name, item.phone)}
                               {!item.is_virtual && !item.user_service_window_open ? (
                                 <span className="inbox-chat-avatar-lock" aria-hidden>
                                   🔒
@@ -2043,7 +2068,7 @@ export function ConversationsInboxPage() {
                               </span>
                               {showPhoneRow ? (
                                 <span className="inbox-chat-phone-row">
-                                  <span className="inbox-chat-phone">{item.phone}</span>
+                                  <span className="inbox-chat-phone">{chatSecondaryLabel(item.phone)}</span>
                                   {leadScore ? <LeadStars score={leadScore} /> : null}
                                   <ConversationBadges
                                     status={item.conversation_status}
@@ -2137,14 +2162,15 @@ export function ConversationsInboxPage() {
                       <ContextMenuLabel className="truncate normal-case">
                         {name}
                       </ContextMenuLabel>
-                      {canOpenListContact(item.contact_id) ? (
+                      {canOpenListContact(item.contact_id, item.phone) ? (
                         <ContextMenuItem
                           onSelect={() =>
                             openAfterContextMenu(() =>
                               openContactSheet({
                                 mode: item.contact_id ? 'edit' : 'create',
                                 contactId: item.contact_id,
-                                phone: item.phone,
+                                phone: item.phone || '',
+                                whatsappUserId: item.whatsapp_user_id,
                                 prefillName: waAlias,
                               }),
                             )
@@ -2160,7 +2186,7 @@ export function ConversationsInboxPage() {
                               openAssignDialog({
                                 conversationId: item.id,
                                 heading: name,
-                                phone: item.phone,
+                                phone: item.phone || '',
                                 assignedUserId: item.assigned_user_id,
                               }),
                             )
@@ -2287,7 +2313,8 @@ export function ConversationsInboxPage() {
                     openContactSheet({
                       mode: detail.conversation.contact_id ? 'edit' : 'create',
                       contactId: detail.conversation.contact_id,
-                      phone: detail.conversation.phone,
+                      phone: detail.conversation.phone || '',
+                      whatsappUserId: detail.conversation.whatsapp_user_id,
                       prefillName: detail.conversation.wa_profile_name ?? '',
                     })
                   }
@@ -2303,7 +2330,7 @@ export function ConversationsInboxPage() {
                       openAssignDialog({
                         conversationId: detail.conversation.id,
                         heading: detailHeading,
-                        phone: detail.conversation.phone,
+                        phone: detail.conversation.phone || '',
                         assignedUserId: detail.conversation.assigned_user_id,
                       })
                     }
@@ -2394,7 +2421,8 @@ export function ConversationsInboxPage() {
                   String(detail.conversation.wa_profile_name ?? '').trim()
                 }
                 contactPhone={
-                  detail.contact?.phone || detail.conversation.phone
+                  detail.contact?.phone ||
+                  (isContactPhone(detail.conversation.phone) ? detail.conversation.phone || '' : '')
                 }
                 contactEmail={detail.contact?.email || ''}
                 contactDni={detail.contact?.dni || ''}
@@ -2438,12 +2466,13 @@ export function ConversationsInboxPage() {
           lastUserMessageAt={actionsContext.lastUserMessageAt}
           onModeChange={onModeChange}
           onAssign={() => openAssignFromActions(actionsContext)}
-          canOpenContact={canOpenListContact(actionsContext.contactId)}
+          canOpenContact={canOpenListContact(actionsContext.contactId, actionsContext.phone)}
           onOpenContact={() =>
             openContactSheet({
               mode: actionsContext.contactId ? 'edit' : 'create',
               contactId: actionsContext.contactId,
               phone: actionsContext.phone,
+              whatsappUserId: actionsContext.whatsappUserId,
               prefillName: actionsContext.waProfileName,
             })
           }
@@ -2465,6 +2494,8 @@ export function ConversationsInboxPage() {
         mode={contactSheetMode}
         contactId={contactSheetContactId}
         prefillPhone={contactSheetPhone}
+        prefillUserId={contactSheetUserId}
+        prefillUsername={detail?.conversation.whatsapp_user_id === contactSheetUserId ? detail.conversation.wa_username : null}
         prefillName={contactSheetPrefillName}
         onSaved={() => {
           void loadList()

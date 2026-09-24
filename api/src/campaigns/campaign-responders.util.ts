@@ -146,7 +146,8 @@ async function fetchCampaignResponders(
       conv.id AS conversation_id,
       MIN(cm.created_at) AS first_response_at
     FROM latest_logs
-    INNER JOIN conversations conv ON conv.area = ${area} AND conv.phone = latest_logs.phone
+    INNER JOIN conversations conv ON conv.area = ${area}
+      AND (conv.phone = latest_logs.phone OR conv.whatsapp_user_id = latest_logs.phone)
     INNER JOIN chat_messages cm ON cm.conversation_id = conv.id
       AND cm.direction = 'inbound'
       AND cm.created_at > latest_logs.created_at
@@ -194,7 +195,8 @@ async function fetchCampaignInteractiveResponders(
       first_btn.response_text AS interactive_response_text,
       first_btn.created_at AS first_response_at
     FROM latest_logs
-    INNER JOIN conversations conv ON conv.area = ${area} AND conv.phone = latest_logs.phone
+    INNER JOIN conversations conv ON conv.area = ${area}
+      AND (conv.phone = latest_logs.phone OR conv.whatsapp_user_id = latest_logs.phone)
     INNER JOIN LATERAL (
       SELECT
         cm.created_at,

@@ -193,6 +193,8 @@ export class MetaAdsService {
             status: true,
             archived: true,
             last_message_at: true,
+            wa_username: true,
+            wa_profile_name: true,
             assigned_user_id: true,
             assigned_user: {
               select: {
@@ -231,6 +233,8 @@ export class MetaAdsService {
       ad,
       leads: leads.map((lead) => ({
         phone: lead.phone,
+        wa_username: lead.conversations?.wa_username ?? null,
+        wa_profile_name: lead.conversations?.wa_profile_name ?? null,
         first_message_at: lead.first_message_at,
         contact_name: lead.contacts
           ? [lead.contacts.name, lead.contacts.last_name]

@@ -15,7 +15,7 @@ import {
 } from './contacts-filter.utils';
 import {
   firstSegmentForLegacyColumn,
-  validateContactInput,
+  validateContactIdentityInput,
 } from './contacts-validation.utils';
 import {
   MAX_CSV_ROWS,
@@ -48,15 +48,14 @@ type ContactRow = {
   id: number;
   name: string;
   last_name: string;
-  phone: string;
+  phone: string | null;
+  whatsapp_user_id: string | null;
+  wa_username: string | null;
   email: string | null;
   dni: string | null;
   opt_in: boolean;
   opt_in_email: boolean;
   active: boolean;
-  replaced_by_contact_id: number | null;
-  replaced_at: Date | null;
-  replacement_reason: string | null;
   created_at: Date;
   segment_slugs: string[];
   _total: number;
@@ -182,15 +181,8 @@ export class ContactsService {
     params: ListContactsParams,
     slugSet: Set<string>,
   ): Promise<Prisma.Sql> {
-    const showReplaced = Boolean(params.show_replaced);
     const segmentFilter = parseSegmentListFilter(params.segment, slugSet);
     const conditions: Prisma.Sql[] = [Prisma.sql`c.area = ${area}`];
-
-    if (!showReplaced) {
-      conditions.push(
-        Prisma.sql`c.replacement_reason IS NULL AND c.replaced_by_contact_id IS NULL`,
-      );
-    }
 
     const segmentClauses: Prisma.Sql[] = [];
     if (segmentFilter.slugs.length > 0) {
@@ -213,6 +205,7 @@ export class ContactsService {
     const qDigits = searchQ.replace(/\D/g, '');
     if (searchQ) {
       const searchPat = `%${escapeForLikePattern(searchQ)}%`;
+      const usernameSearchPat = `%${escapeForLikePattern(searchQ.replace(/^@/, ''))}%`;
       if (qDigits) {
         const digitsPat = `%${qDigits}%`;
         conditions.push(Prisma.sql`(
@@ -221,6 +214,7 @@ export class ContactsService {
           OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
           OR COALESCE(c.email, '') ILIKE ${searchPat} ESCAPE '!'
           OR COALESCE(c.dni, '') ILIKE ${searchPat} ESCAPE '!'
+          OR EXISTS (SELECT 1 FROM conversations conv WHERE conv.area = c.area AND conv.contact_id = c.id AND COALESCE(conv.wa_username, '') ILIKE ${usernameSearchPat} ESCAPE '!')
           OR regexp_replace(COALESCE(c.phone, ''), '\\D', '', 'g') LIKE ${digitsPat}
         )`);
       } else {
@@ -230,6 +224,7 @@ export class ContactsService {
           OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
           OR COALESCE(c.email, '') ILIKE ${searchPat} ESCAPE '!'
           OR COALESCE(c.dni, '') ILIKE ${searchPat} ESCAPE '!'
+          OR EXISTS (SELECT 1 FROM conversations conv WHERE conv.area = c.area AND conv.contact_id = c.id AND COALESCE(conv.wa_username, '') ILIKE ${usernameSearchPat} ESCAPE '!')
         )`);
       }
     }
@@ -326,8 +321,6 @@ export class ContactsService {
           where: {
             id: cid,
             area,
-            replacement_reason: null,
-            replaced_by_contact_id: null,
           },
           select: { id: true },
         });
@@ -422,8 +415,6 @@ export class ContactsService {
           where: {
             id: cid,
             area,
-            replacement_reason: null,
-            replaced_by_contact_id: null,
           },
           select: { id: true },
         });
@@ -493,8 +484,6 @@ export class ContactsService {
       where: {
         id: contactId,
         area,
-        replacement_reason: null,
-        replaced_by_contact_id: null,
       },
       select: { id: true },
     });
@@ -575,6 +564,9 @@ export class ContactsService {
         c.name,
         c.last_name,
         c.phone,
+        (SELECT conv.wa_username FROM conversations conv
+         WHERE conv.area = c.area AND conv.contact_id = c.id AND conv.wa_username IS NOT NULL
+         ORDER BY conv.updated_at DESC LIMIT 1) AS wa_username,
         c.email,
         c.dni,
         COALESCE((
@@ -695,14 +687,12 @@ export class ContactsService {
       name: string;
       last_name: string;
       phone: string | null;
+      whatsapp_user_id: string | null;
       email: string | null;
       dni: string | null;
       opt_in: boolean;
       opt_in_email: boolean;
       active: boolean;
-      replaced_by_contact_id: number | null;
-      replaced_at: Date | null;
-      replacement_reason: string | null;
       created_at: Date;
       lead_status_id: number | null;
       lead_status: { id: number; slug: string; label: string } | null;
@@ -726,19 +716,23 @@ export class ContactsService {
         last_seen_at: true,
       },
     });
+    const linkedConversation = await this.prisma.conversations.findFirst({
+      where: { area, contact_id: row.id, wa_username: { not: null } },
+      select: { wa_username: true },
+      orderBy: { updated_at: 'desc' },
+    });
     return {
       id: row.id,
       name: row.name,
       last_name: row.last_name,
       phone: row.phone,
+      whatsapp_user_id: row.whatsapp_user_id,
+      wa_username: linkedConversation?.wa_username ?? null,
       email: row.email,
       dni: row.dni,
       opt_in: row.opt_in,
       opt_in_email: row.opt_in_email,
       active: row.active,
-      replaced_by_contact_id: row.replaced_by_contact_id,
-      replaced_at: row.replaced_at?.toISOString() ?? null,
-      replacement_reason: row.replacement_reason,
       created_at: row.created_at.toISOString(),
       segment_slugs: segmentSlugs,
       lead_status_id: row.lead_status_id,
@@ -775,10 +769,29 @@ export class ContactsService {
     return this.mapContactDetail(area, row, segmentSlugs);
   }
 
+  private async assertConversationIdentityCompatible(
+    tx: Prisma.TransactionClient,
+    area: string,
+    phone: string | null,
+    userId: string | null,
+  ): Promise<void> {
+    if (!phone || !userId) return;
+    const conflict = await tx.conversations.findFirst({
+      where: { area, OR: [
+        { phone, whatsapp_user_id: { not: userId } },
+        { whatsapp_user_id: userId, phone: { not: phone } },
+      ] },
+      select: { id: true },
+    });
+    if (conflict) {
+      throw new ConflictException('El teléfono y la identidad de WhatsApp pertenecen a conversaciones distintas');
+    }
+  }
+
   async create(user: AuthUser, dto: UpsertContactDto): Promise<ContactDetail> {
     const area = user.area;
     const segmentSet = await this.getSegmentSlugSet(area);
-    const validation = validateContactInput(dto, segmentSet, { minSegments: 1 });
+    const validation = validateContactIdentityInput(dto, segmentSet);
     if (!validation.ok) {
       throw new BadRequestException(validation.message);
     }
@@ -797,7 +810,7 @@ export class ContactsService {
       throw new BadRequestException(requiredError);
     }
 
-    const { name, last_name, phone, segments } = validation.value;
+    const { name, last_name, phone, whatsapp_user_id, segments } = validation.value;
     const email = this.normalizeOptionalEmail(dto.email);
     const dni = this.normalizeOptionalDni(dto.dni);
     const opt_in_email =
@@ -805,11 +818,13 @@ export class ContactsService {
 
     try {
       const created = await this.prisma.$transaction(async (tx) => {
+        await this.assertConversationIdentityCompatible(tx, area, phone, whatsapp_user_id);
         const contact = await tx.contacts.create({
           data: {
             name,
             last_name,
             phone,
+            whatsapp_user_id,
             email,
             dni,
             segment: firstSegmentForLegacyColumn(segments),
@@ -830,7 +845,10 @@ export class ContactsService {
           await this.upsertContactAttributes(tx, contact.id, { dni });
         }
         await tx.conversations.updateMany({
-          where: { area, phone },
+          where: { area, contact_id: null, OR: [
+            ...(phone ? [{ phone }] : []),
+            ...(whatsapp_user_id ? [{ whatsapp_user_id }] : []),
+          ] },
           data: { contact_id: contact.id, updated_at: new Date() },
         });
         return { contactId: contact.id, change };
@@ -842,7 +860,7 @@ export class ContactsService {
         meta: {
           contact_id: created.contactId,
           phone,
-          phone_tail: phoneMetaTail(phone),
+          phone_tail: phone ? phoneMetaTail(phone) : null,
           email,
           dni,
           segments: validation.value.segments,
@@ -862,7 +880,7 @@ export class ContactsService {
         error.code === 'P2002'
       ) {
         throw new ConflictException(
-          'Ya existe un contacto con ese teléfono en esta área',
+          'Ya existe un contacto con ese teléfono o identidad de WhatsApp en esta área',
         );
       }
       throw error;
@@ -875,34 +893,55 @@ export class ContactsService {
     dto: UpsertContactDto,
   ): Promise<ContactDetail> {
     const area = user.area;
-    const segmentSet = await this.getSegmentSlugSet(area);
-    const validation = validateContactInput(dto, segmentSet, { minSegments: 1 });
-    if (!validation.ok) {
-      throw new BadRequestException(validation.message);
-    }
-
     const current = await this.prisma.contacts.findFirst({ where: { id, area } });
     if (!current) {
       throw new NotFoundException('Contacto no encontrado');
     }
+    if (
+      current.whatsapp_user_id &&
+      dto.whatsapp_user_id != null &&
+      dto.whatsapp_user_id !== current.whatsapp_user_id
+    ) {
+      throw new BadRequestException('La identidad de WhatsApp no se edita manualmente');
+    }
+    const segmentSet = await this.getSegmentSlugSet(area);
+    const validation = validateContactIdentityInput(
+      {
+        ...dto,
+        phone: dto.phone ?? (dto.phone_local === undefined ? current.phone ?? undefined : undefined),
+        whatsapp_user_id: dto.whatsapp_user_id ?? current.whatsapp_user_id ?? undefined,
+      },
+      segmentSet,
+    );
+    if (!validation.ok) {
+      throw new BadRequestException(validation.message);
+    }
 
-    const isReplaced =
-      Boolean(current.replacement_reason) ||
-      current.replaced_by_contact_id != null;
-    if (isReplaced) {
+    if (current.phone && validation.value.phone !== current.phone) {
       throw new BadRequestException(
-        'Este contacto está reemplazado. Reactívalo antes de editarlo.',
+        'El teléfono no se puede cambiar. Crea otro contacto para el número nuevo.',
       );
     }
 
-    const duplicate = await this.prisma.contacts.findFirst({
-      where: { area, phone: validation.value.phone, NOT: { id } },
-      select: { id: true },
-    });
+    const duplicate = validation.value.phone
+      ? await this.prisma.contacts.findFirst({
+          where: { area, phone: validation.value.phone, NOT: { id } },
+          select: { id: true },
+        })
+      : null;
     if (duplicate) {
       throw new ConflictException(
         'Ya existe otro contacto con ese teléfono en esta área',
       );
+    }
+    if (validation.value.whatsapp_user_id) {
+      const duplicateUserId = await this.prisma.contacts.findFirst({
+        where: { area, whatsapp_user_id: validation.value.whatsapp_user_id, NOT: { id } },
+        select: { id: true },
+      });
+      if (duplicateUserId) {
+        throw new ConflictException('Esta identidad de WhatsApp ya pertenece a otro contacto');
+      }
     }
 
     const applicable = getApplicableAttributeDefinitions(
@@ -918,7 +957,7 @@ export class ContactsService {
       throw new BadRequestException(requiredError);
     }
 
-    const { name, last_name, phone, segments } = validation.value;
+    const { name, last_name, phone, whatsapp_user_id, segments } = validation.value;
     const email =
       dto.email !== undefined
         ? this.normalizeOptionalEmail(dto.email)
@@ -931,24 +970,21 @@ export class ContactsService {
       dto.opt_in_email !== undefined
         ? Boolean(dto.opt_in_email)
         : current.opt_in_email;
-    const phoneChanged = String(current.phone) !== String(phone);
-
-    if (!phoneChanged) {
+    {
       const change = await this.prisma.$transaction(async (tx) => {
+        await this.assertConversationIdentityCompatible(tx, area, phone, whatsapp_user_id);
         await tx.contacts.update({
           where: { id },
           data: {
             name,
             last_name,
             phone,
+            whatsapp_user_id,
             email,
             dni,
             opt_in_email,
             segment: firstSegmentForLegacyColumn(segments),
             active: true,
-            replaced_by_contact_id: null,
-            replaced_at: null,
-            replacement_reason: null,
             updated_at: new Date(),
           },
         });
@@ -964,6 +1000,16 @@ export class ContactsService {
             dni: dni ?? '',
           });
         }
+        await tx.conversations.updateMany({
+          where: { area, AND: [
+            { OR: [{ contact_id: null }, { contact_id: id }] },
+            { OR: [
+              ...(phone ? [{ phone }] : []),
+              ...(whatsapp_user_id ? [{ whatsapp_user_id }] : []),
+            ] },
+          ] },
+          data: { contact_id: id, updated_at: new Date() },
+        });
         return segmentChange;
       });
       await this.auditSegmentChange(user, id, area, change, phone);
@@ -974,81 +1020,14 @@ export class ContactsService {
         meta: {
           contact_id: id,
           phone,
-          phone_tail: phoneMetaTail(phone),
+          phone_tail: phone ? phoneMetaTail(phone) : null,
           email,
           dni,
           segments,
-          phone_changed: false,
         },
       });
       return this.getById(area, id);
     }
-
-    const replaced = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.contacts.create({
-        data: {
-          name,
-          last_name,
-          phone,
-          email,
-          dni,
-          opt_in_email,
-          segment: firstSegmentForLegacyColumn(segments),
-          area,
-          opt_in: current.opt_in,
-          active: true,
-        },
-      });
-      const change = await this.replaceContactSegments(
-        tx,
-        created.id,
-        area,
-        segments,
-      );
-      await this.upsertContactAttributes(tx, created.id, attrs);
-      if (dni) {
-        await this.upsertContactAttributes(tx, created.id, { dni });
-      }
-      await tx.contacts.update({
-        where: { id },
-        data: {
-          active: false,
-          replaced_by_contact_id: created.id,
-          replaced_at: new Date(),
-          replacement_reason: 'phone_change',
-          updated_at: new Date(),
-        },
-      });
-      await tx.conversations.updateMany({
-        where: { area, phone },
-        data: { contact_id: created.id, updated_at: new Date() },
-      });
-      return { newContactId: created.id, change };
-    });
-
-    await this.auditSegmentChange(
-      user,
-      replaced.newContactId,
-      area,
-      replaced.change,
-      phone,
-    );
-
-    await this.auditLog.write({
-      event_type: AuditEvent.CONTACT_UPDATED,
-      message: `Contacto actualizado (id ${id}, nuevo id ${replaced.newContactId} por cambio de teléfono)`,
-      actor: auditActor(user),
-        meta: {
-          contact_id: id,
-          new_contact_id: replaced.newContactId,
-          phone,
-          phone_tail: phoneMetaTail(phone),
-        segments,
-        phone_changed: true,
-      },
-    });
-
-    return this.getById(area, replaced.newContactId);
   }
 
   async remove(user: AuthUser, id: number): Promise<void> {
@@ -1070,19 +1049,13 @@ export class ContactsService {
     if (!current) {
       throw new NotFoundException('Contacto no encontrado');
     }
-    const isReplaced =
-      Boolean(current.replacement_reason) ||
-      current.replaced_by_contact_id != null;
-    if (!isReplaced) {
+    if (current.active) {
       return this.getById(area, id);
     }
     await this.prisma.contacts.update({
       where: { id },
       data: {
         active: true,
-        replaced_by_contact_id: null,
-        replaced_at: null,
-        replacement_reason: null,
         updated_at: new Date(),
       },
     });
@@ -1111,7 +1084,7 @@ export class ContactsService {
 
     const phones = parsed.rows.map((r) => r.phone);
     const existingContacts = await this.prisma.contacts.findMany({
-      where: { area, phone: { in: phones }, replaced_at: null },
+      where: { area, phone: { in: phones } },
       select: { phone: true, email: true },
     });
     const existingByPhone = new Map(
@@ -1130,7 +1103,6 @@ export class ContactsService {
             .map((r) => r.email)
             .filter((e): e is string => !!e),
         },
-        replaced_at: null,
       },
       select: { phone: true, email: true },
     });
@@ -1235,13 +1207,13 @@ export class ContactsService {
 
     const result = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.contacts.findFirst({
-        where: { area, phone: row.phone, replaced_at: null },
+        where: { area, phone: row.phone },
       });
 
       let safeEmail: string | null | undefined = row.email;
       if (safeEmail) {
         const emailOwner = await tx.contacts.findFirst({
-          where: { area, email: safeEmail, replaced_at: null },
+          where: { area, email: safeEmail },
           select: { id: true },
         });
         if (emailOwner && emailOwner.id !== existing?.id) {
@@ -1259,9 +1231,6 @@ export class ContactsService {
               ...(row.dni !== undefined ? { dni: row.dni } : {}),
               segment: firstSegmentForLegacyColumn(row.segments),
               active: true,
-              replaced_by_contact_id: null,
-              replaced_at: null,
-              replacement_reason: null,
               updated_at: new Date(),
             },
           })
@@ -1292,7 +1261,7 @@ export class ContactsService {
         await this.upsertContactAttributes(tx, contact.id, { dni: row.dni });
       }
       await tx.conversations.updateMany({
-        where: { area, phone: row.phone },
+        where: { area, phone: row.phone, OR: [{ contact_id: null }, { contact_id: contact.id }] },
         data: { contact_id: contact.id, updated_at: new Date() },
       });
       return { contactId: contact.id, change };
@@ -1336,14 +1305,15 @@ export class ContactsService {
         c.name,
         c.last_name,
         c.phone,
+        c.whatsapp_user_id,
+        (SELECT conv.wa_username FROM conversations conv
+         WHERE conv.area = c.area AND conv.contact_id = c.id AND conv.wa_username IS NOT NULL
+         ORDER BY conv.updated_at DESC LIMIT 1) AS wa_username,
         c.email,
         c.dni,
         c.opt_in,
         c.opt_in_email,
         c.active,
-        c.replaced_by_contact_id,
-        c.replaced_at,
-        c.replacement_reason,
         c.created_at,
         COALESCE((
           SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
@@ -1367,14 +1337,13 @@ export class ContactsService {
         name: row.name,
         last_name: row.last_name,
         phone: row.phone,
+        whatsapp_user_id: row.whatsapp_user_id,
+        wa_username: row.wa_username,
         email: row.email,
         dni: row.dni,
         opt_in: row.opt_in,
         opt_in_email: row.opt_in_email,
         active: row.active,
-        replaced_by_contact_id: row.replaced_by_contact_id,
-        replaced_at: row.replaced_at?.toISOString() ?? null,
-        replacement_reason: row.replacement_reason,
         created_at: row.created_at.toISOString(),
         segment_slugs: row.segment_slugs ?? [],
       })),

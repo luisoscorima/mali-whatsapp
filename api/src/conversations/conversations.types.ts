@@ -22,7 +22,9 @@ export type InboxSegmentOption = {
 
 export type InboxListItem = {
   id: number;
-  phone: string;
+  phone: string | null;
+  whatsapp_user_id: string | null;
+  recipient: string;
   last_message_at: string | null;
   inbox_unread: boolean;
   conversation_status: string | null;
@@ -31,6 +33,7 @@ export type InboxListItem = {
   automation_touched_at: string | null;
   contact_name: string;
   wa_profile_name: string | null;
+  wa_username: string | null;
   contact_lead_score: number | null;
   contact_segment_slugs: string[];
   preview: string;
@@ -134,7 +137,9 @@ export type InboxMetaAd = {
 
 export type InboxConversation = {
   id: number;
-  phone: string;
+  phone: string | null;
+  whatsapp_user_id: string | null;
+  recipient: string;
   status: string;
   last_message_at: string | null;
   last_user_message_at: string | null;
@@ -142,6 +147,7 @@ export type InboxConversation = {
   archived: boolean;
   contact_id: number | null;
   wa_profile_name: string | null;
+  wa_username: string | null;
   meta_ctwa_ad_id: number | null;
   assigned_user_id: number | null;
   assigned_user_label: string | null;

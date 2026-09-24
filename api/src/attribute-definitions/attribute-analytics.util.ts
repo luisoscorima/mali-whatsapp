@@ -30,8 +30,6 @@ export async function fetchAttributeSummary(
        JOIN contacts c ON c.id = ca.contact_id
        WHERE c.area = ${area}
          AND c.active = true
-         AND c.replacement_reason IS NULL
-         AND c.replaced_by_contact_id IS NULL
          AND TRIM(COALESCE(ca.attr_value, '')) <> '') AS contacts_with_attr
   `);
 

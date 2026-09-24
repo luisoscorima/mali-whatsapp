@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Query,
   Res,
@@ -173,6 +174,17 @@ export class CampaignsController {
   ): Promise<ApiResponse<CampaignRetryActionResult>> {
     assertCanCreateCampaigns(user);
     const data = await this.campaignsService.retryFailed(user, id);
+    return { ok: true, data };
+  }
+
+  @Patch(':id/schedule')
+  async reschedule(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { scheduledAt?: unknown },
+  ): Promise<ApiResponse<{ scheduled_at: string }>> {
+    assertCanCreateCampaigns(user);
+    const data = await this.campaignsService.reschedule(user, id, body?.scheduledAt);
     return { ok: true, data };
   }
 

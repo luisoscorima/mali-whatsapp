@@ -4,7 +4,7 @@ import { AuditLogService } from '../audit/audit-log.service';
 import { normalizeArea } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
 import { CampaignQueueService } from '../queues/campaign-queue.service';
-import { normalizePhone } from '../contacts/contacts-validation.utils';
+import { normalizeWhatsAppRecipient } from '../conversations/whatsapp-recipient.util';
 import {
   buildTemplateDefinition,
   buildWhatsappGraphComponents,
@@ -154,7 +154,7 @@ export class CampaignSenderService {
         contactIds.add(row.contact_id!);
       }
       if (row.phone) {
-        phones.add(normalizePhone(row.phone));
+        phones.add(normalizeWhatsAppRecipient(row.phone));
       }
     }
     return { contactIds, phones };
@@ -166,7 +166,7 @@ export class CampaignSenderService {
   ): RecipientRow[] {
     return recipients.filter((contact) => {
       if (processedState.contactIds.has(contact.id)) return false;
-      const phoneNorm = normalizePhone(contact.phone);
+      const phoneNorm = normalizeWhatsAppRecipient(contact.phone);
       if (phoneNorm && processedState.phones.has(phoneNorm)) return false;
       return true;
     });
@@ -255,7 +255,7 @@ export class CampaignSenderService {
         const batch = recipients.slice(i, i + batchSize);
 
         for (const contact of batch) {
-          const phoneNorm = normalizePhone(contact.phone);
+          const phoneNorm = normalizeWhatsAppRecipient(contact.phone);
           let acceptedMessageId: string | null = null;
           let acceptedApiResponse: unknown = null;
           try {
@@ -277,7 +277,7 @@ export class CampaignSenderService {
               ? buildParamsForContact(
                   staticParams,
                   paramMapping,
-                  contact,
+                  { ...contact, phone: contact.actual_phone },
                   attrsMap.get(contact.id),
                 )
               : staticParams;

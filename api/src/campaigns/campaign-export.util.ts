@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { isWhatsAppBsuid } from '../conversations/whatsapp-recipient.util';
 import { collectLatestLogsByPhone } from './campaign-analytics.util';
 import { formatExportDate } from './campaign-format.util';
 import type { EnrichedFailedLog } from './campaign-incident.util';
@@ -145,7 +146,7 @@ export function buildCampaignLogsExportBuffer(
     ],
     ...logs.map((log) => [
       formatDate(log.created_at),
-      String(log.phone || ''),
+      isWhatsAppBsuid(log.phone) ? 'Número privado' : String(log.phone || ''),
       exportContactName(log),
       exportContactEmail(log),
       exportContactDni(log),
@@ -190,7 +191,7 @@ export function buildCampaignFailedLogsExportBuffer(
     ],
     ...logs.map((log) => [
       formatDate(log.created_at),
-      String(log.phone || ''),
+      isWhatsAppBsuid(log.phone) ? 'Número privado' : String(log.phone || ''),
       exportContactName(log),
       exportContactEmail(log),
       exportContactDni(log),
@@ -242,7 +243,7 @@ export function buildCampaignRespondersExportBuffer(
       'Respuesta interactiva',
     ],
     ...rows.map((row) => [
-      String(row.phone || ''),
+      isWhatsAppBsuid(row.phone) ? 'Número privado' : String(row.phone || ''),
       String(row.contact_name || ''),
       String(row.contact_email || ''),
       String(row.contact_dni || ''),

@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { isWhatsAppBsuid } from '../conversations/whatsapp-recipient.util';
 import type { BusinessArea } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -93,7 +94,8 @@ export async function processInboundReferral(
         meta_ctwa_ad_id: ad.id,
         conversation_id: input.conversationId,
         contact_id: input.contactId,
-        phone: input.phone,
+        phone: isWhatsAppBsuid(input.phone) ? null : input.phone,
+        whatsapp_user_id: isWhatsAppBsuid(input.phone) ? input.phone : null,
         first_message_at: new Date(),
       },
     ],

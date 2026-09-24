@@ -37,12 +37,10 @@ export async function fetchContactSummary(
       }[]
     >(Prisma.sql`
       WITH contact_base AS (
-        SELECT c.id, c.phone, c.created_at
+        SELECT c.id, c.phone, c.whatsapp_user_id, c.created_at
         FROM contacts c
         WHERE c.area = ${area}
           AND c.active = true
-          AND c.replacement_reason IS NULL
-          AND c.replaced_by_contact_id IS NULL
       ),
       conv_by_contact AS (
         SELECT conv.contact_id, MAX(conv.last_message_at) AS last_msg
@@ -57,6 +55,12 @@ export async function fetchContactSummary(
         WHERE conv.area = ${area}
         GROUP BY conv.phone
       ),
+      conv_by_user_id AS (
+        SELECT conv.whatsapp_user_id, MAX(conv.last_message_at) AS last_msg
+        FROM conversations conv
+        WHERE conv.area = ${area} AND conv.whatsapp_user_id IS NOT NULL
+        GROUP BY conv.whatsapp_user_id
+      ),
       labeled AS (
         SELECT DISTINCT cs.contact_id
         FROM contact_segments cs
@@ -66,19 +70,20 @@ export async function fetchContactSummary(
         COUNT(*)::int AS total_active,
         COUNT(*) FILTER (WHERE cb.created_at >= ${since})::int AS new_in_period,
         COUNT(*) FILTER (
-          WHERE COALESCE(cc.last_msg, cp.last_msg) IS NOT NULL
+          WHERE COALESCE(cc.last_msg, cp.last_msg, cu.last_msg) IS NOT NULL
         )::int AS with_chat,
         COUNT(*) FILTER (
-          WHERE COALESCE(cc.last_msg, cp.last_msg) IS NULL
+          WHERE COALESCE(cc.last_msg, cp.last_msg, cu.last_msg) IS NULL
         )::int AS without_chat,
         COUNT(*) FILTER (
-          WHERE COALESCE(cc.last_msg, cp.last_msg) IS NOT NULL
-            AND COALESCE(cc.last_msg, cp.last_msg) < ${inactiveSince}
+          WHERE COALESCE(cc.last_msg, cp.last_msg, cu.last_msg) IS NOT NULL
+            AND COALESCE(cc.last_msg, cp.last_msg, cu.last_msg) < ${inactiveSince}
         )::int AS inactive_30d,
         COUNT(*) FILTER (WHERE lb.contact_id IS NULL)::int AS without_segment
       FROM contact_base cb
       LEFT JOIN conv_by_contact cc ON cc.contact_id = cb.id
       LEFT JOIN conv_by_phone cp ON cp.phone = cb.phone
+      LEFT JOIN conv_by_user_id cu ON cu.whatsapp_user_id = cb.whatsapp_user_id
       LEFT JOIN labeled lb ON lb.contact_id = cb.id
     `),
     prisma.$queryRaw<{ day: Date; count: number }[]>(Prisma.sql`
@@ -86,8 +91,6 @@ export async function fetchContactSummary(
       FROM contacts c
       WHERE c.area = ${area}
         AND c.active = true
-        AND c.replacement_reason IS NULL
-        AND c.replaced_by_contact_id IS NULL
         AND c.created_at >= ${since}
       GROUP BY 1
       ORDER BY 1 ASC

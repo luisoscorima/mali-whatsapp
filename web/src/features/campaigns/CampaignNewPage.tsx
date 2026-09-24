@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { formatContactName } from '../contacts/contactName'
+import { isWhatsAppBsuid } from '../conversations/whatsappIdentity'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import {
   CampaignTemplateFields,
@@ -379,7 +380,7 @@ export function CampaignNewPage() {
       const sampleLines = report.sample
         .slice(0, 5)
         .map((s) => {
-          const who = formatContactName(s.name, '', s.phone)
+          const who = formatContactName(s.name, '', isWhatsAppBsuid(s.phone) ? 'Número privado' : s.phone)
           return `· ${who} (${s.missing.join(', ')})`
         })
         .join('\n')
@@ -562,7 +563,7 @@ export function CampaignNewPage() {
                             {formatContactName(row.name, '') || '—'}
                           </p>
                           <p className="font-mono text-xs text-muted">
-                            {row.phone}
+                            {isWhatsAppBsuid(row.phone) ? 'Número privado' : row.phone}
                             {row.service_window_open ? (
                               <span className="ml-2 text-accent">
                                 ventana 24 h

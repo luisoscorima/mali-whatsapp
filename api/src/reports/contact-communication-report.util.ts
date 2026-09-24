@@ -270,7 +270,9 @@ async function fetchContactIdsForReport(
   const countRows = await prisma.$queryRaw<{ c: number }[]>(Prisma.sql`
     SELECT COUNT(*)::int AS c
     FROM contacts c
-    INNER JOIN conversations conv ON conv.area = c.area AND conv.phone = c.phone
+    INNER JOIN conversations conv ON conv.area = c.area
+      AND (conv.contact_id = c.id OR (c.phone IS NOT NULL AND conv.phone = c.phone)
+        OR (c.whatsapp_user_id IS NOT NULL AND conv.whatsapp_user_id = c.whatsapp_user_id))
     WHERE ${where}
   `);
   const total = Number(countRows[0]?.c || 0);
@@ -324,7 +326,9 @@ async function fetchContactIdsForReport(
       COALESCE(ls.label, '') AS lead_status,
       COALESCE(c.lead_score::text, '') AS lead_score
     FROM contacts c
-    INNER JOIN conversations conv ON conv.area = c.area AND conv.phone = c.phone
+    INNER JOIN conversations conv ON conv.area = c.area
+      AND (conv.contact_id = c.id OR (c.phone IS NOT NULL AND conv.phone = c.phone)
+        OR (c.whatsapp_user_id IS NOT NULL AND conv.whatsapp_user_id = c.whatsapp_user_id))
     LEFT JOIN lead_status_definitions ls ON ls.id = c.lead_status_id
     WHERE ${where}
     ORDER BY COALESCE(NULLIF(c.name, ''), c.phone) ASC, c.id ASC

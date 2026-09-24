@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { normalizeArea } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
 import { CampaignQueueService } from '../queues/campaign-queue.service';
-import { normalizePhone } from '../contacts/contacts-validation.utils';
+import { normalizeWhatsAppRecipient } from '../conversations/whatsapp-recipient.util';
 import {
   buildTemplateDefinition,
   buildWhatsappGraphComponents,
@@ -171,7 +171,7 @@ export class CampaignRetryService {
         SELECT m.wa_message_id
         FROM chat_messages m
         INNER JOIN conversations conv ON conv.id = m.conversation_id
-        WHERE conv.phone = ${phone}
+        WHERE (conv.phone = ${phone} OR conv.whatsapp_user_id = ${phone})
           AND m.direction = 'outbound'
           AND m.message_type = 'campaign'
           AND NULLIF(BTRIM(m.raw_payload->>'campaign_id'), '') ~ '^[0-9]+$'
@@ -368,7 +368,7 @@ export class CampaignRetryService {
         await wait(retryDelayMs);
       }
 
-      const phoneNorm = normalizePhone(row.phone);
+      const phoneNorm = normalizeWhatsAppRecipient(row.phone);
       if (!phoneNorm) {
         stillFailed += 1;
         continue;

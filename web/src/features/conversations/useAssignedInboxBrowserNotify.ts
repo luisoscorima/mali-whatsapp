@@ -7,17 +7,19 @@ import {
   type BrowserNotifyPermission,
 } from '@/shared/browserNotify'
 import { notify } from '@/shared/notify'
+import { chatDisplayName } from './whatsappIdentity'
 
 const MINE_NOTIFY_POLL_MS = 8000
 const PREF_STORAGE_KEY = 'mali-inbox-browser-notify-enabled'
 
 type MineListItem = {
   id: number
-  phone: string
+  phone: string | null
   last_message_at: string | null
   inbox_unread: boolean
   contact_name: string
   wa_profile_name: string | null
+  wa_username: string | null
   preview: string
   is_virtual: boolean
   archived: boolean
@@ -28,9 +30,12 @@ type MineListResult = {
 }
 
 function itemDisplayName(item: MineListItem): string {
-  const crmName = String(item.contact_name ?? '').trim()
-  const waAlias = String(item.wa_profile_name ?? '').trim()
-  return crmName || waAlias || item.phone
+  return chatDisplayName({
+    phone: item.phone,
+    contactName: item.contact_name,
+    profileName: item.wa_profile_name,
+    username: item.wa_username,
+  })
 }
 
 function readNotifyPref(): boolean {

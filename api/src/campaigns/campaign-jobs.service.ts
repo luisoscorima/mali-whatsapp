@@ -41,7 +41,11 @@ export class CampaignJobsService {
 
     for (const row of rows) {
       const lock = await this.prisma.campaigns.updateMany({
-        where: { id: row.id, status: 'scheduled' },
+        where: {
+          id: row.id,
+          status: 'scheduled',
+          scheduled_at: { lte: new Date() },
+        },
         data: { status: 'queued' },
       });
       if (lock.count === 0) continue;

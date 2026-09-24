@@ -41,7 +41,7 @@ model campaign_logs {
   id                  Int       @id @default(autoincrement())
   campaign_id         Int
   contact_id          Int?
-  phone               String    @db.VarChar(20)
+  phone               String    @db.VarChar(132)
   whatsapp_message_id String?   @db.VarChar(150)
   status              String    @db.VarChar(30)
   response            Json?
@@ -156,6 +156,7 @@ model contacts {
   name                   String               @db.VarChar(150)
   last_name              String               @default("") @db.VarChar(150)
   phone                  String?              @db.VarChar(20)
+  whatsapp_user_id       String?              @db.VarChar(132)
   email                  String?              @db.VarChar(255)
   dni                    String?              @db.VarChar(32)
   segment                String?              @db.VarChar(50)
@@ -168,17 +169,12 @@ model contacts {
   lead_score             Int?                 @db.SmallInt
   lead_status_id         Int?
   lead_status_updated_at DateTime?            @db.Timestamptz(6)
-  replaced_by_contact_id Int?
-  replaced_at            DateTime?            @db.Timestamptz(6)
-  replacement_reason     String?              @db.VarChar(64)
   campaign_logs          campaign_logs[]
   contact_attributes     contact_attributes[]
   contact_segments       contact_segments[]
   contact_origins        contact_origins[]
   education_lead_cycles  education_lead_cycles[]
   education_lead_entries education_lead_entries[]
-  contacts               contacts?            @relation("contactsTocontacts", fields: [replaced_by_contact_id], references: [id], onUpdate: NoAction, map: "contacts_replaced_by_contact_fkey")
-  other_contacts         contacts[]           @relation("contactsTocontacts")
   conversations          conversations[]
   meta_ctwa_ad_leads     meta_ctwa_ad_leads[]
   meta_leadgen_leads     meta_leadgen_leads[]
@@ -186,11 +182,10 @@ model contacts {
   lead_status            lead_status_definitions? @relation(fields: [lead_status_id], references: [id], onUpdate: NoAction, onDelete: SetNull)
 
   @@index([area], map: "idx_contacts_area")
+  @@unique([area, whatsapp_user_id])
   @@index([area, email], map: "idx_contacts_area_email")
   @@index([area, dni], map: "idx_contacts_area_dni")
   @@index([lead_status_id], map: "idx_contacts_lead_status")
-  @@index([replaced_at(sort: Desc)], map: "idx_contacts_replaced_at")
-  @@index([replaced_by_contact_id], map: "idx_contacts_replaced_by_contact")
   @@index([segment], map: "idx_contacts_segment")
 }
 
@@ -238,6 +233,14 @@ model contact_origins {
   @@unique([area, channel, external_id], map: "contact_origins_area_channel_external_uq")
   @@index([contact_id], map: "idx_contact_origins_contact")
   @@index([area, channel], map: "idx_contact_origins_area_channel")
+}
+
+/// Read-only archive of replacement links that existed before phone identities were frozen.
+model contact_replacement_history {
+  old_contact_id Int       @id
+  new_contact_id Int?
+  replaced_at    DateTime? @db.Timestamptz(6)
+  reason         String?   @db.VarChar(64)
 }
 
 model education_lead_cycles {
@@ -399,7 +402,10 @@ model conversation_tags {
 model conversations {
   id                           Int                  @id @default(autoincrement())
   area                         String               @db.VarChar(20)
-  phone                        String               @db.VarChar(20)
+  /// Real phone number when Meta shares it; absent for username-only users.
+  phone                        String?              @db.VarChar(132)
+  /// Meta business-scoped user ID, retained even when a phone is also available.
+  whatsapp_user_id             String?              @db.VarChar(132)
   contact_id                   Int?
   last_user_message_at         DateTime?            @db.Timestamptz(6)
   last_message_at              DateTime             @default(now()) @db.Timestamptz(6)
@@ -416,6 +422,7 @@ model conversations {
   automation_touched_at        DateTime?            @db.Timestamptz(6)
   archived                     Boolean              @default(false)
   wa_profile_name              String?              @db.VarChar(150)
+  wa_username                  String?              @db.VarChar(100)
   chat_messages                chat_messages[]
   conversation_tags            conversation_tags[]
   contact_origins              contact_origins[]
@@ -426,10 +433,26 @@ model conversations {
   assigned_user                users?               @relation("conversation_assignee", fields: [assigned_user_id], references: [id], onUpdate: NoAction)
 
   @@unique([area, phone])
+  @@unique([area, whatsapp_user_id])
   @@index([area, last_message_at(sort: Desc)], map: "idx_conversations_area_last_msg")
   @@index([area, assigned_user_id], map: "idx_conversations_area_assignee")
   @@index([contact_id, area], map: "idx_conversations_contact_area")
   @@index([area, archived], map: "idx_conversations_area_archived")
+}
+
+/// Immutable evidence of Meta identity changes; never used to merge contacts automatically.
+model whatsapp_identity_events {
+  id             Int       @id @default(autoincrement())
+  area           String    @db.VarChar(20)
+  wa_message_id  String?   @db.VarChar(180)
+  event_type     String    @db.VarChar(64)
+  previous_user_id String? @db.VarChar(132)
+  new_user_id    String?   @db.VarChar(132)
+  raw_payload    Json
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@unique([area, wa_message_id])
+  @@index([area, created_at(sort: Desc)])
 }
 
 model flows {
@@ -560,7 +583,8 @@ model meta_ctwa_ad_leads {
   meta_ctwa_ad_id  Int
   conversation_id  Int
   contact_id       Int?
-  phone            String        @db.VarChar(32)
+  phone            String?       @db.VarChar(132)
+  whatsapp_user_id String?       @db.VarChar(132)
   first_message_at DateTime      @default(now()) @db.Timestamptz(6)
   created_at       DateTime      @default(now()) @db.Timestamptz(6)
   contacts         contacts?     @relation(fields: [contact_id], references: [id], onUpdate: NoAction)

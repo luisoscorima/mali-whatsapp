@@ -12,6 +12,7 @@ export type RecipientRow = {
   id: number;
   name: string;
   phone: string;
+  actual_phone: string | null;
   email: string | null;
   dni: string | null;
   last_user_message_at: Date | null;
@@ -29,19 +30,22 @@ function buildRecipientQuery(
     parts.push(Prisma.sql`SELECT COUNT(DISTINCT c.id)::int AS n`);
   } else {
     parts.push(
-      Prisma.sql`SELECT DISTINCT c.id, c.name, c.phone, c.email, c.dni, conv.last_user_message_at`,
+      Prisma.sql`SELECT DISTINCT c.id, c.name, COALESCE(c.phone, c.whatsapp_user_id) AS phone, c.phone AS actual_phone, c.email, c.dni, conv.last_user_message_at`,
     );
   }
 
   parts.push(Prisma.sql`
     FROM contacts c
     INNER JOIN contact_segments cs ON cs.contact_id = c.id AND cs.area = c.area
-    LEFT JOIN conversations conv ON conv.area = c.area AND conv.contact_id = c.id
+    LEFT JOIN LATERAL (
+      SELECT MAX(last_user_message_at) AS last_user_message_at
+      FROM conversations
+      WHERE area = c.area AND contact_id = c.id
+    ) conv ON TRUE
     WHERE c.area = ${area}
       AND c.opt_in = TRUE
       AND c.active = TRUE
-      AND c.replacement_reason IS NULL
-      AND c.replaced_by_contact_id IS NULL
+      AND (c.phone IS NOT NULL OR c.whatsapp_user_id IS NOT NULL)
       AND cs.segment_slug = ANY(${segmentSlugs}::varchar[])
   `);
 

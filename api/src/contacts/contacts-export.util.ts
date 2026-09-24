@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx';
 import { exportFilenameDateStamp } from '../campaigns/campaign-format.util';
 import { safeFilenamePart } from '../conversations/conversation-export.util';
 
-const BASE_HEADERS = ['Nombre', 'Apellidos', 'Teléfono', 'Email', 'DNI', 'Segmentos'];
+const BASE_HEADERS = ['Nombre', 'Apellidos', 'Teléfono', 'Usuario de WhatsApp', 'Email', 'DNI', 'Segmentos'];
 
 /** Slugs nativos que no deben salir como columnas de atributo dinámico. */
 const NATIVE_ATTR_KEYS = new Set(['dni', 'email', 'correo']);
@@ -11,7 +11,8 @@ export type ContactExportRow = {
   id: number;
   name: string;
   last_name: string;
-  phone: string;
+  phone: string | null;
+  wa_username: string | null;
   email: string | null;
   dni: string | null;
   segment_labels: string;
@@ -50,6 +51,7 @@ export function buildContactsExportBuffer(
         String(c.name || ''),
         String(c.last_name || ''),
         String(c.phone || ''),
+        c.wa_username ? `@${c.wa_username.replace(/^@/, '')}` : '',
         String(c.email || ''),
         String(c.dni || ''),
         String(c.segment_labels || ''),
@@ -66,6 +68,7 @@ export function buildContactsExportBuffer(
     { wch: 28 },
     { wch: 28 },
     { wch: 18 },
+    { wch: 24 },
     { wch: 28 },
     { wch: 16 },
     { wch: 36 },

@@ -1,3 +1,38 @@
+import {
+  E164_NO_PLUS_REGEX,
+  normalizePhone,
+} from '../contacts/contacts-validation.utils';
+import { isWhatsAppBsuid } from '../conversations/whatsapp-recipient.util';
+import type { MetaWebhookContact } from './webhook.types';
+
+export function extractInboundSenderIdentity(
+  msg: Record<string, unknown>,
+  contacts: MetaWebhookContact[] | undefined,
+): { phone: string | null; userId: string | null; recipient: string } | null {
+  const rawFrom = String(msg.from ?? '').trim();
+  const userIdFromMessage = String(msg.from_user_id ?? '').trim();
+  const matchingContact =
+    contacts?.find(
+      (contact) =>
+        (userIdFromMessage && contact.user_id === userIdFromMessage) ||
+        (rawFrom && contact.wa_id === rawFrom),
+    ) ?? (contacts?.length === 1 ? contacts[0] : undefined);
+  const rawPhone = /^\+?[0-9]+$/.test(rawFrom)
+    ? rawFrom
+    : String(matchingContact?.wa_id ?? '').trim();
+  const normalizedPhone = /^\+?[0-9]+$/.test(rawPhone)
+    ? normalizePhone(rawPhone)
+    : '';
+  const phone = E164_NO_PLUS_REGEX.test(normalizedPhone)
+    ? normalizedPhone
+    : null;
+  const candidateUserId =
+    userIdFromMessage || String(matchingContact?.user_id ?? '').trim() || rawFrom;
+  const userId = isWhatsAppBsuid(candidateUserId) ? candidateUserId : null;
+  const recipient = phone ?? userId;
+  return recipient ? { phone, userId, recipient } : null;
+}
+
 export function extractInboundMessagePreview(msg: Record<string, unknown>): {
   messageType: string;
   bodyText: string;
@@ -70,17 +105,30 @@ export function extractInboundMessagePreview(msg: Record<string, unknown>): {
 
 /** Nombre de perfil WhatsApp del webhook Meta (`value.contacts[].profile.name`). */
 export function extractInboundProfileName(
-  contacts: { profile?: { name?: string }; wa_id?: string }[] | undefined,
-  senderPhone: string,
+  contacts: MetaWebhookContact[] | undefined,
+  senderId: string,
 ): string | null {
   if (!Array.isArray(contacts) || contacts.length === 0) return null;
-  const phone = String(senderPhone || '').trim();
-  const matched = phone
-    ? contacts.find((c) => String(c?.wa_id ?? '').trim() === phone)
+  const id = String(senderId || '').trim();
+  const matched = id
+    ? contacts.find((c) => c?.wa_id === id || c?.user_id === id)
     : undefined;
   const entry = matched ?? (contacts.length === 1 ? contacts[0] : undefined);
-  const name = String(entry?.profile?.name ?? '').trim();
+  const name =
+    String(entry?.profile?.name ?? '').trim() ||
+    String(entry?.profile?.username ?? '').trim();
   return name || null;
+}
+
+export function extractInboundUsername(
+  contacts: MetaWebhookContact[] | undefined,
+  senderId: string,
+): string | null {
+  const entry = contacts?.find(
+    (contact) => contact.wa_id === senderId || contact.user_id === senderId,
+  ) ?? (contacts?.length === 1 ? contacts[0] : undefined);
+  const username = String(entry?.profile?.username ?? '').trim().replace(/^@/, '');
+  return username ? username.slice(0, 100) : null;
 }
 
 export function resolveInboundLinePhoneNumberId(

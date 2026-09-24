@@ -4,6 +4,7 @@ import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
 import { ContactForm } from '../contacts/ContactForm'
 import { splitPhoneForForm } from '../contacts/phoneUtils'
+import { isWhatsAppBsuid } from './whatsappIdentity'
 import { segmentOptionsForAssignment, pruneSegmentSlugsToOptions } from '../segments/segmentOptions'
 import {
   Sheet,
@@ -31,11 +32,11 @@ type ContactDetail = {
   id: number
   name: string
   last_name: string
-  phone: string
+  phone: string | null
+  whatsapp_user_id: string | null
+  wa_username: string | null
   email: string | null
   dni: string | null
-  replaced_by_contact_id: number | null
-  replacement_reason: string | null
   segment_slugs: string[]
   lead_status_id: number | null
   lead_status: { id: number; slug: string; label: string } | null
@@ -68,6 +69,8 @@ export type InboxContactSheetProps = {
   mode: 'edit' | 'create'
   contactId?: number | null
   prefillPhone?: string
+  prefillUserId?: string | null
+  prefillUsername?: string | null
   prefillName?: string
   onSaved: () => void
 }
@@ -78,6 +81,8 @@ export function InboxContactSheet({
   mode,
   contactId = null,
   prefillPhone = '',
+  prefillUserId = null,
+  prefillUsername = null,
   prefillName = '',
   onSaved,
 }: InboxContactSheetProps) {
@@ -92,11 +97,11 @@ export function InboxContactSheet({
   const [saving, setSaving] = useState(false)
 
   const phoneParts = useMemo(
-    () => splitPhoneForForm(prefillPhone),
+    () => splitPhoneForForm(isWhatsAppBsuid(prefillPhone) ? '' : prefillPhone),
     [prefillPhone],
   )
   const contactPhoneParts = useMemo(
-    () => (contact ? splitPhoneForForm(contact.phone) : null),
+    () => (contact ? splitPhoneForForm(contact.phone ?? '') : null),
     [contact],
   )
 
@@ -169,16 +174,13 @@ export function InboxContactSheet({
     }
   }, [open, mode, contactId])
 
-  const isReplaced = Boolean(
-    contact?.replacement_reason || contact?.replaced_by_contact_id,
-  )
-
   async function onSubmit(values: {
     name: string
     last_name: string
     phone: string
     phone_prefix: string
     phone_local: string
+    whatsapp_user_id?: string | null
     email: string
     dni: string
     segments: string[]
@@ -191,6 +193,7 @@ export function InboxContactSheet({
         last_name: values.last_name,
         phone_prefix: values.phone_prefix,
         phone_local: values.phone_local,
+        whatsapp_user_id: values.whatsapp_user_id,
         email: values.email || null,
         dni: values.dni || null,
         segments: values.segments,
@@ -216,6 +219,7 @@ export function InboxContactSheet({
       last_name: values.last_name,
       phone_prefix: values.phone_prefix,
       phone_local: values.phone_local,
+      whatsapp_user_id: values.whatsapp_user_id,
       email: values.email || null,
       dni: values.dni || null,
       segments: values.segments,
@@ -259,7 +263,7 @@ export function InboxContactSheet({
   const formKey =
     mode === 'edit'
       ? `edit-${contact?.id ?? contactId ?? 'pending'}-${selectedSegmentSlugs.join(',')}-${segments.map((s) => s.slug).join(',')}`
-      : `create-${prefillPhone}-${String(prefillName ?? '').trim()}`
+      : `create-${prefillPhone}-${prefillUserId ?? ''}-${String(prefillName ?? '').trim()}`
 
   const ready =
     !loading &&
@@ -282,7 +286,7 @@ export function InboxContactSheet({
           </SheetTitle>
           <SheetDescription>
             {mode === 'create'
-              ? 'Guarda este número como contacto sin salir del chat.'
+              ? 'Guarda este usuario de WhatsApp como contacto sin salir del chat.'
               : 'Actualiza los datos del contacto. El chat permanece abierto.'}
           </SheetDescription>
         </SheetHeader>
@@ -294,29 +298,21 @@ export function InboxContactSheet({
             <p className="text-sm text-muted">Cargando formulario…</p>
           ) : (
             <>
-              {isReplaced ? (
-                <p className="mb-4 text-sm text-bad">
-                  Este contacto está reemplazado
-                  {contact?.replacement_reason
-                    ? ` (${contact.replacement_reason})`
-                    : ''}{' '}
-                  y no se puede editar.
-                </p>
-              ) : null}
               <ContactForm
                 key={formKey}
                 mode={mode}
                 segments={segments}
                 attributeDefinitions={attributeDefinitions}
-                isReplaced={isReplaced}
                 initial={
                   mode === 'edit' && contact && contactPhoneParts
                     ? {
                         name: contact.name,
                         last_name: contact.last_name,
-                        phone: contact.phone,
+                        phone: contact.phone ?? '',
                         phone_prefix: contactPhoneParts.prefix,
                         phone_local: contactPhoneParts.local,
+                        whatsapp_user_id: contact.whatsapp_user_id,
+                        wa_username: contact.wa_username,
                         email: contact.email ?? '',
                         dni: contact.dni ?? contact.attributes.dni ?? '',
                         segments: selectedSegmentSlugs,
@@ -328,6 +324,8 @@ export function InboxContactSheet({
                         phone: '',
                         phone_prefix: phoneParts.prefix,
                         phone_local: phoneParts.local,
+                        whatsapp_user_id: prefillUserId || (isWhatsAppBsuid(prefillPhone) ? prefillPhone : null),
+                        wa_username: prefillUsername,
                         email: '',
                         dni: '',
                         segments: [],

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { apiClient } from '@/shared/api'
 import { formatDateTime } from '@/shared/format'
 import { formatContactName } from '../contacts/contactName'
+import { chatSecondaryLabel } from '../conversations/whatsappIdentity'
 import {
   Dialog,
   DialogBody,
@@ -230,8 +231,8 @@ export function CampaignDrilldownDialog({
                 {(rows as ResponderRow[]).map((row) => (
                   <tr key={`${row.phone}-${row.first_response_at}`} className="border-b border-line/60">
                     <td className="py-2 pr-2">
-                      <div>{formatContactName(row.contact_name, null, row.phone)}</div>
-                      <div className="text-xs text-muted">{row.phone}</div>
+                      <div>{formatContactName(row.contact_name, null, chatSecondaryLabel(row.phone))}</div>
+                      <div className="text-xs text-muted">{chatSecondaryLabel(row.phone)}</div>
                       <ChatLinkButton contactId={row.contact_id} />
                     </td>
                     <td className="py-2 pr-2">{row.interactive_response_text || '—'}</td>
@@ -244,7 +245,7 @@ export function CampaignDrilldownDialog({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-muted">
-                  <th className="py-2 pr-2">Teléfono</th>
+                  <th className="py-2 pr-2">Destinatario</th>
                   <th className="py-2 pr-2">Tipo</th>
                   <th className="py-2 pr-2">Detalle</th>
                   <th className="py-2">Fecha</th>
@@ -254,7 +255,7 @@ export function CampaignDrilldownDialog({
                 {(rows as CampaignLog[]).map((row) => (
                   <tr key={row.id} className="border-b border-line/60">
                     <td className="py-2 pr-2">
-                      <div>{row.phone}</div>
+                      <div>{chatSecondaryLabel(row.phone)}</div>
                       <ChatLinkButton contactId={row.contact_id} />
                     </td>
                     <td className="py-2 pr-2">{row.incident_label ?? row.incident_type ?? '—'}</td>
@@ -268,7 +269,7 @@ export function CampaignDrilldownDialog({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-muted">
-                  <th className="py-2 pr-2">Teléfono</th>
+                  <th className="py-2 pr-2">Destinatario</th>
                   <th className="py-2 pr-2">Estado</th>
                   <th className="py-2">Fecha</th>
                 </tr>
@@ -277,8 +278,8 @@ export function CampaignDrilldownDialog({
                 {(rows as CampaignLog[]).map((row) => (
                   <tr key={row.id} className="border-b border-line/60">
                     <td className="py-2 pr-2">
-                      <div>{formatContactName(row.contact_name, null, row.phone)}</div>
-                      <div className="text-xs text-muted">{row.phone}</div>
+                      <div>{formatContactName(row.contact_name, null, chatSecondaryLabel(row.phone))}</div>
+                      <div className="text-xs text-muted">{chatSecondaryLabel(row.phone)}</div>
                       <ChatLinkButton contactId={row.contact_id} />
                     </td>
                     <td className="py-2 pr-2">{row.status}</td>

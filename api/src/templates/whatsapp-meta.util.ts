@@ -2,6 +2,7 @@ import {
   normalizeArea,
   type BusinessArea,
 } from '../config/areas';
+import { whatsappRecipientField } from '../conversations/whatsapp-recipient.util';
 import {
   getWabaIdOverrideForArea as getWabaFromStore,
   getWhatsAppCredentialsForArea as getCredsFromStore,
@@ -412,7 +413,7 @@ export async function sendTemplateWithComponents(input: {
       token,
       {
         messaging_product: 'whatsapp',
-        to: input.to,
+        ...whatsappRecipientField(input.to),
         type: 'template',
         template: templatePayload,
       },

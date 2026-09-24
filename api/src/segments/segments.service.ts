@@ -179,8 +179,6 @@ export class SegmentsService {
         ), ARRAY[]::varchar[]) AS segment_slugs
       FROM contacts c
       WHERE c.area = ${area}
-        AND c.replacement_reason IS NULL
-        AND c.replaced_by_contact_id IS NULL
         AND EXISTS (
           SELECT 1
           FROM contact_segments csf
@@ -493,8 +491,6 @@ export class SegmentsService {
         ), '') AS segment_labels
       FROM contacts c
       WHERE c.area = ${area}
-        AND c.replacement_reason IS NULL
-        AND c.replaced_by_contact_id IS NULL
         AND EXISTS (
           SELECT 1
           FROM contact_segments csf

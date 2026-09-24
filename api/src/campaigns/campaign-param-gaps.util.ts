@@ -107,6 +107,7 @@ export function analyzeRecipientTemplateParams(
     id: number;
     name: string;
     phone: string;
+    actual_phone?: string | null;
     email?: string | null;
     dni?: string | null;
   }>,
@@ -140,7 +141,7 @@ export function analyzeRecipientTemplateParams(
       paramMapping,
       {
         name: row.name,
-        phone: row.phone,
+        phone: row.actual_phone ?? (row.phone.includes('.') ? '' : row.phone),
         email: row.email,
         dni: row.dni,
       },

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAppUser } from '@/app/appOutletContext'
 import { apiClient } from '@/shared/api'
+import { PERMISSION, userHasPermission } from '@/shared/auth/permissions'
 import { notify } from '@/shared/notify'
 import { formatDateTime } from '../../shared/format'
 import { formatContactName } from '../contacts/contactName'
@@ -124,10 +125,17 @@ function selectClass(): string {
   return 'rounded-lg border border-line bg-surface px-2 py-1.5 text-sm'
 }
 
+function toDateTimeLocal(value: string): string {
+  const date = new Date(value)
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+  return local.toISOString().slice(0, 16)
+}
+
 export function CampaignDetailPage() {
   const { id } = useParams()
   const user = useAppUser()
   const canViewStats = Boolean(user?.canViewCampaignStats)
+  const canEditSchedule = userHasPermission(user, PERMISSION.CAMPAIGNS_CREATE)
   const { confirm, confirmDialog } = useConfirmDialog()
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
@@ -135,6 +143,8 @@ export function CampaignDetailPage() {
   const [logsFilter, setLogsFilter] = useState('all_current')
   const [drilldownAction, setDrilldownAction] = useState<MetricAction | null>(null)
   const [drilldownOpen, setDrilldownOpen] = useState(false)
+  const [scheduleEditOpen, setScheduleEditOpen] = useState(false)
+  const [scheduleInput, setScheduleInput] = useState('')
 
   function onMetricClick(metric: MetricCard) {
     const action = resolveMetricAction(metric)
@@ -153,6 +163,7 @@ export function CampaignDetailPage() {
     }
     setLoadFailed(false)
     setCampaign(result.data)
+    setScheduleEditOpen(false)
   }
 
   useEffect(() => {
@@ -206,6 +217,30 @@ export function CampaignDetailPage() {
     await reload()
   }
 
+  async function handleReschedule(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!id || !scheduleInput) return
+    const scheduledAt = new Date(scheduleInput)
+    if (Number.isNaN(scheduledAt.getTime())) {
+      notify.error('Fecha u hora de programación no válida')
+      return
+    }
+    setBusy('schedule')
+    const result = await apiClient.patch<{ scheduled_at: string }>(
+      `/api/campaigns/${id}/schedule`,
+      { scheduledAt: scheduledAt.toISOString() },
+    )
+    setBusy('')
+    if (!result.ok) {
+      notify.error(result.error)
+      await reload()
+      return
+    }
+    setCampaign((current) => current ? { ...current, scheduled_at: result.data.scheduled_at } : current)
+    setScheduleEditOpen(false)
+    notify.success('Campaña reprogramada')
+  }
+
   if (loadFailed) {
     return <p className="text-muted">No se pudo cargar</p>
   }
@@ -222,6 +257,8 @@ export function CampaignDetailPage() {
     incidents: attachMetricActions(campaign.analytics.incidents),
   }
   const campaignId = campaign.id
+  const canReschedule = canEditSchedule && campaign.status === 'scheduled' &&
+    Boolean(campaign.scheduled_at && new Date(campaign.scheduled_at).getTime() > Date.now())
 
   return (
     <div className="space-y-6">
@@ -267,7 +304,7 @@ export function CampaignDetailPage() {
               <dd>
                 {campaign.first_send_at
                   ? formatDateTime(campaign.first_send_at)
-                  : formatDateTime(campaign.created_at)}
+                  : formatDateTime(campaign.scheduled_at || campaign.created_at)}
               </dd>
             </div>
             {campaign.exclude_segment_slugs.length > 0 ||
@@ -337,7 +374,47 @@ export function CampaignDetailPage() {
             {campaign.scheduled_at ? (
               <div>
                 <dt className="text-muted">Programada para</dt>
-                <dd>{formatDateTime(campaign.scheduled_at)}</dd>
+                <dd className="space-y-2">
+                  <span>{formatDateTime(campaign.scheduled_at)}</span>
+                  {canReschedule && !scheduleEditOpen ? (
+                    <button
+                      type="button"
+                      className={`${actionButtonClass(true)} ml-3`}
+                      disabled={busy !== ''}
+                      onClick={() => {
+                        setScheduleInput(toDateTimeLocal(campaign.scheduled_at!))
+                        setScheduleEditOpen(true)
+                      }}
+                    >
+                      Reprogramar
+                    </button>
+                  ) : null}
+                  {canReschedule && scheduleEditOpen ? (
+                    <form onSubmit={handleReschedule} className="flex flex-wrap items-end gap-2">
+                      <label className="block">
+                        <span className="block text-muted">Nueva fecha y hora</span>
+                        <input
+                          type="datetime-local"
+                          className="mt-1 rounded-lg border border-line bg-surface px-3 py-2"
+                          value={scheduleInput}
+                          onChange={(event) => setScheduleInput(event.target.value)}
+                          required
+                        />
+                      </label>
+                      <button type="submit" className={actionButtonClass()} disabled={busy !== ''}>
+                        {busy === 'schedule' ? 'Guardando…' : 'Guardar'}
+                      </button>
+                      <button
+                        type="button"
+                        className={actionButtonClass(true)}
+                        disabled={busy !== ''}
+                        onClick={() => setScheduleEditOpen(false)}
+                      >
+                        Cancelar
+                      </button>
+                    </form>
+                  ) : null}
+                </dd>
               </div>
             ) : null}
             {campaign.retry_stats.recoveredCount > 0 ? (

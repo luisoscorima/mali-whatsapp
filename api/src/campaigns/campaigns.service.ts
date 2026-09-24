@@ -61,7 +61,7 @@ import {
   validateRecipientsMatchRequest,
 } from './campaign-recipients.util';
 import { RecipientsPreviewDto } from './dto/recipients-preview.dto';
-import { validateCampaignSend } from './campaign-send-validate.util';
+import { validateCampaignSchedule, validateCampaignSend } from './campaign-send-validate.util';
 import {
   CampaignSenderService,
   type CampaignJobPayload,
@@ -634,6 +634,59 @@ export class CampaignsService {
       exclude_contacts: excludeContacts,
       first_send_at: firstSendAt,
     };
+  }
+
+  async reschedule(
+    user: AuthUser,
+    id: number,
+    rawScheduledAt: unknown,
+  ): Promise<{ scheduled_at: string }> {
+    const schedule = validateCampaignSchedule(rawScheduledAt);
+    if (!schedule.ok) {
+      throw new BadRequestException(schedule.message);
+    }
+
+    const campaign = await this.prisma.campaigns.findFirst({
+      where: { id, area: user.area },
+      select: { status: true, scheduled_at: true },
+    });
+    if (!campaign) {
+      throw new NotFoundException('Campaña no encontrada');
+    }
+    const now = new Date();
+    if (
+      campaign.status !== 'scheduled' ||
+      !campaign.scheduled_at ||
+      campaign.scheduled_at <= now
+    ) {
+      throw new ConflictException('La campaña ya inició o su hora programada pasó');
+    }
+
+    const updated = await this.prisma.campaigns.updateMany({
+      where: {
+        id,
+        area: user.area,
+        status: 'scheduled',
+        scheduled_at: { equals: campaign.scheduled_at, gt: new Date() },
+      },
+      data: { scheduled_at: schedule.scheduledAt },
+    });
+    if (updated.count === 0) {
+      throw new ConflictException('La campaña cambió o ya inició. Recarga e inténtalo de nuevo');
+    }
+
+    await this.auditLog.write({
+      event_type: AuditEvent.CAMPAIGN_RESCHEDULED,
+      message: `Campaña #${id} reprogramada`,
+      actor: auditActor(user),
+      meta: {
+        campaign_id: id,
+        previous_scheduled_at: campaign.scheduled_at.toISOString(),
+        scheduled_at: schedule.scheduledAt.toISOString(),
+      },
+    });
+
+    return { scheduled_at: schedule.scheduledAt.toISOString() };
   }
 
   private async resolveTemplateRowForPreview(

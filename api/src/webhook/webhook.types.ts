@@ -14,8 +14,9 @@ export type MetaWebhookChange = {
 };
 
 export type MetaWebhookContact = {
-  profile?: { name?: string };
+  profile?: { name?: string; username?: string };
   wa_id?: string;
+  user_id?: string;
 };
 
 export type MetaWebhookChangeValue = {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/shared/ui/shadcn/button'
+import { chatSecondaryLabel } from './whatsappIdentity'
 import {
   Dialog,
   DialogBody,
@@ -54,7 +55,7 @@ export function InboxAssignDialog({
         <DialogHeader>
           <DialogTitle>Asignar chat</DialogTitle>
           <DialogDescription>
-            {heading} · {phone}
+            {heading} · {chatSecondaryLabel(phone)}
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="flex flex-col gap-3">

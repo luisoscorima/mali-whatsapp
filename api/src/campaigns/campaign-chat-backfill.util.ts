@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client';
-import { normalizePhone } from '../contacts/contacts-validation.utils';
+import { normalizeWhatsAppRecipient, isWhatsAppBsuid } from '../conversations/whatsapp-recipient.util';
 import type { PrismaService } from '../prisma/prisma.service';
 import { persistCampaignChatMessage } from './campaign-chat-message.util';
 import { parseCampaignPayload } from './campaign-payload.util';
@@ -278,7 +278,7 @@ export async function backfillCampaignChatFromLogs(
         const contact =
           (row.contact_id ? contactsById.get(row.contact_id) : null) ?? {
             name: '',
-            phone: row.phone,
+            phone: isWhatsAppBsuid(row.phone) ? null : row.phone,
           };
         const attrs = row.contact_id ? attrsMap.get(row.contact_id) : undefined;
         const preview = rebuildPreviewForContact(
@@ -345,7 +345,7 @@ export async function backfillCampaignChatPreviews(
         cm.wa_message_id,
         cm.raw_payload,
         conv.area,
-        conv.phone AS conv_phone,
+        COALESCE(conv.phone, conv.whatsapp_user_id) AS conv_phone,
         conv.contact_id AS conv_contact_id,
         cl.contact_id AS log_contact_id
       FROM chat_messages cm
@@ -366,7 +366,7 @@ export async function backfillCampaignChatPreviews(
     for (const row of batch) {
       const contactId = resolveContactId(row);
       if (contactId) contactIds.add(contactId);
-      const phone = normalizePhone(row.conv_phone);
+      const phone = normalizeWhatsAppRecipient(row.conv_phone);
       if (row.area && phone) {
         if (!phonesByArea.has(row.area)) phonesByArea.set(row.area, new Set());
         phonesByArea.get(row.area)!.add(phone);
@@ -419,7 +419,7 @@ export async function backfillCampaignChatPreviews(
         { id: number | null; name: string | null; phone: string }
       >();
       for (const c of rows) {
-        map.set(normalizePhone(c.phone), c);
+        map.set(normalizeWhatsAppRecipient(c.phone), c);
       }
       contactsByAreaPhone.set(area, map);
     }
@@ -481,12 +481,12 @@ export async function backfillCampaignChatPreviews(
           contact = contactsById.get(contactId) || null;
         }
         if (!contact) {
-          const phone = normalizePhone(row.conv_phone);
+          const phone = normalizeWhatsAppRecipient(row.conv_phone);
           const phoneMap = contactsByAreaPhone.get(area);
           contact = phoneMap?.get(phone) || {
             id: contactId,
             name: '',
-            phone: row.conv_phone,
+            phone: isWhatsAppBsuid(row.conv_phone) ? null : row.conv_phone,
           };
         }
 

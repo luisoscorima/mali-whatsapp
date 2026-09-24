@@ -1,4 +1,4 @@
-import { normalizePhone } from '../contacts/contacts-validation.utils';
+import { normalizeWhatsAppRecipient } from '../conversations/whatsapp-recipient.util';
 import type { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -14,7 +14,7 @@ export async function archiveCampaignRecipientConversations(
   const phones = [
     ...new Set(
       recipients
-        .map((r) => normalizePhone(r.phone))
+        .map((r) => normalizeWhatsAppRecipient(r.phone))
         .filter((p): p is string => Boolean(p)),
     ),
   ];

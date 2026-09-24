@@ -230,7 +230,7 @@ export class ReportsService {
         select: { id: true, phone: true },
       });
       for (const conversation of conversations) {
-        conversationPhones.set(conversation.id, conversation.phone);
+        if (conversation.phone) conversationPhones.set(conversation.id, conversation.phone);
       }
     }
 

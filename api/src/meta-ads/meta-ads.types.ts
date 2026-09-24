@@ -38,7 +38,9 @@ export type MetaCtwaAdDetail = {
 };
 
 export type MetaCtwaAdLead = {
-  phone: string;
+  phone: string | null;
+  wa_username: string | null;
+  wa_profile_name: string | null;
   first_message_at: Date;
   contact_name: string | null;
   contact_id: number | null;

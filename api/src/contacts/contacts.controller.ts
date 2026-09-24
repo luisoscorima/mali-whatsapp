@@ -155,8 +155,6 @@ export class ContactsController {
         limit: query.limit,
         q: query.q,
         segment: normalizeSegmentParam(query.segment),
-        show_replaced:
-          query.show_replaced === '1' || query.show_replaced === 'true',
         attr_key: query.attr_key,
         attr_value: query.attr_value,
       },
@@ -211,8 +209,6 @@ export class ContactsController {
       limit: query.limit,
       q: query.q,
       segment: normalizeSegmentParam(query.segment),
-      show_replaced:
-        query.show_replaced === '1' || query.show_replaced === 'true',
       attr_key: query.attr_key,
       attr_value: query.attr_value,
     });

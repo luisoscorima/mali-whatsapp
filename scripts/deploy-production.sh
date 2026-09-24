@@ -57,7 +57,15 @@ $COMPOSE "${BUILD_ARGS[@]}"
 $COMPOSE up -d
 
 echo "[deploy] 4/4 Comprobando /health (API :4000)…"
-for i in 1 2 3 4 5 6 7 8 9 10; do
+HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-900}"
+if ! [[ "$HEALTH_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "[deploy] ERROR: HEALTH_TIMEOUT_SECONDS debe ser un entero positivo" >&2
+  exit 1
+fi
+health_started_at=$SECONDS
+deadline=$((health_started_at + HEALTH_TIMEOUT_SECONDS))
+attempt=0
+while (( SECONDS < deadline )); do
   if $COMPOSE exec -T api node -e "
     require('http').get('http://127.0.0.1:4000/health', (r) => {
       let b = ''; r.on('data', (c) => { b += c; });
@@ -68,10 +76,14 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
     $COMPOSE ps api web redis postgres
     exit 0
   fi
+  attempt=$((attempt + 1))
+  if (( attempt % 15 == 0 )); then
+    echo "[deploy] API aún no disponible; esperando migraciones y arranque… ($((SECONDS - health_started_at))s)"
+  fi
   sleep 2
 done
 
 echo "[deploy] ERROR: /health no respondió a tiempo. Revisa:" >&2
-echo "  $COMPOSE logs --tail 80 api" >&2
-echo "  $COMPOSE logs --tail 30 web" >&2
+$COMPOSE logs --tail 80 api >&2 || true
+$COMPOSE logs --tail 30 web >&2 || true
 exit 1

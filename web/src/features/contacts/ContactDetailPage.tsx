@@ -20,11 +20,12 @@ type ContactDetail = {
   id: number
   name: string
   last_name: string
-  phone: string
+  phone: string | null
+  whatsapp_user_id: string | null
+  wa_username: string | null
+  active: boolean
   email: string | null
   dni: string | null
-  replaced_by_contact_id: number | null
-  replacement_reason: string | null
   segment_slugs: string[]
   lead_status_id: number | null
   lead_status: { id: number; slug: string; label: string } | null
@@ -110,9 +111,6 @@ export function ContactDetailPage() {
     })
   }, [id])
 
-  const isReplaced = Boolean(
-    contact?.replacement_reason || contact?.replaced_by_contact_id,
-  )
 
   async function onSubmit(values: {
     name: string
@@ -120,6 +118,7 @@ export function ContactDetailPage() {
     phone: string
     phone_prefix: string
     phone_local: string
+    whatsapp_user_id?: string | null
     email: string
     dni: string
     segments: string[]
@@ -132,6 +131,7 @@ export function ContactDetailPage() {
       last_name: values.last_name,
       phone_prefix: values.phone_prefix,
       phone_local: values.phone_local,
+      whatsapp_user_id: values.whatsapp_user_id,
       email: values.email || null,
       dni: values.dni || null,
       segments: values.segments,
@@ -239,7 +239,7 @@ export function ContactDetailPage() {
     return <p className="text-muted">Cargando contacto…</p>
   }
 
-  const phoneParts = splitPhoneForForm(contact.phone)
+  const phoneParts = splitPhoneForForm(contact.phone ?? '')
   const listHref = `/contacts${location.search}`
   const statusOptions = leadStatuses
     .filter((s) => s.active || s.id === contact.lead_status_id)
@@ -254,16 +254,15 @@ export function ContactDetailPage() {
         </Link>
         <div className="min-w-0">
           <h1 className="contact-detail-title">
-            {formatContactName(contact.name, contact.last_name, contact.phone)}
+            {formatContactName(contact.name, contact.last_name, contact.wa_username ? `@${contact.wa_username.replace(/^@/, '')}` : 'Usuario de WhatsApp')}
           </h1>
-          <p className="contact-detail-phone">{contact.phone}</p>
+          <p className="contact-detail-phone">{contact.phone ?? (contact.wa_username ? `@${contact.wa_username.replace(/^@/, '')} · Número privado` : 'Número privado')}</p>
         </div>
       </div>
 
-      {isReplaced ? (
+      {!contact.active ? (
         <p className="text-sm text-bad">
-          Este contacto está reemplazado ({contact.replacement_reason}) y no se
-          puede editar.
+          Este contacto está inactivo.
         </p>
       ) : null}
 
@@ -273,13 +272,14 @@ export function ContactDetailPage() {
           mode="edit"
           segments={segments}
           attributeDefinitions={allAttributeDefs}
-          isReplaced={isReplaced}
           initial={{
             name: contact.name,
             last_name: contact.last_name,
-            phone: contact.phone,
+            phone: contact.phone ?? '',
             phone_prefix: phoneParts.prefix,
             phone_local: phoneParts.local,
+            whatsapp_user_id: contact.whatsapp_user_id,
+            wa_username: contact.wa_username,
             email: contact.email ?? '',
             dni: contact.dni ?? contact.attributes.dni ?? '',
             segments: selectedSegmentSlugs,
@@ -295,13 +295,13 @@ export function ContactDetailPage() {
             <>
               <button
                 type="button"
-                disabled={chatBusy || isReplaced}
+                disabled={chatBusy || !contact.active}
                 onClick={() => void onOpenChat()}
                 className="rounded-lg border border-line bg-bg px-4 py-2 text-sm disabled:opacity-60"
               >
                 {chatBusy ? 'Abriendo…' : 'Ir al chat'}
               </button>
-              {isReplaced ? (
+              {!contact.active ? (
                 <button
                   type="button"
                   onClick={() => void onReactivate()}

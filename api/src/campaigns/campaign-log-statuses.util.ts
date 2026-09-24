@@ -30,7 +30,7 @@ export function sqlNoSuccessfulCampaignChatForPhone(
     SELECT 1
     FROM chat_messages m
     INNER JOIN conversations conv ON conv.id = m.conversation_id
-    WHERE conv.phone = ${outerAlias}.phone
+    WHERE (conv.phone = ${outerAlias}.phone OR conv.whatsapp_user_id = ${outerAlias}.phone)
       AND m.direction = 'outbound'
       AND m.message_type = 'campaign'
       AND NULLIF(BTRIM(m.raw_payload->>'campaign_id'), '') ~ '^[0-9]+$'

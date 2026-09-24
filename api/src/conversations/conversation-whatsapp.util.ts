@@ -4,6 +4,7 @@ import {
   type WhatsAppCredentials,
 } from '../templates/whatsapp-meta.util';
 import { MAX_SESSION_TEXT_LEN } from '../settings/business-hours.util';
+import { whatsappRecipientField } from './whatsapp-recipient.util';
 
 const GRAPH_BASE = 'https://graph.facebook.com/v23.0';
 
@@ -165,7 +166,7 @@ export async function sendSessionTextMessage(input: {
   const replyTo = String(input.replyToWaMessageId ?? '').trim();
   const payload: Record<string, unknown> = {
     messaging_product: 'whatsapp',
-    to: input.to,
+    ...whatsappRecipientField(input.to),
     type: 'text',
     text: { body: safe, preview_url: false },
   };
@@ -231,7 +232,7 @@ export async function sendSessionInteractiveButtons(input: {
   }
   return graphPostJson<SessionMessageResult>(`${phoneNumberId}/messages`, token, {
     messaging_product: 'whatsapp',
-    to: input.to,
+    ...whatsappRecipientField(input.to),
     type: 'interactive',
     interactive,
   });
@@ -253,7 +254,7 @@ export async function sendMessageReaction(input: {
   const emoji = String(input.emoji || '').trim();
   return graphPostJson<SessionMessageResult>(`${phoneNumberId}/messages`, token, {
     messaging_product: 'whatsapp',
-    to: input.to,
+    ...whatsappRecipientField(input.to),
     type: 'reaction',
     reaction: {
       message_id: waMessageId,
@@ -336,7 +337,7 @@ export async function sendSessionMediaMessage(input: {
 
   const payload: Record<string, unknown> = {
     messaging_product: 'whatsapp',
-    to: input.to,
+    ...whatsappRecipientField(input.to),
     type: input.waType,
   };
 

@@ -48,6 +48,33 @@ export type ValidatedCampaignSend = {
   scheduledAt: Date | null;
 };
 
+export function validateCampaignSchedule(
+  raw: unknown,
+): { ok: true; scheduledAt: Date } | { ok: false; message: string } {
+  if (typeof raw !== 'string' || !raw.trim()) {
+    return { ok: false, message: 'Indica fecha y hora para la campaña programada' };
+  }
+  const scheduledAt = new Date(raw.trim());
+  if (Number.isNaN(scheduledAt.getTime())) {
+    return { ok: false, message: 'Fecha u hora de programación no válida' };
+  }
+  const now = Date.now();
+  if (scheduledAt.getTime() < now + CAMPAIGN_SCHEDULE_MIN_MARGIN_MS) {
+    return {
+      ok: false,
+      message: 'La programación debe ser al menos 1 minuto en el futuro',
+    };
+  }
+  const maxMs = CAMPAIGN_SCHEDULE_MAX_DAYS * 24 * 60 * 60 * 1000;
+  if (scheduledAt.getTime() > now + maxMs) {
+    return {
+      ok: false,
+      message: `La programación no puede superar ${CAMPAIGN_SCHEDULE_MAX_DAYS} días`,
+    };
+  }
+  return { ok: true, scheduledAt };
+}
+
 export function validateCampaignSend(
   reqBody: Record<string, unknown>,
   segmentSet: Set<string>,
@@ -125,32 +152,9 @@ export function validateCampaignSend(
   let scheduledAt: Date | null = null;
 
   if (isScheduled) {
-    const raw = String(reqBody.scheduledAt || '').trim();
-    if (!raw) {
-      return {
-        ok: false,
-        message: 'Indica fecha y hora para la campaña programada',
-      };
-    }
-    const t = new Date(raw);
-    if (Number.isNaN(t.getTime())) {
-      return { ok: false, message: 'Fecha u hora de programación no válida' };
-    }
-    const minT = Date.now() + CAMPAIGN_SCHEDULE_MIN_MARGIN_MS;
-    if (t.getTime() < minT) {
-      return {
-        ok: false,
-        message: 'La programación debe ser al menos 1 minuto en el futuro',
-      };
-    }
-    const maxMs = CAMPAIGN_SCHEDULE_MAX_DAYS * 24 * 60 * 60 * 1000;
-    if (t.getTime() > Date.now() + maxMs) {
-      return {
-        ok: false,
-        message: `La programación no puede superar ${CAMPAIGN_SCHEDULE_MAX_DAYS} días`,
-      };
-    }
-    scheduledAt = t;
+    const schedule = validateCampaignSchedule(reqBody.scheduledAt);
+    if (!schedule.ok) return schedule;
+    scheduledAt = schedule.scheduledAt;
   }
 
   return {

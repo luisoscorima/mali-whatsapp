@@ -6,16 +6,14 @@ import { sanitizeApiResponse } from '../conversations/api-sanitize.util';
 import { setMessageSender } from '../conversations/chat-sender.util';
 import { downloadWhatsAppMediaBuffer, sendSessionTextMessage } from '../conversations/conversation-whatsapp.util';
 import { saveInboundChatMediaFromBuffer } from '../conversations/chat-media.util';
-import {
-  E164_NO_PLUS_REGEX,
-  normalizePhone,
-} from '../contacts/contacts-validation.utils';
 import { FlowsService } from '../flows/flows.service';
 import { MetaLeadgenService } from '../leads/meta-leadgen.service';
 import { LeadsService } from '../leads/leads.service';
 import { MaliOneLinksCatalogService } from '../leads/mali-one-links-catalog.service';
 import { matchMaliOneWhatsappLink } from '../leads/mali-one-link-match.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { isWhatsAppBsuid } from '../conversations/whatsapp-recipient.util';
+import { chooseWhatsAppIdentityMatch } from '../conversations/whatsapp-identity.util';
 import {
   isBusinessHoursConfigOperational,
   isWithinBusinessHours,
@@ -30,6 +28,8 @@ import {
   extractInboundMessagePreview,
   extractInboundMediaRef,
   extractInboundProfileName,
+  extractInboundSenderIdentity,
+  extractInboundUsername,
   resolveInboundLinePhoneNumberId,
 } from './webhook-inbound.util';
 import {
@@ -474,9 +474,9 @@ export class WebhookService {
     if (messages.length === 0) return;
 
     let { area, source } = resolveInboundArea(value, context.wabaEntryId);
-    const senderPhones = messages.map((m) =>
-      normalizePhone((m as { from?: string }).from),
-    );
+    const senderPhones = messages
+      .map((m) => extractInboundSenderIdentity(m, value.contacts)?.phone)
+      .filter((phone): phone is string => Boolean(phone));
     const areaByPhone = await this.resolveAreaFromSenderPhones(senderPhones);
 
     if (!area && areaByPhone) {
@@ -502,17 +502,71 @@ export class WebhookService {
     let saved = 0;
     for (const msg of messages) {
       const record = msg as Record<string, unknown>;
-      const from = normalizePhone(record.from);
       const waId = String(record.id || '').trim();
-      if (!from || !E164_NO_PLUS_REGEX.test(from)) continue;
+      const system = record.system && typeof record.system === 'object'
+        ? record.system as Record<string, unknown> : null;
+      const identityChangeType = String(system?.type ?? '').trim();
+      if (record.type === 'system' && [
+        'user_changed_number', 'user_changed_user_id', 'user_identity_changed',
+      ].includes(identityChangeType)) {
+        const previousUserId = String(system?.previous_user_id ?? '').trim();
+        const newUserId = String(system?.user_id ?? record.from_user_id ?? '').trim();
+        const eventData = {
+          area,
+          wa_message_id: waId || null,
+          event_type: identityChangeType,
+          previous_user_id: isWhatsAppBsuid(previousUserId) ? previousUserId : null,
+          new_user_id: isWhatsAppBsuid(newUserId) ? newUserId : null,
+          raw_payload: record as Prisma.InputJsonValue,
+        };
+        if (waId) {
+          await this.prisma.whatsapp_identity_events.upsert({
+            where: { area_wa_message_id: { area, wa_message_id: waId } },
+            create: eventData,
+            update: {},
+          });
+        } else {
+          await this.prisma.whatsapp_identity_events.create({ data: eventData });
+        }
+        continue;
+      }
+      const sender = extractInboundSenderIdentity(record, value.contacts);
+      if (!sender) {
+        this.logger.warn('Webhook inbound: mensaje sin teléfono ni BSUID válido');
+        continue;
+      }
+      const { userId } = sender;
+      let { phone, recipient: from } = sender;
 
-      const contactInArea = await this.prisma.contacts.findFirst({
-        where: { area, phone: from },
-        select: { id: true },
-      });
+      const contactByUserId = userId
+        ? await this.prisma.contacts.findFirst({
+            where: { area, whatsapp_user_id: userId },
+            select: { id: true, phone: true, whatsapp_user_id: true },
+          })
+        : null;
+      const contactByPhone = phone
+        ? await this.prisma.contacts.findFirst({
+            where: { area, phone },
+            select: { id: true, phone: true, whatsapp_user_id: true },
+          })
+        : null;
+      const contactMatch = chooseWhatsAppIdentityMatch(contactByUserId, contactByPhone, userId);
+      if (contactMatch.conflict) {
+        phone = null;
+        from = userId!;
+        this.logger.warn(`Webhook inbound: identidades de contacto en conflicto para area=${area}; se conserva BSUID`);
+      }
+      const contactInArea = contactMatch.match;
       const contactId = contactInArea?.id ?? null;
+      if (contactInArea && userId && !contactInArea.whatsapp_user_id) {
+        await this.prisma.contacts.update({
+          where: { id: contactInArea.id },
+          data: { whatsapp_user_id: userId },
+        });
+      }
 
-      const waProfileName = extractInboundProfileName(value.contacts, from);
+      const waProfileName = extractInboundProfileName(value.contacts, userId ?? from);
+      const waUsername = extractInboundUsername(value.contacts, userId ?? from);
       const { messageType, bodyText } = extractInboundMessagePreview(record);
       const linePhoneNumberId = resolveInboundLinePhoneNumberId(
         value,
@@ -520,11 +574,37 @@ export class WebhookService {
         (slug) => getWhatsAppCredentialsForArea(slug).phoneNumberId,
       );
 
+      const existingByUserId = userId
+        ? await this.prisma.conversations.findUnique({
+            where: { area_whatsapp_user_id: { area, whatsapp_user_id: userId } },
+            select: { id: true, phone: true, whatsapp_user_id: true, contact_id: true },
+          })
+        : null;
+      const existingByPhone = phone
+        ? await this.prisma.conversations.findUnique({
+            where: { area_phone: { area, phone } },
+            select: { id: true, phone: true, whatsapp_user_id: true, contact_id: true },
+          })
+        : null;
+      const conversationMatch = chooseWhatsAppIdentityMatch(existingByUserId, existingByPhone, userId);
+      if (conversationMatch.conflict) {
+        phone = null;
+        from = userId!;
+        this.logger.warn(`Webhook inbound: identidades de conversación en conflicto para area=${area}; se conserva BSUID`);
+      }
+      const existing = conversationMatch.match;
+      const canAttachPhone = phone && (!existing?.phone || existing.phone === phone) && (!existingByPhone || existingByPhone.id === existing?.id);
+      const canAttachUserId = userId && (!existing?.whatsapp_user_id || existing.whatsapp_user_id === userId);
       const conversation = await this.prisma.conversations.upsert({
-        where: { area_phone: { area, phone: from } },
+        where: existing
+          ? { id: existing.id }
+          : userId
+            ? { area_whatsapp_user_id: { area, whatsapp_user_id: userId } }
+            : { area_phone: { area, phone: phone! } },
         create: {
           area,
-          phone: from,
+          phone,
+          whatsapp_user_id: userId,
           contact_id: contactId,
           last_user_message_at: new Date(),
           last_message_at: new Date(),
@@ -532,10 +612,15 @@ export class WebhookService {
           whatsapp_phone_number_id: linePhoneNumberId,
           status: 'bot',
           ...(waProfileName ? { wa_profile_name: waProfileName } : {}),
+          ...(waUsername ? { wa_username: waUsername } : {}),
         },
         update: {
-          ...(contactId ? { contact_id: contactId } : {}),
+          ...(canAttachPhone ? { phone } : {}),
+          ...(canAttachUserId ? { whatsapp_user_id: userId } : {}),
+          ...(contactId && (!existing?.contact_id || existing.contact_id === contactId)
+            ? { contact_id: contactId } : {}),
           ...(waProfileName ? { wa_profile_name: waProfileName } : {}),
+          ...(waUsername ? { wa_username: waUsername } : {}),
           last_user_message_at: new Date(),
           last_message_at: new Date(),
           inbox_unread: true,
@@ -566,25 +651,25 @@ export class WebhookService {
           (referral?.ctwa_clid
             ? `clid:${String(referral.ctwa_clid).slice(0, 120)}`
             : '');
-        if (sourceId) {
+        if (sourceId && phone) {
           await this.leadsService.upsertOrigin({
             area,
             channel: 'meta_ctwa',
             external_id: `${sourceId}:${conversation.id}`,
             source_key: sourceId,
             payload: referral ?? record,
-            phone: from,
+            phone,
             conversation_id: conversation.id,
             contact: {
-              phone: from,
+              phone,
               name: waProfileName ?? undefined,
             },
           });
-        } else if (bodyText.trim()) {
+        } else if (!sourceId && phone && bodyText.trim()) {
           await this.maybeAttributeMaliOneLinkOrigin({
             area,
             conversationId: conversation.id,
-            phone: from,
+            phone,
             bodyText,
             waProfileName,
           });
@@ -599,6 +684,7 @@ export class WebhookService {
         ...record,
         _mali_routing: {
           phone_number_id: linePhoneNumberId,
+          whatsapp_user_id: userId,
           routing_source: source,
           known_db_area:
             areaByPhone && areaByPhone !== area ? areaByPhone : null,
@@ -620,20 +706,22 @@ export class WebhookService {
         });
         saved += 1;
 
-        try {
-          await this.leadsService.recordEducationOrganicOrigin({
-            area,
-            conversationId: conversation.id,
-            contactId,
-            phone: from,
-            name: waProfileName,
-            seenAt: chatMessage.created_at,
-            messageId: chatMessage.id,
-          });
-        } catch (error) {
-          this.logger.warn(
-            `Origen orgánico no registrado: ${error instanceof Error ? error.message : error}`,
-          );
+        if (phone) {
+          try {
+            await this.leadsService.recordEducationOrganicOrigin({
+              area,
+              conversationId: conversation.id,
+              contactId,
+              phone,
+              name: waProfileName,
+              seenAt: chatMessage.created_at,
+              messageId: chatMessage.id,
+            });
+          } catch (error) {
+            this.logger.warn(
+              `Origen orgánico no registrado: ${error instanceof Error ? error.message : error}`,
+            );
+          }
         }
 
         await this.tryStoreInboundMedia({

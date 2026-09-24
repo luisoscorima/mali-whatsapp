@@ -43,16 +43,12 @@ export async function fetchSegmentSummary(
         (SELECT COUNT(DISTINCT c.id)::int FROM contacts c
          WHERE c.area = ${area}
            AND c.active = true
-           AND c.replacement_reason IS NULL
-           AND c.replaced_by_contact_id IS NULL
            AND EXISTS (
              SELECT 1 FROM contact_segments cs WHERE cs.contact_id = c.id
            )) AS labeled_contacts,
         (SELECT COUNT(*)::int FROM contacts c
          WHERE c.area = ${area}
            AND c.active = true
-           AND c.replacement_reason IS NULL
-           AND c.replaced_by_contact_id IS NULL
            AND NOT EXISTS (
              SELECT 1 FROM contact_segments cs WHERE cs.contact_id = c.id
            )) AS unlabeled_contacts,
@@ -60,8 +56,6 @@ export async function fetchSegmentSummary(
          JOIN contacts c ON c.id = cs.contact_id
          WHERE cs.area = ${area}
            AND c.active = true
-           AND c.replacement_reason IS NULL
-           AND c.replaced_by_contact_id IS NULL
            AND cs.created_at >= ${since}) AS joins_in_period
     `),
     prisma.$queryRaw<{ slug: string; label: string; total: number }[]>(Prisma.sql`
@@ -73,8 +67,6 @@ export async function fetchSegmentSummary(
       LEFT JOIN contact_segments cs ON cs.area = sd.area AND cs.segment_slug = sd.slug
       LEFT JOIN contacts c ON c.id = cs.contact_id
         AND c.active = true
-        AND c.replacement_reason IS NULL
-        AND c.replaced_by_contact_id IS NULL
       WHERE sd.area = ${area}
         AND sd.active = true
       GROUP BY sd.slug, sd.label, sd.sort_order

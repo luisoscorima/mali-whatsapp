@@ -2,6 +2,7 @@ export type ChatActionsContext = {
   conversationId: number | null
   heading: string
   phone: string
+  whatsappUserId: string | null
   contactId: number | null
   waProfileName: string
   leadScore: number | null
@@ -16,7 +17,8 @@ export type ChatActionsContext = {
 
 type ListItemLike = {
   id: number
-  phone: string
+  phone: string | null
+  whatsapp_user_id: string | null
   contact_name: string
   wa_profile_name?: string | null
   contact_id: number | null
@@ -31,7 +33,8 @@ type ListItemLike = {
 type DetailLike = {
   conversation: {
     id: number
-    phone: string
+    phone: string | null
+    whatsapp_user_id: string | null
     status: string
     contact_id: number | null
     wa_profile_name?: string | null
@@ -54,7 +57,8 @@ export function chatActionsFromListItem(
   return {
     conversationId: item.is_virtual ? null : item.id,
     heading,
-    phone: item.phone,
+    phone: item.phone || '',
+    whatsappUserId: item.whatsapp_user_id,
     contactId: item.contact_id,
     waProfileName: crmName ? '' : String(item.wa_profile_name ?? '').trim(),
     leadScore: item.contact_lead_score,
@@ -76,7 +80,8 @@ export function chatActionsFromDetail(
   return {
     conversationId: detail.conversation.id,
     heading,
-    phone: detail.conversation.phone,
+    phone: detail.conversation.phone || '',
+    whatsappUserId: detail.conversation.whatsapp_user_id,
     contactId: detail.conversation.contact_id,
     waProfileName: detail.conversation.contact_id
       ? ''

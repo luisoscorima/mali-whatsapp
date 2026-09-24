@@ -251,17 +251,17 @@ export class LeadsService {
     let existing =
       (phone
         ? await this.prisma.contacts.findFirst({
-            where: { area: areaNorm, phone, replaced_at: null },
+            where: { area: areaNorm, phone },
           })
         : null) ??
       (dni
         ? await this.prisma.contacts.findFirst({
-            where: { area: areaNorm, dni, replaced_at: null },
+            where: { area: areaNorm, dni },
           })
         : null) ??
       (email
         ? await this.prisma.contacts.findFirst({
-            where: { area: areaNorm, email, replaced_at: null },
+            where: { area: areaNorm, email },
           })
         : null);
 

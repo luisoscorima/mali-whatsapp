@@ -168,8 +168,9 @@ export async function fetchConversationHistoryReport(
         ), '') AS origins
       FROM conversations conv
       LEFT JOIN contacts c ON c.id = conv.contact_id
-        OR (c.area = conv.area AND c.phone = conv.phone
-            AND c.replacement_reason IS NULL AND c.replaced_by_contact_id IS NULL)
+        OR (c.area = conv.area AND
+          ((c.phone IS NOT NULL AND c.phone = conv.phone)
+           OR (c.whatsapp_user_id IS NOT NULL AND c.whatsapp_user_id = conv.whatsapp_user_id)))
       WHERE conv.id = ANY(${ids}::int[])
     `);
     for (const er of enrichRows) {

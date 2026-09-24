@@ -63,10 +63,9 @@ type ContactListItem = {
   id: number
   name: string
   last_name: string
-  phone: string
+  phone: string | null
+  wa_username: string | null
   active: boolean
-  replaced_by_contact_id: number | null
-  replacement_reason: string | null
   segment_slugs: string[]
 }
 
@@ -113,7 +112,6 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
   const fabRef = useRef<HTMLDetailsElement>(null)
 
   const selectedSegments = searchParams.getAll('segment')
-  const showReplaced = searchParams.get('show_replaced') === '1'
   const attrKey = searchParams.get('attr_key') ?? ''
   const attrValue = searchParams.get('attr_value') ?? ''
   const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1)
@@ -127,11 +125,10 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
     for (const seg of selectedSegments) {
       sp.append('segment', seg)
     }
-    if (showReplaced) sp.set('show_replaced', '1')
     if (attrKey) sp.set('attr_key', attrKey)
     if (attrValue) sp.set('attr_value', attrValue)
     return sp.toString()
-  }, [searchParams, page, selectedSegments, showReplaced, attrKey, attrValue])
+  }, [searchParams, page, selectedSegments, attrKey, attrValue])
 
   const exportQuery = useMemo(() => {
     const sp = new URLSearchParams()
@@ -140,12 +137,11 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
     for (const seg of selectedSegments) {
       sp.append('segment', seg)
     }
-    if (showReplaced) sp.set('show_replaced', '1')
     if (attrKey) sp.set('attr_key', attrKey)
     if (attrValue) sp.set('attr_value', attrValue)
     const value = sp.toString()
     return value ? `?${value}` : ''
-  }, [searchParams, selectedSegments, showReplaced, attrKey, attrValue])
+  }, [searchParams, selectedSegments, attrKey, attrValue])
 
   useEffect(() => {
     apiClient.get<FilterOptions>('/api/contacts/filter-options').then((res) => {
@@ -385,8 +381,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
   const hasFilters =
     selectedSegments.length > 0 ||
     Boolean(searchParams.get('q')) ||
-    Boolean(attrKey) ||
-    showReplaced
+    Boolean(attrKey)
 
   const showPager = Boolean(result && result.pages > 1)
 
@@ -560,20 +555,6 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
           </div>
 
           <div className="flex flex-wrap items-end gap-2 text-xs">
-            <label className="flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={showReplaced}
-                onChange={(e) =>
-                  updateParams((sp) => {
-                    if (e.target.checked) sp.set('show_replaced', '1')
-                    else sp.delete('show_replaced')
-                  })
-                }
-              />
-              Reemplazados
-            </label>
-
             <select
               value={attrKey}
               onChange={(e) =>
@@ -695,7 +676,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
               const displayName = formatContactName(
                 contact.name,
                 contact.last_name,
-                contact.phone,
+                contact.wa_username ? `@${contact.wa_username.replace(/^@/, '')}` : contact.phone ?? 'Usuario de WhatsApp',
               )
               const detailHref = `/contacts/${contact.id}${listQuery}`
               return (
@@ -727,7 +708,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
                           <span className="inbox-chat-title">{displayName}</span>
                         </span>
                         {formatContactName(contact.name, contact.last_name) ? (
-                          <span className="inbox-chat-preview font-mono">{contact.phone}</span>
+                          <span className="inbox-chat-preview">{contact.phone ?? (contact.wa_username ? `@${contact.wa_username.replace(/^@/, '')} · Número privado` : 'Número privado')}</span>
                         ) : null}
                         {contact.segment_slugs.length > 0 ? (
                           <span
@@ -748,11 +729,9 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
                         ) : (
                           <span className="inbox-chat-preview">Sin segmento</span>
                         )}
-                        {contact.replaced_by_contact_id || !contact.active ? (
+                        {!contact.active ? (
                           <span className="inbox-chat-preview">
-                            {contact.replaced_by_contact_id ? 'Reemplazado' : ''}
-                            {contact.replaced_by_contact_id && !contact.active ? ' · ' : ''}
-                            {!contact.active ? 'Inactivo' : ''}
+                            Inactivo
                           </span>
                         ) : null}
                       </span>
@@ -769,7 +748,6 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
                         aria-label="Abrir chat"
                         disabled={
                           chatOpeningId === contact.id ||
-                          Boolean(contact.replaced_by_contact_id) ||
                           !contact.active
                         }
                         onClick={(e) => {

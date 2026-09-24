@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/shared/ui/shadcn/dialog'
 import { segmentFilterPillStyle } from '../segments/segmentColors'
+import { chatSecondaryLabel } from './whatsappIdentity'
 
 type SegmentOption = {
   slug: string
@@ -139,7 +140,7 @@ export function InboxChatActionsDialog({
         <DialogHeader>
           <DialogTitle>Opciones del chat</DialogTitle>
           <DialogDescription>
-            {heading} · {phone}
+            {heading} · {chatSecondaryLabel(phone)}
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="flex flex-col gap-4">

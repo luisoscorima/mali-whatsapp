@@ -100,6 +100,7 @@ export type ContactInputBody = {
   name?: string;
   last_name?: string;
   phone?: string;
+  whatsapp_user_id?: string;
   phone_prefix?: string;
   phone_local?: string;
   segments?: string[];
@@ -156,6 +157,33 @@ export function validateContactInput(
     segmentSet,
     opts.minSegments ?? 1,
   );
+}
+
+/** A contact can be addressed by a real phone number or a Meta BSUID. */
+export function validateContactIdentityInput(
+  body: ContactInputBody,
+  segmentSet: Set<string>,
+):
+  | { ok: true; value: Omit<ValidatedContactCore, 'phone'> & { phone: string | null; whatsapp_user_id: string | null } }
+  | { ok: false; message: string } {
+  const userId = String(body.whatsapp_user_id ?? '').trim();
+  if (userId && !/^[A-Z]{2}\.[A-Za-z0-9]{1,128}$/.test(userId)) {
+    return { ok: false, message: 'Identificador de WhatsApp inválido' };
+  }
+  const hasPhone = Boolean(String(body.phone_local ?? '').trim() || String(body.phone ?? '').trim());
+  if (!hasPhone && !userId) {
+    return { ok: false, message: 'Indica un teléfono o una identidad de WhatsApp' };
+  }
+  const checked = validateContactInput(
+    hasPhone ? body : { ...body, phone: '51999999999' },
+    segmentSet,
+    { minSegments: 1 },
+  );
+  if (!checked.ok) return checked;
+  return {
+    ok: true,
+    value: { ...checked.value, phone: hasPhone ? checked.value.phone : null, whatsapp_user_id: userId || null },
+  };
 }
 
 export function firstSegmentForLegacyColumn(segments: string[]): string | null {

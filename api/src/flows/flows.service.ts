@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { sanitizeApiResponse } from '../conversations/api-sanitize.util';
+import { conversationRecipient } from '../conversations/whatsapp-recipient.util';
 import { setMessageSender } from '../conversations/chat-sender.util';
 import {
   INTERACTIVE_BUTTON_TITLE_MAX,
@@ -287,8 +288,8 @@ export class FlowsService {
         return {
           conversation_id: c.id,
           contact_id: c.contact_id,
-          contact_name: name || c.phone,
-          phone: c.phone,
+          contact_name: name || c.phone || 'Usuario de WhatsApp',
+          phone: c.phone || '',
           event_type: 'active',
           client_key: s.current_node?.client_key ?? null,
           node_label: s.current_node
@@ -325,8 +326,8 @@ export class FlowsService {
         return {
           conversation_id: c.id,
           contact_id: c.contact_id,
-          contact_name: name || c.phone,
-          phone: c.phone,
+          contact_name: name || c.phone || 'Usuario de WhatsApp',
+          phone: c.phone || '',
           event_type: 'started',
           client_key: null,
           node_label: null,
@@ -361,8 +362,8 @@ export class FlowsService {
         return {
           conversation_id: c.id,
           contact_id: c.contact_id,
-          contact_name: name || c.phone,
-          phone: c.phone,
+          contact_name: name || c.phone || 'Usuario de WhatsApp',
+          phone: c.phone || '',
           event_type: eventType,
           client_key: null,
           node_label: null,
@@ -411,8 +412,8 @@ export class FlowsService {
       rows.push({
         conversation_id: c.id,
         contact_id: c.contact_id,
-        contact_name: name || c.phone,
-        phone: c.phone,
+        contact_name: name || c.phone || 'Usuario de WhatsApp',
+        phone: c.phone || '',
         event_type: e.event_type,
         client_key: e.client_key,
         node_label: e.node_label,
@@ -690,6 +691,7 @@ export class FlowsService {
             id: true,
             area: true,
             phone: true,
+            whatsapp_user_id: true,
             whatsapp_phone_number_id: true,
             last_user_message_at: true,
           },
@@ -733,7 +735,7 @@ export class FlowsService {
         await this.sendOutboundButtons({
           conversationId: conv.id,
           area: conv.area,
-          phone: conv.phone,
+          phone: conversationRecipient(conv),
           phoneNumberId: conv.whatsapp_phone_number_id,
           bodyText,
           buttons: FLOW_TIMEOUT_CONFIRM_BUTTONS,

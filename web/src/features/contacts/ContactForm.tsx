@@ -25,6 +25,8 @@ type ContactFormValues = {
   phone: string
   phone_prefix: string
   phone_local: string
+  whatsapp_user_id?: string | null
+  wa_username?: string | null
   email: string
   dni: string
   segments: string[]
@@ -36,7 +38,6 @@ type ContactFormProps = {
   segments: SegmentOption[]
   attributeDefinitions: AttributeFieldDefinition[]
   initial: ContactFormValues
-  isReplaced?: boolean
   saving?: boolean
   actions?: ReactNode
   onSubmit: (values: ContactFormValues) => void
@@ -66,7 +67,6 @@ export function ContactForm({
   segments,
   attributeDefinitions,
   initial,
-  isReplaced = false,
   saving = false,
   actions,
   onSubmit,
@@ -111,7 +111,8 @@ export function ContactForm({
     [segments],
   )
 
-  const disabled = isReplaced || segments.length === 0
+  const disabled = segments.length === 0
+  const phoneLocked = mode === 'edit' && Boolean(initial.phone)
 
   function toggleSegment(slug: string) {
     setSelectedSegments((prev) => {
@@ -136,7 +137,9 @@ export function ContactForm({
     setSegmentsError('')
     const prefixDigits = digitsOnly(phonePrefix)
     const localDigits = digitsOnly(phoneLocal)
-    const phoneValidation = validatePhoneLocal(prefixDigits, localDigits)
+    const phoneValidation = localDigits || !initial.whatsapp_user_id
+      ? validatePhoneLocal(prefixDigits, localDigits)
+      : null
     if (phoneValidation) {
       setPhoneError(phoneValidation)
       return
@@ -145,9 +148,10 @@ export function ContactForm({
     onSubmit({
       name,
       last_name: lastName,
-      phone: `${prefixDigits}${localDigits}`,
+      phone: localDigits ? `${prefixDigits}${localDigits}` : '',
       phone_prefix: prefixDigits,
       phone_local: localDigits,
+      whatsapp_user_id: initial.whatsapp_user_id,
       email: normalizeEmailForSubmit(email),
       dni,
       segments: selectedSegments,
@@ -182,12 +186,18 @@ export function ContactForm({
         />
       </label>
 
+      {initial.whatsapp_user_id ? (
+        <p className="rounded-lg border border-line bg-bg px-3 py-2 text-sm text-muted">
+          WhatsApp: {initial.wa_username ? `@${initial.wa_username.replace(/^@/, '')}` : 'usuario con número privado'}
+        </p>
+      ) : null}
+
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="block text-sm sm:col-span-1">
           <span className="text-muted">Prefijo país</span>
           <PhonePrefixSelect
             value={phonePrefix}
-            disabled={disabled}
+            disabled={disabled || phoneLocked}
             onChange={setPhonePrefix}
           />
         </div>
@@ -195,11 +205,11 @@ export function ContactForm({
           <span className="text-muted">Celular</span>
           <input
             type="text"
-            required
+            required={!initial.whatsapp_user_id}
             inputMode="numeric"
             placeholder="987654321"
             value={phoneLocal}
-            disabled={disabled}
+            disabled={disabled || phoneLocked}
             onChange={(e) => {
               setPhoneLocal(digitsOnly(e.target.value))
               if (phoneError) setPhoneError('')
@@ -211,6 +221,11 @@ export function ContactForm({
           ) : null}
         </label>
       </div>
+      {phoneLocked ? (
+        <p className="text-xs text-muted">
+          El teléfono de este contacto no se puede cambiar. Para otro número, crea un contacto nuevo.
+        </p>
+      ) : null}
 
       <label className="block text-sm">
         <span className="text-muted">Email (opcional)</span>

@@ -16,6 +16,8 @@ import {
   readSessionWindowMs,
 } from '../campaigns/campaign-conversation-window.util';
 import { persistCampaignChatMessage } from '../campaigns/campaign-chat-message.util';
+import { conversationRecipient } from './whatsapp-recipient.util';
+import { chooseWhatsAppIdentityMatch } from './whatsapp-identity.util';
 import { buildCampaignMessagePreview } from '../campaigns/campaign-message-preview.util';
 import {
   buildParamsForContact,
@@ -25,7 +27,6 @@ import {
   escapeForLikePattern,
   parseSegmentListFilter,
 } from '../contacts/contacts-filter.utils';
-import { normalizePhone } from '../contacts/contacts-validation.utils';
 import {
   MAX_BODY_PARAM_LEN,
   MAX_IMAGE_URL_LEN,
@@ -122,7 +123,8 @@ const INBOX_LIST_PAGE_SIZE = 100;
 
 type InboxRow = {
   id: number;
-  phone: string;
+  phone: string | null;
+  whatsapp_user_id: string | null;
   last_message_at: Date | null;
   inbox_unread: boolean;
   conversation_status: string | null;
@@ -132,6 +134,7 @@ type InboxRow = {
   contact_lead_score: number | null;
   contact_name: string | null;
   wa_profile_name: string | null;
+  wa_username: string | null;
   contact_segment_slugs: string[];
   preview: string | null;
   conversation_tags: string[];
@@ -210,6 +213,8 @@ export class ConversationsService {
     return {
       id,
       phone: row.phone,
+      whatsapp_user_id: row.whatsapp_user_id,
+      recipient: row.phone || row.whatsapp_user_id || '',
       last_message_at: row.last_message_at
         ? row.last_message_at.toISOString()
         : null,
@@ -224,6 +229,7 @@ export class ConversationsService {
         : null,
       contact_name: String(row.contact_name ?? '').trim(),
       wa_profile_name: String(row.wa_profile_name ?? '').trim() || null,
+      wa_username: String(row.wa_username ?? '').trim() || null,
       contact_lead_score: row.contact_lead_score,
       contact_segment_slugs: row.contact_segment_slugs ?? [],
       preview: String(row.preview ?? '').trim(),
@@ -259,10 +265,11 @@ export class ConversationsService {
       (
         SELECT ct_phone.id
         FROM contacts ct_phone
-        WHERE ct_phone.phone = c.phone
-          AND ct_phone.area = ${area}
-          AND ct_phone.replaced_by_contact_id IS NULL
-        ORDER BY ct_phone.updated_at DESC NULLS LAST
+        WHERE ct_phone.area = ${area}
+          AND ((c.whatsapp_user_id IS NOT NULL AND ct_phone.whatsapp_user_id = c.whatsapp_user_id)
+            OR (c.phone IS NOT NULL AND ct_phone.phone = c.phone))
+        ORDER BY CASE WHEN ct_phone.whatsapp_user_id = c.whatsapp_user_id THEN 0 ELSE 1 END,
+          ct_phone.updated_at DESC NULLS LAST
         LIMIT 1
       )
     )`;
@@ -290,6 +297,7 @@ export class ConversationsService {
 
   private buildInboxSearchSql(searchQ: string): Prisma.Sql {
     const searchPat = `%${escapeForLikePattern(searchQ)}%`;
+    const usernameSearchPat = `%${escapeForLikePattern(searchQ.replace(/^@/, ''))}%`;
     const segmentSql = this.buildInboxSegmentSearchSql(searchPat);
     const attributeSql = this.buildInboxAttributeSearchSql(searchPat);
     const digitsOnly = searchQ.replace(/\D/g, '');
@@ -306,6 +314,7 @@ export class ConversationsService {
         OR COALESCE(ct.phone, '') ILIKE ${searchPat} ESCAPE '!'
         OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
         OR COALESCE(c.wa_profile_name, '') ILIKE ${searchPat} ESCAPE '!'
+        OR COALESCE(c.wa_username, '') ILIKE ${usernameSearchPat} ESCAPE '!'
         OR regexp_replace(COALESCE(ct.phone, ''), '\\D', '', 'g') LIKE ${digitsPat}
         OR regexp_replace(COALESCE(c.phone, ''), '\\D', '', 'g') LIKE ${digitsPat}
         ${segmentSql}
@@ -323,6 +332,7 @@ export class ConversationsService {
       OR COALESCE(ct.phone, '') ILIKE ${searchPat} ESCAPE '!'
       OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
       OR COALESCE(c.wa_profile_name, '') ILIKE ${searchPat} ESCAPE '!'
+      OR COALESCE(c.wa_username, '') ILIKE ${usernameSearchPat} ESCAPE '!'
       ${segmentSql}
       ${attributeSql}
     )`;
@@ -403,6 +413,7 @@ export class ConversationsService {
       SELECT
         c.id,
         c.phone,
+        c.whatsapp_user_id,
         c.last_message_at,
         c.last_user_message_at,
         (
@@ -429,6 +440,7 @@ export class ConversationsService {
           )
         ) AS contact_name,
         NULLIF(TRIM(COALESCE(c.wa_profile_name, '')), '') AS wa_profile_name,
+        NULLIF(TRIM(COALESCE(c.wa_username, '')), '') AS wa_username,
         COALESCE((
           SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
           FROM contact_segments cs
@@ -489,6 +501,7 @@ export class ConversationsService {
       SELECT
         (-ct.id) AS id,
         ct.phone,
+        ct.whatsapp_user_id,
         NULL::timestamptz AS last_message_at,
         NULL::timestamptz AS last_user_message_at,
         NULL::timestamptz AS last_outbound_message_at,
@@ -501,6 +514,7 @@ export class ConversationsService {
         ct.lead_score AS contact_lead_score,
         ${this.inboxContactNameSql('ct')} AS contact_name,
         NULL::text AS wa_profile_name,
+        NULL::text AS wa_username,
         COALESCE((
           SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
           FROM contact_segments cs
@@ -518,7 +532,9 @@ export class ConversationsService {
       AND NOT EXISTS (
         SELECT 1
         FROM conversations c
-        WHERE c.area = ${area} AND (c.contact_id = ct.id OR c.phone = ct.phone)
+        WHERE c.area = ${area} AND (c.contact_id = ct.id
+          OR (ct.phone IS NOT NULL AND c.phone = ct.phone)
+          OR (ct.whatsapp_user_id IS NOT NULL AND c.whatsapp_user_id = ct.whatsapp_user_id))
       )
       ORDER BY ct.updated_at DESC, ct.id DESC
       LIMIT 50
@@ -588,7 +604,9 @@ export class ConversationsService {
       AND NOT EXISTS (
         SELECT 1
         FROM conversations c
-        WHERE c.area = ${area} AND (c.contact_id = ct.id OR c.phone = ct.phone)
+        WHERE c.area = ${area} AND (c.contact_id = ct.id
+          OR (ct.phone IS NOT NULL AND c.phone = ct.phone)
+          OR (ct.whatsapp_user_id IS NOT NULL AND c.whatsapp_user_id = ct.whatsapp_user_id))
       )
     `);
     total += virtualRows[0]?.n ?? 0;
@@ -812,7 +830,7 @@ export class ConversationsService {
         )
       : staticParams;
     const components = buildWhatsappGraphComponents(def, resolvedParams);
-    const phoneNorm = normalizePhone(conversation.phone);
+    const phoneNorm = conversationRecipient(conversation);
     const preview = buildCampaignMessagePreview(
       def,
       templateRow.components_json,
@@ -974,21 +992,23 @@ export class ConversationsService {
       ? Number(activeConversation.contact_id)
       : null;
 
-    if (!resolvedContactId && activeConversation.phone) {
-      const byPhone = await this.prisma.contacts.findFirst({
-        where: {
-          area,
-          phone: activeConversation.phone,
-          replaced_by_contact_id: null,
-        },
-        orderBy: { updated_at: 'desc' },
-        select: { id: true },
-      });
-      if (byPhone) {
-        resolvedContactId = byPhone.id;
+    if (!resolvedContactId && (activeConversation.phone || activeConversation.whatsapp_user_id)) {
+      const byUserId = activeConversation.whatsapp_user_id
+        ? await this.prisma.contacts.findFirst({
+            where: { area, whatsapp_user_id: activeConversation.whatsapp_user_id },
+            select: { id: true },
+          }) : null;
+      const byPhone = activeConversation.phone
+        ? await this.prisma.contacts.findFirst({
+            where: { area, phone: activeConversation.phone },
+            select: { id: true, whatsapp_user_id: true },
+          }) : null;
+      const byIdentity = chooseWhatsAppIdentityMatch(byUserId, byPhone, activeConversation.whatsapp_user_id).match;
+      if (byIdentity) {
+        resolvedContactId = byIdentity.id;
         await this.prisma.conversations.update({
           where: { id: conversationId },
-          data: { contact_id: byPhone.id, updated_at: new Date() },
+          data: { contact_id: byIdentity.id, updated_at: new Date() },
         });
       }
     }
@@ -1150,6 +1170,8 @@ export class ConversationsService {
       conversation: {
         id: activeConversation.id,
         phone: activeConversation.phone,
+        whatsapp_user_id: activeConversation.whatsapp_user_id,
+        recipient: conversationRecipient(activeConversation),
         status: activeConversation.status,
         last_message_at: activeConversation.last_message_at?.toISOString() ?? null,
         last_user_message_at:
@@ -1159,6 +1181,8 @@ export class ConversationsService {
         contact_id: resolvedContactId,
         wa_profile_name:
           String(activeConversation.wa_profile_name ?? '').trim() || null,
+        wa_username:
+          String(activeConversation.wa_username ?? '').trim() || null,
         meta_ctwa_ad_id: activeConversation.meta_ctwa_ad_id,
         assigned_user_id: activeConversation.assigned_user_id,
         assigned_user_label: assignedUserLabel,
@@ -1314,7 +1338,7 @@ export class ConversationsService {
 
     const contact = await this.prisma.contacts.findFirst({
       where: { id: contactId, area },
-      select: { id: true, phone: true },
+      select: { id: true, phone: true, whatsapp_user_id: true },
     });
     if (!contact) {
       throw new NotFoundException('Contacto no encontrado');
@@ -1326,6 +1350,7 @@ export class ConversationsService {
         OR: [
           { contact_id: contactId },
           ...(contact.phone ? [{ phone: contact.phone }] : []),
+          ...(contact.whatsapp_user_id ? [{ whatsapp_user_id: contact.whatsapp_user_id }] : []),
         ],
       },
       orderBy: { id: 'asc' },
@@ -1351,9 +1376,9 @@ export class ConversationsService {
       return { id: existing.id };
     }
 
-    if (!contact.phone) {
+    if (!contact.phone && !contact.whatsapp_user_id) {
       throw new BadRequestException(
-        'El contacto no tiene teléfono; no se puede abrir conversación WhatsApp',
+        'El contacto no tiene identidad de WhatsApp',
       );
     }
 
@@ -1361,6 +1386,7 @@ export class ConversationsService {
       data: {
         area,
         phone: contact.phone,
+        whatsapp_user_id: contact.whatsapp_user_id,
         contact_id: contactId,
         status: 'human',
         ...(['educacion', 'educacion_ca', 'educacion_ep'].includes(area)
@@ -1418,6 +1444,7 @@ export class ConversationsService {
       select: {
         id: true,
         phone: true,
+        whatsapp_user_id: true,
         last_user_message_at: true,
         whatsapp_phone_number_id: true,
       },
@@ -1435,7 +1462,7 @@ export class ConversationsService {
       area,
       conversationId: conversation.id,
       flowId,
-      phone: conversation.phone,
+      phone: conversationRecipient(conversation),
       phoneNumberId:
         String(conversation.whatsapp_phone_number_id || '').trim() || null,
     });
@@ -1447,7 +1474,7 @@ export class ConversationsService {
       meta: {
         conversation_id: conversationId,
         flow_id: result.flow_id,
-        phone: phoneMetaTail(conversation.phone),
+        phone: conversation.phone ? phoneMetaTail(conversation.phone) : null,
         source: 'inbox_start_flow',
       },
     }).catch(() => undefined);
@@ -1897,7 +1924,7 @@ export class ConversationsService {
     try {
       if (!file) {
         const apiResponse = await sendSessionTextMessage({
-          to: conversation.phone,
+          to: conversationRecipient(conversation),
           text,
           area,
           phoneNumberId: linePhoneNumberId,
@@ -1944,7 +1971,7 @@ export class ConversationsService {
 
         if (uploadResult.waType === 'audio' && text) {
           const textResp = await sendSessionTextMessage({
-            to: conversation.phone,
+            to: conversationRecipient(conversation),
             text,
             area,
             phoneNumberId: linePhoneNumberId,
@@ -1976,7 +2003,7 @@ export class ConversationsService {
               : '';
 
         const sendResp = await sendSessionMediaMessage({
-          to: conversation.phone,
+          to: conversationRecipient(conversation),
           area,
           waType: uploadResult.waType,
           mediaId: uploadResult.mediaId,
@@ -2068,7 +2095,7 @@ export class ConversationsService {
           meta: {
             conversation_id: conversationId,
             phone: conversation.phone,
-            phone_tail: phoneMetaTail(conversation.phone),
+            phone_tail: conversation.phone ? phoneMetaTail(conversation.phone) : null,
             text_preview: text.slice(0, 120),
           },
         });
@@ -2084,7 +2111,7 @@ export class ConversationsService {
           meta: {
             conversation_id: conversationId,
             phone: conversation.phone,
-            phone_tail: phoneMetaTail(conversation.phone),
+            phone_tail: conversation.phone ? phoneMetaTail(conversation.phone) : null,
             media_type: waType,
             filename: String(file.originalname || '').slice(0, 200),
             has_caption: Boolean(text),
@@ -2153,7 +2180,7 @@ export class ConversationsService {
 
     try {
       await sendMessageReaction({
-        to: conversation.phone,
+        to: conversationRecipient(conversation),
         waMessageId: String(row.wa_message_id),
         emoji: safeEmoji,
         area,
@@ -2477,13 +2504,16 @@ export class ConversationsService {
       meta: {
         conversation_id: conversationId,
         phone: conversation.phone,
-        phone_tail: phoneMetaTail(conversation.phone),
+        phone_tail: conversation.phone ? phoneMetaTail(conversation.phone) : null,
         message_count: messageRows.length,
       },
     });
     return {
       buffer,
-      filename: conversationExportFilename(conversation.phone, conversation.id),
+      filename: conversationExportFilename(
+        conversation.phone || 'numero-privado',
+        conversation.id,
+      ),
     };
   }
 

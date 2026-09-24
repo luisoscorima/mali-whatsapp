@@ -22,7 +22,9 @@ type MetaAdDetail = {
 }
 
 type MetaAdLead = {
-  phone: string
+  phone: string | null
+  wa_username: string | null
+  wa_profile_name: string | null
   first_message_at: string | null
   contact_name: string | null
   contact_id: number | null
@@ -205,7 +207,7 @@ export function MetaAdDetailPage() {
               <thead className="border-b border-line text-muted">
                 <tr>
                   <th className="px-2 py-2 font-medium">Nombre</th>
-                  <th className="px-2 py-2 font-medium">Teléfono</th>
+                  <th className="px-2 py-2 font-medium">WhatsApp</th>
                   <th className="px-2 py-2 font-medium">Estado</th>
                   <th className="px-2 py-2 font-medium">Asignado</th>
                   <th className="px-2 py-2 font-medium">Primer mensaje</th>
@@ -216,7 +218,7 @@ export function MetaAdDetailPage() {
               </thead>
               <tbody>
                 {leads.map((lead) => (
-                  <tr key={lead.phone} className="border-b border-line last:border-0">
+                  <tr key={lead.conversation_id} className="border-b border-line last:border-0">
                     <td className="px-2 py-2">
                       {lead.contact_id ? (
                         <Link
@@ -229,7 +231,7 @@ export function MetaAdDetailPage() {
                         lead.contact_name || '—'
                       )}
                     </td>
-                    <td className="px-2 py-2 font-mono">{lead.phone}</td>
+                    <td className="px-2 py-2">{lead.phone || (lead.wa_username ? `@${lead.wa_username.replace(/^@/, '')}` : lead.wa_profile_name || 'Número privado')}</td>
                     <td className="px-2 py-2">{lead.lead_status?.label || '—'}</td>
                     <td className="px-2 py-2">
                       {lead.assigned_user?.name ||

@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { normalizeArea } from '../config/areas';
 import { normalizePhone } from '../contacts/contacts-validation.utils';
+import { isWhatsAppBsuid } from '../conversations/whatsapp-recipient.util';
 import { setMessageSender } from '../conversations/chat-sender.util';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { CampaignMessagePreview } from './campaign-message-preview.util';
@@ -21,8 +22,9 @@ export async function persistCampaignChatMessage(
   },
 ): Promise<void> {
   const area = normalizeArea(input.area);
-  const phone = normalizePhone(input.phone);
-  if (!phone) return;
+  const userId = isWhatsAppBsuid(input.phone) ? input.phone.trim() : null;
+  const phone = userId ? null : normalizePhone(input.phone);
+  if (!phone && !userId) return;
 
   const at = input.sentAt ?? new Date();
   const isHistorical = Boolean(input.sentAt);
@@ -32,21 +34,44 @@ export async function persistCampaignChatMessage(
     input.preview.headerText.trim() ||
     'Campaña enviada';
 
+  const exact = userId
+    ? await prisma.conversations.findUnique({
+        where: { area_whatsapp_user_id: { area, whatsapp_user_id: userId } },
+        select: { id: true, phone: true, whatsapp_user_id: true, contact_id: true },
+      })
+    : await prisma.conversations.findUnique({
+        where: { area_phone: { area, phone: phone! } },
+        select: { id: true, phone: true, whatsapp_user_id: true, contact_id: true },
+      });
+  const existing = exact ?? (input.contactId ? await prisma.conversations.findFirst({
+    where: { area, contact_id: input.contactId,
+      ...(userId ? { whatsapp_user_id: null } : { phone: null }) },
+    select: { id: true, phone: true, whatsapp_user_id: true, contact_id: true },
+  }) : null);
   const conversation = await prisma.conversations.upsert({
-    where: { area_phone: { area, phone } },
+    where: existing
+      ? { id: existing.id }
+      : userId
+        ? { area_whatsapp_user_id: { area, whatsapp_user_id: userId } }
+        : { area_phone: { area, phone: phone! } },
     create: {
       area,
       phone,
+      whatsapp_user_id: userId,
       contact_id: input.contactId,
       last_message_at: at,
       status: 'bot',
     },
     update: isHistorical
       ? {
-          ...(input.contactId ? { contact_id: input.contactId } : {}),
+          ...(input.contactId && !existing?.contact_id ? { contact_id: input.contactId } : {}),
+          ...(userId && !existing?.whatsapp_user_id ? { whatsapp_user_id: userId } : {}),
+          ...(phone && !existing?.phone ? { phone } : {}),
         }
       : {
-          ...(input.contactId ? { contact_id: input.contactId } : {}),
+          ...(input.contactId && !existing?.contact_id ? { contact_id: input.contactId } : {}),
+          ...(userId && !existing?.whatsapp_user_id ? { whatsapp_user_id: userId } : {}),
+          ...(phone && !existing?.phone ? { phone } : {}),
           last_message_at: at,
           updated_at: new Date(),
         },
