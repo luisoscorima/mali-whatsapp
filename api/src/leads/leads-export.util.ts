@@ -6,6 +6,7 @@ export function buildLeadsOriginsExportBuffer(
   rows: Array<{
     channel: string;
     contact_name: string;
+    username: string;
     phone: string;
     email: string;
     dni: string;
@@ -22,6 +23,7 @@ export function buildLeadsOriginsExportBuffer(
   const headers = [
     'Canal',
     'Contacto',
+    'Username WhatsApp',
     'Teléfono',
     'Email',
     'DNI',
@@ -39,6 +41,7 @@ export function buildLeadsOriginsExportBuffer(
     ...rows.map((r) => [
       r.channel,
       r.contact_name,
+      r.username,
       r.phone,
       r.email,
       r.dni,

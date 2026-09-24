@@ -186,12 +186,6 @@ export function ContactForm({
         />
       </label>
 
-      {initial.whatsapp_user_id ? (
-        <p className="rounded-lg border border-line bg-bg px-3 py-2 text-sm text-muted">
-          WhatsApp: {initial.wa_username ? `@${initial.wa_username.replace(/^@/, '')}` : 'usuario con número privado'}
-        </p>
-      ) : null}
-
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="block text-sm sm:col-span-1">
           <span className="text-muted">Prefijo país</span>
@@ -225,6 +219,26 @@ export function ContactForm({
         <p className="text-xs text-muted">
           El teléfono de este contacto no se puede cambiar. Para otro número, crea un contacto nuevo.
         </p>
+      ) : null}
+
+      {mode === 'edit' || initial.wa_username ? (
+        <label className="block text-sm">
+          <span className="text-muted">Username de WhatsApp</span>
+          <input
+            type="text"
+            readOnly
+            aria-readonly="true"
+            value={
+              initial.wa_username
+                ? `@${initial.wa_username.replace(/^@/, '')}`
+                : ''
+            }
+            className="mt-1 w-full cursor-default rounded-lg border border-line bg-bg px-3 py-2 text-muted"
+          />
+          <p className="mt-1 text-xs text-muted">
+            WhatsApp actualiza este dato automáticamente cuando lo incluye en el webhook.
+          </p>
+        </label>
       ) : null}
 
       <label className="block text-sm">

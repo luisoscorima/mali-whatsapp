@@ -217,6 +217,7 @@ model contact_origins {
   source_label     String?        @db.VarChar(200)
   payload          Json?
   phone            String?        @db.VarChar(32)
+  whatsapp_user_id String?        @db.VarChar(132)
   dni              String?        @db.VarChar(32)
   email            String?        @db.VarChar(255)
   conversation_id  Int?
@@ -233,6 +234,7 @@ model contact_origins {
   @@unique([area, channel, external_id], map: "contact_origins_area_channel_external_uq")
   @@index([contact_id], map: "idx_contact_origins_contact")
   @@index([area, channel], map: "idx_contact_origins_area_channel")
+  @@index([area, whatsapp_user_id], map: "idx_contact_origins_area_whatsapp_user_id")
 }
 
 /// Read-only archive of replacement links that existed before phone identities were frozen.

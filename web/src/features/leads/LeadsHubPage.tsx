@@ -52,6 +52,12 @@ const CHANNEL_META: Record<
     to: '/leads/tiktok-forms',
     enabled: true,
   },
+  organic_wa: {
+    title: 'WhatsApp orgánico',
+    blurb: 'Personas que iniciaron una conversación sin otra atribución',
+    to: '/leads?channel=organic_wa',
+    enabled: true,
+  },
 }
 
 const CHANNEL_FILTER_OPTIONS = [
@@ -141,12 +147,15 @@ export function LeadsHubPage() {
 }
 
 type OriginRow = ContactOriginSummary & {
+  whatsapp_user_id: string | null
+  conversations: { wa_username: string | null } | null
   chat_conversation_id: number | null
   came_with_inbound: boolean
   contacts: {
     id: number
     name: string
     phone: string | null
+    whatsapp_user_id: string | null
     email: string | null
     lead_status: { label: string } | null
   } | null
@@ -258,7 +267,7 @@ function LeadsUnifiedList() {
             className="mt-1 block w-64 max-w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm"
             value={qInput}
             onChange={(e) => setQInput(e.target.value)}
-            placeholder="Nombre, tel, email, fuente…"
+            placeholder="Nombre, @username, tel, email, fuente…"
           />
         </label>
         <button
@@ -306,7 +315,13 @@ function LeadsUnifiedList() {
                             className="text-accent hover:underline"
                           >
                             {o.contacts.name}
+                            {o.conversations?.wa_username
+                              ? ` · @${o.conversations.wa_username.replace(/^@/, '')}`
+                              : ''}
                             {o.contacts.phone ? ` · ${o.contacts.phone}` : ''}
+                            {!o.contacts.phone && o.whatsapp_user_id
+                              ? ' · Número privado'
+                              : ''}
                             {o.contacts.email ? ` · ${o.contacts.email}` : ''}
                           </Link>
                         ) : (

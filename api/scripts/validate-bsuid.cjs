@@ -16,6 +16,8 @@ const { WebhookService } = require('../dist/webhook/webhook.service');
 const { fetchRecipientsUnion, countRecipientsUnion } = require('../dist/campaigns/campaign-recipients.util');
 const { persistCampaignChatMessage } = require('../dist/campaigns/campaign-chat-message.util');
 const { ContactsService } = require('../dist/contacts/contacts.service');
+const { LeadsService } = require('../dist/leads/leads.service');
+const { EducationLeadWorkflowService } = require('../dist/leads/education-lead-workflow.service');
 const prisma = new PrismaClient();
 const container = 'mali-bsuid-validation';
 function sql(database, input) {
@@ -27,11 +29,15 @@ async function main() {
   sql('postgres', `CREATE DATABASE ${upgradeDb}; CREATE DATABASE ${runtimeDb};`);
   const migrations = path.join(__dirname, '../prisma/migrations');
   const names = fs.readdirSync(migrations).filter(n => fs.existsSync(path.join(migrations, n, 'migration.sql'))).sort();
-  const last = names.pop();
-  assert.equal(last, '20260924110000_nullable_conversation_phone_no_replacements');
-  const precedingSql = names.map(name => fs.readFileSync(path.join(migrations, name, 'migration.sql'), 'utf8')).join('\n');
-  const finalSql = fs.readFileSync(path.join(migrations, last, 'migration.sql'), 'utf8');
-  sql(runtimeDb, precedingSql + '\n' + finalSql);
+  const identityMigration = '20260924110000_nullable_conversation_phone_no_replacements';
+  const identityIndex = names.indexOf(identityMigration);
+  assert.notEqual(identityIndex, -1);
+  const readMigrations = migrationNames => migrationNames
+    .map(name => fs.readFileSync(path.join(migrations, name, 'migration.sql'), 'utf8')).join('\n');
+  const precedingSql = readMigrations(names.slice(0, identityIndex));
+  const identitySql = readMigrations([identityMigration]);
+  const followingSql = readMigrations(names.slice(identityIndex + 1));
+  sql(runtimeDb, readMigrations(names));
   sql(upgradeDb, precedingSql);
   sql(upgradeDb, `
     INSERT INTO contacts(id,name,area,phone,replaced_at,replacement_reason) VALUES (900001,'Legacy','ti','51911111111',NOW(),'old');
@@ -42,7 +48,7 @@ async function main() {
     INSERT INTO chat_messages(conversation_id,direction,wa_message_id,body_text) VALUES (900002,'inbound','migration-fixture','Preserve me');
     INSERT INTO conversation_tags(conversation_id,label) VALUES (900002,'Migrated');
   `);
-  sql(upgradeDb, finalSql);
+  sql(upgradeDb, identitySql + '\n' + followingSql);
   sql(upgradeDb, `DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM conversations WHERE id=900003 AND phone IS NULL AND whatsapp_user_id='PE.only') THEN RAISE EXCEPTION 'BSUID conversion failed'; END IF;
     IF EXISTS (SELECT 1 FROM conversations WHERE id=900002) THEN RAISE EXCEPTION 'Duplicate remains'; END IF;
@@ -147,5 +153,37 @@ async function main() {
     }
   }
   console.log('PASS outbound HTTP payloads for phone and BSUID: text, buttons, reaction, four media types, template (Meta simulated)');
+
+  const leadUserId = 'PE.organicLead123';
+  const leadConversation = await prisma.conversations.create({ data: {
+    area: 'educacion_ca', phone: null, whatsapp_user_id: leadUserId,
+    wa_profile_name: 'Ponce', wa_username: 'ponce.de.leon08',
+    last_user_message_at: new Date(),
+  } });
+  const leadMessage = await prisma.chat_messages.create({ data: {
+    conversation_id: leadConversation.id, direction: 'inbound',
+    wa_message_id: `validation-organic-${runId}`, body_text: 'Vengo desde la web',
+  } });
+  const leads = new LeadsService(prisma, new EducationLeadWorkflowService(prisma));
+  await leads.recordEducationOrganicOrigin({
+    area: 'educacion_ca', conversationId: leadConversation.id,
+    contactId: null, phone: null, whatsappUserId: leadUserId,
+    name: 'Ponce', seenAt: leadMessage.created_at, messageId: leadMessage.id,
+  });
+  const leadContact = await prisma.contacts.findUniqueOrThrow({
+    where: { area_whatsapp_user_id: { area: 'educacion_ca', whatsapp_user_id: leadUserId } },
+  });
+  const leadOrigin = await prisma.contact_origins.findUniqueOrThrow({
+    where: { area_channel_external_id: {
+      area: 'educacion_ca', channel: 'organic_wa',
+      external_id: `conversation:${leadConversation.id}`,
+    } },
+  });
+  assert.equal(leadOrigin.contact_id, leadContact.id);
+  assert.equal(leadOrigin.whatsapp_user_id, leadUserId);
+  assert.equal((await prisma.conversations.findUniqueOrThrow({ where: { id: leadConversation.id } })).contact_id, leadContact.id);
+  assert.equal((await leads.listOrigins({ area: 'educacion_ca', q: '@ponce.de.leon08' })).total, 1);
+  assert.equal(await prisma.education_lead_entries.count({ where: { contact_id: leadContact.id } }), 1);
+  console.log('PASS BSUID-only organic lead: contact, origin, chat link, education entry, @username search');
 }
 main().catch(e => { console.error(e); process.exitCode = 1; }).finally(() => prisma.$disconnect());

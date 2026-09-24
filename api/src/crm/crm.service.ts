@@ -55,6 +55,8 @@ export type CrmContactRow = {
   name: string;
   last_name: string;
   phone: string | null;
+  whatsapp_user_id: string | null;
+  wa_username: string | null;
   email: string | null;
   dni: string | null;
   opt_in: boolean;
@@ -667,6 +669,8 @@ export class CrmService {
           { name: { contains: q, mode: 'insensitive' } },
           { last_name: { contains: q, mode: 'insensitive' } },
           { phone: { contains: q } },
+          { whatsapp_user_id: { contains: q, mode: 'insensitive' } },
+          { conversations: { some: { wa_username: { contains: q.replace(/^@/, ''), mode: 'insensitive' } } } },
           { email: { contains: q, mode: 'insensitive' } },
           { dni: { contains: q, mode: 'insensitive' } },
           {
@@ -707,6 +711,11 @@ export class CrmService {
             select: { segment_slug: true },
             orderBy: { segment_slug: 'asc' },
           },
+          conversations: {
+            where: { wa_username: { not: null } },
+            orderBy: { updated_at: 'desc' }, take: 1,
+            select: { wa_username: true },
+          },
           education_lead_cycles: {
             orderBy: [{ started_at: 'desc' }, { id: 'desc' }], take: 1,
             include: {
@@ -725,6 +734,8 @@ export class CrmService {
       name: row.name,
       last_name: row.last_name,
       phone: row.phone,
+      whatsapp_user_id: row.whatsapp_user_id,
+      wa_username: row.conversations[0]?.wa_username ?? null,
       email: this.softEmail(row.email),
       dni: row.dni?.trim() || null,
       opt_in: row.opt_in,
@@ -869,6 +880,11 @@ export class CrmService {
           select: { segment_slug: true },
           orderBy: { segment_slug: 'asc' },
         },
+        conversations: {
+          where: { wa_username: { not: null } },
+          orderBy: { updated_at: 'desc' }, take: 1,
+          select: { wa_username: true },
+        },
       },
     });
 
@@ -878,6 +894,8 @@ export class CrmService {
       name: updated.name,
       last_name: updated.last_name,
       phone: updated.phone,
+      whatsapp_user_id: updated.whatsapp_user_id,
+      wa_username: updated.conversations[0]?.wa_username ?? null,
       email: this.softEmail(updated.email),
       dni: updated.dni?.trim() || null,
       opt_in: updated.opt_in,

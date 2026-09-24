@@ -28,6 +28,7 @@ export const DEFAULT_LEAD_STATUSES: Array<{
 
 export type ContactIdentityInput = {
   phone?: string | null;
+  whatsapp_user_id?: string | null;
   dni?: string | null;
   email?: string | null;
   name?: string | null;
@@ -44,6 +45,7 @@ export type UpsertOriginInput = {
   source_label?: string | null;
   payload?: unknown;
   phone?: string | null;
+  whatsapp_user_id?: string | null;
   dni?: string | null;
   email?: string | null;
   conversation_id?: number | null;

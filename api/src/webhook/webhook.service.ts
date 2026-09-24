@@ -651,25 +651,34 @@ export class WebhookService {
           (referral?.ctwa_clid
             ? `clid:${String(referral.ctwa_clid).slice(0, 120)}`
             : '');
-        if (sourceId && phone) {
-          await this.leadsService.upsertOrigin({
+        if (sourceId) {
+          const origin = await this.leadsService.upsertOrigin({
             area,
             channel: 'meta_ctwa',
             external_id: `${sourceId}:${conversation.id}`,
             source_key: sourceId,
             payload: referral ?? record,
             phone,
+            whatsapp_user_id: userId,
             conversation_id: conversation.id,
             contact: {
               phone,
+              whatsapp_user_id: userId,
               name: waProfileName ?? undefined,
             },
           });
-        } else if (!sourceId && phone && bodyText.trim()) {
+          if (origin.contact_id) {
+            await this.prisma.meta_ctwa_ad_leads.updateMany({
+              where: { conversation_id: conversation.id, contact_id: null },
+              data: { contact_id: origin.contact_id },
+            });
+          }
+        } else if (!sourceId && bodyText.trim()) {
           await this.maybeAttributeMaliOneLinkOrigin({
             area,
             conversationId: conversation.id,
             phone,
+            whatsappUserId: userId,
             bodyText,
             waProfileName,
           });
@@ -706,13 +715,14 @@ export class WebhookService {
         });
         saved += 1;
 
-        if (phone) {
+        if (phone || userId) {
           try {
             await this.leadsService.recordEducationOrganicOrigin({
               area,
               conversationId: conversation.id,
               contactId,
               phone,
+              whatsappUserId: userId,
               name: waProfileName,
               seenAt: chatMessage.created_at,
               messageId: chatMessage.id,
@@ -785,7 +795,8 @@ export class WebhookService {
   private async maybeAttributeMaliOneLinkOrigin(input: {
     area: string;
     conversationId: number;
-    phone: string;
+    phone: string | null;
+    whatsappUserId: string | null;
     bodyText: string;
     waProfileName: string | null;
   }): Promise<void> {
@@ -803,6 +814,7 @@ export class WebhookService {
         source_label: primaryTag || matched.slug,
         conversation_id: input.conversationId,
         phone: input.phone,
+        whatsapp_user_id: input.whatsappUserId,
         payload: {
           slug: matched.slug,
           tags: matched.tags,
@@ -811,6 +823,7 @@ export class WebhookService {
         },
         contact: {
           phone: input.phone,
+          whatsapp_user_id: input.whatsappUserId,
           name: input.waProfileName ?? undefined,
         },
       });

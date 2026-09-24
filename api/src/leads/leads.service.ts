@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -15,6 +16,7 @@ import {
   normalizePhone,
 } from '../contacts/contacts-validation.utils';
 import { PrismaService } from '../prisma/prisma.service';
+import { isWhatsAppBsuid } from '../conversations/whatsapp-recipient.util';
 import { EducationLeadWorkflowService } from './education-lead-workflow.service';
 import {
   type LeadChatEnrichInput,
@@ -59,18 +61,21 @@ export class LeadsService {
     const page = params.page ?? 1;
     const limit = params.limit ?? 50;
     const q = String(params.q ?? '').trim();
+    const usernameQ = q.replace(/^@/, '');
     const where: Prisma.contact_originsWhereInput = {
       area: { in: areas },
       ...(params.channel ? { channel: params.channel } : {}),
       ...(q ? {
         OR: [
           { phone: { contains: q } },
+          { whatsapp_user_id: { contains: q, mode: 'insensitive' } },
           { email: { contains: q, mode: 'insensitive' } },
           { dni: { contains: q, mode: 'insensitive' } },
           { source_key: { contains: q, mode: 'insensitive' } },
           { source_label: { contains: q, mode: 'insensitive' } },
           { contacts: { is: { name: { contains: q, mode: 'insensitive' } } } },
           { contacts: { is: { last_name: { contains: q, mode: 'insensitive' } } } },
+          { conversations: { is: { wa_username: { contains: usernameQ, mode: 'insensitive' } } } },
         ],
       } : {}),
     };
@@ -90,6 +95,7 @@ export class LeadsService {
           phone: true,
           email: true,
           contact_id: true,
+          whatsapp_user_id: true,
           first_seen_at: true,
           last_seen_at: true,
           contacts: {
@@ -98,6 +104,7 @@ export class LeadsService {
               name: true,
               last_name: true,
               phone: true,
+              whatsapp_user_id: true,
               email: true,
               lead_status: { select: { label: true } },
             },
@@ -112,7 +119,8 @@ export class LeadsService {
     area: string;
     conversationId: number;
     contactId: number | null;
-    phone: string;
+    phone: string | null;
+    whatsappUserId: string | null;
     name?: string | null;
     seenAt: Date;
     messageId?: number;
@@ -144,7 +152,13 @@ export class LeadsService {
       conversation_id: input.conversationId,
       first_seen_at: firstInbound?.created_at ?? input.seenAt,
       last_seen_at: input.seenAt,
-      contact: { phone: input.phone, name: input.name },
+      phone: input.phone,
+      whatsapp_user_id: input.whatsappUserId,
+      contact: {
+        phone: input.phone,
+        whatsapp_user_id: input.whatsappUserId,
+        name: input.name,
+      },
     });
     const message = input.messageId ? { id: input.messageId } : await this.prisma.chat_messages.findFirst({
       where: { conversation_id: input.conversationId, direction: 'inbound', created_at: input.seenAt },
@@ -191,11 +205,15 @@ export class LeadsService {
 
   assertHasIdentity(input: ContactIdentityInput): void {
     const phone = input.phone ? normalizePhone(input.phone) : '';
+    const userId = String(input.whatsapp_user_id ?? '').trim();
+    if (userId && !isWhatsAppBsuid(userId)) {
+      throw new BadRequestException('Identidad de WhatsApp inválida');
+    }
     const dni = String(input.dni ?? '').trim();
     const email = normalizeEmail(input.email);
-    if (!phone && !dni && !email) {
+    if (!phone && !userId && !dni && !email) {
       throw new BadRequestException(
-        'Se requiere al menos uno de: phone, dni o email',
+        'Se requiere al menos uno de: phone, BSUID, dni o email',
       );
     }
   }
@@ -229,7 +247,7 @@ export class LeadsService {
   }
 
   /**
-   * Resolve contact by phone → dni → email within area. Creates if missing.
+   * Resolve contact by BSUID → phone → dni → email within area. Creates if missing.
    * `overwriteName`: Instant Form / fuentes con nombre declarado pisan alias de WA.
    */
   async resolveContact(
@@ -243,17 +261,36 @@ export class LeadsService {
     const phone = input.phone
       ? this.normalizeOptionalPhone(input.phone)
       : null;
+    const userId = String(input.whatsapp_user_id ?? '').trim() || null;
     const dni = this.normalizeOptionalDni(input.dni);
     const email = input.email
       ? this.normalizeOptionalEmail(input.email)
       : null;
 
-    let existing =
-      (phone
-        ? await this.prisma.contacts.findFirst({
-            where: { area: areaNorm, phone },
-          })
-        : null) ??
+    const byUserId = userId
+      ? await this.prisma.contacts.findFirst({
+          where: { area: areaNorm, whatsapp_user_id: userId },
+        })
+      : null;
+    const byPhone = phone
+      ? await this.prisma.contacts.findFirst({
+          where: { area: areaNorm, phone },
+        })
+      : null;
+    if (byUserId && byPhone && byUserId.id !== byPhone.id) {
+      throw new ConflictException(
+        'El teléfono y la identidad de WhatsApp pertenecen a contactos distintos',
+      );
+    }
+    if (!byUserId && byPhone?.whatsapp_user_id && userId && byPhone.whatsapp_user_id !== userId) {
+      throw new ConflictException(
+        'El teléfono pertenece a otra identidad de WhatsApp',
+      );
+    }
+
+    const existing =
+      byUserId ??
+      byPhone ??
       (dni
         ? await this.prisma.contacts.findFirst({
             where: { area: areaNorm, dni },
@@ -277,6 +314,7 @@ export class LeadsService {
         updated_at: new Date(),
       };
       if (!existing.phone && phone) data.phone = phone;
+      if (!existing.whatsapp_user_id && userId) data.whatsapp_user_id = userId;
       if (!existing.dni && dni) data.dni = dni;
       if (!existing.email && email) data.email = email;
       const incomingName = String(input.name ?? '').trim();
@@ -302,10 +340,12 @@ export class LeadsService {
         where: { id: existing.id },
         data,
       });
-      const linkPhone = phone || existing.phone;
-      if (linkPhone) {
-        await this.linkConversationsToContact(areaNorm, linkPhone, existing.id);
-      }
+      await this.linkConversationsToContact(
+        areaNorm,
+        phone || existing.phone,
+        userId || existing.whatsapp_user_id,
+        existing.id,
+      );
       return { contact_id: existing.id, created: false };
     }
 
@@ -315,6 +355,7 @@ export class LeadsService {
         name: name.slice(0, 150),
         last_name: last_name.slice(0, 150),
         phone,
+        whatsapp_user_id: userId,
         dni,
         email,
         opt_in: input.opt_in ?? true,
@@ -324,20 +365,23 @@ export class LeadsService {
         updated_at: new Date(),
       },
     });
-    if (phone) {
-      await this.linkConversationsToContact(areaNorm, phone, created.id);
-    }
+    await this.linkConversationsToContact(areaNorm, phone, userId, created.id);
     return { contact_id: created.id, created: true };
   }
 
-  /** Enlaza chats del área con el mismo teléfono que aún no tienen contact_id. */
+  /** Enlaza chats del área con la misma identidad que aún no tienen contacto. */
   private async linkConversationsToContact(
     area: string,
-    phone: string,
+    phone: string | null,
+    userId: string | null,
     contactId: number,
   ): Promise<void> {
+    const or: Prisma.conversationsWhereInput[] = [];
+    if (phone) or.push({ phone });
+    if (userId) or.push({ whatsapp_user_id: userId });
+    if (!or.length) return;
     await this.prisma.conversations.updateMany({
-      where: { area, phone, contact_id: null },
+      where: { area, contact_id: null, OR: or },
       data: { contact_id: contactId, updated_at: new Date() },
     });
   }
@@ -355,6 +399,8 @@ export class LeadsService {
 
     const identity: ContactIdentityInput = {
       phone: input.contact?.phone ?? input.phone,
+      whatsapp_user_id:
+        input.contact?.whatsapp_user_id ?? input.whatsapp_user_id,
       dni: input.contact?.dni ?? input.dni,
       email: input.contact?.email ?? input.email,
       name: input.contact?.name,
@@ -381,6 +427,8 @@ export class LeadsService {
     const phone = identity.phone
       ? normalizePhone(identity.phone) || null
       : null;
+    const whatsapp_user_id =
+      String(identity.whatsapp_user_id ?? '').trim() || null;
     const dni = this.normalizeOptionalDni(identity.dni);
     const email = identity.email
       ? normalizeEmail(identity.email) || null
@@ -410,6 +458,8 @@ export class LeadsService {
           source_label: input.source_label ?? existing.source_label,
           payload: payload ?? undefined,
           phone: phone ?? existing.phone,
+          whatsapp_user_id:
+            whatsapp_user_id ?? existing.whatsapp_user_id,
           dni: dni ?? existing.dni,
           email: email ?? existing.email,
           conversation_id:
@@ -436,6 +486,7 @@ export class LeadsService {
         source_label: input.source_label ?? null,
         payload: payload ?? Prisma.JsonNull,
         phone,
+        whatsapp_user_id,
         dni,
         email,
         conversation_id: input.conversation_id ?? null,
@@ -592,6 +643,7 @@ export class LeadsService {
     const take = Math.min(Math.max(params.limit ?? 50, 1), 200);
     const skip = Math.max(params.offset ?? 0, 0);
     const q = String(params.q ?? '').trim();
+    const usernameQ = q.replace(/^@/, '');
     const where: Prisma.contact_originsWhereInput = {
       area: areaNorm,
       ...(params.channel ? { channel: params.channel } : {}),
@@ -599,6 +651,7 @@ export class LeadsService {
         ? {
             OR: [
               { phone: { contains: q } },
+              { whatsapp_user_id: { contains: q, mode: 'insensitive' } },
               { email: { contains: q, mode: 'insensitive' } },
               { dni: { contains: q, mode: 'insensitive' } },
               { source_label: { contains: q, mode: 'insensitive' } },
@@ -615,6 +668,12 @@ export class LeadsService {
                 },
               },
               { contacts: { phone: { contains: q } } },
+              { contacts: { whatsapp_user_id: { contains: q, mode: 'insensitive' } } },
+              {
+                conversations: {
+                  wa_username: { contains: usernameQ, mode: 'insensitive' },
+                },
+              },
               {
                 contacts: {
                   email: { contains: q, mode: 'insensitive' },
@@ -638,12 +697,14 @@ export class LeadsService {
               name: true,
               last_name: true,
               phone: true,
+              whatsapp_user_id: true,
               email: true,
               dni: true,
               lead_status_id: true,
               lead_status: true,
             },
           },
+          conversations: { select: { wa_username: true } },
         },
       }),
     ]);
@@ -678,6 +739,9 @@ export class LeadsService {
       return {
         channel: o.channel,
         contact_name: contactName,
+        username: o.conversations?.wa_username
+          ? `@${o.conversations.wa_username.replace(/^@/, '')}`
+          : '',
         phone: o.contacts?.phone || o.phone || '',
         email: o.contacts?.email || o.email || '',
         dni: o.contacts?.dni || o.dni || '',
