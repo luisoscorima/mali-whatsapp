@@ -84,7 +84,7 @@ export class EducationLeadWorkflowService {
     eventKey: string; occurredAt: Date;
   }): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(20260924, ${input.contactId})`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(20260924::integer, ${input.contactId}::integer)`;
       const existing = await tx.education_lead_entries.findUnique({
         where: { area_event_key: { area: input.area, event_key: input.eventKey } },
       });
@@ -317,7 +317,7 @@ export class EducationLeadWorkflowService {
       if (!status) throw new BadRequestException('Estado no disponible para este número');
     }
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(20260924, ${contactId})`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(20260924::integer, ${contactId}::integer)`;
       let cycle = await tx.education_lead_cycles.findFirst({
         where: { contact_id: contactId, area }, orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
       });
@@ -378,7 +378,7 @@ export class EducationLeadWorkflowService {
     const cutoff = new Date(Date.now() - SIXTY_DAYS_MS);
     const q = String(params.q ?? '').trim();
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(20260924)`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(20260924::bigint)`;
       const result: Array<{ area: string; assigned: number }> = [];
       for (const currentArea of areas) {
         const advisors = await tx.users.findMany({
@@ -465,7 +465,7 @@ export class EducationLeadWorkflowService {
       if (!entry) throw new NotFoundException('Entrada no encontrada');
       if (entry.classification !== 'conflict') throw new BadRequestException('La entrada no tiene conflicto');
       if (entry.reviewed_at) throw new BadRequestException('El conflicto ya fue revisado');
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(20260924, ${entry.contact_id})`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(20260924::integer, ${entry.contact_id}::integer)`;
       const latestCycle = await tx.education_lead_cycles.findFirst({
         where: { contact_id: entry.contact_id, area },
         orderBy: [{ started_at: 'desc' }, { id: 'desc' }],

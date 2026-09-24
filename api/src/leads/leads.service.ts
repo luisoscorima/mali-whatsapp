@@ -543,7 +543,7 @@ export class LeadsService {
     });
     if (!status) throw new NotFoundException('Estado no encontrado');
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(20260924, ${contactId})`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(20260924::integer, ${contactId}::integer)`;
       const updated = await tx.contacts.update({
         where: { id: contactId },
         data: {

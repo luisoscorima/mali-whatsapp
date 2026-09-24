@@ -12,6 +12,7 @@ describe('Education lead cycle creation', () => {
       assigned_user: { first_name: 'Ana', last_name: 'Soto', email: 'ana@example.org' },
       last_interaction_at: previousAt, lead_status: { slug: previousStatus, label: previousStatus } };
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       $queryRaw: jest.fn().mockResolvedValue([]),
       education_lead_entries: {
         findUnique: jest.fn().mockResolvedValue(null),
@@ -36,6 +37,9 @@ describe('Education lead cycle creation', () => {
   it('opens a new cycle after 60 days while retaining the advisor until review', async () => {
     const { service, tx } = setup('contactado', new Date(now.getTime() - 61 * 86400000));
     await service.recordOrigin(origin.id);
+    expect(tx.$executeRaw.mock.calls[0][0].join('?')).toContain(
+      'pg_advisory_xact_lock(20260924::integer, ?::integer)',
+    );
     expect(tx.education_lead_cycles.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       contact_id: 10, assigned_user_id: 22, requires_review: true,
     }) });
@@ -90,6 +94,7 @@ describe('Education lead cycle creation', () => {
 
   it('distributes only numbers without history, leaving reassignable returns for manual review', async () => {
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       $queryRaw: jest.fn().mockResolvedValue([]),
       users: { findMany: jest.fn().mockResolvedValue([{ id: 22 }]) },
       education_lead_entries: { findMany: jest.fn().mockResolvedValue([]) },
@@ -113,7 +118,7 @@ describe('Education lead cycle creation', () => {
 
   it('keeps the previous advisor when a conflict is reviewed as a new cycle', async () => {
     const tx = {
-      $queryRaw: jest.fn().mockResolvedValue([]),
+      $executeRaw: jest.fn().mockResolvedValue(1),
       education_lead_entries: {
         findFirst: jest.fn().mockResolvedValue({ id: 8, area: 'educacion_ep',
           contact_id: 10, classification: 'conflict', reviewed_at: null,
