@@ -728,6 +728,45 @@ export class LeadsService {
       offset: 0,
     });
 
+    // Mensaje del intento: primer inbound en la conversación del origen
+    // en/tras first_seen_at (no el primer mensaje histórico del chat).
+    const originIds = [
+      ...new Set(
+        listed.items.flatMap((origin) =>
+          origin.conversation_id == null ? [] : [origin.id],
+        ),
+      ),
+    ];
+    const firstChats = new Map<number, string>();
+    if (originIds.length > 0) {
+      const firstMessages = await this.prisma.$queryRaw<
+        Array<{
+          origin_id: number;
+          body_text: string | null;
+          message_type: string;
+        }>
+      >(Prisma.sql`
+        SELECT DISTINCT ON (co.id)
+          co.id AS origin_id,
+          cm.body_text,
+          cm.message_type
+        FROM contact_origins co
+        INNER JOIN chat_messages cm
+          ON cm.conversation_id = co.conversation_id
+         AND cm.direction = 'inbound'
+         AND cm.created_at >= co.first_seen_at - INTERVAL '5 seconds'
+        WHERE co.id IN (${Prisma.join(originIds)})
+        ORDER BY co.id, cm.created_at ASC, cm.id ASC
+      `);
+      for (const message of firstMessages) {
+        firstChats.set(
+          message.origin_id,
+          String(message.body_text ?? '').trim() ||
+            `[${String(message.message_type || 'mensaje').trim()}]`,
+        );
+      }
+    }
+
     const rows = listed.items.map((o) => {
       const payload =
         o.payload && typeof o.payload === 'object' && !Array.isArray(o.payload)
@@ -751,6 +790,7 @@ export class LeadsService {
         curso: String(payload.curso ?? '').trim(),
         fuente: String(payload.fuente ?? '').trim(),
         programa: String(payload.programa ?? '').trim(),
+        first_lead_chat: firstChats.get(o.id) ?? '',
         external_id: o.external_id,
         last_seen_at: o.last_seen_at
           ? new Date(o.last_seen_at).toISOString()
