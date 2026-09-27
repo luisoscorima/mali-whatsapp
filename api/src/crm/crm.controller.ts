@@ -166,7 +166,7 @@ export class CrmController {
 
   @Get('education/prospectia/sync')
   educationProspectiaSyncStatus() {
-    return { ok: true, data: { running: this.prospectiaSync.running } };
+    return { ok: true, data: this.prospectiaSync.status() };
   }
 
   @Get('education/management-catalogs')

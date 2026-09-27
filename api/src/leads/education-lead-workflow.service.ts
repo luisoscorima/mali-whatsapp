@@ -247,6 +247,23 @@ export class EducationLeadWorkflowService {
     });
   }
 
+  prospectiaLatestCheckedAt() {
+    return this.prisma.education_lead_entries.findFirst({
+      where: { area: { in: EDUCATION_AREAS }, prospectia_checked_at: { not: null } },
+      orderBy: { prospectia_checked_at: 'desc' },
+      select: { prospectia_checked_at: true },
+    }).then((row) => row?.prospectia_checked_at ?? null);
+  }
+
+  prospectiaSyncCount(mode: 'pending' | 'all') {
+    return this.prisma.education_lead_entries.count({
+      where: {
+        area: { in: EDUCATION_AREAS },
+        ...(mode === 'pending' ? { prospectia_checked_at: null } : {}),
+      },
+    });
+  }
+
   async prospectiaSyncBatch(mode: 'pending' | 'all', cursorId: number) {
     const rows = await this.prisma.education_lead_entries.findMany({
       where: {
