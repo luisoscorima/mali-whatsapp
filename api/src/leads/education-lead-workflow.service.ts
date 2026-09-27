@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { classifyEducationIntake, EDUCATION_LEAD_WINDOW_MS } from './education-lead-classification.util';
+import { ProspectiaAdvisorService } from './prospectia-advisor.service';
 
 const EDUCATION_AREAS = ['educacion', 'educacion_ca', 'educacion_ep'];
 const SIXTY_DAYS_MS = EDUCATION_LEAD_WINDOW_MS;
@@ -13,7 +14,10 @@ function advisorLabel(user: { first_name: string | null; last_name: string | nul
 
 @Injectable()
 export class EducationLeadWorkflowService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly prospectia?: ProspectiaAdvisorService,
+  ) {}
 
   private areas(area?: string): string[] {
     const selected = String(area ?? 'all').trim().toLowerCase() || 'all';
@@ -83,12 +87,12 @@ export class EducationLeadWorkflowService {
     channel: string; sourceKey: string | null; sourceLabel: string | null;
     eventKey: string; occurredAt: Date;
   }): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+    const newCycleId = await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(20260924::integer, ${input.contactId}::integer)`;
       const existing = await tx.education_lead_entries.findUnique({
         where: { area_event_key: { area: input.area, event_key: input.eventKey } },
       });
-      if (existing) return;
+      if (existing) return null;
       const previous = await tx.education_lead_cycles.findFirst({
         where: { area: input.area, contact_id: input.contactId, started_at: { lte: input.occurredAt } },
         orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
@@ -161,6 +165,53 @@ export class EducationLeadWorkflowService {
           previous_interaction_at: previous?.last_interaction_at ?? null,
         },
       });
+      return classification === 'new' && !previous ? cycleId : null;
+    });
+    if (newCycleId && this.prospectia?.enabled) {
+      await this.assignProspectiaAdvisor(input.contactId, input.area, newCycleId);
+    }
+  }
+
+  private async assignProspectiaAdvisor(contactId: number, area: string, cycleId: number): Promise<void> {
+    const cycle = await this.prisma.education_lead_cycles.findUnique({
+      where: { id: cycleId }, select: { assigned_user_id: true, requires_review: true },
+    });
+    if (!cycle || cycle.assigned_user_id || cycle.requires_review) return;
+    const contact = await this.prisma.contacts.findUnique({
+      where: { id: contactId }, select: { phone: true },
+    });
+    if (!contact?.phone) return;
+    const email = await this.prospectia!.advisorEmail(contact.phone);
+    if (!email) return;
+    const advisor = await this.prisma.users.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' }, is_provisioned: true,
+        OR: [{ area }, { is_master: true }, { user_areas: { some: { area } } }],
+      }, select: { id: true },
+    });
+    if (!advisor) return;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(20260924::integer, ${contactId}::integer)`;
+      const latest = await tx.education_lead_cycles.findFirst({
+        where: { contact_id: contactId, area },
+        orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+        select: { id: true },
+      });
+      if (latest?.id !== cycleId) return;
+      const updated = await tx.education_lead_cycles.updateMany({
+        where: { id: cycleId, assigned_user_id: null, requires_review: false },
+        data: { assigned_user_id: advisor.id, updated_at: new Date() },
+      });
+      if (!updated.count) return;
+      await tx.conversations.updateMany({
+        where: { area, contact_id: contactId, assigned_user_id: null },
+        data: { assigned_user_id: advisor.id, assigned_at: new Date(), updated_at: new Date() },
+      });
+      await tx.audit_logs.create({ data: {
+        event_type: 'education.lead.prospectia_assigned',
+        message: `Lead ${cycleId} asignado según Prospectia`,
+        actor_email: 'prospectia@system', area,
+        meta: { contact_id: contactId, cycle_id: cycleId, assigned_user_id: advisor.id },
+      } });
     });
   }
 

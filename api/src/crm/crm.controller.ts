@@ -26,7 +26,8 @@ import { CrmSyncContactDto } from './dto/crm-sync-contact.dto';
 import { CrmSendTemplateDto } from './dto/crm-send-template.dto';
 import { LeadsService } from '../leads/leads.service';
 import { EducationLeadWorkflowService } from '../leads/education-lead-workflow.service';
-import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsArray, IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { ProspectiaAdvisorService } from '../leads/prospectia-advisor.service';
 import type { LeadChannel } from '../leads/leads.types';
 import { BadRequestException } from '@nestjs/common';
 import { LEAD_CHANNELS } from '../leads/leads.types';
@@ -40,6 +41,10 @@ class EducationManagementDto {
 class EducationReviewDto {
   @IsIn(['open_new', 'keep_existing', 'dismiss']) action!: 'open_new' | 'keep_existing' | 'dismiss';
   @IsOptional() @IsString() @MaxLength(120) actor_email?: string;
+}
+
+class ProspectiaCheckDto {
+  @IsArray() @IsString({ each: true }) phones!: string[];
 }
 
 class EducationDistributeDto {
@@ -56,6 +61,7 @@ export class CrmController {
     private readonly crm: CrmService,
     private readonly leads: LeadsService,
     private readonly educationWorkflow: EducationLeadWorkflowService,
+    private readonly prospectia: ProspectiaAdvisorService,
   ) {}
 
   /** Upsert contact from MALI ONE product (PamRegistration). */
@@ -130,6 +136,14 @@ export class CrmController {
   async educationLeads(@Query() query: CrmEducationLeadsQueryDto) {
     const data = await this.educationWorkflow.listEntries(query);
     return { ok: true, data };
+  }
+
+  @Post('education/prospectia/check')
+  async educationProspectiaCheck(@Body() body: ProspectiaCheckDto) {
+    if (body.phones.length > 50 || body.phones.some((phone) => phone.length > 32)) {
+      throw new BadRequestException('Máximo 50 teléfonos de hasta 32 caracteres');
+    }
+    return { ok: true, data: await this.prospectia.checkPhones(body.phones) };
   }
 
   @Get('education/management-catalogs')
