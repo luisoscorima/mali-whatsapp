@@ -26,7 +26,8 @@ import { CrmSyncContactDto } from './dto/crm-sync-contact.dto';
 import { CrmSendTemplateDto } from './dto/crm-send-template.dto';
 import { LeadsService } from '../leads/leads.service';
 import { EducationLeadWorkflowService } from '../leads/education-lead-workflow.service';
-import { IsArray, IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsArray, IsIn, IsInt, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ProspectiaAdvisorService } from '../leads/prospectia-advisor.service';
 import type { LeadChannel } from '../leads/leads.types';
 import { BadRequestException } from '@nestjs/common';
@@ -43,8 +44,16 @@ class EducationReviewDto {
   @IsOptional() @IsString() @MaxLength(120) actor_email?: string;
 }
 
+class ProspectiaSubjectDto {
+  @IsString() @MaxLength(160) key!: string;
+  @IsOptional() @IsString() @MaxLength(32) phone?: string | null;
+  @IsOptional() @IsString() @MaxLength(64) username?: string | null;
+  @IsOptional() @IsString() @MaxLength(128) whatsapp_user_id?: string | null;
+}
+
 class ProspectiaCheckDto {
-  @IsArray() @IsString({ each: true }) phones!: string[];
+  @IsArray() @ValidateNested({ each: true }) @Type(() => ProspectiaSubjectDto)
+  subjects!: ProspectiaSubjectDto[];
 }
 
 class EducationDistributeDto {
@@ -140,10 +149,12 @@ export class CrmController {
 
   @Post('education/prospectia/check')
   async educationProspectiaCheck(@Body() body: ProspectiaCheckDto) {
-    if (body.phones.length > 50 || body.phones.some((phone) => phone.length > 32)) {
-      throw new BadRequestException('Máximo 50 teléfonos de hasta 32 caracteres');
+    if (body.subjects.length > 50 || body.subjects.some((subject) =>
+      subject.key.length > 160 || (subject.phone?.length ?? 0) > 32 ||
+      (subject.username?.length ?? 0) > 64 || (subject.whatsapp_user_id?.length ?? 0) > 128)) {
+      throw new BadRequestException('Máximo 50 contactos');
     }
-    return { ok: true, data: await this.prospectia.checkPhones(body.phones) };
+    return { ok: true, data: await this.prospectia.checkSubjects(body.subjects) };
   }
 
   @Get('education/management-catalogs')

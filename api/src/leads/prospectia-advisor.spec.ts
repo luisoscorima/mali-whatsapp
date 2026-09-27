@@ -67,8 +67,10 @@ describe('Prospectia advisor lookup', () => {
         meta: { count: 1 }, payload: [{ id: 1, phone_number: '+51999999998' }],
       }) })
       .mockRejectedValueOnce(new Error('network')) as typeof fetch;
-    const result = await new ProspectiaAdvisorService().checkPhones([
-      '51999999999', '51988888888', '51977777777',
+    const result = await new ProspectiaAdvisorService().checkSubjects([
+      { key: '51999999999', phone: '51999999999' },
+      { key: '51988888888', phone: '51988888888' },
+      { key: '51977777777', phone: '51977777777' },
     ]);
     expect(result).toEqual({
       enabled: true,
@@ -84,8 +86,67 @@ describe('Prospectia advisor lookup', () => {
   it('marks every phone unverified when Prospectia is not configured', async () => {
     delete process.env.PROSPECTIA_API_ACCESS_TOKEN;
     global.fetch = jest.fn() as typeof fetch;
-    const result = await new ProspectiaAdvisorService().checkPhones(['51999999999']);
+    const result = await new ProspectiaAdvisorService().checkSubjects([
+      { key: '51999999999', phone: '51999999999' },
+    ]);
     expect(result).toEqual({ enabled: false, matches: { '51999999999': 'unverified' } });
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('accepts an exact WhatsApp username when the phone is absent', async () => {
+    process.env.PROSPECTIA_API_ACCESS_TOKEN = 'test-token';
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({
+      meta: { count: 2 },
+      payload: [
+        { id: 1, name: 'Ana Mali', additional_attributes: { city: 'Lima' } },
+        { id: 4, whatsapp_user_id: '@Ana_Mali' },
+      ],
+    }) }) as typeof fetch;
+    const result = await new ProspectiaAdvisorService().checkSubjects([
+      { key: 'user', username: 'ana_mali' },
+    ]);
+    expect(result.matches.user).toBe('exists');
+    expect(String((global.fetch as jest.Mock).mock.calls[0][0])).toContain('q=ana_mali');
+  });
+
+  it('ignores a name that only contains the username', async () => {
+    process.env.PROSPECTIA_API_ACCESS_TOKEN = 'test-token';
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({
+      meta: { count: 1 }, payload: [{ id: 1, name: 'Ana Mali' }],
+    }) }) as typeof fetch;
+    const result = await new ProspectiaAdvisorService().checkSubjects([
+      { key: 'user', username: '@ana_mali' },
+    ]);
+    expect(result.matches.user).toBe('missing');
+  });
+
+  it('finds a username the text search does not return', async () => {
+    process.env.PROSPECTIA_API_ACCESS_TOKEN = 'test-token';
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ meta: { count: 0 }, payload: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({
+        meta: { count: 1 },
+        payload: [{ id: 9, whatsapp_user_id: 'ana_mali' }],
+      }) }) as typeof fetch;
+    const result = await new ProspectiaAdvisorService().checkSubjects([
+      { key: 'user', username: 'ana_mali' },
+    ]);
+    expect(result.matches.user).toBe('exists');
+    expect(String((global.fetch as jest.Mock).mock.calls[1][0])).toContain('/contacts/filter');
+  });
+
+  it('uses the username when the phone is not in Prospectia', async () => {
+    process.env.PROSPECTIA_API_ACCESS_TOKEN = 'test-token';
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ meta: { count: 0 }, payload: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({
+        meta: { count: 1 },
+        payload: [{ id: 4, whatsapp_user_id: 'ana_mali' }],
+      }) }) as typeof fetch;
+    const result = await new ProspectiaAdvisorService().checkSubjects([
+      { key: 'both', phone: '51999999999', username: 'ana_mali' },
+    ]);
+    expect(result.matches.both).toBe('exists');
+    expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 });
