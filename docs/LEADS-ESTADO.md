@@ -31,6 +31,7 @@ Misma persona = mismo **teléfono / dni / email** en la **misma área**. CTWA e 
 - Origen al **enviar** el WhatsApp prellenado (no en el click del acortador).
 - Match: `ref:{slug}` automático en el texto (MALI ONE) o texto normalizado vs catálogo.
 - Área: por línea WA (`phone_number_id`), como CTWA.
+- Históricos orgánicos: `POST /api/leads/mali-one-links/backfill` cuenta coincidencias del primer inbound; `?apply=1` los pasa a `mali_one_link` (slug y etiqueta) sin abrir otro ciclo ni consultar Prospectia. Omite textos ambiguos.
 
 ### Instant Forms → área (CA / EP / Educación)
 

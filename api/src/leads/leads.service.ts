@@ -18,6 +18,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { isWhatsAppBsuid } from '../conversations/whatsapp-recipient.util';
 import { EducationLeadWorkflowService } from './education-lead-workflow.service';
+import { MaliOneLinksCatalogService } from './mali-one-links-catalog.service';
+import { matchMaliOneWhatsappLink } from './mali-one-link-match.util';
 import {
   type LeadChatEnrichInput,
   type ConversationHint,
@@ -39,6 +41,7 @@ export class LeadsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly educationWorkflow: EducationLeadWorkflowService,
+    private readonly maliOneLinks: MaliOneLinksCatalogService,
   ) {}
 
   private educationAreas(area?: string): string[] {
@@ -176,6 +179,153 @@ export class LeadsService {
       sourceLabel: recentAttribution?.source_label,
       occurredAt: input.seenAt,
     });
+  }
+
+  /**
+   * Pasa a mali_one_link los orígenes orgánicos cuyo primer inbound coincide
+   * con el catálogo. No abre ciclos ni vuelve a consultar Prospectia.
+   * Sin `apply` solo cuenta.
+   */
+  async backfillOrganicMaliOneLinks(opts?: { apply?: boolean }): Promise<{
+    catalog: number;
+    scanned: number;
+    matched: number;
+    ambiguous: number;
+    updated: number;
+    entries_updated: number;
+    sample: Array<{ area: string; conversation_id: number; slug: string; source_label: string }>;
+  }> {
+    const apply = Boolean(opts?.apply);
+    const catalog = await this.maliOneLinks.getCatalog();
+    if (!catalog.length) {
+      throw new BadRequestException('El catálogo de links MALI ONE está vacío');
+    }
+    const origins = await this.prisma.contact_origins.findMany({
+      where: {
+        channel: 'organic_wa',
+        conversation_id: { not: null },
+        area: { in: this.educationAreas() },
+      },
+      select: { id: true, area: true, conversation_id: true },
+    });
+    const byConversation = new Map<number, { id: number; body_text: string | null }>();
+    const conversationIds = origins
+      .map((row) => row.conversation_id)
+      .filter((id): id is number => id != null);
+    for (let i = 0; i < conversationIds.length; i += 400) {
+      const chunk = conversationIds.slice(i, i + 400);
+      const rows = await this.prisma.$queryRaw<Array<{
+        conversation_id: number;
+        id: number;
+        body_text: string | null;
+      }>>(Prisma.sql`
+        SELECT DISTINCT ON (conversation_id) conversation_id, id, body_text
+        FROM chat_messages
+        WHERE direction = 'inbound'
+          AND conversation_id IN (${Prisma.join(chunk)})
+        ORDER BY conversation_id, created_at ASC, id ASC
+      `);
+      for (const row of rows) byConversation.set(row.conversation_id, row);
+    }
+
+    let matched = 0;
+    let ambiguous = 0;
+    let updated = 0;
+    let entriesUpdated = 0;
+    const sample: Array<{ area: string; conversation_id: number; slug: string; source_label: string }> = [];
+    for (const origin of origins) {
+      const conversationId = origin.conversation_id;
+      if (conversationId == null) continue;
+      const first = byConversation.get(conversationId);
+      const hit = matchMaliOneWhatsappLink(first?.body_text ?? '', catalog);
+      if (!hit) continue;
+      if (hit.ambiguous) {
+        ambiguous += 1;
+        continue;
+      }
+      matched += 1;
+      const sourceLabel = (hit.tags[0] || hit.slug).slice(0, 200);
+      if (sample.length < 30) {
+        sample.push({
+          area: origin.area,
+          conversation_id: conversationId,
+          slug: hit.slug,
+          source_label: sourceLabel,
+        });
+      }
+      if (!apply) continue;
+      const externalId = `${hit.slug}:${conversationId}`.slice(0, 128);
+      const payload = {
+        slug: hit.slug,
+        tags: hit.tags,
+        match: hit.match,
+        ambiguous: false,
+        backfill: true,
+      };
+      const entryData = {
+        channel: 'mali_one_link',
+        source_key: hit.slug,
+        source_label: sourceLabel,
+      };
+      const moved = await this.prisma.$transaction(async (tx) => {
+        const clash = await tx.contact_origins.findUnique({
+          where: {
+            area_channel_external_id: {
+              area: origin.area,
+              channel: 'mali_one_link',
+              external_id: externalId,
+            },
+          },
+          select: { id: true },
+        });
+        const originId = clash?.id ?? origin.id;
+        if (!clash) {
+          await tx.contact_origins.update({
+            where: { id: origin.id },
+            data: {
+              channel: 'mali_one_link',
+              external_id: externalId,
+              source_key: hit.slug,
+              source_label: sourceLabel,
+              payload: payload as Prisma.InputJsonValue,
+              updated_at: new Date(),
+            },
+          });
+        }
+        const entries = await tx.education_lead_entries.updateMany({
+          where: { origin_id: origin.id, channel: 'organic_wa' },
+          data: { ...entryData, ...(clash ? { origin_id: originId } : {}) },
+        });
+        let entryCount = entries.count;
+        if (first?.id) {
+          const loose = await tx.education_lead_entries.updateMany({
+            where: {
+              area: origin.area,
+              channel: 'organic_wa',
+              origin_id: null,
+              event_key: `inbound:${first.id}`,
+            },
+            data: { ...entryData, origin_id: originId },
+          });
+          entryCount += loose.count;
+        }
+        if (clash && clash.id !== origin.id) {
+          await tx.contact_origins.delete({ where: { id: origin.id } });
+        }
+        return entryCount;
+      });
+      updated += 1;
+      entriesUpdated += moved;
+    }
+    return {
+      catalog: catalog.length,
+      scanned: origins.length,
+      matched,
+      ambiguous,
+      updated: apply ? updated : 0,
+      entries_updated: apply ? entriesUpdated : 0,
+      sample,
+    };
   }
 
   normalizeOptionalPhone(value: unknown): string | null {
