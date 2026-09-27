@@ -29,6 +29,7 @@ import { EducationLeadWorkflowService } from '../leads/education-lead-workflow.s
 import { IsArray, IsIn, IsInt, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ProspectiaAdvisorService } from '../leads/prospectia-advisor.service';
+import { ProspectiaSyncService } from '../leads/prospectia-sync.service';
 import type { LeadChannel } from '../leads/leads.types';
 import { BadRequestException } from '@nestjs/common';
 import { LEAD_CHANNELS } from '../leads/leads.types';
@@ -71,6 +72,7 @@ export class CrmController {
     private readonly leads: LeadsService,
     private readonly educationWorkflow: EducationLeadWorkflowService,
     private readonly prospectia: ProspectiaAdvisorService,
+    private readonly prospectiaSync: ProspectiaSyncService,
   ) {}
 
   /** Upsert contact from MALI ONE product (PamRegistration). */
@@ -155,6 +157,16 @@ export class CrmController {
       throw new BadRequestException('Máximo 50 contactos');
     }
     return { ok: true, data: await this.prospectia.checkSubjects(body.subjects) };
+  }
+
+  @Post('education/prospectia/sync')
+  educationProspectiaSync() {
+    return { ok: true, data: this.prospectiaSync.start('all') };
+  }
+
+  @Get('education/prospectia/sync')
+  educationProspectiaSyncStatus() {
+    return { ok: true, data: { running: this.prospectiaSync.running } };
   }
 
   @Get('education/management-catalogs')

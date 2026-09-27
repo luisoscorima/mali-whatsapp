@@ -34,12 +34,17 @@ describe('CRM Educación', () => {
         whatsapp_user_id: 'PE.123', conversations: [{ wa_username: 'ana_mali' }],
         email: null, dni: null, opt_in: true, opt_in_email: false, active: true,
         contact_attributes: [], contact_segments: [], education_lead_cycles: [],
+        education_lead_entries: [{
+          prospectia_match: 'exists', prospectia_advisor_email: 'ana@mali.pe',
+          prospectia_checked_at: new Date('2026-09-27T12:00:00Z'),
+        }],
         lead_status_id: null, lead_status: null,
         created_at: new Date('2026-01-01'), updated_at: new Date('2026-01-01') },
       { id: 8, area: 'educacion_ep', name: 'Ana', last_name: '', phone: '51911',
         whatsapp_user_id: null, conversations: [],
         email: null, dni: null, opt_in: true, opt_in_email: false, active: true,
         contact_attributes: [], contact_segments: [], education_lead_cycles: [],
+        education_lead_entries: [],
         lead_status_id: null, lead_status: null,
         created_at: new Date('2026-01-01'), updated_at: new Date('2026-01-01') },
     ];
@@ -62,7 +67,10 @@ describe('CRM Educación', () => {
     ]);
     expect(result.items[0]).toMatchObject({
       whatsapp_user_id: 'PE.123', wa_username: 'ana_mali',
+      prospectia_match: 'exists', prospectia_advisor_email: 'ana@mali.pe',
+      prospectia_checked_at: '2026-09-27T12:00:00.000Z',
     });
+    expect(result.items[1].prospectia_match).toBeNull();
     await expect(service.listEducationContacts({ area: 'pam' })).rejects.toThrow('Área de educación inválida');
   });
 

@@ -71,6 +71,9 @@ export type CrmContactRow = {
   requires_review?: boolean;
   lead_status_id?: number | null;
   lead_status_label?: string | null;
+  prospectia_match?: string | null;
+  prospectia_advisor_email?: string | null;
+  prospectia_checked_at?: string | null;
 };
 
 export type CrmContactsResult = {
@@ -602,7 +605,7 @@ export class CrmService {
       throw new BadRequestException(`Área de educación inválida: ${query.area}`);
     }
     const areas = selected === 'all' ? allowed : [selected];
-    return this.listContactsForAreas(query, areas, selected);
+    return this.listContactsForAreas(query, areas, selected, true);
   }
 
   private async listContactsForAreas(
@@ -618,6 +621,7 @@ export class CrmService {
     },
     areas: string[],
     resultArea: string,
+    includeLatestProspectia = false,
   ): Promise<CrmContactsResult> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 100;
@@ -723,6 +727,17 @@ export class CrmService {
               lead_status: { select: { label: true } },
             },
           },
+          ...(includeLatestProspectia ? {
+            education_lead_entries: {
+              orderBy: [{ occurred_at: 'desc' as const }, { id: 'desc' as const }],
+              take: 1,
+              select: {
+                prospectia_match: true,
+                prospectia_advisor_email: true,
+                prospectia_checked_at: true,
+              },
+            },
+          } : {}),
           lead_status: { select: { label: true } },
         },
       }),
@@ -756,6 +771,11 @@ export class CrmService {
       lead_status_id: row.education_lead_cycles[0]?.lead_status_id ?? row.lead_status_id,
       lead_status_label: row.education_lead_cycles[0]?.lead_status?.label
         ?? row.lead_status?.label ?? null,
+      ...(includeLatestProspectia ? {
+        prospectia_match: row.education_lead_entries[0]?.prospectia_match ?? null,
+        prospectia_advisor_email: row.education_lead_entries[0]?.prospectia_advisor_email ?? null,
+        prospectia_checked_at: row.education_lead_entries[0]?.prospectia_checked_at?.toISOString() ?? null,
+      } : {}),
     }));
 
     const pages = total > 0 ? Math.ceil(total / limit) : 0;

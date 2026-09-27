@@ -51,18 +51,51 @@ export class ProspectiaAdvisorService {
     return { enabled: this.enabled, matches };
   }
 
+  async lookup(subject: ProspectiaSubject): Promise<{ match: ProspectiaMatch; advisorEmail: string | null }> {
+    if (!this.enabled) return { match: 'unverified', advisorEmail: null };
+    const found = await this.resolve(subject);
+    if (found.kind !== 'exists') return { match: found.kind, advisorEmail: null };
+    if (!found.complete) return { match: 'exists', advisorEmail: null };
+    return { match: 'exists', advisorEmail: await this.advisorEmailFor(found.id) };
+  }
+
   async advisorEmail(rawPhone: string): Promise<string | null> {
     const phone = normalizePhone(rawPhone);
     if (!phone) return null;
     const found = await this.findContact(phone, (item) =>
       Boolean(item.id && item.phone_number && normalizePhone(item.phone_number) === phone));
     if (found.kind !== 'exists' || !found.complete) return null;
+    return this.advisorEmailFor(found.id);
+  }
+
+  private async resolve(subject: ProspectiaSubject): Promise<SearchOutcome> {
+    const phone = subject.phone ? normalizePhone(subject.phone) : null;
+    const identities = [...new Set([subject.username, subject.whatsapp_user_id]
+      .map((value) => value ? normalizeIdentity(value) : null)
+      .filter((value): value is string => Boolean(value)))];
+    if (!phone && !identities.length) return { kind: 'unverified' };
+    let failed = false;
+    if (phone) {
+      const found = await this.findContact(phone, (item) =>
+        Boolean(item.id && item.phone_number && normalizePhone(item.phone_number) === phone));
+      if (found.kind === 'exists') return found;
+      if (found.kind === 'unverified') failed = true;
+    }
+    for (const identity of identities) {
+      const found = await this.findUsername(identity);
+      if (found.kind === 'exists') return found;
+      if (found.kind === 'unverified') failed = true;
+    }
+    return failed ? { kind: 'unverified' } : { kind: 'missing' };
+  }
+
+  private async advisorEmailFor(contactId: number): Promise<string | null> {
     const token = process.env.PROSPECTIA_API_ACCESS_TOKEN?.trim();
     const accountId = process.env.PROSPECTIA_ACCOUNT_ID?.trim() || '21';
     if (!token) return null;
     try {
       const conversations = await this.get<{ payload?: Conversation[] }>(
-        new URL(`https://prospectia.attachmedia.com/api/v1/accounts/${accountId}/contacts/${found.id}/conversations`),
+        new URL(`https://prospectia.attachmedia.com/api/v1/accounts/${accountId}/contacts/${contactId}/conversations`),
         token,
       );
       if (!Array.isArray(conversations.payload)) return null;
