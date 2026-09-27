@@ -68,8 +68,7 @@ const CHANNEL_FILTER_OPTIONS = [
   { value: 'meta_ctwa', label: 'Click-to-WhatsApp' },
   { value: 'tiktok', label: 'TikTok' },
   { value: 'organic_wa', label: 'WhatsApp orgánico' },
-  { value: 'manual', label: 'Manual' },
-  { value: 'import', label: 'Import' },
+  { value: 'import', label: 'Importar' },
   { value: 'other', label: 'Otros' },
 ] as const
 

@@ -4,7 +4,6 @@ export const LEAD_CHANNELS = [
   'widget',
   'tiktok',
   'import',
-  'manual',
   'organic_wa',
   'mali_one_link',
   'other',

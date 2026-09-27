@@ -5,7 +5,6 @@ export const CONTACT_ONLY_LEAD_CHANNELS = new Set<LeadChannel>([
   'meta_lead_form',
   'tiktok',
   'import',
-  'manual',
   'other',
 ]);
 
@@ -18,7 +17,7 @@ export type ConversationHint = {
  * true si el origen vino con conversación / inbound al captar (no solo contacto).
  * - CTWA / orgánico: conversation_id en el origen.
  * - Widget: conversación con al menos un mensaje inbound del lead.
- * - Form / import / manual: siempre false (aunque luego exista chat).
+ * - Form / import / otros: siempre false (aunque luego exista chat).
  */
 export function originCameWithInbound(
   channel: string,

@@ -74,7 +74,7 @@ export function channelLabel(channel: string): string {
     organic_wa: 'WhatsApp orgánico',
     mali_one_link: 'Links / QR MALI ONE',
     manual: 'Manual',
-    import: 'Import',
+    import: 'Importar',
     tiktok: 'TikTok',
     other: 'Otros',
   }

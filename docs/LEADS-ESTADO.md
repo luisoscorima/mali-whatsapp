@@ -58,7 +58,7 @@ Tabla `meta_lead_form_routes` (`form_id` → `area`):
 - Requiere Page access token.
 - Por cada lead Graph: crea/actualiza **contacto** (tel, email, dni, nombre) + origen + `meta_leadgen_leads`.
 - Preguntas custom (curso, etc.) → **payload del origen** (`field_data` / `mapped`), no columnas fijas del contacto.
-- Si el contacto ya existía (p. ej. CTWA): solo rellena campos **vacíos** (no sobrescribe).
+- Si el contacto ya existía (p. ej. CTWA): rellena campos vacíos. Instant Form sí reemplaza el nombre (y el apellido si viene). Detalle: [LEADS-CRM-EDUCACION.md](LEADS-CRM-EDUCACION.md) § Enlace con el contacto.
 - `leadgen_id` duplicado → skip.
 
 ### Nombres de anuncios CTWA
