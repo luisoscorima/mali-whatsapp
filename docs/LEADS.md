@@ -225,7 +225,7 @@ Caso de uso en la app Meta: Lead Ads + WhatsApp. Webhook Page + `leadgen`. Si no
 
 UI: Form ID + **Importar leads** → `POST /api/leads/meta-forms/backfill`. Requiere Page access token.
 
-Por cada lead de Graph: crea o actualiza contacto (teléfono, email, DNI, nombre) + origen + `meta_leadgen_leads`. Preguntas custom (curso, etc.) van al payload del origen (`field_data` / `mapped`), no a columnas fijas del contacto. `leadgen_id` duplicado se omite.
+Por cada lead de Graph: crea o actualiza contacto (teléfono, email, DNI, nombre) + origen + `meta_leadgen_leads`. Preguntas custom van al payload del origen (`field_data` / `mapped`), no a columnas fijas del contacto. Si la pregunta contiene la palabra curso, cursos, programa o programas, la respuesta se copia a `payload.curso`. Al arrancar la API se rellenan los Instant Forms de Meta y TikTok que ya estaban guardados con ese campo vacío. `leadgen_id` duplicado se omite y no vuelve a leer el lead en Graph.
 
 ### Nombres de anuncios CTWA
 
@@ -268,7 +268,7 @@ El CRM Educación de MALI ONE ya muestra Contactos y Leads de los tres números.
 | Reportes por fuente + email | Falta | Datos en orígenes; envío con SES desde ONE (como CRM PAM) |
 | Infra de email saliente en WhatsApp | No | Preferible SES desde ONE |
 | Estados EP del Sheet | Pendiente | Alinear o mapear al catálogo `lead_status_definitions` del área |
-| Curso y campos custom en UI | Después | Hoy viven en el payload del origen; opcional mapearlos a `contact_attributes` |
+| Curso en el listado | Hecho | `payload.curso` en widget, links y, si la pregunta lo nombra, Instant Forms de Meta y TikTok. Otros campos custom siguen en el payload |
 
 | Capacidad | Implementar en |
 |-----------|----------------|

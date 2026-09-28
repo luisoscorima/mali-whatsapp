@@ -1,7 +1,9 @@
 import {
+  Injectable,
+  Logger,
+  OnModuleInit,
   BadRequestException,
   ConflictException,
-  Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -19,6 +21,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { isWhatsAppBsuid } from '../conversations/whatsapp-recipient.util';
 import { EducationLeadWorkflowService } from './education-lead-workflow.service';
 import { MaliOneLinksCatalogService } from './mali-one-links-catalog.service';
+import {
+  cursoFromOriginPayload,
+  payloadCursoPatch,
+  payloadWithStandardCurso,
+} from './lead-curso.util';
 import { matchMaliOneWhatsappLink } from './mali-one-link-match.util';
 import {
   type LeadChatEnrichInput,
@@ -37,12 +44,60 @@ import {
 } from './leads.types';
 
 @Injectable()
-export class LeadsService {
+export class LeadsService implements OnModuleInit {
+  private readonly logger = new Logger(LeadsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly educationWorkflow: EducationLeadWorkflowService,
     private readonly maliOneLinks: MaliOneLinksCatalogService,
   ) {}
+
+  onModuleInit(): void {
+    void this.backfillFormCurso().catch((error) => {
+      this.logger.warn(
+        `Backfill de curso falló: ${error instanceof Error ? error.message : error}`,
+      );
+    });
+  }
+
+  /**
+   * Escribe `payload.curso` en Instant Forms de Meta y TikTok que lo tienen vacío
+   * y cuya pregunta de curso o programa ya está en el payload. Idempotente.
+   */
+  async backfillFormCurso(): Promise<{ scanned: number; updated: number }> {
+    let cursor = 0;
+    let scanned = 0;
+    let updated = 0;
+    for (;;) {
+      const rows = await this.prisma.contact_origins.findMany({
+        where: {
+          id: { gt: cursor },
+          channel: { in: ['meta_lead_form', 'tiktok'] },
+        },
+        select: { id: true, payload: true },
+        orderBy: { id: 'asc' },
+        take: 200,
+      });
+      if (!rows.length) break;
+      cursor = rows[rows.length - 1].id;
+      scanned += rows.length;
+      for (const row of rows) {
+        const next = payloadCursoPatch(row.payload);
+        if (!next) continue;
+        await this.prisma.contact_origins.update({
+          where: { id: row.id },
+          data: {
+            payload: next as Prisma.InputJsonValue,
+            updated_at: new Date(),
+          },
+        });
+        updated += 1;
+      }
+    }
+    this.logger.log(`Backfill de curso: scanned=${scanned}, updated=${updated}`);
+    return { scanned, updated };
+  }
 
   private educationAreas(area?: string): string[] {
     const allowed = ['educacion', 'educacion_ca', 'educacion_ep'];
@@ -861,7 +916,15 @@ export class LeadsService {
 
     const enriched = await this.enrichLeadRowsWithChat(areaNorm, items);
 
-    return { total, items: enriched, limit: take, offset: skip };
+    return {
+      total,
+      items: enriched.map((item) => ({
+        ...item,
+        payload: payloadWithStandardCurso(item.payload),
+      })),
+      limit: take,
+      offset: skip,
+    };
   }
 
   async exportOrigins(params: {
@@ -937,7 +1000,7 @@ export class LeadsService {
         lead_status: o.contacts?.lead_status?.label || '',
         source_label: o.source_label || '',
         source_key: o.source_key || '',
-        curso: String(payload.curso ?? '').trim(),
+        curso: cursoFromOriginPayload(payload),
         fuente: String(payload.fuente ?? '').trim(),
         programa: String(payload.programa ?? '').trim(),
         sede: String(payload.sede ?? '').trim(),

@@ -10,6 +10,7 @@ import type { Request } from 'express';
 import { BUSINESS_AREAS, normalizeArea } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
 import { inferAreaFromFormName } from './lead-form-area.util';
+import { pickCursoFromAnswers } from './lead-curso.util';
 import { LeadsService } from './leads.service';
 
 const TT_API_BASE = 'https://business-api.tiktok.com/open_api/v1.3';
@@ -20,6 +21,7 @@ type MappedFields = {
   dni?: string;
   name?: string;
   last_name?: string;
+  curso?: string;
   raw: Record<string, string>;
 };
 
@@ -168,6 +170,7 @@ export class TikTokLeadgenService {
         pickMatch((k) => k.includes('dni') || k.includes('documento')),
       name: fullName,
       last_name: pick('last_name', 'apellidos', 'apellido'),
+      curso: pickCursoFromAnswers(raw),
       raw,
     };
   }
@@ -572,6 +575,7 @@ export class TikTokLeadgenService {
         form_id: formId,
         form_name: formName,
         advertiser_id: advertiserId || null,
+        ...(mapped.curso ? { curso: mapped.curso } : {}),
       },
       contact: {
         phone: mapped.phone,

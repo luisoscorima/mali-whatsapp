@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { payloadWithStandardCurso } from '../leads/lead-curso.util';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/auth.types';
 import { parseStoredOptions } from '../attribute-definitions/attribute-definitions.types';
@@ -748,7 +749,7 @@ export class ContactsService {
         external_id: o.external_id,
         source_key: o.source_key,
         source_label: o.source_label,
-        payload: o.payload,
+        payload: payloadWithStandardCurso(o.payload),
         first_seen_at: o.first_seen_at.toISOString(),
         last_seen_at: o.last_seen_at.toISOString(),
       })),

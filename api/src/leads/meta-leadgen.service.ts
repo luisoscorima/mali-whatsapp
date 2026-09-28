@@ -17,6 +17,7 @@ import {
 } from '../meta-settings/meta-settings.store';
 import { PrismaService } from '../prisma/prisma.service';
 import { inferAreaFromFormName } from './lead-form-area.util';
+import { pickCursoFromAnswers } from './lead-curso.util';
 import {
   buildMetaFormLeadsExportBuffer,
   metaFormLeadsExportFilename,
@@ -128,6 +129,7 @@ export class MetaLeadgenService {
     dni?: string;
     name?: string;
     last_name?: string;
+    curso?: string;
     raw: Record<string, string>;
   } {
     const raw: Record<string, string> = {};
@@ -208,6 +210,7 @@ export class MetaLeadgenService {
         pickMatch((k) => k.includes('dni') || k.includes('documento')),
       name: fullName,
       last_name: pick('last_name', 'apellidos', 'apellido'),
+      curso: pickCursoFromAnswers(raw),
       raw,
     };
   }
@@ -540,6 +543,7 @@ export class MetaLeadgenService {
         ad_id: params.adId || graph.ad_id,
         form_id: formId,
         form_name: route?.form_name ?? null,
+        ...(mapped.curso ? { curso: mapped.curso } : {}),
       },
       contact: {
         phone: mapped.phone,
