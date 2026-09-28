@@ -86,7 +86,7 @@ La clasificación de 60 días ocurre al crear la entrada, no en un paso posterio
 
 Un Instant Form y un CTWA de la misma persona no son dos CRMs: son dos orígenes del mismo contacto si la identidad coincide.
 
-`mali_one_link` se atribuye al enviar el WhatsApp prellenado, no al hacer clic en el acortador. El cuerpo debe terminar en `ref:{slug}`, o el texto normalizado (mínimo 12 caracteres) debe coincidir con el catálogo. Si varios links comparten el mismo texto, se toma el más exacto y se marca ambiguo. Si el catálogo no responde, el match por texto no corre. Un mensaje con `referral` de anuncio no se evalúa como link.
+`mali_one_link` se atribuye al enviar el WhatsApp prellenado, no al hacer clic en el acortador. El cuerpo trae `ref:{slug}` al inicio (`ref:{slug} · mensaje`); los históricos pueden traerlo al final. Si no hay `ref:`, el texto normalizado (mínimo 12 caracteres) debe coincidir con el catálogo. Si varios links comparten el mismo texto, se toma el más exacto y se marca ambiguo. Si el catálogo no responde, el match por texto no corre. Un mensaje con `referral` de anuncio no se evalúa como link.
 
 ### Conversación o solo contacto
 

@@ -1,10 +1,21 @@
 /** Utilidades de match texto/ref para links WHATSAPP de MALI ONE. */
 
-export const WHATSAPP_REF_IN_BODY_RE =
-  /\bref:([a-zA-Z0-9_-]+)\s*$/i;
+const REF_TOKEN = String.raw`ref:[a-zA-Z0-9_-]+`;
 
-export const WHATSAPP_REF_SUFFIX_RE =
-  /\s*[·•\-–—]?\s*ref:[a-zA-Z0-9_-]+\s*$/i;
+/** `ref:{slug}` en cualquier parte. El lead suele escribir al final del prefill. */
+export const WHATSAPP_REF_IN_BODY_RE = /\bref:([a-zA-Z0-9_-]+)/i;
+
+/** Prefijo actual: `ref:{slug} · mensaje`. */
+export const WHATSAPP_REF_PREFIX_RE = new RegExp(
+  String.raw`^\s*${REF_TOKEN}(?:\s*[·•\-–—]\s*|\s+)?`,
+  'i',
+);
+
+/** Históricos: mensaje ` · ref:{slug}`. */
+export const WHATSAPP_REF_SUFFIX_RE = new RegExp(
+  String.raw`\s*[·•\-–—]?\s*${REF_TOKEN}\s*$`,
+  'i',
+);
 
 export type MaliOneWhatsappCatalogItem = {
   slug: string;
@@ -28,6 +39,7 @@ export function extractWhatsappRefSlug(body: string): string | null {
 
 export function stripWhatsappRef(text: string): string {
   return String(text ?? '')
+    .replace(WHATSAPP_REF_PREFIX_RE, '')
     .replace(WHATSAPP_REF_SUFFIX_RE, '')
     .trim();
 }
@@ -42,7 +54,7 @@ export function normalizeWhatsappText(text: string): string {
 }
 
 /**
- * 1) `ref:slug` en el cuerpo → match exacto.
+ * 1) Primer `ref:slug` del cuerpo, al inicio o al final → match exacto.
  * 2) Texto normalizado (sin ref) vs catálogo.
  * Si varios links comparten el mismo texto → primer slug estable + ambiguous.
  */
