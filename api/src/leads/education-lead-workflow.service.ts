@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { classifyEducationIntake, EDUCATION_LEAD_WINDOW_MS } from './education-lead-classification.util';
+import { syncEducationLeadStatuses } from './education-lead-statuses';
 import { ProspectiaAdvisorService } from './prospectia-advisor.service';
 
 const EDUCATION_AREAS = ['educacion', 'educacion_ca', 'educacion_ep'];
@@ -412,6 +413,9 @@ export class EducationLeadWorkflowService {
   }
 
   async catalogs() {
+    for (const area of EDUCATION_AREAS) {
+      await syncEducationLeadStatuses(this.prisma, area);
+    }
     const [users, statuses] = await Promise.all([
       this.prisma.users.findMany({
         where: { is_provisioned: true,

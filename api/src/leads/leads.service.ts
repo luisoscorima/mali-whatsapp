@@ -36,6 +36,7 @@ import {
   buildLeadsOriginsExportBuffer,
   leadsOriginsExportFilename,
 } from './leads-export.util';
+import { syncEducationLeadStatuses, isEducationLeadArea } from './education-lead-statuses';
 import {
   DEFAULT_LEAD_STATUSES,
   type ContactIdentityInput,
@@ -424,6 +425,10 @@ export class LeadsService implements OnModuleInit {
   }
 
   async ensureDefaultStatuses(area: BusinessArea): Promise<void> {
+    if (isEducationLeadArea(area)) {
+      await syncEducationLeadStatuses(this.prisma, area);
+      return;
+    }
     const count = await this.prisma.lead_status_definitions.count({
       where: { area },
     });
@@ -709,7 +714,7 @@ export class LeadsService implements OnModuleInit {
     const areaNorm = normalizeArea(area);
     await this.ensureDefaultStatuses(areaNorm);
     return this.prisma.lead_status_definitions.findMany({
-      where: { area: areaNorm },
+      where: { area: areaNorm, active: true },
       orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
     });
   }
