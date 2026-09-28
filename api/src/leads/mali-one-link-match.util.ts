@@ -23,9 +23,9 @@ export type MaliOneWhatsappCatalogItem = {
   text_normalized: string;
   tags: string[];
   phone: string;
-  curso?: string | null;
-  programa?: string | null;
-  sede?: string | null;
+  curso: string | null;
+  programa: string | null;
+  sede: string | null;
 };
 
 export type MaliOneLinkMatch = {
@@ -33,6 +33,9 @@ export type MaliOneLinkMatch = {
   tags: string[];
   match: 'ref' | 'text';
   ambiguous: boolean;
+  curso: string | null;
+  programa: string | null;
+  sede: string | null;
 };
 
 export function extractWhatsappRefSlug(body: string): string | null {
@@ -77,6 +80,9 @@ export function matchMaliOneWhatsappLink(
       tags: bySlug?.tags ?? [],
       match: 'ref',
       ambiguous: false,
+      curso: bySlug?.curso ?? null,
+      programa: bySlug?.programa ?? null,
+      sede: bySlug?.sede ?? null,
     };
   }
 
@@ -113,5 +119,8 @@ export function matchMaliOneWhatsappLink(
     tags: best.tags,
     match: 'text',
     ambiguous: sameText.length > 1,
+    curso: best.curso,
+    programa: best.programa,
+    sede: best.sede,
   };
 }

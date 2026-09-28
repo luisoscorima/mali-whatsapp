@@ -133,6 +133,9 @@ describe('WebhookService BSUID inbound', () => {
         text_normalized: 'hola, deseo informacion sobre el curso de teatro',
         tags: ['Teatro'],
         phone: '51999999999',
+        curso: null,
+        programa: null,
+        sede: null,
       }]),
     };
     const service = new WebhookService(
