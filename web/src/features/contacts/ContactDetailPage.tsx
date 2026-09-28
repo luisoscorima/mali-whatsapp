@@ -376,6 +376,11 @@ export function ContactDetailPage() {
                       {primary.programa}
                     </p>
                   ) : null}
+                  {primary.sede ? (
+                    <p className="mt-1">
+                      <span className="text-muted">Sede:</span> {primary.sede}
+                    </p>
+                  ) : null}
                   {(secondary.source || secondary.leadId) && (
                     <details className="mt-2 text-xs text-muted">
                       <summary className="cursor-pointer">Más detalle</summary>

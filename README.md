@@ -14,7 +14,7 @@ En producción: **[https://whatsapp.mali.pe](https://whatsapp.mali.pe)**.
 - **Segmentación y atributos:** contactos con segmentos; definiciones de atributos por área; importación CSV/Excel; campañas con exclusiones y variables por contacto.
 - **Seguridad y gobernanza:** Google OAuth `@mali.pe` + JWT, permisos por módulo, bitácora de auditoría con retención configurable, usuarios y áreas desde Admin.
 - **IA asistida (Groq):** respuestas en ventana de 24 h en modo **Bot**; el master activa o desactiva el bot por área desde Ajustes.
-- **Leads multicanal:** Instant Forms (Lead Ads), CTWA, widgets (vía MALI ONE). CRM en `/leads` con orígenes y estados editables. Ver [docs/OWNERSHIP-LEADS.md](docs/OWNERSHIP-LEADS.md).
+- **Leads multicanal:** Instant Forms (Lead Ads), CTWA, widgets (vía MALI ONE). CRM en `/leads` con orígenes y estados editables. Ver [docs/LEADS.md](docs/LEADS.md).
 
 ## Funcionalidades
 
@@ -140,8 +140,7 @@ En Meta Developers, suscribe el webhook a **`message_template_status_update`** a
 
 1. **Instant Forms:** caso de uso Lead Ads + webhook Page `leadgen` ([CONFIGURACION_META.md § 16](CONFIGURACION_META.md)).
 2. **CTWA:** pauta Click-to-WhatsApp; al llegar `referral` se registra el anuncio y se vincula la conversación.
-3. Operación en **Leads** (`/leads`); ownership en [docs/OWNERSHIP-LEADS.md](docs/OWNERSHIP-LEADS.md).
-4. **Handoff / estado actual:** [docs/LEADS-ESTADO.md](docs/LEADS-ESTADO.md) (rutas form→área, backfill, sync nombres CTWA, pendientes Meta).
+3. Operación en **Leads** (`/leads`): ownership, rutas form→área, backfill y pendientes en [docs/LEADS.md](docs/LEADS.md).
 
 La **inversión de la pauta** (spend Ads) no se muestra aquí; el costo en detalle de campaña WA es el del **envío masivo de plantillas** (WABA).
 

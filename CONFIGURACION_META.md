@@ -333,7 +333,7 @@ Desde el ecosistema Meta / Business: **WhatsApp Manager** — crear plantillas, 
 
 ## 16. Lead Ads / Instant Forms (`leadgen`)
 
-Esto es **distinto** de CTWA (Click-to-WhatsApp). Los Instant Forms no llegan por el webhook de mensajes WA; usan el objeto **Page** y el campo **`leadgen`**. Ownership de producto: [docs/OWNERSHIP-LEADS.md](docs/OWNERSHIP-LEADS.md).
+Esto es **distinto** de CTWA (Click-to-WhatsApp). Los Instant Forms no llegan por el webhook de mensajes WA; usan el objeto **Page** y el campo **`leadgen`**. Producto y operación: [docs/LEADS.md](docs/LEADS.md).
 
 ### Caso de uso en Developers
 
@@ -393,7 +393,7 @@ Si `data` está vacío o no aparece la Página: en Business Manager asigna el ac
 - Pega el **Page** token del paso A (no el system user, no el WhatsApp token).
 - Es **una** Página → **un** token y **un** Page ID. Repite los mismos valores en **`educacion`**, **`educacion_ca`** y **`educacion_ep`**.
 - Respaldo opcional en `.env`: `META_PAGE_ACCESS_TOKEN` / `META_PAGE_ID` (prioridad: Admin/BD sobre env).
-- Detalle: [docs/LEADS-ESTADO.md](./docs/LEADS-ESTADO.md) § “Dónde poner el Page token”.
+- Detalle: [docs/LEADS.md](./docs/LEADS.md) § “Dónde poner el Page token”.
 
 #### Paso C — Suscribir la Página a la app (`leadgen`)
 

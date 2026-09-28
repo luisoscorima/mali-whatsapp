@@ -353,6 +353,9 @@ function LeadsUnifiedList() {
                             {primary.programa}
                           </div>
                         ) : null}
+                        {primary.sede ? (
+                          <div className="text-xs text-muted">{primary.sede}</div>
+                        ) : null}
                         {secondary.source ? (
                           <div className="text-xs text-muted">
                             {secondary.source}

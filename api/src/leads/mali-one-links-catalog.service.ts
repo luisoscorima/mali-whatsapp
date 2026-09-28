@@ -77,6 +77,9 @@ export class MaliOneLinksCatalogService {
             ? r.tags.map((t) => String(t)).filter(Boolean)
             : [],
           phone: String(r.phone ?? ''),
+          curso: r.curso == null ? null : String(r.curso),
+          programa: r.programa == null ? null : String(r.programa),
+          sede: r.sede == null ? null : String(r.sede),
         } satisfies MaliOneWhatsappCatalogItem;
       })
       .filter((x): x is MaliOneWhatsappCatalogItem => x != null);

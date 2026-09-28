@@ -23,6 +23,9 @@ export type MaliOneWhatsappCatalogItem = {
   text_normalized: string;
   tags: string[];
   phone: string;
+  curso?: string | null;
+  programa?: string | null;
+  sede?: string | null;
 };
 
 export type MaliOneLinkMatch = {

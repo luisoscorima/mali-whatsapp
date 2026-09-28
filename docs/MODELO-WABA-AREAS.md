@@ -1,6 +1,6 @@
 # Modelo: Área + WABA + Línea (no solo WABA)
 
-Documento de decisión / hoja de ruta. Relacionado: [CRM-API.md](./CRM-API.md), [LEADS-ESTADO.md](./LEADS-ESTADO.md), [ROLES-PERMISOS.md](./ROLES-PERMISOS.md).
+Documento de decisión / hoja de ruta. Relacionado: [CRM-API.md](./CRM-API.md), [LEADS.md](./LEADS.md), [ROLES-PERMISOS.md](./ROLES-PERMISOS.md).
 
 ## Veredicto corto
 
@@ -37,7 +37,7 @@ flowchart TB
 - Tenant = string `area` en casi todo (`api/src/config/areas.ts`).
 - Credenciales Meta en `app_settings` **1 PID + 1 token + 1 waba_id por área** (`api/src/meta-settings/`).
 - Webhook: primero `phone_number_id` → área; fallback WABA ambiguo si varias áreas comparten WABA (`api/src/webhook/webhook-area.util.ts`).
-- Educación ya tiene **3 tenants** (`educacion`, `educacion_ca`, `educacion_ep`) con Page token duplicado; Instant Forms se separan por `form_id`, CTWA por línea ([LEADS-ESTADO.md](./LEADS-ESTADO.md)).
+- Educación ya tiene **3 tenants** (`educacion`, `educacion_ca`, `educacion_ep`) con Page token duplicado; Instant Forms se separan por `form_id`, CTWA por línea ([LEADS.md](./LEADS.md)).
 
 Si se “agrupa solo por WABA” como tenant: se rompe aislamiento de contactos PAM vs Educación (si algún día compartieran infra), plantillas keyed por área, y el contrato CRM que MALI ONE ya usa.
 

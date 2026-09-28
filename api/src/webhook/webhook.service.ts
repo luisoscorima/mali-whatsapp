@@ -820,6 +820,9 @@ export class WebhookService {
           tags: matched.tags,
           match: matched.match,
           ambiguous: matched.ambiguous,
+          ...(matched.curso ? { curso: matched.curso } : {}),
+          ...(matched.programa ? { programa: matched.programa } : {}),
+          ...(matched.sede ? { sede: matched.sede } : {}),
         },
         contact: {
           phone: input.phone,

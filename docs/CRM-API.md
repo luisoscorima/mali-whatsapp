@@ -55,7 +55,7 @@ Ingestión de **evento de lead** (widget Educación, etc.). Match de persona: **
 
 Respuesta: `{ contact_id, origin_id, created }`.
 
-Ownership leads: [OWNERSHIP-LEADS.md](./OWNERSHIP-LEADS.md).
+Leads: [LEADS.md](./LEADS.md).
 
 ### `POST /api/crm/sync`
 

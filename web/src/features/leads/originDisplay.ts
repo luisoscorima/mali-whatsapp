@@ -5,6 +5,7 @@ export type OriginPayload = {
   fuente?: unknown
   source?: unknown
   programa?: unknown
+  sede?: unknown
   educacion_lead_id?: unknown
   slug?: unknown
   tags?: unknown
@@ -50,6 +51,7 @@ export function originPrimaryFields(origin: OriginLike) {
     cursoUrl: asText(p.curso_url),
     fuente: asText(p.fuente) || asText(origin.source_label),
     programa: asText(p.programa),
+    sede: asText(p.sede),
   }
 }
 

@@ -940,6 +940,7 @@ export class LeadsService {
         curso: String(payload.curso ?? '').trim(),
         fuente: String(payload.fuente ?? '').trim(),
         programa: String(payload.programa ?? '').trim(),
+        sede: String(payload.sede ?? '').trim(),
         first_lead_chat: firstChats.get(o.id) ?? '',
         external_id: o.external_id,
         last_seen_at: o.last_seen_at
