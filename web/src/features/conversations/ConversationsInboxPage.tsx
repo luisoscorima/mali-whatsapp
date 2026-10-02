@@ -677,6 +677,29 @@ function chatListPageItems(current: number, total: number): Array<number | 'elli
   return out
 }
 
+type ServiceReplyQuota = {
+  monthLabel: string
+  replyCount: number
+  freeAllowance: number
+  billableCount: number
+  usdAmount: number
+  penAmount: number
+}
+
+function formatServiceReplyQuota(quota: ServiceReplyQuota): string {
+  const count = quota.replyCount.toLocaleString('es-PE')
+  const free = quota.freeAllowance.toLocaleString('es-PE')
+  if (quota.billableCount <= 0) {
+    return `Respuestas de ${quota.monthLabel}: ${count} de ${free}. Referencial.`
+  }
+  const extra = quota.billableCount.toLocaleString('es-PE')
+  const soles = quota.penAmount.toLocaleString('es-PE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+  return `Respuestas de ${quota.monthLabel}: ${count}. Gratis ${free}; ${extra} de más, estimado S/ ${soles}. Referencial.`
+}
+
 export function ConversationsInboxPage() {
   const { id: idParam } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -684,6 +707,7 @@ export function ConversationsInboxPage() {
   const user = useAppUser()
   const { confirm, confirmDialog } = useConfirmDialog()
   const [list, setList] = useState<InboxListResult | null>(null)
+  const [serviceReplies, setServiceReplies] = useState<ServiceReplyQuota | null>(null)
   const [detail, setDetail] = useState<InboxDetail | null>(null)
   const [error, setError] = useState('')
   const [replyText, setReplyText] = useState('')
@@ -761,6 +785,16 @@ export function ConversationsInboxPage() {
         }
       })
   }, [filterQuerySuffix])
+
+  const loadServiceReplies = useCallback(() => {
+    return apiClient.get<ServiceReplyQuota>('/api/conversations/service-replies').then((result) => {
+      if (result.ok) setServiceReplies(result.data)
+    })
+  }, [])
+
+  useEffect(() => {
+    void loadServiceReplies()
+  }, [loadServiceReplies, user?.area])
 
   useEffect(() => {
     const area = user?.area ?? null
@@ -995,6 +1029,7 @@ export function ConversationsInboxPage() {
         silent: true,
         skipIfInFlight: !opts?.forceList,
       })
+      void loadServiceReplies()
       if (
         selectedId != null &&
         selectedId > 0 &&
@@ -1013,7 +1048,7 @@ export function ConversationsInboxPage() {
       window.clearInterval(timer)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [loadList, pollConversationUpdates, selectedId])
+  }, [loadList, loadServiceReplies, pollConversationUpdates, selectedId])
 
   useEffect(() => {
     setError('')
@@ -1462,6 +1497,7 @@ export function ConversationsInboxPage() {
     setReplyText('')
     setReplyFile(null)
     setReplyToMessage(null)
+    void loadServiceReplies()
 
     const sent = result.data.messages ?? []
     const convId = selectedId
@@ -1672,6 +1708,9 @@ export function ConversationsInboxPage() {
 
   const filterPills = (
     <>
+      {serviceReplies ? (
+        <p className="text-xs text-muted">{formatServiceReplyQuota(serviceReplies)}</p>
+      ) : null}
       {!isArchivedChatFilter(chatFilter) ? (
         <div
           className="inbox-chat-filter-pills inbox-chat-filter-pills--row inbox-chat-filter-pills--compact"

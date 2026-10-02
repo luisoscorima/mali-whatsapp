@@ -206,6 +206,7 @@ export function buildCampaignDetailAnalytics(
     cost_currency?: string | null;
     cost_source?: string | null;
     cost_is_estimated?: boolean | null;
+    priced_at?: Date | string | null;
   },
   statusCounts: CampaignDetailStatusCounts,
   failedLogs: FailedLogRow[],
@@ -410,6 +411,7 @@ export type CampaignTotalsRow = {
     cost_source: string | null;
     cost_is_estimated: boolean | null;
     delivered_count: number;
+    priced_at?: Date | string | null;
   }[];
 };
 

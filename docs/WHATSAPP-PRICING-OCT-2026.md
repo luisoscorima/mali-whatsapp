@@ -1,103 +1,36 @@
-# WhatsApp API — cambios de precio (01 oct 2026)
+# WhatsApp API — precios vigentes (desde el 1 oct 2026)
 
-Checklist y contexto operativo para mali-whatsapp antes de que Meta cobre mensajes de servicio y utility dentro de la ventana 24h.
+El cobro ya rige desde las 00:00 de la zona horaria de la cuenta de WhatsApp. En este proyecto el mercado es **Perú** (prefijo +51). Cada categoría usa la tarifa de **lista** de la fila Perú. Los soles y los dólares salen de la tarjeta de esa moneda; no se convierten entre sí.
 
-**Fecha límite:** 01 de octubre 2026 (00:00 zona horaria de la WABA)  
-**Método de pago Meta:** antes del **30 de septiembre 2026**
+Fuentes:
 
-Referencias:
+- [Precios de la plataforma](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing/?locale=es_LA)
+- [Mensajes de servicio y utilidad](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing/non-template-messages/?locale=es_LA)
 
-- [Pricing WhatsApp Business Platform](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing)
-- [Service / utility / non-template updates](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing/non-template-messages)
+La fila Perú se tomó de las hojas «Tarifas en PEN» y «Tarifas en USD» con vigencia **1 de octubre de 2026**.
 
----
+## Tarifa de lista, Perú
 
-## Resumen (para gerencia)
-
-| Antes | Desde 01 oct 2026 |
-| --- | --- |
-| Responder al cliente en la ventana 24h (*service*: texto, media, bot) era **gratis** | Se **cobra** por mensaje entregado |
-| Plantillas **utility** dentro de la ventana 24h eran **gratis** | También se **cobran** |
-| Campañas / plantillas marketing, utility y auth fuera de ventana ya cobraban | Siguen cobrando; en Perú utility/auth/*service* ~**USD 0.02 → 0.03** |
-| Marketing Perú | Al parecer se **mantiene** (~USD 0.0703) |
-
-Cupo típico reportado: **~1.000 mensajes *service* gratis por número de negocio y mes**. El cupo **no** cubre plantillas utility. Tras el cupo, tarifa Perú ≈ **USD 0.03** por mensaje *service* entregado.
-
-Ventana **72h gratis (free entry point):** leads que entran por anuncio **Click-to-WhatsApp** o CTA de página Facebook (app móvil), si respondemos a tiempo. Conviene priorizar esa atención.
-
-**Lo más afectado en este proyecto:** Chat (inbox manual) y Flujograma/chatbot. Cada reply sale del cupo de 1.000 o genera costo.
-
----
-
-## Checklist antes del 01 de octubre
-
-### A. Meta / Billing (obligatorio, no es código)
-
-- [ ] Confirmar **método de pago** en [Billing Hub](https://business.facebook.com/billing_hub) para cada WABA **antes del 30 sep 2026**. Sin pago, Meta puede dejar de entregar mensajes *service*.
-- [ ] Revisar qué **números / líneas** tenemos y a qué área corresponden (el cupo de 1.000 es **por número**, no por empresa).
-- [ ] Confirmar moneda de facturación (USD / PEN según WABA) y quién ve la factura.
-
-### B. Medición de volumen (para saber el impacto real)
-
-- [ ] Estimar cuántos mensajes *service* salen hoy al mes por número:
-  - replies del **inbox** (asesores)
-  - mensajes del **flujograma / chatbot**
-  - media, botones, etc. (todo no-plantilla cuenta como *service*)
-- [ ] Separar, si se puede, volumen de plantillas **utility** enviadas **dentro** de ventana 24h (esas cobran **sin** cupo de 1.000).
-- [ ] Identificar picos (campañas + chat el mismo mes) y números más cargados.
-
-### C. Producto / app (mali-whatsapp)
-
-- [ ] **Contador de cupo *service***: mostrar uso de las ~1.000 respuestas gratis/mes **por número** (inbox + flujos).
-- [ ] Al superar el cupo, **estimar costo** a ~USD 0.03 (Perú) por mensaje *service* entregado.
-- [ ] Actualizar tarifas hardcodeadas en `api/src/campaigns/campaign-pricing.util.ts`:
-  - hoy: auth/utility `0.02`, marketing `0.0703`, service `0`
-  - objetivo oct: auth/utility/**service** ~`0.03`, marketing revisar si Meta confirma sin cambio
-  - marcar el KPI de campaña como **estimado** (no “tarifa oficial” si no viene de Meta)
-- [ ] Decidir si el costo del **inbox/flujos** se muestra en dashboard (además del costo de campañas).
-- [ ] Revisar copy UI que diga sync / tarifa oficial WABA si aún no hay pull real de facturación Meta.
-
-### D. Operación / uso moderado
-
-- [ ] Acordar criterios de uso del **chatbot/flujo** (menos mensajes redundantes, evitar cascadas largas).
-- [ ] Capacitar asesores: cada reply manual cuenta para el cupo / costo.
-- [ ] Priorizar atención de leads **CTWA / CTA Facebook** para aprovechar la ventana ~72h gratis.
-- [ ] Revisar plantillas **utility** usadas en chat: si ya hay ventana abierta, a veces un texto libre (*service*) vs utility tiene el mismo orden de precio; no asumir “utility en chat = gratis”.
-- [ ] Terminar pruebas del chatbot al **100%** con foco en volumen de mensajes por conversación, no solo en “funciona”.
-
-### E. Validación post-cambio (primera semana de octubre)
-
-- [ ] Revisar webhooks `pricing` (`billable`, `category: service|utility|...`) en entregas reales.
-- [ ] Contrastar factura / pricing analytics de Meta vs contador interno.
-- [ ] Ajustar tarifas o copy si Meta publica matices (cupo exacto, mercados).
-
----
-
-## Impacto por módulo
-
-| Módulo | Impacto | Notas |
+| Categoría | Hasta el 30 sep 2026 | Desde el 1 oct 2026 |
 | --- | --- | --- |
-| Inbox (respuestas manuales) | Alto | Pasan a *service* cobrable tras cupo |
-| Flujos / chatbot | Alto | Cada mensaje del flujo descuenta cupo o cobra |
-| Campañas (plantillas) | Medio | Siguen cobrando; utility/auth Perú ~+50% |
-| CRM / plantillas producto | Bajo–medio | Según categoría de plantilla |
-| KPI costo campaña | Alto (datos) | Tarifas actuales desfasadas; `service = 0` incorrecto |
+| Marketing | USD 0.0703 / PEN 0.2339 | Igual |
+| Utilidad | USD 0.0200 / PEN 0.0665 | USD 0.0300 / PEN 0.0998 |
+| Autenticación | USD 0.0200 / PEN 0.0665 | USD 0.0300 / PEN 0.0998 |
+| Servicio (respuestas sin plantilla) | Gratis | USD 0.0300 / PEN 0.0998 después de 1.000 al mes |
 
-Archivo de tarifas actuales: `api/src/campaigns/campaign-pricing.util.ts`.
+Utilidad y autenticación en Perú subieron. Marketing no está en la lista de subidas. Autenticación internacional no aplica a Perú.
 
----
+## Qué cambió para este proyecto
 
-## Propuesta mínima de producto (prioridad)
+- Cada respuesta de chat o de flujograma es un mensaje de **servicio**. Hay **1.000 gratis por número y mes** (no se acumulan). Desde la 1.001 se estima con la tarifa de servicio de Perú. El cupo es por área, porque cada área usa un número.
+- Una plantilla de utilidad se cobra siempre, también dentro de la ventana de 24 horas, y **no** descuenta las 1.000 respuestas. La enviada desde el chat sigue en el costo de la campaña.
+- La ventana de 72 horas de un anuncio Click-to-WhatsApp o de un botón de Facebook sigue gratis. El contador del inbox no la separa: el número es referencial.
+- Utilidad y autenticación tienen tramos de volumen en la hoja de niveles PEN. El monto de la app usa solo el primer tramo (tarifa de lista).
+- Sin método de pago en Meta, las respuestas del chat pueden dejar de entregarse. Hay que comprobarlo en [Billing Hub](https://business.facebook.com/billing_hub). El plazo del 30 sep 2026 ya pasó.
 
-1. Contador **1.000 *service* gratis / mes / número** (inbox + flujograma).
-2. Estimación de costo al superar el cupo (~0.03 USD).
-3. Actualizar `CATEGORY_PRICING` (incluir `service` ≠ 0).
-4. Uso más moderado de chat y flujos hasta tener números reales de octubre.
+## Dónde se ve en la app
 
----
+- Campañas: el detalle y el resumen usan la tarifa según la fecha del envío (`primer envío`, si no la programada, si no la de creación), hora de Lima. Antes del 1 oct 2026 se queda la tabla anterior. El texto dice «Estimado de lista (Perú)».
+- Inbox: encima del buscador, una línea con las respuestas del mes que Meta marcó como entregadas o leídas y, si pasan de 1.000, el estimado en soles. No incluye plantillas ni mensajes que no llegaron.
 
-## Fuera de alcance inmediato
-
-- Integrar facturación real de Meta (pricing analytics) end-to-end — deseable después del contador estimado.
-- Meta Business Agent (otra categoría / cobro por tokens) — no aplica si no lo usamos.
-- Cambios al modelo de envío Graph API — el envío no se rompe; cambia el costo.
+El envío por Graph API no cambia. El monto no es la factura de Meta.

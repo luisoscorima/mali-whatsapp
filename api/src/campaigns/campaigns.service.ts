@@ -164,6 +164,7 @@ function aggregateSummaryRows(rows: SummaryCampaignRow[]): CampaignTotalsRow {
       cost_source: row.cost_source,
       cost_is_estimated: row.cost_is_estimated,
       delivered_count: row.delivered_count,
+      priced_at: effectiveCampaignDate(row),
     });
   }
 
@@ -195,7 +196,10 @@ function buildMonthlySeries(
     });
     let costUsd = 0;
     for (const row of inMonth) {
-      const cost = buildCampaignCostSummary(row, row.delivered_count);
+      const cost = buildCampaignCostSummary(
+        { ...row, priced_at: effectiveCampaignDate(row) },
+        row.delivered_count,
+      );
       costUsd += Number(cost.usdAmount || 0);
     }
     return {
@@ -575,7 +579,13 @@ export class CampaignsService {
     );
 
     const analytics = buildCampaignDetailAnalytics(
-      campaign,
+      {
+        ...campaign,
+        priced_at:
+          statusTotals?.first_send_at ??
+          campaign.scheduled_at ??
+          campaign.created_at,
+      },
       {
         sentOnly: statusTotals?.sent_only ?? 0,
         deliveredOnly: statusTotals?.delivered_only ?? 0,
@@ -941,18 +951,31 @@ export class CampaignsService {
     `);
     const deliveredCount = deliveredRows[0]?.n ?? 0;
     const category = getCampaignTemplateCategory(campaign);
+    const [firstSendRow] = await this.prisma.$queryRaw<{ first_send_at: Date | null }[]>(
+      Prisma.sql`
+        SELECT MIN(created_at) AS first_send_at
+        FROM campaign_logs
+        WHERE campaign_id = ${id}
+      `,
+    );
+    const pricedAt =
+      firstSendRow?.first_send_at ?? campaign.scheduled_at ?? campaign.created_at;
 
     let amount: number | null = null;
     let currency = 'USD';
     let source = 'estimated';
     let isEstimated = true;
 
-    const categoryEstimate = estimateCategoryCost(deliveredCount, category);
+    const categoryEstimate = estimateCategoryCost(
+      deliveredCount,
+      category,
+      pricedAt,
+    );
     if (categoryEstimate) {
       amount = categoryEstimate.usdAmount;
       currency = 'USD';
       source = 'category_rate';
-      isEstimated = false;
+      isEstimated = true;
     } else {
       const setting = await this.prisma.app_settings.findFirst({
         where: { area, key: 'campaign_cost_per_message_usd' },

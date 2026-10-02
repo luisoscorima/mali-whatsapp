@@ -16,6 +16,7 @@ import {
   readSessionWindowMs,
 } from '../campaigns/campaign-conversation-window.util';
 import { persistCampaignChatMessage } from '../campaigns/campaign-chat-message.util';
+import { estimateServiceReplyOverage } from '../campaigns/campaign-pricing.util';
 import { conversationRecipient } from './whatsapp-recipient.util';
 import { chooseWhatsAppIdentityMatch } from './whatsapp-identity.util';
 import { buildCampaignMessagePreview } from '../campaigns/campaign-message-preview.util';
@@ -2570,4 +2571,56 @@ export class ConversationsService {
       },
     });
   }
+
+  async getServiceReplyEstimate(user: AuthUser): Promise<{
+    monthLabel: string;
+    replyCount: number;
+    freeAllowance: number;
+    billableCount: number;
+    usdAmount: number;
+    penAmount: number;
+  }> {
+    const { start, end, label } = limaCalendarMonth(new Date());
+    const [row] = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
+      SELECT COUNT(*)::int AS n
+      FROM chat_messages m
+      INNER JOIN conversations c ON c.id = m.conversation_id
+      WHERE c.area = ${user.area}
+        AND m.direction = 'outbound'
+        AND m.message_type <> 'campaign'
+        AND LOWER(COALESCE(m.raw_payload->'delivery_status'->>'status', '')) IN ('delivered', 'read')
+        AND m.created_at >= ${start}
+        AND m.created_at < ${end}
+    `);
+    const estimate = estimateServiceReplyOverage(row?.n ?? 0, start);
+    return { monthLabel: label, ...estimate };
+  }
+}
+
+const LIMA_MONTHS = [
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+] as const;
+
+function limaCalendarMonth(now: Date): { start: Date; end: Date; label: string } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Lima',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(now);
+  const year = Number(parts.find((part) => part.type === 'year')?.value);
+  const month = Number(parts.find((part) => part.type === 'month')?.value);
+  const start = new Date(Date.UTC(year, month - 1, 1, 5, 0, 0));
+  const end = new Date(Date.UTC(year, month, 1, 5, 0, 0));
+  return { start, end, label: LIMA_MONTHS[month - 1] ?? '' };
 }

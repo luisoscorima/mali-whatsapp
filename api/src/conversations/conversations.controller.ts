@@ -88,6 +88,13 @@ export class ConversationsController {
     return { ok: true, data };
   }
 
+  @Get('service-replies')
+  async serviceReplies(@CurrentUser() user: AuthUser) {
+    assertCanManageConversations(user);
+    const data = await this.conversationsService.getServiceReplyEstimate(user);
+    return { ok: true, data };
+  }
+
   @Post('from-contact/:contactId')
   async ensureFromContact(
     @CurrentUser() user: AuthUser,
