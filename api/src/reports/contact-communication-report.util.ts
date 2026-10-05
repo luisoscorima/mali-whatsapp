@@ -12,6 +12,7 @@ const SEGMENT_NONE = '__none__';
 
 export const REPORT_HEADERS = [
   'Número',
+  'Usuario de WhatsApp',
   'Nombre',
   'Apellido',
   'Email',
@@ -32,10 +33,13 @@ export const REPORT_HEADERS = [
   'Asesor Fecha últ msj',
   'Estado de Lead',
   'Calificación del Lead',
+  'Asesor asignado',
 ] as const;
 
 export type ContactCommunicationRow = {
+  contact_id: number;
   phone: string;
+  wa_identity_display: string;
   name: string;
   last_name: string;
   email: string;
@@ -64,7 +68,19 @@ export type ContactCommunicationRow = {
   last_communication_display: string;
   lead_status: string;
   lead_score: string;
+  assigned_advisor: string;
 };
+
+export function formatWaIdentityDisplay(
+  waUsername: string | null | undefined,
+  whatsappUserId: string | null | undefined,
+): string {
+  const username = String(waUsername ?? '').trim();
+  if (username) {
+    return `@${username.replace(/^@/, '')}`;
+  }
+  return String(whatsappUserId ?? '').trim();
+}
 
 export type CommunicationReportFilters = {
   from: string;
@@ -126,7 +142,11 @@ function isoAt(msg: MessageRow | undefined): string | null {
 
 function buildRowFromMessages(
   contact: {
+    id: number;
     phone: string;
+    wa_username: string | null;
+    whatsapp_user_id: string | null;
+    assigned_advisor: string;
     name: string;
     last_name: string;
     email: string;
@@ -151,7 +171,12 @@ function buildRowFromMessages(
   const lastAdvisorText = messageText(lastAdvisor);
 
   return {
+    contact_id: contact.id,
     phone: contact.phone,
+    wa_identity_display: formatWaIdentityDisplay(
+      contact.wa_username,
+      contact.whatsapp_user_id,
+    ),
     name: contact.name,
     last_name: contact.last_name,
     email: contact.email,
@@ -180,6 +205,7 @@ function buildRowFromMessages(
     last_communication_display: displayAt(lastAbs),
     lead_status: contact.lead_status,
     lead_score: contact.lead_score,
+    assigned_advisor: contact.assigned_advisor,
   };
 }
 
@@ -263,6 +289,9 @@ async function fetchContactIdsForReport(
     origins: string;
     lead_status: string;
     lead_score: string;
+    wa_username: string | null;
+    whatsapp_user_id: string | null;
+    assigned_advisor: string;
   }[];
 }> {
   const where = buildContactFilterSql(area, filters);
@@ -299,16 +328,21 @@ async function fetchContactIdsForReport(
       origins: string;
       lead_status: string;
       lead_score: string;
+      wa_username: string | null;
+      whatsapp_user_id: string | null;
+      assigned_advisor: string;
     }[]
   >(Prisma.sql`
     SELECT
       c.id,
       c.name,
       COALESCE(c.last_name, '') AS last_name,
-      c.phone,
+      COALESCE(c.phone, conv.phone, '') AS phone,
       COALESCE(c.email, '') AS email,
       COALESCE(c.dni, '') AS dni,
       conv.id AS conversation_id,
+      NULLIF(TRIM(conv.wa_username), '') AS wa_username,
+      COALESCE(c.whatsapp_user_id, conv.whatsapp_user_id) AS whatsapp_user_id,
       COALESCE((
         SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
         FROM contact_segments cs
@@ -324,11 +358,27 @@ async function fetchContactIdsForReport(
         WHERE co.contact_id = c.id AND co.area = c.area
       ), '') AS origins,
       COALESCE(ls.label, '') AS lead_status,
-      COALESCE(c.lead_score::text, '') AS lead_score
+      COALESCE(c.lead_score::text, '') AS lead_score,
+      COALESCE(
+        NULLIF(TRIM(CONCAT(COALESCE(assignee.first_name, ''), ' ', COALESCE(assignee.last_name, ''))), ''),
+        NULLIF(split_part(assignee.email, '@', 1), ''),
+        ''
+      ) AS assigned_advisor
     FROM contacts c
     INNER JOIN conversations conv ON conv.area = c.area
       AND (conv.contact_id = c.id OR (c.phone IS NOT NULL AND conv.phone = c.phone)
         OR (c.whatsapp_user_id IS NOT NULL AND conv.whatsapp_user_id = c.whatsapp_user_id))
+    LEFT JOIN LATERAL (
+      SELECT elc.assigned_user_id
+      FROM education_lead_cycles elc
+      WHERE elc.contact_id = c.id AND elc.area = c.area
+      ORDER BY elc.started_at DESC, elc.id DESC
+      LIMIT 1
+    ) lead_cycle ON true
+    LEFT JOIN users assignee ON assignee.id = COALESCE(
+      lead_cycle.assigned_user_id,
+      conv.assigned_user_id
+    )
     LEFT JOIN lead_status_definitions ls ON ls.id = c.lead_status_id
     WHERE ${where}
     ORDER BY COALESCE(NULLIF(c.name, ''), c.phone) ASC, c.id ASC
@@ -435,13 +485,15 @@ async function fetchMessagesForConversations(
  * Post-filter advisor rows with shared util (SQL heuristic may include edge cases
  * without _mali_sender — those stay for ranking but label stays empty per product rule).
  */
-function pickAdvisor(
+export function pickAdvisor(
   msgs: MessageRow[],
   which: 'first' | 'last',
 ): MessageRow | undefined {
   const advisors = msgs
-    .filter((m) =>
-      isHumanAdvisorOutboundMessage(m.raw_payload, m.is_ai, m.message_type),
+    .filter(
+      (m) =>
+        m.direction === 'outbound' &&
+        isHumanAdvisorOutboundMessage(m.raw_payload, m.is_ai, m.message_type),
     )
     .sort((a, b) => {
       const t = a.created_at.getTime() - b.created_at.getTime();
@@ -491,6 +543,7 @@ export async function fetchContactCommunicationReport(
 export function reportRowToExportCells(row: ContactCommunicationRow): string[] {
   return [
     row.phone,
+    row.wa_identity_display,
     row.name,
     row.last_name,
     row.email,
@@ -511,5 +564,6 @@ export function reportRowToExportCells(row: ContactCommunicationRow): string[] {
     row.last_advisor_message_display,
     row.lead_status,
     row.lead_score,
+    row.assigned_advisor,
   ];
 }

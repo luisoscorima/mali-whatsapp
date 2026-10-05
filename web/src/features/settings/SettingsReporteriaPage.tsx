@@ -14,7 +14,10 @@ type FilterOptions = {
 }
 
 type CommRow = {
+  contact_id: number
   phone: string
+  wa_identity_display: string
+  assigned_advisor: string
   name: string
   last_name: string
   email: string
@@ -478,6 +481,7 @@ export function SettingsReporteriaPage() {
                 <thead className="sticky top-0 border-b border-line bg-surface text-xs text-muted">
                   <tr>
                     <th className="px-3 py-2">Número</th>
+                    <th className="px-3 py-2">Usuario WA</th>
                     <th className="px-3 py-2">Cliente</th>
                     <th className="px-3 py-2">Segmentos / Origen</th>
                     <th className="px-3 py-2">1era / últ por</th>
@@ -489,14 +493,19 @@ export function SettingsReporteriaPage() {
                 <tbody className="divide-y divide-line">
                   {commData.rows.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-3 py-4 text-muted">
+                      <td colSpan={8} className="px-3 py-4 text-muted">
                         No hay contactos en el rango.
                       </td>
                     </tr>
                   ) : (
                     commData.rows.map((row) => (
-                      <tr key={row.phone}>
-                        <td className="px-3 py-2 font-mono text-xs">{row.phone}</td>
+                      <tr key={row.contact_id}>
+                        <td className="px-3 py-2 font-mono text-xs">
+                          {row.phone || '—'}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs text-muted">
+                          {row.wa_identity_display || '—'}
+                        </td>
                         <td className="px-3 py-2">
                           {[row.name, row.last_name].filter(Boolean).join(' ') ||
                             '—'}
@@ -530,6 +539,10 @@ export function SettingsReporteriaPage() {
                         <td className="px-3 py-2 text-xs">
                           {row.lead_status || '—'}
                           {row.lead_score ? ` · ${row.lead_score}` : ''}
+                          <br />
+                          <span className="text-muted">
+                            {row.assigned_advisor || '—'}
+                          </span>
                         </td>
                       </tr>
                     ))
