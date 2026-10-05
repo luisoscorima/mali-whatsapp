@@ -358,7 +358,12 @@ async function fetchContactIdsForReport(
         WHERE co.contact_id = c.id AND co.area = c.area
       ), '') AS origins,
       COALESCE(ls.label, '') AS lead_status,
-      COALESCE(c.lead_score::text, '') AS lead_score,
+      CASE c.lead_score
+        WHEN 1 THEN 'Bajo'
+        WHEN 2 THEN 'Medio'
+        WHEN 3 THEN 'Alto'
+        ELSE ''
+      END AS lead_score,
       COALESCE(
         NULLIF(TRIM(CONCAT(COALESCE(assignee.first_name, ''), ' ', COALESCE(assignee.last_name, ''))), ''),
         NULLIF(split_part(assignee.email, '@', 1), ''),

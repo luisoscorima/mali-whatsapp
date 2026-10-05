@@ -82,6 +82,10 @@ import {
   parseSegmentQueryParam,
 } from './inbox-query.util';
 import { formatAdvisorLabel } from '../users/advisor-label.util';
+import {
+  formatLeadScoreLabel,
+  isValidLeadScore,
+} from '../leads/lead-score.util';
 import type {
   EnsureConversationResult,
   InboxDetail,
@@ -2322,8 +2326,8 @@ export class ConversationsService {
     let score: number | null = null;
     if (!clear) {
       const n = parseInt(String(scoreInput ?? '').trim(), 10);
-      if (!Number.isInteger(n) || n < 1 || n > 5) {
-        throw new BadRequestException('Calificacion invalida (1 a 5)');
+      if (!isValidLeadScore(n)) {
+        throw new BadRequestException('Calificacion invalida (Bajo, Medio o Alto)');
       }
       score = n;
     }
@@ -2356,7 +2360,7 @@ export class ConversationsService {
       event_type: AuditEvent.CONTACT_LEAD_SCORE,
       message: clear
         ? `Lead score borrado (conversación ${conversationId})`
-        : `Lead score ${score}/5 (conversación ${conversationId})`,
+        : `Lead score ${formatLeadScoreLabel(score)} (conversación ${conversationId})`,
       actor: auditActor(user),
       meta: {
         conversation_id: conversationId,

@@ -63,6 +63,7 @@ import {
 } from './inboxChatActions'
 import { useAssignedInboxBrowserNotify } from './useAssignedInboxBrowserNotify'
 import { chatDisplayName, chatSecondaryLabel, isContactPhone } from './whatsappIdentity'
+import { leadScoreLabel, leadScoreTone } from './leadScore'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 
 const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000
@@ -187,14 +188,16 @@ function segmentColorKey(slug: string, segments: SegmentOption[]): string {
   return segments.find((s) => s.slug === slug)?.color_key ?? 'slate'
 }
 
-function LeadStars({ score }: { score: number }) {
+function LeadScoreBadge({ score }: { score: number }) {
+  const label = leadScoreLabel(score)
+  const tone = leadScoreTone(score)
+  if (!label || !tone) return null
   return (
-    <span className="inbox-chat-lead-stars" aria-label={`Calificación ${score} de 5`} title="Calificación del lead">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <span key={i} className={`inbox-chat-lead-star ${i <= score ? 'is-on' : ''}`}>
-          ★
-        </span>
-      ))}
+    <span
+      className={`inbox-lead-score-badge inbox-lead-score-badge--${tone}`}
+      title="Calificación del lead"
+    >
+      {label}
     </span>
   )
 }
@@ -300,7 +303,7 @@ function ProfileBlock({
           {leadScore ? (
             <>
               {' '}
-              <LeadStars score={leadScore} />
+              <LeadScoreBadge score={leadScore} />
             </>
           ) : null}
           {leadStatusLabel ? (
@@ -2101,14 +2104,14 @@ export function ConversationsInboxPage() {
                                     {name}
                                   </span>
                                   {!showPhoneRow && leadScore ? (
-                                    <LeadStars score={leadScore} />
+                                    <LeadScoreBadge score={leadScore} />
                                   ) : null}
                                 </span>
                               </span>
                               {showPhoneRow ? (
                                 <span className="inbox-chat-phone-row">
                                   <span className="inbox-chat-phone">{chatSecondaryLabel(item.phone)}</span>
-                                  {leadScore ? <LeadStars score={leadScore} /> : null}
+                                  {leadScore ? <LeadScoreBadge score={leadScore} /> : null}
                                   <ConversationBadges
                                     status={item.conversation_status}
                                     assignedUserLabel={item.assigned_user_label}

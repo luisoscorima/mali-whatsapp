@@ -1,6 +1,7 @@
 import { AuditEvent } from '../audit/audit-events';
 import type { InboxTimelineEvent } from './conversations.types';
 import { formatAdvisorLabel } from '../users/advisor-label.util';
+import { formatLeadScoreLabel } from '../leads/lead-score.util';
 
 const DISPLAY_TIMEZONE = 'America/Lima';
 
@@ -115,8 +116,9 @@ export function formatInboxTimelineEventLabel(
       return `${actor} quitó la calificación del lead`;
     }
     const score = Number(meta.score);
-    if (Number.isInteger(score) && score >= 1 && score <= 5) {
-      return `${actor} calificó el lead (${score}/5)`;
+    const label = formatLeadScoreLabel(score);
+    if (label) {
+      return `${actor} calificó el lead (${label})`;
     }
     return `${actor} actualizó la calificación del lead`;
   }

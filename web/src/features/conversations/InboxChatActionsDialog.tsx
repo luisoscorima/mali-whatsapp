@@ -15,6 +15,7 @@ import {
 } from '@/shared/ui/shadcn/dialog'
 import { segmentFilterPillStyle } from '../segments/segmentColors'
 import { chatSecondaryLabel } from './whatsappIdentity'
+import { LEAD_SCORE_OPTIONS } from './leadScore'
 
 type SegmentOption = {
   slug: string
@@ -222,19 +223,21 @@ export function InboxChatActionsDialog({
                   Calificación del lead
                 </span>
                 <div
-                  className="inbox-lead-stars-input"
+                  className="inbox-lead-score-input"
                   role="group"
                   aria-labelledby="inbox-actions-lead-label"
                 >
-                  {[1, 2, 3, 4, 5].map((n) => (
+                  {LEAD_SCORE_OPTIONS.map(({ value, label }) => (
                     <button
-                      key={n}
+                      key={value}
                       type="button"
-                      className={`inbox-lead-star-btn ${n <= current ? 'is-on' : ''}`}
-                      onClick={() => void onLeadScore(n)}
-                      aria-label={`${n} estrella${n > 1 ? 's' : ''}`}
+                      className={`inbox-lead-score-pick inbox-lead-score-pick--${
+                        value === 1 ? 'low' : value === 2 ? 'mid' : 'high'
+                      } ${current === value ? 'is-on' : ''}`}
+                      onClick={() => void onLeadScore(value)}
+                      aria-pressed={current === value}
                     >
-                      ★
+                      {label}
                     </button>
                   ))}
                   <Button
