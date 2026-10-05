@@ -587,6 +587,9 @@ export class WebhookService {
         );
         contactMatch = {
           match: {
+            ...(contactByUserId.id === merged.keepId
+              ? contactByUserId
+              : contactByPhone),
             id: merged.keepId,
             phone: merged.phone,
             whatsapp_user_id: merged.whatsappUserId,
@@ -641,6 +644,8 @@ export class WebhookService {
         userId &&
         contactId
       ) {
+        const mergePhone = phone;
+        const mergeUserId = userId;
         const dropContactId =
           existingByPhone?.contact_id &&
           existingByPhone.contact_id !== contactId
@@ -652,13 +657,13 @@ export class WebhookService {
             area,
             contactId,
             dropContactId,
-            phone,
-            userId,
+            mergePhone,
+            mergeUserId,
           ),
         );
         existingByUserId = await this.prisma.conversations.findUnique({
           where: {
-            area_whatsapp_user_id: { area, whatsapp_user_id: userId },
+            area_whatsapp_user_id: { area, whatsapp_user_id: mergeUserId },
           },
           select: {
             id: true,
@@ -668,7 +673,7 @@ export class WebhookService {
           },
         });
         existingByPhone = await this.prisma.conversations.findUnique({
-          where: { area_phone: { area, phone } },
+          where: { area_phone: { area, phone: mergePhone } },
           select: {
             id: true,
             phone: true,
@@ -679,7 +684,7 @@ export class WebhookService {
         conversationMatch = chooseWhatsAppIdentityMatch(
           existingByUserId,
           existingByPhone,
-          userId,
+          mergeUserId,
         );
       }
       if (conversationMatch.conflict === 'hard') {
