@@ -14,6 +14,7 @@ import { matchMaliOneWhatsappLink } from '../leads/mali-one-link-match.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { isWhatsAppBsuid } from '../conversations/whatsapp-recipient.util';
 import { chooseWhatsAppIdentityMatch } from '../conversations/whatsapp-identity.util';
+import { mergeComplementaryContacts, mergeComplementaryConversations } from '../contacts/merge-complementary-contacts.util';
 import {
   isBusinessHoursConfigOperational,
   isWithinBusinessHours,
@@ -541,20 +542,63 @@ export class WebhookService {
       const contactByUserId = userId
         ? await this.prisma.contacts.findFirst({
             where: { area, whatsapp_user_id: userId },
-            select: { id: true, phone: true, whatsapp_user_id: true },
+            select: {
+              id: true,
+              phone: true,
+              whatsapp_user_id: true,
+              email: true,
+              dni: true,
+              last_name: true,
+              lead_status_id: true,
+              lead_score: true,
+            },
           })
         : null;
       const contactByPhone = phone
         ? await this.prisma.contacts.findFirst({
             where: { area, phone },
-            select: { id: true, phone: true, whatsapp_user_id: true },
+            select: {
+              id: true,
+              phone: true,
+              whatsapp_user_id: true,
+              email: true,
+              dni: true,
+              last_name: true,
+              lead_status_id: true,
+              lead_score: true,
+            },
           })
         : null;
-      const contactMatch = chooseWhatsAppIdentityMatch(contactByUserId, contactByPhone, userId);
-      if (contactMatch.conflict) {
+      let contactMatch = chooseWhatsAppIdentityMatch(
+        contactByUserId,
+        contactByPhone,
+        userId,
+      );
+      if (
+        contactMatch.conflict === 'complementary' &&
+        contactByUserId &&
+        contactByPhone
+      ) {
+        const merged = await this.prisma.$transaction((tx) =>
+          mergeComplementaryContacts(tx, area, contactByUserId, contactByPhone),
+        );
+        this.logger.log(
+          `Webhook inbound: merge complementario contactos keep=${merged.keepId} drop=${merged.dropId} area=${area}`,
+        );
+        contactMatch = {
+          match: {
+            id: merged.keepId,
+            phone: merged.phone,
+            whatsapp_user_id: merged.whatsappUserId,
+          },
+          conflict: 'none',
+        };
+      } else if (contactMatch.conflict === 'hard') {
         phone = null;
         from = userId!;
-        this.logger.warn(`Webhook inbound: identidades de contacto en conflicto para area=${area}; se conserva BSUID`);
+        this.logger.warn(
+          `Webhook inbound: identidades de contacto en conflicto duro para area=${area}; se conserva BSUID`,
+        );
       }
       const contactInArea = contactMatch.match;
       const contactId = contactInArea?.id ?? null;
@@ -574,23 +618,81 @@ export class WebhookService {
         (slug) => getWhatsAppCredentialsForArea(slug).phoneNumberId,
       );
 
-      const existingByUserId = userId
+      let existingByUserId = userId
         ? await this.prisma.conversations.findUnique({
             where: { area_whatsapp_user_id: { area, whatsapp_user_id: userId } },
             select: { id: true, phone: true, whatsapp_user_id: true, contact_id: true },
           })
         : null;
-      const existingByPhone = phone
+      let existingByPhone = phone
         ? await this.prisma.conversations.findUnique({
             where: { area_phone: { area, phone } },
             select: { id: true, phone: true, whatsapp_user_id: true, contact_id: true },
           })
         : null;
-      const conversationMatch = chooseWhatsAppIdentityMatch(existingByUserId, existingByPhone, userId);
-      if (conversationMatch.conflict) {
+      let conversationMatch = chooseWhatsAppIdentityMatch(
+        existingByUserId,
+        existingByPhone,
+        userId,
+      );
+      if (
+        conversationMatch.conflict === 'complementary' &&
+        phone &&
+        userId &&
+        contactId
+      ) {
+        const dropContactId =
+          existingByPhone?.contact_id &&
+          existingByPhone.contact_id !== contactId
+            ? existingByPhone.contact_id
+            : null;
+        await this.prisma.$transaction((tx) =>
+          mergeComplementaryConversations(
+            tx,
+            area,
+            contactId,
+            dropContactId,
+            phone,
+            userId,
+          ),
+        );
+        existingByUserId = await this.prisma.conversations.findUnique({
+          where: {
+            area_whatsapp_user_id: { area, whatsapp_user_id: userId },
+          },
+          select: {
+            id: true,
+            phone: true,
+            whatsapp_user_id: true,
+            contact_id: true,
+          },
+        });
+        existingByPhone = await this.prisma.conversations.findUnique({
+          where: { area_phone: { area, phone } },
+          select: {
+            id: true,
+            phone: true,
+            whatsapp_user_id: true,
+            contact_id: true,
+          },
+        });
+        conversationMatch = chooseWhatsAppIdentityMatch(
+          existingByUserId,
+          existingByPhone,
+          userId,
+        );
+      }
+      if (conversationMatch.conflict === 'hard') {
         phone = null;
         from = userId!;
-        this.logger.warn(`Webhook inbound: identidades de conversación en conflicto para area=${area}; se conserva BSUID`);
+        this.logger.warn(
+          `Webhook inbound: identidades de conversación en conflicto duro para area=${area}; se conserva BSUID`,
+        );
+        conversationMatch = chooseWhatsAppIdentityMatch(
+          existingByUserId,
+          null,
+          userId,
+        );
       }
       const existing = conversationMatch.match;
       const canAttachPhone = phone && (!existing?.phone || existing.phone === phone) && (!existingByPhone || existingByPhone.id === existing?.id);

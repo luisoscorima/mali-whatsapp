@@ -91,6 +91,121 @@ describe('WebhookService BSUID inbound', () => {
     );
   });
 
+  it('merges complementary phone-only contact into BSUID contact and keeps the phone', async () => {
+    jest.spyOn(areaResolver, 'resolveInboundArea').mockReturnValue({
+      area: 'ti',
+      source: 'phone_number_id',
+    });
+    const phoneOnly = {
+      id: 20,
+      phone: '51999999999',
+      whatsapp_user_id: null,
+      email: null,
+      dni: null,
+      last_name: '',
+      lead_status_id: null,
+      lead_score: null,
+    };
+    const bsuidOnly = {
+      id: 21,
+      phone: null,
+      whatsapp_user_id: userId,
+      email: null,
+      dni: null,
+      last_name: '',
+      lead_status_id: null,
+      lead_score: null,
+    };
+    const prisma = {
+      $transaction: jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
+        // Merge util runs against tx; stub minimal surface so merge completes.
+        const tx = {
+          contacts: {
+            update: jest.fn().mockResolvedValue({}),
+          },
+          contact_origins: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+          education_lead_entries: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+          campaign_logs: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+          meta_ctwa_ad_leads: {
+            updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+            findMany: jest.fn().mockResolvedValue([]),
+          },
+          meta_leadgen_leads: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+          tiktok_leads: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+          contact_segments: { findMany: jest.fn().mockResolvedValue([]) },
+          contact_attributes: { findMany: jest.fn().mockResolvedValue([]) },
+          education_lead_cycles: {
+            findFirst: jest.fn().mockResolvedValue(null),
+            updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+          },
+          conversations: {
+            findUnique: jest.fn().mockResolvedValue(null),
+            findFirst: jest.fn().mockResolvedValue(null),
+            updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+          },
+        };
+        return fn(tx);
+      }),
+      contacts: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockImplementation(({ where }) => {
+          if (where.whatsapp_user_id) return Promise.resolve(bsuidOnly);
+          if (where.phone) return Promise.resolve(phoneOnly);
+          return Promise.resolve(null);
+        }),
+        update: jest.fn(),
+      },
+      conversations: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn().mockResolvedValue(null),
+        upsert: jest.fn().mockResolvedValue({ id: 99 }),
+      },
+      chat_messages: {
+        create: jest.fn().mockResolvedValue({ id: 1, created_at: new Date() }),
+      },
+      campaign_logs: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const flows = { handleInbound: jest.fn().mockResolvedValue({ handled: true }) };
+    const leads = {
+      recordEducationOrganicOrigin: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new WebhookService(
+      prisma as never,
+      flows as never,
+      {} as never,
+      leads as never,
+      { getCatalog: jest.fn().mockResolvedValue([]) } as never,
+    );
+
+    await service['persistInboundMessages'](
+      {
+        metadata: { phone_number_id: 'line-1' },
+        contacts: [{ user_id: userId, profile: { name: 'Ana' } }],
+        messages: [
+          {
+            from: '51999999999',
+            from_user_id: userId,
+            id: 'wamid.merge',
+            type: 'text',
+            text: { body: 'Hola' },
+          },
+        ],
+      },
+      {},
+    );
+
+    expect(prisma.$transaction).toHaveBeenCalled();
+    expect(prisma.conversations.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          phone: '51999999999',
+          contact_id: 21,
+          whatsapp_user_id: userId,
+        }),
+      }),
+    );
+  });
+
   it('records a BSUID rotation without relinking a contact or conversation', async () => {
     jest.spyOn(areaResolver, 'resolveInboundArea').mockReturnValue({
       area: 'ti', source: 'phone_number_id',

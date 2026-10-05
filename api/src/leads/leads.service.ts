@@ -19,6 +19,8 @@ import {
 } from '../contacts/contacts-validation.utils';
 import { PrismaService } from '../prisma/prisma.service';
 import { isWhatsAppBsuid } from '../conversations/whatsapp-recipient.util';
+import { chooseWhatsAppIdentityMatch } from '../conversations/whatsapp-identity.util';
+import { mergeComplementaryContacts } from '../contacts/merge-complementary-contacts.util';
 import { EducationLeadWorkflowService } from './education-lead-workflow.service';
 import { MaliOneLinksCatalogService } from './mali-one-links-catalog.service';
 import {
@@ -487,20 +489,41 @@ export class LeadsService implements OnModuleInit {
           where: { area: areaNorm, phone },
         })
       : null;
-    if (byUserId && byPhone && byUserId.id !== byPhone.id) {
+
+    let resolvedPair = chooseWhatsAppIdentityMatch(byUserId, byPhone, userId);
+    if (
+      resolvedPair.conflict === 'complementary' &&
+      byUserId &&
+      byPhone
+    ) {
+      const merged = await this.prisma.$transaction((tx) =>
+        mergeComplementaryContacts(tx, areaNorm, byUserId, byPhone),
+      );
+      this.logger.log(
+        `resolveContact: merge complementario keep=${merged.keepId} drop=${merged.dropId} area=${areaNorm}`,
+      );
+      const keep = await this.prisma.contacts.findFirst({
+        where: { id: merged.keepId },
+      });
+      resolvedPair = { match: keep, conflict: 'none' };
+    } else if (resolvedPair.conflict === 'hard') {
       throw new ConflictException(
         'El teléfono y la identidad de WhatsApp pertenecen a contactos distintos',
       );
     }
-    if (!byUserId && byPhone?.whatsapp_user_id && userId && byPhone.whatsapp_user_id !== userId) {
+    if (
+      !byUserId &&
+      byPhone?.whatsapp_user_id &&
+      userId &&
+      byPhone.whatsapp_user_id !== userId
+    ) {
       throw new ConflictException(
         'El teléfono pertenece a otra identidad de WhatsApp',
       );
     }
 
     const existing =
-      byUserId ??
-      byPhone ??
+      resolvedPair.match ??
       (dni
         ? await this.prisma.contacts.findFirst({
             where: { area: areaNorm, dni },
