@@ -1,62 +1,263 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { WaAppShell } from './WaAppShell'
 import { RequireAuth } from './RequireAuth'
 import { RequirePasswordChanged } from './RequirePasswordChanged'
 import { RequireUserPermission, HomeRedirect } from './appOutletContext'
 import { PERMISSION, userHasPermission } from '@/shared/auth/permissions'
-import { LoginPage } from '../features/auth/LoginPage'
-import { ChangePasswordPage } from '../features/auth/ChangePasswordPage'
-import { MetaAdsShell } from '../features/meta-ads/MetaAdsShell'
-import { MetaAdsEmptyPane } from '../features/meta-ads/MetaAdsEmptyPane'
-import { MetaAdDetailPage } from '../features/meta-ads/MetaAdDetailPage'
-import { LeadsHubPage } from '../features/leads/LeadsHubPage'
-import { MetaFormsPage } from '../features/leads/MetaFormsPage'
-import { TikTokFormsPage } from '../features/leads/TikTokFormsPage'
-import { LeadsShell } from '../features/leads/LeadsShell'
-import { AttributesShell } from '../features/attributes/AttributesShell'
-import { AttributesSummaryPane } from '../features/attributes/AttributesSummaryPane'
-import { AttributeNewPage } from '../features/attributes/AttributeNewPage'
-import { AttributeDetailPage } from '../features/attributes/AttributeDetailPage'
-import { SegmentsShell } from '../features/segments/SegmentsShell'
-import { SegmentsSummaryPane } from '../features/segments/SegmentsSummaryPane'
-import { SegmentNewPage } from '../features/segments/SegmentNewPage'
-import { SegmentDetailPage } from '../features/segments/SegmentDetailPage'
-import { ContactsShell } from '../features/contacts/ContactsShell'
-import { ContactsSummaryPane } from '../features/contacts/ContactsSummaryPane'
-import { ContactImportPage } from '../features/contacts/ContactImportPage'
-import { ContactNewPage } from '../features/contacts/ContactNewPage'
-import { ContactDetailPage } from '../features/contacts/ContactDetailPage'
-import { TemplatesShell } from '../features/templates/TemplatesShell'
-import { TemplatesSummaryPane } from '../features/templates/TemplatesSummaryPane'
-import { TemplateDetailPage } from '../features/templates/TemplateDetailPage'
-import { TemplateNewPage } from '../features/templates/TemplateNewPage'
-import { CampaignsShell } from '../features/campaigns/CampaignsShell'
-import { CampaignsSummaryPane } from '../features/campaigns/CampaignsSummaryPane'
-import { CampaignNewPage } from '../features/campaigns/CampaignNewPage'
-import { CampaignDetailPage } from '../features/campaigns/CampaignDetailPage'
-import { FlowsShell } from '../features/flows/FlowsShell'
-import { FlowsSummaryPane } from '../features/flows/FlowsSummaryPane'
-import { FlowNewPage } from '../features/flows/FlowNewPage'
-import { FlowDetailPage } from '../features/flows/FlowDetailPage'
-import { SettingsShell } from '../features/settings/SettingsShell'
-import { SettingsIndexPage } from '../features/settings/SettingsIndexPage'
-import { SettingsIntegrationPage } from '../features/settings/SettingsIntegrationPage'
-import { SettingsAiPage } from '../features/settings/SettingsAiPage'
-import { SettingsBusinessHoursPage } from '../features/settings/SettingsBusinessHoursPage'
-import { SettingsAuditPage } from '../features/settings/SettingsAuditPage'
-import { SettingsReporteriaPage } from '../features/settings/SettingsReporteriaPage'
-import { ConversationsInboxPage } from '../features/conversations/ConversationsInboxPage'
-import { RequireMaster, AdminShell } from '../features/admin/AdminShell'
-import { AdminUsersShell } from '../features/admin/AdminUsersShell'
-import { AdminIndexPage } from '../features/admin/AdminIndexPage'
-import { AdminMetaPage } from '../features/admin/AdminMetaPage'
-import { AdminAuditPage } from '../features/admin/AdminAuditPage'
-import { AdminAreasPage } from '../features/admin/AdminAreasPage'
-import { AdminRolesPage } from '../features/admin/AdminRolesPage'
+const LoginPage = lazy(() =>
+  import('../features/auth/LoginPage').then((m) => ({ default: m.LoginPage })),
+)
+const ChangePasswordPage = lazy(() =>
+  import('../features/auth/ChangePasswordPage').then((m) => ({
+    default: m.ChangePasswordPage,
+  })),
+)
+const MetaAdsShell = lazy(() =>
+  import('../features/meta-ads/MetaAdsShell').then((m) => ({
+    default: m.MetaAdsShell,
+  })),
+)
+const MetaAdsEmptyPane = lazy(() =>
+  import('../features/meta-ads/MetaAdsEmptyPane').then((m) => ({
+    default: m.MetaAdsEmptyPane,
+  })),
+)
+const MetaAdDetailPage = lazy(() =>
+  import('../features/meta-ads/MetaAdDetailPage').then((m) => ({
+    default: m.MetaAdDetailPage,
+  })),
+)
+const LeadsHubPage = lazy(() =>
+  import('../features/leads/LeadsHubPage').then((m) => ({
+    default: m.LeadsHubPage,
+  })),
+)
+const MetaFormsPage = lazy(() =>
+  import('../features/leads/MetaFormsPage').then((m) => ({
+    default: m.MetaFormsPage,
+  })),
+)
+const TikTokFormsPage = lazy(() =>
+  import('../features/leads/TikTokFormsPage').then((m) => ({
+    default: m.TikTokFormsPage,
+  })),
+)
+const LeadsShell = lazy(() =>
+  import('../features/leads/LeadsShell').then((m) => ({
+    default: m.LeadsShell,
+  })),
+)
+const AttributesShell = lazy(() =>
+  import('../features/attributes/AttributesShell').then((m) => ({
+    default: m.AttributesShell,
+  })),
+)
+const AttributesSummaryPane = lazy(() =>
+  import('../features/attributes/AttributesSummaryPane').then((m) => ({
+    default: m.AttributesSummaryPane,
+  })),
+)
+const AttributeNewPage = lazy(() =>
+  import('../features/attributes/AttributeNewPage').then((m) => ({
+    default: m.AttributeNewPage,
+  })),
+)
+const AttributeDetailPage = lazy(() =>
+  import('../features/attributes/AttributeDetailPage').then((m) => ({
+    default: m.AttributeDetailPage,
+  })),
+)
+const SegmentsShell = lazy(() =>
+  import('../features/segments/SegmentsShell').then((m) => ({
+    default: m.SegmentsShell,
+  })),
+)
+const SegmentsSummaryPane = lazy(() =>
+  import('../features/segments/SegmentsSummaryPane').then((m) => ({
+    default: m.SegmentsSummaryPane,
+  })),
+)
+const SegmentNewPage = lazy(() =>
+  import('../features/segments/SegmentNewPage').then((m) => ({
+    default: m.SegmentNewPage,
+  })),
+)
+const SegmentDetailPage = lazy(() =>
+  import('../features/segments/SegmentDetailPage').then((m) => ({
+    default: m.SegmentDetailPage,
+  })),
+)
+const ContactsShell = lazy(() =>
+  import('../features/contacts/ContactsShell').then((m) => ({
+    default: m.ContactsShell,
+  })),
+)
+const ContactsSummaryPane = lazy(() =>
+  import('../features/contacts/ContactsSummaryPane').then((m) => ({
+    default: m.ContactsSummaryPane,
+  })),
+)
+const ContactImportPage = lazy(() =>
+  import('../features/contacts/ContactImportPage').then((m) => ({
+    default: m.ContactImportPage,
+  })),
+)
+const ContactNewPage = lazy(() =>
+  import('../features/contacts/ContactNewPage').then((m) => ({
+    default: m.ContactNewPage,
+  })),
+)
+const ContactDetailPage = lazy(() =>
+  import('../features/contacts/ContactDetailPage').then((m) => ({
+    default: m.ContactDetailPage,
+  })),
+)
+const TemplatesShell = lazy(() =>
+  import('../features/templates/TemplatesShell').then((m) => ({
+    default: m.TemplatesShell,
+  })),
+)
+const TemplatesSummaryPane = lazy(() =>
+  import('../features/templates/TemplatesSummaryPane').then((m) => ({
+    default: m.TemplatesSummaryPane,
+  })),
+)
+const TemplateDetailPage = lazy(() =>
+  import('../features/templates/TemplateDetailPage').then((m) => ({
+    default: m.TemplateDetailPage,
+  })),
+)
+const TemplateNewPage = lazy(() =>
+  import('../features/templates/TemplateNewPage').then((m) => ({
+    default: m.TemplateNewPage,
+  })),
+)
+const CampaignsShell = lazy(() =>
+  import('../features/campaigns/CampaignsShell').then((m) => ({
+    default: m.CampaignsShell,
+  })),
+)
+const CampaignsSummaryPane = lazy(() =>
+  import('../features/campaigns/CampaignsSummaryPane').then((m) => ({
+    default: m.CampaignsSummaryPane,
+  })),
+)
+const CampaignNewPage = lazy(() =>
+  import('../features/campaigns/CampaignNewPage').then((m) => ({
+    default: m.CampaignNewPage,
+  })),
+)
+const CampaignDetailPage = lazy(() =>
+  import('../features/campaigns/CampaignDetailPage').then((m) => ({
+    default: m.CampaignDetailPage,
+  })),
+)
+const FlowsShell = lazy(() =>
+  import('../features/flows/FlowsShell').then((m) => ({
+    default: m.FlowsShell,
+  })),
+)
+const FlowsSummaryPane = lazy(() =>
+  import('../features/flows/FlowsSummaryPane').then((m) => ({
+    default: m.FlowsSummaryPane,
+  })),
+)
+const FlowNewPage = lazy(() =>
+  import('../features/flows/FlowNewPage').then((m) => ({
+    default: m.FlowNewPage,
+  })),
+)
+const FlowDetailPage = lazy(() =>
+  import('../features/flows/FlowDetailPage').then((m) => ({
+    default: m.FlowDetailPage,
+  })),
+)
+const SettingsShell = lazy(() =>
+  import('../features/settings/SettingsShell').then((m) => ({
+    default: m.SettingsShell,
+  })),
+)
+const SettingsIndexPage = lazy(() =>
+  import('../features/settings/SettingsIndexPage').then((m) => ({
+    default: m.SettingsIndexPage,
+  })),
+)
+const SettingsIntegrationPage = lazy(() =>
+  import('../features/settings/SettingsIntegrationPage').then((m) => ({
+    default: m.SettingsIntegrationPage,
+  })),
+)
+const SettingsAiPage = lazy(() =>
+  import('../features/settings/SettingsAiPage').then((m) => ({
+    default: m.SettingsAiPage,
+  })),
+)
+const SettingsBusinessHoursPage = lazy(() =>
+  import('../features/settings/SettingsBusinessHoursPage').then((m) => ({
+    default: m.SettingsBusinessHoursPage,
+  })),
+)
+const SettingsAuditPage = lazy(() =>
+  import('../features/settings/SettingsAuditPage').then((m) => ({
+    default: m.SettingsAuditPage,
+  })),
+)
+const SettingsReporteriaPage = lazy(() =>
+  import('../features/settings/SettingsReporteriaPage').then((m) => ({
+    default: m.SettingsReporteriaPage,
+  })),
+)
+const ConversationsInboxPage = lazy(() =>
+  import('../features/conversations/ConversationsInboxPage').then((m) => ({
+    default: m.ConversationsInboxPage,
+  })),
+)
+const RequireMaster = lazy(() =>
+  import('../features/admin/AdminShell').then((m) => ({
+    default: m.RequireMaster,
+  })),
+)
+const AdminShell = lazy(() =>
+  import('../features/admin/AdminShell').then((m) => ({
+    default: m.AdminShell,
+  })),
+)
+const AdminUsersShell = lazy(() =>
+  import('../features/admin/AdminUsersShell').then((m) => ({
+    default: m.AdminUsersShell,
+  })),
+)
+const AdminIndexPage = lazy(() =>
+  import('../features/admin/AdminIndexPage').then((m) => ({
+    default: m.AdminIndexPage,
+  })),
+)
+const AdminMetaPage = lazy(() =>
+  import('../features/admin/AdminMetaPage').then((m) => ({
+    default: m.AdminMetaPage,
+  })),
+)
+const AdminAuditPage = lazy(() =>
+  import('../features/admin/AdminAuditPage').then((m) => ({
+    default: m.AdminAuditPage,
+  })),
+)
+const AdminAreasPage = lazy(() =>
+  import('../features/admin/AdminAreasPage').then((m) => ({
+    default: m.AdminAreasPage,
+  })),
+)
+const AdminRolesPage = lazy(() =>
+  import('../features/admin/AdminRolesPage').then((m) => ({
+    default: m.AdminRolesPage,
+  })),
+)
 
 export function AppRouter() {
   return (
     <BrowserRouter>
+      <Suspense fallback={<div role="status" className="p-4 text-muted">Cargando…</div>}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<RequireAuth />}>
@@ -231,6 +432,7 @@ export function AppRouter() {
         </Route>
         <Route path="*" element={<Navigate to="/conversations" replace />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   )
 }

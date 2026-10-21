@@ -364,6 +364,8 @@
 }
 
 .area-pill--rail {
+  flex-direction: column;
+  gap: 2px;
   max-width: 64px;
   justify-content: center;
   text-align: center;
@@ -372,6 +374,13 @@
   padding: 4px 5px;
   font-size: 0.62rem;
   border-radius: 8px;
+}
+
+.area-pill__phone {
+  font-size: 0.5rem;
+  font-weight: 500;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .area-pill--rail-btn {

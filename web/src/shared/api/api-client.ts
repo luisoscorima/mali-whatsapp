@@ -15,6 +15,7 @@ type RequestOptions = {
   skipAuth?: boolean;
   /** 401 esperado (p. ej. comprobar sesión en login); no dispara logout global */
   sessionProbe?: boolean;
+  signal?: AbortSignal;
 };
 
 let unauthorizedHandler: (() => void) | null = null;
@@ -73,6 +74,7 @@ async function request<T>(
     method: options.method ?? 'GET',
     headers,
     credentials: 'include',
+    signal: options.signal,
     body:
       options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
@@ -115,8 +117,8 @@ async function request<T>(
 }
 
 export const apiClient = {
-  async get<T>(path: string): Promise<ApiResponse<T>> {
-    return request<T>(path);
+  async get<T>(path: string, options?: { signal?: AbortSignal }): Promise<ApiResponse<T>> {
+    return request<T>(path, options);
   },
 
   async post<T>(path: string, body: unknown): Promise<ApiResponse<T>> {

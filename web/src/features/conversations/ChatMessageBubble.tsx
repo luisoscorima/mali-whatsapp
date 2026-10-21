@@ -210,7 +210,7 @@ export function ChatMessageBubble({
             className="chat-msg-media chat-msg-media--video"
             controls
             playsInline
-            preload="metadata"
+            preload="none"
             src={mediaUrl}
           />
         </div>
@@ -221,7 +221,7 @@ export function ChatMessageBubble({
           <audio
             className="chat-msg-media chat-msg-media--audio"
             controls
-            preload="metadata"
+            preload="none"
             src={mediaUrl}
           />
         </div>

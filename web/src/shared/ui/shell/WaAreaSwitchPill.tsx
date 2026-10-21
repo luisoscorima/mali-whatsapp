@@ -1,8 +1,8 @@
-import { useState } from 'react'
-import type { AuthUser } from '@/shared/api'
+import { useEffect, useState } from 'react'
+import { apiClient, type AreaLineInfo, type AuthUser } from '@/shared/api'
 import { areaLabel } from '@/features/admin/areaLabels'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/shadcn/popover'
-import { canSwitchArea, WaAreaSwitchPanel } from './WaAreaSwitchPanel'
+import { WaAreaSwitchPanel } from './WaAreaSwitchPanel'
 
 type WaAreaSwitchPillProps = {
   user: AuthUser
@@ -11,15 +11,21 @@ type WaAreaSwitchPillProps = {
 
 export function WaAreaSwitchPill({ user, onUserUpdate }: WaAreaSwitchPillProps) {
   const [open, setOpen] = useState(false)
-  const label = areaLabel(user.area)
+  const [areaLines, setAreaLines] = useState<AreaLineInfo[]>([])
+  const allowedAreasKey = user.allowedAreas.join(',')
+  const line = areaLines.find((item) => item.area === user.area)
+  const label = line?.label || areaLabel(user.area)
+  const phone = line?.display_phone_number?.trim() || ''
+  const activeLabel = `Área activa: ${label}${phone ? ` · ${phone}` : ''}`
 
-  if (!canSwitchArea(user)) {
-    return (
-      <span className="area-pill area-pill--rail" title={`Área activa: ${label}`}>
-        {label}
-      </span>
-    )
-  }
+  useEffect(() => {
+    let cancelled = false
+    setAreaLines([])
+    void apiClient.getAreaLines().then((result) => {
+      if (!cancelled && result.ok) setAreaLines(result.data)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [user.id, allowedAreasKey])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -27,10 +33,11 @@ export function WaAreaSwitchPill({ user, onUserUpdate }: WaAreaSwitchPillProps) 
         <button
           type="button"
           className="area-pill area-pill--rail area-pill--rail-btn"
-          title={`Área activa: ${label}. Clic para cambiar`}
-          aria-label={`Área activa: ${label}. Cambiar área`}
+          title={`${activeLabel}. Ver áreas`}
+          aria-label={`${activeLabel}. Ver áreas`}
         >
-          {label}
+          <span>{label}</span>
+          {phone ? <span className="area-pill__phone">{phone.replace(/\D/g, '')}</span> : null}
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -41,6 +48,7 @@ export function WaAreaSwitchPill({ user, onUserUpdate }: WaAreaSwitchPillProps) 
       >
         <WaAreaSwitchPanel
           user={user}
+          areaLines={areaLines}
           onUserUpdate={onUserUpdate}
           onDone={() => setOpen(false)}
           className="px-4 py-3"

@@ -1,4 +1,6 @@
 import * as XLSX from 'xlsx';
+import type { BusinessArea } from '../config/areas';
+import { REPORT_SOURCE_HEADERS, reportExportSourceCells } from './report-export-source.util';
 import { Prisma } from '@prisma/client';
 import { formatExportDate, exportFilenameDateStamp } from '../campaigns/campaign-format.util';
 import { formatAdvisorLabel } from '../users/advisor-label.util';
@@ -263,10 +265,13 @@ export async function fetchConversationHistoryReport(
 
 export function buildConversationHistoryXlsxBuffer(
   rows: ConversationHistoryRow[],
+  area: BusinessArea,
 ): Buffer {
+  const source = reportExportSourceCells(area);
   const aoa: string[][] = [
-    [...CONVERSATION_HISTORY_HEADERS],
+    [...REPORT_SOURCE_HEADERS, ...CONVERSATION_HISTORY_HEADERS],
     ...rows.map((r) => [
+      ...source,
       r.created_display,
       r.phone,
       r.name,
@@ -284,6 +289,7 @@ export function buildConversationHistoryXlsxBuffer(
     ]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 24 }, { wch: 24 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Hist. chat');
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;

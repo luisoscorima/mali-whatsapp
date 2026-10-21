@@ -1,4 +1,8 @@
 const DISPLAY_TIMEZONE = 'America/Lima'
+const dayFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: DISPLAY_TIMEZONE })
+const labelFormatter = new Intl.DateTimeFormat('es-PE', {
+  day: '2-digit', month: '2-digit', year: 'numeric', timeZone: DISPLAY_TIMEZONE,
+})
 
 export type InboxTimelineEvent = {
   id: string
@@ -13,7 +17,7 @@ export type InboxMessageForTimeline = {
 }
 
 function dayKey(date: Date): string {
-  return date.toLocaleDateString('en-CA', { timeZone: DISPLAY_TIMEZONE })
+  return dayFormatter.format(date)
 }
 
 export function formatTimelineDateLabel(value: string | Date): string {
@@ -25,12 +29,7 @@ export function formatTimelineDateLabel(value: string | Date): string {
   const yesterday = new Date(now)
   yesterday.setDate(yesterday.getDate() - 1)
   if (dk === dayKey(yesterday)) return 'Ayer'
-  return date.toLocaleDateString('es-PE', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    timeZone: DISPLAY_TIMEZONE,
-  })
+  return labelFormatter.format(date)
 }
 
 export type ChatTimelineItem =

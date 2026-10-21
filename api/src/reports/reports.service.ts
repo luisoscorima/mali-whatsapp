@@ -307,7 +307,7 @@ export class ReportsService {
       { limit: REPORT_EXPORT_MAX, offset: 0 },
     );
     return {
-      buffer: buildContactCommunicationXlsxBuffer(rows),
+      buffer: buildContactCommunicationXlsxBuffer(rows, area),
       filename: contactCommunicationExportFilename(area),
     };
   }
@@ -354,7 +354,7 @@ export class ReportsService {
       offset: 0,
     });
     return {
-      buffer: buildSegmentHistoryXlsxBuffer(rows),
+      buffer: buildSegmentHistoryXlsxBuffer(rows, area),
       filename: segmentHistoryExportFilename(area),
     };
   }
@@ -405,7 +405,7 @@ export class ReportsService {
       { limit: REPORT_EXPORT_MAX, offset: 0 },
     );
     return {
-      buffer: buildConversationHistoryXlsxBuffer(rows),
+      buffer: buildConversationHistoryXlsxBuffer(rows, area),
       filename: conversationHistoryExportFilename(area),
     };
   }

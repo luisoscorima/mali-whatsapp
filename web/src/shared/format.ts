@@ -1,4 +1,15 @@
 const DISPLAY_TIMEZONE = 'America/Lima'
+const dayFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: DISPLAY_TIMEZONE })
+const yearFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: DISPLAY_TIMEZONE, year: 'numeric' })
+const timeFormatter = new Intl.DateTimeFormat('es-PE', {
+  hour: '2-digit', minute: '2-digit', hour12: false, timeZone: DISPLAY_TIMEZONE,
+})
+const shortDateFormatter = new Intl.DateTimeFormat('es-PE', {
+  day: '2-digit', month: 'short', timeZone: DISPLAY_TIMEZONE,
+})
+const fullDateFormatter = new Intl.DateTimeFormat('es-PE', {
+  day: '2-digit', month: 'short', year: '2-digit', timeZone: DISPLAY_TIMEZONE,
+})
 
 export function formatDateTime(value: string | Date | null | undefined): string {
   if (!value) return '—'
@@ -11,31 +22,15 @@ export function formatChatListTime(value: string | Date | null | undefined): str
   const date = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
   const now = new Date()
-  const tz = DISPLAY_TIMEZONE
-  const dayKey = (x: Date) => x.toLocaleDateString('en-CA', { timeZone: tz })
-  if (dayKey(date) === dayKey(now)) {
-    return date.toLocaleTimeString('es-PE', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-      timeZone: tz,
-    })
+  if (dayFormatter.format(date) === dayFormatter.format(now)) {
+    return timeFormatter.format(date)
   }
-  const y1 = date.toLocaleDateString('en-CA', { timeZone: tz, year: 'numeric' })
-  const y2 = now.toLocaleDateString('en-CA', { timeZone: tz, year: 'numeric' })
+  const y1 = yearFormatter.format(date)
+  const y2 = yearFormatter.format(now)
   if (y1 === y2) {
-    return date.toLocaleDateString('es-PE', {
-      day: '2-digit',
-      month: 'short',
-      timeZone: tz,
-    })
+    return shortDateFormatter.format(date)
   }
-  return date.toLocaleDateString('es-PE', {
-    day: '2-digit',
-    month: 'short',
-    year: '2-digit',
-    timeZone: tz,
-  })
+  return fullDateFormatter.format(date)
 }
 
 /** Duración compacta para lista (respuesta / espera). */

@@ -1,6 +1,6 @@
-import { Outlet, useLocation } from 'react-router-dom'
-import { useEffect, useState } from 'react'
-import { apiClient, onUnauthorized, type AuthUser } from '@/shared/api'
+import { Outlet, useLocation, useOutletContext } from 'react-router-dom'
+import { Suspense, useEffect, useState } from 'react'
+import { apiClient, onUnauthorized } from '@/shared/api'
 import { areaLabel } from '@/features/admin/areaLabels'
 import { hasInboxDetailRoute } from '@/shared/layout/inboxDetailRoute'
 import { TooltipProvider } from '@/shared/ui/shadcn/tooltip'
@@ -8,22 +8,20 @@ import { WaLayout } from '@/shared/ui/shell/WaLayout'
 import { WaRail } from '@/shared/ui/shell/WaRail'
 import type { AppShellOutletContext } from './appOutletContext'
 
-const UNREAD_POLL_MS = 8000
+const UNREAD_POLL_MS = 15000
 const APP_TITLE = 'MALI ONE WhatsApp'
 
 export function WaAppShell() {
-  const [user, setUser] = useState<AuthUser | null>(null)
+  const { user, setUser } = useOutletContext<AppShellOutletContext>()
   const [conversationsUnreadCount, setConversationsUnreadCount] = useState(0)
   const location = useLocation()
   const isConversations = location.pathname.startsWith('/conversations')
   const hasInboxDetail = hasInboxDetailRoute(location.pathname)
 
   useEffect(() => {
-    onUnauthorized(() => setUser(null))
-    apiClient.getMe().then((result) => {
-      if (result.ok) setUser(result.data)
-    })
-  }, [])
+    onUnauthorized(() => setUser?.(null))
+    return () => onUnauthorized(() => {})
+  }, [setUser])
 
   useEffect(() => {
     if (!user?.area) {
@@ -42,12 +40,21 @@ export function WaAppShell() {
       return
     }
     let cancelled = false
+    let inFlight = false
     async function tick() {
-      const result = await apiClient.get<{ unread_count?: number }>(
-        '/api/conversations?chat=all&page=1',
-      )
-      if (cancelled || !result.ok) return
-      setConversationsUnreadCount(Math.max(0, result.data.unread_count ?? 0))
+      if (cancelled || inFlight || document.visibilityState === 'hidden') return
+      inFlight = true
+      try {
+        const result = await apiClient.get<{ unread_count?: number }>(
+          '/api/conversations/unread-count',
+        )
+        if (cancelled || !result.ok) return
+        setConversationsUnreadCount(Math.max(0, result.data.unread_count ?? 0))
+      } catch {
+        // El siguiente ciclo reintenta sin bloquear la navegación.
+      } finally {
+        inFlight = false
+      }
     }
     void tick()
     const timer = window.setInterval(() => void tick(), UNREAD_POLL_MS)
@@ -60,7 +67,7 @@ export function WaAppShell() {
       window.clearInterval(timer)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [user?.id])
+  }, [user?.id, user?.area])
 
   const layoutClass = [
     isConversations ? 'conversations-page' : '',
@@ -80,7 +87,15 @@ export function WaAppShell() {
             onUserUpdate={setUser}
             conversationsUnreadCount={conversationsUnreadCount}
           />
-          <Outlet context={outletContext} />
+          <Suspense
+            fallback={
+              <div role="status" className="p-4 text-muted">
+                Cargando…
+              </div>
+            }
+          >
+            <Outlet context={outletContext} />
+          </Suspense>
         </WaLayout>
       </div>
     </TooltipProvider>

@@ -10,6 +10,7 @@ import {
 
 type WaAreaSwitchPanelProps = {
   user: AuthUser
+  areaLines?: AreaLineInfo[]
   onUserUpdate?: (user: AuthUser) => void
   onDone?: () => void
   className?: string
@@ -21,6 +22,7 @@ export function canSwitchArea(user: AuthUser): boolean {
 
 export function WaAreaSwitchPanel({
   user,
+  areaLines: suppliedAreaLines,
   onUserUpdate,
   onDone,
   className = '',
@@ -30,16 +32,17 @@ export function WaAreaSwitchPanel({
   const [areaLines, setAreaLines] = useState<AreaLineInfo[]>([])
 
   useEffect(() => {
+    if (suppliedAreaLines) return
     let cancelled = false
     void (async () => {
       const result = await apiClient.getAreaLines()
       if (cancelled || !result.ok) return
       setAreaLines(result.data)
-    })()
+    })().catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [suppliedAreaLines])
 
   async function onSelectArea(area: string) {
     if (!area || area === user.area || switching) return
@@ -53,7 +56,7 @@ export function WaAreaSwitchPanel({
     }
   }
 
-  const linesByArea = new Map(areaLines.map((line) => [line.area, line]))
+  const linesByArea = new Map((suppliedAreaLines ?? areaLines).map((line) => [line.area, line]))
 
   return (
     <div className={className}>

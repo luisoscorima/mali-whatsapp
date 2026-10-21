@@ -1,6 +1,8 @@
 import { formatExportDate } from '../campaigns/campaign-format.util';
 import { exportFilenameDateStamp } from '../campaigns/campaign-format.util';
 import * as XLSX from 'xlsx';
+import type { BusinessArea } from '../config/areas';
+import { REPORT_SOURCE_HEADERS, reportExportSourceCells } from './report-export-source.util';
 import { auditCreatedDateSql } from './audit-log-query.util';
 import { resolveReportDateRange } from './report-date-range.util';
 
@@ -146,10 +148,15 @@ export async function fetchSegmentHistoryReport(
   };
 }
 
-export function buildSegmentHistoryXlsxBuffer(rows: SegmentHistoryRow[]): Buffer {
+export function buildSegmentHistoryXlsxBuffer(
+  rows: SegmentHistoryRow[],
+  area: BusinessArea,
+): Buffer {
+  const source = reportExportSourceCells(area);
   const aoa: string[][] = [
-    [...SEGMENT_HISTORY_HEADERS],
+    [...REPORT_SOURCE_HEADERS, ...SEGMENT_HISTORY_HEADERS],
     ...rows.map((r) => [
+      ...source,
       r.created_display,
       r.contact_id != null ? String(r.contact_id) : '',
       r.phone,
@@ -164,6 +171,7 @@ export function buildSegmentHistoryXlsxBuffer(rows: SegmentHistoryRow[]): Buffer
     ]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 24 }, { wch: 24 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Hist. segmentos');
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;

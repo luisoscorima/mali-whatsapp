@@ -62,6 +62,11 @@ export type InboxListResult = {
     q: string;
     chat: InboxChatFilter;
     window_max: InboxWindowMaxFilter;
+    from: string | null;
+    to: string | null;
+    range: 'default' | 'all' | 'custom';
+    applied_from: string | null;
+    applied_to: string | null;
     segment_slugs: string[];
     include_none: boolean;
   };
@@ -161,11 +166,24 @@ export type InboxDetail = {
   messages: InboxMessage[];
   events: InboxTimelineEvent[];
   tags: string[];
+  has_older_messages: boolean;
+  has_newer_messages: boolean;
   can_reply: boolean;
   reply_blocked_reason: '24h' | 'bot_mode' | null;
   user_service_window_open: boolean;
   ai_area_enabled: boolean;
   can_assign_conversations: boolean;
+};
+
+export type InboxOlderMessagesResult = {
+  messages: InboxMessage[];
+  events: InboxTimelineEvent[];
+  has_older_messages: boolean;
+  has_newer_messages: boolean;
+};
+
+export type InboxUnreadCountResult = {
+  unread_count: number;
 };
 
 export type EnsureConversationResult = {
@@ -207,6 +225,7 @@ export type MessageReactionResult = {
 
 export type InboxConversationUpdates = {
   messages: InboxMessage[];
+  has_newer_messages: boolean;
   message_reactions: { id: number; reaction: InboxMessageReaction | null }[];
   message_deliveries: { id: number; delivery: InboxMessageDelivery | null }[];
   events: InboxTimelineEvent[];

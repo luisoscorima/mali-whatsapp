@@ -1,4 +1,4 @@
-import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import { useAppUser } from '@/app/appOutletContext'
 import { apiClient } from '../../shared/api'
@@ -53,7 +53,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/ui/shadcn/dropdown-menu'
-import { ConversationsSummaryPane } from './ConversationsSummaryPane'
+const ConversationsSummaryPane = lazy(() => import('./ConversationsSummaryPane').then((m) => ({ default: m.ConversationsSummaryPane })))
 import { InboxComposeBar, type ReplyToMessage } from './InboxComposeBar'
 import { InboxMessageScroller, type InboxMessageScrollerHandle } from './InboxMessageScroller'
 import {
@@ -297,6 +297,8 @@ function ProfileBlock({
         <ConversationBadges
           status={detail.conversation.status}
           assignedUserLabel={detail.conversation.assigned_user_label}
+          archived={Boolean(detail.conversation.archived)}
+          unanswered={!detail.conversation.last_user_message_at}
         />
         <p className="inbox-chat-sub">
           {chatSecondaryLabel(detail.conversation.phone)}
@@ -405,6 +407,11 @@ type InboxListResult = {
     q: string
     chat: 'all' | 'unread' | 'bot' | 'human' | 'mine' | 'unassigned' | 'unanswered' | 'archived' | 'archived_auto' | 'archived_manual'
     window_max: WindowMaxFilter
+    from: string | null
+    to: string | null
+    range: 'default' | 'all' | 'custom'
+    applied_from: string | null
+    applied_to: string | null
     segment_slugs: string[]
     include_none: boolean
   }
@@ -485,6 +492,8 @@ type InboxDetail = {
   messages: InboxMessage[]
   events: InboxTimelineEvent[]
   tags: string[]
+  has_older_messages?: boolean
+  has_newer_messages?: boolean
   can_reply: boolean
   reply_blocked_reason: '24h' | 'bot_mode' | null
   user_service_window_open: boolean
@@ -492,8 +501,16 @@ type InboxDetail = {
   can_assign_conversations: boolean
 }
 
+type InboxOlderMessagesResult = {
+  messages: InboxMessage[]
+  events: InboxTimelineEvent[]
+  has_older_messages: boolean
+  has_newer_messages: boolean
+}
+
 type InboxConversationUpdates = {
   messages: InboxMessage[]
+  has_newer_messages: boolean
   message_reactions: { id: number; reaction: InboxMessageReaction | null }[]
   message_deliveries: { id: number; delivery: InboxMessage['delivery'] }[]
   events: InboxTimelineEvent[]
@@ -521,6 +538,10 @@ function normalizeInboxChatParam(
   return chat as InboxListResult['filters']['chat']
 }
 
+function isYmdDateParam(raw: string | null): raw is string {
+  return Boolean(raw && /^\d{4}-\d{2}-\d{2}$/.test(raw.trim()))
+}
+
 function inboxApiQuery(searchParams: URLSearchParams, extra?: { msg?: number }): string {
   const qs = new URLSearchParams()
   const q = searchParams.get('q')
@@ -529,6 +550,13 @@ function inboxApiQuery(searchParams: URLSearchParams, extra?: { msg?: number }):
   if (chat !== 'all') qs.set('chat', chat)
   const windowMax = parseWindowMaxFilter(searchParams.get('window_max'))
   if (windowMax != null) qs.set('window_max', String(windowMax))
+  const from = searchParams.get('from')
+  const to = searchParams.get('to')
+  const hasFrom = isYmdDateParam(from)
+  const hasTo = isYmdDateParam(to)
+  if (hasFrom) qs.set('from', from.trim())
+  if (hasTo) qs.set('to', to.trim())
+  if (!hasFrom && !hasTo && searchParams.get('range') === 'all') qs.set('range', 'all')
   searchParams.getAll('segment').forEach((slug) => qs.append('segment', slug))
   const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1)
   if (page > 1) qs.set('page', String(page))
@@ -537,19 +565,39 @@ function inboxApiQuery(searchParams: URLSearchParams, extra?: { msg?: number }):
   return value ? `?${value}` : ''
 }
 
+function inboxDateKeyFromParams(searchParams: URLSearchParams): string {
+  const from = isYmdDateParam(searchParams.get('from'))
+    ? searchParams.get('from')!.trim()
+    : ''
+  const to = isYmdDateParam(searchParams.get('to'))
+    ? searchParams.get('to')!.trim()
+    : ''
+  if (from || to) return `custom\n${from}\n${to}`
+  if (searchParams.get('range') === 'all') return 'all'
+  return 'default'
+}
+
+function inboxDateKeyFromResult(filters: InboxListResult['filters']): string {
+  if (filters.range === 'custom') {
+    return `custom\n${filters.from ?? ''}\n${filters.to ?? ''}`
+  }
+  if (filters.range === 'all') return 'all'
+  return 'default'
+}
+
 function inboxFilterKeyFromParams(searchParams: URLSearchParams): string {
   const q = (searchParams.get('q') ?? '').trim()
   const chat = normalizeInboxChatParam(searchParams.get('chat'))
   const windowMax = parseWindowMaxFilter(searchParams.get('window_max')) ?? ''
   const segments = searchParams.getAll('segment').sort().join('\0')
-  return `${q}\n${chat}\n${windowMax}\n${segments}`
+  return `${q}\n${chat}\n${windowMax}\n${inboxDateKeyFromParams(searchParams)}\n${segments}`
 }
 
 function inboxFilterKeyFromResult(filters: InboxListResult['filters']): string {
   const segments = [...filters.segment_slugs]
   if (filters.include_none) segments.push('__none__')
   const windowMax = filters.window_max ?? ''
-  return `${filters.q}\n${filters.chat}\n${windowMax}\n${segments.sort().join('\0')}`
+  return `${filters.q}\n${filters.chat}\n${windowMax}\n${inboxDateKeyFromResult(filters)}\n${segments.sort().join('\0')}`
 }
 
 function inboxInitials(contactName: string, phone: string | null): string {
@@ -718,6 +766,7 @@ export function ConversationsInboxPage() {
   const [sendingReply, setSendingReply] = useState(false)
   const [searchInput, setSearchInput] = useState(searchParams.get('q') ?? '')
   const [loadingDetail, setLoadingDetail] = useState(false)
+  const [loadingMessagePage, setLoadingMessagePage] = useState(false)
   const [selectedContactIds, setSelectedContactIds] = useState<Set<number>>(new Set())
   const [bulkAttrDefs, setBulkAttrDefs] = useState<AttributeFieldDefinition[]>([])
   const [bulkBusy, setBulkBusy] = useState(false)
@@ -742,9 +791,19 @@ export function ConversationsInboxPage() {
   const listRequestIdRef = useRef(0)
   const detailRequestIdRef = useRef(0)
   const listInFlightRef = useRef(false)
+  const listAbortRef = useRef<AbortController | null>(null)
+  const quotaInFlightRef = useRef(false)
   const listAreaRef = useRef<string | null>(null)
   const scrollerRef = useRef<InboxMessageScrollerHandle | null>(null)
   const sendingReplyRef = useRef(false)
+  const detailAbortRef = useRef<AbortController | null>(null)
+  const pageAbortRef = useRef<AbortController | null>(null)
+  const updatesAbortRef = useRef<AbortController | null>(null)
+  const detailRef = useRef(detail)
+  detailRef.current = detail
+  const searchParamsRef = useRef(searchParams)
+  searchParamsRef.current = searchParams
+  const [showSummary, setShowSummary] = useState(false)
   const [listScrollAtEnd, setListScrollAtEnd] = useState(false)
   const [listCanScroll, setListCanScroll] = useState(false)
 
@@ -758,6 +817,13 @@ export function ConversationsInboxPage() {
   const highlightMsgId = Number(searchParams.get('msg') || '') || null
   const chatFilter = normalizeInboxChatParam(searchParams.get('chat'))
   const windowMaxFilter = parseWindowMaxFilter(searchParams.get('window_max'))
+  const explicitFrom = isYmdDateParam(searchParams.get('from'))
+    ? searchParams.get('from')!.trim()
+    : ''
+  const explicitTo = isYmdDateParam(searchParams.get('to'))
+    ? searchParams.get('to')!.trim()
+    : ''
+  const rangeAll = searchParams.get('range') === 'all'
   const selectedSegments = searchParams.getAll('segment')
   const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1)
   const activeFilterKey = useMemo(
@@ -767,10 +833,13 @@ export function ConversationsInboxPage() {
 
   const loadList = useCallback((opts?: { silent?: boolean; skipIfInFlight?: boolean }) => {
     if (opts?.skipIfInFlight && listInFlightRef.current) return Promise.resolve()
+    listAbortRef.current?.abort()
+    const controller = new AbortController()
+    listAbortRef.current = controller
     const requestId = ++listRequestIdRef.current
     listInFlightRef.current = true
     return apiClient
-      .get<InboxListResult>(`/api/conversations${filterQuerySuffix}`)
+      .get<InboxListResult>(`/api/conversations${filterQuerySuffix}`, { signal: controller.signal })
       .then((result) => {
         if (requestId !== listRequestIdRef.current) return
         if (!result.ok) {
@@ -782,6 +851,9 @@ export function ConversationsInboxPage() {
         }
         setList(result.data)
       })
+      .catch(() => {
+        if (!controller.signal.aborted && !opts?.silent) setError('No se pudo cargar la bandeja. Intenta de nuevo.')
+      })
       .finally(() => {
         if (requestId === listRequestIdRef.current) {
           listInFlightRef.current = false
@@ -789,10 +861,15 @@ export function ConversationsInboxPage() {
       })
   }, [filterQuerySuffix])
 
-  const loadServiceReplies = useCallback(() => {
-    return apiClient.get<ServiceReplyQuota>('/api/conversations/service-replies').then((result) => {
+  const loadServiceReplies = useCallback(async () => {
+    if (quotaInFlightRef.current) return
+    quotaInFlightRef.current = true
+    try {
+      const result = await apiClient.get<ServiceReplyQuota>('/api/conversations/service-replies')
       if (result.ok) setServiceReplies(result.data)
-    })
+    } catch {
+      // Se vuelve a consultar al enviar o en el próximo ciclo.
+    } finally { quotaInFlightRef.current = false }
   }, [])
 
   useEffect(() => {
@@ -822,7 +899,7 @@ export function ConversationsInboxPage() {
   }, [filterQuerySuffix])
 
   useEffect(() => {
-    if (!user?.area) return
+    if (!user?.area || !bulkActionsOpen) return
     apiClient
       .get<{ attribute_definitions: AttributeFieldDefinition[] }>(
         '/api/contacts/filter-options',
@@ -839,7 +916,7 @@ export function ConversationsInboxPage() {
           [...bySlug.values()].sort((a, b) => a.label.localeCompare(b.label)),
         )
       })
-  }, [user?.area])
+  }, [user?.area, bulkActionsOpen])
 
   const listCount = useMemo(() => {
     if (!list) return null
@@ -859,11 +936,22 @@ export function ConversationsInboxPage() {
   const listMatchesFilters =
     list != null && inboxFilterKeyFromResult(list.filters) === activeFilterKey
 
+  const showingDefaultRange = !rangeAll && !explicitFrom && !explicitTo && !searchQuery
+  const dateFromFilter =
+    explicitFrom ||
+    (showingDefaultRange && listMatchesFilters ? (list?.filters.applied_from ?? '') : '')
+  const dateToFilter =
+    explicitTo ||
+    (showingDefaultRange && listMatchesFilters ? (list?.filters.applied_to ?? '') : '')
+
   const hasActiveListFilters =
     chatFilter !== 'all' ||
     windowMaxFilter != null ||
     selectedSegments.length > 0 ||
-    Boolean(searchQuery)
+    Boolean(searchQuery) ||
+    Boolean(explicitFrom) ||
+    Boolean(explicitTo) ||
+    rangeAll
 
   function clearListFilters() {
     const next = new URLSearchParams()
@@ -871,57 +959,149 @@ export function ConversationsInboxPage() {
     setSearchParams(next)
   }
 
-  const loadDetail = useCallback((conversationId: number) => {
-    const requestId = ++detailRequestIdRef.current
-    setLoadingDetail(true)
-    setError('')
-    return apiClient
-      .get<InboxDetail>(`/api/conversations/${conversationId}`)
-      .then((result) => {
-        if (requestId !== detailRequestIdRef.current) return
-        setLoadingDetail(false)
-        if (!result.ok) {
-          notify.error(result.error)
-          setError(result.error)
-          setDetail(null)
-          setContactAttributes({})
-          return
-        }
-        setDetail(result.data)
-        const cid = result.data.conversation.contact_id
-        if (cid) {
-          apiClient
-            .get<{ attributes: Record<string, string> }>(`/api/contacts/${cid}`)
-            .then((cr) => {
-              if (requestId !== detailRequestIdRef.current) return
-              if (cr.ok) setContactAttributes(cr.data.attributes || {})
-              else setContactAttributes({})
+  const loadDetail = useCallback(
+    (conversationId: number, messageId?: number | null) => {
+      detailAbortRef.current?.abort()
+      pageAbortRef.current?.abort()
+      pageAbortRef.current = null
+      updatesAbortRef.current?.abort()
+      const controller = new AbortController()
+      detailAbortRef.current = controller
+      const requestId = ++detailRequestIdRef.current
+      setLoadingDetail(true)
+      setLoadingMessagePage(false)
+      setError('')
+      return apiClient
+        .get<InboxDetail>(
+          `/api/conversations/${conversationId}${messageId ? `?message_id=${messageId}` : ''}`,
+          { signal: controller.signal },
+        )
+        .then((result) => {
+          if (requestId !== detailRequestIdRef.current) return
+          setLoadingDetail(false)
+          if (!result.ok) {
+            notify.error(result.error)
+            setError(result.error)
+            setDetail(null)
+            setContactAttributes({})
+            return
+          }
+          setDetail(result.data)
+          if (!messageId)
+            requestAnimationFrame(() => {
+              if (requestId === detailRequestIdRef.current)
+                scrollerRef.current?.scrollToBottom('auto')
             })
-        } else {
-          setContactAttributes({})
-        }
-        setList((prev) => {
-          if (!prev) return prev
-          const item = prev.items.find((row) => row.id === conversationId)
-          if (!item?.inbox_unread) return prev
-          return {
-            ...prev,
-            unread_count: Math.max(0, (prev.unread_count ?? 0) - 1),
-            items: prev.items.map((row) =>
-              row.id === conversationId ? { ...row, inbox_unread: false } : row,
-            ),
+          const cid = result.data.conversation.contact_id
+          if (cid) {
+            apiClient
+              .get<{ attributes: Record<string, string> }>(
+                `/api/contacts/${cid}`,
+                { signal: controller.signal },
+              )
+              .then((cr) => {
+                if (requestId !== detailRequestIdRef.current) return
+                if (cr.ok) setContactAttributes(cr.data.attributes || {})
+                else setContactAttributes({})
+              })
+              .catch(() => {})
+          } else {
+            setContactAttributes({})
+          }
+          setList((prev) => {
+            if (!prev) return prev
+            const item = prev.items.find((row) => row.id === conversationId)
+            if (!item?.inbox_unread) return prev
+            return {
+              ...prev,
+              unread_count: Math.max(0, (prev.unread_count ?? 0) - 1),
+              items: prev.items.map((row) =>
+                row.id === conversationId
+                  ? { ...row, inbox_unread: false }
+                  : row,
+              ),
+            }
+          })
+        })
+        .catch(() => {
+          if (
+            !controller.signal.aborted &&
+            requestId === detailRequestIdRef.current
+          ) {
+            setError('No se pudo cargar la conversación. Intenta de nuevo.')
+            setLoadingDetail(false)
           }
         })
+        .finally(() => {
+          if (detailAbortRef.current === controller)
+            detailAbortRef.current = null
+        })
+    },
+    [],
+  )
+
+  const loadMessagePage = useCallback(async (direction: 'before' | 'after') => {
+    const current = detailRef.current
+    if (!current || pageAbortRef.current || detailAbortRef.current) return
+    if (
+      direction === 'before'
+        ? !current.has_older_messages
+        : !current.has_newer_messages
+    )
+      return
+    const cursor =
+      direction === 'before'
+        ? current.messages[0]?.id
+        : current.messages.at(-1)?.id
+    if (!cursor) return
+    const conversationId = current.conversation.id
+    const requestId = detailRequestIdRef.current
+    const controller = new AbortController()
+    pageAbortRef.current = controller
+    setLoadingMessagePage(true)
+    try {
+      const result = await apiClient.get<InboxOlderMessagesResult>(
+        `/api/conversations/${conversationId}/messages?${direction}_id=${cursor}`,
+        { signal: controller.signal },
+      )
+      if (controller.signal.aborted || requestId !== detailRequestIdRef.current)
+        return
+      if (!result.ok) {
+        notify.error(result.error)
+        return
+      }
+      if (direction === 'before') scrollerRef.current?.preserveScrollOnPrepend()
+      setDetail((prev) => {
+        if (!prev || prev.conversation.id !== conversationId) return prev
+        const known = new Set(prev.messages.map((m) => m.id))
+        const incoming = result.data.messages.filter((m) => !known.has(m.id))
+        return {
+          ...prev,
+          messages: [...prev.messages, ...incoming].sort((a, b) => a.id - b.id),
+          events: mergeTimelineEvents(prev.events, result.data.events ?? []),
+          ...(direction === 'before'
+            ? { has_older_messages: result.data.has_older_messages }
+            : { has_newer_messages: result.data.has_newer_messages }),
+        }
       })
+    } catch {
+      if (!controller.signal.aborted)
+        notify.error('No se pudieron cargar los mensajes. Intenta de nuevo.')
+    } finally {
+      if (pageAbortRef.current === controller) {
+        pageAbortRef.current = null
+        setLoadingMessagePage(false)
+      }
+    }
   }, [])
 
   const conversationPath = useCallback(
     (conversationId: number, item?: InboxListItem): string => {
-      return `/conversations/${conversationId}${inboxApiQuery(searchParams, {
+      return `/conversations/${conversationId}${inboxApiQuery(searchParamsRef.current, {
         msg: item?.matched_message_id ?? undefined,
       })}`
     },
-    [searchParams],
+    [],
   )
 
   const openConversationFromNotify = useCallback(
@@ -945,68 +1125,104 @@ export function ConversationsInboxPage() {
 
   const pollConversationUpdates = useCallback(
     async (conversationId: number) => {
-      const afterId = lastMessageIdRef.current
-      const afterAuditId = lastAuditIdRef.current
-      const result = await apiClient.get<InboxConversationUpdates>(
-        `/api/conversations/${conversationId}/updates?after_message_id=${afterId}&after_audit_id=${afterAuditId.toString()}`,
+      const current = detailRef.current
+      if (
+        !current ||
+        current.conversation.id !== conversationId ||
+        current.has_newer_messages ||
+        detailAbortRef.current ||
+        pageAbortRef.current ||
+        updatesAbortRef.current
       )
-      if (!result.ok) return
-
-      const shouldScroll = scrollerRef.current?.isNearBottom() ?? true
-      const incoming = result.data.messages
-      const reactionPatches = result.data.message_reactions ?? []
-      const deliveryPatches = result.data.message_deliveries ?? []
-      const incomingEvents = result.data.events ?? []
-
-      setDetail((prev) => {
-        if (!prev || prev.conversation.id !== conversationId) return prev
-        const known = new Set(prev.messages.map((message) => message.id))
-        const merged = [...prev.messages]
-        for (const message of incoming) {
-          if (!known.has(message.id)) merged.push(message)
-        }
-        merged.sort((a, b) => a.id - b.id)
-        return {
-          ...prev,
-          messages: mergeMessageDeliveries(
-            mergeMessageReactions(merged, reactionPatches),
-            deliveryPatches,
-          ),
-          events: mergeTimelineEvents(prev.events ?? [], incomingEvents),
-          conversation: {
-            ...prev.conversation,
-            status: result.data.conversation.status,
-            last_message_at: result.data.conversation.last_message_at,
-            last_user_message_at: result.data.conversation.last_user_message_at,
-            inbox_unread: result.data.conversation.inbox_unread,
-            archived: result.data.conversation.archived,
-            assigned_user_id: result.data.conversation.assigned_user_id,
-            assigned_user_label: result.data.conversation.assigned_user_label,
-            automation_touched_at: result.data.conversation.automation_touched_at,
-          },
-          can_reply: result.data.can_reply,
-          reply_blocked_reason: result.data.reply_blocked_reason,
-          user_service_window_open: result.data.user_service_window_open,
-        }
-      })
-
-      if (incoming.length > 0) {
-        lastMessageIdRef.current = Math.max(
-          afterId,
-          ...incoming.map((message) => message.id),
+        return
+      const controller = new AbortController()
+      updatesAbortRef.current = controller
+      const requestId = detailRequestIdRef.current
+      try {
+        const afterId = lastMessageIdRef.current
+        const afterAuditId = lastAuditIdRef.current
+        const result = await apiClient.get<InboxConversationUpdates>(
+          `/api/conversations/${conversationId}/updates?after_message_id=${afterId}&after_audit_id=${afterAuditId.toString()}&visible_from_id=${current.messages[0]?.id ?? 0}`,
+          { signal: controller.signal },
         )
-        if (shouldScroll) {
-          requestAnimationFrame(() => scrollerRef.current?.scrollToBottom('auto'))
-        }
-      } else if ((reactionPatches.length > 0 || incomingEvents.length > 0) && shouldScroll) {
-        requestAnimationFrame(() => scrollerRef.current?.scrollToBottom('auto'))
-      }
+        if (
+          !result.ok ||
+          controller.signal.aborted ||
+          requestId !== detailRequestIdRef.current
+        )
+          return
 
-      if (incomingEvents.length > 0) {
-        const nextAudit = maxAuditId(incomingEvents)
-        if (nextAudit > lastAuditIdRef.current) {
-          lastAuditIdRef.current = nextAudit
+        const shouldScroll = scrollerRef.current?.isNearBottom() ?? true
+        const incoming = result.data.messages
+        const reactionPatches = result.data.message_reactions ?? []
+        const deliveryPatches = result.data.message_deliveries ?? []
+        const incomingEvents = result.data.events ?? []
+
+        setDetail((prev) => {
+          if (!prev || prev.conversation.id !== conversationId) return prev
+          const known = new Set(prev.messages.map((message) => message.id))
+          const merged = [...prev.messages]
+          for (const message of incoming) {
+            if (!known.has(message.id)) merged.push(message)
+          }
+          merged.sort((a, b) => a.id - b.id)
+          return {
+            ...prev,
+            has_newer_messages: result.data.has_newer_messages,
+            messages: mergeMessageDeliveries(
+              mergeMessageReactions(merged, reactionPatches),
+              deliveryPatches,
+            ),
+            events: mergeTimelineEvents(prev.events ?? [], incomingEvents),
+            conversation: {
+              ...prev.conversation,
+              status: result.data.conversation.status,
+              last_message_at: result.data.conversation.last_message_at,
+              last_user_message_at:
+                result.data.conversation.last_user_message_at,
+              inbox_unread: result.data.conversation.inbox_unread,
+              archived: result.data.conversation.archived,
+              assigned_user_id: result.data.conversation.assigned_user_id,
+              assigned_user_label: result.data.conversation.assigned_user_label,
+              automation_touched_at:
+                result.data.conversation.automation_touched_at,
+            },
+            can_reply: result.data.can_reply,
+            reply_blocked_reason: result.data.reply_blocked_reason,
+            user_service_window_open: result.data.user_service_window_open,
+          }
+        })
+
+        if (incoming.length > 0) {
+          lastMessageIdRef.current = Math.max(
+            afterId,
+            ...incoming.map((message) => message.id),
+          )
+          if (shouldScroll) {
+            requestAnimationFrame(() =>
+              scrollerRef.current?.scrollToBottom('auto'),
+            )
+          }
+        } else if (
+          (reactionPatches.length > 0 || incomingEvents.length > 0) &&
+          shouldScroll
+        ) {
+          requestAnimationFrame(() =>
+            scrollerRef.current?.scrollToBottom('auto'),
+          )
         }
+
+        if (incomingEvents.length > 0) {
+          const nextAudit = maxAuditId(incomingEvents)
+          if (nextAudit > lastAuditIdRef.current) {
+            lastAuditIdRef.current = nextAudit
+          }
+        }
+      } catch {
+        // Reintentar en el próximo ciclo, sin superponer solicitudes.
+      } finally {
+        if (updatesAbortRef.current === controller)
+          updatesAbortRef.current = null
       }
     },
     [],
@@ -1026,13 +1242,19 @@ export function ConversationsInboxPage() {
   }, [sendingReply])
 
   useEffect(() => {
-    function tick(opts?: { forceList?: boolean }) {
+    let lastListPoll = Date.now()
+    let lastQuotaPoll = Date.now()
+    function tick() {
       if (document.visibilityState === 'hidden') return
-      void loadList({
-        silent: true,
-        skipIfInFlight: !opts?.forceList,
-      })
-      void loadServiceReplies()
+      const now = Date.now()
+      if (now - lastListPoll >= 15000) {
+        lastListPoll = now
+        void loadList({ silent: true, skipIfInFlight: true })
+      }
+      if (now - lastQuotaPoll >= 60000) {
+        lastQuotaPoll = now
+        void loadServiceReplies()
+      }
       if (
         selectedId != null &&
         selectedId > 0 &&
@@ -1044,7 +1266,7 @@ export function ConversationsInboxPage() {
 
     const timer = window.setInterval(() => tick(), INBOX_POLL_MS)
     function onVisibilityChange() {
-      if (document.visibilityState === 'visible') tick({ forceList: true })
+      if (document.visibilityState === 'visible') { lastListPoll = 0; tick() }
     }
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
@@ -1056,6 +1278,7 @@ export function ConversationsInboxPage() {
   useEffect(() => {
     setError('')
     void loadList()
+    return () => listAbortRef.current?.abort()
   }, [loadList])
 
   useEffect(() => {
@@ -1091,8 +1314,16 @@ export function ConversationsInboxPage() {
       return
     }
 
-    void loadDetail(selectedId)
-  }, [selectedId, navigate, loadDetail, conversationPath])
+    void loadDetail(selectedId, highlightMsgId)
+  }, [selectedId, highlightMsgId, navigate, loadDetail, conversationPath])
+
+  useEffect(() => () => {
+    detailRequestIdRef.current += 1
+    detailAbortRef.current?.abort()
+    pageAbortRef.current?.abort()
+    pageAbortRef.current = null
+    updatesAbortRef.current?.abort()
+  }, [selectedId, highlightMsgId])
 
   const resolvedHighlightMsgId = useMemo(() => {
     if (highlightMsgId) return highlightMsgId
@@ -1212,6 +1443,39 @@ export function ConversationsInboxPage() {
     next.delete('page')
     if (windowMax == null) next.delete('window_max')
     else next.set('window_max', String(windowMax))
+    setSearchParams(next)
+  }
+
+  function setDateRangeFilter(which: 'from' | 'to', value: string) {
+    const next = new URLSearchParams(searchParams)
+    next.delete('page')
+    next.delete('range')
+    if (showingDefaultRange) {
+      if (which !== 'from' && dateFromFilter) next.set('from', dateFromFilter)
+      if (which !== 'to' && dateToFilter) next.set('to', dateToFilter)
+    }
+    const trimmed = value.trim()
+    if (isYmdDateParam(trimmed)) next.set(which, trimmed)
+    else next.delete(which)
+    if (!next.get('from') && !next.get('to')) next.set('range', 'all')
+    setSearchParams(next)
+  }
+
+  function clearDateRangeFilter() {
+    const next = new URLSearchParams(searchParams)
+    next.delete('page')
+    next.delete('from')
+    next.delete('to')
+    next.set('range', 'all')
+    setSearchParams(next)
+  }
+
+  function restoreDefaultDateRange() {
+    const next = new URLSearchParams(searchParams)
+    next.delete('page')
+    next.delete('from')
+    next.delete('to')
+    next.delete('range')
     setSearchParams(next)
   }
 
@@ -1504,8 +1768,9 @@ export function ConversationsInboxPage() {
 
     const sent = result.data.messages ?? []
     const convId = selectedId
+    if (detailRef.current?.has_newer_messages) void loadDetail(convId)
     setDetail((prev) => {
-      if (!prev || prev.conversation.id !== convId) return prev
+      if (!prev || prev.conversation.id !== convId || prev.has_newer_messages) return prev
       const byId = new Map(prev.messages.map((message) => [message.id, message]))
       for (const message of sent) byId.set(message.id, message)
       const merged = [...byId.values()].sort((a, b) => a.id - b.id)
@@ -1814,6 +2079,46 @@ export function ConversationsInboxPage() {
             }}
           />
         </div>
+        <div className="flex flex-wrap items-center gap-2 px-3 text-xs">
+          <label className="muted flex items-center gap-1">
+            Desde
+            <input
+              type="date"
+              value={dateFromFilter}
+              onChange={(e) => setDateRangeFilter('from', e.target.value)}
+              className="rounded border border-line bg-surface px-1 py-0.5 text-ink"
+              aria-label="Fecha desde último mensaje"
+            />
+          </label>
+          <label className="muted flex items-center gap-1">
+            Hasta
+            <input
+              type="date"
+              value={dateToFilter}
+              onChange={(e) => setDateRangeFilter('to', e.target.value)}
+              className="rounded border border-line bg-surface px-1 py-0.5 text-ink"
+              aria-label="Fecha hasta último mensaje"
+            />
+          </label>
+          {dateFromFilter || dateToFilter || explicitFrom || explicitTo ? (
+            <button
+              type="button"
+              className="small-btn compact"
+              onClick={clearDateRangeFilter}
+            >
+              Limpiar fechas
+            </button>
+          ) : null}
+          {rangeAll ? (
+            <button
+              type="button"
+              className="small-btn compact"
+              onClick={restoreDefaultDateRange}
+            >
+              Últimos 15 días
+            </button>
+          ) : null}
+        </div>
       </div>
       <button
         type="button"
@@ -2115,12 +2420,16 @@ export function ConversationsInboxPage() {
                                   <ConversationBadges
                                     status={item.conversation_status}
                                     assignedUserLabel={item.assigned_user_label}
+                                    archived={item.archived}
+                                    unanswered={!item.last_user_message_at}
                                   />
                                 </span>
                               ) : (
                                 <ConversationBadges
                                   status={item.conversation_status}
                                   assignedUserLabel={item.assigned_user_label}
+                                  archived={item.archived}
+                                  unanswered={!item.last_user_message_at}
                                 />
                               )}
                               <span className="inbox-chat-row-mid">
@@ -2318,7 +2627,12 @@ export function ConversationsInboxPage() {
 
       <WaMainPane>
         {selectedId == null ? (
-          <ConversationsSummaryPane />
+          showSummary ? <Suspense fallback={<p className="p-4 text-muted">Cargando resumen…</p>}><ConversationsSummaryPane /></Suspense> : (
+            <WaEmptyPane>
+              <p>Selecciona una conversación para ver sus mensajes.</p>
+              <button type="button" className="small-btn" onClick={() => setShowSummary(true)}>Ver resumen de conversaciones</button>
+            </WaEmptyPane>
+          )
         ) : loadingDetail && !detail ? (
           <WaEmptyPane heading="Cargando chat…" />
         ) : error && !detail ? (
@@ -2404,7 +2718,24 @@ export function ConversationsInboxPage() {
                 ref={scrollerRef}
                 conversationId={detail.conversation.id}
                 scrollToMessageId={resolvedHighlightMsgId}
+                onLoadOlder={() => void loadMessagePage('before')}
+                onLoadNewer={() => void loadMessagePage('after')}
+                onJumpToLatest={detail.has_newer_messages ? () => void loadDetail(detail.conversation.id) : undefined}
               >
+                {detail.has_older_messages ? (
+                  <div className="flex justify-center py-2">
+                    <button
+                      type="button"
+                      className="small-btn compact"
+                      disabled={loadingMessagePage}
+                      onClick={() => void loadMessagePage('before')}
+                    >
+                      {loadingMessagePage
+                        ? 'Cargando…'
+                        : 'Cargar mensajes anteriores'}
+                    </button>
+                  </div>
+                ) : null}
                 {timelineItems.length === 0 ? (
                   <p className="text-center text-sm text-muted">Sin mensajes aún.</p>
                 ) : (
@@ -2434,6 +2765,14 @@ export function ConversationsInboxPage() {
                     )
                   })
                 )}
+                {detail.has_newer_messages ? (
+                  <div className="flex justify-center py-2">
+                    <button type="button" className="small-btn compact" disabled={loadingMessagePage}
+                      onClick={() => void loadMessagePage('after')}>
+                      {loadingMessagePage ? 'Cargando…' : 'Cargar mensajes siguientes'}
+                    </button>
+                  </div>
+                ) : null}
               </InboxMessageScroller>
             </div>
 

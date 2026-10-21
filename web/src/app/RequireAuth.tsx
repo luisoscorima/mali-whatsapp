@@ -1,15 +1,29 @@
 import { useEffect, useState } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
-import { apiClient } from '../shared/api'
+import { apiClient, type AuthUser } from '../shared/api'
 
 export function RequireAuth() {
   const location = useLocation()
   const [allowed, setAllowed] = useState<boolean | null>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
 
   useEffect(() => {
-    apiClient.getSession().then((result) =>
-      setAllowed(Boolean(result.ok && result.data.authenticated)),
-    )
+    let cancelled = false
+    apiClient
+      .getSession()
+      .then((result) => {
+        if (cancelled) return
+        setUser(result.ok ? (result.data.user ?? null) : null)
+        setAllowed(
+          Boolean(result.ok && result.data.authenticated && result.data.user),
+        )
+      })
+      .catch(() => {
+        if (!cancelled) setAllowed(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   if (allowed === null) {
@@ -20,9 +34,9 @@ export function RequireAuth() {
     )
   }
 
-  if (!allowed) {
+  if (!allowed || !user) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />
   }
 
-  return <Outlet />
+  return <Outlet context={{ user, setUser }} />
 }

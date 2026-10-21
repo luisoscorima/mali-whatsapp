@@ -1,4 +1,6 @@
 import * as XLSX from 'xlsx';
+import type { BusinessArea } from '../config/areas';
+import { REPORT_SOURCE_HEADERS, reportExportSourceCells } from './report-export-source.util';
 import { exportFilenameDateStamp } from '../campaigns/campaign-format.util';
 import {
   REPORT_HEADERS,
@@ -16,14 +18,16 @@ function safeFilenamePart(value: string): string {
 
 export function buildContactCommunicationXlsxBuffer(
   rows: ContactCommunicationRow[],
+  area: BusinessArea,
 ): Buffer {
+  const source = reportExportSourceCells(area);
   const aoa: string[][] = [
-    [...REPORT_HEADERS],
-    ...rows.map((r) => reportRowToExportCells(r)),
+    [...REPORT_SOURCE_HEADERS, ...REPORT_HEADERS],
+    ...rows.map((r) => [...source, ...reportRowToExportCells(r)]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = REPORT_HEADERS.map((h) => ({
-    wch: Math.min(48, Math.max(12, h.length + 2)),
+  ws['!cols'] = [...REPORT_SOURCE_HEADERS, ...REPORT_HEADERS].map((h, i) => ({
+    wch: Math.min(48, Math.max(i < 2 ? 24 : 12, h.length + 2)),
   }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Comunicaciones');

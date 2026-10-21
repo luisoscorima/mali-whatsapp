@@ -4,6 +4,7 @@ import { defaultHomePath } from '@/shared/auth/permissions'
 
 export type AppShellOutletContext = {
   user: AuthUser | null
+  setUser?: (user: AuthUser | null) => void
 }
 
 export function useAppUser(): AuthUser | null {

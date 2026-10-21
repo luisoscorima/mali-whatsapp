@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useOutletContext } from 'react-router-dom'
+import type { AppShellOutletContext } from '@/app/appOutletContext'
 import { notify } from '@/shared/notify'
 import { apiClient } from '../../shared/api'
 
 export function ChangePasswordPage() {
   const navigate = useNavigate()
+  const { setUser } = useOutletContext<AppShellOutletContext>()
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -38,6 +40,7 @@ export function ChangePasswordPage() {
       notify.error(result.error)
       return
     }
+    setUser?.(result.data.user)
     navigate('/conversations', { replace: true })
   }
 

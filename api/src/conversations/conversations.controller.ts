@@ -31,6 +31,8 @@ import type {
   EnsureConversationResult,
   InboxDetail,
   InboxListResult,
+  InboxOlderMessagesResult,
+  InboxUnreadCountResult,
   ReplyResult,
   UpdateConversationModeResult,
   InboxConversationUpdates,
@@ -76,6 +78,15 @@ export class ConversationsController {
   ): Promise<ApiResponse<InboxListResult>> {
     assertCanManageConversations(user);
     const data = await this.conversationsService.list(user, query);
+    return { ok: true, data };
+  }
+
+  @Get('unread-count')
+  async unreadCount(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<InboxUnreadCountResult>> {
+    assertCanManageConversations(user);
+    const data = await this.conversationsService.getUnreadCount(user);
     return { ok: true, data };
   }
 
@@ -290,6 +301,7 @@ export class ConversationsController {
     @Param('id', ParseIntPipe) id: number,
     @Query('after_message_id') afterMessageId?: string,
     @Query('after_audit_id') afterAuditId?: string,
+    @Query('visible_from_id') visibleFromId?: string,
   ): Promise<ApiResponse<InboxConversationUpdates>> {
     assertCanManageConversations(user);
     const afterId = Number(afterMessageId ?? 0) || 0;
@@ -299,6 +311,26 @@ export class ConversationsController {
       id,
       afterId,
       auditAfter,
+      Number(visibleFromId) || 0,
+    );
+    return { ok: true, data };
+  }
+
+  @Get(':id/messages')
+  async olderMessages(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Query('before_id') beforeId?: string,
+    @Query('limit') limit?: string,
+    @Query('after_id') afterId?: string,
+  ): Promise<ApiResponse<InboxOlderMessagesResult>> {
+    assertCanManageConversations(user);
+    const data = await this.conversationsService.getOlderMessages(
+      user,
+      id,
+      beforeId,
+      limit,
+      afterId,
     );
     return { ok: true, data };
   }
@@ -307,9 +339,10 @@ export class ConversationsController {
   async detail(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
+    @Query('message_id') messageId?: string,
   ): Promise<ApiResponse<InboxDetail>> {
     assertCanManageConversations(user);
-    const data = await this.conversationsService.getDetail(user, id);
+    const data = await this.conversationsService.getDetail(user, id, messageId);
     return { ok: true, data };
   }
 }

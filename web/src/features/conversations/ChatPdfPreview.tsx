@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import type { PDFDocumentLoadingTask } from 'pdfjs-dist'
 import { getToken } from '../../shared/api/token'
-
-GlobalWorkerOptions.workerSrc = pdfWorker
 
 const PREVIEW_MAX_HEIGHT = 180
 
@@ -15,22 +12,7 @@ export function ChatPdfPreview({ downloadUrl }: ChatPdfPreviewProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [visible, setVisible] = useState(false)
-
-  useEffect(() => {
-    const host = hostRef.current
-    if (!host) return
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) {
-          setVisible(true)
-          observer.disconnect()
-        }
-      },
-      { rootMargin: '120px' },
-    )
-    observer.observe(host)
-    return () => observer.disconnect()
-  }, [])
+  const [status, setStatus] = useState('')
 
   useEffect(() => {
     if (!visible) return
@@ -39,8 +21,18 @@ export function ChatPdfPreview({ downloadUrl }: ChatPdfPreviewProps) {
     if (!canvas || !host) return
 
     let cancelled = false
+    const controller = new AbortController()
+    let loadingTask: PDFDocumentLoadingTask | undefined
+    setStatus('Cargando vista previa…')
     void (async () => {
       try {
+        const [{ getDocument, GlobalWorkerOptions }, { default: pdfWorker }] =
+          await Promise.all([
+            import('pdfjs-dist'),
+            import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
+          ])
+        if (cancelled) return
+        GlobalWorkerOptions.workerSrc = pdfWorker
         const headers: HeadersInit = {}
         const isAbsolute = /^https?:\/\//i.test(downloadUrl)
         if (!isAbsolute) {
@@ -51,13 +43,16 @@ export function ChatPdfPreview({ downloadUrl }: ChatPdfPreviewProps) {
         const res = await fetch(downloadUrl, {
           headers,
           credentials: isAbsolute ? 'omit' : 'include',
+          signal: controller.signal,
         })
-        if (!res.ok || cancelled) return
+        if (cancelled) return
+        if (!res.ok) throw new Error('PDF no disponible')
 
         const data = await res.arrayBuffer()
         if (cancelled) return
 
-        const pdf = await getDocument({ data }).promise
+        loadingTask = getDocument({ data })
+        const pdf = await loadingTask.promise
         if (cancelled) return
 
         const page = await pdf.getPage(1)
@@ -78,19 +73,45 @@ export function ChatPdfPreview({ downloadUrl }: ChatPdfPreviewProps) {
         canvas.width = viewport.width
         canvas.height = viewport.height
         await page.render({ canvasContext: context, viewport, canvas }).promise
+        if (!cancelled) setStatus('')
       } catch {
-        // Sin vista previa: Abrir/Descargar siguen disponibles.
+        if (!cancelled)
+          setStatus(
+            'Vista previa no disponible. Puedes abrir o descargar el PDF.',
+          )
+      } finally {
+        void loadingTask?.destroy()
       }
     })()
 
     return () => {
       cancelled = true
+      controller.abort()
+      void loadingTask?.destroy()
     }
   }, [visible, downloadUrl])
 
   return (
-    <div ref={hostRef} className="chat-pdf-preview" aria-hidden="true">
-      <canvas ref={canvasRef} className="chat-msg-media chat-msg-media--pdf" />
+    <div ref={hostRef} className="chat-pdf-preview">
+      {!visible ? (
+        <button
+          type="button"
+          className="small-btn compact"
+          onClick={() => setVisible(true)}
+        >
+          Ver vista previa del PDF
+        </button>
+      ) : null}
+      {status ? (
+        <p role="status" className="text-xs text-muted">
+          {status}
+        </p>
+      ) : null}
+      <canvas
+        ref={canvasRef}
+        hidden={!visible}
+        className="chat-msg-media chat-msg-media--pdf"
+      />
     </div>
   )
 }

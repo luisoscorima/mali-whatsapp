@@ -9,7 +9,7 @@ import {
 import { notify } from '@/shared/notify'
 import { chatDisplayName } from './whatsappIdentity'
 
-const MINE_NOTIFY_POLL_MS = 8000
+const MINE_NOTIFY_POLL_MS = 15000
 const PREF_STORAGE_KEY = 'mali-inbox-browser-notify-enabled'
 
 type MineListItem = {
@@ -115,7 +115,7 @@ export function useAssignedInboxBrowserNotify(opts: {
     let inFlight = false
 
     async function pollMine() {
-      if (cancelled || inFlight) return
+      if (cancelled || inFlight || document.visibilityState !== 'hidden') return
       inFlight = true
       try {
         const result = await apiClient.get<MineListResult>(
@@ -159,6 +159,8 @@ export function useAssignedInboxBrowserNotify(opts: {
             onClick: () => onOpenRef.current(item.id),
           })
         }
+      } catch {
+        // Reintentar en el próximo ciclo si la conexión vuelve.
       } finally {
         inFlight = false
       }
@@ -167,7 +169,10 @@ export function useAssignedInboxBrowserNotify(opts: {
     void pollMine()
     const timer = window.setInterval(() => void pollMine(), MINE_NOTIFY_POLL_MS)
     function onVisibilityChange() {
-      if (document.visibilityState === 'hidden') void pollMine()
+      if (document.visibilityState === 'hidden') {
+        seeded = false
+        void pollMine()
+      }
     }
     document.addEventListener('visibilitychange', onVisibilityChange)
 

@@ -76,10 +76,13 @@ import {
 import {
   buildContactSegmentSql,
   buildConversationSegmentSql,
+  buildLastMessageDateRangeSql,
   buildWindowMaxFilterSql,
   parseInboxChatFilter,
+  parseInboxDateParam,
   parseInboxWindowMaxFilter,
   parseSegmentQueryParam,
+  resolveInboxDateFilter,
 } from './inbox-query.util';
 import { formatAdvisorLabel } from '../users/advisor-label.util';
 import {
@@ -94,6 +97,8 @@ import type {
   InboxMessage,
   InboxMessageReaction,
   InboxMessageDelivery,
+  InboxOlderMessagesResult,
+  InboxUnreadCountResult,
   ReplyResult,
   UpdateConversationModeResult,
   InboxConversationUpdates,
@@ -124,7 +129,8 @@ import {
 } from './inbox-timeline.util';
 import { fetchConversationSummary } from './conversation-analytics.util';
 
-const INBOX_LIST_PAGE_SIZE = 100;
+const INBOX_LIST_PAGE_SIZE = 50;
+const INBOX_DETAIL_MESSAGE_PAGE_SIZE = 50;
 
 type InboxRow = {
   id: number;
@@ -346,6 +352,7 @@ export class ConversationsService {
   private buildChatFilterSql(
     chat: ReturnType<typeof parseInboxChatFilter>,
     userId: number,
+    opts?: { searchAll?: boolean },
   ): Prisma.Sql {
     if (chat === 'archived') {
       return Prisma.sql` AND (c.archived = TRUE OR c.last_user_message_at IS NULL)`;
@@ -383,6 +390,10 @@ export class ConversationsService {
             AND m_out.created_at >= c.last_user_message_at
         )`;
     }
+    // Búsqueda en «Todos»: incluir archivados / históricos (como contactos).
+    if (opts?.searchAll) {
+      return Prisma.empty;
+    }
     return activeInbox;
   }
 
@@ -392,18 +403,27 @@ export class ConversationsService {
     searchQ: string,
     chatFilter: ReturnType<typeof parseInboxChatFilter>,
     windowMax: ReturnType<typeof parseInboxWindowMaxFilter>,
+    dateFrom: string | null,
+    dateTo: string | null,
+    includeUnreadOutside: boolean,
     userId: number,
     page: number,
     limit: number,
   ): Promise<InboxRow[]> {
     const segmentSql = buildConversationSegmentSql(segmentFilter);
     const searchSql = searchQ ? this.buildInboxSearchSql(searchQ) : Prisma.empty;
-    const chatSql = this.buildChatFilterSql(chatFilter, userId);
+    const chatSql = this.buildChatFilterSql(chatFilter, userId, {
+      searchAll: Boolean(searchQ) && chatFilter === 'all',
+    });
     const windowSql = buildWindowMaxFilterSql(windowMax);
+    const dateSql = buildLastMessageDateRangeSql(
+      dateFrom,
+      dateTo,
+      includeUnreadOutside,
+    );
+    const hasDateFilter = Boolean(dateFrom || dateTo);
     const offset = (page - 1) * limit;
-    const searchPat = searchQ
-      ? `%${escapeForLikePattern(searchQ)}%`
-      : null;
+    const searchPat = searchQ ? `%${escapeForLikePattern(searchQ)}%` : null;
     const matchedMessageSql = searchPat
       ? Prisma.sql`(
           SELECT m.id FROM chat_messages m
@@ -452,7 +472,7 @@ export class ConversationsService {
           JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
           WHERE cs.contact_id = ct.id
         ), ARRAY[]::varchar[]) AS contact_segment_slugs,
-        (SELECT m.body_text FROM chat_messages m
+        (SELECT LEFT(m.body_text, 160) FROM chat_messages m
          WHERE m.conversation_id = c.id
          ORDER BY m.created_at DESC
          LIMIT 1) AS preview,
@@ -471,11 +491,18 @@ export class ConversationsService {
       ${searchSql}
       ${chatSql}
       ${windowSql}
+      ${dateSql}
       ORDER BY c.inbox_unread DESC, c.last_message_at DESC
       LIMIT ${limit} OFFSET ${offset}
     `);
 
-    if (!searchQ || chatFilter !== 'all' || windowMax != null || page !== 1) {
+    if (
+      !searchQ ||
+      chatFilter !== 'all' ||
+      windowMax != null ||
+      hasDateFilter ||
+      page !== 1
+    ) {
       return rows;
     }
 
@@ -554,12 +581,23 @@ export class ConversationsService {
     searchQ: string,
     chatFilter: ReturnType<typeof parseInboxChatFilter>,
     windowMax: ReturnType<typeof parseInboxWindowMaxFilter>,
+    dateFrom: string | null,
+    dateTo: string | null,
+    includeUnreadOutside: boolean,
     userId: number,
   ): Promise<number> {
     const segmentSql = buildConversationSegmentSql(segmentFilter);
     const searchSql = searchQ ? this.buildInboxSearchSql(searchQ) : Prisma.empty;
-    const chatSql = this.buildChatFilterSql(chatFilter, userId);
+    const chatSql = this.buildChatFilterSql(chatFilter, userId, {
+      searchAll: Boolean(searchQ) && chatFilter === 'all',
+    });
     const windowSql = buildWindowMaxFilterSql(windowMax);
+    const dateSql = buildLastMessageDateRangeSql(
+      dateFrom,
+      dateTo,
+      includeUnreadOutside,
+    );
+    const hasDateFilter = Boolean(dateFrom || dateTo);
 
     const rows = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
       SELECT COUNT(*)::int AS n
@@ -570,10 +608,16 @@ export class ConversationsService {
       ${searchSql}
       ${chatSql}
       ${windowSql}
+      ${dateSql}
     `);
     let total = rows[0]?.n ?? 0;
 
-    if (!searchQ || chatFilter !== 'all' || windowMax != null) {
+    if (
+      !searchQ ||
+      chatFilter !== 'all' ||
+      windowMax != null ||
+      hasDateFilter
+    ) {
       return total;
     }
 
@@ -626,7 +670,7 @@ export class ConversationsService {
     const rows = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
       SELECT COUNT(*)::int AS n
       FROM conversations c
-      ${this.inboxResolvedContactJoinSql(area)}
+      ${segmentFilter.slugs.length ? this.inboxResolvedContactJoinSql(area) : Prisma.empty}
       WHERE c.area = ${area}
         AND c.inbox_unread = TRUE
         AND c.archived = FALSE
@@ -664,6 +708,19 @@ export class ConversationsService {
     const windowMax = parseInboxWindowMaxFilter(
       Array.isArray(query.window_max) ? query.window_max[0] : query.window_max,
     );
+    const dateFrom = parseInboxDateParam(
+      Array.isArray(query.from) ? query.from[0] : query.from,
+    );
+    const dateTo = parseInboxDateParam(
+      Array.isArray(query.to) ? query.to[0] : query.to,
+    );
+    const rangeRaw = Array.isArray(query.range) ? query.range[0] : query.range;
+    const dateFilter = resolveInboxDateFilter({
+      searchQ,
+      from: dateFrom,
+      to: dateTo,
+      rangeAll: String(rangeRaw ?? '').trim().toLowerCase() === 'all',
+    });
     const segmentRaw = parseSegmentQueryParam(query.segment);
     const slugSet = await this.getSegmentSlugSet(area);
     const segmentFilter = parseSegmentListFilter(segmentRaw, slugSet);
@@ -687,6 +744,9 @@ export class ConversationsService {
         searchQ,
         chat,
         windowMax,
+        dateFilter.appliedFrom,
+        dateFilter.appliedTo,
+        dateFilter.includeUnreadOutside,
         user.id,
       ),
       this.loadAiAreaEnabled(area),
@@ -702,6 +762,9 @@ export class ConversationsService {
       searchQ,
       chat,
       windowMax,
+      dateFilter.appliedFrom,
+      dateFilter.appliedTo,
+      dateFilter.includeUnreadOutside,
       user.id,
       pageClamped,
       limit,
@@ -722,10 +785,23 @@ export class ConversationsService {
         q: searchQ,
         chat,
         window_max: windowMax,
+        from: dateFrom,
+        to: dateTo,
+        range: dateFilter.range,
+        applied_from: dateFilter.appliedFrom,
+        applied_to: dateFilter.appliedTo,
         segment_slugs: segmentFilter.slugs,
         include_none: segmentFilter.includeNone,
       },
     };
+  }
+
+  async getUnreadCount(user: AuthUser): Promise<InboxUnreadCountResult> {
+    const unread_count = await this.countInboxUnread(user.area, {
+      slugs: [],
+      includeNone: false,
+    });
+    return { unread_count };
   }
 
   async getSummary(
@@ -929,12 +1005,15 @@ export class ConversationsService {
     return { campaign_id: campaign.id, message_id: messageId };
   }
 
-  async getDetail(user: AuthUser, conversationId: number): Promise<InboxDetail> {
+  async getDetail(
+    user: AuthUser,
+    conversationId: number,
+    aroundIdRaw?: string,
+  ): Promise<InboxDetail> {
     if (!Number.isInteger(conversationId) || conversationId <= 0) {
       throw new BadRequestException('Id de conversacion invalido');
     }
     const area = user.area;
-
     const conversation = await this.prisma.conversations.findFirst({
       where: { id: conversationId, area },
       include: {
@@ -1133,29 +1212,20 @@ export class ConversationsService {
         : null;
     }
 
-    const messageRows = await this.prisma.chat_messages.findMany({
-      where: { conversation_id: conversationId },
-      orderBy: { created_at: 'asc' },
-      select: {
-        id: true,
-        direction: true,
-        body_text: true,
-        message_type: true,
-        created_at: true,
-        is_ai: true,
-        raw_payload: true,
-      },
+    const page = await this.loadInboxMessagePage(conversationId, {
+      aroundIdRaw,
     });
-
     const messages = await this.enrichMessagesSenderFromAudit(
       area,
       conversationId,
-      await this.mapMessageRowsWithReplyTo(conversationId, messageRows),
+      await this.mapMessageRowsWithReplyTo(conversationId, page.rows),
     );
     const events = await this.loadConversationTimelineEvents(
       area,
       conversationId,
       resolvedContactId,
+      BigInt(0),
+      page.eventRange,
     );
 
     const windowOpen = isWithinUserServiceWindow(
@@ -1178,7 +1248,8 @@ export class ConversationsService {
         whatsapp_user_id: activeConversation.whatsapp_user_id,
         recipient: conversationRecipient(activeConversation),
         status: activeConversation.status,
-        last_message_at: activeConversation.last_message_at?.toISOString() ?? null,
+        last_message_at:
+          activeConversation.last_message_at?.toISOString() ?? null,
         last_user_message_at:
           activeConversation.last_user_message_at?.toISOString() ?? null,
         inbox_unread: false,
@@ -1199,11 +1270,162 @@ export class ConversationsService {
       messages,
       events,
       tags: tags.map((row) => row.label),
+      has_older_messages: page.hasOlder,
+      has_newer_messages: page.hasNewer,
       can_reply: windowOpen && !botModeBlock,
       reply_blocked_reason: replyBlockedReason,
       user_service_window_open: windowOpen,
       ai_area_enabled: aiAreaEnabled,
       can_assign_conversations: this.canAssignConversations(user),
+    };
+  }
+
+  /** ID is the cursor in both directions, including polling. Read one extra row. */
+  private async loadInboxMessagePage(
+    conversationId: number,
+    opts: {
+      beforeIdRaw?: string;
+      afterIdRaw?: string;
+      aroundIdRaw?: string;
+      limitRaw?: string;
+    } = {},
+  ) {
+    const parseId = (raw: string | undefined) => {
+      if (raw == null) return undefined;
+      const n = Number(raw);
+      if (!Number.isSafeInteger(n) || n <= 0)
+        throw new BadRequestException('Cursor de mensajes invalido');
+      return n;
+    };
+    const beforeId = parseId(opts.beforeIdRaw);
+    const afterId = parseId(opts.afterIdRaw);
+    const aroundId = parseId(opts.aroundIdRaw);
+    if ([beforeId, afterId, aroundId].filter((id) => id != null).length > 1) {
+      throw new BadRequestException('Usa un solo cursor de mensajes');
+    }
+    const requestedLimit = Number(
+      opts.limitRaw ?? INBOX_DETAIL_MESSAGE_PAGE_SIZE,
+    );
+    if (!Number.isInteger(requestedLimit) || requestedLimit <= 0) {
+      throw new BadRequestException('Limite de mensajes invalido');
+    }
+    const limit = Math.min(INBOX_DETAIL_MESSAGE_PAGE_SIZE, requestedLimit);
+    const anchorId = beforeId ?? afterId ?? aroundId;
+    const anchor =
+      anchorId == null
+        ? null
+        : await this.prisma.chat_messages.findFirst({
+            where: { id: anchorId, conversation_id: conversationId },
+            select: { id: true, created_at: true },
+          });
+    if (anchorId != null && !anchor)
+      throw new NotFoundException('Mensaje no encontrado');
+    const fetched = await this.prisma.chat_messages.findMany({
+      where: {
+        conversation_id: conversationId,
+        NOT: { message_type: { equals: 'reaction', mode: 'insensitive' } },
+        ...(beforeId
+          ? { id: { lt: beforeId } }
+          : afterId
+            ? { id: { gt: afterId } }
+            : aroundId
+              ? { id: { lte: aroundId } }
+              : {}),
+      },
+      orderBy: { id: afterId ? 'asc' : 'desc' },
+      take: limit + 1,
+      select: {
+        id: true,
+        direction: true,
+        body_text: true,
+        message_type: true,
+        created_at: true,
+        is_ai: true,
+        raw_payload: true,
+      },
+    });
+    const rows = fetched.slice(0, limit);
+    if (!afterId) rows.reverse();
+    const hasOlder = afterId ? true : fetched.length > limit;
+    const hasNewer = afterId
+      ? fetched.length > limit
+      : beforeId
+        ? true
+        : aroundId != null
+          ? (await this.prisma.chat_messages.findFirst({
+              where: {
+                conversation_id: conversationId,
+                id: { gt: aroundId },
+                NOT: {
+                  message_type: { equals: 'reaction', mode: 'insensitive' },
+                },
+              },
+              select: { id: true },
+            })) != null
+          : false;
+    const times = rows.map((row) => row.created_at.getTime());
+    const oldestDate = times.length
+      ? new Date(Math.min(...times))
+      : anchor?.created_at;
+    const newestDate = times.length
+      ? new Date(Math.max(...times))
+      : anchor?.created_at;
+    return {
+      rows,
+      hasOlder,
+      hasNewer,
+      eventRange: {
+        from: afterId ? anchor?.created_at : hasOlder ? oldestDate : undefined,
+        to: beforeId ? anchor?.created_at : hasNewer ? newestDate : undefined,
+      },
+    };
+  }
+
+  async getOlderMessages(
+    user: AuthUser,
+    conversationId: number,
+    beforeIdRaw?: string,
+    limitRaw?: string,
+    afterIdRaw?: string,
+  ): Promise<InboxOlderMessagesResult> {
+    if (!Number.isInteger(conversationId) || conversationId <= 0) {
+      throw new BadRequestException('Id de conversacion invalido');
+    }
+    if (!beforeIdRaw && !afterIdRaw)
+      throw new BadRequestException('Cursor requerido');
+    const conversation = await this.prisma.conversations.findFirst({
+      where: { id: conversationId, area: user.area },
+      select: { id: true, contact_id: true },
+    });
+    if (!conversation)
+      throw new NotFoundException('Conversacion no encontrada');
+    const page = await this.loadInboxMessagePage(conversationId, {
+      beforeIdRaw,
+      afterIdRaw,
+      limitRaw,
+    });
+    const [messages, events] = await Promise.all([
+      this.mapMessageRowsWithReplyTo(conversationId, page.rows).then(
+        (messages) =>
+          this.enrichMessagesSenderFromAudit(
+            user.area,
+            conversationId,
+            messages,
+          ),
+      ),
+      this.loadConversationTimelineEvents(
+        user.area,
+        conversationId,
+        conversation.contact_id,
+        BigInt(0),
+        page.eventRange,
+      ),
+    ]);
+    return {
+      messages,
+      events,
+      has_older_messages: page.hasOlder,
+      has_newer_messages: page.hasNewer,
     };
   }
 
@@ -1575,11 +1797,16 @@ export class ConversationsService {
     conversationId: number,
     contactId: number | null,
     afterAuditId = BigInt(0),
+    range: { from?: Date; to?: Date } = {},
   ): Promise<InboxTimelineEvent[]> {
     const contactEventTypes = [
       AuditEvent.CONTACT_LEAD_SCORE,
       AuditEvent.CONTACT_UPDATED,
     ];
+    const rangeSql = Prisma.sql`
+      ${range.from ? Prisma.sql` AND created_at >= ${range.from}` : Prisma.empty}
+      ${range.to ? Prisma.sql` AND created_at <= ${range.to}` : Prisma.empty}
+    `;
     const rows = contactId
       ? await this.prisma.$queryRaw<
           {
@@ -1594,6 +1821,7 @@ export class ConversationsService {
           FROM audit_logs
           WHERE area = ${area}
             AND id > ${afterAuditId}
+            ${rangeSql}
             AND event_type IN (${Prisma.join(INBOX_TIMELINE_EVENT_TYPES)})
             AND (
               (meta->>'conversation_id')::int = ${conversationId}
@@ -1617,6 +1845,7 @@ export class ConversationsService {
           FROM audit_logs
           WHERE area = ${area}
             AND id > ${afterAuditId}
+            ${rangeSql}
             AND event_type IN (${Prisma.join(INBOX_TIMELINE_EVENT_TYPES)})
             AND (meta->>'conversation_id')::int = ${conversationId}
           ORDER BY created_at ASC, id ASC
@@ -1728,6 +1957,13 @@ export class ConversationsService {
     );
     if (!needsLabel) return messages;
 
+    // El emparejamiento legacy solo considera auditorías a ±3 minutos.
+    const times = messages.map((message) =>
+      new Date(message.created_at).getTime(),
+    );
+    const auditFrom = new Date(Math.min(...times) - 3 * 60 * 1000);
+    const auditTo = new Date(Math.max(...times) + 3 * 60 * 1000);
+
     const audits = await this.prisma.$queryRaw<
       { actor_email: string | null; created_at: Date; meta: unknown }[]
     >(Prisma.sql`
@@ -1736,6 +1972,7 @@ export class ConversationsService {
       WHERE area = ${area}
         AND event_type = ${AuditEvent.CONVERSATION_REPLY}
         AND (meta->>'conversation_id')::int = ${conversationId}
+        AND created_at >= ${auditFrom} AND created_at <= ${auditTo}
       ORDER BY created_at ASC
     `);
 
@@ -1757,6 +1994,7 @@ export class ConversationsService {
 
   private async loadMessageReactions(
     conversationId: number,
+    visibleFromId = 0,
   ): Promise<{ id: number; reaction: InboxMessageReaction | null }[]> {
     const rows = await this.prisma.$queryRaw<
       { id: number; raw_payload: unknown }[]
@@ -1764,6 +2002,7 @@ export class ConversationsService {
       SELECT id, raw_payload
       FROM chat_messages
       WHERE conversation_id = ${conversationId}
+        AND id >= ${visibleFromId}
         AND raw_payload->'_mali_reaction' IS NOT NULL
     `);
     return rows
@@ -1781,9 +2020,14 @@ export class ConversationsService {
 
   private async loadMessageDeliveries(
     conversationId: number,
+    visibleFromId = 0,
   ): Promise<{ id: number; delivery: InboxMessageDelivery | null }[]> {
     const rows = await this.prisma.chat_messages.findMany({
-      where: { conversation_id: conversationId, direction: 'outbound' },
+      where: {
+        conversation_id: conversationId,
+        direction: 'outbound',
+        id: { gte: visibleFromId },
+      },
       select: { id: true, raw_payload: true },
       orderBy: { id: 'desc' },
       take: 300,
@@ -2377,6 +2621,7 @@ export class ConversationsService {
     conversationId: number,
     afterMessageId: number,
     afterAuditId = BigInt(0),
+    visibleFromId = 0,
   ): Promise<InboxConversationUpdates> {
     if (!Number.isInteger(conversationId) || conversationId <= 0) {
       throw new BadRequestException('Id de conversacion invalido');
@@ -2397,12 +2642,24 @@ export class ConversationsService {
     const safeAfterId =
       Number.isInteger(afterMessageId) && afterMessageId > 0 ? afterMessageId : 0;
 
-    const messageRows = await this.prisma.chat_messages.findMany({
+    const visibleFrom =
+      Number.isSafeInteger(visibleFromId) && visibleFromId > 0
+        ? visibleFromId
+        : safeAfterId;
+    const firstVisible = visibleFrom
+      ? await this.prisma.chat_messages.findFirst({
+          where: { conversation_id: conversationId, id: visibleFrom },
+          select: { created_at: true },
+        })
+      : null;
+    const fetched = await this.prisma.chat_messages.findMany({
       where: {
         conversation_id: conversationId,
+        NOT: { message_type: { equals: 'reaction', mode: 'insensitive' } },
         ...(safeAfterId > 0 ? { id: { gt: safeAfterId } } : {}),
       },
-      orderBy: { created_at: 'asc' },
+      orderBy: { id: 'asc' },
+      take: INBOX_DETAIL_MESSAGE_PAGE_SIZE + 1,
       select: {
         id: true,
         direction: true,
@@ -2413,8 +2670,11 @@ export class ConversationsService {
         raw_payload: true,
       },
     });
-    const messageReactions = await this.loadMessageReactions(conversationId);
-    const messageDeliveries = await this.loadMessageDeliveries(conversationId);
+    const messageRows = fetched.slice(0, INBOX_DETAIL_MESSAGE_PAGE_SIZE);
+    const [messageReactions, messageDeliveries] = await Promise.all([
+      this.loadMessageReactions(conversationId, visibleFrom),
+      this.loadMessageDeliveries(conversationId, visibleFrom),
+    ]);
 
     if (messageRows.length > 0) {
       await this.clearInboxUnreadOnOpen(user, conversationId, area);
@@ -2446,11 +2706,13 @@ export class ConversationsService {
         conversationId,
         conversation.contact_id,
         afterAuditId,
+        { from: firstVisible?.created_at ?? messageRows[0]?.created_at },
       ),
     ]);
 
     return {
       messages,
+      has_newer_messages: fetched.length > INBOX_DETAIL_MESSAGE_PAGE_SIZE,
       message_reactions: messageReactions,
       message_deliveries: messageDeliveries,
       events,
@@ -2459,7 +2721,8 @@ export class ConversationsService {
         last_user_message_at:
           conversation.last_user_message_at?.toISOString() ?? null,
         status: conversation.status,
-        inbox_unread: messageRows.length > 0 ? false : conversation.inbox_unread,
+        inbox_unread:
+          messageRows.length > 0 ? false : conversation.inbox_unread,
         archived: Boolean(conversation.archived),
         assigned_user_id: conversation.assigned_user_id,
         assigned_user_label: assignedUserLabel,
