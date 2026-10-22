@@ -13,6 +13,11 @@ export type TemplateListItem = {
   active: boolean;
 };
 
+export type SendableTemplateListItem = Pick<
+  TemplateListItem,
+  'id' | 'name' | 'language' | 'category' | 'status' | 'active'
+>;
+
 export type TemplateUsageMassCampaign = {
   id: number;
   status: string;

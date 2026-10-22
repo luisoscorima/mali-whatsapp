@@ -15,6 +15,7 @@ import type { ApiResponse, AuthUser } from '../auth/auth.types';
 import {
   assertCanCreateTemplates,
   assertCanListTemplates,
+  assertCanSendTemplatesFromChat,
   assertPermission,
 } from '../auth/permission.util';
 import { PERMISSION } from '../auth/roles';
@@ -30,6 +31,7 @@ import type {
   TemplateDefinition,
   TemplateDetail,
   TemplateListItem,
+  SendableTemplateListItem,
   TemplateSyncResult,
   TemplateValidateResult,
 } from './templates.types';
@@ -39,6 +41,28 @@ import type { TemplateSummary } from './template-analytics.util';
 @UseGuards(JwtAuthGuard, ProvisionedGuard)
 export class TemplatesController {
   constructor(private readonly templatesService: TemplatesService) {}
+
+  @Get('sendable')
+  async sendable(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<SendableTemplateListItem[]>> {
+    assertCanSendTemplatesFromChat(user);
+    const data = await this.templatesService.listSendable(user.area);
+    return { ok: true, data };
+  }
+
+  @Get('sendable/:id/definition')
+  async sendableDefinition(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<ApiResponse<TemplateDefinition>> {
+    assertCanSendTemplatesFromChat(user);
+    const data = await this.templatesService.getSendableDefinition(
+      user.area,
+      id,
+    );
+    return { ok: true, data };
+  }
 
   @Get()
   async list(

@@ -133,6 +133,14 @@ export function assertCanListTemplates(user: AuthUser): void {
   );
 }
 
+export function assertCanSendTemplatesFromChat(user: AuthUser): void {
+  assertPermission(
+    user,
+    PERMISSION.TEMPLATES_SEND_FROM_CHAT,
+    'No tienes permiso para enviar plantillas desde Chats',
+  );
+}
+
 export function assertCanCreateTemplates(user: AuthUser): void {
   assertPermission(
     user,

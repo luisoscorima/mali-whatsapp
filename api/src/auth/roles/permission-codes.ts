@@ -28,6 +28,7 @@ export const PERMISSION = {
   CAMPAIGNS_STATS: 'campaigns.stats',
 
   TEMPLATES_LIST: 'templates.list',
+  TEMPLATES_SEND_FROM_CHAT: 'templates.send_from_chat',
   TEMPLATES_CREATE: 'templates.create',
   TEMPLATES_TOGGLE: 'templates.toggle',
   TEMPLATES_SYNC: 'templates.sync',

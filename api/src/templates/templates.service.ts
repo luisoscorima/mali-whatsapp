@@ -33,6 +33,7 @@ import type {
   TemplateDefinition,
   TemplateDetail,
   TemplateListItem,
+  SendableTemplateListItem,
   TemplateSyncResult,
   TemplateUsage,
   TemplateValidateResult,
@@ -82,6 +83,42 @@ export class TemplatesService {
       submitted_at: toIso(row.submitted_at),
       synced_at: row.synced_at.toISOString(),
     }));
+  }
+
+  async listSendable(
+    area: AuthUser['area'],
+  ): Promise<SendableTemplateListItem[]> {
+    return this.prisma.whatsapp_templates.findMany({
+      where: { area, status: 'APPROVED', active: true },
+      orderBy: [{ name: 'asc' }, { language: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        language: true,
+        category: true,
+        status: true,
+        active: true,
+      },
+    });
+  }
+
+  async getSendableDefinition(area: AuthUser['area'], id: number): Promise<TemplateDefinition> {
+    const row = await this.prisma.whatsapp_templates.findFirst({
+      where: { id, area, status: 'APPROVED', active: true },
+      select: {
+        id: true,
+        name: true,
+        language: true,
+        category: true,
+        status: true,
+        components_json: true,
+        placeholder_aliases_json: true,
+      },
+    });
+    if (!row) {
+      throw new NotFoundException('Plantilla no encontrada o no disponible');
+    }
+    return buildTemplateDefinition(row);
   }
 
   async getSummary(area: AuthUser['area']): Promise<TemplateSummary> {

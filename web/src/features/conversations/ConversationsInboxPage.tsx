@@ -5,8 +5,10 @@ import { apiClient } from '../../shared/api'
 import { formatChatListTime, chatListReplyStatus } from '../../shared/format'
 import { notify } from '@/shared/notify'
 import {
+  PERMISSION,
   userCanCreateContacts,
   userCanUpdateContacts,
+  userHasPermission,
 } from '@/shared/auth/permissions'
 import { WaPageContents } from '@/shared/ui/shell/WaLayout'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
@@ -756,6 +758,7 @@ export function ConversationsInboxPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const user = useAppUser()
+  const canSendTemplate = userHasPermission(user, PERMISSION.TEMPLATES_SEND_FROM_CHAT)
   const { confirm, confirmDialog } = useConfirmDialog()
   const [list, setList] = useState<InboxListResult | null>(null)
   const [serviceReplies, setServiceReplies] = useState<ServiceReplyQuota | null>(null)
@@ -2790,6 +2793,7 @@ export function ConversationsInboxPage() {
                 canReply={detail.can_reply}
                 replyBlockedReason={detail.reply_blocked_reason}
                 conversationId={detail.conversation.id}
+                canSendTemplate={canSendTemplate}
                 onOpenTemplate={() => setTemplateOpen(true)}
                 onSwitchToHuman={() => void onModeChange('human', detail.conversation.id)}
                 onFlowStarted={() => void loadDetail(detail.conversation.id)}
@@ -2884,7 +2888,7 @@ export function ConversationsInboxPage() {
         }}
       />
 
-      {detail && selectedId ? (
+      {detail && selectedId && canSendTemplate ? (
         <InboxSendTemplateDialog
           open={templateOpen}
           onOpenChange={setTemplateOpen}

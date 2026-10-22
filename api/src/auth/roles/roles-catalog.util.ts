@@ -33,6 +33,7 @@ export const PERMISSION_LABELS: Record<PermissionCode, string> = {
   'campaigns.create': 'Crear campañas',
   'campaigns.stats': 'Estadísticas de campañas',
   'templates.list': 'Listar / ver plantillas',
+  'templates.send_from_chat': 'Listar y enviar plantillas desde Chats',
   'templates.create': 'Crear plantillas',
   'templates.toggle': 'Activar / desactivar plantillas',
   'templates.sync': 'Sincronizar plantillas desde Meta',
@@ -118,6 +119,7 @@ export const PERMISSION_GROUPS: {
     label: 'Plantillas',
     codes: [
       'templates.list',
+      'templates.send_from_chat',
       'templates.create',
       'templates.toggle',
       'templates.sync',

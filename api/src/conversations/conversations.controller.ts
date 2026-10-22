@@ -21,6 +21,7 @@ import type { ApiResponse, AuthUser } from '../auth/auth.types';
 import {
   assertCanExportConversation,
   assertCanManageConversations,
+  assertCanSendTemplatesFromChat,
   assertPermission,
   hasPermission,
 } from '../auth/permission.util';
@@ -126,7 +127,12 @@ export class ConversationsController {
     @Body() body: Record<string, unknown>,
   ) {
     assertCanManageConversations(user);
-    const data = await this.conversationsService.sendDirectTemplate(user, id, body);
+    assertCanSendTemplatesFromChat(user);
+    const data = await this.conversationsService.sendDirectTemplate(
+      user,
+      id,
+      body,
+    );
     return { ok: true, data };
   }
 

@@ -19,6 +19,7 @@ export const PERMISSION = {
   CAMPAIGNS_CREATE: 'campaigns.create',
   CAMPAIGNS_STATS: 'campaigns.stats',
   TEMPLATES_LIST: 'templates.list',
+  TEMPLATES_SEND_FROM_CHAT: 'templates.send_from_chat',
   TEMPLATES_CREATE: 'templates.create',
   FLOWS_LIST: 'flows.list',
   FLOWS_MANAGE: 'flows.manage',

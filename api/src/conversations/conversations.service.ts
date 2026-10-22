@@ -860,7 +860,7 @@ export class ConversationsService {
     }
 
     const templateRow = await this.prisma.whatsapp_templates.findFirst({
-      where: { id: templateSyncId, area, status: 'APPROVED' },
+      where: { id: templateSyncId, area, status: 'APPROVED', active: true },
       select: {
         id: true,
         name: true,

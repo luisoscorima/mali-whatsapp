@@ -111,6 +111,7 @@ type InboxComposeBarProps = {
   canReply: boolean
   replyBlockedReason?: ReplyBlockedReason
   conversationId: number
+  canSendTemplate: boolean
   onOpenTemplate: () => void
   onSwitchToHuman?: () => void | Promise<void>
   onFlowStarted?: () => void
@@ -135,6 +136,7 @@ export function InboxComposeBar({
   canReply,
   replyBlockedReason = null,
   conversationId,
+  canSendTemplate,
   onOpenTemplate,
   onSwitchToHuman,
   onFlowStarted,
@@ -214,7 +216,7 @@ export function InboxComposeBar({
 
   const blockedByBot = !canReply && replyBlockedReason === 'bot_mode'
   const blockedByWindow = !canReply && !blockedByBot
-  const hasSecondary = canReply && (windowOpen ? flows.length > 0 : true)
+  const hasSecondary = canReply && (windowOpen ? flows.length > 0 : canSendTemplate)
 
   return (
     <>
@@ -259,7 +261,9 @@ export function InboxComposeBar({
                 ? 'Este chat está en modo Bot. Pásalo a Asesor para escribir libremente.'
                 : windowOpen
                   ? 'No puedes escribir libremente ahora; inicia un flujo o envía una plantilla.'
-                  : 'Ventana de 24 h cerrada; envía una plantilla para reabrir la conversación.'}
+                  : canSendTemplate
+                    ? 'Ventana de 24 h cerrada; envía una plantilla para reabrir la conversación.'
+                    : 'Ventana de 24 h cerrada; no tienes permiso para enviar plantillas.'}
             </p>
             <div className="flex flex-wrap gap-2">
               {blockedByBot && onSwitchToHuman ? (
@@ -271,7 +275,7 @@ export function InboxComposeBar({
                   Pasar a Asesor
                 </Button>
               ) : null}
-              {blockedByWindow ? (
+              {blockedByWindow && canSendTemplate ? (
                 <Button type="button" size="sm" onClick={() => onOpenTemplate()}>
                   Enviar plantilla
                 </Button>

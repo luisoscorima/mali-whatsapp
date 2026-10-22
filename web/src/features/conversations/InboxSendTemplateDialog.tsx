@@ -41,6 +41,8 @@ export function InboxSendTemplateDialog({
   onSent,
 }: InboxSendTemplateDialogProps) {
   const [templates, setTemplates] = useState<TemplateItem[]>([])
+  const [templatesLoading, setTemplatesLoading] = useState(false)
+  const [templatesError, setTemplatesError] = useState('')
   const [templateId, setTemplateId] = useState('')
   const [def, setDef] = useState<WizardTemplateDefinition | null>(null)
   const [defLoading, setDefLoading] = useState(false)
@@ -54,18 +56,20 @@ export function InboxSendTemplateDialog({
     if (!open) return
     setTemplateId('')
     setDef(null)
+    setTemplates([])
+    setTemplatesLoading(true)
+    setTemplatesError('')
     setHeaderMediaUrl('')
     setHeaderParams([])
     setBodyParams([])
     setButtonParams([])
-    void apiClient.get<TemplateItem[]>('/api/templates').then((res) => {
-      if (res.ok) {
-        setTemplates(
-          res.data.filter(
-            (t) => t.status === 'APPROVED' && t.active !== false,
-          ),
-        )
+    void apiClient.get<TemplateItem[]>('/api/templates/sendable').then((res) => {
+      setTemplatesLoading(false)
+      if (!res.ok) {
+        setTemplatesError(res.error)
+        return
       }
+      setTemplates(res.data)
     })
   }, [open])
 
@@ -82,7 +86,7 @@ export function InboxSendTemplateDialog({
     let cancelled = false
     setDefLoading(true)
     void apiClient
-      .get<WizardTemplateDefinition>(`/api/templates/${templateId}/definition`)
+      .get<WizardTemplateDefinition>(`/api/templates/sendable/${templateId}/definition`)
       .then((res) => {
         if (cancelled) return
         setDefLoading(false)
@@ -173,9 +177,10 @@ export function InboxSendTemplateDialog({
             <select
               value={templateId}
               onChange={(e) => setTemplateId(e.target.value)}
+              disabled={templatesLoading}
               className="mt-1 w-full rounded-lg border border-line bg-bg px-2 py-1.5"
             >
-              <option value="">Seleccionar…</option>
+              <option value="">{templatesLoading ? 'Cargando…' : 'Seleccionar…'}</option>
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name} ({t.language})
@@ -183,6 +188,14 @@ export function InboxSendTemplateDialog({
               ))}
             </select>
           </label>
+
+          {templatesError ? (
+            <p className="text-sm text-danger">{templatesError}</p>
+          ) : null}
+
+          {!templatesLoading && !templatesError && templates.length === 0 ? (
+            <p className="muted text-sm">No hay plantillas aprobadas y activas disponibles.</p>
+          ) : null}
 
           {defLoading ? (
             <p className="muted text-sm">Cargando parámetros de plantilla…</p>
@@ -264,7 +277,7 @@ export function InboxSendTemplateDialog({
           <DialogClose>Cancelar</DialogClose>
           <Button
             type="button"
-            disabled={busy || !templateId || defLoading || !def}
+            disabled={busy || templatesLoading || !templateId || defLoading || !def}
             onClick={() => void handleSend()}
           >
             {busy ? 'Enviando…' : 'Enviar'}
