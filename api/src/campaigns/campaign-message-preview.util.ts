@@ -47,6 +47,7 @@ function parseButtonDefs(components: unknown[]) {
 export function formatCampaignParamSourceLabel(source: unknown): string {
   const s = String(source ?? '').trim();
   if (!s || s === 'static') return '';
+  if (s === 'user.name') return 'Nombre de quien envía';
   if (s === 'contact.name') return 'Nombre del contacto';
   if (s === 'contact.phone') return 'Telefono del contacto';
   if (s === 'contact.email') return 'Email del contacto';

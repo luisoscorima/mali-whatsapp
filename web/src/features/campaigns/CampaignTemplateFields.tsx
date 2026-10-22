@@ -55,7 +55,7 @@ function buildEmptyForm(def: WizardTemplateDefinition): CampaignTemplateFormStat
   }
 }
 
-type ParamRowProps = {
+type TemplateParamRowProps = {
   label: string
   value: string
   source: string
@@ -64,28 +64,31 @@ type ParamRowProps = {
   onSourceChange: (source: string) => void
 }
 
-function ParamRow({
+export function TemplateParamRow({
   label,
   value,
   source,
   attrs,
   onValueChange,
   onSourceChange,
-}: ParamRowProps) {
+}: TemplateParamRowProps) {
   const isStatic = source === 'static'
   const sourceLabel =
     source === 'static'
       ? 'valor fijo'
       : source === 'contact.name'
         ? 'nombre del contacto'
-        : source === 'contact.phone'
-          ? 'teléfono del contacto'
-          : source === 'contact.email'
-            ? 'email del contacto'
-            : source === 'contact.dni'
-              ? 'DNI del contacto'
-              : attrs.find((a) => `attr.${a.slug}` === source)?.label?.toLowerCase() ||
-                'valor por contacto'
+        : source === 'user.name'
+          ? 'nombre de quien envía'
+          : source === 'contact.phone'
+            ? 'teléfono del contacto'
+            : source === 'contact.email'
+              ? 'email del contacto'
+              : source === 'contact.dni'
+                ? 'DNI del contacto'
+                : attrs
+                    .find((a) => `attr.${a.slug}` === source)
+                    ?.label?.toLowerCase() || 'valor por contacto'
 
   return (
     <div className="space-y-2 rounded-lg border border-line bg-surface p-3">
@@ -114,6 +117,7 @@ function ParamRow({
           onChange={(e) => onSourceChange(e.target.value)}
         >
           <option value="static">Valor fijo (igual para todos)</option>
+          <option value="user.name">Nombre de quien envía</option>
           <option value="contact.name">Nombre del contacto</option>
           <option value="contact.phone">Teléfono del contacto</option>
           <option value="contact.email">Email del contacto</option>
@@ -261,7 +265,7 @@ export function CampaignTemplateFields({
       ) : null}
 
       {Array.from({ length: def.headerTextSlotCount }).map((_, i) => (
-        <ParamRow
+        <TemplateParamRow
           key={`h-${i}`}
           label={def.headerParamDefs[i]?.label || `Texto cabecera (${i + 1})`}
           value={form.headerParams[i] || ''}
@@ -277,7 +281,7 @@ export function CampaignTemplateFields({
       ))}
 
       {Array.from({ length: def.bodySlotCount }).map((_, i) => (
-        <ParamRow
+        <TemplateParamRow
           key={`b-${i}`}
           label={def.bodyParamDefs[i]?.label || `Texto cuerpo (${i + 1})`}
           value={form.bodyParams[i] || ''}
@@ -293,7 +297,7 @@ export function CampaignTemplateFields({
       ))}
 
       {Array.from({ length: def.totalButtonParams }).map((_, i) => (
-        <ParamRow
+        <TemplateParamRow
           key={`btn-${i}`}
           label={def.buttonParamDefs[i]?.label || `Botón URL (${i + 1})`}
           value={form.buttonParams[i] || ''}

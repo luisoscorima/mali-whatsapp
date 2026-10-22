@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -23,6 +24,10 @@ import { buildCampaignMessagePreview } from '../campaigns/campaign-message-previ
 import {
   buildParamsForContact,
   fetchContactAttributesMap,
+  formatTemplateSenderName,
+  materializeTemplateSenderName,
+  paramMappingUsesSource,
+  USER_NAME_PARAM_SOURCE,
 } from '../campaigns/contact-template-params.util';
 import {
   escapeForLikePattern,
@@ -158,6 +163,8 @@ type InboxRow = {
 
 @Injectable()
 export class ConversationsService {
+  private readonly logger = new Logger(ConversationsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
@@ -178,6 +185,91 @@ export class ConversationsService {
       user.isMaster ||
       user.canAssignConversations
     );
+  }
+
+  private async assignDirectTemplateSender(
+    user: AuthUser,
+    conversation: {
+      id: number;
+    },
+    campaignId: number,
+    templateName: string,
+  ): Promise<void> {
+    const sender = await this.prisma.users.findUnique({
+      where: { id: user.id },
+      select: { email: true, first_name: true, last_name: true },
+    });
+    const senderLabel = formatAdvisorLabel(
+      sender ?? { email: user.email, first_name: null, last_name: null },
+    );
+    const assignedAt = new Date();
+
+    const previousAssignment = await this.prisma.$transaction(async (tx) => {
+      const current = await tx.conversations.findFirst({
+        where: { id: conversation.id, area: user.area },
+        select: {
+          contact_id: true,
+          assigned_user_id: true,
+          assigned_user: {
+            select: { email: true, first_name: true, last_name: true },
+          },
+        },
+      });
+      if (!current) throw new NotFoundException('Conversación no encontrada');
+
+      await tx.conversations.update({
+        where: { id: conversation.id },
+        data: {
+          assigned_user_id: user.id,
+          assigned_at: assignedAt,
+          updated_at: assignedAt,
+        },
+      });
+
+      if (
+        current.contact_id &&
+        ['educacion', 'educacion_ca', 'educacion_ep'].includes(user.area)
+      ) {
+        const cycle = await tx.education_lead_cycles.findFirst({
+          where: { contact_id: current.contact_id, area: user.area },
+          orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+          select: { id: true },
+        });
+        if (cycle) {
+          await tx.education_lead_cycles.update({
+            where: { id: cycle.id },
+            data: {
+              assigned_user_id: user.id,
+              requires_review: false,
+              updated_at: assignedAt,
+            },
+          });
+        }
+      }
+
+      return {
+        userId: current.assigned_user_id,
+        label: current.assigned_user
+          ? formatAdvisorLabel(current.assigned_user)
+          : null,
+      };
+    });
+
+    await this.auditLog.write({
+      event_type: AuditEvent.CONVERSATION_ASSIGN,
+      message: `Conversación ${conversation.id} asignada a ${senderLabel} al enviar plantilla individual`,
+      actor: auditActor(user),
+      meta: {
+        conversation_id: conversation.id,
+        from_user_id: previousAssignment.userId,
+        from_user_label: previousAssignment.label,
+        to_user_id: user.id,
+        to_user_label: senderLabel,
+        source: 'direct_template',
+        campaign_id: campaignId,
+        template_name: templateName,
+      },
+    });
   }
 
   private async loadAiAreaEnabled(area: string): Promise<boolean> {
@@ -876,7 +968,7 @@ export class ConversationsService {
     }
 
     const def = buildTemplateDefinition(templateRow);
-    const staticParams = {
+    const submittedStaticParams = {
       headerParams: Array.isArray(body.headerParams)
         ? (body.headerParams as string[]).map((v) => String(v).trim())
         : [],
@@ -890,6 +982,19 @@ export class ConversationsService {
         typeof body.headerMediaUrl === 'string' ? body.headerMediaUrl.trim() : '',
     };
     const paramMapping = parseParamMappingFromBody(def, body);
+    let senderName = '';
+    if (paramMappingUsesSource(paramMapping, USER_NAME_PARAM_SOURCE)) {
+      const sender = await this.prisma.users.findUnique({
+        where: { id: user.id },
+        select: { first_name: true, last_name: true },
+      });
+      senderName = formatTemplateSenderName(sender || {});
+    }
+    const staticParams = materializeTemplateSenderName(
+      submittedStaticParams,
+      paramMapping,
+      senderName,
+    );
     const formCheck = validateTemplateFormValues(def, staticParams, {
       maxBodyLen: MAX_BODY_PARAM_LEN,
       maxUrlLen: MAX_IMAGE_URL_LEN,
@@ -910,6 +1015,15 @@ export class ConversationsService {
           contact ? attrsMap.get(contact.id) : undefined,
         )
       : staticParams;
+    const resolvedCheck = validateTemplateFormValues(def, resolvedParams, {
+      maxBodyLen: MAX_BODY_PARAM_LEN,
+      maxUrlLen: MAX_IMAGE_URL_LEN,
+    });
+    if (!resolvedCheck.ok) {
+      throw new BadRequestException(
+        `No se pudo completar la plantilla con los datos del contacto: ${resolvedCheck.message}`,
+      );
+    }
     const components = buildWhatsappGraphComponents(def, resolvedParams);
     const phoneNorm = conversationRecipient(conversation);
     const preview = buildCampaignMessagePreview(
@@ -994,6 +1108,32 @@ export class ConversationsService {
         preview,
         apiResponse,
       });
+      try {
+        await this.assignDirectTemplateSender(
+          user,
+          conversation,
+          campaign.id,
+          templateRow.name,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Plantilla individual enviada, pero no se pudo asignar conversación ${conversationId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        await this.auditLog.write({
+          level: 'error',
+          event_type: 'conversation.assign_failed',
+          message: `No se pudo asignar la conversación ${conversationId} después de enviar una plantilla individual`,
+          actor: auditActor(user),
+          meta: {
+            conversation_id: conversationId,
+            intended_user_id: user.id,
+            campaign_id: campaign.id,
+            template_name: templateRow.name,
+          },
+        });
+      }
     } else {
       throw new BadRequestException(
         sendErrorMessage

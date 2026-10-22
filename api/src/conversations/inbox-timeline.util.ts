@@ -75,6 +75,8 @@ export function formatInboxTimelineEventLabel(
   const eventType = String(row.event_type || '').trim();
 
   if (eventType === AuditEvent.CONVERSATION_ASSIGN) {
+    const fromUserId =
+      meta.from_user_id != null ? Number(meta.from_user_id) : null;
     const toUserId = meta.to_user_id != null ? Number(meta.to_user_id) : null;
     const source = String(meta.source ?? '').trim();
     if (toUserId == null || !Number.isFinite(toUserId)) {
@@ -84,6 +86,19 @@ export function formatInboxTimelineEventLabel(
       userLabelById.get(toUserId) ||
       String(meta.to_user_label ?? '').trim() ||
       'asesor';
+    if (source === 'direct_template') {
+      if (fromUserId == null || !Number.isFinite(fromUserId)) {
+        return `${actor} se asignó el chat al enviar una plantilla`;
+      }
+      if (fromUserId === toUserId) {
+        return `${actor} mantuvo la asignación al enviar una plantilla`;
+      }
+      const previousAssignee =
+        userLabelById.get(fromUserId) ||
+        String(meta.from_user_label ?? '').trim() ||
+        'asesor anterior';
+      return `${actor} reasignó el chat de ${previousAssignee} a ${assignee} al enviar una plantilla`;
+    }
     if (source === 'auto_reply') {
       return `Asignado a ${assignee} (autoasignación al responder)`;
     }
@@ -160,7 +175,9 @@ export function collectUserIdsFromAuditRows(rows: AuditRow[]): number[] {
   const ids = new Set<number>();
   for (const row of rows) {
     const meta = readMeta(row.meta);
+    const fromUserId = Number(meta.from_user_id);
     const toUserId = Number(meta.to_user_id);
+    if (Number.isInteger(fromUserId) && fromUserId > 0) ids.add(fromUserId);
     if (Number.isInteger(toUserId) && toUserId > 0) ids.add(toUserId);
   }
   return [...ids];

@@ -79,7 +79,13 @@ import type {
 } from './campaigns.types';
 import { formatCampaignSegmentDisplay, parseCampaignPayload } from './campaign-payload.util';
 import { analyzeRecipientTemplateParams } from './campaign-param-gaps.util';
-import { fetchContactAttributesMap } from './contact-template-params.util';
+import {
+  fetchContactAttributesMap,
+  formatTemplateSenderName,
+  materializeTemplateSenderName,
+  paramMappingUsesSource,
+  USER_NAME_PARAM_SOURCE,
+} from './contact-template-params.util';
 
 const SALIDA_OK_IN = sqlInList(SALIDA_OK_STATUSES);
 const ERROR_IN = sqlInList(ERROR_STATUSES);
@@ -1112,12 +1118,25 @@ export class CampaignsService {
       throw new BadRequestException('No hay destinatarios con los filtros actuales');
     }
 
-    const staticParams = {
+    const submittedStaticParams = {
       headerParams: values.headerParams,
       bodyParams: values.bodyParams,
       buttonParams: values.buttonParams,
       headerMediaUrl: values.headerMediaUrl,
     };
+    let senderName = '';
+    if (paramMappingUsesSource(paramMapping, USER_NAME_PARAM_SOURCE)) {
+      const sender = await this.prisma.users.findUnique({
+        where: { id: user.id },
+        select: { first_name: true, last_name: true },
+      });
+      senderName = formatTemplateSenderName(sender || {});
+    }
+    const staticParams = materializeTemplateSenderName(
+      submittedStaticParams,
+      paramMapping,
+      senderName,
+    );
 
     const excludeMissingParams = body.excludeMissingParams === true;
     const slotCount =

@@ -2,6 +2,7 @@ import type { PrismaService } from '../prisma/prisma.service';
 import type { ParamMapping } from '../templates/template-definition.util';
 
 const ATTR_PREFIX = 'attr.';
+export const USER_NAME_PARAM_SOURCE = 'user.name';
 
 export type StaticTemplateParams = {
   headerParams: string[];
@@ -33,6 +34,68 @@ export type ContactTemplateFields = {
   email?: string | null;
   dni?: string | null;
 };
+
+type TemplateSenderProfile = {
+  first_name?: string | null;
+  last_name?: string | null;
+};
+
+function firstNamePart(value: string | null | undefined): string {
+  return String(value || '').trim().split(/\s+/)[0] || '';
+}
+
+/** Primer nombre + primer apellido del usuario que crea el envío. */
+export function formatTemplateSenderName(
+  profile: TemplateSenderProfile,
+): string {
+  return [
+    firstNamePart(profile.first_name),
+    firstNamePart(profile.last_name),
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+export function paramMappingUsesSource(
+  paramMapping: ParamMapping | null,
+  source: string,
+): boolean {
+  if (!paramMapping) return false;
+  return [
+    ...paramMapping.headerParams,
+    ...paramMapping.bodyParams,
+    ...paramMapping.buttonParams,
+  ].some((value) => String(value || '').trim() === source);
+}
+
+/**
+ * Congela "Nombre de quien envía" como valor fijo al crear el envío. Así las
+ * campañas programadas y sus reintentos conservan al usuario que las creó.
+ */
+export function materializeTemplateSenderName(
+  staticParams: StaticTemplateParams,
+  paramMapping: ParamMapping | null,
+  senderName: string,
+): StaticTemplateParams {
+  const out: StaticTemplateParams = {
+    headerParams: [...staticParams.headerParams],
+    bodyParams: [...staticParams.bodyParams],
+    buttonParams: [...staticParams.buttonParams],
+    headerMediaUrl: staticParams.headerMediaUrl,
+  };
+  if (!paramMapping) return out;
+
+  function applyList(listKey: 'headerParams' | 'bodyParams' | 'buttonParams') {
+    paramMapping![listKey].forEach((source, index) => {
+      if (source === USER_NAME_PARAM_SOURCE) out[listKey][index] = senderName;
+    });
+  }
+
+  applyList('headerParams');
+  applyList('bodyParams');
+  applyList('buttonParams');
+  return out;
+}
 
 function resolveFieldValue(
   source: string,
