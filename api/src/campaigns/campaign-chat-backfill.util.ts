@@ -1,5 +1,8 @@
 import type { Prisma } from '@prisma/client';
-import { normalizeWhatsAppRecipient, isWhatsAppBsuid } from '../conversations/whatsapp-recipient.util';
+import {
+  normalizeWhatsAppRecipient,
+  isWhatsAppBsuid,
+} from '../conversations/whatsapp-recipient.util';
 import type { PrismaService } from '../prisma/prisma.service';
 import { persistCampaignChatMessage } from './campaign-chat-message.util';
 import { parseCampaignPayload } from './campaign-payload.util';
@@ -75,6 +78,8 @@ function resolveContactId(row: {
 type CampaignBackfillRow = {
   id: number;
   area: string;
+  whatsapp_line_id: number | null;
+  whatsapp_line: { phone_number_id: string } | null;
   template_name: string;
   message_text: string;
   image_url: string | null;
@@ -128,6 +133,8 @@ async function fetchCampaignRow(
     select: {
       id: true,
       area: true,
+      whatsapp_line_id: true,
+      whatsapp_line: { select: { phone_number_id: true } },
       template_name: true,
       message_text: true,
       image_url: true,
@@ -182,7 +189,12 @@ export async function backfillCampaignChatFromLogs(
     return { skipped: true, reason: 'already_done' };
   }
 
-  const stats: BackfillStats = { scanned: 0, updated: 0, skipped: 0, errors: 0 };
+  const stats: BackfillStats = {
+    scanned: 0,
+    updated: 0,
+    skipped: 0,
+    errors: 0,
+  };
   const campaignCache = new Map<number, CampaignBackfillRow | null>();
   const templateCache = new Map<string, TemplateBackfillRow | null>();
   let lastId = 0;
@@ -275,11 +287,12 @@ export async function backfillCampaignChatFromLogs(
           continue;
         }
 
-        const contact =
-          (row.contact_id ? contactsById.get(row.contact_id) : null) ?? {
-            name: '',
-            phone: isWhatsAppBsuid(row.phone) ? null : row.phone,
-          };
+        const contact = (row.contact_id
+          ? contactsById.get(row.contact_id)
+          : null) ?? {
+          name: '',
+          phone: isWhatsAppBsuid(row.phone) ? null : row.phone,
+        };
         const attrs = row.contact_id ? attrsMap.get(row.contact_id) : undefined;
         const preview = rebuildPreviewForContact(
           sendCtx,
@@ -301,6 +314,9 @@ export async function backfillCampaignChatFromLogs(
           waMessageId: row.whatsapp_message_id,
           preview,
           sentAt: row.created_at,
+          whatsappLineId: campaignRow.whatsapp_line_id,
+          whatsappPhoneNumberId:
+            campaignRow.whatsapp_line?.phone_number_id ?? null,
         });
         stats.updated += 1;
       } catch {
@@ -323,7 +339,12 @@ export async function backfillCampaignChatPreviews(
     return { skipped: true, reason: 'already_done' };
   }
 
-  const stats: BackfillStats = { scanned: 0, updated: 0, skipped: 0, errors: 0 };
+  const stats: BackfillStats = {
+    scanned: 0,
+    updated: 0,
+    skipped: 0,
+    errors: 0,
+  };
   const campaignCache = new Map<number, CampaignBackfillRow | null>();
   const templateCache = new Map<string, TemplateBackfillRow | null>();
   let lastId = 0;
@@ -455,6 +476,8 @@ export async function backfillCampaignChatPreviews(
           campaignRow = {
             id: campaignId,
             area,
+            whatsapp_line_id: null,
+            whatsapp_line: null,
             template_name: tplName,
             message_text: '',
             image_url: null,
@@ -474,8 +497,11 @@ export async function backfillCampaignChatPreviews(
           continue;
         }
 
-        let contact: { id?: number | null; name?: string | null; phone?: string | null } | null =
-          null;
+        let contact: {
+          id?: number | null;
+          name?: string | null;
+          phone?: string | null;
+        } | null = null;
         const contactId = resolveContactId(row);
         if (contactId) {
           contact = contactsById.get(contactId) || null;
@@ -573,7 +599,10 @@ export async function backfillCampaignChatPreviewMedia(
       },
       row.image_url,
     );
-    if (!preview?.headerMediaUrl || preview.headerMediaUrl === prev?.headerMediaUrl) {
+    if (
+      !preview?.headerMediaUrl ||
+      preview.headerMediaUrl === prev?.headerMediaUrl
+    ) {
       continue;
     }
     const nextPayload = { ...raw, preview };
@@ -593,7 +622,10 @@ export async function backfillCampaignChatPreviewMedia(
  */
 export async function repairCampaignChatTimestampsFromLogs(
   prisma: PrismaService,
-): Promise<{ messagesFixed: number; conversationsFixed: number } | { skipped: true; reason: string }> {
+): Promise<
+  | { messagesFixed: number; conversationsFixed: number }
+  | { skipped: true; reason: string }
+> {
   if (await isBackfillDone(prisma, TIMESTAMPS_REPAIR_FLAG)) {
     return { skipped: true, reason: 'already_done' };
   }

@@ -1,6 +1,7 @@
 import {
   getWhatsAppCredentialsForArea,
   getWhatsAppLineByPhoneNumberId,
+  getWhatsAppLineForArea,
   resolveWhatsAppAreaFromCatalogWaba,
   setMetaSettingsCache,
   setWhatsAppLineCatalog,
@@ -28,6 +29,7 @@ function catalogRows(): WhatsAppLineCatalogRow[] {
       displayPhoneNumber: '+51 900 000 001',
       legacyArea: 'educacion',
       canonicalArea: 'educacion',
+      programId: null,
       programKey: null,
       isDefault: true,
       wabaId: 'shared-waba',
@@ -41,6 +43,7 @@ function catalogRows(): WhatsAppLineCatalogRow[] {
       displayPhoneNumber: '+51 900 000 002',
       legacyArea: 'educacion_ca',
       canonicalArea: 'educacion',
+      programId: 100,
       programKey: 'ca',
       isDefault: false,
       wabaId: 'shared-waba',
@@ -96,6 +99,7 @@ describe('WhatsApp line catalog compatibility store', () => {
       area: 'educacion_ca',
       token: 'token-t2',
     });
+    expect(getWhatsAppLineForArea('educacion_ca')).toMatchObject({ id: 11 });
   });
 
   it('does not guess an area from a WABA shared by legacy areas', () => {
@@ -122,6 +126,7 @@ describe('WhatsApp line catalog compatibility store', () => {
     process.env.WHATSAPP_LINE_CATALOG_ENABLED = 'false';
 
     expect(getWhatsAppLineByPhoneNumberId('pid-ca')).toBeNull();
+    expect(getWhatsAppLineForArea('educacion_ca')).toBeNull();
     expect(getWhatsAppCredentialsForArea('educacion_ca')).toMatchObject({
       area: 'educacion_ca',
       phoneNumberId: 'legacy-pid-ca',

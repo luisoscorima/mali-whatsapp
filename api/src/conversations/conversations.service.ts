@@ -181,9 +181,7 @@ export class ConversationsService {
 
   private canAssignConversations(user: AuthUser): boolean {
     return (
-      user.isBootstrapAdmin ||
-      user.isMaster ||
-      user.canAssignConversations
+      user.isBootstrapAdmin || user.isMaster || user.canAssignConversations
     );
   }
 
@@ -323,7 +321,9 @@ export class ConversationsService {
         : null,
       inbox_unread: Boolean(row.inbox_unread),
       conversation_status: row.conversation_status,
-      assigned_user_id: row.assigned_user_id ? Number(row.assigned_user_id) : null,
+      assigned_user_id: row.assigned_user_id
+        ? Number(row.assigned_user_id)
+        : null,
       assigned_user_label: row.assigned_user_label
         ? String(row.assigned_user_label).trim()
         : null,
@@ -342,7 +342,9 @@ export class ConversationsService {
       matched_message_id: row.matched_message_id
         ? Number(row.matched_message_id)
         : null,
-      user_service_window_open: isWithinUserServiceWindow(row.last_user_message_at),
+      user_service_window_open: isWithinUserServiceWindow(
+        row.last_user_message_at,
+      ),
       last_user_message_at: row.last_user_message_at
         ? row.last_user_message_at.toISOString()
         : null,
@@ -503,7 +505,9 @@ export class ConversationsService {
     limit: number,
   ): Promise<InboxRow[]> {
     const segmentSql = buildConversationSegmentSql(segmentFilter);
-    const searchSql = searchQ ? this.buildInboxSearchSql(searchQ) : Prisma.empty;
+    const searchSql = searchQ
+      ? this.buildInboxSearchSql(searchQ)
+      : Prisma.empty;
     const chatSql = this.buildChatFilterSql(chatFilter, userId, {
       searchAll: Boolean(searchQ) && chatFilter === 'all',
     });
@@ -679,7 +683,9 @@ export class ConversationsService {
     userId: number,
   ): Promise<number> {
     const segmentSql = buildConversationSegmentSql(segmentFilter);
-    const searchSql = searchQ ? this.buildInboxSearchSql(searchQ) : Prisma.empty;
+    const searchSql = searchQ
+      ? this.buildInboxSearchSql(searchQ)
+      : Prisma.empty;
     const chatSql = this.buildChatFilterSql(chatFilter, userId, {
       searchAll: Boolean(searchQ) && chatFilter === 'all',
     });
@@ -811,7 +817,10 @@ export class ConversationsService {
       searchQ,
       from: dateFrom,
       to: dateTo,
-      rangeAll: String(rangeRaw ?? '').trim().toLowerCase() === 'all',
+      rangeAll:
+        String(rangeRaw ?? '')
+          .trim()
+          .toLowerCase() === 'all',
     });
     const segmentRaw = parseSegmentQueryParam(query.segment);
     const slugSet = await this.getSegmentSlugSet(area);
@@ -896,11 +905,7 @@ export class ConversationsService {
     return { unread_count };
   }
 
-  async getSummary(
-    user: AuthUser,
-    daysRaw?: string,
-    advisorIdRaw?: string,
-  ) {
+  async getSummary(user: AuthUser, daysRaw?: string, advisorIdRaw?: string) {
     const days = Number(daysRaw ?? 30) || 30;
     const requestedAdvisorId = Number(advisorIdRaw ?? 0) || null;
     // Sin flag: solo stats propias. Con flag: global del área o filtro por asesor.
@@ -946,7 +951,9 @@ export class ConversationsService {
       );
     }
 
-    const templateSyncId = Number(body.templateSyncId ?? body.template_sync_id ?? 0);
+    const templateSyncId = Number(
+      body.templateSyncId ?? body.template_sync_id ?? 0,
+    );
     if (!Number.isInteger(templateSyncId) || templateSyncId <= 0) {
       throw new BadRequestException('Plantilla inválida');
     }
@@ -979,7 +986,9 @@ export class ConversationsService {
         ? (body.buttonParams as string[]).map((v) => String(v).trim())
         : [],
       headerMediaUrl:
-        typeof body.headerMediaUrl === 'string' ? body.headerMediaUrl.trim() : '',
+        typeof body.headerMediaUrl === 'string'
+          ? body.headerMediaUrl.trim()
+          : '',
     };
     const paramMapping = parseParamMappingFromBody(def, body);
     let senderName = '';
@@ -1035,9 +1044,11 @@ export class ConversationsService {
     const campaign = await this.prisma.campaigns.create({
       data: {
         area,
+        whatsapp_line_id: conversation.whatsapp_line_id,
         segment: 'direct',
         template_name: templateRow.name,
-        message_text: preview.bodyText || preview.headerText || templateRow.name,
+        message_text:
+          preview.bodyText || preview.headerText || templateRow.name,
         status: 'sending',
         total_recipients: 1,
         send_mode: 'direct',
@@ -1065,6 +1076,7 @@ export class ConversationsService {
         languageCode: templateRow.language,
         components,
         area,
+        phoneNumberId: conversation.whatsapp_phone_number_id,
       });
       messageId = result.messages?.[0]?.id ?? null;
       logStatus = messageId ? 'sent' : 'failed';
@@ -1074,8 +1086,7 @@ export class ConversationsService {
           'WhatsApp no devolvió un id de mensaje. Revisa la configuración.';
       }
     } catch (error) {
-      sendErrorMessage =
-        error instanceof Error ? error.message : String(error);
+      sendErrorMessage = error instanceof Error ? error.message : String(error);
       apiResponse = { error: sendErrorMessage };
     }
 
@@ -1107,6 +1118,8 @@ export class ConversationsService {
         waMessageId: messageId,
         preview,
         apiResponse,
+        whatsappLineId: conversation.whatsapp_line_id,
+        whatsappPhoneNumberId: conversation.whatsapp_phone_number_id,
       });
       try {
         await this.assignDirectTemplateSender(
@@ -1216,18 +1229,30 @@ export class ConversationsService {
       ? Number(activeConversation.contact_id)
       : null;
 
-    if (!resolvedContactId && (activeConversation.phone || activeConversation.whatsapp_user_id)) {
+    if (
+      !resolvedContactId &&
+      (activeConversation.phone || activeConversation.whatsapp_user_id)
+    ) {
       const byUserId = activeConversation.whatsapp_user_id
         ? await this.prisma.contacts.findFirst({
-            where: { area, whatsapp_user_id: activeConversation.whatsapp_user_id },
+            where: {
+              area,
+              whatsapp_user_id: activeConversation.whatsapp_user_id,
+            },
             select: { id: true },
-          }) : null;
+          })
+        : null;
       const byPhone = activeConversation.phone
         ? await this.prisma.contacts.findFirst({
             where: { area, phone: activeConversation.phone },
             select: { id: true, whatsapp_user_id: true },
-          }) : null;
-      const byIdentity = chooseWhatsAppIdentityMatch(byUserId, byPhone, activeConversation.whatsapp_user_id).match;
+          })
+        : null;
+      const byIdentity = chooseWhatsAppIdentityMatch(
+        byUserId,
+        byPhone,
+        activeConversation.whatsapp_user_id,
+      ).match;
       if (byIdentity) {
         resolvedContactId = byIdentity.id;
         await this.prisma.conversations.update({
@@ -1371,7 +1396,9 @@ export class ConversationsService {
     const windowOpen = isWithinUserServiceWindow(
       activeConversation.last_user_message_at,
     );
-    const status = String(activeConversation.status ?? '').trim().toLowerCase();
+    const status = String(activeConversation.status ?? '')
+      .trim()
+      .toLowerCase();
     const botModeBlock = aiAreaEnabled && status === 'bot';
     let replyBlockedReason: InboxDetail['reply_blocked_reason'] = null;
     if (!windowOpen) replyBlockedReason = '24h';
@@ -1625,8 +1652,10 @@ export class ConversationsService {
     }
 
     let assigneeLabel: string | null = null;
-    if (['educacion', 'educacion_ca', 'educacion_ep'].includes(area) &&
-        assignedUserId === null) {
+    if (
+      ['educacion', 'educacion_ca', 'educacion_ep'].includes(area) &&
+      assignedUserId === null
+    ) {
       throw new BadRequestException('Para reasignar, selecciona otro asesor');
     }
     if (assignedUserId != null) {
@@ -1660,16 +1689,24 @@ export class ConversationsService {
           updated_at: new Date(),
         },
       });
-      if (conversation.contact_id && ['educacion', 'educacion_ca', 'educacion_ep'].includes(area)) {
+      if (
+        conversation.contact_id &&
+        ['educacion', 'educacion_ca', 'educacion_ep'].includes(area)
+      ) {
         const cycle = await tx.education_lead_cycles.findFirst({
           where: { contact_id: conversation.contact_id, area },
-          orderBy: [{ started_at: 'desc' }, { id: 'desc' }], select: { id: true },
+          orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+          select: { id: true },
         });
-        if (cycle) await tx.education_lead_cycles.update({
-          where: { id: cycle.id },
-          data: { assigned_user_id: assignedUserId,
-            requires_review: assignedUserId === null, updated_at: new Date() },
-        });
+        if (cycle)
+          await tx.education_lead_cycles.update({
+            where: { id: cycle.id },
+            data: {
+              assigned_user_id: assignedUserId,
+              requires_review: assignedUserId === null,
+              updated_at: new Date(),
+            },
+          });
       }
     });
 
@@ -1717,7 +1754,9 @@ export class ConversationsService {
         OR: [
           { contact_id: contactId },
           ...(contact.phone ? [{ phone: contact.phone }] : []),
-          ...(contact.whatsapp_user_id ? [{ whatsapp_user_id: contact.whatsapp_user_id }] : []),
+          ...(contact.whatsapp_user_id
+            ? [{ whatsapp_user_id: contact.whatsapp_user_id }]
+            : []),
         ],
       },
       orderBy: { id: 'asc' },
@@ -1730,13 +1769,20 @@ export class ConversationsService {
             where: { contact_id: contactId, area },
             orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
             select: { assigned_user_id: true },
-          }) : null;
+          })
+        : null;
       if (!existing.contact_id || cycle) {
         await this.prisma.conversations.update({
           where: { id: existing.id },
-          data: { contact_id: contactId, updated_at: new Date(),
-            ...(cycle ? { assigned_user_id: cycle.assigned_user_id,
-              assigned_at: cycle.assigned_user_id ? new Date() : null } : {}),
+          data: {
+            contact_id: contactId,
+            updated_at: new Date(),
+            ...(cycle
+              ? {
+                  assigned_user_id: cycle.assigned_user_id,
+                  assigned_at: cycle.assigned_user_id ? new Date() : null,
+                }
+              : {}),
           },
         });
       }
@@ -1757,11 +1803,16 @@ export class ConversationsService {
         contact_id: contactId,
         status: 'human',
         ...(['educacion', 'educacion_ca', 'educacion_ep'].includes(area)
-          ? { assigned_user_id: (await this.prisma.education_lead_cycles.findFirst({
-              where: { contact_id: contactId, area },
-              orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
-              select: { assigned_user_id: true },
-            }))?.assigned_user_id ?? null }
+          ? {
+              assigned_user_id:
+                (
+                  await this.prisma.education_lead_cycles.findFirst({
+                    where: { contact_id: contactId, area },
+                    orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+                    select: { assigned_user_id: true },
+                  })
+                )?.assigned_user_id ?? null,
+            }
           : {}),
       },
       select: { id: true },
@@ -1782,7 +1833,9 @@ export class ConversationsService {
         'Ventana de 24 h cerrada: el usuario debe escribirte de nuevo o usa una plantilla desde Campañas.',
       );
     }
-    const st = String(conversation.status || '').trim().toLowerCase();
+    const st = String(conversation.status || '')
+      .trim()
+      .toLowerCase();
     if (aiEnabled && st === 'bot') {
       throw new BadRequestException(
         'Este chat está en modo Bot; cambia a Asesor para responder.',
@@ -1834,17 +1887,19 @@ export class ConversationsService {
         String(conversation.whatsapp_phone_number_id || '').trim() || null,
     });
 
-    await this.auditLog.write({
-      event_type: AuditEvent.CONVERSATION_REPLY,
-      message: `Flujo «${result.flow_name}» iniciado en conversación #${conversationId}`,
-      actor: auditActor(user),
-      meta: {
-        conversation_id: conversationId,
-        flow_id: result.flow_id,
-        phone: conversation.phone ? phoneMetaTail(conversation.phone) : null,
-        source: 'inbox_start_flow',
-      },
-    }).catch(() => undefined);
+    await this.auditLog
+      .write({
+        event_type: AuditEvent.CONVERSATION_REPLY,
+        message: `Flujo «${result.flow_name}» iniciado en conversación #${conversationId}`,
+        actor: auditActor(user),
+        meta: {
+          conversation_id: conversationId,
+          flow_id: result.flow_id,
+          phone: conversation.phone ? phoneMetaTail(conversation.phone) : null,
+          source: 'inbox_start_flow',
+        },
+      })
+      .catch(() => undefined);
 
     return result;
   }
@@ -2051,7 +2106,10 @@ export class ConversationsService {
       if (!target) continue;
       result.set(item.messageId, {
         message_id: target.id,
-        preview: buildMessageReplyPreview(target.body_text, target.message_type),
+        preview: buildMessageReplyPreview(
+          target.body_text,
+          target.message_type,
+        ),
         outbound: target.direction === 'outbound',
       });
     }
@@ -2205,9 +2263,7 @@ export class ConversationsService {
       data: { raw_payload: nextPayload as PrismaTypes.InputJsonValue },
     });
     const stored = readMessageReaction(nextPayload);
-    return stored
-      ? { emoji: stored.emoji, direction: stored.direction }
-      : null;
+    return stored ? { emoji: stored.emoji, direction: stored.direction } : null;
   }
 
   async reply(
@@ -2248,27 +2304,39 @@ export class ConversationsService {
       String(conversation.whatsapp_phone_number_id || '').trim() || undefined;
     const createdMessages: InboxMessage[] = [];
     const wasUnassigned = !conversation.assigned_user_id;
-    const currentLeadCycle = conversation.contact_id &&
+    const currentLeadCycle =
+      conversation.contact_id &&
       ['educacion', 'educacion_ca', 'educacion_ep'].includes(area)
-      ? await this.prisma.education_lead_cycles.findFirst({
-          where: { contact_id: conversation.contact_id, area },
-          orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
-        }) : null;
+        ? await this.prisma.education_lead_cycles.findFirst({
+            where: { contact_id: conversation.contact_id, area },
+            orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+          })
+        : null;
     if (wasUnassigned && currentLeadCycle?.assigned_user_id) {
       const inherited = await this.prisma.conversations.updateMany({
         where: { id: conversationId, assigned_user_id: null },
-        data: { assigned_user_id: currentLeadCycle.assigned_user_id,
-          assigned_at: new Date(), updated_at: new Date() },
+        data: {
+          assigned_user_id: currentLeadCycle.assigned_user_id,
+          assigned_at: new Date(),
+          updated_at: new Date(),
+        },
       });
-      if (inherited.count) await this.auditLog.write({
-        event_type: AuditEvent.CONVERSATION_ASSIGN,
-        message: `Conversación ${conversationId} asignada al responsable del lead`,
-        actor: { area, email: 'system@mali' },
-        meta: { conversation_id: conversationId, from_user_id: null,
-          to_user_id: currentLeadCycle.assigned_user_id, source: 'lead_owner' },
-      });
+      if (inherited.count)
+        await this.auditLog.write({
+          event_type: AuditEvent.CONVERSATION_ASSIGN,
+          message: `Conversación ${conversationId} asignada al responsable del lead`,
+          actor: { area, email: 'system@mali' },
+          meta: {
+            conversation_id: conversationId,
+            from_user_id: null,
+            to_user_id: currentLeadCycle.assigned_user_id,
+            source: 'lead_owner',
+          },
+        });
     }
-    const assignOnReply = wasUnassigned && !currentLeadCycle?.requires_review &&
+    const assignOnReply =
+      wasUnassigned &&
+      !currentLeadCycle?.requires_review &&
       !currentLeadCycle?.assigned_user_id;
     const senderProfile = await this.prisma.users.findFirst({
       where: { id: user.id },
@@ -2283,7 +2351,11 @@ export class ConversationsService {
       preview: string;
       outbound: boolean;
     } | null = null;
-    if (replyToMessageId != null && Number.isInteger(replyToMessageId) && replyToMessageId > 0) {
+    if (
+      replyToMessageId != null &&
+      Number.isInteger(replyToMessageId) &&
+      replyToMessageId > 0
+    ) {
       const quoted = await this.prisma.chat_messages.findFirst({
         where: {
           id: replyToMessageId,
@@ -2304,7 +2376,10 @@ export class ConversationsService {
       if (quoted) {
         replyToMeta = {
           message_id: quoted.id,
-          preview: buildMessageReplyPreview(quoted.body_text, quoted.message_type),
+          preview: buildMessageReplyPreview(
+            quoted.body_text,
+            quoted.message_type,
+          ),
           outbound: quoted.direction === 'outbound',
         };
       }
@@ -2328,10 +2403,7 @@ export class ConversationsService {
             body_text: text.slice(0, 8000),
             message_type: 'text',
             raw_payload: setMessageSender(
-              setMessageReplyTo(
-                sanitizeApiResponse(apiResponse),
-                replyToMeta,
-              ),
+              setMessageReplyTo(sanitizeApiResponse(apiResponse), replyToMeta),
               actorLabel,
               user.id,
             ) as PrismaTypes.InputJsonValue,
@@ -2445,8 +2517,13 @@ export class ConversationsService {
       const replyAssignment = assignOnReply
         ? await this.prisma.conversations.updateMany({
             where: { id: conversationId, assigned_user_id: null },
-            data: { assigned_user_id: user.id, assigned_at: new Date(), updated_at: new Date() },
-          }) : { count: 0 };
+            data: {
+              assigned_user_id: user.id,
+              assigned_at: new Date(),
+              updated_at: new Date(),
+            },
+          })
+        : { count: 0 };
       await this.prisma.conversations.update({
         where: { id: conversationId },
         data: {
@@ -2457,7 +2534,11 @@ export class ConversationsService {
 
       if (replyAssignment.count && currentLeadCycle) {
         await this.prisma.education_lead_cycles.updateMany({
-          where: { id: currentLeadCycle.id, assigned_user_id: null, requires_review: false },
+          where: {
+            id: currentLeadCycle.id,
+            assigned_user_id: null,
+            requires_review: false,
+          },
           data: { assigned_user_id: user.id, updated_at: new Date() },
         });
       }
@@ -2484,7 +2565,9 @@ export class ConversationsService {
           meta: {
             conversation_id: conversationId,
             phone: conversation.phone,
-            phone_tail: conversation.phone ? phoneMetaTail(conversation.phone) : null,
+            phone_tail: conversation.phone
+              ? phoneMetaTail(conversation.phone)
+              : null,
             text_preview: text.slice(0, 120),
           },
         });
@@ -2500,7 +2583,9 @@ export class ConversationsService {
           meta: {
             conversation_id: conversationId,
             phone: conversation.phone,
-            phone_tail: conversation.phone ? phoneMetaTail(conversation.phone) : null,
+            phone_tail: conversation.phone
+              ? phoneMetaTail(conversation.phone)
+              : null,
             media_type: waType,
             filename: String(file.originalname || '').slice(0, 200),
             has_caption: Boolean(text),
@@ -2635,7 +2720,10 @@ export class ConversationsService {
     return { status };
   }
 
-  async markUnread(user: AuthUser, conversationId: number): Promise<{ ok: true }> {
+  async markUnread(
+    user: AuthUser,
+    conversationId: number,
+  ): Promise<{ ok: true }> {
     if (!Number.isInteger(conversationId) || conversationId <= 0) {
       throw new BadRequestException('Id invalido');
     }
@@ -2711,7 +2799,9 @@ export class ConversationsService {
     if (!clear) {
       const n = parseInt(String(scoreInput ?? '').trim(), 10);
       if (!isValidLeadScore(n)) {
-        throw new BadRequestException('Calificacion invalida (Bajo, Medio o Alto)');
+        throw new BadRequestException(
+          'Calificacion invalida (Bajo, Medio o Alto)',
+        );
       }
       score = n;
     }
@@ -2734,11 +2824,14 @@ export class ConversationsService {
     if (['educacion', 'educacion_ca', 'educacion_ep'].includes(area)) {
       const cycle = await this.prisma.education_lead_cycles.findFirst({
         where: { contact_id: conv.contact_id, area },
-        orderBy: [{ started_at: 'desc' }, { id: 'desc' }], select: { id: true },
+        orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+        select: { id: true },
       });
-      if (cycle) await this.prisma.education_lead_cycles.update({
-        where: { id: cycle.id }, data: { lead_score: clear ? null : score, updated_at: new Date() },
-      });
+      if (cycle)
+        await this.prisma.education_lead_cycles.update({
+          where: { id: cycle.id },
+          data: { lead_score: clear ? null : score, updated_at: new Date() },
+        });
     }
     await this.auditLog.write({
       event_type: AuditEvent.CONTACT_LEAD_SCORE,
@@ -2780,7 +2873,9 @@ export class ConversationsService {
     }
 
     const safeAfterId =
-      Number.isInteger(afterMessageId) && afterMessageId > 0 ? afterMessageId : 0;
+      Number.isInteger(afterMessageId) && afterMessageId > 0
+        ? afterMessageId
+        : 0;
 
     const visibleFrom =
       Number.isSafeInteger(visibleFromId) && visibleFromId > 0
@@ -2824,7 +2919,9 @@ export class ConversationsService {
     const windowOpen = isWithinUserServiceWindow(
       conversation.last_user_message_at,
     );
-    const status = String(conversation.status ?? '').trim().toLowerCase();
+    const status = String(conversation.status ?? '')
+      .trim()
+      .toLowerCase();
     const botModeBlock = aiAreaEnabled && status === 'bot';
     let replyBlockedReason: InboxConversationUpdates['reply_blocked_reason'] =
       null;
@@ -2912,7 +3009,9 @@ export class ConversationsService {
       meta: {
         conversation_id: conversationId,
         phone: conversation.phone,
-        phone_tail: conversation.phone ? phoneMetaTail(conversation.phone) : null,
+        phone_tail: conversation.phone
+          ? phoneMetaTail(conversation.phone)
+          : null,
         message_count: messageRows.length,
       },
     });
@@ -3019,7 +3118,11 @@ const LIMA_MONTHS = [
   'diciembre',
 ] as const;
 
-function limaCalendarMonth(now: Date): { start: Date; end: Date; label: string } {
+function limaCalendarMonth(now: Date): {
+  start: Date;
+  end: Date;
+  label: string;
+} {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Lima',
     year: 'numeric',

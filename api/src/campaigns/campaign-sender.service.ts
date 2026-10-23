@@ -12,7 +12,10 @@ import {
 import { sendTemplateWithComponents } from '../templates/whatsapp-meta.util';
 import { archiveCampaignRecipientConversations } from './archive-campaign-recipients.util';
 import { classifyCampaignSendError } from './campaign-incident.util';
-import { readCampaignAutoRetryDelayMinutes, readCampaignPhoneMinGapMs } from './campaign-config.util';
+import {
+  readCampaignAutoRetryDelayMinutes,
+  readCampaignPhoneMinGapMs,
+} from './campaign-config.util';
 import {
   buildParamsForContact,
   fetchContactAttributesMap,
@@ -108,14 +111,18 @@ export class CampaignSenderService {
       Array.isArray(ctx.excludeContactIdsMerged) &&
       ctx.excludeContactIdsMerged.length > 0
         ? ctx.excludeContactIdsMerged
-        : Array.isArray(ctx.excludeContactIds) && ctx.excludeContactIds.length > 0
+        : Array.isArray(ctx.excludeContactIds) &&
+            ctx.excludeContactIds.length > 0
           ? ctx.excludeContactIds
           : [];
 
     if (mergedExclude.length > 0) {
       recipientOptions.excludeContactIds = mergedExclude;
     }
-    if (Array.isArray(ctx.excludeSegmentSlugs) && ctx.excludeSegmentSlugs.length > 0) {
+    if (
+      Array.isArray(ctx.excludeSegmentSlugs) &&
+      ctx.excludeSegmentSlugs.length > 0
+    ) {
       recipientOptions.excludeSegmentSlugs = ctx.excludeSegmentSlugs;
     }
     if (ctx.excludeOpenServiceWindow) {
@@ -134,12 +141,24 @@ export class CampaignSenderService {
       });
     }
     if (ctx.segment) {
-      return fetchRecipientsUnion(this.prisma, area, [ctx.segment], recipientOptions);
+      return fetchRecipientsUnion(
+        this.prisma,
+        area,
+        [ctx.segment],
+        recipientOptions,
+      );
     }
     if (Array.isArray(ctx.segments) && ctx.segments.length > 0) {
-      return fetchRecipientsUnion(this.prisma, area, ctx.segments, recipientOptions);
+      return fetchRecipientsUnion(
+        this.prisma,
+        area,
+        ctx.segments,
+        recipientOptions,
+      );
     }
-    throw new Error('Payload de campaña inválido: falta segmento o lista de destinatarios');
+    throw new Error(
+      'Payload de campaña inválido: falta segmento o lista de destinatarios',
+    );
   }
 
   private async fetchProcessedRecipientState(campaignId: number) {
@@ -210,9 +229,16 @@ export class CampaignSenderService {
 
       const campaignMeta = await this.prisma.campaigns.findUnique({
         where: { id: campaignId },
-        select: { image_url: true },
+        select: {
+          image_url: true,
+          whatsapp_line_id: true,
+          whatsapp_line: { select: { phone_number_id: true } },
+        },
       });
       const campaignImageUrl = campaignMeta?.image_url ?? null;
+      const whatsappLineId = campaignMeta?.whatsapp_line_id ?? null;
+      const whatsappPhoneNumberId =
+        campaignMeta?.whatsapp_line?.phone_number_id ?? null;
 
       const allRecipients = await this.buildCampaignRecipients(area, ctx);
       await this.prisma.campaigns.update({
@@ -225,6 +251,7 @@ export class CampaignSenderService {
           this.prisma,
           area,
           allRecipients,
+          whatsappLineId,
         );
       await this.auditLog.write({
         event_type: AuditEvent.CAMPAIGN_ARCHIVE_RECIPIENTS,
@@ -238,8 +265,12 @@ export class CampaignSenderService {
         },
       });
 
-      const processedState = await this.fetchProcessedRecipientState(campaignId);
-      const recipients = this.filterPendingRecipients(allRecipients, processedState);
+      const processedState =
+        await this.fetchProcessedRecipientState(campaignId);
+      const recipients = this.filterPendingRecipients(
+        allRecipients,
+        processedState,
+      );
 
       let attrsMap = new Map<number, Record<string, string>>();
       if (usePerContactParams) {
@@ -308,7 +339,10 @@ export class CampaignSenderService {
               continue;
             }
 
-            const components = buildWhatsappGraphComponents(def, resolvedParams);
+            const components = buildWhatsappGraphComponents(
+              def,
+              resolvedParams,
+            );
 
             const apiResponse = await sendTemplateWithComponents({
               to: phoneNorm,
@@ -316,6 +350,7 @@ export class CampaignSenderService {
               languageCode: templateSnapshot.language,
               components,
               area,
+              phoneNumberId: whatsappPhoneNumberId,
             });
 
             const messageId = apiResponse.messages?.[0]?.id || null;
@@ -351,6 +386,8 @@ export class CampaignSenderService {
                 waMessageId: messageId,
                 preview,
                 apiResponse: sanitizeApiResponse(apiResponse),
+                whatsappLineId,
+                whatsappPhoneNumberId,
               });
             } catch (persistError) {
               this.logger.warn(
@@ -377,7 +414,9 @@ export class CampaignSenderService {
                     phone: phoneNorm,
                     whatsapp_message_id: acceptedMessageId,
                     status: 'sent',
-                    response: sanitizeApiResponse(acceptedApiResponse) as object,
+                    response: sanitizeApiResponse(
+                      acceptedApiResponse,
+                    ) as object,
                     retryable: false,
                     attempt: 1,
                   },

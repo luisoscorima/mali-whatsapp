@@ -27,7 +27,26 @@ model business_areas {
   created_at     DateTime                @default(now()) @db.Timestamptz(6)
   updated_at     DateTime                @default(now()) @db.Timestamptz(6)
   aliases        business_area_aliases[]
+  programs       business_programs[]
   whatsapp_lines whatsapp_lines[]
+}
+
+/// Optional subdivisions inside a business area. A contact may belong to several programs.
+model business_programs {
+  id               Int                @id @default(autoincrement())
+  business_area_id Int
+  slug             String             @db.VarChar(40)
+  label            String             @db.VarChar(120)
+  active           Boolean            @default(true)
+  sort_order       Int                @default(0)
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime           @default(now()) @db.Timestamptz(6)
+  business_area    business_areas     @relation(fields: [business_area_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  contact_programs contact_programs[]
+  whatsapp_lines   whatsapp_lines[]
+
+  @@unique([business_area_id, slug], map: "business_programs_area_slug_uq")
+  @@index([business_area_id], map: "idx_business_programs_area")
 }
 
 /// Resolves old/external area slugs to a canonical business area.
@@ -81,31 +100,34 @@ model whatsapp_wabas {
 
 /// A WhatsApp phone number routed to one canonical business area.
 model whatsapp_lines {
-  id                     Int               @id @default(autoincrement())
+  id                     Int                @id @default(autoincrement())
   business_area_id       Int
   waba_id                Int
   credential_override_id Int?
-  phone_number_id        String            @unique @db.VarChar(32)
-  display_phone_number   String?           @db.VarChar(32)
-  label                  String            @db.VarChar(120)
-  legacy_area            String?           @db.VarChar(40)
-  program_key            String?           @db.VarChar(40)
-  is_default             Boolean           @default(false)
-  active                 Boolean           @default(true)
-  registration_status    String            @default("unknown") @db.VarChar(24)
-  quality_rating         String?           @db.VarChar(24)
-  last_validated_at      DateTime?         @db.Timestamptz(6)
-  created_at             DateTime          @default(now()) @db.Timestamptz(6)
-  updated_at             DateTime          @default(now()) @db.Timestamptz(6)
-  business_area          business_areas    @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  waba                   whatsapp_wabas    @relation(fields: [waba_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  credential_override    meta_credentials? @relation("line_credential_override", fields: [credential_override_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  program_id             Int?
+  phone_number_id        String             @unique @db.VarChar(32)
+  display_phone_number   String?            @db.VarChar(32)
+  label                  String             @db.VarChar(120)
+  legacy_area            String?            @db.VarChar(40)
+  program_key            String?            @db.VarChar(40)
+  is_default             Boolean            @default(false)
+  active                 Boolean            @default(true)
+  registration_status    String             @default("unknown") @db.VarChar(24)
+  quality_rating         String?            @db.VarChar(24)
+  last_validated_at      DateTime?          @db.Timestamptz(6)
+  created_at             DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime           @default(now()) @db.Timestamptz(6)
+  business_area          business_areas     @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  waba                   whatsapp_wabas     @relation(fields: [waba_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  credential_override    meta_credentials?  @relation("line_credential_override", fields: [credential_override_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  program                business_programs? @relation(fields: [program_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   campaigns              campaigns[]
   conversations          conversations[]
 
   @@index([business_area_id], map: "idx_whatsapp_lines_business_area")
   @@index([waba_id], map: "idx_whatsapp_lines_waba")
   @@index([credential_override_id], map: "idx_whatsapp_lines_credential_override")
+  @@index([program_id], map: "idx_whatsapp_lines_program")
   @@index([legacy_area], map: "idx_whatsapp_lines_legacy_area")
 }
 
@@ -248,25 +270,26 @@ model contact_segments {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model contacts {
-  id                     Int                  @id @default(autoincrement())
-  name                   String               @db.VarChar(150)
-  last_name              String               @default("") @db.VarChar(150)
-  phone                  String?              @db.VarChar(20)
-  whatsapp_user_id       String?              @db.VarChar(132)
-  email                  String?              @db.VarChar(255)
-  dni                    String?              @db.VarChar(32)
-  segment                String?              @db.VarChar(50)
-  area                   String               @default("ti") @db.VarChar(20)
-  opt_in                 Boolean              @default(true)
-  opt_in_email           Boolean              @default(true)
-  active                 Boolean              @default(true)
-  created_at             DateTime             @default(now()) @db.Timestamp(6)
-  updated_at             DateTime             @default(now()) @db.Timestamp(6)
-  lead_score             Int?                 @db.SmallInt
+  id                     Int                      @id @default(autoincrement())
+  name                   String                   @db.VarChar(150)
+  last_name              String                   @default("") @db.VarChar(150)
+  phone                  String?                  @db.VarChar(20)
+  whatsapp_user_id       String?                  @db.VarChar(132)
+  email                  String?                  @db.VarChar(255)
+  dni                    String?                  @db.VarChar(32)
+  segment                String?                  @db.VarChar(50)
+  area                   String                   @default("ti") @db.VarChar(20)
+  opt_in                 Boolean                  @default(true)
+  opt_in_email           Boolean                  @default(true)
+  active                 Boolean                  @default(true)
+  created_at             DateTime                 @default(now()) @db.Timestamp(6)
+  updated_at             DateTime                 @default(now()) @db.Timestamp(6)
+  lead_score             Int?                     @db.SmallInt
   lead_status_id         Int?
-  lead_status_updated_at DateTime?            @db.Timestamptz(6)
+  lead_status_updated_at DateTime?                @db.Timestamptz(6)
   campaign_logs          campaign_logs[]
   contact_attributes     contact_attributes[]
+  contact_programs       contact_programs[]
   contact_segments       contact_segments[]
   contact_origins        contact_origins[]
   education_lead_cycles  education_lead_cycles[]
@@ -277,26 +300,40 @@ model contacts {
   tiktok_leads           tiktok_leads[]
   lead_status            lead_status_definitions? @relation(fields: [lead_status_id], references: [id], onUpdate: NoAction, onDelete: SetNull)
 
-  @@index([area], map: "idx_contacts_area")
   @@unique([area, whatsapp_user_id])
+  @@index([area], map: "idx_contacts_area")
   @@index([area, email], map: "idx_contacts_area_email")
   @@index([area, dni], map: "idx_contacts_area_dni")
   @@index([lead_status_id], map: "idx_contacts_lead_status")
   @@index([segment], map: "idx_contacts_segment")
 }
 
+/// Many-to-many program membership, preserved when contacts are merged.
+model contact_programs {
+  contact_id    Int
+  program_id    Int
+  source        String            @default("migration") @db.VarChar(32)
+  first_seen_at DateTime          @default(now()) @db.Timestamptz(6)
+  last_seen_at  DateTime          @default(now()) @db.Timestamptz(6)
+  contact       contacts          @relation(fields: [contact_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  program       business_programs @relation(fields: [program_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([contact_id, program_id])
+  @@index([program_id], map: "idx_contact_programs_program")
+}
+
 model lead_status_definitions {
-  id          Int       @id @default(autoincrement())
-  area        String    @db.VarChar(20)
-  slug        String    @db.VarChar(50)
-  label       String    @db.VarChar(120)
-  sort_order  Int       @default(0)
-  is_default  Boolean   @default(false)
-  is_terminal Boolean   @default(false)
-  active      Boolean   @default(true)
-  created_at  DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at  DateTime  @default(now()) @db.Timestamptz(6)
-  contacts    contacts[]
+  id                    Int                     @id @default(autoincrement())
+  area                  String                  @db.VarChar(20)
+  slug                  String                  @db.VarChar(50)
+  label                 String                  @db.VarChar(120)
+  sort_order            Int                     @default(0)
+  is_default            Boolean                 @default(false)
+  is_terminal           Boolean                 @default(false)
+  active                Boolean                 @default(true)
+  created_at            DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime                @default(now()) @db.Timestamptz(6)
+  contacts              contacts[]
   education_lead_cycles education_lead_cycles[] @relation("education_cycle_status")
 
   @@unique([area, slug])
@@ -304,28 +341,28 @@ model lead_status_definitions {
 }
 
 model contact_origins {
-  id               Int            @id @default(autoincrement())
-  area             String         @db.VarChar(32)
-  contact_id       Int?
-  channel          String         @db.VarChar(32)
-  external_id      String         @db.VarChar(128)
-  source_key       String?        @db.VarChar(128)
-  source_label     String?        @db.VarChar(200)
-  payload          Json?
-  phone            String?        @db.VarChar(32)
-  whatsapp_user_id String?        @db.VarChar(132)
-  dni              String?        @db.VarChar(32)
-  email            String?        @db.VarChar(255)
-  conversation_id  Int?
-  first_seen_at    DateTime       @default(now()) @db.Timestamptz(6)
-  last_seen_at     DateTime       @default(now()) @db.Timestamptz(6)
-  created_at       DateTime       @default(now()) @db.Timestamptz(6)
-  updated_at       DateTime       @default(now()) @db.Timestamptz(6)
-  contacts         contacts?      @relation(fields: [contact_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  id                     Int                      @id @default(autoincrement())
+  area                   String                   @db.VarChar(32)
+  contact_id             Int?
+  channel                String                   @db.VarChar(32)
+  external_id            String                   @db.VarChar(128)
+  source_key             String?                  @db.VarChar(128)
+  source_label           String?                  @db.VarChar(200)
+  payload                Json?
+  phone                  String?                  @db.VarChar(32)
+  whatsapp_user_id       String?                  @db.VarChar(132)
+  dni                    String?                  @db.VarChar(32)
+  email                  String?                  @db.VarChar(255)
+  conversation_id        Int?
+  first_seen_at          DateTime                 @default(now()) @db.Timestamptz(6)
+  last_seen_at           DateTime                 @default(now()) @db.Timestamptz(6)
+  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  contacts               contacts?                @relation(fields: [contact_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   education_lead_entries education_lead_entries[]
-  conversations    conversations? @relation(fields: [conversation_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  meta_leadgen_leads meta_leadgen_leads[]
-  tiktok_leads       tiktok_leads[]
+  conversations          conversations?           @relation(fields: [conversation_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  meta_leadgen_leads     meta_leadgen_leads[]
+  tiktok_leads           tiktok_leads[]
 
   @@unique([area, channel, external_id], map: "contact_origins_area_channel_external_uq")
   @@index([contact_id], map: "idx_contact_origins_contact")
@@ -342,53 +379,53 @@ model contact_replacement_history {
 }
 
 model education_lead_cycles {
-  id                  Int       @id @default(autoincrement())
-  area                String    @db.VarChar(20)
+  id                  Int                      @id @default(autoincrement())
+  area                String                   @db.VarChar(20)
   contact_id          Int
-  started_at          DateTime  @db.Timestamptz(6)
-  last_interaction_at DateTime  @db.Timestamptz(6)
+  started_at          DateTime                 @db.Timestamptz(6)
+  last_interaction_at DateTime                 @db.Timestamptz(6)
   assigned_user_id    Int?
   lead_status_id      Int?
-  lead_score          Int?      @db.SmallInt
-  requires_review     Boolean   @default(false)
-  created_at          DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at          DateTime  @default(now()) @db.Timestamptz(6)
-  contact             contacts  @relation(fields: [contact_id], references: [id], onDelete: Cascade)
-  assigned_user       users?    @relation("education_lead_assignee", fields: [assigned_user_id], references: [id], onDelete: SetNull)
+  lead_score          Int?                     @db.SmallInt
+  requires_review     Boolean                  @default(false)
+  created_at          DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime                 @default(now()) @db.Timestamptz(6)
+  contact             contacts                 @relation(fields: [contact_id], references: [id], onDelete: Cascade)
+  assigned_user       users?                   @relation("education_lead_assignee", fields: [assigned_user_id], references: [id], onDelete: SetNull)
   lead_status         lead_status_definitions? @relation("education_cycle_status", fields: [lead_status_id], references: [id], onDelete: SetNull)
   entries             education_lead_entries[]
 
-  @@index([contact_id, started_at(sort: Desc)], map: "education_lead_cycles_contact_started_idx")
   @@unique([contact_id, started_at], map: "education_lead_cycles_contact_started_key")
+  @@index([contact_id, started_at(sort: Desc)], map: "education_lead_cycles_contact_started_idx")
   @@index([area, assigned_user_id], map: "education_lead_cycles_area_assignee_idx")
 }
 
 model education_lead_entries {
-  id              Int       @id @default(autoincrement())
-  area            String    @db.VarChar(20)
-  contact_id      Int
-  origin_id       Int?
-  channel         String    @db.VarChar(32)
-  source_key      String?   @db.VarChar(128)
-  source_label    String?   @db.VarChar(200)
-  cycle_id        Int?
-  event_key       String    @db.VarChar(160)
-  occurred_at     DateTime  @db.Timestamptz(6)
-  classification  String    @db.VarChar(20)
-  assignment_rule String    @db.VarChar(24)
-  conflict_reason String?   @db.VarChar(80)
+  id                        Int                    @id @default(autoincrement())
+  area                      String                 @db.VarChar(20)
+  contact_id                Int
+  origin_id                 Int?
+  channel                   String                 @db.VarChar(32)
+  source_key                String?                @db.VarChar(128)
+  source_label              String?                @db.VarChar(200)
+  cycle_id                  Int?
+  event_key                 String                 @db.VarChar(160)
+  occurred_at               DateTime               @db.Timestamptz(6)
+  classification            String                 @db.VarChar(20)
+  assignment_rule           String                 @db.VarChar(24)
+  conflict_reason           String?                @db.VarChar(80)
   previous_assigned_user_id Int?
-  previous_advisor_label String? @db.VarChar(200)
-  previous_status_label String? @db.VarChar(120)
-  previous_interaction_at DateTime? @db.Timestamptz(6)
-  reviewed_at     DateTime? @db.Timestamptz(6)
-  prospectia_match String?  @db.VarChar(16)
-  prospectia_advisor_email String? @db.VarChar(255)
-  prospectia_checked_at DateTime? @db.Timestamptz(6)
-  created_at      DateTime  @default(now()) @db.Timestamptz(6)
-  contact         contacts  @relation(fields: [contact_id], references: [id], onDelete: Cascade)
-  origin          contact_origins? @relation(fields: [origin_id], references: [id], onDelete: SetNull)
-  cycle           education_lead_cycles? @relation(fields: [cycle_id], references: [id], onDelete: SetNull)
+  previous_advisor_label    String?                @db.VarChar(200)
+  previous_status_label     String?                @db.VarChar(120)
+  previous_interaction_at   DateTime?              @db.Timestamptz(6)
+  reviewed_at               DateTime?              @db.Timestamptz(6)
+  prospectia_match          String?                @db.VarChar(16)
+  prospectia_advisor_email  String?                @db.VarChar(255)
+  prospectia_checked_at     DateTime?              @db.Timestamptz(6)
+  created_at                DateTime               @default(now()) @db.Timestamptz(6)
+  contact                   contacts               @relation(fields: [contact_id], references: [id], onDelete: Cascade)
+  origin                    contact_origins?       @relation(fields: [origin_id], references: [id], onDelete: SetNull)
+  cycle                     education_lead_cycles? @relation(fields: [cycle_id], references: [id], onDelete: SetNull)
 
   @@unique([area, event_key], map: "education_lead_entries_area_event_key_key")
   @@index([area, occurred_at(sort: Desc)], map: "education_lead_entries_area_occurred_idx")
@@ -430,22 +467,22 @@ model meta_lead_form_routes {
 }
 
 model meta_leadgen_leads {
-  id                 Int              @id @default(autoincrement())
-  area               String           @db.VarChar(32)
-  leadgen_id         String           @unique(map: "meta_leadgen_leads_leadgen_uq") @db.VarChar(64)
-  form_id            String           @db.VarChar(64)
-  page_id            String?          @db.VarChar(64)
-  ad_id              String?          @db.VarChar(64)
-  adgroup_id         String?          @db.VarChar(64)
-  field_data         Json?
-  raw                Json?
-  contact_id         Int?
-  contact_origin_id  Int?
-  created_time       DateTime?        @db.Timestamptz(6)
-  created_at         DateTime         @default(now()) @db.Timestamptz(6)
-  updated_at         DateTime         @default(now()) @db.Timestamptz(6)
-  contacts           contacts?        @relation(fields: [contact_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  contact_origins    contact_origins? @relation(fields: [contact_origin_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  id                Int              @id @default(autoincrement())
+  area              String           @db.VarChar(32)
+  leadgen_id        String           @unique(map: "meta_leadgen_leads_leadgen_uq") @db.VarChar(64)
+  form_id           String           @db.VarChar(64)
+  page_id           String?          @db.VarChar(64)
+  ad_id             String?          @db.VarChar(64)
+  adgroup_id        String?          @db.VarChar(64)
+  field_data        Json?
+  raw               Json?
+  contact_id        Int?
+  contact_origin_id Int?
+  created_time      DateTime?        @db.Timestamptz(6)
+  created_at        DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime         @default(now()) @db.Timestamptz(6)
+  contacts          contacts?        @relation(fields: [contact_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  contact_origins   contact_origins? @relation(fields: [contact_origin_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([area, form_id], map: "idx_meta_leadgen_leads_area_form")
   @@index([contact_id], map: "idx_meta_leadgen_leads_contact")
@@ -467,21 +504,21 @@ model tiktok_lead_form_routes {
 }
 
 model tiktok_leads {
-  id                 Int              @id @default(autoincrement())
-  area               String           @db.VarChar(32)
-  lead_id            String           @unique(map: "tiktok_leads_lead_uq") @db.VarChar(64)
-  form_id            String           @db.VarChar(64)
-  advertiser_id      String?          @db.VarChar(64)
-  ad_id              String?          @db.VarChar(64)
-  field_data         Json?
-  raw                Json?
-  contact_id         Int?
-  contact_origin_id  Int?
-  created_time       DateTime?        @db.Timestamptz(6)
-  created_at         DateTime         @default(now()) @db.Timestamptz(6)
-  updated_at         DateTime         @default(now()) @db.Timestamptz(6)
-  contacts           contacts?        @relation(fields: [contact_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  contact_origins    contact_origins? @relation(fields: [contact_origin_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  id                Int              @id @default(autoincrement())
+  area              String           @db.VarChar(32)
+  lead_id           String           @unique(map: "tiktok_leads_lead_uq") @db.VarChar(64)
+  form_id           String           @db.VarChar(64)
+  advertiser_id     String?          @db.VarChar(64)
+  ad_id             String?          @db.VarChar(64)
+  field_data        Json?
+  raw               Json?
+  contact_id        Int?
+  contact_origin_id Int?
+  created_time      DateTime?        @db.Timestamptz(6)
+  created_at        DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime         @default(now()) @db.Timestamptz(6)
+  contacts          contacts?        @relation(fields: [contact_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  contact_origins   contact_origins? @relation(fields: [contact_origin_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([area, form_id], map: "idx_tiktok_leads_area_form")
   @@index([contact_id], map: "idx_tiktok_leads_contact")
@@ -535,8 +572,10 @@ model conversations {
   assigned_user                users?               @relation("conversation_assignee", fields: [assigned_user_id], references: [id], onUpdate: NoAction)
   whatsapp_line                whatsapp_lines?      @relation(fields: [whatsapp_line_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
-  @@unique([area, phone])
-  @@unique([area, whatsapp_user_id])
+  @@unique([whatsapp_line_id, phone], map: "conversations_line_phone_uq")
+  @@unique([whatsapp_line_id, whatsapp_user_id], map: "conversations_line_wuid_uq")
+  @@index([area, phone], map: "idx_conversations_area_phone")
+  @@index([area, whatsapp_user_id], map: "idx_conversations_area_wuid")
   @@index([whatsapp_line_id], map: "idx_conversations_whatsapp_line")
   @@index([area, last_message_at(sort: Desc)], map: "idx_conversations_area_last_msg")
   @@index([area, assigned_user_id], map: "idx_conversations_area_assignee")
@@ -546,31 +585,31 @@ model conversations {
 
 /// Immutable evidence of Meta identity changes; never used to merge contacts automatically.
 model whatsapp_identity_events {
-  id             Int       @id @default(autoincrement())
-  area           String    @db.VarChar(20)
-  wa_message_id  String?   @db.VarChar(180)
-  event_type     String    @db.VarChar(64)
-  previous_user_id String? @db.VarChar(132)
-  new_user_id    String?   @db.VarChar(132)
-  raw_payload    Json
-  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  id               Int      @id @default(autoincrement())
+  area             String   @db.VarChar(20)
+  wa_message_id    String?  @db.VarChar(180)
+  event_type       String   @db.VarChar(64)
+  previous_user_id String?  @db.VarChar(132)
+  new_user_id      String?  @db.VarChar(132)
+  raw_payload      Json
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
 
   @@unique([area, wa_message_id])
   @@index([area, created_at(sort: Desc)])
 }
 
 model flows {
-  id              Int             @id @default(autoincrement())
-  area            String          @db.VarChar(20)
-  name            String          @db.VarChar(150)
-  status          String          @default("draft") @db.VarChar(16)
-  trigger_payload String          @db.VarChar(256)
-  entry_node_id   Int?
-  created_at      DateTime        @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime        @default(now()) @db.Timestamptz(6)
-  flow_nodes      flow_nodes[]
-  flow_edges      flow_edges[]
-  flow_sessions   flow_sessions[]
+  id                  Int                   @id @default(autoincrement())
+  area                String                @db.VarChar(20)
+  name                String                @db.VarChar(150)
+  status              String                @default("draft") @db.VarChar(16)
+  trigger_payload     String                @db.VarChar(256)
+  entry_node_id       Int?
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  flow_nodes          flow_nodes[]
+  flow_edges          flow_edges[]
+  flow_sessions       flow_sessions[]
   flow_session_events flow_session_events[]
 
   @@unique([area, trigger_payload], map: "flows_area_trigger_uq")
@@ -578,32 +617,32 @@ model flows {
 }
 
 model flow_nodes {
-  id                          Int       @id @default(autoincrement())
+  id                          Int             @id @default(autoincrement())
   flow_id                     Int
-  client_key                  String?   @db.VarChar(64)
-  kind                        String    @db.VarChar(32)
-  body_text                   String?   @db.Text
+  client_key                  String?         @db.VarChar(64)
+  kind                        String          @db.VarChar(32)
+  body_text                   String?         @db.Text
   buttons_json                Json?
   timeout_minutes             Int?
-  timeout_body_text           String?   @db.Text
-  timeout_repeat              Boolean   @default(false)
+  timeout_body_text           String?         @db.Text
+  timeout_repeat              Boolean         @default(false)
   timeout_max_nudges          Int?
-  timeout_close_on_silence    Boolean   @default(false)
-  timeout_window_guard        Boolean   @default(false)
+  timeout_close_on_silence    Boolean         @default(false)
+  timeout_window_guard        Boolean         @default(false)
   timeout_window_lead_minutes Int?
-  sort_order                  Int       @default(0)
-  position_x                  Float     @default(0)
-  position_y                  Float     @default(0)
+  sort_order                  Int             @default(0)
+  position_x                  Float           @default(0)
+  position_y                  Float           @default(0)
   handoff_user_id             Int?
-  media_url                   String?   @db.VarChar(1024)
-  media_mime                  String?   @db.VarChar(128)
-  media_filename              String?   @db.VarChar(255)
-  created_at                  DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at                  DateTime  @default(now()) @db.Timestamptz(6)
-  flows                       flows     @relation(fields: [flow_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  handoff_user                users?    @relation("flow_node_handoff", fields: [handoff_user_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  edges_from                  flow_edges[] @relation("flow_edge_from")
-  edges_to                    flow_edges[] @relation("flow_edge_to")
+  media_url                   String?         @db.VarChar(1024)
+  media_mime                  String?         @db.VarChar(128)
+  media_filename              String?         @db.VarChar(255)
+  created_at                  DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime        @default(now()) @db.Timestamptz(6)
+  flows                       flows           @relation(fields: [flow_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  handoff_user                users?          @relation("flow_node_handoff", fields: [handoff_user_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  edges_from                  flow_edges[]    @relation("flow_edge_from")
+  edges_to                    flow_edges[]    @relation("flow_edge_to")
   sessions                    flow_sessions[]
 
   @@unique([flow_id, client_key], map: "flow_nodes_flow_client_key_uq")
@@ -612,35 +651,35 @@ model flow_nodes {
 }
 
 model flow_edges {
-  id             Int        @id @default(autoincrement())
-  flow_id        Int
-  from_node_id   Int
-  to_node_id     Int
-  match_payload  String?    @db.VarChar(256)
-  created_at     DateTime   @default(now()) @db.Timestamptz(6)
-  flows          flows      @relation(fields: [flow_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  from_node      flow_nodes @relation("flow_edge_from", fields: [from_node_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  to_node        flow_nodes @relation("flow_edge_to", fields: [to_node_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id            Int        @id @default(autoincrement())
+  flow_id       Int
+  from_node_id  Int
+  to_node_id    Int
+  match_payload String?    @db.VarChar(256)
+  created_at    DateTime   @default(now()) @db.Timestamptz(6)
+  flows         flows      @relation(fields: [flow_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  from_node     flow_nodes @relation("flow_edge_from", fields: [from_node_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  to_node       flow_nodes @relation("flow_edge_to", fields: [to_node_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([flow_id], map: "idx_flow_edges_flow")
   @@index([from_node_id], map: "idx_flow_edges_from")
 }
 
 model flow_sessions {
-  id                   Int           @id @default(autoincrement())
-  conversation_id      Int
-  flow_id              Int
-  current_node_id      Int?
-  status               String        @default("active") @db.VarChar(24)
-  timeout_at           DateTime?     @db.Timestamptz(6)
-  timeout_sent_at      DateTime?     @db.Timestamptz(6)
-  timeout_nudge_count  Int           @default(0)
-  started_at           DateTime      @default(now()) @db.Timestamptz(6)
-  updated_at           DateTime      @default(now()) @db.Timestamptz(6)
-  conversations        conversations @relation(fields: [conversation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  flows                flows         @relation(fields: [flow_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  current_node         flow_nodes?   @relation(fields: [current_node_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  events               flow_session_events[]
+  id                  Int                   @id @default(autoincrement())
+  conversation_id     Int
+  flow_id             Int
+  current_node_id     Int?
+  status              String                @default("active") @db.VarChar(24)
+  timeout_at          DateTime?             @db.Timestamptz(6)
+  timeout_sent_at     DateTime?             @db.Timestamptz(6)
+  timeout_nudge_count Int                   @default(0)
+  started_at          DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  conversations       conversations         @relation(fields: [conversation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  flows               flows                 @relation(fields: [flow_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  current_node        flow_nodes?           @relation(fields: [current_node_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  events              flow_session_events[]
 
   @@index([conversation_id, status], map: "idx_flow_sessions_conv_status")
   @@index([flow_id], map: "idx_flow_sessions_flow")
@@ -648,19 +687,19 @@ model flow_sessions {
 }
 
 model flow_session_events {
-  id               Int           @id @default(autoincrement())
-  flow_id          Int
-  session_id       Int
-  conversation_id  Int
-  node_id          Int?
-  client_key       String?       @db.VarChar(64)
-  node_kind        String?       @db.VarChar(32)
-  node_label       String?       @db.VarChar(200)
-  event_type       String        @db.VarChar(32)
-  match_payload    String?       @db.VarChar(256)
-  created_at       DateTime      @default(now()) @db.Timestamptz(6)
-  flows            flows         @relation(fields: [flow_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  sessions         flow_sessions @relation(fields: [session_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id              Int           @id @default(autoincrement())
+  flow_id         Int
+  session_id      Int
+  conversation_id Int
+  node_id         Int?
+  client_key      String?       @db.VarChar(64)
+  node_kind       String?       @db.VarChar(32)
+  node_label      String?       @db.VarChar(200)
+  event_type      String        @db.VarChar(32)
+  match_payload   String?       @db.VarChar(256)
+  created_at      DateTime      @default(now()) @db.Timestamptz(6)
+  flows           flows         @relation(fields: [flow_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  sessions        flow_sessions @relation(fields: [session_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([flow_id, event_type], map: "idx_flow_events_flow_type")
   @@index([flow_id, client_key, event_type], map: "idx_flow_events_flow_key_type")
@@ -727,18 +766,18 @@ model meta_ctwa_ads {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model segment_definitions {
-  id             Int      @id @default(autoincrement())
-  area           String   @db.VarChar(20)
-  slug           String   @db.VarChar(50)
-  label          String   @db.VarChar(120)
-  sort_order     Int      @default(0)
-  color_key      String   @default("teal") @db.VarChar(16)
-  active         Boolean  @default(true)
-  show_in_filter Boolean  @default(true)
-  assignable     Boolean  @default(false)
-  assignment_group String? @db.VarChar(20)
-  created_at     DateTime @default(now()) @db.Timestamp(6)
-  updated_at     DateTime @default(now()) @db.Timestamp(6)
+  id               Int      @id @default(autoincrement())
+  area             String   @db.VarChar(20)
+  slug             String   @db.VarChar(50)
+  label            String   @db.VarChar(120)
+  sort_order       Int      @default(0)
+  color_key        String   @default("teal") @db.VarChar(16)
+  active           Boolean  @default(true)
+  show_in_filter   Boolean  @default(true)
+  assignable       Boolean  @default(false)
+  assignment_group String?  @db.VarChar(20)
+  created_at       DateTime @default(now()) @db.Timestamp(6)
+  updated_at       DateTime @default(now()) @db.Timestamp(6)
 
   @@unique([area, slug])
   @@index([area], map: "idx_segment_definitions_area")
@@ -756,35 +795,35 @@ model user_areas {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model users {
-  id                      Int          @id @default(autoincrement())
-  email                   String       @unique @db.VarChar(120)
-  password_hash           String       @db.VarChar(120)
-  area                    String       @db.VarChar(20)
-  role_slug               String?      @db.VarChar(40)
-  is_master               Boolean      @default(false)
-  created_at              DateTime     @default(now()) @db.Timestamp(6)
-  must_change_password    Boolean      @default(false)
-  can_edit_ai_prompt      Boolean      @default(false)
-  can_view_audit_logs     Boolean      @default(false)
-  can_view_integration    Boolean      @default(false)
-  can_edit_business_hours Boolean      @default(false)
-  can_view_reports             Boolean      @default(false)
-  is_provisioned               Boolean      @default(false)
-  can_assign_conversations     Boolean      @default(false)
-  can_manage_attributes        Boolean      @default(false)
-  can_manage_segments          Boolean      @default(false)
-  can_view_conversation_stats  Boolean      @default(false)
-  can_view_campaign_stats      Boolean      @default(false)
-  can_manage_leads             Boolean      @default(false)
-  first_name                   String?      @db.VarChar(80)
-  last_name                    String?      @db.VarChar(80)
-  audit_logs                   audit_logs[]
-  login_logs                   login_logs[]
-  user_areas                   user_areas[]
-  assigned_conversations       conversations[] @relation("conversation_assignee")
+  id                             Int                     @id @default(autoincrement())
+  email                          String                  @unique @db.VarChar(120)
+  password_hash                  String                  @db.VarChar(120)
+  area                           String                  @db.VarChar(20)
+  role_slug                      String?                 @db.VarChar(40)
+  is_master                      Boolean                 @default(false)
+  created_at                     DateTime                @default(now()) @db.Timestamp(6)
+  must_change_password           Boolean                 @default(false)
+  can_edit_ai_prompt             Boolean                 @default(false)
+  can_view_audit_logs            Boolean                 @default(false)
+  can_view_integration           Boolean                 @default(false)
+  can_edit_business_hours        Boolean                 @default(false)
+  can_view_reports               Boolean                 @default(false)
+  is_provisioned                 Boolean                 @default(false)
+  can_assign_conversations       Boolean                 @default(false)
+  can_manage_attributes          Boolean                 @default(false)
+  can_manage_segments            Boolean                 @default(false)
+  can_view_conversation_stats    Boolean                 @default(false)
+  can_view_campaign_stats        Boolean                 @default(false)
+  can_manage_leads               Boolean                 @default(false)
+  first_name                     String?                 @db.VarChar(80)
+  last_name                      String?                 @db.VarChar(80)
+  audit_logs                     audit_logs[]
+  login_logs                     login_logs[]
+  user_areas                     user_areas[]
+  assigned_conversations         conversations[]         @relation("conversation_assignee")
   assigned_education_lead_cycles education_lead_cycles[] @relation("education_lead_assignee")
-  advisor_notes                advisor_notes[]
-  flow_node_handoffs           flow_nodes[]    @relation("flow_node_handoff")
+  advisor_notes                  advisor_notes[]
+  flow_node_handoffs             flow_nodes[]            @relation("flow_node_handoff")
 
   @@index([role_slug], map: "idx_users_role_slug")
 }
@@ -804,21 +843,21 @@ model advisor_notes {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model whatsapp_templates {
-  id                       Int       @id @default(autoincrement())
+  id                       Int             @id @default(autoincrement())
   whatsapp_waba_id         Int?
-  area                     String    @db.VarChar(20)
-  meta_id                  String?   @db.VarChar(64)
-  name                     String    @db.VarChar(200)
-  language                 String    @db.VarChar(32)
-  category                 String?   @db.VarChar(80)
-  status                   String    @db.VarChar(40)
-  components_json          Json      @default("[]")
-  synced_at                DateTime  @default(now()) @db.Timestamptz(6)
+  area                     String          @db.VarChar(20)
+  meta_id                  String?         @db.VarChar(64)
+  name                     String          @db.VarChar(200)
+  language                 String          @db.VarChar(32)
+  category                 String?         @db.VarChar(80)
+  status                   String          @db.VarChar(40)
+  components_json          Json            @default("[]")
+  synced_at                DateTime        @default(now()) @db.Timestamptz(6)
   rejection_reason         String?
-  submitted_at             DateTime? @db.Timestamptz(6)
+  submitted_at             DateTime?       @db.Timestamptz(6)
   submitted_by             Int?
   placeholder_aliases_json Json?
-  active                   Boolean   @default(true)
+  active                   Boolean         @default(true)
   whatsapp_waba            whatsapp_wabas? @relation(fields: [whatsapp_waba_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@unique([area, name, language])

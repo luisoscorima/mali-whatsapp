@@ -4,7 +4,10 @@ import type { Request, Response } from 'express';
 import type { BusinessArea } from '../config/areas';
 import { sanitizeApiResponse } from '../conversations/api-sanitize.util';
 import { setMessageSender } from '../conversations/chat-sender.util';
-import { downloadWhatsAppMediaBuffer, sendSessionTextMessage } from '../conversations/conversation-whatsapp.util';
+import {
+  downloadWhatsAppMediaBuffer,
+  sendSessionTextMessage,
+} from '../conversations/conversation-whatsapp.util';
 import { saveInboundChatMediaFromBuffer } from '../conversations/chat-media.util';
 import { FlowsService } from '../flows/flows.service';
 import { MetaLeadgenService } from '../leads/meta-leadgen.service';
@@ -14,7 +17,10 @@ import { matchMaliOneWhatsappLink } from '../leads/mali-one-link-match.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { isWhatsAppBsuid } from '../conversations/whatsapp-recipient.util';
 import { chooseWhatsAppIdentityMatch } from '../conversations/whatsapp-identity.util';
-import { mergeComplementaryContacts, mergeComplementaryConversations } from '../contacts/merge-complementary-contacts.util';
+import {
+  mergeComplementaryContacts,
+  mergeComplementaryConversations,
+} from '../contacts/merge-complementary-contacts.util';
 import {
   isBusinessHoursConfigOperational,
   isWithinBusinessHours,
@@ -45,14 +51,8 @@ import {
   TRANSFER_TO_HUMAN_NOTICE,
   UNAVAILABLE_REPLY_MESSAGE,
 } from './ai-response.util';
-import type {
-  MetaWebhookBody,
-  MetaWebhookChangeValue,
-} from './webhook.types';
-import {
-  readVerifyToken,
-  verifyWebhookSignature,
-} from './webhook-verify.util';
+import type { MetaWebhookBody, MetaWebhookChangeValue } from './webhook.types';
+import { readVerifyToken, verifyWebhookSignature } from './webhook-verify.util';
 
 @Injectable()
 export class WebhookService {
@@ -102,7 +102,9 @@ export class WebhookService {
     }
 
     const webhookDebug =
-      String(process.env.WEBHOOK_DEBUG || '').trim().toLowerCase() === 'true';
+      String(process.env.WEBHOOK_DEBUG || '')
+        .trim()
+        .toLowerCase() === 'true';
     const entries = body.entry ?? [];
 
     for (const entry of entries) {
@@ -119,7 +121,9 @@ export class WebhookService {
           );
         }
 
-        const inboundCount = Array.isArray(value.messages) ? value.messages.length : 0;
+        const inboundCount = Array.isArray(value.messages)
+          ? value.messages.length
+          : 0;
         if (inboundCount > 0) {
           this.logger.log(
             `Webhook inbound: ${inboundCount} mensaje(s), phone_number_id=${value.metadata?.phone_number_id ?? 'n/a'}`,
@@ -200,9 +204,13 @@ export class WebhookService {
     });
   }
 
-  private async applyDeliveryStatus(status: Record<string, unknown>): Promise<void> {
+  private async applyDeliveryStatus(
+    status: Record<string, unknown>,
+  ): Promise<void> {
     const messageId = String(status.id || '').trim();
-    const mappedStatus = String(status.status || '').trim().toLowerCase();
+    const mappedStatus = String(status.status || '')
+      .trim()
+      .toLowerCase();
     if (!messageId || !mappedStatus) return;
 
     const statusJson = JSON.stringify(status);
@@ -423,17 +431,11 @@ export class WebhookService {
 
     const history = histRows.reverse().map((row) => ({
       role: (String(row.direction) === 'inbound' ? 'user' : 'model') as
-        | 'user'
-        | 'model',
+        'user' | 'model',
       text: String(row.body_text || '').slice(0, 8000),
     }));
 
-    const replyText = await getAiResponse(
-      userText,
-      history,
-      aiCfg,
-      input.area,
-    );
+    const replyText = await getAiResponse(userText, history, aiCfg, input.area);
 
     const iaFallo =
       replyText == null || replyText === UNAVAILABLE_REPLY_MESSAGE;
@@ -529,19 +531,30 @@ export class WebhookService {
     for (const msg of messages) {
       const record = msg as Record<string, unknown>;
       const waId = String(record.id || '').trim();
-      const system = record.system && typeof record.system === 'object'
-        ? record.system as Record<string, unknown> : null;
+      const system =
+        record.system && typeof record.system === 'object'
+          ? (record.system as Record<string, unknown>)
+          : null;
       const identityChangeType = String(system?.type ?? '').trim();
-      if (record.type === 'system' && [
-        'user_changed_number', 'user_changed_user_id', 'user_identity_changed',
-      ].includes(identityChangeType)) {
+      if (
+        record.type === 'system' &&
+        [
+          'user_changed_number',
+          'user_changed_user_id',
+          'user_identity_changed',
+        ].includes(identityChangeType)
+      ) {
         const previousUserId = String(system?.previous_user_id ?? '').trim();
-        const newUserId = String(system?.user_id ?? record.from_user_id ?? '').trim();
+        const newUserId = String(
+          system?.user_id ?? record.from_user_id ?? '',
+        ).trim();
         const eventData = {
           area,
           wa_message_id: waId || null,
           event_type: identityChangeType,
-          previous_user_id: isWhatsAppBsuid(previousUserId) ? previousUserId : null,
+          previous_user_id: isWhatsAppBsuid(previousUserId)
+            ? previousUserId
+            : null,
           new_user_id: isWhatsAppBsuid(newUserId) ? newUserId : null,
           raw_payload: record as Prisma.InputJsonValue,
         };
@@ -552,17 +565,27 @@ export class WebhookService {
             update: {},
           });
         } else {
-          await this.prisma.whatsapp_identity_events.create({ data: eventData });
+          await this.prisma.whatsapp_identity_events.create({
+            data: eventData,
+          });
         }
         continue;
       }
       const sender = extractInboundSenderIdentity(record, value.contacts);
       if (!sender) {
-        this.logger.warn('Webhook inbound: mensaje sin teléfono ni BSUID válido');
+        this.logger.warn(
+          'Webhook inbound: mensaje sin teléfono ni BSUID válido',
+        );
         continue;
       }
       const { userId } = sender;
       let { phone, recipient: from } = sender;
+      const linePhoneNumberId = resolveInboundLinePhoneNumberId(
+        value,
+        area,
+        (slug) => getWhatsAppCredentialsForArea(slug).phoneNumberId,
+      );
+      const catalogLine = getWhatsAppLineByPhoneNumberId(linePhoneNumberId);
 
       const contactByUserId = userId
         ? await this.prisma.contacts.findFirst({
@@ -605,7 +628,13 @@ export class WebhookService {
         contactByPhone
       ) {
         const merged = await this.prisma.$transaction((tx) =>
-          mergeComplementaryContacts(tx, area, contactByUserId, contactByPhone),
+          mergeComplementaryContacts(
+            tx,
+            area,
+            contactByUserId,
+            contactByPhone,
+            catalogLine?.id,
+          ),
         );
         this.logger.log(
           `Webhook inbound: merge complementario contactos keep=${merged.keepId} drop=${merged.dropId} area=${area}`,
@@ -636,28 +665,83 @@ export class WebhookService {
           data: { whatsapp_user_id: userId },
         });
       }
+      if (contactId && catalogLine?.programId) {
+        await this.prisma.contact_programs.upsert({
+          where: {
+            contact_id_program_id: {
+              contact_id: contactId,
+              program_id: catalogLine.programId,
+            },
+          },
+          create: {
+            contact_id: contactId,
+            program_id: catalogLine.programId,
+            source: 'whatsapp_line',
+          },
+          update: { last_seen_at: new Date() },
+        });
+      }
 
-      const waProfileName = extractInboundProfileName(value.contacts, userId ?? from);
+      const waProfileName = extractInboundProfileName(
+        value.contacts,
+        userId ?? from,
+      );
       const waUsername = extractInboundUsername(value.contacts, userId ?? from);
       const { messageType, bodyText } = extractInboundMessagePreview(record);
-      const linePhoneNumberId = resolveInboundLinePhoneNumberId(
-        value,
-        area,
-        (slug) => getWhatsAppCredentialsForArea(slug).phoneNumberId,
-      );
-      const catalogLine = getWhatsAppLineByPhoneNumberId(linePhoneNumberId);
 
       let existingByUserId = userId
-        ? await this.prisma.conversations.findUnique({
-            where: { area_whatsapp_user_id: { area, whatsapp_user_id: userId } },
-            select: { id: true, phone: true, whatsapp_user_id: true, contact_id: true },
-          })
+        ? catalogLine
+          ? await this.prisma.conversations.findUnique({
+              where: {
+                  whatsapp_line_id_whatsapp_user_id: {
+                    whatsapp_line_id: catalogLine.id,
+                    whatsapp_user_id: userId,
+                  },
+                },
+              select: {
+                id: true,
+                phone: true,
+                whatsapp_user_id: true,
+                contact_id: true,
+              },
+            })
+          : await this.prisma.conversations.findFirst({
+              where: { area, whatsapp_user_id: userId },
+              orderBy: { id: 'desc' },
+              select: {
+                id: true,
+                phone: true,
+                whatsapp_user_id: true,
+                contact_id: true,
+              },
+            })
         : null;
       let existingByPhone = phone
-        ? await this.prisma.conversations.findUnique({
-            where: { area_phone: { area, phone } },
-            select: { id: true, phone: true, whatsapp_user_id: true, contact_id: true },
-          })
+        ? catalogLine
+          ? await this.prisma.conversations.findUnique({
+              where: {
+                  whatsapp_line_id_phone: {
+                    whatsapp_line_id: catalogLine.id,
+                    phone,
+                  },
+                },
+              select: {
+                id: true,
+                phone: true,
+                whatsapp_user_id: true,
+                contact_id: true,
+              },
+            })
+          : await this.prisma.conversations.findFirst({
+              where: { area, phone },
+              orderBy: { id: 'desc' },
+              select: {
+                id: true,
+                phone: true,
+                whatsapp_user_id: true,
+                contact_id: true,
+              },
+            })
         : null;
       let conversationMatch = chooseWhatsAppIdentityMatch(
         existingByUserId,
@@ -685,28 +769,59 @@ export class WebhookService {
             dropContactId,
             mergePhone,
             mergeUserId,
+            catalogLine?.id,
           ),
         );
-        existingByUserId = await this.prisma.conversations.findUnique({
-          where: {
-            area_whatsapp_user_id: { area, whatsapp_user_id: mergeUserId },
-          },
-          select: {
-            id: true,
-            phone: true,
-            whatsapp_user_id: true,
-            contact_id: true,
-          },
-        });
-        existingByPhone = await this.prisma.conversations.findUnique({
-          where: { area_phone: { area, phone: mergePhone } },
-          select: {
-            id: true,
-            phone: true,
-            whatsapp_user_id: true,
-            contact_id: true,
-          },
-        });
+        existingByUserId = catalogLine
+          ? await this.prisma.conversations.findUnique({
+              where: {
+                whatsapp_line_id_whatsapp_user_id: {
+                  whatsapp_line_id: catalogLine.id,
+                  whatsapp_user_id: mergeUserId,
+                },
+              },
+              select: {
+                id: true,
+                phone: true,
+                whatsapp_user_id: true,
+                contact_id: true,
+              },
+            })
+          : await this.prisma.conversations.findFirst({
+              where: { area, whatsapp_user_id: mergeUserId },
+              orderBy: { id: 'desc' },
+              select: {
+                id: true,
+                phone: true,
+                whatsapp_user_id: true,
+                contact_id: true,
+              },
+            });
+        existingByPhone = catalogLine
+          ? await this.prisma.conversations.findUnique({
+              where: {
+                whatsapp_line_id_phone: {
+                  whatsapp_line_id: catalogLine.id,
+                  phone: mergePhone,
+                },
+              },
+              select: {
+                id: true,
+                phone: true,
+                whatsapp_user_id: true,
+                contact_id: true,
+              },
+            })
+          : await this.prisma.conversations.findFirst({
+              where: { area, phone: mergePhone },
+              orderBy: { id: 'desc' },
+              select: {
+                id: true,
+                phone: true,
+                whatsapp_user_id: true,
+                contact_id: true,
+              },
+            });
         conversationMatch = chooseWhatsAppIdentityMatch(
           existingByUserId,
           existingByPhone,
@@ -726,45 +841,74 @@ export class WebhookService {
         );
       }
       const existing = conversationMatch.match;
-      const canAttachPhone = phone && (!existing?.phone || existing.phone === phone) && (!existingByPhone || existingByPhone.id === existing?.id);
-      const canAttachUserId = userId && (!existing?.whatsapp_user_id || existing.whatsapp_user_id === userId);
-      const conversation = await this.prisma.conversations.upsert({
-        where: existing
-          ? { id: existing.id }
-          : userId
-            ? { area_whatsapp_user_id: { area, whatsapp_user_id: userId } }
-            : { area_phone: { area, phone: phone! } },
-        create: {
-          area,
-          phone,
-          whatsapp_user_id: userId,
-          contact_id: contactId,
-          last_user_message_at: new Date(),
-          last_message_at: new Date(),
-          inbox_unread: true,
-          whatsapp_phone_number_id: linePhoneNumberId,
-          whatsapp_line_id: catalogLine?.id ?? null,
-          status: 'bot',
-          ...(waProfileName ? { wa_profile_name: waProfileName } : {}),
-          ...(waUsername ? { wa_username: waUsername } : {}),
-        },
-        update: {
-          ...(canAttachPhone ? { phone } : {}),
-          ...(canAttachUserId ? { whatsapp_user_id: userId } : {}),
-          ...(contactId && (!existing?.contact_id || existing.contact_id === contactId)
-            ? { contact_id: contactId } : {}),
-          ...(waProfileName ? { wa_profile_name: waProfileName } : {}),
-          ...(waUsername ? { wa_username: waUsername } : {}),
-          last_user_message_at: new Date(),
-          last_message_at: new Date(),
-          inbox_unread: true,
-          archived: false,
-          whatsapp_phone_number_id: linePhoneNumberId,
-          ...(catalogLine ? { whatsapp_line_id: catalogLine.id } : {}),
-          updated_at: new Date(),
-        },
-        select: { id: true },
-      });
+      const canAttachPhone =
+        phone &&
+        (!existing?.phone || existing.phone === phone) &&
+        (!existingByPhone || existingByPhone.id === existing?.id);
+      const canAttachUserId =
+        userId &&
+        (!existing?.whatsapp_user_id || existing.whatsapp_user_id === userId);
+      const now = new Date();
+      const createData = {
+        area,
+        phone,
+        whatsapp_user_id: userId,
+        contact_id: contactId,
+        last_user_message_at: now,
+        last_message_at: now,
+        inbox_unread: true,
+        whatsapp_phone_number_id: linePhoneNumberId,
+        whatsapp_line_id: catalogLine?.id ?? null,
+        status: 'bot',
+        ...(waProfileName ? { wa_profile_name: waProfileName } : {}),
+        ...(waUsername ? { wa_username: waUsername } : {}),
+      };
+      const updateData = {
+        ...(canAttachPhone ? { phone } : {}),
+        ...(canAttachUserId ? { whatsapp_user_id: userId } : {}),
+        ...(contactId &&
+        (!existing?.contact_id || existing.contact_id === contactId)
+          ? { contact_id: contactId }
+          : {}),
+        ...(waProfileName ? { wa_profile_name: waProfileName } : {}),
+        ...(waUsername ? { wa_username: waUsername } : {}),
+        last_user_message_at: now,
+        last_message_at: now,
+        inbox_unread: true,
+        archived: false,
+        whatsapp_phone_number_id: linePhoneNumberId,
+        ...(catalogLine ? { whatsapp_line_id: catalogLine.id } : {}),
+        updated_at: now,
+      };
+      const conversation = existing
+        ? await this.prisma.conversations.update({
+            where: { id: existing.id },
+            data: updateData,
+            select: { id: true },
+          })
+        : catalogLine
+          ? await this.prisma.conversations.upsert({
+              where: userId
+                ? {
+                  whatsapp_line_id_whatsapp_user_id: {
+                    whatsapp_line_id: catalogLine.id,
+                    whatsapp_user_id: userId,
+                  },
+                }
+                : {
+                    whatsapp_line_id_phone: {
+                      whatsapp_line_id: catalogLine.id,
+                      phone: phone!,
+                    },
+                  },
+              create: createData,
+              update: updateData,
+              select: { id: true },
+            })
+          : await this.prisma.conversations.create({
+              data: createData,
+              select: { id: true },
+            });
 
       if (messageType === 'reaction') {
         await this.applyInboundReaction(area, conversation.id, record);
@@ -779,8 +923,9 @@ export class WebhookService {
           phone: from,
           msg: record,
         });
-        const referral = (record as { referral?: { source_id?: string; ctwa_clid?: string } })
-          .referral;
+        const referral = (
+          record as { referral?: { source_id?: string; ctwa_clid?: string } }
+        ).referral;
         const sourceId =
           String(referral?.source_id || '').trim() ||
           (referral?.ctwa_clid

@@ -29,7 +29,10 @@ import {
   type CampaignExportLogRow,
 } from './campaign-export.util';
 import { exportFilenameDateStamp } from './campaign-format.util';
-import { enrichFailedLogRow, type EnrichedFailedLog } from './campaign-incident.util';
+import {
+  enrichFailedLogRow,
+  type EnrichedFailedLog,
+} from './campaign-incident.util';
 import {
   buildCampaignCostSummary,
   estimateCategoryCost,
@@ -37,9 +40,7 @@ import {
 } from './campaign-pricing.util';
 import { fetchCampaignRetryStats } from './campaign-retry-stats.util';
 import { fetchCampaignResponderMetrics } from './campaign-responders.util';
-import {
-  buildCampaignDetailPreviewFromRow,
-} from './campaign-message-preview.util';
+import { buildCampaignDetailPreviewFromRow } from './campaign-message-preview.util';
 import {
   buildCampaignParamSummary,
   readCampaignExclusions,
@@ -61,7 +62,10 @@ import {
   validateRecipientsMatchRequest,
 } from './campaign-recipients.util';
 import { RecipientsPreviewDto } from './dto/recipients-preview.dto';
-import { validateCampaignSchedule, validateCampaignSend } from './campaign-send-validate.util';
+import {
+  validateCampaignSchedule,
+  validateCampaignSend,
+} from './campaign-send-validate.util';
 import {
   CampaignSenderService,
   type CampaignJobPayload,
@@ -77,8 +81,12 @@ import type {
   RecipientsPreviewResult,
   SendCampaignOutcome,
 } from './campaigns.types';
-import { formatCampaignSegmentDisplay, parseCampaignPayload } from './campaign-payload.util';
+import {
+  formatCampaignSegmentDisplay,
+  parseCampaignPayload,
+} from './campaign-payload.util';
 import { analyzeRecipientTemplateParams } from './campaign-param-gaps.util';
+import { getWhatsAppLineForArea } from '../templates/whatsapp-meta.util';
 import {
   fetchContactAttributesMap,
   formatTemplateSenderName,
@@ -245,7 +253,9 @@ export class CampaignsService {
     private readonly auditLog: AuditLogService,
   ) {}
 
-  private async getSegmentSlugSet(area: AuthUser['area']): Promise<Set<string>> {
+  private async getSegmentSlugSet(
+    area: AuthUser['area'],
+  ): Promise<Set<string>> {
     const rows = await this.prisma.segment_definitions.findMany({
       where: { area, active: true },
       select: { slug: true },
@@ -283,9 +293,7 @@ export class CampaignsService {
   ): Promise<RecipientsPreviewResult> {
     const segmentSet = await this.getSegmentSlugSet(area);
     const segments = [
-      ...new Set(
-        dto.segments.map((s) => String(s).trim()).filter(Boolean),
-      ),
+      ...new Set(dto.segments.map((s) => String(s).trim()).filter(Boolean)),
     ];
     if (!segments.length) {
       throw new BadRequestException('Indica al menos un segmento');
@@ -368,14 +376,19 @@ export class CampaignsService {
         id: row.id,
         name: row.name,
         phone: row.phone,
-        service_window_open: isWithinUserServiceWindow(row.last_user_message_at),
+        service_window_open: isWithinUserServiceWindow(
+          row.last_user_message_at,
+        ),
       })),
       total: rows.length,
       exclude_open_service_window: excludeOpenServiceWindow,
     };
   }
 
-  async list(area: AuthUser['area'], month?: string): Promise<CampaignListItem[]> {
+  async list(
+    area: AuthUser['area'],
+    month?: string,
+  ): Promise<CampaignListItem[]> {
     const rows = await this.prisma.$queryRaw<ListRow[]>(Prisma.sql`
       WITH latest_logs AS (
         SELECT DISTINCT ON (cl.campaign_id, cl.phone)
@@ -442,8 +455,7 @@ export class CampaignsService {
     });
     if (!range) return mapped;
     return mapped.filter((item) => {
-      const ts =
-        item.first_send_at ?? item.scheduled_at ?? item.created_at;
+      const ts = item.first_send_at ?? item.scheduled_at ?? item.created_at;
       const d = new Date(ts);
       return d >= range.start && d < range.end;
     });
@@ -505,10 +517,7 @@ export class CampaignsService {
     return summary;
   }
 
-  async getById(
-    area: AuthUser['area'],
-    id: number,
-  ): Promise<CampaignDetail> {
+  async getById(area: AuthUser['area'], id: number): Promise<CampaignDetail> {
     const campaign = await this.prisma.campaigns.findFirst({
       where: { id, area },
     });
@@ -605,10 +614,7 @@ export class CampaignsService {
 
     const retryStats = await fetchCampaignRetryStats(this.prisma, id);
 
-    const templateRow = await this.resolveTemplateRowForPreview(
-      area,
-      campaign,
-    );
+    const templateRow = await this.resolveTemplateRowForPreview(area, campaign);
     const { preview: messagePreview, templateId } =
       buildCampaignDetailPreviewFromRow(campaign, templateRow);
     const paramSummary = buildCampaignParamSummary(campaign);
@@ -675,7 +681,9 @@ export class CampaignsService {
       !campaign.scheduled_at ||
       campaign.scheduled_at <= now
     ) {
-      throw new ConflictException('La campaña ya inició o su hora programada pasó');
+      throw new ConflictException(
+        'La campaña ya inició o su hora programada pasó',
+      );
     }
 
     const updated = await this.prisma.campaigns.updateMany({
@@ -688,7 +696,9 @@ export class CampaignsService {
       data: { scheduled_at: schedule.scheduledAt },
     });
     if (updated.count === 0) {
-      throw new ConflictException('La campaña cambió o ya inició. Recarga e inténtalo de nuevo');
+      throw new ConflictException(
+        'La campaña cambió o ya inició. Recarga e inténtalo de nuevo',
+      );
     }
 
     await this.auditLog.write({
@@ -943,7 +953,9 @@ export class CampaignsService {
       throw new NotFoundException('Campaña no encontrada');
     }
 
-    const deliveredRows = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
+    const deliveredRows = await this.prisma.$queryRaw<
+      { n: number }[]
+    >(Prisma.sql`
       SELECT COUNT(*)::int AS n
       FROM (
         SELECT DISTINCT ON (phone)
@@ -957,7 +969,9 @@ export class CampaignsService {
     `);
     const deliveredCount = deliveredRows[0]?.n ?? 0;
     const category = getCampaignTemplateCategory(campaign);
-    const [firstSendRow] = await this.prisma.$queryRaw<{ first_send_at: Date | null }[]>(
+    const [firstSendRow] = await this.prisma.$queryRaw<
+      { first_send_at: Date | null }[]
+    >(
       Prisma.sql`
         SELECT MIN(created_at) AS first_send_at
         FROM campaign_logs
@@ -965,7 +979,9 @@ export class CampaignsService {
       `,
     );
     const pricedAt =
-      firstSendRow?.first_send_at ?? campaign.scheduled_at ?? campaign.created_at;
+      firstSendRow?.first_send_at ??
+      campaign.scheduled_at ??
+      campaign.created_at;
 
     let amount: number | null = null;
     let currency = 'USD';
@@ -986,7 +1002,9 @@ export class CampaignsService {
       const setting = await this.prisma.app_settings.findFirst({
         where: { area, key: 'campaign_cost_per_message_usd' },
       });
-      const defaultRate = Number(process.env.CAMPAIGN_COST_PER_MESSAGE_USD || 0.05);
+      const defaultRate = Number(
+        process.env.CAMPAIGN_COST_PER_MESSAGE_USD || 0.05,
+      );
       const rate = setting?.value != null ? Number(setting.value) : defaultRate;
       const safeRate = Number.isFinite(rate) && rate >= 0 ? rate : defaultRate;
       amount = deliveredCount * safeRate;
@@ -1020,7 +1038,10 @@ export class CampaignsService {
   ): Promise<SendCampaignOutcome> {
     const area = user.area;
     const segmentSet = await this.getSegmentSlugSet(area);
-    const templateSyncId = parseInt(String(body.templateSyncId || '').trim(), 10);
+    const templateSyncId = parseInt(
+      String(body.templateSyncId || '').trim(),
+      10,
+    );
 
     let templateRow: {
       id: number;
@@ -1115,7 +1136,9 @@ export class CampaignsService {
     }
 
     if (!recipients.length) {
-      throw new BadRequestException('No hay destinatarios con los filtros actuales');
+      throw new BadRequestException(
+        'No hay destinatarios con los filtros actuales',
+      );
     }
 
     const submittedStaticParams = {
@@ -1198,13 +1221,11 @@ export class CampaignsService {
       recipientContactIds: recipients.map((r) => r.id),
     };
 
-    if (
-      !(
-        audienceMode === 'multi' &&
-        recipientContactIds &&
-        recipientContactIds.length > 0
-      )
-    ) {
+    if (!(
+      audienceMode === 'multi' &&
+      recipientContactIds &&
+      recipientContactIds.length > 0
+    )) {
       campaignPayload.segment = segments[0];
     }
     if (excludeContactIds.length > 0) {
@@ -1221,10 +1242,12 @@ export class CampaignsService {
     }
 
     const campaignStatus = isScheduled ? 'scheduled' : 'queued';
+    const whatsappLine = getWhatsAppLineForArea(area);
 
     const campaign = await this.prisma.campaigns.create({
       data: {
         area,
+        whatsapp_line_id: whatsappLine?.id ?? null,
         segment,
         template_name: tRow.name,
         message_text: messageText,

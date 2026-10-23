@@ -18,6 +18,7 @@ export type WhatsAppLineCatalogRow = {
   displayPhoneNumber: string | null;
   legacyArea: string | null;
   canonicalArea: string;
+  programId: number | null;
   programKey: string | null;
   isDefault: boolean;
   wabaId: string;
@@ -31,6 +32,7 @@ export type ResolvedWhatsAppLine = WhatsAppCredentials & {
   displayPhoneNumber: string | null;
   legacyArea: string | null;
   canonicalArea: string;
+  programId: number | null;
   programKey: string | null;
   isDefault: boolean;
   wabaId: string;
@@ -101,12 +103,18 @@ export function normalizeSecretValue(value: unknown): string {
   return v;
 }
 
-export function setMetaSettingsCache(rows: { area: string; key: string; value: string }[]): void {
+export function setMetaSettingsCache(
+  rows: { area: string; key: string; value: string }[],
+): void {
   const next = emptyCache();
   for (const row of rows) {
     const area = String(row.area || '').trim();
-    if (area === 'global' || (BUSINESS_AREAS as readonly string[]).includes(area)) {
-      (next as Record<string, Record<string, string>>)[area][row.key] = row.value;
+    if (
+      area === 'global' ||
+      (BUSINESS_AREAS as readonly string[]).includes(area)
+    ) {
+      (next as Record<string, Record<string, string>>)[area][row.key] =
+        row.value;
     }
   }
   cache = next;
@@ -127,7 +135,9 @@ export function isWhatsAppLineCatalogEnabled(): boolean {
 
 export function getVerifyToken(): string {
   return normalizeSecretValue(
-    cache.global[META_SETTING_KEYS.verifyToken] || process.env.VERIFY_TOKEN || '',
+    cache.global[META_SETTING_KEYS.verifyToken] ||
+      process.env.VERIFY_TOKEN ||
+      '',
   );
 }
 
@@ -159,10 +169,12 @@ function buildLegacyWhatsAppCredentialsRaw(norm: BusinessArea): {
   return { token, phoneNumberId };
 }
 
-export function getWhatsAppCredentialsForArea(area: unknown): WhatsAppCredentials {
+export function getWhatsAppCredentialsForArea(
+  area: unknown,
+): WhatsAppCredentials {
   const norm = normalizeArea(area);
   if (isWhatsAppLineCatalogEnabled()) {
-    const line = resolveCatalogLineForArea(norm);
+    const line = getWhatsAppLineForArea(norm);
     if (line) return line;
   }
   let { token, phoneNumberId } = buildLegacyWhatsAppCredentialsRaw(norm);
@@ -175,7 +187,9 @@ export function getWhatsAppCredentialsForArea(area: unknown): WhatsAppCredential
     if (tiPid && pid && pid === tiPid) {
       const fallbackPhone = String(process.env.PHONE_NUMBER_ID || '').trim();
       const envKeys = ENV_BY_AREA[norm] || ENV_BY_AREA.ti;
-      const preferred = String(process.env[envKeys.phone] || fallbackPhone).trim();
+      const preferred = String(
+        process.env[envKeys.phone] || fallbackPhone,
+      ).trim();
       if (preferred && preferred !== pid) {
         if (!warnedPhoneIdDupWithTi.has(norm)) {
           warnedPhoneIdDupWithTi.add(norm);
@@ -199,7 +213,7 @@ export function getWhatsAppCredentialsForArea(area: unknown): WhatsAppCredential
 export function getWabaIdOverrideForArea(area: unknown): string {
   const norm = normalizeArea(area);
   if (isWhatsAppLineCatalogEnabled()) {
-    const line = resolveCatalogLineForArea(norm);
+    const line = getWhatsAppLineForArea(norm);
     if (line?.wabaId) return line.wabaId;
   }
   const row = cache[norm];
@@ -214,7 +228,7 @@ export function getWabaIdOverrideForArea(area: unknown): string {
 export function getStoredDisplayPhoneNumber(area: unknown): string {
   const norm = normalizeArea(area);
   if (isWhatsAppLineCatalogEnabled()) {
-    const line = resolveCatalogLineForArea(norm);
+    const line = getWhatsAppLineForArea(norm);
     if (line?.displayPhoneNumber) return line.displayPhoneNumber;
   }
   return String(
@@ -246,7 +260,9 @@ function resolveCatalogToken(row: WhatsAppLineCatalogRow): string {
   return '';
 }
 
-function effectiveCatalogArea(row: WhatsAppLineCatalogRow): BusinessArea | null {
+function effectiveCatalogArea(
+  row: WhatsAppLineCatalogRow,
+): BusinessArea | null {
   if (row.legacyArea && isValidBusinessArea(row.legacyArea)) {
     return normalizeArea(row.legacyArea);
   }
@@ -256,7 +272,9 @@ function effectiveCatalogArea(row: WhatsAppLineCatalogRow): BusinessArea | null 
   return null;
 }
 
-function resolveCatalogLine(row: WhatsAppLineCatalogRow): ResolvedWhatsAppLine | null {
+function resolveCatalogLine(
+  row: WhatsAppLineCatalogRow,
+): ResolvedWhatsAppLine | null {
   const area = effectiveCatalogArea(row);
   const token = resolveCatalogToken(row);
   if (!area || !token || !row.phoneNumberId) return null;
@@ -268,18 +286,18 @@ function resolveCatalogLine(row: WhatsAppLineCatalogRow): ResolvedWhatsAppLine |
     displayPhoneNumber: row.displayPhoneNumber,
     legacyArea: row.legacyArea,
     canonicalArea: row.canonicalArea,
+    programId: row.programId,
     programKey: row.programKey,
     isDefault: row.isDefault,
     wabaId: row.wabaId,
   };
 }
 
-function resolveCatalogLineForArea(
+export function getWhatsAppLineForArea(
   area: BusinessArea,
 ): ResolvedWhatsAppLine | null {
-  const exactLegacy = lineCatalog.find(
-    (row) => row.legacyArea === area,
-  );
+  if (!isWhatsAppLineCatalogEnabled()) return null;
+  const exactLegacy = lineCatalog.find((row) => row.legacyArea === area);
   if (exactLegacy) return resolveCatalogLine(exactLegacy);
   const canonicalDefault = lineCatalog.find(
     (row) => row.canonicalArea === area && row.isDefault,

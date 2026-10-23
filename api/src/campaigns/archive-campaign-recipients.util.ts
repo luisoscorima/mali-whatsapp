@@ -10,6 +10,7 @@ export async function archiveCampaignRecipientConversations(
   prisma: PrismaService,
   area: string,
   recipients: { id: number; phone: string }[],
+  whatsappLineId?: number | null,
 ): Promise<{ archivedCount: number; recipientCount: number }> {
   const phones = [
     ...new Set(
@@ -31,14 +32,13 @@ export async function archiveCampaignRecipientConversations(
     return { archivedCount: 0, recipientCount };
   }
 
-  const or: { phone?: { in: string[] }; contact_id?: { in: number[] } }[] =
-    [];
+  const or: { phone?: { in: string[] }; contact_id?: { in: number[] } }[] = [];
   if (phones.length) or.push({ phone: { in: phones } });
   if (contactIds.length) or.push({ contact_id: { in: contactIds } });
 
   const result = await prisma.conversations.updateMany({
     where: {
-      area,
+      ...(whatsappLineId ? { whatsapp_line_id: whatsappLineId } : { area }),
       archived: false,
       OR: or,
     },

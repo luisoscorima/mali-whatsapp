@@ -17,6 +17,8 @@ export async function persistCampaignChatMessage(
     waMessageId: string | null;
     preview: CampaignMessagePreview;
     apiResponse?: unknown;
+    whatsappLineId?: number | null;
+    whatsappPhoneNumberId?: string | null;
     /** Fecha real del envío (backfill histórico). */
     sentAt?: Date;
   },
@@ -28,55 +30,156 @@ export async function persistCampaignChatMessage(
 
   const at = input.sentAt ?? new Date();
   const isHistorical = Boolean(input.sentAt);
+  const whatsappLineId =
+    Number.isInteger(input.whatsappLineId) && Number(input.whatsappLineId) > 0
+      ? Number(input.whatsappLineId)
+      : null;
+  const whatsappPhoneNumberId =
+    String(input.whatsappPhoneNumberId || '').trim() || null;
 
   const bodyText =
     input.preview.bodyText.trim() ||
     input.preview.headerText.trim() ||
     'Campaña enviada';
 
-  const exact = userId
-    ? await prisma.conversations.findUnique({
-        where: { area_whatsapp_user_id: { area, whatsapp_user_id: userId } },
-        select: { id: true, phone: true, whatsapp_user_id: true, contact_id: true },
-      })
-    : await prisma.conversations.findUnique({
-        where: { area_phone: { area, phone: phone! } },
-        select: { id: true, phone: true, whatsapp_user_id: true, contact_id: true },
-      });
-  const existing = exact ?? (input.contactId ? await prisma.conversations.findFirst({
-    where: { area, contact_id: input.contactId,
-      ...(userId ? { whatsapp_user_id: null } : { phone: null }) },
-    select: { id: true, phone: true, whatsapp_user_id: true, contact_id: true },
-  }) : null);
-  const conversation = await prisma.conversations.upsert({
-    where: existing
-      ? { id: existing.id }
-      : userId
-        ? { area_whatsapp_user_id: { area, whatsapp_user_id: userId } }
-        : { area_phone: { area, phone: phone! } },
-    create: {
-      area,
-      phone,
-      whatsapp_user_id: userId,
-      contact_id: input.contactId,
-      last_message_at: at,
-      status: 'bot',
-    },
-    update: isHistorical
-      ? {
-          ...(input.contactId && !existing?.contact_id ? { contact_id: input.contactId } : {}),
-          ...(userId && !existing?.whatsapp_user_id ? { whatsapp_user_id: userId } : {}),
+  const exact = whatsappLineId
+    ? userId
+      ? await prisma.conversations.findUnique({
+          where: {
+            whatsapp_line_id_whatsapp_user_id: {
+              whatsapp_line_id: whatsappLineId,
+              whatsapp_user_id: userId,
+            },
+          },
+          select: {
+            id: true,
+            phone: true,
+            whatsapp_user_id: true,
+            contact_id: true,
+          },
+        })
+      : await prisma.conversations.findUnique({
+          where: {
+            whatsapp_line_id_phone: {
+              whatsapp_line_id: whatsappLineId,
+              phone: phone!,
+            },
+          },
+          select: {
+            id: true,
+            phone: true,
+            whatsapp_user_id: true,
+            contact_id: true,
+          },
+        })
+    : userId
+      ? await prisma.conversations.findFirst({
+          where: { area, whatsapp_user_id: userId },
+          orderBy: { id: 'desc' },
+          select: {
+            id: true,
+            phone: true,
+            whatsapp_user_id: true,
+            contact_id: true,
+          },
+        })
+      : await prisma.conversations.findFirst({
+          where: { area, phone: phone! },
+          orderBy: { id: 'desc' },
+          select: {
+            id: true,
+            phone: true,
+            whatsapp_user_id: true,
+            contact_id: true,
+          },
+        });
+  const existing =
+    exact ??
+    (input.contactId
+      ? await prisma.conversations.findFirst({
+          where: {
+            ...(whatsappLineId
+              ? { whatsapp_line_id: whatsappLineId }
+              : { area }),
+            contact_id: input.contactId,
+            ...(userId ? { whatsapp_user_id: null } : { phone: null }),
+          },
+          select: {
+            id: true,
+            phone: true,
+            whatsapp_user_id: true,
+            contact_id: true,
+          },
+        })
+      : null);
+  const createData = {
+    area,
+    whatsapp_line_id: whatsappLineId,
+    whatsapp_phone_number_id: whatsappPhoneNumberId,
+    phone,
+    whatsapp_user_id: userId,
+    contact_id: input.contactId,
+    last_message_at: at,
+    status: 'bot',
+  };
+  const updateData = isHistorical
+    ? {
+          ...(input.contactId && !existing?.contact_id
+            ? { contact_id: input.contactId }
+            : {}),
+          ...(userId && !existing?.whatsapp_user_id
+            ? { whatsapp_user_id: userId }
+            : {}),
           ...(phone && !existing?.phone ? { phone } : {}),
-        }
-      : {
-          ...(input.contactId && !existing?.contact_id ? { contact_id: input.contactId } : {}),
-          ...(userId && !existing?.whatsapp_user_id ? { whatsapp_user_id: userId } : {}),
+          ...(whatsappLineId ? { whatsapp_line_id: whatsappLineId } : {}),
+          ...(whatsappPhoneNumberId
+            ? { whatsapp_phone_number_id: whatsappPhoneNumberId }
+            : {}),
+      }
+    : {
+          ...(input.contactId && !existing?.contact_id
+            ? { contact_id: input.contactId }
+            : {}),
+          ...(userId && !existing?.whatsapp_user_id
+            ? { whatsapp_user_id: userId }
+            : {}),
           ...(phone && !existing?.phone ? { phone } : {}),
+          ...(whatsappLineId ? { whatsapp_line_id: whatsappLineId } : {}),
+          ...(whatsappPhoneNumberId
+            ? { whatsapp_phone_number_id: whatsappPhoneNumberId }
+            : {}),
           last_message_at: at,
           updated_at: new Date(),
-        },
-    select: { id: true },
-  });
+      };
+  const conversation = existing
+    ? await prisma.conversations.update({
+        where: { id: existing.id },
+        data: updateData,
+        select: { id: true },
+      })
+    : whatsappLineId
+      ? await prisma.conversations.upsert({
+          where: userId
+            ? {
+                whatsapp_line_id_whatsapp_user_id: {
+                  whatsapp_line_id: whatsappLineId,
+                  whatsapp_user_id: userId,
+                },
+              }
+            : {
+                whatsapp_line_id_phone: {
+                  whatsapp_line_id: whatsappLineId,
+                  phone: phone!,
+                },
+              },
+          create: createData,
+          update: updateData,
+          select: { id: true },
+        })
+      : await prisma.conversations.create({
+          data: createData,
+          select: { id: true },
+        });
 
   const rawPayload = setMessageSender(
     {

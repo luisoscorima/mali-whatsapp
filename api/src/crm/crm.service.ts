@@ -19,7 +19,10 @@ import {
   buildTemplateDefinition,
   buildWhatsappGraphComponents,
 } from '../templates/template-definition.util';
-import { sendTemplateWithComponents } from '../templates/whatsapp-meta.util';
+import {
+  getWhatsAppLineForArea,
+  sendTemplateWithComponents,
+} from '../templates/whatsapp-meta.util';
 import { CrmAudienceQueryDto } from './dto/crm-audience-query.dto';
 import type {
   CrmCreateAttributeDefinitionDto,
@@ -316,13 +319,16 @@ export class CrmService {
       templateRow.components_json,
       staticParams,
     );
+    const whatsappLine = getWhatsAppLineForArea(area);
 
     const campaign = await this.prisma.campaigns.create({
       data: {
         area,
+        whatsapp_line_id: whatsappLine?.id ?? null,
         segment: 'product_automation',
         template_name: templateRow.name,
-        message_text: preview.bodyText || preview.headerText || templateRow.name,
+        message_text:
+          preview.bodyText || preview.headerText || templateRow.name,
         status: 'sending',
         total_recipients: 1,
         send_mode: 'direct',
@@ -357,6 +363,7 @@ export class CrmService {
         languageCode: templateRow.language,
         components,
         area,
+        phoneNumberId: whatsappLine?.phoneNumberId ?? null,
       });
       messageId = result.messages?.[0]?.id ?? null;
       logStatus = messageId ? 'sent' : 'failed';
@@ -366,8 +373,7 @@ export class CrmService {
           'WhatsApp no devolvió un id de mensaje. Revisa credenciales/plantilla.';
       }
     } catch (error) {
-      sendErrorMessage =
-        error instanceof Error ? error.message : String(error);
+      sendErrorMessage = error instanceof Error ? error.message : String(error);
       apiResponse = { error: sendErrorMessage };
     }
 
@@ -397,20 +403,17 @@ export class CrmService {
         waMessageId: messageId,
         preview,
         apiResponse,
+        whatsappLineId: whatsappLine?.id ?? null,
+        whatsappPhoneNumberId: whatsappLine?.phoneNumberId ?? null,
       });
 
-      await this.prisma.conversations.upsert({
-        where: {
-          area_phone: { area, phone },
-        },
-        create: {
-          area,
-          phone,
+      await this.prisma.conversations.updateMany({
+        where: whatsappLine
+          ? { whatsapp_line_id: whatsappLine.id, phone }
+          : { area, phone },
+        data: {
           contact_id: contact.id,
           status: 'human',
-        },
-        update: {
-          contact_id: contact.id,
           updated_at: new Date(),
         },
       });
@@ -513,7 +516,10 @@ export class CrmService {
     if (segmentFilters.length === 1) {
       Object.assign(where, segmentFilters[0]);
     } else if (segmentFilters.length > 1) {
-      where.AND = [...(Array.isArray(where.AND) ? where.AND : []), ...segmentFilters];
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : []),
+        ...segmentFilters,
+      ];
     }
 
     if (query.attr_key) {
@@ -563,13 +569,7 @@ export class CrmService {
   }
 
   private normalizeSegmentList(raw: string[]): string[] {
-    return [
-      ...new Set(
-        raw
-          .map((s) => String(s ?? '').trim())
-          .filter(Boolean),
-      ),
-    ];
+    return [...new Set(raw.map((s) => String(s ?? '').trim()).filter(Boolean))];
   }
 
   /** Full CRM contact list for MALI ONE CRM PAM (not only email audience). */
@@ -602,7 +602,9 @@ export class CrmService {
     const allowed = ['educacion', 'educacion_ca', 'educacion_ep'];
     const selected = query.area?.trim().toLowerCase() || 'all';
     if (selected !== 'all' && !allowed.includes(selected)) {
-      throw new BadRequestException(`Área de educación inválida: ${query.area}`);
+      throw new BadRequestException(
+        `Área de educación inválida: ${query.area}`,
+      );
     }
     const areas = selected === 'all' ? allowed : [selected];
     return this.listContactsForAreas(query, areas, selected, true);
@@ -674,7 +676,16 @@ export class CrmService {
           { last_name: { contains: q, mode: 'insensitive' } },
           { phone: { contains: q } },
           { whatsapp_user_id: { contains: q, mode: 'insensitive' } },
-          { conversations: { some: { wa_username: { contains: q.replace(/^@/, ''), mode: 'insensitive' } } } },
+          {
+            conversations: {
+              some: {
+                wa_username: {
+                  contains: q.replace(/^@/, ''),
+                  mode: 'insensitive',
+                },
+              },
+            },
+          },
           { email: { contains: q, mode: 'insensitive' } },
           { dni: { contains: q, mode: 'insensitive' } },
           {
@@ -717,27 +728,36 @@ export class CrmService {
           },
           conversations: {
             where: { wa_username: { not: null } },
-            orderBy: { updated_at: 'desc' }, take: 1,
+            orderBy: { updated_at: 'desc' },
+            take: 1,
             select: { wa_username: true },
           },
           education_lead_cycles: {
-            orderBy: [{ started_at: 'desc' }, { id: 'desc' }], take: 1,
+            orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+            take: 1,
             include: {
-              assigned_user: { select: { first_name: true, last_name: true, email: true } },
+              assigned_user: {
+                select: { first_name: true, last_name: true, email: true },
+              },
               lead_status: { select: { label: true } },
             },
           },
-          ...(includeLatestProspectia ? {
-            education_lead_entries: {
-              orderBy: [{ occurred_at: 'desc' as const }, { id: 'desc' as const }],
-              take: 1,
-              select: {
-                prospectia_match: true,
-                prospectia_advisor_email: true,
-                prospectia_checked_at: true,
-              },
-            },
-          } : {}),
+          ...(includeLatestProspectia
+            ? {
+                education_lead_entries: {
+                  orderBy: [
+                    { occurred_at: 'desc' as const },
+                    { id: 'desc' as const },
+                  ],
+                  take: 1,
+                  select: {
+                    prospectia_match: true,
+                    prospectia_advisor_email: true,
+                    prospectia_checked_at: true,
+                  },
+                },
+              }
+            : {}),
           lead_status: { select: { label: true } },
         },
       }),
@@ -765,17 +785,30 @@ export class CrmService {
       assigned_user_id: row.education_lead_cycles[0]?.assigned_user_id ?? null,
       requires_review: row.education_lead_cycles[0]?.requires_review ?? false,
       assigned_user_label: row.education_lead_cycles[0]?.assigned_user
-        ? [row.education_lead_cycles[0].assigned_user.first_name,
-          row.education_lead_cycles[0].assigned_user.last_name].filter(Boolean).join(' ')
-          || row.education_lead_cycles[0].assigned_user.email : null,
-      lead_status_id: row.education_lead_cycles[0]?.lead_status_id ?? row.lead_status_id,
-      lead_status_label: row.education_lead_cycles[0]?.lead_status?.label
-        ?? row.lead_status?.label ?? null,
-      ...(includeLatestProspectia ? {
-        prospectia_match: row.education_lead_entries[0]?.prospectia_match ?? null,
-        prospectia_advisor_email: row.education_lead_entries[0]?.prospectia_advisor_email ?? null,
-        prospectia_checked_at: row.education_lead_entries[0]?.prospectia_checked_at?.toISOString() ?? null,
-      } : {}),
+        ? [
+            row.education_lead_cycles[0].assigned_user.first_name,
+            row.education_lead_cycles[0].assigned_user.last_name,
+          ]
+            .filter(Boolean)
+            .join(' ') || row.education_lead_cycles[0].assigned_user.email
+        : null,
+      lead_status_id:
+        row.education_lead_cycles[0]?.lead_status_id ?? row.lead_status_id,
+      lead_status_label:
+        row.education_lead_cycles[0]?.lead_status?.label ??
+        row.lead_status?.label ??
+        null,
+      ...(includeLatestProspectia
+        ? {
+            prospectia_match:
+              row.education_lead_entries[0]?.prospectia_match ?? null,
+            prospectia_advisor_email:
+              row.education_lead_entries[0]?.prospectia_advisor_email ?? null,
+            prospectia_checked_at:
+              row.education_lead_entries[0]?.prospectia_checked_at?.toISOString() ??
+              null,
+          }
+        : {}),
     }));
 
     const pages = total > 0 ? Math.ceil(total / limit) : 0;
@@ -842,9 +875,7 @@ export class CrmService {
 
     const attributes = this.normalizeAttributes(dto.attributes);
     const dni =
-      dto.dni !== undefined
-        ? this.normalizeOptionalDni(dto.dni)
-        : undefined;
+      dto.dni !== undefined ? this.normalizeOptionalDni(dto.dni) : undefined;
     if (dni) attributes.dni = dni;
     if (dto.dni !== undefined && !dni) attributes.dni = '';
 
@@ -902,7 +933,8 @@ export class CrmService {
         },
         conversations: {
           where: { wa_username: { not: null } },
-          orderBy: { updated_at: 'desc' }, take: 1,
+          orderBy: { updated_at: 'desc' },
+          take: 1,
           select: { wa_username: true },
         },
       },
@@ -979,7 +1011,9 @@ export class CrmService {
         .replace(/[^a-z0-9_]/g, '_')
         .slice(0, 64);
       if (!k) continue;
-      out[k] = String(value ?? '').trim().slice(0, 500);
+      out[k] = String(value ?? '')
+        .trim()
+        .slice(0, 500);
     }
     return out;
   }

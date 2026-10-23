@@ -1,12 +1,10 @@
-import {
-  normalizeArea,
-  type BusinessArea,
-} from '../config/areas';
+import { normalizeArea, type BusinessArea } from '../config/areas';
 import { whatsappRecipientField } from '../conversations/whatsapp-recipient.util';
 import {
   getConfiguredWhatsAppCatalogLines as getCatalogLinesFromStore,
   getWabaIdOverrideForArea as getWabaFromStore,
   getWhatsAppLineByPhoneNumberId as getLineFromStore,
+  getWhatsAppLineForArea as getLineForAreaFromStore,
   getWhatsAppCredentialsForArea as getCredsFromStore,
   resolveWhatsAppAreaFromCatalogWaba as resolveAreaFromCatalogWabaStore,
   type ResolvedWhatsAppLine,
@@ -29,6 +27,12 @@ export function getWhatsAppLineByPhoneNumberId(
   phoneNumberId: unknown,
 ): ResolvedWhatsAppLine | null {
   return getLineFromStore(phoneNumberId);
+}
+
+export function getWhatsAppLineForArea(
+  area: unknown,
+): ResolvedWhatsAppLine | null {
+  return getLineForAreaFromStore(normalizeArea(area));
 }
 
 export function getConfiguredWhatsAppCatalogLines(): ResolvedWhatsAppLine[] {
@@ -180,11 +184,9 @@ export async function fetchDisplayPhoneNumber(
 ): Promise<string | null> {
   const idStr = String(phoneNumberId || '').trim();
   if (!idStr || !token) return null;
-  const data = await graphGet<{ display_phone_number?: string }>(
-    idStr,
-    token,
-    { fields: 'display_phone_number' },
-  );
+  const data = await graphGet<{ display_phone_number?: string }>(idStr, token, {
+    fields: 'display_phone_number',
+  });
   const display = String(data?.display_phone_number ?? '').trim();
   return display || null;
 }
@@ -335,10 +337,7 @@ export async function uploadTemplateHeaderHandle(input: {
   const initBody = (await initRes.json()) as { id?: string } & GraphErrorBody;
   if (!initRes.ok) {
     throw new Error(
-      formatGraphError(
-        initBody,
-        'Error iniciando upload de cabecera en Meta.',
-      ),
+      formatGraphError(initBody, 'Error iniciando upload de cabecera en Meta.'),
     );
   }
   const sessionId = String(initBody?.id || '').trim();
@@ -355,7 +354,9 @@ export async function uploadTemplateHeaderHandle(input: {
     },
     body: new Uint8Array(input.buffer),
   });
-  const uploadBody = (await uploadRes.json()) as { h?: string } & GraphErrorBody;
+  const uploadBody = (await uploadRes.json()) as {
+    h?: string;
+  } & GraphErrorBody;
   if (!uploadRes.ok) {
     throw new Error(
       formatGraphError(uploadBody, 'Error subiendo cabecera media.'),
@@ -411,8 +412,18 @@ export async function sendTemplateWithComponents(input: {
   languageCode: string;
   components?: Record<string, unknown>[];
   area: unknown;
+  phoneNumberId?: string | null;
 }): Promise<SendTemplateResult> {
-  const { token, phoneNumberId } = getWhatsAppCredentialsForArea(input.area);
+  const requestedPhoneNumberId = String(input.phoneNumberId || '').trim();
+  const exactLine = requestedPhoneNumberId
+    ? getWhatsAppLineByPhoneNumberId(requestedPhoneNumberId)
+    : null;
+  const areaCredentials = getWhatsAppCredentialsForArea(input.area);
+  const token = exactLine?.token || areaCredentials.token;
+  const phoneNumberId =
+    exactLine?.phoneNumberId ||
+    requestedPhoneNumberId ||
+    areaCredentials.phoneNumberId;
   if (!token || !phoneNumberId) {
     throw new Error(
       'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_* y PHONE_NUMBER_ID_*',
@@ -440,7 +451,9 @@ export async function sendTemplateWithComponents(input: {
     );
   } catch (error) {
     const err = error as Error & { status?: number };
-    const wrapped = new Error(err.message || 'Error enviando plantilla') as Error & {
+    const wrapped = new Error(
+      err.message || 'Error enviando plantilla',
+    ) as Error & {
       response?: { data: unknown };
     };
     wrapped.response = {

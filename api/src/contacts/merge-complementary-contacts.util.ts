@@ -35,6 +35,7 @@ export async function mergeComplementaryContacts(
     lead_status_id?: number | null;
     lead_score?: number | null;
   },
+  whatsappLineId?: number | null,
 ): Promise<MergeComplementaryResult> {
   const pair = pickComplementaryKeepDrop(contactA, contactB);
   if (!pair) {
@@ -64,14 +65,12 @@ export async function mergeComplementaryContacts(
     where: { id: keep.id },
     data: {
       phone: keepFull.phone?.trim() ? keepFull.phone : phone,
-      email:
-        keepFull.email?.trim() || dropFull.email?.trim() || undefined,
+      email: keepFull.email?.trim() || dropFull.email?.trim() || undefined,
       dni: keepFull.dni?.trim() || dropFull.dni?.trim() || undefined,
       last_name:
-        keepFull.last_name?.trim() ||
-        dropFull.last_name?.trim() ||
-        undefined,
-      lead_status_id: keepFull.lead_status_id ?? dropFull.lead_status_id ?? undefined,
+        keepFull.last_name?.trim() || dropFull.last_name?.trim() || undefined,
+      lead_status_id:
+        keepFull.lead_status_id ?? dropFull.lead_status_id ?? undefined,
       lead_score: keepFull.lead_score ?? dropFull.lead_score ?? undefined,
       updated_at: new Date(),
     },
@@ -85,6 +84,7 @@ export async function mergeComplementaryContacts(
     drop.id,
     phone,
     whatsappUserId,
+    whatsappLineId,
   );
 
   await tx.contacts.update({
@@ -130,6 +130,51 @@ async function reassignContactFks(
     where: { contact_id: dropId },
     data: { contact_id: keepId },
   });
+
+  const dropPrograms = await tx.contact_programs.findMany({
+    where: { contact_id: dropId },
+  });
+  for (const membership of dropPrograms) {
+    const existing = await tx.contact_programs.findUnique({
+      where: {
+        contact_id_program_id: {
+          contact_id: keepId,
+          program_id: membership.program_id,
+        },
+      },
+    });
+    if (existing) {
+      await tx.contact_programs.update({
+        where: {
+          contact_id_program_id: {
+            contact_id: keepId,
+            program_id: membership.program_id,
+          },
+        },
+        data: {
+          first_seen_at:
+            existing.first_seen_at <= membership.first_seen_at
+              ? existing.first_seen_at
+              : membership.first_seen_at,
+          last_seen_at:
+            existing.last_seen_at >= membership.last_seen_at
+              ? existing.last_seen_at
+              : membership.last_seen_at,
+        },
+      });
+    } else {
+      await tx.contact_programs.create({
+        data: {
+          contact_id: keepId,
+          program_id: membership.program_id,
+          source: membership.source,
+          first_seen_at: membership.first_seen_at,
+          last_seen_at: membership.last_seen_at,
+        },
+      });
+    }
+  }
+  await tx.contact_programs.deleteMany({ where: { contact_id: dropId } });
 
   // Segmentos / attrs: copiar ausentes, luego borrar del drop (cascade al desactivar no borra;
   // contact sigue existiendo inactive)
@@ -192,15 +237,34 @@ export async function mergeComplementaryConversations(
   dropContactId: number | null,
   phone: string,
   whatsappUserId: string,
+  whatsappLineId?: number | null,
 ): Promise<number | null> {
-  const byUser = await tx.conversations.findUnique({
-    where: {
-      area_whatsapp_user_id: { area, whatsapp_user_id: whatsappUserId },
-    },
-  });
-  const byPhone = await tx.conversations.findUnique({
-    where: { area_phone: { area, phone } },
-  });
+  const byUser = whatsappLineId
+    ? await tx.conversations.findUnique({
+        where: {
+          whatsapp_line_id_whatsapp_user_id: {
+            whatsapp_line_id: whatsappLineId,
+            whatsapp_user_id: whatsappUserId,
+          },
+        },
+      })
+    : await tx.conversations.findFirst({
+        where: { area, whatsapp_user_id: whatsappUserId },
+        orderBy: { id: 'desc' },
+      });
+  const byPhone = whatsappLineId
+    ? await tx.conversations.findUnique({
+        where: {
+          whatsapp_line_id_phone: {
+            whatsapp_line_id: whatsappLineId,
+            phone,
+          },
+        },
+      })
+    : await tx.conversations.findFirst({
+        where: { area, phone },
+        orderBy: { id: 'desc' },
+      });
 
   let keepConv = byUser;
   let dropConv =
@@ -209,12 +273,21 @@ export async function mergeComplementaryConversations(
   // Conversaciones huérfanas ligadas al drop por contact_id
   if (!dropConv && dropContactId != null) {
     dropConv = await tx.conversations.findFirst({
-      where: { area, contact_id: dropContactId, id: { not: keepConv?.id } },
+      where: {
+        area,
+        contact_id: dropContactId,
+        id: { not: keepConv?.id },
+        ...(whatsappLineId ? { whatsapp_line_id: whatsappLineId } : {}),
+      },
     });
   }
   if (!keepConv) {
     keepConv = await tx.conversations.findFirst({
-      where: { area, contact_id: keepContactId },
+      where: {
+        area,
+        contact_id: keepContactId,
+        ...(whatsappLineId ? { whatsapp_line_id: whatsappLineId } : {}),
+      },
     });
   }
 
@@ -315,8 +388,7 @@ export async function mergeComplementaryConversations(
         contact_id: keepContactId,
         phone,
         whatsapp_user_id: whatsappUserId,
-        assigned_user_id:
-          target.assigned_user_id ?? source.assigned_user_id,
+        assigned_user_id: target.assigned_user_id ?? source.assigned_user_id,
         wa_username: target.wa_username ?? source.wa_username,
         wa_profile_name: target.wa_profile_name ?? source.wa_profile_name,
         last_message_at:

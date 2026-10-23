@@ -218,6 +218,8 @@ export class CampaignRetryService {
     area: string;
     templateName: string;
     preview: ReturnType<typeof buildCampaignMessagePreview>;
+    whatsappLineId: number | null;
+    whatsappPhoneNumberId: string | null;
   }): Promise<void> {
     await this.prisma.campaign_logs.update({
       where: { id: input.logId },
@@ -239,6 +241,8 @@ export class CampaignRetryService {
         phone: input.phone,
         waMessageId: input.waMessageId,
         preview: input.preview,
+        whatsappLineId: input.whatsappLineId,
+        whatsappPhoneNumberId: input.whatsappPhoneNumberId,
       });
     } catch (persistError) {
       this.logger.warn(
@@ -266,6 +270,8 @@ export class CampaignRetryService {
         campaign_payload: true,
         auto_retry_done: true,
         manual_retry_count: true,
+        whatsapp_line_id: true,
+        whatsapp_line: { select: { phone_number_id: true } },
       },
     });
 
@@ -333,7 +339,13 @@ export class CampaignRetryService {
       contactIds.length > 0
         ? await this.prisma.contacts.findMany({
             where: { id: { in: contactIds } },
-            select: { id: true, name: true, phone: true, email: true, dni: true },
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              email: true,
+              dni: true,
+            },
           })
         : [];
     const contactById = new Map(contactRows.map((c) => [c.id, c]));
@@ -418,6 +430,9 @@ export class CampaignRetryService {
           area: sendCtx.area,
           templateName,
           preview,
+          whatsappLineId: campaign.whatsapp_line_id,
+          whatsappPhoneNumberId:
+            campaign.whatsapp_line?.phone_number_id ?? null,
         });
         this.logger.log(
           `Campaña #${campaignId}: skip reenvío Meta (${phoneNorm}); wamid existente ${existingWaId}`,
@@ -480,6 +495,7 @@ export class CampaignRetryService {
           languageCode: sendCtx.templateSnapshot.language,
           components,
           area: sendCtx.area,
+          phoneNumberId: campaign.whatsapp_line?.phone_number_id ?? null,
         });
 
         const messageId = apiResponse.messages?.[0]?.id || null;
@@ -506,6 +522,9 @@ export class CampaignRetryService {
             waMessageId: messageId,
             preview,
             apiResponse: sanitizeApiResponse(apiResponse),
+            whatsappLineId: campaign.whatsapp_line_id,
+            whatsappPhoneNumberId:
+              campaign.whatsapp_line?.phone_number_id ?? null,
           });
         } catch (persistError) {
           this.logger.warn(

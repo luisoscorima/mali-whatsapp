@@ -46,11 +46,7 @@ export class MetaSettingsService implements OnModuleInit {
   private async syncMissingDisplayPhoneNumbersOnBoot(): Promise<void> {
     const missing = BUSINESS_AREAS.filter((area) => {
       const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
-      return (
-        !!token &&
-        !!phoneNumberId &&
-        !getStoredDisplayPhoneNumber(area)
-      );
+      return !!token && !!phoneNumberId && !getStoredDisplayPhoneNumber(area);
     });
     if (!missing.length) return;
 
@@ -88,6 +84,7 @@ export class MetaSettingsService implements OnModuleInit {
           phone_number_id: true,
           display_phone_number: true,
           legacy_area: true,
+          program_id: true,
           program_key: true,
           is_default: true,
           business_area: { select: { slug: true } },
@@ -124,6 +121,7 @@ export class MetaSettingsService implements OnModuleInit {
           displayPhoneNumber: line.display_phone_number,
           legacyArea: line.legacy_area,
           canonicalArea: line.business_area.slug,
+          programId: line.program_id,
           programKey: line.program_key,
           isDefault: line.is_default,
           wabaId: line.waba.meta_waba_id,
@@ -179,7 +177,8 @@ export class MetaSettingsService implements OnModuleInit {
           console.warn(
             JSON.stringify({
               level: 'warn',
-              message: 'No se pudo sincronizar display_phone_number desde Graph',
+              message:
+                'No se pudo sincronizar display_phone_number desde Graph',
               area,
               phone_number_id: phoneNumberId,
               error: err instanceof Error ? err.message : String(err),
@@ -193,11 +192,7 @@ export class MetaSettingsService implements OnModuleInit {
 
     await Promise.all(
       updates.map(({ area, display }) =>
-        this.upsertSetting(
-          area,
-          META_SETTING_KEYS.displayPhoneNumber,
-          display,
-        ),
+        this.upsertSetting(area, META_SETTING_KEYS.displayPhoneNumber, display),
       ),
     );
     await this.refresh();
@@ -215,11 +210,7 @@ export class MetaSettingsService implements OnModuleInit {
 
     const missing = unique.filter((area) => {
       const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
-      return (
-        !!token &&
-        !!phoneNumberId &&
-        !getStoredDisplayPhoneNumber(area)
-      );
+      return !!token && !!phoneNumberId && !getStoredDisplayPhoneNumber(area);
     });
 
     if (missing.length) {
