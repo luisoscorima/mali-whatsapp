@@ -100,8 +100,34 @@ CREATE UNIQUE INDEX "conversations_line_wuid_uq"
 -- Catalogued conversations may share area + recipient when they belong to
 -- different WhatsApp lines. Keep the old uniqueness only for legacy rows that
 -- have not been assigned to the catalog yet.
-DROP INDEX "conversations_area_phone_key";
-DROP INDEX "conversations_area_whatsapp_user_id_key";
+-- Some long-lived installations created these as table constraints, while a
+-- clean migration history creates standalone unique indexes. Support both.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = '"conversations"'::regclass
+          AND conname = 'conversations_area_phone_key'
+    ) THEN
+        ALTER TABLE "conversations"
+            DROP CONSTRAINT "conversations_area_phone_key";
+    ELSE
+        DROP INDEX IF EXISTS "conversations_area_phone_key";
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = '"conversations"'::regclass
+          AND conname = 'conversations_area_whatsapp_user_id_key'
+    ) THEN
+        ALTER TABLE "conversations"
+            DROP CONSTRAINT "conversations_area_whatsapp_user_id_key";
+    ELSE
+        DROP INDEX IF EXISTS "conversations_area_whatsapp_user_id_key";
+    END IF;
+END $$;
 CREATE INDEX "idx_conversations_area_phone"
     ON "conversations"("area", "phone");
 CREATE INDEX "idx_conversations_area_wuid"
