@@ -19,6 +19,7 @@ import {
   getStoredDisplayPhoneNumber,
   getStoredMetaRows,
   setMetaSettingsCache,
+  setWhatsAppLineCatalog,
 } from './meta-settings.store';
 
 export type AreaLineInfo = {
@@ -74,11 +75,64 @@ export class MetaSettingsService implements OnModuleInit {
   }
 
   async refresh(): Promise<void> {
-    const rows = await this.prisma.app_settings.findMany({
-      where: { key: { startsWith: 'meta.' } },
-      select: { area: true, key: true, value: true },
-    });
+    const [rows, lines] = await Promise.all([
+      this.prisma.app_settings.findMany({
+        where: { key: { startsWith: 'meta.' } },
+        select: { area: true, key: true, value: true },
+      }),
+      this.prisma.whatsapp_lines.findMany({
+        where: { active: true },
+        orderBy: [{ business_area_id: 'asc' }, { id: 'asc' }],
+        select: {
+          id: true,
+          phone_number_id: true,
+          display_phone_number: true,
+          legacy_area: true,
+          program_key: true,
+          is_default: true,
+          business_area: { select: { slug: true } },
+          waba: {
+            select: {
+              meta_waba_id: true,
+              default_credential: {
+                select: {
+                  secret_source: true,
+                  secret_ref: true,
+                  encrypted_token: true,
+                },
+              },
+            },
+          },
+          credential_override: {
+            select: {
+              secret_source: true,
+              secret_ref: true,
+              encrypted_token: true,
+            },
+          },
+        },
+      }),
+    ]);
     setMetaSettingsCache(rows);
+    setWhatsAppLineCatalog(
+      lines.map((line) => {
+        const credential =
+          line.credential_override || line.waba.default_credential;
+        return {
+          id: line.id,
+          phoneNumberId: line.phone_number_id,
+          displayPhoneNumber: line.display_phone_number,
+          legacyArea: line.legacy_area,
+          canonicalArea: line.business_area.slug,
+          programKey: line.program_key,
+          isDefault: line.is_default,
+          wabaId: line.waba.meta_waba_id,
+          credentialSource: credential?.secret_source ?? null,
+          credentialRef: credential?.secret_ref ?? null,
+          encryptedToken: credential?.encrypted_token ?? null,
+        };
+      }),
+    );
   }
 
   private async upsertSetting(

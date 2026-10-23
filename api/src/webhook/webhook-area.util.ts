@@ -1,7 +1,10 @@
 import { BUSINESS_AREAS, type BusinessArea } from '../config/areas';
 import {
+  getConfiguredWhatsAppCatalogLines,
   getWabaIdOverrideForArea,
   getWhatsAppCredentialsForArea,
+  getWhatsAppLineByPhoneNumberId,
+  resolveWhatsAppAreaFromCatalogWaba,
 } from '../templates/whatsapp-meta.util';
 import type { MetaWebhookChangeValue } from './webhook.types';
 
@@ -14,6 +17,8 @@ export function resolveAreaFromPhoneNumberId(
   phoneNumberId: string | null | undefined,
 ): BusinessArea | null {
   const id = String(phoneNumberId || '').trim();
+  const catalogLine = getWhatsAppLineByPhoneNumberId(id);
+  if (catalogLine) return catalogLine.area;
   const lines = BUSINESS_AREAS.map((area) => ({
     area,
     pid: getWhatsAppCredentialsForArea(area).phoneNumberId,
@@ -33,16 +38,28 @@ export function resolveInboundArea(
 
   const waba = String(wabaEntryId ?? '').trim();
   if (waba) {
-    for (const slug of BUSINESS_AREAS) {
-      const w = String(getWabaIdOverrideForArea(slug) || '').trim();
-      if (w && w === waba) return { area: slug, source: 'waba_entry_id' };
+    const catalogArea = resolveWhatsAppAreaFromCatalogWaba(waba);
+    if (catalogArea) {
+      return { area: catalogArea, source: 'waba_entry_id' };
+    }
+    const matchingAreas = BUSINESS_AREAS.filter(
+      (slug) => String(getWabaIdOverrideForArea(slug) || '').trim() === waba,
+    );
+    if (matchingAreas.length === 1) {
+      return { area: matchingAreas[0], source: 'waba_entry_id' };
     }
   }
 
-  const lines = BUSINESS_AREAS.map((area) => ({
-    slug: area,
-    phoneNumberId: getWhatsAppCredentialsForArea(area).phoneNumberId,
-  })).filter((x) => !!x.phoneNumberId);
+  const catalogLines = getConfiguredWhatsAppCatalogLines();
+  const lines = catalogLines.length
+    ? catalogLines.map((line) => ({
+        slug: line.area,
+        phoneNumberId: line.phoneNumberId,
+      }))
+    : BUSINESS_AREAS.map((area) => ({
+        slug: area,
+        phoneNumberId: getWhatsAppCredentialsForArea(area).phoneNumberId,
+      })).filter((x) => !!x.phoneNumberId);
   if (lines.length === 1) {
     return { area: lines[0].slug, source: 'single_configured_line' };
   }

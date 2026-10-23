@@ -17,6 +17,98 @@ model app_settings {
   @@id([area, key])
 }
 
+/// Canonical business tenants. Legacy string areas remain in place during the migration.
+model business_areas {
+  id             Int                     @id @default(autoincrement())
+  slug           String                  @unique @db.VarChar(40)
+  label          String                  @db.VarChar(120)
+  active         Boolean                 @default(true)
+  sort_order     Int                     @default(0)
+  created_at     DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime                @default(now()) @db.Timestamptz(6)
+  aliases        business_area_aliases[]
+  whatsapp_lines whatsapp_lines[]
+}
+
+/// Resolves old/external area slugs to a canonical business area.
+model business_area_aliases {
+  alias            String         @id @db.VarChar(40)
+  business_area_id Int
+  program_key      String?        @db.VarChar(40)
+  active           Boolean        @default(true)
+  created_at       DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime       @default(now()) @db.Timestamptz(6)
+  business_area    business_areas @relation(fields: [business_area_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([business_area_id], map: "idx_business_area_aliases_area")
+}
+
+/// Token locator or encrypted token envelope. Plain Meta tokens must never be stored here.
+model meta_credentials {
+  id                 Int              @id @default(autoincrement())
+  label              String           @db.VarChar(120)
+  secret_source      String           @default("env") @db.VarChar(24)
+  secret_ref         String?          @db.VarChar(255)
+  encrypted_token    String?
+  token_fingerprint  String?          @db.VarChar(64)
+  active             Boolean          @default(true)
+  validation_status  String           @default("unknown") @db.VarChar(24)
+  validation_error   String?
+  last_validated_at  DateTime?        @db.Timestamptz(6)
+  created_at         DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime         @default(now()) @db.Timestamptz(6)
+  default_for_wabas  whatsapp_wabas[] @relation("waba_default_credential")
+  override_for_lines whatsapp_lines[] @relation("line_credential_override")
+}
+
+/// Meta WhatsApp Business Account. It owns templates and one or more phone lines.
+model whatsapp_wabas {
+  id                      Int                  @id @default(autoincrement())
+  meta_waba_id            String               @unique @db.VarChar(32)
+  label                   String               @db.VarChar(120)
+  default_credential_id   Int?
+  active                  Boolean              @default(true)
+  app_subscription_status String               @default("unknown") @db.VarChar(24)
+  last_validated_at       DateTime?            @db.Timestamptz(6)
+  created_at              DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime             @default(now()) @db.Timestamptz(6)
+  default_credential      meta_credentials?    @relation("waba_default_credential", fields: [default_credential_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  whatsapp_lines          whatsapp_lines[]
+  whatsapp_templates      whatsapp_templates[]
+
+  @@index([default_credential_id], map: "idx_whatsapp_wabas_default_credential")
+}
+
+/// A WhatsApp phone number routed to one canonical business area.
+model whatsapp_lines {
+  id                     Int               @id @default(autoincrement())
+  business_area_id       Int
+  waba_id                Int
+  credential_override_id Int?
+  phone_number_id        String            @unique @db.VarChar(32)
+  display_phone_number   String?           @db.VarChar(32)
+  label                  String            @db.VarChar(120)
+  legacy_area            String?           @db.VarChar(40)
+  program_key            String?           @db.VarChar(40)
+  is_default             Boolean           @default(false)
+  active                 Boolean           @default(true)
+  registration_status    String            @default("unknown") @db.VarChar(24)
+  quality_rating         String?           @db.VarChar(24)
+  last_validated_at      DateTime?         @db.Timestamptz(6)
+  created_at             DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime          @default(now()) @db.Timestamptz(6)
+  business_area          business_areas    @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  waba                   whatsapp_wabas    @relation(fields: [waba_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  credential_override    meta_credentials? @relation("line_credential_override", fields: [credential_override_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  campaigns              campaigns[]
+  conversations          conversations[]
+
+  @@index([business_area_id], map: "idx_whatsapp_lines_business_area")
+  @@index([waba_id], map: "idx_whatsapp_lines_waba")
+  @@index([credential_override_id], map: "idx_whatsapp_lines_credential_override")
+  @@index([legacy_area], map: "idx_whatsapp_lines_legacy_area")
+}
+
 model audit_logs {
   id            BigInt   @id @default(autoincrement())
   created_at    DateTime @default(now()) @db.Timestamptz(6)
@@ -58,6 +150,7 @@ model campaign_logs {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model campaigns {
   id                   Int             @id @default(autoincrement())
+  whatsapp_line_id     Int?
   area                 String          @default("ti") @db.VarChar(20)
   segment              String
   template_name        String          @db.VarChar(100)
@@ -79,8 +172,10 @@ model campaigns {
   cost_is_estimated    Boolean         @default(false)
   send_mode            String          @default("mass") @db.VarChar(16)
   campaign_logs        campaign_logs[]
+  whatsapp_line        whatsapp_lines? @relation(fields: [whatsapp_line_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([area], map: "idx_campaigns_area")
+  @@index([whatsapp_line_id], map: "idx_campaigns_whatsapp_line")
   @@index([auto_retry_at], map: "idx_campaigns_auto_retry")
   @@index([status, scheduled_at], map: "idx_campaigns_scheduled")
 }
@@ -407,6 +502,7 @@ model conversation_tags {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model conversations {
   id                           Int                  @id @default(autoincrement())
+  whatsapp_line_id             Int?
   area                         String               @db.VarChar(20)
   /// Real phone number when Meta shares it; absent for username-only users.
   phone                        String?              @db.VarChar(132)
@@ -437,9 +533,11 @@ model conversations {
   meta_ctwa_ads                meta_ctwa_ads?       @relation(fields: [meta_ctwa_ad_id], references: [id], onUpdate: NoAction)
   meta_ctwa_ad_leads           meta_ctwa_ad_leads[]
   assigned_user                users?               @relation("conversation_assignee", fields: [assigned_user_id], references: [id], onUpdate: NoAction)
+  whatsapp_line                whatsapp_lines?      @relation(fields: [whatsapp_line_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@unique([area, phone])
   @@unique([area, whatsapp_user_id])
+  @@index([whatsapp_line_id], map: "idx_conversations_whatsapp_line")
   @@index([area, last_message_at(sort: Desc)], map: "idx_conversations_area_last_msg")
   @@index([area, assigned_user_id], map: "idx_conversations_area_assignee")
   @@index([contact_id, area], map: "idx_conversations_contact_area")
@@ -707,6 +805,7 @@ model advisor_notes {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model whatsapp_templates {
   id                       Int       @id @default(autoincrement())
+  whatsapp_waba_id         Int?
   area                     String    @db.VarChar(20)
   meta_id                  String?   @db.VarChar(64)
   name                     String    @db.VarChar(200)
@@ -720,7 +819,9 @@ model whatsapp_templates {
   submitted_by             Int?
   placeholder_aliases_json Json?
   active                   Boolean   @default(true)
+  whatsapp_waba            whatsapp_wabas? @relation(fields: [whatsapp_waba_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@unique([area, name, language])
   @@index([area], map: "idx_whatsapp_templates_area")
+  @@index([whatsapp_waba_id], map: "idx_whatsapp_templates_waba")
 }

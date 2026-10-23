@@ -21,7 +21,10 @@ import {
   parseBusinessHoursConfig,
 } from '../settings/business-hours.util';
 import { parseAiConfigValue } from '../settings/ai-config.util';
-import { getWhatsAppCredentialsForArea } from '../templates/whatsapp-meta.util';
+import {
+  getWhatsAppCredentialsForArea,
+  getWhatsAppLineByPhoneNumberId,
+} from '../templates/whatsapp-meta.util';
 import { processInboundReferral } from './meta-ctwa-referral.util';
 import { resolveInboundArea } from './webhook-area.util';
 import {
@@ -155,6 +158,28 @@ export class WebhookService {
 
     const { area } = resolveInboundArea(value, wabaEntryId);
     if (!area) {
+      const wabaId = String(wabaEntryId || '').trim();
+      const waba = wabaId
+        ? await this.prisma.whatsapp_wabas.findUnique({
+            where: { meta_waba_id: wabaId },
+            select: { id: true },
+          })
+        : null;
+      if (waba) {
+        await this.prisma.whatsapp_templates.updateMany({
+          where: {
+            whatsapp_waba_id: waba.id,
+            name: templateName,
+            ...(templateLanguage ? { language: templateLanguage } : {}),
+          },
+          data: {
+            status: event,
+            rejection_reason: reason ? String(reason) : null,
+            synced_at: new Date(),
+          },
+        });
+        return;
+      }
       this.logger.warn(
         `Webhook plantilla: no se pudo resolver area (${templateName})`,
       );
@@ -620,6 +645,7 @@ export class WebhookService {
         area,
         (slug) => getWhatsAppCredentialsForArea(slug).phoneNumberId,
       );
+      const catalogLine = getWhatsAppLineByPhoneNumberId(linePhoneNumberId);
 
       let existingByUserId = userId
         ? await this.prisma.conversations.findUnique({
@@ -717,6 +743,7 @@ export class WebhookService {
           last_message_at: new Date(),
           inbox_unread: true,
           whatsapp_phone_number_id: linePhoneNumberId,
+          whatsapp_line_id: catalogLine?.id ?? null,
           status: 'bot',
           ...(waProfileName ? { wa_profile_name: waProfileName } : {}),
           ...(waUsername ? { wa_username: waUsername } : {}),
@@ -733,6 +760,7 @@ export class WebhookService {
           inbox_unread: true,
           archived: false,
           whatsapp_phone_number_id: linePhoneNumberId,
+          ...(catalogLine ? { whatsapp_line_id: catalogLine.id } : {}),
           updated_at: new Date(),
         },
         select: { id: true },

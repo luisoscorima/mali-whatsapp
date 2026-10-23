@@ -1,6 +1,7 @@
 import path from 'node:path';
 import {
   getWhatsAppCredentialsForArea,
+  getWhatsAppLineByPhoneNumberId,
   type WhatsAppCredentials,
 } from '../templates/whatsapp-meta.util';
 import { MAX_SESSION_TEXT_LEN } from '../settings/business-hours.util';
@@ -43,9 +44,17 @@ export function resolveWhatsAppSendCredentials(input: {
   area: unknown;
   phoneNumberId?: string | null;
 }): WhatsAppCredentials {
-  const creds = getWhatsAppCredentialsForArea(input.area);
   const override = String(input.phoneNumberId ?? '').trim();
   if (override) {
+    const line = getWhatsAppLineByPhoneNumberId(override);
+    if (line) {
+      return {
+        token: line.token,
+        phoneNumberId: line.phoneNumberId,
+        area: line.area,
+      };
+    }
+    const creds = getWhatsAppCredentialsForArea(input.area);
     if (!creds.token) {
       throw new Error(
         'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_*',
@@ -53,6 +62,7 @@ export function resolveWhatsAppSendCredentials(input: {
     }
     return { ...creds, phoneNumberId: override };
   }
+  const creds = getWhatsAppCredentialsForArea(input.area);
   if (!creds.token || !creds.phoneNumberId) {
     throw new Error(
       'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_* y PHONE_NUMBER_ID_*',

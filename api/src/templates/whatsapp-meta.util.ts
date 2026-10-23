@@ -4,8 +4,12 @@ import {
 } from '../config/areas';
 import { whatsappRecipientField } from '../conversations/whatsapp-recipient.util';
 import {
+  getConfiguredWhatsAppCatalogLines as getCatalogLinesFromStore,
   getWabaIdOverrideForArea as getWabaFromStore,
+  getWhatsAppLineByPhoneNumberId as getLineFromStore,
   getWhatsAppCredentialsForArea as getCredsFromStore,
+  resolveWhatsAppAreaFromCatalogWaba as resolveAreaFromCatalogWabaStore,
+  type ResolvedWhatsAppLine,
   type WhatsAppCredentials,
 } from '../meta-settings/meta-settings.store';
 
@@ -19,6 +23,22 @@ export function getWhatsAppCredentialsForArea(
 
 export function getWabaIdOverrideForArea(area: unknown): string {
   return getWabaFromStore(area);
+}
+
+export function getWhatsAppLineByPhoneNumberId(
+  phoneNumberId: unknown,
+): ResolvedWhatsAppLine | null {
+  return getLineFromStore(phoneNumberId);
+}
+
+export function getConfiguredWhatsAppCatalogLines(): ResolvedWhatsAppLine[] {
+  return getCatalogLinesFromStore();
+}
+
+export function resolveWhatsAppAreaFromCatalogWaba(
+  wabaId: unknown,
+): BusinessArea | null {
+  return resolveAreaFromCatalogWabaStore(wabaId);
 }
 
 const GRAPH_BASE = 'https://graph.facebook.com/v23.0';
@@ -432,4 +452,3 @@ export async function sendTemplateWithComponents(input: {
     throw wrapped;
   }
 }
-
