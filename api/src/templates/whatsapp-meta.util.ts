@@ -123,6 +123,127 @@ async function graphGet<T>(
   return body;
 }
 
+export type WhatsAppWabaInspection = {
+  id: string;
+  name: string | null;
+  appSubscriptionStatus: 'subscribed' | 'not_subscribed' | 'unavailable';
+  subscriptionWarning: string | null;
+};
+
+export type WhatsAppLineInspection = {
+  id: string;
+  displayPhoneNumber: string | null;
+  verifiedName: string | null;
+  qualityRating: string | null;
+  registrationStatus: string;
+};
+
+/** Validates that a token can read a WABA and reports its webhook subscription. */
+export async function inspectWhatsAppWaba(
+  wabaId: string,
+  token: string,
+): Promise<WhatsAppWabaInspection> {
+  const id = String(wabaId || '').trim();
+  if (!id || !token) throw new Error('WABA y token son obligatorios');
+
+  const waba = await graphGet<{ id?: string; name?: string }>(id, token, {
+    fields: 'id,name',
+  });
+  if (String(waba.id || '') !== id) {
+    throw new Error('Meta devolvió un WABA distinto al solicitado');
+  }
+
+  let appSubscriptionStatus: WhatsAppWabaInspection['appSubscriptionStatus'] =
+    'unavailable';
+  let subscriptionWarning: string | null = null;
+  try {
+    const subscriptions = await graphGet<{ data?: unknown[] }>(
+      `${id}/subscribed_apps`,
+      token,
+      { limit: '1' },
+    );
+    appSubscriptionStatus = subscriptions.data?.length
+      ? 'subscribed'
+      : 'not_subscribed';
+  } catch (error) {
+    subscriptionWarning =
+      error instanceof Error ? error.message : String(error);
+  }
+
+  return {
+    id,
+    name: String(waba.name || '').trim() || null,
+    appSubscriptionStatus,
+    subscriptionWarning,
+  };
+}
+
+/** Validates that the phone number belongs to the selected WABA. */
+export async function inspectWhatsAppLine(
+  wabaId: string,
+  phoneNumberId: string,
+  token: string,
+): Promise<WhatsAppLineInspection> {
+  const waba = String(wabaId || '').trim();
+  const phoneId = String(phoneNumberId || '').trim();
+  if (!waba || !phoneId || !token) {
+    throw new Error('WABA, Phone Number ID y token son obligatorios');
+  }
+
+  let after: string | null = null;
+  for (let page = 0; page < 20; page += 1) {
+    const params: Record<string, string> = {
+      fields:
+        'id,display_phone_number,verified_name,quality_rating,code_verification_status,name_status,status',
+      limit: '100',
+    };
+    if (after) params.after = after;
+    const response = await graphGet<{
+      data?: Array<{
+        id?: string;
+        display_phone_number?: string;
+        verified_name?: string;
+        quality_rating?: string;
+        code_verification_status?: string;
+        name_status?: string;
+        status?: string;
+      }>;
+      paging?: { cursors?: { after?: string }; next?: string };
+    }>(`${waba}/phone_numbers`, token, params);
+
+    const match = (response.data || []).find(
+      (line) => String(line.id || '') === phoneId,
+    );
+    if (match) {
+      return {
+        id: phoneId,
+        displayPhoneNumber:
+          String(match.display_phone_number || '').trim() || null,
+        verifiedName: String(match.verified_name || '').trim() || null,
+        qualityRating: String(match.quality_rating || '').trim() || null,
+        registrationStatus:
+          String(
+            match.code_verification_status ||
+              match.status ||
+              match.name_status ||
+              'validated',
+          )
+            .trim()
+            .toLowerCase() || 'validated',
+      };
+    }
+
+    after = response.paging?.next
+      ? String(response.paging.cursors?.after || '').trim() || null
+      : null;
+    if (!after) break;
+  }
+
+  throw new Error(
+    `El Phone Number ID ${phoneId} no pertenece al WABA ${waba} o el token no permite consultarlo`,
+  );
+}
+
 async function fetchWabaIdFromPhoneNumberId(
   phoneNumberId: string,
   token: string,

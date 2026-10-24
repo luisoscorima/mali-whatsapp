@@ -14,6 +14,11 @@ import {
   type BusinessArea,
 } from '../config/areas';
 import {
+  educationProgramOf,
+  educationReadScope,
+  isEducationAreaSlug,
+} from '../config/education-scope';
+import {
   E164_NO_PLUS_REGEX,
   normalizePhone,
 } from '../contacts/contacts-validation.utils';
@@ -111,6 +116,37 @@ export class LeadsService implements OnModuleInit {
     return selected === 'all' ? allowed : [selected];
   }
 
+  private async attachEducationProgram(
+    contactId: number | null,
+    area: string,
+  ): Promise<void> {
+    const slug = educationProgramOf(area);
+    if (!contactId || !slug) return;
+    const program = await this.prisma.business_programs.findFirst({
+      where: {
+        slug,
+        active: true,
+        business_area: { slug: 'educacion' },
+      },
+      select: { id: true },
+    });
+    if (!program) return;
+    await this.prisma.contact_programs.upsert({
+      where: {
+        contact_id_program_id: {
+          contact_id: contactId,
+          program_id: program.id,
+        },
+      },
+      create: {
+        contact_id: contactId,
+        program_id: program.id,
+        source: 'alias',
+      },
+      update: { last_seen_at: new Date() },
+    });
+  }
+
   async listEducationOrigins(params: {
     area?: string;
     channel?: string;
@@ -118,15 +154,33 @@ export class LeadsService implements OnModuleInit {
     page?: number;
     limit?: number;
   }) {
-    const areas = this.educationAreas(params.area);
+    const scope = educationReadScope(params.area);
+    const areas = isEducationAreaSlug(params.area) || !params.area || params.area === 'all'
+      ? scope.areas
+      : this.educationAreas(params.area);
+    const program = scope.program;
     const page = params.page ?? 1;
     const limit = params.limit ?? 50;
     const q = String(params.q ?? '').trim();
     const usernameQ = q.replace(/^@/, '');
-    const where: Prisma.contact_originsWhereInput = {
-      area: { in: areas },
-      ...(params.channel ? { channel: params.channel } : {}),
-      ...(q ? {
+    const and: Prisma.contact_originsWhereInput[] = [];
+    if (program) {
+      const legacy = program === 'ca' ? 'educacion_ca' : 'educacion_ep';
+      and.push({
+        OR: [
+          { area: legacy },
+          {
+            contacts: {
+              is: {
+                contact_programs: { some: { program: { slug: program } } },
+              },
+            },
+          },
+        ],
+      });
+    }
+    if (q) {
+      and.push({
         OR: [
           { phone: { contains: q } },
           { whatsapp_user_id: { contains: q, mode: 'insensitive' } },
@@ -138,7 +192,12 @@ export class LeadsService implements OnModuleInit {
           { contacts: { is: { last_name: { contains: q, mode: 'insensitive' } } } },
           { conversations: { is: { wa_username: { contains: usernameQ, mode: 'insensitive' } } } },
         ],
-      } : {}),
+      });
+    }
+    const where: Prisma.contact_originsWhereInput = {
+      area: { in: areas },
+      ...(params.channel ? { channel: params.channel } : {}),
+      ...(and.length ? { AND: and } : {}),
     };
     const [total, items] = await this.prisma.$transaction([
       this.prisma.contact_origins.count({ where }),
@@ -651,6 +710,7 @@ export class LeadsService implements OnModuleInit {
           input.channel === 'meta_lead_form' || input.channel === 'tiktok',
       });
       contact_id = resolved.contact_id;
+      await this.attachEducationProgram(contact_id, area);
     } catch (err) {
       if (!(err instanceof BadRequestException)) throw err;
       // allow origin without contact only if truly no identity — still throw

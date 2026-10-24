@@ -61,6 +61,11 @@ export class AppConfigService {
     process.env.MALI_ONE_LINKS_SERVICE_TOKEN || '',
   ).trim();
 
+  /** Token de servicio para el plano de control de líneas, distinto de la sesión master. */
+  readonly whatsappAdminServiceToken = String(
+    process.env.WHATSAPP_ADMIN_SERVICE_TOKEN || '',
+  ).trim();
+
   get googleAuthEnabled(): boolean {
     return Boolean(
       this.googleClientId &&

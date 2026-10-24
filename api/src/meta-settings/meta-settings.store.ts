@@ -5,6 +5,7 @@ import {
   type BusinessArea,
 } from '../config/areas';
 import { META_SETTING_KEYS } from './meta-settings.keys';
+import { decryptMetaToken } from './credential-vault.util';
 
 export type WhatsAppCredentials = {
   token: string;
@@ -256,7 +257,20 @@ function resolveCatalogToken(row: WhatsAppLineCatalogRow): string {
       );
     }
   }
-  // Encrypted credentials require the future credential-vault service.
+  if (source === 'encrypted_db' && row.encryptedToken) {
+    try {
+      return normalizeSecretValue(decryptMetaToken(row.encryptedToken));
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          message: 'No se pudo descifrar una credencial Meta del catálogo',
+          credential_source: source,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  }
   return '';
 }
 

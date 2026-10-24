@@ -8,6 +8,12 @@ import { Prisma } from '@prisma/client';
 import { AttributeDefinitionsService } from '../attribute-definitions/attribute-definitions.service';
 import { BUSINESS_AREAS, type BusinessArea } from '../config/areas';
 import {
+  EDUCATION_AREA_SLUGS,
+  educationProgramOf,
+  educationReadScope,
+  isEducationAreaSlug,
+} from '../config/education-scope';
+import {
   E164_NO_PLUS_REGEX,
   firstSegmentForLegacyColumn,
   normalizePhone,
@@ -115,7 +121,10 @@ export class CrmService {
   ) {}
 
   async syncFromProduct(dto: CrmSyncContactDto): Promise<CrmSyncResult> {
-    const area = this.normalizeArea(dto.area ?? 'pam');
+    const requestedArea = this.normalizeArea(dto.area ?? 'pam');
+    const program =
+      educationProgramOf(dto.programa) || educationProgramOf(requestedArea);
+    const area = isEducationAreaSlug(requestedArea) ? 'educacion' : requestedArea;
     const phone = normalizePhone(dto.phone);
     if (!E164_NO_PLUS_REGEX.test(phone)) {
       throw new BadRequestException(
@@ -141,7 +150,15 @@ export class CrmService {
     }
 
     const existing = await this.prisma.contacts.findFirst({
-      where: { area, phone },
+      where: {
+        phone,
+        area: {
+          in: isEducationAreaSlug(requestedArea)
+            ? [...EDUCATION_AREA_SLUGS]
+            : [area],
+        },
+      },
+      orderBy: { updated_at: 'desc' },
     });
 
     let segmentSlugs = dto.segment_slugs;
@@ -199,9 +216,43 @@ export class CrmService {
       }
 
       await tx.conversations.updateMany({
-        where: { area, phone },
+        where: {
+          phone,
+          area: {
+            in: isEducationAreaSlug(requestedArea)
+              ? [...EDUCATION_AREA_SLUGS]
+              : [area],
+          },
+        },
         data: { contact_id: row.id, updated_at: new Date() },
       });
+
+      if (program) {
+        const programRow = await tx.business_programs.findFirst({
+          where: {
+            slug: program,
+            active: true,
+            business_area: { slug: 'educacion' },
+          },
+          select: { id: true },
+        });
+        if (programRow) {
+          await tx.contact_programs.upsert({
+            where: {
+              contact_id_program_id: {
+                contact_id: row.id,
+                program_id: programRow.id,
+              },
+            },
+            create: {
+              contact_id: row.id,
+              program_id: programRow.id,
+              source: 'crm',
+            },
+            update: { last_seen_at: new Date() },
+          });
+        }
+      }
 
       return row;
     });
@@ -599,15 +650,26 @@ export class CrmService {
     page?: number;
     limit?: number;
   }): Promise<CrmContactsResult> {
-    const allowed = ['educacion', 'educacion_ca', 'educacion_ep'];
     const selected = query.area?.trim().toLowerCase() || 'all';
-    if (selected !== 'all' && !allowed.includes(selected)) {
+    if (
+      selected !== 'all' &&
+      selected !== 'educacion' &&
+      !isEducationAreaSlug(selected) &&
+      selected !== 'ca' &&
+      selected !== 'ep'
+    ) {
       throw new BadRequestException(
         `Área de educación inválida: ${query.area}`,
       );
     }
-    const areas = selected === 'all' ? allowed : [selected];
-    return this.listContactsForAreas(query, areas, selected, true);
+    const scope = educationReadScope(selected);
+    return this.listContactsForAreas(
+      query,
+      scope.areas,
+      selected,
+      true,
+      scope.program,
+    );
   }
 
   private async listContactsForAreas(
@@ -624,6 +686,7 @@ export class CrmService {
     areas: string[],
     resultArea: string,
     includeLatestProspectia = false,
+    program: 'ca' | 'ep' | null = null,
   ): Promise<CrmContactsResult> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 100;
@@ -647,6 +710,16 @@ export class CrmService {
     }
 
     const andFilters: Prisma.contactsWhereInput[] = [];
+
+    if (program) {
+      const legacy = program === 'ca' ? 'educacion_ca' : 'educacion_ep';
+      andFilters.push({
+        OR: [
+          { area: legacy },
+          { contact_programs: { some: { program: { slug: program } } } },
+        ],
+      });
+    }
 
     if (query.attr_key) {
       const attrKey = query.attr_key.trim();

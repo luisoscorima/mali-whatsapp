@@ -7,6 +7,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import {
+  contactAreaPredicate,
+  conversationAreaPredicate,
+  visibleConversationWhere,
+} from '../config/education-scope';
 import type { Prisma as PrismaTypes } from '@prisma/client';
 import type { AuthUser } from '../auth/auth.types';
 import { AuditEvent } from '../audit/audit-events';
@@ -159,6 +164,9 @@ type InboxRow = {
   last_user_message_at: Date | null;
   last_outbound_message_at: Date | null;
   archived: boolean;
+  line_label: string | null;
+  line_display_phone: string | null;
+  line_program: string | null;
 };
 
 @Injectable()
@@ -170,6 +178,10 @@ export class ConversationsService {
     private readonly auditLog: AuditLogService,
     private readonly flowsService: FlowsService,
   ) {}
+
+  private conversationLookup(area: string, id: number) {
+    return visibleConversationWhere(area, id);
+  }
 
   private async getSegmentSlugSet(area: string): Promise<Set<string>> {
     const rows = await this.prisma.segment_definitions.findMany({
@@ -204,7 +216,7 @@ export class ConversationsService {
 
     const previousAssignment = await this.prisma.$transaction(async (tx) => {
       const current = await tx.conversations.findFirst({
-        where: { id: conversation.id, area: user.area },
+        where: this.conversationLookup(user.area, conversation.id),
         select: {
           contact_id: true,
           assigned_user_id: true,
@@ -352,6 +364,9 @@ export class ConversationsService {
         ? row.last_outbound_message_at.toISOString()
         : null,
       archived: Boolean(row.archived),
+      line_label: String(row.line_label ?? '').trim() || null,
+      line_display_phone: String(row.line_display_phone ?? '').trim() || null,
+      line_program: String(row.line_program ?? '').trim() || null,
     };
   }
 
@@ -370,7 +385,7 @@ export class ConversationsService {
       (
         SELECT ct_phone.id
         FROM contacts ct_phone
-        WHERE ct_phone.area = ${area}
+        WHERE ${contactAreaPredicate('ct_phone', area)}
           AND ((c.whatsapp_user_id IS NOT NULL AND ct_phone.whatsapp_user_id = c.whatsapp_user_id)
             OR (c.phone IS NOT NULL AND ct_phone.phone = c.phone))
         ORDER BY CASE WHEN ct_phone.whatsapp_user_id = c.whatsapp_user_id THEN 0 ELSE 1 END,
@@ -578,11 +593,16 @@ export class ConversationsService {
           WHERE tg.conversation_id = c.id
         ), ARRAY[]::varchar[]) AS conversation_tags,
         ${matchedMessageSql} AS matched_message_id,
-        ct.id AS contact_id
+        ct.id AS contact_id,
+        NULLIF(TRIM(COALESCE(scope_line.label, '')), '') AS line_label,
+        NULLIF(TRIM(COALESCE(scope_line.display_phone_number, '')), '') AS line_display_phone,
+        NULLIF(TRIM(COALESCE(scope_program.slug, scope_line.program_key, '')), '') AS line_program
       FROM conversations c
       ${this.inboxResolvedContactJoinSql(area)}
       LEFT JOIN users au ON au.id = c.assigned_user_id
-      WHERE c.area = ${area}
+      LEFT JOIN whatsapp_lines scope_line ON scope_line.id = c.whatsapp_line_id
+      LEFT JOIN business_programs scope_program ON scope_program.id = scope_line.program_id
+      WHERE ${conversationAreaPredicate('c', area)}
       ${segmentSql}
       ${searchSql}
       ${chatSql}
@@ -652,15 +672,18 @@ export class ConversationsService {
         ''::text AS preview,
         ARRAY[]::varchar[] AS conversation_tags,
         NULL::int AS matched_message_id,
-        ct.id AS contact_id
+        ct.id AS contact_id,
+        NULL::text AS line_label,
+        NULL::text AS line_display_phone,
+        NULL::text AS line_program
       FROM contacts ct
-      WHERE ct.area = ${area}
+      WHERE ${contactAreaPredicate('ct', area)}
       ${contactSegmentSql}
       ${contactSearchSql}
       AND NOT EXISTS (
         SELECT 1
         FROM conversations c
-        WHERE c.area = ${area} AND (c.contact_id = ct.id
+        WHERE ${conversationAreaPredicate('c', area)} AND (c.contact_id = ct.id
           OR (ct.phone IS NOT NULL AND c.phone = ct.phone)
           OR (ct.whatsapp_user_id IS NOT NULL AND c.whatsapp_user_id = ct.whatsapp_user_id))
       )
@@ -701,7 +724,7 @@ export class ConversationsService {
       SELECT COUNT(*)::int AS n
       FROM conversations c
       ${this.inboxResolvedContactJoinSql(area)}
-      WHERE c.area = ${area}
+      WHERE ${conversationAreaPredicate('c', area)}
       ${segmentSql}
       ${searchSql}
       ${chatSql}
@@ -745,13 +768,13 @@ export class ConversationsService {
     const virtualRows = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
       SELECT COUNT(*)::int AS n
       FROM contacts ct
-      WHERE ct.area = ${area}
+      WHERE ${contactAreaPredicate('ct', area)}
       ${contactSegmentSql}
       ${contactSearchSql}
       AND NOT EXISTS (
         SELECT 1
         FROM conversations c
-        WHERE c.area = ${area} AND (c.contact_id = ct.id
+        WHERE ${conversationAreaPredicate('c', area)} AND (c.contact_id = ct.id
           OR (ct.phone IS NOT NULL AND c.phone = ct.phone)
           OR (ct.whatsapp_user_id IS NOT NULL AND c.whatsapp_user_id = ct.whatsapp_user_id))
       )
@@ -769,7 +792,7 @@ export class ConversationsService {
       SELECT COUNT(*)::int AS n
       FROM conversations c
       ${segmentFilter.slugs.length ? this.inboxResolvedContactJoinSql(area) : Prisma.empty}
-      WHERE c.area = ${area}
+      WHERE ${conversationAreaPredicate('c', area)}
         AND c.inbox_unread = TRUE
         AND c.archived = FALSE
         AND c.last_user_message_at IS NOT NULL
@@ -787,7 +810,7 @@ export class ConversationsService {
       SELECT COUNT(*)::int AS n
       FROM conversations c
       ${this.inboxResolvedContactJoinSql(area)}
-      WHERE c.area = ${area}
+      WHERE ${conversationAreaPredicate('c', area)}
         AND (c.archived = TRUE OR c.last_user_message_at IS NULL)
       ${segmentSql}
     `);
@@ -928,7 +951,7 @@ export class ConversationsService {
   ): Promise<{ campaign_id: number; message_id: string | null }> {
     const area = user.area;
     const conversation = await this.prisma.conversations.findFirst({
-      where: { id: conversationId, area },
+      where: this.conversationLookup(area, conversationId),
       include: {
         contacts: {
           select: {
@@ -1168,10 +1191,18 @@ export class ConversationsService {
     }
     const area = user.area;
     const conversation = await this.prisma.conversations.findFirst({
-      where: { id: conversationId, area },
+      where: this.conversationLookup(area, conversationId),
       include: {
         assigned_user: {
           select: { first_name: true, last_name: true, email: true },
+        },
+        whatsapp_line: {
+          select: {
+            label: true,
+            display_phone_number: true,
+            program_key: true,
+            program: { select: { slug: true } },
+          },
         },
       },
     });
@@ -1189,10 +1220,18 @@ export class ConversationsService {
       );
       if (assigned) {
         const refreshed = await this.prisma.conversations.findFirst({
-          where: { id: conversationId, area },
+          where: this.conversationLookup(area, conversationId),
           include: {
             assigned_user: {
               select: { first_name: true, last_name: true, email: true },
+            },
+            whatsapp_line: {
+              select: {
+                label: true,
+                display_phone_number: true,
+                program_key: true,
+                program: { select: { slug: true } },
+              },
             },
           },
         });
@@ -1431,6 +1470,16 @@ export class ConversationsService {
         assigned_user_label: assignedUserLabel,
         automation_touched_at:
           activeConversation.automation_touched_at?.toISOString() ?? null,
+        line_label:
+          String(activeConversation.whatsapp_line?.label ?? '').trim() || null,
+        line_display_phone:
+          String(
+            activeConversation.whatsapp_line?.display_phone_number ?? '',
+          ).trim() || null,
+        line_program:
+          activeConversation.whatsapp_line?.program?.slug ||
+          activeConversation.whatsapp_line?.program_key ||
+          null,
       },
       contact,
       meta_ad: metaAd,
@@ -1561,7 +1610,7 @@ export class ConversationsService {
     if (!beforeIdRaw && !afterIdRaw)
       throw new BadRequestException('Cursor requerido');
     const conversation = await this.prisma.conversations.findFirst({
-      where: { id: conversationId, area: user.area },
+      where: this.conversationLookup(user.area, conversationId),
       select: { id: true, contact_id: true },
     });
     if (!conversation)
@@ -1644,7 +1693,7 @@ export class ConversationsService {
     }
     const area = user.area;
     const conversation = await this.prisma.conversations.findFirst({
-      where: { id: conversationId, area },
+      where: this.conversationLookup(area, conversationId),
       select: { id: true, assigned_user_id: true, contact_id: true },
     });
     if (!conversation) {
@@ -1860,7 +1909,7 @@ export class ConversationsService {
     }
     const area = user.area;
     const conversation = await this.prisma.conversations.findFirst({
-      where: { id: conversationId, area },
+      where: this.conversationLookup(area, conversationId),
       select: {
         id: true,
         phone: true,
@@ -1962,7 +2011,10 @@ export class ConversationsService {
     area: string,
   ): Promise<void> {
     const clearedUnread = await this.prisma.conversations.updateMany({
-      where: { id: conversationId, area, inbox_unread: true },
+      where: {
+        ...this.conversationLookup(area, conversationId),
+        inbox_unread: true,
+      },
       data: {
         inbox_unread: false,
         outside_hours_notice_sent_at: null,
@@ -1979,7 +2031,7 @@ export class ConversationsService {
       return;
     }
     await this.prisma.conversations.updateMany({
-      where: { id: conversationId, area },
+      where: this.conversationLookup(area, conversationId),
       data: {
         outside_hours_notice_sent_at: null,
         updated_at: new Date(),
@@ -2288,7 +2340,7 @@ export class ConversationsService {
 
     const area = user.area;
     const conversation = await this.prisma.conversations.findFirst({
-      where: { id: conversationId, area },
+      where: this.conversationLookup(area, conversationId),
       include: {
         assigned_user: {
           select: { first_name: true, last_name: true, email: true },
@@ -2628,7 +2680,7 @@ export class ConversationsService {
 
     const area = user.area;
     const conversation = await this.prisma.conversations.findFirst({
-      where: { id: conversationId, area },
+      where: this.conversationLookup(area, conversationId),
     });
     if (!conversation) {
       throw new NotFoundException('Conversacion no encontrada');
@@ -2705,7 +2757,7 @@ export class ConversationsService {
       }
     }
     const updated = await this.prisma.conversations.updateMany({
-      where: { id: conversationId, area },
+      where: this.conversationLookup(area, conversationId),
       data: { status, updated_at: new Date() },
     });
     if (updated.count === 0) {
@@ -2729,7 +2781,7 @@ export class ConversationsService {
     }
     const area = user.area;
     const updated = await this.prisma.conversations.updateMany({
-      where: { id: conversationId, area },
+      where: this.conversationLookup(area, conversationId),
       data: { inbox_unread: true, updated_at: new Date() },
     });
     if (updated.count === 0) {
@@ -2757,7 +2809,7 @@ export class ConversationsService {
     }
     const area = user.area;
     const conversation = await this.prisma.conversations.findFirst({
-      where: { id: conversationId, area },
+      where: this.conversationLookup(area, conversationId),
       select: { id: true, last_user_message_at: true },
     });
     if (!conversation) {
@@ -2768,7 +2820,7 @@ export class ConversationsService {
       return { archived: false };
     }
     const updated = await this.prisma.conversations.updateMany({
-      where: { id: conversationId, area },
+      where: this.conversationLookup(area, conversationId),
       data: { archived, updated_at: new Date() },
     });
     if (updated.count === 0) {
@@ -2806,7 +2858,7 @@ export class ConversationsService {
       score = n;
     }
     const conv = await this.prisma.conversations.findFirst({
-      where: { id: conversationId, area },
+      where: this.conversationLookup(area, conversationId),
       select: { contact_id: true },
     });
     if (!conv) {
@@ -2861,7 +2913,7 @@ export class ConversationsService {
     }
     const area = user.area;
     const conversation = await this.prisma.conversations.findFirst({
-      where: { id: conversationId, area },
+      where: this.conversationLookup(area, conversationId),
       include: {
         assigned_user: {
           select: { first_name: true, last_name: true, email: true },
@@ -2981,7 +3033,7 @@ export class ConversationsService {
     }
     const area = user.area;
     const conversation = await this.prisma.conversations.findFirst({
-      where: { id: conversationId, area },
+      where: this.conversationLookup(area, conversationId),
       select: { id: true, phone: true },
     });
     if (!conversation) {
@@ -3091,7 +3143,7 @@ export class ConversationsService {
       SELECT COUNT(*)::int AS n
       FROM chat_messages m
       INNER JOIN conversations c ON c.id = m.conversation_id
-      WHERE c.area = ${user.area}
+      WHERE ${conversationAreaPredicate('c', user.area)}
         AND m.direction = 'outbound'
         AND m.message_type <> 'campaign'
         AND LOWER(COALESCE(m.raw_payload->'delivery_status'->>'status', '')) IN ('delivered', 'read')

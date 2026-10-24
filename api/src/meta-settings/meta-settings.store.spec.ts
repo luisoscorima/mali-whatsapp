@@ -17,6 +17,7 @@ const ENV_KEYS = [
   'WHATSAPP_TOKEN_EDUCACION_CA',
   'PHONE_NUMBER_ID_EDUCACION_CA',
   'WABA_ID_EDUCACION_CA',
+  'WHATSAPP_CREDENTIALS_MASTER_KEY',
 ] as const;
 
 const previousEnv = new Map<string, string | undefined>();
@@ -152,6 +153,25 @@ describe('WhatsApp line catalog compatibility store', () => {
 
     expect(getWhatsAppLineByPhoneNumberId('pid-ca')?.token).toBe(
       'database-token',
+    );
+  });
+
+  it('resolves an encrypted database token without exposing it in the catalog', () => {
+    process.env.WHATSAPP_CREDENTIALS_MASTER_KEY = Buffer.alloc(32, 9).toString(
+      'base64',
+    );
+    const { encryptMetaToken } = require('./credential-vault.util') as typeof import('./credential-vault.util');
+    const rows = catalogRows();
+    rows[1] = {
+      ...rows[1],
+      credentialSource: 'encrypted_db',
+      credentialRef: null,
+      encryptedToken: encryptMetaToken('database-encrypted-token'),
+    };
+    setWhatsAppLineCatalog(rows);
+
+    expect(getWhatsAppLineByPhoneNumberId('pid-ca')?.token).toBe(
+      'database-encrypted-token',
     );
   });
 });

@@ -7,10 +7,18 @@ import { AdminController } from './admin.controller';
 import { AdminUsersService } from './admin-users.service';
 import { AdminAreasService } from './admin-areas.service';
 import { MasterGuard } from './guards/master.guard';
+import { WhatsAppAdminController } from '../whatsapp-admin/whatsapp-admin.controller';
+import { WhatsAppAdminService } from '../whatsapp-admin/whatsapp-admin.service';
 
 @Module({
   imports: [AuthModule, ReportsModule, PrismaModule],
-  controllers: [AdminController],
-  providers: [AdminUsersService, AdminAreasService, UserAreasService, MasterGuard],
+  controllers: [AdminController, WhatsAppAdminController],
+  providers: [
+    AdminUsersService,
+    AdminAreasService,
+    UserAreasService,
+    MasterGuard,
+    WhatsAppAdminService,
+  ],
 })
 export class AdminModule {}

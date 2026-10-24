@@ -38,6 +38,7 @@ const ADMIN_LINKS = [
   { to: '/admin/roles', label: 'Roles' },
   { to: '/admin/areas', label: 'Áreas' },
   { to: '/admin/meta', label: 'Credenciales Meta' },
+  { to: '/admin/whatsapp', label: 'Líneas WhatsApp' },
   { to: '/admin/audit-logs', label: 'Bitácora' },
 ]
 

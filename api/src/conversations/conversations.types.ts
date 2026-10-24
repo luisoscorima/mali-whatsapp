@@ -45,6 +45,9 @@ export type InboxListItem = {
   last_user_message_at: string | null;
   last_outbound_message_at: string | null;
   archived: boolean;
+  line_label: string | null;
+  line_display_phone: string | null;
+  line_program: string | null;
 };
 
 export type InboxListResult = {
@@ -157,6 +160,9 @@ export type InboxConversation = {
   assigned_user_id: number | null;
   assigned_user_label: string | null;
   automation_touched_at: string | null;
+  line_label: string | null;
+  line_display_phone: string | null;
+  line_program: string | null;
 };
 
 export type InboxDetail = {

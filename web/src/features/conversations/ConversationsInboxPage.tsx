@@ -303,6 +303,17 @@ function ProfileBlock({
           unanswered={!detail.conversation.last_user_message_at}
         />
         <p className="inbox-chat-sub">
+          {detail.conversation.line_label || detail.conversation.line_display_phone
+            ? `${detail.conversation.line_label || 'Línea'}${
+                detail.conversation.line_program
+                  ? ` · ${detail.conversation.line_program.toUpperCase()}`
+                  : ''
+              }${
+                detail.conversation.line_display_phone
+                  ? ` · ${detail.conversation.line_display_phone}`
+                  : ''
+              } · `
+            : ''}
           {chatSecondaryLabel(detail.conversation.phone)}
           {leadScore ? (
             <>
@@ -392,6 +403,9 @@ type InboxListItem = {
   last_user_message_at: string | null
   last_outbound_message_at: string | null
   archived: boolean
+  line_label?: string | null
+  line_display_phone?: string | null
+  line_program?: string | null
 }
 
 type InboxListResult = {
@@ -474,6 +488,9 @@ type InboxDetail = {
     assigned_user_id: number | null
     assigned_user_label: string | null
     automation_touched_at: string | null
+    line_label?: string | null
+    line_display_phone?: string | null
+    line_program?: string | null
   }
   contact: {
     name: string | null
@@ -2418,7 +2435,12 @@ export function ConversationsInboxPage() {
                               </span>
                               {showPhoneRow ? (
                                 <span className="inbox-chat-phone-row">
-                                  <span className="inbox-chat-phone">{chatSecondaryLabel(item.phone)}</span>
+                                  <span className="inbox-chat-phone">
+                                    {item.line_label
+                                      ? `${item.line_label}${item.line_program ? ` ${item.line_program.toUpperCase()}` : ''} · `
+                                      : ''}
+                                    {chatSecondaryLabel(item.phone)}
+                                  </span>
                                   {leadScore ? <LeadScoreBadge score={leadScore} /> : null}
                                   <ConversationBadges
                                     status={item.conversation_status}
