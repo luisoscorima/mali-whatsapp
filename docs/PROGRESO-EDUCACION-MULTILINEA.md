@@ -1,8 +1,10 @@
 # Progreso: Educación, un área y varias líneas
 
-> **Actualización del 24 de octubre de 2026:** el usuario confirma que producción sigue en `e18791b`, con CA/EP inbound y outbound probados. El código descrito abajo como «sin commit» ya está en `d4b263a`, todavía sin desplegar. Hay **seis líneas operativas en total y otras seis nuevas por incorporar**; la tabla histórica de la WABA Educación no es el inventario global. La prioridad es administrar múltiples líneas por área sin cambiar el entorno por cada alta. Hay nuevos cambios locales sin commit/PR. Ver [despliegue y pruebas de administración multilínea](./DESPLIEGUE-ADMIN-MULTILINEA.md). Las secciones siguientes conservan el registro del ensayo del 23 de octubre.
+> **Estado al 26 de octubre de 2026.** Educación es un área. CA, EP y General son categorías. Una categoría nueva se crea en Administración → Áreas. La consolidación ya se aplicó en producción: 5.735 grupos, 5.268 fusionados, 467 en revisión. Esos 467, y los datos que no coinciden con una persona, se resuelven en Administración → Conflictos. Las líneas se dan de alta en Administración → Líneas: crear, Validar en Meta, Activar. Las seis líneas nuevas todavía no tienen phone number id ni categoría cargados; no se inventan. El registro del 23 de octubre queda debajo como historia. Modelo y reglas: [MODELO-WABA-AREAS.md](./MODELO-WABA-AREAS.md), [REGLAS-CONSOLIDACION-EDUCACION.md](./REGLAS-CONSOLIDACION-EDUCACION.md).
 
-Actualizado el 23 de octubre de 2026. Rama `migrate/v2`, al día con `origin/migrate/v2` en el commit `e18791b`. Los cambios de código de esta sesión están sin commit y sin desplegar.
+Activar una línea, Unir fichas, Guardar en esta persona y el texto de ayuda de Conflictos están en el código de esta rama. Entran en el servidor con el despliegue que los incluya. La consolidación y la restauración de segmentos por categoría ya corrieron en producción y no se vuelven a ejecutar.
+
+Actualizado el 23 de octubre de 2026. Rama `migrate/v2`. El párrafo siguiente describe ese día, no el estado actual.
 
 ## Objetivo
 
@@ -43,7 +45,7 @@ Se restauró el respaldo en la base `mali_edu_rehearsal`, se aplicó el script y
 
 Un contacto no se fusiona si el grupo tiene estados distintos, asesores distintos, más de un WhatsApp user ID o más de un DNI. Tampoco se mueve de área si choca con el índice único de teléfono, correo, DNI o WhatsApp user ID.
 
-Producción no se consolidó. Hacerlo antes de desplegar este código vaciaría los inbox de CA y EP.
+Ese día producción no se consolidó. Hacerlo antes de desplegar este código vaciaría los inbox de CA y EP. La aplicación en producción fue el 26 de octubre, ya con ese código.
 
 ## Líneas descubiertas en la WABA de Educación
 
@@ -69,7 +71,9 @@ No hay otros tres números en esa WABA. No se activó ninguna línea nueva.
 - Cifrado de tokens: `api/src/meta-settings/credential-vault.util.ts`. La bóveda no está configurada en producción.
 - Columna nueva, sin aplicar en producción: `program_key` en rutas de formularios Meta y TikTok (`20261023220000_education_route_program_key`).
 
-## Qué sigue
+## Qué seguía el 23 de octubre
+
+Esta lista ya no es el plan. La consolidación se aplicó el 26 de octubre. No volver a correr `--apply` ni `restore-education-segments.cjs --apply`.
 
 1. Revisar y commitear este código.
 2. Desplegar API y web. La migración `20261023220000` corre con el deploy.
@@ -77,10 +81,10 @@ No hay otros tres números en esa WABA. No se activó ninguna línea nueva.
 4. Respaldo nuevo y `node scripts/consolidate-education.cjs --apply` en producción.
 5. Activar de a una Educación 1, 2 y 3 desde `/admin/whatsapp`, con prueba de entrada y respuesta en cada una.
 
-## Qué no se hizo
+## Qué no se había hecho ese día
 
-- No hay commit ni PR.
-- No se ejecutó la consolidación sobre la base de producción.
+- No había commit ni PR de aquel corte.
+- La consolidación de producción se aplicó después, el 26 de octubre.
 - No se activaron Educación 1, 2 ni 3.
 - No se rotaron tokens de las líneas que ya operan.
 - No se reiniciaron contenedores para este trabajo.

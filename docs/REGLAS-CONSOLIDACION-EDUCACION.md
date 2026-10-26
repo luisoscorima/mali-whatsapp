@@ -25,7 +25,7 @@ El grupo queda en `review` y ningún contacto cambia de área si ocurre cualquie
 - hay más de un asesor distinto en el ciclo más reciente;
 - el mismo WhatsApp user ID aparece en teléfonos distintos.
 
-Esos casos quedan en `education_consolidation_map` con `decision = review` para revisión manual.
+Esos casos quedan en `education_consolidation_map` con `decision = review` para revisión manual. La pantalla es Administración → Conflictos, solo usuario master.
 
 ## Conversaciones y líneas
 
@@ -44,7 +44,7 @@ Esos casos quedan en `education_consolidation_map` con `decision = review` para 
 
 - Plantillas con el mismo nombre e idioma: se conserva la fila de `educacion` y se retiran las copias de CA y EP. Las campañas guardan el nombre, no el id.
 - Estados de lead con el mismo slug: los contactos y ciclos pasan al estado de `educacion`. Las definiciones duplicadas se eliminan solo si ya no tienen referencias.
-- Segmentos que existen en una sola área se mueven a `educacion`. Los que comparten slug se unen a la definición de `educacion` sin perder miembros.
+- Segmentos que existen en una sola área se mueven a `educacion`. Los que comparten slug se unen a la definición de `educacion` sin perder miembros. Ese colapso se corrigió después con `api/scripts/restore-education-segments.cjs --apply`: el mismo slug puede existir en General, en CA y en EP, y las asignaciones vuelven a la categoría de origen. No volver a ejecutar ese script.
 
 ## Lo que se reetiqueta y lo que se conserva
 
@@ -80,4 +80,28 @@ La transacción se revierte si, al terminar:
 
 ## Producción
 
-No se ejecuta `--apply` sobre la base de producción hasta que este ensayo cuadre en una copia del respaldo y la aplicación que lee `educacion` más programa ya esté desplegada. El corte no apaga los alias ni agrega las seis líneas nuevas.
+`--apply` se ejecutó el 26 de octubre de 2026 sobre la base de producción, después del ensayo y con el código que lee `educacion` más categoría ya desplegado. Resultado de esa corrida: 5.735 grupos, 5.268 fusionados, 467 en revisión, conversaciones 23.579 y mensajes 129.039, iguales antes y después. Los alias no se apagaron. No se agregan líneas nuevas desde el script. No volver a ejecutar `--apply`.
+
+## Revisión en Administración → Conflictos
+
+Hay dos listas. Ninguna abre una segunda persona. Cada una tiene dos decisiones.
+
+### Mismo teléfono, varias fichas
+
+Son los grupos con `decision = review`. Se muestran de 40 en 40, por teléfono, no por ficha. La tarjeta dice por qué no se unió sola: WhatsApp distinto, DNI distinto, estado distinto, asesor distinto, o el mismo WhatsApp en otro teléfono.
+
+La ficha marcada como la que se queda trae nombre, apellido, correo y DNI editables. Las otras fichas están solo para comparar.
+
+- **Unir.** Guarda esos datos en la ficha que se queda, le pasa chats, orígenes, leads, atributos, segmentos y programas, y apaga las demás. El grupo pasa a `decision = joined`.
+- **Dejar separadas.** No modifica fichas ni personas. El grupo pasa a `decision = separate`.
+
+Arriba se lee cuántos quedan, cuántos se dejaron separados y cuántos se unieron.
+
+### Dato que no coincide con la persona
+
+Son filas de `person_identity_reviews` con `resolved_at` vacío. La persona ya existe. Llegó un teléfono, un DNI, un correo o una identidad de WhatsApp que no coincidía, y no se creó otra persona.
+
+Los campos empiezan con lo guardado. La tarjeta muestra lo que llegó.
+
+- **Guardar en esta persona.** Escribe teléfono, DNI, correo e identidad de WhatsApp en la persona que ya existe, y marca el caso como resuelto.
+- **Dejar la persona como está.** Marca el caso como resuelto y no cambia los datos.
