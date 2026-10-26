@@ -6,7 +6,8 @@ import {
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { getToken } from '../../shared/api/token'
 
-GlobalWorkerOptions.workerSrc = pdfWorker
+// La URL sin query quedó en caché un año como octet-stream. Otra query obliga a pedirla de nuevo.
+GlobalWorkerOptions.workerSrc = `${pdfWorker}?v=2`
 
 export async function fetchPdfBytes(
   downloadUrl: string,

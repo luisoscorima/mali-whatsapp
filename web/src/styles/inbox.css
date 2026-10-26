@@ -1688,6 +1688,7 @@ html[data-theme='dark'] .chat-bubble__reply-to {
 .chat-image-actions {
   position: absolute;
   inset: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1699,7 +1700,6 @@ html[data-theme='dark'] .chat-bubble__reply-to {
 .chat-image-frame:hover .chat-image-actions,
 .chat-image-frame:focus-within .chat-image-actions {
   opacity: 1;
-  pointer-events: auto;
 }
 
 .chat-image-action {
@@ -1713,6 +1713,7 @@ html[data-theme='dark'] .chat-bubble__reply-to {
   background: var(--surface-strong);
   color: var(--ink);
   cursor: pointer;
+  pointer-events: auto;
 }
 
 .chat-image-action:hover {
@@ -1722,7 +1723,6 @@ html[data-theme='dark'] .chat-bubble__reply-to {
 @media (hover: none) {
   .chat-image-actions {
     opacity: 1;
-    pointer-events: auto;
   }
 
   .chat-image-frame .chat-msg-media--img {
@@ -1855,12 +1855,15 @@ html[data-theme='dark'] .chat-bubble__reply-to {
 }
 
 .chat-pdf-preview__status {
+  position: relative;
+  z-index: 3;
   display: flex;
   align-items: center;
   gap: 8px;
   margin: 8px;
   color: var(--muted);
   font-size: 0.75rem;
+  pointer-events: none;
 }
 
 .chat-pdf-preview__retry {
@@ -1875,6 +1878,7 @@ html[data-theme='dark'] .chat-bubble__reply-to {
   background: var(--surface-strong);
   color: var(--ink);
   cursor: pointer;
+  pointer-events: auto;
 }
 
 .chat-pdf-lightbox__pages {
