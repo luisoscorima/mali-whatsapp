@@ -2,6 +2,10 @@ import * as XLSX from 'xlsx';
 import type { BusinessArea } from '../config/areas';
 import { REPORT_SOURCE_HEADERS, reportExportSourceCells } from './report-export-source.util';
 import { Prisma } from '@prisma/client';
+import {
+  auditConversationCategorySql,
+  parseCategorySlugs,
+} from '../config/category-scope';
 import { formatExportDate, exportFilenameDateStamp } from '../campaigns/campaign-format.util';
 import { formatAdvisorLabel } from '../users/advisor-label.util';
 import { auditCreatedDateSql } from './audit-log-query.util';
@@ -90,10 +94,13 @@ export async function fetchConversationHistoryReport(
 }> {
   const { from, to } = resolveReportDateRange(query.from, query.to);
   const dateExpr = auditCreatedDateSql();
+  const categories = parseCategorySlugs(
+    (query as { category?: string | string[] }).category,
+  );
   const whereSql = `WHERE area = $1
     AND event_type = ANY($2::text[])
     AND ${dateExpr} >= $3::date
-    AND ${dateExpr} <= $4::date`;
+    AND ${dateExpr} <= $4::date${auditConversationCategorySql(categories)}`;
   const params: unknown[] = [area, [...EVENT_TYPES], from, to];
 
   const countRows = await prisma.$queryRawUnsafe<{ c: number }[]>(
@@ -157,7 +164,7 @@ export async function fetchConversationHistoryReport(
         COALESCE((
           SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
           FROM contact_segments cs
-          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
           WHERE cs.contact_id = c.id AND cs.area = c.area
         ), '') AS segments,
         COALESCE((

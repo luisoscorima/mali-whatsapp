@@ -6,6 +6,7 @@ import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import { SortableSidebarList } from '@/shared/ui/SortableSidebarList'
 import { SegmentBadge } from './SegmentBadge'
+import { categoryLabel, useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
 import {
   SEGMENTS_LIST_REFRESH_EVENT,
   SEGMENTS_LIST_UPSERT_EVENT,
@@ -33,6 +34,7 @@ type SegmentDefinition = {
   show_in_filter: boolean
   assignable: boolean
   assignment_group: string | null
+  category?: string
   created_at: string
   updated_at?: string
 }
@@ -89,6 +91,7 @@ function FilterVisibilityIcon({ visible }: { visible: boolean }) {
 }
 
 export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
+  const scope = useCategoryScope()
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const [segments, setSegments] = useState<SegmentDefinition[] | null>(null)
@@ -103,14 +106,16 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
   }, [location.search])
 
   const refresh = useCallback(() => {
-    void apiClient.get<SegmentDefinition[]>('/api/segments').then((result) => {
+    void apiClient
+      .get<SegmentDefinition[]>(withCategoryQuery('/api/segments', scope.query))
+      .then((result) => {
       if (!result.ok) {
         notify.error(result.error)
         return
       }
       setSegments(result.data)
     })
-  }, [])
+  }, [scope.query, scope.revision])
 
   useEffect(() => {
     refresh()
@@ -227,13 +232,13 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
           items={filteredSegments}
           onReorder={handleReorder}
           renderItem={(seg, dragHandle) =>
-            renderSegmentRow(seg, selectedId, listQuery, dragHandle)
+            renderSegmentRow(seg, selectedId, listQuery, dragHandle, scope.education)
           }
         />
       ) : (
         <ul className="inbox-chat-list">
           {filteredSegments.map((seg) => (
-            <li key={seg.id}>{renderSegmentRow(seg, selectedId, listQuery)}</li>
+            <li key={seg.id}>{renderSegmentRow(seg, selectedId, listQuery, undefined, scope.education)}</li>
           ))}
         </ul>
       )}
@@ -246,6 +251,7 @@ function renderSegmentRow(
   selectedId: number | null | undefined,
   listQuery: string,
   dragHandle?: ReactNode,
+  showCategory = false,
 ) {
   const active = selectedId === seg.id
   return (
@@ -270,7 +276,7 @@ function renderSegmentRow(
               colorKey={seg.color_key}
               className="inbox-chat-segment font-mono text-[10px]"
             >
-              {seg.slug}
+              {showCategory ? `${seg.slug} · ${categoryLabel(seg.category)}` : seg.slug}
             </SegmentBadge>
             <span className="ml-auto shrink-0">
               <FilterVisibilityIcon visible={seg.show_in_filter} />

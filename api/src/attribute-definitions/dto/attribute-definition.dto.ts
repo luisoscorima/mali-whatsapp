@@ -17,6 +17,11 @@ export class CreateAttributeDefinitionDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(40)
+  category?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(50)
   segment_slug?: string;
 

@@ -73,7 +73,10 @@ model business_programs {
   updated_at                    DateTime              @default(now()) @db.Timestamptz(6)
   business_area                 business_areas        @relation(fields: [business_area_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   contact_programs              contact_programs[]
+  contact_segments              contact_segments[]
   whatsapp_lines                whatsapp_lines[]
+  segment_definitions           segment_definitions[]
+  flows                         flows[]
 
   @@unique([business_area_id, slug], map: "business_programs_area_slug_uq")
   @@index([business_area_id], map: "idx_business_programs_area")
@@ -301,12 +304,14 @@ model contact_segments {
   contact_id       Int
   area             String         @db.VarChar(20)
   segment_slug     String         @db.VarChar(50)
+  program_id       Int?
+  program          business_programs? @relation(fields: [program_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   created_at       DateTime       @default(now()) @db.Timestamp(6)
   contacts         contacts       @relation(fields: [contact_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@unique([contact_id, segment_slug])
   @@index([area, segment_slug], map: "idx_contact_segments_area_slug")
   @@index([contact_id], map: "idx_contact_segments_contact")
+  @@index([program_id], map: "idx_contact_segments_program")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -682,6 +687,8 @@ model flows {
   status              String                @default("draft") @db.VarChar(16)
   trigger_payload     String                @db.VarChar(256)
   entry_node_id       Int?
+  program_id          Int?
+  program             business_programs?    @relation(fields: [program_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   created_at          DateTime              @default(now()) @db.Timestamptz(6)
   updated_at          DateTime              @default(now()) @db.Timestamptz(6)
   flow_nodes          flow_nodes[]
@@ -691,6 +698,7 @@ model flows {
 
   @@unique([area, trigger_payload], map: "flows_area_trigger_uq")
   @@index([area, status], map: "idx_flows_area_status")
+  @@index([program_id], map: "idx_flows_program")
 }
 
 model flow_nodes {
@@ -859,11 +867,13 @@ model segment_definitions {
   show_in_filter   Boolean        @default(true)
   assignable       Boolean        @default(false)
   assignment_group String?        @db.VarChar(20)
+  program_id       Int?
+  program          business_programs? @relation(fields: [program_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   created_at       DateTime       @default(now()) @db.Timestamp(6)
   updated_at       DateTime       @default(now()) @db.Timestamp(6)
 
-  @@unique([area, slug])
   @@index([area], map: "idx_segment_definitions_area")
+  @@index([program_id], map: "idx_segment_definitions_program")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.

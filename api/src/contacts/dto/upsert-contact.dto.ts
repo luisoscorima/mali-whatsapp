@@ -67,6 +67,11 @@ export class UpsertContactDto {
   @MaxLength(32)
   dni?: string | null;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  category?: string;
+
   @IsArray()
   @IsString({ each: true })
   segments!: string[];

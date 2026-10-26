@@ -6,6 +6,7 @@ import {
   readMessageSenderLabel,
 } from '../conversations/chat-sender.util';
 import { getReportDisplayTimeZone } from './report-date-range.util';
+import { conversationCategoryPredicate } from '../config/business-scope';
 
 const PREVIEW_TRUNCATE = 120;
 const SEGMENT_NONE = '__none__';
@@ -88,6 +89,7 @@ export type CommunicationReportFilters = {
   segment_slugs: string[];
   attr_key: string;
   attr_value: string;
+  categories?: string[] | null;
 };
 
 type MessageRow = {
@@ -258,13 +260,17 @@ function buildContactFilterSql(
         AND ca.attr_key = ${attrKey}
         AND ca.attr_value ILIKE ${attrPat} ESCAPE '!'
     )`);
-  } else if (attrKey) {
+  } else   if (attrKey) {
     conditions.push(Prisma.sql`EXISTS (
       SELECT 1 FROM contact_attributes ca
       WHERE ca.contact_id = c.id
         AND ca.attr_key = ${attrKey}
         AND TRIM(COALESCE(ca.attr_value, '')) <> ''
     )`);
+  }
+
+  if (filters.categories?.length) {
+    conditions.push(conversationCategoryPredicate('conv', filters.categories));
   }
 
   return Prisma.join(conditions, ' AND ');
@@ -346,7 +352,7 @@ async function fetchContactIdsForReport(
       COALESCE((
         SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
         FROM contact_segments cs
-        JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+        JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
         WHERE cs.contact_id = c.id AND cs.area = c.area
       ), '') AS segments,
       COALESCE((

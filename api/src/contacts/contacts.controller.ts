@@ -17,6 +17,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { parseCategorySlugs } from '../config/category-scope';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
@@ -67,9 +68,13 @@ export class ContactsController {
   @Get('filter-options')
   async filterOptions(
     @CurrentUser() user: AuthUser,
+    @Query('category') category?: string | string[],
   ): Promise<ApiResponse<ContactsFilterOptions>> {
     assertCanReadContactForWrite(user);
-    const data = await this.contactsService.getFilterOptions(user.area);
+    const data = await this.contactsService.getFilterOptions(
+      user.area,
+      parseCategorySlugs(category),
+    );
     return { ok: true, data };
   }
 
@@ -239,9 +244,14 @@ export class ContactsController {
   async getOne(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
+    @Query('category') category?: string,
   ): Promise<ApiResponse<ContactDetail>> {
     assertCanReadContactForWrite(user);
-    const data = await this.contactsService.getById(user.area, id);
+    const data = await this.contactsService.getById(
+      user.area,
+      id,
+      category?.trim().toLowerCase() || null,
+    );
     return { ok: true, data };
   }
 
@@ -256,6 +266,7 @@ export class ContactsController {
       user,
       id,
       body.segment_slug,
+      body.category,
     );
     return { ok: true, data };
   }

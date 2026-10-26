@@ -11,6 +11,7 @@ import {
   originSecondaryFields,
 } from './originDisplay'
 import { LeadOpenChatButton } from './LeadOpenChatButton'
+import { categoryLabel, useCategoryScope } from '@/shared/area/useCategoryScope'
 
 type ChannelSummary = {
   channel: string
@@ -73,11 +74,13 @@ const CHANNEL_FILTER_OPTIONS = [
 ] as const
 
 export function LeadsHubPage() {
+  const scope = useCategoryScope()
   const [rows, setRows] = useState<ChannelSummary[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    void apiClient.get<ChannelSummary[]>('/api/leads/summary').then((r) => {
+    const path = scope.query ? `/api/leads/summary?${scope.query}` : '/api/leads/summary'
+    void apiClient.get<ChannelSummary[]>(path).then((r) => {
       setLoading(false)
       if (!r.ok) {
         notify.error(r.error)
@@ -85,7 +88,7 @@ export function LeadsHubPage() {
       }
       setRows(r.data)
     })
-  }, [])
+  }, [scope.query, scope.revision])
 
   const byChannel = Object.fromEntries(rows.map((r) => [r.channel, r]))
 
@@ -150,6 +153,7 @@ type OriginRow = ContactOriginSummary & {
   conversations: { wa_username: string | null } | null
   chat_conversation_id: number | null
   came_with_inbound: boolean
+  categoria?: string
   contacts: {
     id: number
     name: string
@@ -161,6 +165,7 @@ type OriginRow = ContactOriginSummary & {
 }
 
 function LeadsUnifiedList() {
+  const scope = useCategoryScope()
   const [searchParams, setSearchParams] = useSearchParams()
   const channel = (searchParams.get('channel') || '').trim()
   const channelFilterLabel =
@@ -188,6 +193,12 @@ function LeadsUnifiedList() {
     })
     if (channel) qs.set('channel', channel)
     if (qApplied.trim()) qs.set('q', qApplied.trim())
+    if (scope.query) {
+      for (const part of scope.query.split('&')) {
+        const [key, value] = part.split('=')
+        if (key && value) qs.append(key, decodeURIComponent(value))
+      }
+    }
     void apiClient
       .get<{ items: OriginRow[]; total: number }>(`/api/leads/origins?${qs}`)
       .then((r) => {
@@ -196,7 +207,7 @@ function LeadsUnifiedList() {
           setTotal(r.data.total)
         }
       })
-  }, [channel, pageSafe, qApplied])
+  }, [channel, pageSafe, qApplied, scope.query, scope.revision])
 
   function onChannelChange(value: string) {
     const next = new URLSearchParams(searchParams)
@@ -216,6 +227,12 @@ function LeadsUnifiedList() {
     const qs = new URLSearchParams()
     if (channel) qs.set('channel', channel)
     if (qApplied.trim()) qs.set('q', qApplied.trim())
+    if (scope.query) {
+      for (const part of scope.query.split('&')) {
+        const [key, value] = part.split('=')
+        if (key && value) qs.append(key, decodeURIComponent(value))
+      }
+    }
     const path = qs.toString()
       ? `/api/leads/origins/export?${qs}`
       : '/api/leads/origins/export'
@@ -347,6 +364,9 @@ function LeadsUnifiedList() {
                         )}
                       </td>
                       <td className="px-2 py-2">
+                        {scope.education ? (
+                          <div className="text-xs text-muted">{categoryLabel(o.categoria)}</div>
+                        ) : null}
                         {primary.fuente || '—'}
                         {primary.programa ? (
                           <div className="text-xs text-muted">

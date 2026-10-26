@@ -22,6 +22,7 @@ import { ReorderSegmentsDto } from './dto/reorder-segments.dto';
 import { SegmentsService } from './segments.service';
 import type { SegmentDefinition, SegmentDetail } from './segments.types';
 import type { SegmentSummary } from './segment-analytics.util';
+import { parseCategorySlugs } from '../config/category-scope';
 
 @Controller('segments')
 @UseGuards(JwtAuthGuard, ProvisionedGuard)
@@ -32,8 +33,13 @@ export class SegmentsController {
   async list(
     @CurrentUser() user: AuthUser,
     @Query('month') month?: string,
+    @Query('category') category?: string | string[],
   ): Promise<ApiResponse<SegmentDefinition[]>> {
-    const data = await this.segmentsService.list(user.area, month);
+    const data = await this.segmentsService.list(
+      user.area,
+      month,
+      parseCategorySlugs(category),
+    );
     return { ok: true, data };
   }
 
@@ -69,8 +75,12 @@ export class SegmentsController {
   @Get('active')
   async listActive(
     @CurrentUser() user: AuthUser,
+    @Query('category') category?: string | string[],
   ): Promise<ApiResponse<SegmentDefinition[]>> {
-    const data = await this.segmentsService.listActiveForAudience(user.area);
+    const data = await this.segmentsService.listActiveForAudience(
+      user.area,
+      parseCategorySlugs(category),
+    );
     return { ok: true, data };
   }
 

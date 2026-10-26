@@ -48,6 +48,7 @@ export type SegmentDefinition = {
   show_in_filter: boolean;
   assignable: boolean;
   assignment_group: string | null;
+  category: string;
   created_at: string;
   updated_at: string;
 };
@@ -64,6 +65,7 @@ export const SEGMENT_SELECT = {
   assignment_group: true,
   created_at: true,
   updated_at: true,
+  program: { select: { slug: true } },
 } as const;
 
 export function mapSegmentRow(row: {
@@ -78,9 +80,12 @@ export function mapSegmentRow(row: {
   assignment_group: string | null;
   created_at: Date;
   updated_at: Date;
+  program?: { slug: string } | null;
 }): SegmentDefinition {
+  const { program, ...rest } = row;
   return {
-    ...row,
+    ...rest,
+    category: program?.slug?.trim() || 'general',
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
   };

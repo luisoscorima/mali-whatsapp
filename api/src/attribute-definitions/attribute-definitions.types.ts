@@ -58,6 +58,8 @@ export type AttributeDefinition = {
   active: boolean;
   created_at: string;
   updated_at: string;
+  /** general, ca, ep… */
+  category: string;
   /** Contactos del área con valor no vacío en este slug. */
   usage_count: number;
 };

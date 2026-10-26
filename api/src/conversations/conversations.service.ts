@@ -53,6 +53,7 @@ import {
 } from '../templates/template-definition.util';
 import { sendTemplateWithComponents } from '../templates/whatsapp-meta.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { segmentMatchesConversationSql, segmentMatchesOuterLineSql } from '../config/category-scope';
 import { FlowsService } from '../flows/flows.service';
 import { MAX_SESSION_TEXT_LEN } from '../settings/business-hours.util';
 import { parseAiConfigValue } from '../settings/ai-config.util';
@@ -303,7 +304,7 @@ export class ConversationsService {
   }
 
   private async loadAssignableSegmentOptions(area: string) {
-    return this.prisma.segment_definitions.findMany({
+    const rows = await this.prisma.segment_definitions.findMany({
       where: {
         area,
         active: true,
@@ -320,8 +321,16 @@ export class ConversationsService {
         label: true,
         color_key: true,
         assignment_group: true,
+        program: { select: { slug: true } },
       },
     });
+    return rows.map((row) => ({
+      slug: row.slug,
+      label: row.label,
+      color_key: row.color_key,
+      assignment_group: row.assignment_group,
+      category: row.program?.slug || 'general',
+    }));
   }
 
   private mapListRow(row: InboxRow): InboxListItem {
@@ -401,7 +410,7 @@ export class ConversationsService {
   private buildInboxSegmentSearchSql(searchPat: string): Prisma.Sql {
     return Prisma.sql` OR EXISTS (
       SELECT 1 FROM contact_segments cs
-      JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+      JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
       WHERE cs.contact_id = ct.id
       AND (sd.label ILIKE ${searchPat} ESCAPE '!' OR sd.slug ILIKE ${searchPat} ESCAPE '!')
     )`;
@@ -584,8 +593,9 @@ export class ConversationsService {
         COALESCE((
           SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
           FROM contact_segments cs
-          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
           WHERE cs.contact_id = ct.id
+            AND ${segmentMatchesOuterLineSql()}
         ), ARRAY[]::varchar[]) AS contact_segment_slugs,
         (SELECT LEFT(m.body_text, 160) FROM chat_messages m
          WHERE m.conversation_id = c.id
@@ -670,7 +680,7 @@ export class ConversationsService {
         COALESCE((
           SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
           FROM contact_segments cs
-          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
           WHERE cs.contact_id = ct.id
         ), ARRAY[]::varchar[]) AS contact_segment_slugs,
         ''::text AS preview,
@@ -1394,8 +1404,9 @@ export class ConversationsService {
           COALESCE((
             SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
             FROM contact_segments cs
-            JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+            JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
             WHERE cs.contact_id = c.id
+              AND ${segmentMatchesConversationSql(conversationId)}
           ), ARRAY[]::varchar[]) AS segment_slugs
         FROM contacts c
         LEFT JOIN lead_status_definitions ls ON ls.id = c.lead_status_id
@@ -1449,8 +1460,9 @@ export class ConversationsService {
           COALESCE((
             SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
             FROM contact_segments cs
-            JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+            JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
             WHERE cs.contact_id = c.id
+              AND ${segmentMatchesConversationSql(conversationId)}
           ), ARRAY[]::varchar[]) AS segment_slugs
         FROM contacts c
         LEFT JOIN lead_status_definitions ls ON ls.id = c.lead_status_id

@@ -182,20 +182,24 @@ async function reassignContactFks(
     where: { contact_id: dropId },
   });
   for (const seg of dropSegs) {
-    await tx.contact_segments.upsert({
+    const existing = await tx.contact_segments.findFirst({
       where: {
-        contact_id_segment_slug: {
-          contact_id: keepId,
-          segment_slug: seg.segment_slug,
-        },
-      },
-      create: {
         contact_id: keepId,
-        area: seg.area,
         segment_slug: seg.segment_slug,
+        program_id: seg.program_id,
       },
-      update: {},
+      select: { id: true },
     });
+    if (!existing) {
+      await tx.contact_segments.create({
+        data: {
+          contact_id: keepId,
+          area: seg.area,
+          segment_slug: seg.segment_slug,
+          program_id: seg.program_id,
+        },
+      });
+    }
   }
   const dropAttrs = await tx.contact_attributes.findMany({
     where: { contact_id: dropId },

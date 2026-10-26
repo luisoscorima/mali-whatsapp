@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
+import { useCategoryScope } from '@/shared/area/useCategoryScope'
 type SegmentOption = {
   slug: string
   label: string
@@ -9,6 +10,7 @@ type SegmentOption = {
 
 export function AttributeNewPage() {
   const navigate = useNavigate()
+  const scope = useCategoryScope()
   const [segments, setSegments] = useState<SegmentOption[]>([])
   const [scope, setScope] = useState<'area' | 'segment'>('area')
   const [segmentSlug, setSegmentSlug] = useState('')
@@ -45,6 +47,7 @@ export function AttributeNewPage() {
       field_type: fieldType,
       options,
       required,
+      category: scope.stored?.length === 1 ? scope.stored[0] : undefined,
     })
     setSaving(false)
     if (!result.ok) {

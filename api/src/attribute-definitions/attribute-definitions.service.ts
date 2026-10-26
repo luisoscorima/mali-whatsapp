@@ -24,6 +24,11 @@ import {
   fetchAttributeSummary,
   type AttributeSummary,
 } from './attribute-analytics.util';
+import {
+  categoryOfProgram,
+  programIdForCategory,
+  programScopeWhere,
+} from '../config/category-scope';
 
 const ATTR_DEF_SELECT = {
   id: true,
@@ -37,6 +42,7 @@ const ATTR_DEF_SELECT = {
   active: true,
   created_at: true,
   updated_at: true,
+  program: { select: { slug: true } },
 } as const;
 
 function mapDefinition(
@@ -52,6 +58,7 @@ function mapDefinition(
     active: boolean;
     created_at: Date;
     updated_at: Date;
+    program?: { slug: string } | null;
   },
   usageCount = 0,
 ): AttributeDefinition {
@@ -67,6 +74,7 @@ function mapDefinition(
     active: row.active,
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
+    category: categoryOfProgram(row.program?.slug),
     usage_count: usageCount,
   };
 }
@@ -122,10 +130,13 @@ export class AttributeDefinitionsService {
     return rows[0]?.usage_count ?? 0;
   }
 
-  async list(area: AuthUser['area']): Promise<AttributeDefinition[]> {
+  async list(
+    area: AuthUser['area'],
+    categories: string[] | null = null,
+  ): Promise<AttributeDefinition[]> {
     const [rows, usage] = await Promise.all([
       this.prisma.contact_attribute_definitions.findMany({
-        where: { area, active: true },
+        where: { area, active: true, ...programScopeWhere(categories) },
         orderBy: [
           { segment_slug: { sort: 'asc', nulls: 'first' } },
           { sort_order: 'asc' },
@@ -138,10 +149,13 @@ export class AttributeDefinitionsService {
     return rows.map((row) => mapDefinition(row, usage.get(row.slug) ?? 0));
   }
 
-  async listAll(area: AuthUser['area']): Promise<AttributeDefinition[]> {
+  async listAll(
+    area: AuthUser['area'],
+    categories: string[] | null = null,
+  ): Promise<AttributeDefinition[]> {
     const [rows, usage] = await Promise.all([
       this.prisma.contact_attribute_definitions.findMany({
-        where: { area },
+        where: { area, ...programScopeWhere(categories) },
         orderBy: [
           { segment_slug: { sort: 'asc', nulls: 'first' } },
           { sort_order: 'asc' },
@@ -204,6 +218,14 @@ export class AttributeDefinitionsService {
         throw new BadRequestException('Segmento no válido');
       }
     }
+    const programId = await programIdForCategory(
+      (slug) =>
+        this.prisma.business_programs.findFirst({
+          where: { slug, business_area: { slug: 'educacion' } },
+          select: { id: true },
+        }),
+      dto.category,
+    );
 
     try {
       const row = await this.prisma.contact_attribute_definitions.create({
@@ -217,6 +239,7 @@ export class AttributeDefinitionsService {
           sort_order: sortOrder,
           required,
           active: true,
+          program_id: programId,
         },
         select: ATTR_DEF_SELECT,
       });

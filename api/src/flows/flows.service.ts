@@ -6,6 +6,11 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { sanitizeApiResponse } from '../conversations/api-sanitize.util';
+import {
+  categoryOfProgram,
+  programIdForCategory,
+  programScopeWhere,
+} from '../config/category-scope';
 import { conversationRecipient } from '../conversations/whatsapp-recipient.util';
 import { setMessageSender } from '../conversations/chat-sender.util';
 import {
@@ -91,13 +96,14 @@ export class FlowsService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(area: string): Promise<FlowListItem[]> {
+  async list(area: string, categories: string[] | null = null): Promise<FlowListItem[]> {
     const rows = await this.prisma.flows.findMany({
-      where: { area },
+      where: { area, ...programScopeWhere(categories) },
       orderBy: [{ updated_at: 'desc' }, { id: 'desc' }],
       include: {
         _count: { select: { flow_nodes: true } },
         flow_sessions: { select: { status: true } },
+        program: { select: { slug: true } },
       },
     });
     return rows.map((row) => {
@@ -105,6 +111,7 @@ export class FlowsService {
       return {
         id: row.id,
         name: row.name,
+        category: categoryOfProgram(row.program?.slug),
         status: asStatus(row.status),
         trigger_payload: row.trigger_payload,
         entry_node_id: row.entry_node_id,
@@ -484,6 +491,14 @@ export class FlowsService {
     this.validateGraph(dto);
 
     const status = asStatus(dto.status || 'draft');
+    const programId = await programIdForCategory(
+      (slug) =>
+        this.prisma.business_programs.findFirst({
+          where: { slug, business_area: { slug: 'educacion' } },
+          select: { id: true },
+        }),
+      dto.category,
+    );
     try {
       const created = await this.prisma.$transaction(async (tx) => {
         const flow = await tx.flows.create({
@@ -492,6 +507,7 @@ export class FlowsService {
             name,
             trigger_payload: trigger,
             status,
+            program_id: programId,
           },
         });
         await this.replaceGraph(tx, flow.id, dto);

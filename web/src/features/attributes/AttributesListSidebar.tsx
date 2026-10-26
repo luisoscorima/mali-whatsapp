@@ -5,6 +5,7 @@ import { notify } from '@/shared/notify'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import { SortableSidebarList } from '@/shared/ui/SortableSidebarList'
+import { categoryLabel, useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
 
 const LIST_POLL_MS = 15000
 
@@ -31,6 +32,7 @@ type AttributeDefinition = {
   required: boolean
   active: boolean
   usage_count: number
+  category?: string
 }
 
 type SegmentOption = {
@@ -122,6 +124,7 @@ function FieldTypeIcon({ fieldType }: { fieldType: string }) {
 }
 
 export function AttributesListSidebar({ selectedId }: AttributesListSidebarProps) {
+  const scope = useCategoryScope()
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const [definitions, setDefinitions] = useState<AttributeDefinition[] | null>(null)
@@ -137,7 +140,9 @@ export function AttributesListSidebar({ selectedId }: AttributesListSidebarProps
 
   const refresh = useCallback(() => {
     void Promise.all([
-      apiClient.get<AttributeDefinition[]>('/api/attribute-definitions'),
+      apiClient.get<AttributeDefinition[]>(
+        withCategoryQuery('/api/attribute-definitions', scope.query),
+      ),
       apiClient.get<SegmentOption[]>('/api/attribute-definitions/segments'),
     ]).then(([defs, segs]) => {
       if (!defs.ok) {
@@ -147,7 +152,7 @@ export function AttributesListSidebar({ selectedId }: AttributesListSidebarProps
       setDefinitions(defs.data)
       if (segs.ok) setSegments(segs.data)
     })
-  }, [])
+  }, [scope.query, scope.revision])
 
   useEffect(() => {
     refresh()
@@ -243,13 +248,13 @@ export function AttributesListSidebar({ selectedId }: AttributesListSidebarProps
           items={filteredDefinitions}
           onReorder={handleReorder}
           renderItem={(def, dragHandle) =>
-            renderAttributeRow(def, selectedId, segments, listQuery, dragHandle)
+            renderAttributeRow(def, selectedId, segments, listQuery, dragHandle, scope.education)
           }
         />
       ) : (
         <ul className="inbox-chat-list">
           {filteredDefinitions.map((def) => (
-            <li key={def.id}>{renderAttributeRow(def, selectedId, segments, listQuery)}</li>
+            <li key={def.id}>{renderAttributeRow(def, selectedId, segments, listQuery, undefined, scope.education)}</li>
           ))}
         </ul>
       )}
@@ -263,6 +268,7 @@ function renderAttributeRow(
   segments: SegmentOption[],
   listQuery: string,
   dragHandle?: ReactNode,
+  showCategory = false,
 ) {
   const active = selectedId === def.id
   return (
@@ -286,7 +292,10 @@ function renderAttributeRow(
               {def.active ? 'Activo' : 'Inactivo'}
             </span>
           </span>
-          <span className="inbox-chat-preview font-mono">{def.slug}</span>
+          <span className="inbox-chat-preview font-mono">
+            {def.slug}
+            {showCategory ? ` · ${categoryLabel(def.category)}` : ''}
+          </span>
           <span className="inbox-chat-preview">
             {scopeLabel(def, segments)}
             {def.usage_count > 0

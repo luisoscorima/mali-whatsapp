@@ -10,6 +10,10 @@ import { auditActor } from '../audit/audit-actor.util';
 import { AuditLogService } from '../audit/audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/auth.types';
+import {
+  programIdForCategory,
+  programScopeWhere,
+} from '../config/category-scope';
 import type { CreateSegmentDto, UpdateSegmentDto } from './dto/segment.dto';
 import {
   buildContactsExportBuffer,
@@ -65,11 +69,16 @@ export class SegmentsService {
     private readonly auditLog: AuditLogService,
   ) {}
 
-  async list(area: AuthUser['area'], month?: string): Promise<SegmentDefinition[]> {
+  async list(
+    area: AuthUser['area'],
+    month?: string,
+    categories: string[] | null = null,
+  ): Promise<SegmentDefinition[]> {
     const range = parseMonthKey(month);
     const rows = await this.prisma.segment_definitions.findMany({
       where: {
         area,
+        ...programScopeWhere(categories),
         ...(range
           ? { created_at: { gte: range.start, lt: range.end } }
           : {}),
@@ -111,9 +120,12 @@ export class SegmentsService {
     return rows.map(mapSegmentRow);
   }
 
-  async listActiveForAudience(area: AuthUser['area']): Promise<SegmentDefinition[]> {
+  async listActiveForAudience(
+    area: AuthUser['area'],
+    categories: string[] | null = null,
+  ): Promise<SegmentDefinition[]> {
     const rows = await this.prisma.segment_definitions.findMany({
-      where: { area, active: true },
+      where: { area, active: true, ...programScopeWhere(categories) },
       orderBy: [{ sort_order: 'asc' }, { slug: 'asc' }],
       select: SEGMENT_SELECT,
     });
@@ -174,7 +186,7 @@ export class SegmentsService {
         COALESCE((
           SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
           FROM contact_segments cs
-          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
           WHERE cs.contact_id = c.id
         ), ARRAY[]::varchar[]) AS segment_slugs
       FROM contacts c
@@ -222,11 +234,21 @@ export class SegmentsService {
       throw new BadRequestException('Etiqueta inválida');
     }
 
+    const programId = await programIdForCategory(
+      (programSlug) =>
+        this.prisma.business_programs.findFirst({
+          where: { slug: programSlug, business_area: { slug: 'educacion' } },
+          select: { id: true },
+        }),
+      dto.category,
+    );
+
     try {
       const row = await this.prisma.segment_definitions.create({
         data: {
           area,
           slug,
+          program_id: programId,
           label,
           sort_order: sortOrder,
           color_key: colorKey,
@@ -486,7 +508,7 @@ export class SegmentsService {
         COALESCE((
           SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
           FROM contact_segments cs
-          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
           WHERE cs.contact_id = c.id AND cs.area = ${area}
         ), '') AS segment_labels
       FROM contacts c

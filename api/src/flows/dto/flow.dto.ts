@@ -153,6 +153,11 @@ export class FlowEdgeInputDto {
 }
 
 export class CreateFlowDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  category?: string;
+
   @IsString()
   @MinLength(1)
   @MaxLength(150)

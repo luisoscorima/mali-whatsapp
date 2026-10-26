@@ -14,6 +14,7 @@ import {
   normalizeEmail,
   type BusinessArea,
 } from '../config/areas';
+import { programScopeWhere } from '../config/category-scope';
 import {
   educationProgramOf,
   educationReadScope,
@@ -940,11 +941,32 @@ export class LeadsService implements OnModuleInit {
     });
   }
 
-  async channelSummary(area: string) {
+  async channelSummary(area: string, categories: string[] | null = null) {
     const areaNorm = normalizeArea(area);
+    const programs = (categories ?? []).filter((slug) => slug !== 'general');
+    const programIds = programs.length
+      ? (
+          await this.prisma.business_programs.findMany({
+            where: {
+              slug: { in: programs },
+              business_area: { slug: 'educacion' },
+            },
+            select: { id: true },
+          })
+        ).map((row) => row.id)
+      : [];
+    const categoryOr = [
+      ...(categories?.includes('general') ? [{ program_id: null }] : []),
+      ...(programIds.length ? [{ program_id: { in: programIds } }] : []),
+    ];
+    const categoryWhere = !categories?.length
+      ? {}
+      : categoryOr.length
+        ? { OR: categoryOr }
+        : { id: -1 };
     const rows = await this.prisma.contact_origins.groupBy({
       by: ['channel'],
-      where: { area: areaNorm },
+      where: { area: areaNorm, ...categoryWhere },
       _count: { _all: true },
       _max: { last_seen_at: true },
     });
@@ -961,6 +983,7 @@ export class LeadsService implements OnModuleInit {
     q?: string;
     limit?: number;
     offset?: number;
+    categories?: string[] | null;
   }) {
     const areaNorm = normalizeArea(params.area);
     const take = Math.min(Math.max(params.limit ?? 50, 1), 200);
@@ -969,6 +992,7 @@ export class LeadsService implements OnModuleInit {
     const usernameQ = q.replace(/^@/, '');
     const where: Prisma.contact_originsWhereInput = {
       area: areaNorm,
+      ...programScopeWhere(params.categories ?? null),
       ...(params.channel ? { channel: params.channel } : {}),
       ...(q
         ? {
@@ -1028,6 +1052,7 @@ export class LeadsService implements OnModuleInit {
             },
           },
           conversations: { select: { wa_username: true } },
+          program: { select: { slug: true } },
         },
       }),
     ]);
@@ -1038,6 +1063,7 @@ export class LeadsService implements OnModuleInit {
       total,
       items: enriched.map((item) => ({
         ...item,
+        categoria: item.program?.slug || 'general',
         payload: payloadWithStandardCurso(item.payload),
       })),
       limit: take,
@@ -1049,12 +1075,14 @@ export class LeadsService implements OnModuleInit {
     area: string;
     channel?: string;
     q?: string;
+    categories?: string[] | null;
   }): Promise<{ buffer: Buffer; filename: string }> {
     const areaNorm = normalizeArea(params.area);
     const listed = await this.listOrigins({
       area: areaNorm,
       channel: params.channel,
       q: params.q,
+      categories: params.categories,
       limit: 5000,
       offset: 0,
     });

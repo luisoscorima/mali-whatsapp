@@ -91,6 +91,7 @@ export type FlowEventContactRow = {
 export type FlowListItem = {
   id: number;
   name: string;
+  category: string;
   status: FlowStatus;
   trigger_payload: string;
   entry_node_id: number | null;

@@ -5,6 +5,7 @@ import { notify } from '@/shared/notify'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import { defaultReportDateRange } from '../reports/reportDateRange'
 import { ReportScrollableTable } from '@/shared/ui/InboxListPager'
+import { useCategoryScope } from '@/shared/area/useCategoryScope'
 
 type TabId = 'communications' | 'segments' | 'chat'
 
@@ -107,6 +108,7 @@ function tabFromParam(raw: string | null): TabId {
 }
 
 export function SettingsReporteriaPage() {
+  const scope = useCategoryScope()
   const [searchParams, setSearchParams] = useSearchParams()
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null)
   const [commData, setCommData] = useState<CommResult | null>(null)
@@ -174,8 +176,14 @@ export function SettingsReporteriaPage() {
     for (const seg of selectedSegments) qs.append('segment', seg)
     if (attrKey) qs.set('attr_key', attrKey)
     if (attrValue) qs.set('attr_value', attrValue)
+    if (scope.query) {
+      for (const part of scope.query.split('&')) {
+        const [key, value] = part.split('=')
+        if (key && value) qs.append(key, decodeURIComponent(value))
+      }
+    }
     return qs
-  }, [from, to, page, selectedSegments, attrKey, attrValue])
+  }, [from, to, page, selectedSegments, attrKey, attrValue, scope.query, scope.revision])
 
   useEffect(() => {
     if (!rangeReady || !from || !to) return

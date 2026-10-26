@@ -2874,6 +2874,7 @@ export function ConversationsInboxPage() {
           conversationStatus={actionsContext.conversationStatus}
           canAssign={canAssign}
           assignableSegments={list?.assignable_segments ?? []}
+          category={detail?.conversation.line_program || 'general'}
           currentSegmentSlugs={
             detail?.contact?.segment_slugs ??
             list?.items.find((i) => i.id === actionsContext.conversationId)
@@ -2921,6 +2922,9 @@ export function ConversationsInboxPage() {
         prefillUserId={contactSheetUserId}
         prefillUsername={detail?.conversation.whatsapp_user_id === contactSheetUserId ? detail.conversation.wa_username : null}
         prefillName={contactSheetPrefillName}
+        category={
+          detail ? detail.conversation.line_program || 'general' : null
+        }
         onSaved={() => {
           void loadList()
           if (selectedId) void loadDetail(selectedId)

@@ -10,9 +10,11 @@ import {
   type FlowEditorNode,
 } from './flowEditorUtils'
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard'
+import { useCategoryScope } from '@/shared/area/useCategoryScope'
 
 export function FlowNewPage() {
   const navigate = useNavigate()
+  const scope = useCategoryScope()
   const first = emptyNode('message_buttons')
   const [name, setName] = useState('')
   const [triggerPayload, setTriggerPayload] = useState('INICIAR_FLUJO')
@@ -49,6 +51,7 @@ export function FlowNewPage() {
     setEntryClientKey(graph.entry)
     const result = await apiClient.post<FlowDetail>('/api/flows', {
       name: name.trim(),
+      category: scope.stored?.length === 1 ? scope.stored[0] : undefined,
       trigger_payload: triggerPayload.trim(),
       status,
       entry_client_key: graph.entry,

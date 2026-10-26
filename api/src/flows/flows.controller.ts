@@ -36,6 +36,7 @@ import {
   fetchFlowSummary,
   type FlowSummary,
 } from './flow-summary.util';
+import { parseCategorySlugs } from '../config/category-scope';
 
 @Controller('flows')
 @UseGuards(JwtAuthGuard, ProvisionedGuard)
@@ -45,9 +46,13 @@ export class FlowsController {
   @Get()
   async list(
     @CurrentUser() user: AuthUser,
+    @Query('category') category?: string | string[],
   ): Promise<ApiResponse<FlowListItem[]>> {
     assertCanListFlows(user);
-    const data = await this.flowsService.list(user.area);
+    const data = await this.flowsService.list(
+      user.area,
+      parseCategorySlugs(category),
+    );
     return { ok: true, data };
   }
 

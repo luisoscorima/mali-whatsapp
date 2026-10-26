@@ -1,6 +1,11 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import type { AuthUser } from '../auth/auth.types';
 import { AREA_LABELS } from '../config/areas';
+import {
+  auditConversationCategorySql,
+  auditSegmentCategorySql,
+  parseCategorySlugs,
+} from '../config/category-scope';
 import { PrismaService } from '../prisma/prisma.service';
 import { formatExportDate } from '../campaigns/campaign-format.util';
 import { userCanAccessSettingsModule } from '../settings/settings-modules.util';
@@ -249,7 +254,10 @@ export class ReportsService {
     );
     const attr_key = String(query.attr_key || '').trim();
     const attr_value = String(query.attr_value || '').trim();
-    return { from, to, segment_slugs, attr_key, attr_value };
+    const categories = parseCategorySlugs(
+      query.category as string | string[] | undefined,
+    );
+    return { from, to, segment_slugs, attr_key, attr_value, categories };
   }
 
   async listCommunications(

@@ -25,6 +25,7 @@ import {
   UpdateAttributeDefinitionDto,
 } from './dto/attribute-definition.dto';
 import { ReorderAttributeDefinitionsDto } from './dto/reorder-attribute-definitions.dto';
+import { parseCategorySlugs } from '../config/category-scope';
 
 @Controller('attribute-definitions')
 @UseGuards(JwtAuthGuard, ProvisionedGuard)
@@ -34,8 +35,12 @@ export class AttributeDefinitionsController {
   @Get()
   async list(
     @CurrentUser() user: AuthUser,
+    @Query('category') category?: string | string[],
   ): Promise<ApiResponse<AttributeDefinition[]>> {
-    const data = await this.service.listAll(user.area);
+    const data = await this.service.listAll(
+      user.area,
+      parseCategorySlugs(category),
+    );
     return { ok: true, data };
   }
 

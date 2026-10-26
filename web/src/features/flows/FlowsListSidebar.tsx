@@ -4,12 +4,14 @@ import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
+import { categoryLabel, useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
 
 const LIST_POLL_MS = 20000
 
 export type FlowListItem = {
   id: number
   name: string
+  category?: string
   status: 'draft' | 'active' | 'paused'
   trigger_payload: string
   node_count: number
@@ -30,12 +32,15 @@ const STATUS_LABEL: Record<FlowListItem['status'], string> = {
 }
 
 export function FlowsListSidebar({ selectedId }: FlowsListSidebarProps) {
+  const scope = useCategoryScope()
   const location = useLocation()
   const [items, setItems] = useState<FlowListItem[]>([])
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
-    const result = await apiClient.get<FlowListItem[]>('/api/flows')
+    const result = await apiClient.get<FlowListItem[]>(
+      withCategoryQuery('/api/flows', scope.query),
+    )
     if (!result.ok) {
       notify.error(result.error)
       setLoading(false)
@@ -43,7 +48,7 @@ export function FlowsListSidebar({ selectedId }: FlowsListSidebarProps) {
     }
     setItems(result.data)
     setLoading(false)
-  }, [])
+  }, [scope.query, scope.revision])
 
   useEffect(() => {
     load()
@@ -88,6 +93,7 @@ export function FlowsListSidebar({ selectedId }: FlowsListSidebarProps) {
                       </span>
                     </span>
                     <span className="inbox-chat-preview font-mono text-xs">
+                      {scope.education ? `${categoryLabel(item.category)} · ` : ''}
                       {item.trigger_payload}
                     </span>
                   </span>

@@ -10,6 +10,11 @@ import {
 import { SEGMENT_COLOR_KEYS } from '../segments.types';
 
 export class CreateSegmentDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  category?: string;
+
   @IsString()
   @MinLength(1)
   @MaxLength(50)

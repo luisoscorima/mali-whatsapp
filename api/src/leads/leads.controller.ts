@@ -17,6 +17,7 @@ import { ProvisionedGuard } from '../auth/guards/provisioned.guard';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
 import { assertCanManageLeads } from '../auth/permission.util';
 import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { parseCategorySlugs } from '../config/category-scope';
 import { LeadsService } from './leads.service';
 import { MetaLeadgenService } from './meta-leadgen.service';
 import { TikTokLeadgenService } from './tiktok-leadgen.service';
@@ -118,9 +119,13 @@ export class LeadsController {
   @Get('summary')
   async summary(
     @CurrentUser() user: AuthUser,
+    @Query('category') category?: string | string[],
   ): Promise<ApiResponse<unknown>> {
     assertCanManageLeads(user);
-    const data = await this.leadsService.channelSummary(user.area);
+    const data = await this.leadsService.channelSummary(
+      user.area,
+      parseCategorySlugs(category),
+    );
     return { ok: true, data };
   }
 
@@ -131,12 +136,14 @@ export class LeadsController {
     @Query('q') q?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('category') category?: string | string[],
   ): Promise<ApiResponse<unknown>> {
     assertCanManageLeads(user);
     const data = await this.leadsService.listOrigins({
       area: user.area,
       channel,
       q,
+      categories: parseCategorySlugs(category),
       limit: limit ? Number(limit) : undefined,
       offset: offset ? Number(offset) : undefined,
     });
@@ -149,12 +156,14 @@ export class LeadsController {
     @Res() res: Response,
     @Query('channel') channel?: string,
     @Query('q') q?: string,
+    @Query('category') category?: string | string[],
   ): Promise<void> {
     assertCanManageLeads(user);
     const { buffer, filename } = await this.leadsService.exportOrigins({
       area: user.area,
       channel,
       q,
+      categories: parseCategorySlugs(category),
     });
     res.setHeader(
       'Content-Type',

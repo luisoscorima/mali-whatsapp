@@ -22,6 +22,7 @@ type SegmentOption = {
   label: string
   color_key?: string
   assignment_group?: string | null
+  category?: string
 }
 
 type InboxChatActionsDialogProps = {
@@ -38,6 +39,7 @@ type InboxChatActionsDialogProps = {
   conversationStatus: string | null
   canAssign: boolean
   assignableSegments: SegmentOption[]
+  category?: string | null
   currentSegmentSlugs: string[]
   onLeadScore: (score: number | null) => void
   onLeadStatus: (statusId: number) => void | Promise<void>
@@ -67,6 +69,7 @@ export function InboxChatActionsDialog({
   conversationStatus,
   canAssign,
   assignableSegments,
+  category = null,
   currentSegmentSlugs,
   onLeadScore,
   onLeadStatus,
@@ -111,21 +114,24 @@ export function InboxChatActionsDialog({
 
   const groupedAssignable = useMemo(() => {
     const groups = new Map<string, SegmentOption[]>()
-    for (const seg of assignableSegments) {
+    const visible = assignableSegments.filter(
+      (seg) => (seg.category || 'general') === (category || 'general'),
+    )
+    for (const seg of visible) {
       const key = (seg.assignment_group ?? '').trim() || 'sin_grupo'
       const list = groups.get(key) ?? []
       list.push(seg)
       groups.set(key, list)
     }
     return [...groups.entries()]
-  }, [assignableSegments])
+  }, [assignableSegments, category])
 
   async function toggleAssignableSegment(slug: string) {
     if (!contactId) return
     setSegmentBusy(slug)
     const res = await apiClient.patch<{ segment_slugs: string[] }>(
       `/api/contacts/${contactId}/assignable-segment`,
-      { segment_slug: slug },
+      { segment_slug: slug, category: category || undefined },
     )
     setSegmentBusy('')
     if (!res.ok) {

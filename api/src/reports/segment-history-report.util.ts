@@ -5,6 +5,10 @@ import type { BusinessArea } from '../config/areas';
 import { REPORT_SOURCE_HEADERS, reportExportSourceCells } from './report-export-source.util';
 import { auditCreatedDateSql } from './audit-log-query.util';
 import { resolveReportDateRange } from './report-date-range.util';
+import {
+  auditSegmentCategorySql,
+  parseCategorySlugs,
+} from '../config/category-scope';
 
 export const SEGMENT_HISTORY_HEADERS = [
   'Fecha',
@@ -69,10 +73,13 @@ export async function fetchSegmentHistoryReport(
 ): Promise<{ total: number; rows: SegmentHistoryRow[]; from: string; to: string }> {
   const { from, to } = resolveReportDateRange(query.from, query.to);
   const dateExpr = auditCreatedDateSql();
+  const categories = parseCategorySlugs(
+    (query as { category?: string | string[] }).category,
+  );
   const whereSql = `WHERE area = $1
     AND event_type = $2
     AND ${dateExpr} >= $3::date
-    AND ${dateExpr} <= $4::date`;
+    AND ${dateExpr} <= $4::date${auditSegmentCategorySql(categories)}`;
   const params: unknown[] = [area, 'contact.segment_change', from, to];
 
   const countRows = await prisma.$queryRawUnsafe<{ c: number }[]>(

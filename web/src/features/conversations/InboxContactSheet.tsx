@@ -72,6 +72,7 @@ export type InboxContactSheetProps = {
   prefillUserId?: string | null
   prefillUsername?: string | null
   prefillName?: string
+  category?: string | null
   onSaved: () => void
 }
 
@@ -84,6 +85,7 @@ export function InboxContactSheet({
   prefillUserId = null,
   prefillUsername = null,
   prefillName = '',
+  category = null,
   onSaved,
 }: InboxContactSheetProps) {
   const [contact, setContact] = useState<ContactDetail | null>(null)
@@ -114,12 +116,19 @@ export function InboxContactSheet({
     setContact(null)
     setSelectedSegmentSlugs([])
 
+    const categoryQs = category ? `category=${encodeURIComponent(category)}` : ''
     async function load() {
       if (mode === 'edit' && contactId) {
         const [detail, opts, activeSegs, statuses] = await Promise.all([
-          apiClient.get<ContactDetail>(`/api/contacts/${contactId}`),
-          apiClient.get<FilterOptions>('/api/contacts/filter-options'),
-          apiClient.get<ApiSegment[]>('/api/segments/active'),
+          apiClient.get<ContactDetail>(
+            categoryQs ? `/api/contacts/${contactId}?${categoryQs}` : `/api/contacts/${contactId}`,
+          ),
+          apiClient.get<FilterOptions>(
+            categoryQs ? `/api/contacts/filter-options?${categoryQs}` : '/api/contacts/filter-options',
+          ),
+          apiClient.get<ApiSegment[]>(
+            categoryQs ? `/api/segments/active?${categoryQs}` : '/api/segments/active',
+          ),
           apiClient.get<LeadStatusOption[]>('/api/leads/statuses'),
         ])
         if (cancelled) return
@@ -148,8 +157,12 @@ export function InboxContactSheet({
       }
 
       const [opts, segs] = await Promise.all([
-        apiClient.get<FilterOptions>('/api/contacts/filter-options'),
-        apiClient.get<ApiSegment[]>('/api/segments/active'),
+        apiClient.get<FilterOptions>(
+          categoryQs ? `/api/contacts/filter-options?${categoryQs}` : '/api/contacts/filter-options',
+        ),
+        apiClient.get<ApiSegment[]>(
+          categoryQs ? `/api/segments/active?${categoryQs}` : '/api/segments/active',
+        ),
       ])
       if (cancelled) return
       if (!opts.ok) {
@@ -172,7 +185,7 @@ export function InboxContactSheet({
     return () => {
       cancelled = true
     }
-  }, [open, mode, contactId])
+  }, [open, mode, contactId, category])
 
   async function onSubmit(values: {
     name: string
@@ -198,6 +211,7 @@ export function InboxContactSheet({
         dni: values.dni || null,
         segments: values.segments,
         attributes: values.attributes,
+        category: category || undefined,
       })
       setSaving(false)
       if (!result.ok) {
@@ -224,6 +238,7 @@ export function InboxContactSheet({
       dni: values.dni || null,
       segments: values.segments,
       attributes: values.attributes,
+      category: category || undefined,
     })
     setSaving(false)
     if (!result.ok) {

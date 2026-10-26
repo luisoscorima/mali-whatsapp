@@ -7,7 +7,7 @@ import type { AuthUser } from '../auth/auth.types';
 import { AuditEvent } from '../audit/audit-events';
 import { auditActor } from '../audit/audit-actor.util';
 import { AuditLogService } from '../audit/audit-log.service';
-import { isValidBusinessArea, normalizeArea } from '../config/areas';
+import { canonicalBusinessArea, isValidBusinessArea, normalizeArea } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   defaultAiConfig,
@@ -83,7 +83,10 @@ export class SettingsService {
     if (!isValidBusinessArea(area)) {
       throw new BadRequestException('Area invalida');
     }
-    if (!user.isMaster && normalizeArea(user.area) !== area) {
+    if (
+      !user.isMaster &&
+      canonicalBusinessArea(user.area) !== canonicalBusinessArea(area)
+    ) {
       throw new ForbiddenException('No autorizado para otra área');
     }
     return area;
@@ -132,7 +135,8 @@ export class SettingsService {
     const area = this.resolveArea(user, areaParam);
     const isMaster = user.isMaster;
     const canEditPrompt =
-      user.canEditAiPrompt && normalizeArea(user.area) === area;
+      user.canEditAiPrompt &&
+      canonicalBusinessArea(user.area) === canonicalBusinessArea(area);
 
     if (!isMaster && !canEditPrompt) {
       throw new ForbiddenException('No autorizado');
@@ -254,7 +258,8 @@ export class SettingsService {
     const area = this.resolveArea(user, areaParam);
     const isMaster = user.isMaster;
     const canEdit =
-      user.canEditBusinessHours && normalizeArea(user.area) === area;
+      user.canEditBusinessHours &&
+      canonicalBusinessArea(user.area) === canonicalBusinessArea(area);
 
     if (!isMaster && !canEdit) {
       throw new ForbiddenException('No autorizado');

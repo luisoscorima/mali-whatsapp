@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
+import {
+  categoryLabel,
+  categorySettingsArea,
+  useCategoryScope,
+} from '@/shared/area/useCategoryScope'
 
 const DAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
@@ -14,7 +19,13 @@ type BusinessHoursSettings = {
   outside_hours_message: string
 }
 
-export function SettingsBusinessHoursPage() {
+function BusinessHoursForm({
+  area,
+  heading,
+}: {
+  area?: string
+  heading?: string
+}) {
   const [settings, setSettings] = useState<BusinessHoursSettings | null>(null)
   const [enabled, setEnabled] = useState(false)
   const [days, setDays] = useState<Set<number>>(new Set([1, 2, 3, 4, 5]))
@@ -27,7 +38,9 @@ export function SettingsBusinessHoursPage() {
 
   useEffect(() => {
     apiClient
-      .get<BusinessHoursSettings>('/api/settings/business-hours')
+      .get<BusinessHoursSettings>(
+        area ? `/api/settings/business-hours/${area}` : '/api/settings/business-hours',
+      )
       .then((result) => {
         if (!result.ok) {
           notify.error(result.error)
@@ -42,7 +55,7 @@ export function SettingsBusinessHoursPage() {
         setMessage(result.data.outside_hours_message)
         setTimezone(result.data.timezone)
       })
-  }, [])
+  }, [area])
 
   function toggleDay(day: number) {
     setDays((prev) => {
@@ -91,7 +104,7 @@ export function SettingsBusinessHoursPage() {
   return (
     <section className="space-y-4 rounded-xl border border-line bg-surface-strong p-4">
       <h2 className="text-lg font-semibold">
-        Fuera de horario · {settings.area}
+        Fuera de horario · {heading || settings.area}
       </h2>
       <p className="text-sm text-muted">
         Fuera de este horario se envía el mensaje predefinido una sola vez por chat
@@ -169,5 +182,22 @@ export function SettingsBusinessHoursPage() {
         </button>
       </div>
     </section>
+  )
+}
+
+export function SettingsBusinessHoursPage() {
+  const scope = useCategoryScope()
+  if (!scope.education) return <BusinessHoursForm />
+  if (!scope.slugs?.length) return <p className="text-muted">Cargando…</p>
+  return (
+    <div className="space-y-4">
+      {scope.slugs.map((slug) => (
+        <BusinessHoursForm
+          key={slug}
+          area={categorySettingsArea(slug)}
+          heading={categoryLabel(slug)}
+        />
+      ))}
+    </div>
   )
 }

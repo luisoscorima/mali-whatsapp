@@ -24,6 +24,7 @@ export type CampaignListItem = {
   sent_percent: number | null;
   sent_ratio: string;
   send_mode: string;
+  category: string;
 };
 
 export type CampaignSummaryMonthlyPoint = {

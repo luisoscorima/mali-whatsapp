@@ -12,6 +12,7 @@ import { AuditEvent } from '../audit/audit-events';
 import { auditActor } from '../audit/audit-actor.util';
 import { AuditLogService } from '../audit/audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { recordLineCategorySql } from '../config/category-scope';
 import { parseMonthKey } from '../shared/month-filter.util';
 import {
   buildCampaignDetailAnalytics,
@@ -242,6 +243,7 @@ type ListRow = {
   delivered_count: number;
   read_count: number;
   failed_count: number;
+  category: string | null;
 };
 
 @Injectable()
@@ -388,6 +390,7 @@ export class CampaignsService {
   async list(
     area: AuthUser['area'],
     month?: string,
+    categories: string[] | null = null,
   ): Promise<CampaignListItem[]> {
     const rows = await this.prisma.$queryRaw<ListRow[]>(Prisma.sql`
       WITH latest_logs AS (
@@ -417,10 +420,20 @@ export class CampaignsService {
         COALESCE(SUM(CASE WHEN ${Prisma.raw(LOG_STATUS)} IN ${Prisma.raw(SALIDA_OK_IN)} THEN 1 ELSE 0 END), 0)::int AS salida_ok,
         COALESCE(SUM(CASE WHEN ${Prisma.raw(LOG_STATUS)} IN ('delivered', 'read') THEN 1 ELSE 0 END), 0)::int AS delivered_count,
         COALESCE(SUM(CASE WHEN ${Prisma.raw(LOG_STATUS)} = 'read' THEN 1 ELSE 0 END), 0)::int AS read_count,
-        COALESCE(SUM(CASE WHEN ${Prisma.raw(LOG_STATUS)} IN ${Prisma.raw(ERROR_IN)} THEN 1 ELSE 0 END), 0)::int AS failed_count
+        COALESCE(SUM(CASE WHEN ${Prisma.raw(LOG_STATUS)} IN ${Prisma.raw(ERROR_IN)} THEN 1 ELSE 0 END), 0)::int AS failed_count,
+        COALESCE((
+          SELECT CASE
+            WHEN wl.program_id IS NULL AND COALESCE(BTRIM(wl.program_key), '') = '' THEN 'general'
+            ELSE COALESCE(bp.slug, NULLIF(BTRIM(wl.program_key), ''), 'general')
+          END
+          FROM whatsapp_lines wl
+          LEFT JOIN business_programs bp ON bp.id = wl.program_id
+          WHERE wl.id = c.whatsapp_line_id
+        ), 'general') AS category
       FROM campaigns c
       LEFT JOIN latest_logs cl ON cl.campaign_id = c.id
       WHERE c.area = ${area}
+        AND ${recordLineCategorySql('c', categories)}
       GROUP BY c.id
       ORDER BY c.id DESC
       LIMIT 200
@@ -451,6 +464,7 @@ export class CampaignsService {
         sent_percent: sentPercent,
         sent_ratio: denom > 0 ? `${row.salida_ok}/${denom}` : '—',
         send_mode: String(row.send_mode ?? 'mass'),
+        category: row.category || 'general',
       };
     });
     if (!range) return mapped;
@@ -531,7 +545,7 @@ export class CampaignsService {
              COALESCE((
                SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
                FROM contact_segments cs
-               JOIN segment_definitions sd ON sd.area = ${area} AND sd.slug = cs.segment_slug
+               JOIN segment_definitions sd ON sd.area = ${area} AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
                WHERE cs.contact_id = ct.id AND cs.area = ${area}
              ), '') AS segment_labels
       FROM campaign_logs cl
@@ -803,7 +817,7 @@ export class CampaignsService {
              COALESCE((
                SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
                FROM contact_segments cs
-               JOIN segment_definitions sd ON sd.area = ${area} AND sd.slug = cs.segment_slug
+               JOIN segment_definitions sd ON sd.area = ${area} AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
                WHERE cs.contact_id = ct.id AND cs.area = ${area}
              ), '') AS segment_labels
       FROM (
@@ -854,7 +868,7 @@ export class CampaignsService {
              COALESCE((
                SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
                FROM contact_segments cs
-               JOIN segment_definitions sd ON sd.area = ${area} AND sd.slug = cs.segment_slug
+               JOIN segment_definitions sd ON sd.area = ${area} AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
                WHERE cs.contact_id = ct.id AND cs.area = ${area}
              ), '') AS segment_labels
       FROM campaign_logs cl

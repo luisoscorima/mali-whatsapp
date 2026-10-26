@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
+import {
+  categoryLabel,
+  categorySettingsArea,
+  useCategoryScope,
+} from '@/shared/area/useCategoryScope'
 
 type AiSettings = {
   area: string
@@ -10,7 +15,13 @@ type AiSettings = {
   can_toggle_enabled: boolean
 }
 
-export function SettingsAiPage() {
+function AiSettingsForm({
+  area,
+  heading,
+}: {
+  area?: string
+  heading?: string
+}) {
   const [settings, setSettings] = useState<AiSettings | null>(null)
   const [prompt, setPrompt] = useState('')
   const [transferKeyword, setTransferKeyword] = useState('[TRANSFERIR]')
@@ -19,7 +30,9 @@ export function SettingsAiPage() {
   const [busy, setBusy] = useState('')
 
   async function load() {
-    const result = await apiClient.get<AiSettings>('/api/settings/ai')
+    const result = await apiClient.get<AiSettings>(
+      area ? `/api/settings/ai/${area}` : '/api/settings/ai',
+    )
     if (!result.ok) {
       notify.error(result.error)
       setLoadFailed(true)
@@ -34,7 +47,7 @@ export function SettingsAiPage() {
 
   useEffect(() => {
     load()
-  }, [])
+  }, [area])
 
   async function handleToggleEnabled(next: boolean) {
     if (!settings?.can_toggle_enabled) return
@@ -85,7 +98,7 @@ export function SettingsAiPage() {
   return (
     <section className="space-y-4 rounded-xl border border-line bg-surface-strong p-4">
       <h2 className="text-lg font-semibold">
-        Respuesta automática (IA) · {settings.area}
+        Respuesta automática (IA) · {heading || settings.area}
       </h2>
 
       <p className="muted campaign-drilldown-dialog__note">
@@ -155,5 +168,22 @@ export function SettingsAiPage() {
         </div>
       </div>
     </section>
+  )
+}
+
+export function SettingsAiPage() {
+  const scope = useCategoryScope()
+  if (!scope.education) return <AiSettingsForm />
+  if (!scope.slugs?.length) return <p className="text-muted">Cargando…</p>
+  return (
+    <div className="space-y-4">
+      {scope.slugs.map((slug) => (
+        <AiSettingsForm
+          key={slug}
+          area={categorySettingsArea(slug)}
+          heading={categoryLabel(slug)}
+        />
+      ))}
+    </div>
   )
 }

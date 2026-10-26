@@ -6,6 +6,7 @@ import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import { MonthFilterChips } from '@/shared/ui/MonthFilterChips'
 import { campaignStatusClass } from './campaignStatus'
+import { categoryLabel, useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
 
 const LIST_POLL_MS = 15000
 
@@ -20,6 +21,7 @@ export type CampaignListItem = {
   sent_percent: number | null
   sent_ratio: string
   send_mode: string
+  category?: string
 }
 
 type CampaignListSidebarProps = {
@@ -28,6 +30,7 @@ type CampaignListSidebarProps = {
 }
 
 export function CampaignListSidebar({ selectedId, onRefresh }: CampaignListSidebarProps) {
+  const scope = useCategoryScope()
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const [campaigns, setCampaigns] = useState<CampaignListItem[] | null>(null)
@@ -35,12 +38,13 @@ export function CampaignListSidebar({ selectedId, onRefresh }: CampaignListSideb
   const month = searchParams.get('month') ?? ''
 
   const refresh = useCallback(() => {
-    const qs = month ? `?month=${encodeURIComponent(month)}` : ''
-    void apiClient.get<CampaignListItem[]>(`/api/campaigns${qs}`).then((result) => {
+    const qs = month ? `month=${encodeURIComponent(month)}` : ''
+    const query = [qs, scope.query].filter(Boolean).join('&')
+    void apiClient.get<CampaignListItem[]>(`/api/campaigns${query ? `?${query}` : ''}`).then((result) => {
       if (result.ok) setCampaigns(result.data)
     })
     onRefresh?.()
-  }, [month, onRefresh])
+  }, [month, onRefresh, scope.query, scope.revision])
 
   useEffect(() => {
     refresh()
@@ -102,7 +106,10 @@ export function CampaignListSidebar({ selectedId, onRefresh }: CampaignListSideb
                         </span>
                       </span>
                     </span>
-                    <span className="inbox-chat-preview">{c.segment_display || '—'}</span>
+                    <span className="inbox-chat-preview">
+                      {scope.education ? `${categoryLabel(c.category)} · ` : ''}
+                      {c.segment_display || '—'}
+                    </span>
                     <span className="inbox-chat-preview">
                       {c.sent_ratio}
                       {sendWhen ? ` · ${formatDateTime(sendWhen).split(',')[0]}` : ''}

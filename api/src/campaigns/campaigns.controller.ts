@@ -18,6 +18,7 @@ import type { ApiResponse, AuthUser } from '../auth/auth.types';
 import { assertCanCreateCampaigns, assertCanListCampaigns, assertCanViewCampaignStats } from '../auth/permission.util';
 import { CampaignsService } from './campaigns.service';
 import { RecipientsPreviewDto } from './dto/recipients-preview.dto';
+import { parseCategorySlugs } from '../config/category-scope';
 import type {
   CampaignDetail,
   CampaignListItem,
@@ -36,9 +37,14 @@ export class CampaignsController {
   async list(
     @CurrentUser() user: AuthUser,
     @Query('month') month?: string,
+    @Query('category') category?: string | string[],
   ): Promise<ApiResponse<CampaignListItem[]>> {
     assertCanListCampaigns(user);
-    const data = await this.campaignsService.list(user.area, month);
+    const data = await this.campaignsService.list(
+      user.area,
+      month,
+      parseCategorySlugs(category),
+    );
     return { ok: true, data };
   }
 

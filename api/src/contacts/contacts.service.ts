@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, ConflictException, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { programIdForCategory, programScopeWhere } from '../config/category-scope';
 import { payloadWithStandardCurso } from '../leads/lead-curso.util';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/auth.types';
@@ -72,15 +73,18 @@ export class ContactsService {
     @Optional() private readonly people?: PersonResolverService,
   ) {}
 
-  async getFilterOptions(area: AuthUser['area']): Promise<ContactsFilterOptions> {
+  async getFilterOptions(
+    area: AuthUser['area'],
+    categories: string[] | null = null,
+  ): Promise<ContactsFilterOptions> {
     const [segments, attributeRows] = await Promise.all([
       this.prisma.segment_definitions.findMany({
-        where: { area, active: true, show_in_filter: true },
+        where: { area, active: true, show_in_filter: true, ...programScopeWhere(categories) },
         orderBy: [{ sort_order: 'asc' }, { slug: 'asc' }],
         select: { id: true, slug: true, label: true, color_key: true },
       }),
       this.prisma.contact_attribute_definitions.findMany({
-        where: { area, active: true },
+        where: { area, active: true, ...programScopeWhere(categories) },
         orderBy: [
           { segment_slug: { sort: 'asc', nulls: 'first' } },
           { sort_order: 'asc' },
@@ -131,9 +135,13 @@ export class ContactsService {
     return new Set(rows.map((row) => row.slug));
   }
 
-  private async loadAttributeDefinitions(area: string) {
+  private async loadAttributeDefinitions(area: string, programId?: number | null) {
     const rows = await this.prisma.contact_attribute_definitions.findMany({
-      where: { area, active: true },
+      where: {
+        area,
+        active: true,
+        ...(programId !== undefined ? { program_id: programId } : {}),
+      },
       orderBy: [
         { segment_slug: { sort: 'asc', nulls: 'first' } },
         { sort_order: 'asc' },
@@ -158,9 +166,10 @@ export class ContactsService {
 
   private async loadContactAttributes(
     contactId: number,
+    programId: number | null = null,
   ): Promise<Record<string, string>> {
     const rows = await this.prisma.contact_attributes.findMany({
-      where: { contact_id: contactId, program_id: null },
+      where: { contact_id: contactId, program_id: programId },
       orderBy: { attr_key: 'asc' },
       select: { attr_key: true, attr_value: true },
     });
@@ -171,13 +180,25 @@ export class ContactsService {
     return map;
   }
 
-  private async loadContactSegmentSlugs(contactId: number): Promise<string[]> {
+  private async loadContactSegmentSlugs(
+    contactId: number,
+    area?: string,
+    programId?: number | null,
+  ): Promise<string[]> {
     const rows = await this.prisma.contact_segments.findMany({
       where: { contact_id: contactId },
       orderBy: { segment_slug: 'asc' },
       select: { segment_slug: true },
     });
-    return rows.map((row) => row.segment_slug);
+    if (programId === undefined || !area) {
+      return rows.map((row) => row.segment_slug);
+    }
+    const defs = await this.prisma.segment_definitions.findMany({
+      where: { area, program_id: programId },
+      select: { slug: true },
+    });
+    const allowed = new Set(defs.map((def) => def.slug));
+    return rows.map((row) => row.segment_slug).filter((slug) => allowed.has(slug));
   }
 
   private async buildListWhereClause(
@@ -457,6 +478,7 @@ export class ContactsService {
     user: AuthUser,
     contactId: number,
     segmentSlug: string,
+    category?: string | null,
   ): Promise<{ segment_slugs: string[] }> {
     const area = user.area;
     const slug = String(segmentSlug || '').trim();
@@ -464,12 +486,14 @@ export class ContactsService {
       throw new BadRequestException('Segmento invalido');
     }
 
+    const segmentProgramId = await this.programIdFromCategory(category);
     const assignableRows = await this.prisma.segment_definitions.findMany({
       where: {
         area,
         active: true,
         assignable: true,
         assignment_group: { not: null },
+        program_id: segmentProgramId,
       },
       select: { slug: true, assignment_group: true },
     });
@@ -495,7 +519,11 @@ export class ContactsService {
       throw new NotFoundException('Contacto no encontrado');
     }
 
-    const currentSlugs = await this.loadContactSegmentSlugs(contactId);
+    const currentSlugs = await this.loadContactSegmentSlugs(
+      contactId,
+      area,
+      segmentProgramId,
+    );
     const otherSlugs = currentSlugs.filter((s) => !assignableBySlug.has(s));
     const currentAssignable = currentSlugs.filter((s) =>
       assignableBySlug.has(s),
@@ -528,6 +556,7 @@ export class ContactsService {
         contactId,
         area,
         nextSlugs,
+        segmentProgramId,
       );
     });
 
@@ -576,7 +605,7 @@ export class ContactsService {
         COALESCE((
           SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
           FROM contact_segments cs
-          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
           WHERE cs.contact_id = c.id AND cs.area = ${area}
         ), '') AS segment_labels
       FROM contacts c
@@ -614,6 +643,7 @@ export class ContactsService {
     contactId: number,
     area: string,
     slugs: string[],
+    programId: number | null = null,
   ): Promise<{
     previous: string[];
     next: string[];
@@ -621,29 +651,55 @@ export class ContactsService {
     removed: string[];
   }> {
     const prevRows = await tx.contact_segments.findMany({
-      where: { contact_id: contactId },
+      where: { contact_id: contactId, program_id: programId },
       select: { segment_slug: true },
     });
     const previous = [
       ...new Set(prevRows.map((r) => r.segment_slug)),
     ].sort();
-    const next = [...new Set(slugs.map((s) => String(s).trim()).filter(Boolean))].sort();
+    const requested = [...new Set(slugs.map((s) => String(s).trim()).filter(Boolean))];
+    const defs = requested.length
+      ? await tx.segment_definitions.findMany({
+          where: { area, program_id: programId, slug: { in: requested } },
+          select: { slug: true },
+        })
+      : [];
+    const allowed = new Set(defs.map((def) => def.slug));
+    const next = requested.filter((slug) => allowed.has(slug)).sort();
     const prevSet = new Set(previous);
     const nextSet = new Set(next);
     const added = next.filter((s) => !prevSet.has(s));
     const removed = previous.filter((s) => !nextSet.has(s));
 
-    await tx.contact_segments.deleteMany({ where: { contact_id: contactId } });
+    await tx.contact_segments.deleteMany({
+      where: { contact_id: contactId, program_id: programId },
+    });
     if (next.length) {
       await tx.contact_segments.createMany({
         data: next.map((segment_slug) => ({
           contact_id: contactId,
           area,
           segment_slug,
+          program_id: programId,
         })),
       });
     }
     return { previous, next, added, removed };
+  }
+
+  private async programIdFromCategory(category: unknown): Promise<number | null> {
+    const slug = String(category ?? '').trim().toLowerCase();
+    if (!slug || slug === 'general') return null;
+    const id = await programIdForCategory(
+      (programSlug) =>
+        this.prisma.business_programs.findFirst({
+          where: { slug: programSlug, business_area: { slug: 'educacion' } },
+          select: { id: true },
+        }),
+      slug,
+    );
+    if (!id) throw new BadRequestException('Categoría no válida');
+    return id;
   }
 
   private async auditSegmentChange(
@@ -696,9 +752,10 @@ export class ContactsService {
       lead_status: { id: number; slug: string; label: string } | null;
     },
     segmentSlugs: string[],
+    programId?: number | null,
   ): Promise<ContactDetail> {
-    const allDefs = await this.loadAttributeDefinitions(area);
-    const attributes = await this.loadContactAttributes(row.id);
+    const allDefs = await this.loadAttributeDefinitions(area, programId);
+    const attributes = await this.loadContactAttributes(row.id, programId ?? null);
     const originRows = await this.prisma.contact_origins.findMany({
       where: { contact_id: row.id, area },
       orderBy: { last_seen_at: 'desc' },
@@ -753,7 +810,11 @@ export class ContactsService {
     };
   }
 
-  async getById(area: AuthUser['area'], id: number): Promise<ContactDetail> {
+  async getById(
+    area: AuthUser['area'],
+    id: number,
+    category?: string | null,
+  ): Promise<ContactDetail> {
     const row = await this.prisma.contacts.findFirst({
       where: { id, area },
       include: {
@@ -763,8 +824,25 @@ export class ContactsService {
     if (!row) {
       throw new NotFoundException('Contacto no encontrado');
     }
-    const segmentSlugs = await this.loadContactSegmentSlugs(id);
-    return this.mapContactDetail(area, row, segmentSlugs);
+    const scoped = Boolean(category);
+    const programId = !scoped
+      ? undefined
+      : category === 'general'
+        ? null
+        : (await programIdForCategory(
+            (slug) =>
+              this.prisma.business_programs.findFirst({
+                where: { slug, business_area: { slug: 'educacion' } },
+                select: { id: true },
+              }),
+            category,
+          )) ?? -1;
+    const segmentSlugs = await this.loadContactSegmentSlugs(
+      id,
+      scoped ? area : undefined,
+      programId,
+    );
+    return this.mapContactDetail(area, row, segmentSlugs, programId);
   }
 
   private async assertConversationIdentityCompatible(
@@ -813,6 +891,7 @@ export class ContactsService {
     const dni = this.normalizeOptionalDni(dto.dni);
     const opt_in_email =
       dto.opt_in_email !== undefined ? Boolean(dto.opt_in_email) : true;
+    const segmentProgramId = await this.programIdFromCategory(dto.category);
 
     try {
       if (this.people) {
@@ -829,7 +908,7 @@ export class ContactsService {
         });
         const created = await this.prisma.$transaction(async (tx) => {
           await this.assertConversationIdentityCompatible(tx, area, phone, whatsapp_user_id);
-          const change = await this.replaceContactSegments(tx, resolved.contact_id, area, segments);
+          const change = await this.replaceContactSegments(tx, resolved.contact_id, area, segments, segmentProgramId);
           await this.upsertContactAttributes(tx, resolved.contact_id, attrs);
           if (dni) await this.upsertContactAttributes(tx, resolved.contact_id, { dni });
           await tx.conversations.updateMany({
@@ -887,6 +966,7 @@ export class ContactsService {
           contact.id,
           area,
           segments,
+          segmentProgramId,
         );
         await this.upsertContactAttributes(tx, contact.id, attrs);
         if (dni) {
@@ -1018,6 +1098,7 @@ export class ContactsService {
       dto.opt_in_email !== undefined
         ? Boolean(dto.opt_in_email)
         : current.opt_in_email;
+    const segmentProgramId = await this.programIdFromCategory(dto.category);
     {
       const change = await this.prisma.$transaction(async (tx) => {
         await this.assertConversationIdentityCompatible(tx, area, phone, whatsapp_user_id);
@@ -1041,6 +1122,7 @@ export class ContactsService {
           id,
           area,
           segments,
+          segmentProgramId,
         );
         await this.upsertContactAttributes(tx, id, attrs);
         if (dto.dni !== undefined) {
@@ -1366,7 +1448,7 @@ export class ContactsService {
         COALESCE((
           SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
           FROM contact_segments cs
-          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
           WHERE cs.contact_id = c.id
         ), ARRAY[]::varchar[]) AS segment_slugs,
         COUNT(*) OVER()::int AS _total

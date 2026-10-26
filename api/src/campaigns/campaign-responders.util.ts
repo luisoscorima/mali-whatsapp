@@ -139,7 +139,7 @@ async function fetchCampaignResponders(
       COALESCE((
         SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
         FROM contact_segments cs
-        JOIN segment_definitions sd ON sd.area = ${area} AND sd.slug = cs.segment_slug
+        JOIN segment_definitions sd ON sd.area = ${area} AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
         WHERE cs.contact_id = COALESCE(latest_logs.contact_id, conv.contact_id) AND cs.area = ${area}
       ), '') AS segment_labels,
       COALESCE(latest_logs.contact_id, conv.contact_id) AS contact_id,
@@ -186,7 +186,7 @@ async function fetchCampaignInteractiveResponders(
       COALESCE((
         SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
         FROM contact_segments cs
-        JOIN segment_definitions sd ON sd.area = ${area} AND sd.slug = cs.segment_slug
+        JOIN segment_definitions sd ON sd.area = ${area} AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
         WHERE cs.contact_id = COALESCE(latest_logs.contact_id, conv.contact_id) AND cs.area = ${area}
       ), '') AS segment_labels,
       COALESCE(latest_logs.contact_id, conv.contact_id) AS contact_id,

@@ -4,8 +4,10 @@ import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { SegmentColorPicker } from './SegmentColorPicker'
 import { notifySegmentsListRefresh } from './segmentsListEvents'
+import { useCategoryScope } from '@/shared/area/useCategoryScope'
 export function SegmentNewPage() {
   const navigate = useNavigate()
+  const scope = useCategoryScope()
   const [slug, setSlug] = useState('')
   const [label, setLabel] = useState('')
   const [colorKey, setColorKey] = useState('teal')
@@ -18,6 +20,7 @@ export function SegmentNewPage() {
       slug,
       label,
       color_key: colorKey,
+      category: scope.stored?.length === 1 ? scope.stored[0] : undefined,
     })
     setSaving(false)
     if (!result.ok) {
