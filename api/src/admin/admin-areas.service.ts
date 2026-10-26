@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import {
   AREA_LABELS,
   canonicalBusinessAreas,
@@ -43,6 +44,68 @@ function filled(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
 }
 
+async function moveDonorOntoKeep(tx: Prisma.TransactionClient, donorId: number, keepId: number) {
+  await tx.$executeRaw`UPDATE conversations SET contact_id = ${keepId}, updated_at = NOW() WHERE contact_id = ${donorId}`;
+  await tx.$executeRaw`UPDATE campaign_logs SET contact_id = ${keepId} WHERE contact_id = ${donorId}`;
+  await tx.$executeRaw`UPDATE contact_origins SET contact_id = ${keepId}, updated_at = NOW() WHERE contact_id = ${donorId}`;
+  await tx.$executeRaw`UPDATE meta_leadgen_leads SET contact_id = ${keepId}, updated_at = NOW() WHERE contact_id = ${donorId}`;
+  await tx.$executeRaw`UPDATE tiktok_leads SET contact_id = ${keepId}, updated_at = NOW() WHERE contact_id = ${donorId}`;
+  await tx.$executeRaw`UPDATE meta_ctwa_ad_leads SET contact_id = ${keepId} WHERE contact_id = ${donorId}`;
+  await tx.$executeRaw`
+    UPDATE education_lead_entries entry
+    SET cycle_id = winner.id
+    FROM education_lead_cycles loser
+    JOIN education_lead_cycles winner
+      ON winner.contact_id = ${keepId} AND winner.started_at = loser.started_at
+    WHERE loser.contact_id = ${donorId} AND entry.cycle_id = loser.id
+  `;
+  await tx.$executeRaw`
+    DELETE FROM education_lead_cycles loser
+    USING education_lead_cycles winner
+    WHERE loser.contact_id = ${donorId}
+      AND winner.contact_id = ${keepId}
+      AND winner.started_at = loser.started_at
+  `;
+  await tx.$executeRaw`
+    UPDATE education_lead_cycles SET contact_id = ${keepId}, updated_at = NOW() WHERE contact_id = ${donorId}
+  `;
+  await tx.$executeRaw`UPDATE education_lead_entries SET contact_id = ${keepId} WHERE contact_id = ${donorId}`;
+  await tx.$executeRaw`
+    INSERT INTO contact_attributes (contact_id, attr_key, attr_value, program_id, updated_at)
+    SELECT ${keepId}, src.attr_key, src.attr_value, src.program_id, src.updated_at
+    FROM contact_attributes src
+    WHERE src.contact_id = ${donorId}
+      AND NOT EXISTS (
+        SELECT 1 FROM contact_attributes existing
+        WHERE existing.contact_id = ${keepId}
+          AND existing.attr_key = src.attr_key
+          AND existing.program_id IS NOT DISTINCT FROM src.program_id
+      )
+  `;
+  await tx.$executeRaw`DELETE FROM contact_attributes WHERE contact_id = ${donorId}`;
+  await tx.$executeRaw`
+    INSERT INTO contact_segments (contact_id, area, segment_slug, program_id, created_at)
+    SELECT ${keepId}, src.area, src.segment_slug, src.program_id, src.created_at
+    FROM contact_segments src
+    WHERE src.contact_id = ${donorId}
+      AND NOT EXISTS (
+        SELECT 1 FROM contact_segments existing
+        WHERE existing.contact_id = ${keepId}
+          AND existing.segment_slug = src.segment_slug
+          AND existing.program_id IS NOT DISTINCT FROM src.program_id
+      )
+  `;
+  await tx.$executeRaw`DELETE FROM contact_segments WHERE contact_id = ${donorId}`;
+  await tx.$executeRaw`
+    INSERT INTO contact_programs (contact_id, program_id, source, first_seen_at, last_seen_at)
+    SELECT ${keepId}, src.program_id, src.source, src.first_seen_at, NOW()
+    FROM contact_programs src
+    WHERE src.contact_id = ${donorId}
+    ON CONFLICT (contact_id, program_id) DO NOTHING
+  `;
+  await tx.$executeRaw`DELETE FROM contact_programs WHERE contact_id = ${donorId}`;
+}
+
 function groupPhones(rows: ConsolidationRow[]) {
   const groups = new Map<string, ConsolidationRow[]>();
   for (const row of rows) {
@@ -57,24 +120,26 @@ function groupPhones(rows: ConsolidationRow[]) {
     }));
     const why = [
       filled(members.map((member) => member.whatsapp_user_id)).length > 1
-        ? 'Identidades de WhatsApp distintas'
+        ? 'El WhatsApp no es el mismo en todas las fichas.'
         : '',
-      dnis.length > 1 ? 'DNI distintos' : '',
+      dnis.length > 1 ? 'El DNI no es el mismo.' : '',
       filled(members.map((member) => member.status_label)).length > 1
-        ? 'Estados de lead distintos'
+        ? 'El estado del lead no es el mismo.'
         : '',
-      filled(members.map((member) => member.advisor)).length > 1 ? 'Asesores distintos' : '',
+      filled(members.map((member) => member.advisor)).length > 1 ? 'El asesor no es el mismo.' : '',
       members.some((member) => member.wuid_outside)
-        ? 'Una identidad de WhatsApp también está en otro teléfono'
+        ? 'Ese WhatsApp también aparece con otro teléfono.'
         : '',
     ].filter(Boolean);
     return {
       phone,
-      why: why.length ? why : ['Quedó pendiente al unir las fichas de Educación'],
+      why: why.length ? why : ['Quedó pendiente al unir Educación. Compara nombre, DNI y correo.'],
       fichas: members.map((member) => ({
         id: member.contact_id,
         kept: member.contact_id === member.canonical_id,
         name: [member.name, member.last_name].filter(Boolean).join(' ') || 'Sin nombre',
+        first_name: member.name || '',
+        last_name: member.last_name || '',
         area: fichaArea(member.area),
         email: member.email,
         dni: member.dni,
@@ -332,7 +397,7 @@ export class AdminAreasService {
       orderBy: { created_at: 'desc' },
       take: 100,
       include: {
-        person: { select: { name: true, last_name: true, phone: true, email: true, dni: true } },
+        person: { select: { name: true, last_name: true, phone: true, email: true, dni: true, whatsapp_user_id: true } },
       },
     });
     const identity = identityRows.map((row) => ({
@@ -343,19 +408,23 @@ export class AdminAreasService {
       stored_phone: row.person.phone,
       stored_dni: row.person.dni,
       stored_email: row.person.email,
+      stored_whatsapp_user_id: row.person.whatsapp_user_id,
       phone: row.phone,
       dni: row.dni,
       email: row.email,
+      whatsapp_user_id: row.whatsapp_user_id,
     }));
     try {
-      const counts = await this.prisma.$queryRaw<{ pending: number; done: number }[]>`
+      const counts = await this.prisma.$queryRaw<{ pending: number; done: number; joined: number }[]>`
         SELECT
           COUNT(DISTINCT phone_norm) FILTER (WHERE decision = 'review')::int AS pending,
-          COUNT(DISTINCT phone_norm) FILTER (WHERE decision = 'separate')::int AS done
+          COUNT(DISTINCT phone_norm) FILTER (WHERE decision = 'separate')::int AS done,
+          COUNT(DISTINCT phone_norm) FILTER (WHERE decision = 'joined')::int AS joined
         FROM education_consolidation_map
       `;
       const pending = counts[0]?.pending ?? 0;
       const done = counts[0]?.done ?? 0;
+      const joined = counts[0]?.joined ?? 0;
       const pageSize = 40;
       const pages = Math.max(1, Math.ceil(pending / pageSize));
       const page = Math.min(Math.max(1, Math.floor(requestedPage) || 1), pages);
@@ -408,11 +477,12 @@ export class AdminAreasService {
         page_size: pageSize,
         phone_pending: pending,
         phone_done: done,
+        phone_joined: joined,
         phones: groupPhones(rows),
         identity,
       };
     } catch {
-      return { page: 1, page_size: 40, phone_pending: 0, phone_done: 0, phones: [], identity };
+      return { page: 1, page_size: 40, phone_pending: 0, phone_done: 0, phone_joined: 0, phones: [], identity };
     }
   }
 
@@ -428,6 +498,106 @@ export class AdminAreasService {
     return { phone: normalized, decision: 'separate' };
   }
 
+  async mergeConsolidationPhone(input: {
+    phone: string;
+    name: string;
+    last_name: string;
+    email: string;
+    dni: string;
+  }) {
+    const normalized = input.phone.replace(/\D/g, '');
+    const name = input.name.trim();
+    const lastName = input.last_name.trim();
+    const email = input.email.trim() || null;
+    const dni = input.dni.trim() || null;
+    if (!normalized) throw new BadRequestException('Falta el teléfono');
+    if (name.length < 2) throw new BadRequestException('Falta el nombre');
+    if (name.length > 150 || lastName.length > 150) throw new BadRequestException('El nombre es demasiado largo');
+    if (email && email.length > 255) throw new BadRequestException('El correo es demasiado largo');
+    if (dni && dni.length > 32) throw new BadRequestException('El DNI es demasiado largo');
+
+    const rows = await this.prisma.$queryRaw<{ contact_id: number; canonical_id: number }[]>`
+      SELECT contact_id::int AS contact_id, canonical_id::int AS canonical_id
+      FROM education_consolidation_map
+      WHERE phone_norm = ${normalized} AND decision = 'review'
+    `;
+    if (!rows.length) throw new BadRequestException('Ese teléfono ya no está en revisión');
+    const canonicalId = rows[0].canonical_id;
+    if (!rows.some((row) => row.contact_id === canonicalId)) {
+      throw new BadRequestException('No está la ficha que se conserva');
+    }
+    const donorIds = rows.map((row) => row.contact_id).filter((id) => id !== canonicalId);
+    if (!donorIds.length) throw new BadRequestException('No hay otra ficha para unir');
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`ALTER TABLE contacts DISABLE TRIGGER USER`;
+        await tx.$executeRaw`ALTER TABLE people DISABLE TRIGGER USER`;
+        try {
+          for (const donorId of donorIds) {
+            await tx.$executeRaw`
+              UPDATE contacts
+              SET phone = NULL, email = NULL, dni = NULL, whatsapp_user_id = NULL,
+                  active = FALSE, updated_at = NOW()
+              WHERE id = ${donorId}
+            `;
+          }
+          await tx.$executeRaw`
+            UPDATE contacts
+            SET name = ${name}, last_name = ${lastName}, email = ${email}, dni = ${dni}, updated_at = NOW()
+            WHERE id = ${canonicalId}
+          `;
+          await tx.$executeRaw`
+            UPDATE people person
+            SET name = contact.name,
+                last_name = contact.last_name,
+                email = contact.email,
+                dni = contact.dni,
+                updated_at = NOW()
+            FROM contacts contact
+            WHERE contact.id = ${canonicalId} AND person.id = contact.person_id
+          `;
+          for (const donorId of donorIds) await moveDonorOntoKeep(tx, donorId, canonicalId);
+          for (const donorId of donorIds) {
+            await tx.$executeRaw`
+              UPDATE contacts donor
+              SET person_id = keep.person_id
+              FROM contacts keep
+              WHERE donor.id = ${donorId}
+                AND keep.id = ${canonicalId}
+                AND donor.person_id IS DISTINCT FROM keep.person_id
+            `;
+          }
+          await tx.$executeRaw`
+            DELETE FROM people person
+            WHERE NOT EXISTS (SELECT 1 FROM contacts contact WHERE contact.person_id = person.id)
+          `;
+          await tx.$executeRaw`
+            UPDATE education_consolidation_map
+            SET decision = 'joined'
+            WHERE phone_norm = ${normalized} AND decision = 'review'
+          `;
+        } finally {
+          await tx.$executeRaw`ALTER TABLE contacts ENABLE TRIGGER USER`;
+          await tx.$executeRaw`ALTER TABLE people ENABLE TRIGGER USER`;
+        }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (message.includes('contacts_area_dni')) {
+        throw new BadRequestException('Ese DNI ya está en otra ficha de la misma área');
+      }
+      if (message.includes('contacts_area_email')) {
+        throw new BadRequestException('Ese correo ya está en otra ficha de la misma área');
+      }
+      if (message.includes('contacts_area_phone')) {
+        throw new BadRequestException('Ese teléfono ya está en otra ficha de la misma área');
+      }
+      throw error;
+    }
+    return { phone: normalized, contact_id: canonicalId, decision: 'joined' };
+  }
+
   async separateConsolidation(contactId: number) {
     const updated = await this.prisma.$executeRaw`
       UPDATE education_consolidation_map
@@ -436,6 +606,57 @@ export class AdminAreasService {
     `;
     if (!updated) throw new BadRequestException('Ese caso ya no está en revisión');
     return { contact_id: contactId, decision: 'separate' };
+  }
+
+  async applyIdentityReview(
+    id: number,
+    input: { phone?: string; dni?: string; email?: string; whatsapp_user_id?: string },
+  ) {
+    const row = await this.prisma.person_identity_reviews.findUnique({ where: { id } });
+    if (!row || row.resolved_at) throw new NotFoundException('Ese conflicto ya no está pendiente');
+    const phone = input.phone?.trim() || null;
+    const dni = input.dni?.trim() || null;
+    const email = input.email?.trim() || null;
+    const whatsappUserId = input.whatsapp_user_id?.trim() || null;
+    if (phone && phone.length > 20) throw new BadRequestException('El teléfono es demasiado largo');
+    if (dni && dni.length > 32) throw new BadRequestException('El DNI es demasiado largo');
+    if (email && email.length > 255) throw new BadRequestException('El correo es demasiado largo');
+    if (whatsappUserId && whatsappUserId.length > 132) {
+      throw new BadRequestException('La identidad de WhatsApp es demasiado larga');
+    }
+    try {
+      await this.prisma.$transaction([
+        this.prisma.people.update({
+          where: { id: row.person_id },
+          data: {
+            phone,
+            dni,
+            email,
+            whatsapp_user_id: whatsappUserId,
+            updated_at: new Date(),
+          },
+        }),
+        this.prisma.person_identity_reviews.update({
+          where: { id },
+          data: { resolved_at: new Date() },
+        }),
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      const unique = typeof error === 'object' && error !== null && 'code' in error && (error as { code?: string }).code === 'P2002';
+      if (unique && message.includes('dni')) {
+        throw new BadRequestException('Ese DNI ya está en otra ficha de la misma área');
+      }
+      if (unique && message.includes('email')) {
+        throw new BadRequestException('Ese correo ya está en otra ficha de la misma área');
+      }
+      if (unique && message.includes('phone')) {
+        throw new BadRequestException('Ese teléfono ya está en otra ficha de la misma área');
+      }
+      if (unique) throw new BadRequestException('Esa identidad de WhatsApp ya está en otra ficha');
+      throw error;
+    }
+    return { id, resolved: true, applied: true };
   }
 
   async resolveIdentityReview(id: number) {

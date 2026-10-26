@@ -68,6 +68,22 @@ export class AdminController {
     };
   }
 
+  @Post('conflicts/consolidation/phone/merge')
+  async mergeConsolidationPhone(
+    @Body() body: { phone?: string; name?: string; last_name?: string; email?: string; dni?: string },
+  ) {
+    return {
+      ok: true,
+      data: await this.adminAreasService.mergeConsolidationPhone({
+        phone: String(body.phone || ''),
+        name: String(body.name || ''),
+        last_name: String(body.last_name || ''),
+        email: String(body.email || ''),
+        dni: String(body.dni || ''),
+      }),
+    };
+  }
+
   @Post('conflicts/consolidation/phone/separate')
   async separateConsolidationPhone(@Body() body: { phone?: string }) {
     return { ok: true, data: await this.adminAreasService.separateConsolidationPhone(String(body.phone || '')) };
@@ -76,6 +92,14 @@ export class AdminController {
   @Post('conflicts/consolidation/:contactId/separate')
   async separateConsolidation(@Param('contactId', ParseIntPipe) contactId: number) {
     return { ok: true, data: await this.adminAreasService.separateConsolidation(contactId) };
+  }
+
+  @Post('conflicts/identity/:id/apply')
+  async applyIdentity(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { phone?: string; dni?: string; email?: string; whatsapp_user_id?: string },
+  ) {
+    return { ok: true, data: await this.adminAreasService.applyIdentityReview(id, body) };
   }
 
   @Post('conflicts/identity/:id/resolve')

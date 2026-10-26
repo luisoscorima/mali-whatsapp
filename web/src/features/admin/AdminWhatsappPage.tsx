@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
+import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 
 type WhatsAppOverview = {
   vault_configured: boolean
@@ -34,9 +35,11 @@ type WhatsAppOverview = {
 }
 
 export function AdminWhatsappPage() {
+  const { confirm, confirmDialog } = useConfirmDialog()
   const [data, setData] = useState<WhatsAppOverview | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
   const [validatingId, setValidatingId] = useState<number | null>(null)
+  const [switchingId, setSwitchingId] = useState<number | null>(null)
   const [categories, setCategories] = useState<{ id: number | null; slug: string; label: string; active: boolean }[]>([])
   const [draft, setDraft] = useState({
     businessAreaId: '',
@@ -78,6 +81,30 @@ export function AdminWhatsappPage() {
       return
     }
     notify.success('Línea validada contra Meta.')
+    load()
+  }
+
+  async function setLineActive(line: WhatsAppOverview['lines'][number], active: boolean) {
+    if (!active) {
+      const accepted = await confirm({
+        title: 'Desactivar línea',
+        description: `${line.label} deja de enviar y de recibir por este número.`,
+        confirmLabel: 'Desactivar',
+        tone: 'danger',
+      })
+      if (!accepted) return
+    }
+    setSwitchingId(line.id)
+    const result = await apiClient.post(
+      `/api/admin/whatsapp/lines/${line.id}/${active ? 'activate' : 'deactivate'}`,
+      {},
+    )
+    setSwitchingId(null)
+    if (!result.ok) {
+      notify.error(result.error)
+      return
+    }
+    notify.success(active ? 'Línea activada.' : 'Línea desactivada.')
     load()
   }
 
@@ -146,7 +173,7 @@ export function AdminWhatsappPage() {
         }}
       >
         <p className="text-sm text-muted">
-          Alta de línea. Hace falta el identificador de número de Meta y la WABA. El token sale de la WABA. Queda inactiva hasta validarla.
+          Alta de línea. Hace falta el identificador de número de Meta y la WABA. El token sale de la WABA. Queda inactiva: primero Valida en Meta y después Activar.
         </p>
         <div className="flex flex-wrap items-end gap-2">
           <label className="text-sm">
@@ -273,10 +300,22 @@ export function AdminWhatsappPage() {
                         <button
                           type="button"
                           className="small-btn"
-                          disabled={validatingId === line.id}
+                          disabled={validatingId === line.id || switchingId === line.id}
                           onClick={() => void validateLine(line.id)}
                         >
                           {validatingId === line.id ? 'Validando…' : 'Validar en Meta'}
+                        </button>
+                        <button
+                          type="button"
+                          className={line.active ? 'small-btn secondary' : 'small-btn'}
+                          disabled={validatingId === line.id || switchingId === line.id}
+                          onClick={() => void setLineActive(line, !line.active)}
+                        >
+                          {switchingId === line.id
+                            ? 'Guardando…'
+                            : line.active
+                              ? 'Desactivar'
+                              : 'Activar'}
                         </button>
                       </div>
                     </li>
@@ -287,6 +326,7 @@ export function AdminWhatsappPage() {
           </section>
         ))}
       </div>
+      {confirmDialog}
     </div>
   )
 }
