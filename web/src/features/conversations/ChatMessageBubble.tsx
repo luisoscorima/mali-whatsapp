@@ -1,4 +1,6 @@
+import { apiClient } from '../../shared/api/api-client'
 import { formatDateTime } from '../../shared/format'
+import { notify } from '../../shared/notify'
 import { renderWhatsAppText } from '../../shared/whatsappFormat'
 import { cn } from '../../lib/utils'
 import type { CampaignMessagePreviewData } from '../campaigns/CampaignMessagePreview'
@@ -73,6 +75,17 @@ function isPdfDocument(mime: string | null | undefined, url: string): boolean {
   return /\.pdf(?:$|[?#])/i.test(url)
 }
 
+function downloadError(raw: string): string {
+  try {
+    const parsed = JSON.parse(raw) as { message?: unknown }
+    if (typeof parsed.message === 'string' && parsed.message.trim()) return parsed.message
+    if (Array.isArray(parsed.message)) return parsed.message.map(String).join(', ')
+  } catch {
+    /* el API a veces responde texto plano */
+  }
+  return raw
+}
+
 function messageAuthorLabel(message: ChatMessage): string | null {
   if (message.direction !== 'outbound') return null
   const label = message.sender_label?.trim()
@@ -108,6 +121,17 @@ export function ChatMessageBubble({
   const mime = message.media_preview?.mime ?? ''
   const isPdf = isPdfDocument(mime, mediaUrl)
   const downloadHref = `/api/conversations/${conversationId}/messages/${message.id}/download`
+  const canDownload = message.has_downloadable_media
+
+  async function downloadMedia() {
+    const result = await apiClient.download(downloadHref)
+    if (!result.ok) notify.error(downloadError(result.error))
+  }
+
+  function onDownloadClick(event: { preventDefault: () => void }) {
+    event.preventDefault()
+    void downloadMedia()
+  }
   const showTypeRow =
     isMediaType(mt) || (mt === 'campaign' && !message.campaign_preview)
   const campPreview = message.campaign_preview
@@ -198,9 +222,11 @@ export function ChatMessageBubble({
             loading="lazy"
             decoding="async"
           />
-          <a className="chat-msg-download-link" href={downloadHref}>
-            Descargar
-          </a>
+          {canDownload ? (
+            <a className="chat-msg-download-link" href={downloadHref} onClick={onDownloadClick}>
+              Descargar
+            </a>
+          ) : null}
         </div>
       ) : null}
 
@@ -213,6 +239,11 @@ export function ChatMessageBubble({
             preload="none"
             src={mediaUrl}
           />
+          {canDownload ? (
+            <a className="chat-msg-download-link" href={downloadHref} onClick={onDownloadClick}>
+              Descargar
+            </a>
+          ) : null}
         </div>
       ) : null}
 
@@ -224,15 +255,22 @@ export function ChatMessageBubble({
             preload="none"
             src={mediaUrl}
           />
+          {canDownload ? (
+            <a className="chat-msg-download-link" href={downloadHref} onClick={onDownloadClick}>
+              Descargar
+            </a>
+          ) : null}
         </div>
       ) : null}
 
       {mediaUrl && mt === 'document' ? (
         <div className="chat-bubble__media chat-bubble__media--doc">
           {isPdf ? <ChatPdfPreview downloadUrl={downloadHref} /> : null}
-          <a className="chat-msg-download-link" href={downloadHref}>
-            Descargar
-          </a>
+          {canDownload ? (
+            <a className="chat-msg-download-link" href={downloadHref} onClick={onDownloadClick}>
+              Descargar
+            </a>
+          ) : null}
           <a
             className="chat-msg-doc-link"
             href={mediaUrl}
@@ -249,6 +287,14 @@ export function ChatMessageBubble({
           {outbound
             ? 'Adjunto enviado (vista previa no disponible).'
             : 'No se pudo cargar la vista previa del archivo.'}
+          {canDownload ? (
+            <>
+              {' '}
+              <a className="chat-msg-download-link" href={downloadHref} onClick={onDownloadClick}>
+                Descargar
+              </a>
+            </>
+          ) : null}
         </p>
       ) : null}
 

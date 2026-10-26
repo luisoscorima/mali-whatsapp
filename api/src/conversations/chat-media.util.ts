@@ -199,8 +199,79 @@ export function getLocalPreview(rawPayload: unknown): LocalPreview | null {
   };
 }
 
+const INBOUND_MEDIA_KEYS = [
+  'image',
+  'video',
+  'audio',
+  'voice',
+  'document',
+  'sticker',
+] as const;
+
+/** Línea que recibió o envió el mensaje, guardada al persistirlo. */
+export function readRoutingPhoneNumberId(rawPayload: unknown): string | null {
+  const routing = parseRawPayload(rawPayload)?._mali_routing as
+    | { phone_number_id?: string }
+    | undefined;
+  const phoneNumberId = String(routing?.phone_number_id ?? '').trim();
+  return phoneNumberId || null;
+}
+
+export function withRoutingPhoneNumberId(
+  payload: Record<string, unknown>,
+  phoneNumberId: string | null | undefined,
+): Record<string, unknown> {
+  const id = String(phoneNumberId ?? '').trim();
+  if (!id) return payload;
+  const current = payload._mali_routing;
+  const routing =
+    current && typeof current === 'object' && !Array.isArray(current)
+      ? { ...(current as Record<string, unknown>) }
+      : {};
+  return {
+    ...payload,
+    _mali_routing: { ...routing, phone_number_id: id },
+  };
+}
+
+/** Id de media de Meta todavía recuperable, aunque no haya copia en S3. */
+export function extractStoredMediaDownloadRef(rawPayload: unknown): {
+  mediaId: string;
+  phoneNumberId: string | null;
+} | null {
+  const payload = parseRawPayload(rawPayload);
+  if (!payload) return null;
+  const phoneNumberId = readRoutingPhoneNumberId(payload);
+  const uploadId = String(payload.upload_media_id ?? '').trim();
+  if (uploadId) return { mediaId: uploadId, phoneNumberId };
+
+  for (const key of INBOUND_MEDIA_KEYS) {
+    const block = payload[key] as { id?: string } | undefined;
+    const mediaId = String(block?.id ?? '').trim();
+    if (mediaId) return { mediaId, phoneNumberId };
+  }
+  return null;
+}
+
+export function withLocalPreview(
+  rawPayload: unknown,
+  preview: LocalPreview,
+): Record<string, unknown> {
+  const base = parseRawPayload(rawPayload) ?? {};
+  return {
+    ...base,
+    local_preview: {
+      url: preview.url,
+      ...(preview.mime ? { mime: preview.mime } : {}),
+    },
+  };
+}
+
 export function hasDownloadableMedia(rawPayload: unknown): boolean {
-  return getLocalPreview(rawPayload) != null;
+  return (
+    getLocalPreview(rawPayload) != null ||
+    extractStoredMediaDownloadRef(rawPayload) != null
+  );
 }
 
 export type InboxCampaignPreview = {

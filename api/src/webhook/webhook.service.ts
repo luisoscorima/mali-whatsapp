@@ -8,7 +8,10 @@ import {
   downloadWhatsAppMediaBuffer,
   sendSessionTextMessage,
 } from '../conversations/conversation-whatsapp.util';
-import { saveInboundChatMediaFromBuffer } from '../conversations/chat-media.util';
+import {
+  saveInboundChatMediaFromBuffer,
+  withRoutingPhoneNumberId,
+} from '../conversations/chat-media.util';
 import { FlowsService } from '../flows/flows.service';
 import { MetaLeadgenService } from '../leads/meta-leadgen.service';
 import { LeadsService } from '../leads/leads.service';
@@ -294,7 +297,10 @@ export class WebhookService {
       if (input.outboundSource) {
         payload.source = input.outboundSource;
       }
-      payload = setMessageSender(payload, input.isAi ? 'IA' : 'Automático');
+      payload = withRoutingPhoneNumberId(
+        setMessageSender(payload, input.isAi ? 'IA' : 'Automático'),
+        lineId,
+      );
       await this.prisma.chat_messages.create({
         data: {
           conversation_id: input.conversationId,
@@ -366,6 +372,7 @@ export class WebhookService {
     msg: Record<string, unknown>;
     area: BusinessArea;
     conversationId: number;
+    phoneNumberId?: string | null;
   }): Promise<void> {
     const ref = extractInboundMediaRef(input.msg);
     if (!ref) return;
@@ -374,6 +381,7 @@ export class WebhookService {
       const { buffer, mimeType } = await downloadWhatsAppMediaBuffer({
         mediaId: ref.mediaId,
         area: input.area,
+        phoneNumberId: input.phoneNumberId,
       });
       const localPreview = await saveInboundChatMediaFromBuffer({
         buffer,
@@ -1041,6 +1049,7 @@ export class WebhookService {
           msg: record,
           area,
           conversationId: conversation.id,
+          phoneNumberId: linePhoneNumberId,
         });
 
         const buttonInfo = extractInboundButtonPayload(record);

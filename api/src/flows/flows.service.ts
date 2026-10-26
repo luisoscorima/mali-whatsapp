@@ -23,7 +23,10 @@ import {
   sendSessionMediaMessage,
   sendSessionTextMessage,
 } from '../conversations/conversation-whatsapp.util';
-import { saveFlowMediaFile } from '../conversations/chat-media.util';
+import {
+  saveFlowMediaFile,
+  withRoutingPhoneNumberId,
+} from '../conversations/chat-media.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { TRANSFER_TO_HUMAN_NOTICE } from '../webhook/ai-response.util';
 import { formatAdvisorLabel } from '../users/advisor-label.util';
@@ -1415,7 +1418,10 @@ export class FlowsService {
     const msgId = apiResponse.messages?.[0]?.id || null;
     let payload = sanitizeApiResponse(apiResponse) as Record<string, unknown>;
     payload.source = input.source;
-    payload = setMessageSender(payload, 'Flujo');
+    payload = withRoutingPhoneNumberId(
+      setMessageSender(payload, 'Flujo'),
+      input.phoneNumberId,
+    );
     await this.prisma.chat_messages.create({
       data: {
         conversation_id: input.conversationId,
@@ -1454,7 +1460,10 @@ export class FlowsService {
     let payload = sanitizeApiResponse(apiResponse) as Record<string, unknown>;
     payload.source = source;
     payload.flow_buttons = input.buttons;
-    payload = setMessageSender(payload, 'Flujo');
+    payload = withRoutingPhoneNumberId(
+      setMessageSender(payload, 'Flujo'),
+      input.phoneNumberId,
+    );
     await this.prisma.chat_messages.create({
       data: {
         conversation_id: input.conversationId,
@@ -1504,7 +1513,10 @@ export class FlowsService {
       url: input.mediaUrl,
       mime: input.mime || null,
     };
-    payload = setMessageSender(payload, 'Flujo');
+    payload = withRoutingPhoneNumberId(
+      setMessageSender(payload, 'Flujo'),
+      input.phoneNumberId,
+    );
     await this.prisma.chat_messages.create({
       data: {
         conversation_id: input.conversationId,

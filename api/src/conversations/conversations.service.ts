@@ -65,6 +65,7 @@ import {
 } from './api-sanitize.util';
 import {
   classifyConversationUpload,
+  downloadWhatsAppMediaBuffer,
   MEDIA_TYPE_LABEL,
   sendSessionMediaMessage,
   sendSessionTextMessage,
@@ -79,10 +80,15 @@ import {
 import {
   extractCampaignPreview,
   extractInteractiveButtons,
+  extractStoredMediaDownloadRef,
   getLocalPreview,
   hasDownloadableMedia,
+  readRoutingPhoneNumberId,
+  saveChatMediaFromBuffer,
   saveOutboundChatMediaFile,
   streamMessageMediaDownload,
+  withLocalPreview,
+  withRoutingPhoneNumberId,
 } from './chat-media.util';
 import {
   isReactionMessageType,
@@ -2408,7 +2414,7 @@ export class ConversationsService {
       where: {
         id: messageId,
         conversation_id: conversationId,
-        conversations: { area },
+        conversations: this.conversationLookup(area, conversationId),
       },
       select: { raw_payload: true },
     });
@@ -2521,7 +2527,7 @@ export class ConversationsService {
         where: {
           id: replyToMessageId,
           conversation_id: conversationId,
-          conversations: { area },
+          conversations: this.conversationLookup(area, conversationId),
         },
         select: {
           id: true,
@@ -2563,10 +2569,13 @@ export class ConversationsService {
             wa_message_id: msgId,
             body_text: text.slice(0, 8000),
             message_type: 'text',
-            raw_payload: setMessageSender(
-              setMessageReplyTo(sanitizeApiResponse(apiResponse), replyToMeta),
-              actorLabel,
-              user.id,
+            raw_payload: withRoutingPhoneNumberId(
+              setMessageSender(
+                setMessageReplyTo(sanitizeApiResponse(apiResponse), replyToMeta),
+                actorLabel,
+                user.id,
+              ),
+              linePhoneNumberId,
             ) as PrismaTypes.InputJsonValue,
             is_ai: false,
           },
@@ -2606,10 +2615,13 @@ export class ConversationsService {
               wa_message_id: textMsgId,
               body_text: text.slice(0, 8000),
               message_type: 'text',
-              raw_payload: setMessageSender(
-                sanitizeApiResponse(textResp),
-                actorLabel,
-                user.id,
+              raw_payload: withRoutingPhoneNumberId(
+                setMessageSender(
+                  sanitizeApiResponse(textResp),
+                  actorLabel,
+                  user.id,
+                ),
+                linePhoneNumberId,
               ) as PrismaTypes.InputJsonValue,
               is_ai: false,
             },
@@ -2660,14 +2672,17 @@ export class ConversationsService {
             wa_message_id: msgId,
             body_text: bodyText,
             message_type: uploadResult.waType,
-            raw_payload: setMessageSender(
-              sanitizeMediaOutboundPayload(
-                uploadResult.mediaId,
-                sendResp,
-                localPreview,
+            raw_payload: withRoutingPhoneNumberId(
+              setMessageSender(
+                sanitizeMediaOutboundPayload(
+                  uploadResult.mediaId,
+                  sendResp,
+                  localPreview,
+                ),
+                actorLabel,
+                user.id,
               ),
-              actorLabel,
-              user.id,
+              linePhoneNumberId,
             ) as PrismaTypes.InputJsonValue,
             is_ai: false,
           },
@@ -2799,19 +2814,24 @@ export class ConversationsService {
     const row = await this.prisma.chat_messages.findFirst({
       where: {
         id: messageId,
-        conversation_id: conversationId,
-        conversations: { area },
+        conversation_id: conversation.id,
+        conversations: this.conversationLookup(area, conversation.id),
       },
       select: { wa_message_id: true, raw_payload: true },
     });
-    if (!row?.wa_message_id) {
+    if (!row) {
+      throw new NotFoundException('Mensaje no encontrado');
+    }
+    if (!row.wa_message_id) {
       throw new BadRequestException(
         'Este mensaje no tiene ID de WhatsApp para reaccionar',
       );
     }
 
     const linePhoneNumberId =
-      String(conversation.whatsapp_phone_number_id || '').trim() || undefined;
+      readRoutingPhoneNumberId(row.raw_payload) ||
+      String(conversation.whatsapp_phone_number_id || '').trim() ||
+      undefined;
 
     try {
       await sendMessageReaction({
@@ -3200,13 +3220,25 @@ export class ConversationsService {
       throw new BadRequestException('Parámetros inválidos');
     }
 
+    const conversation = await this.prisma.conversations.findFirst({
+      where: this.conversationLookup(user.area, conversationId),
+      select: {
+        id: true,
+        area: true,
+        whatsapp_phone_number_id: true,
+      },
+    });
+    if (!conversation) {
+      throw new NotFoundException('Conversacion no encontrada');
+    }
+
     const row = await this.prisma.chat_messages.findFirst({
       where: {
         id: messageId,
-        conversation_id: conversationId,
-        conversations: { area: user.area },
+        conversation_id: conversation.id,
       },
       select: {
+        direction: true,
         message_type: true,
         raw_payload: true,
       },
@@ -3215,16 +3247,49 @@ export class ConversationsService {
       throw new NotFoundException('Mensaje no encontrado');
     }
 
-    const localPreview = getLocalPreview(row.raw_payload);
+    let localPreview = getLocalPreview(row.raw_payload);
+    let rawPayload = row.raw_payload;
     if (!localPreview) {
-      throw new NotFoundException(
-        'Este mensaje no tiene archivo descargable guardado',
-      );
+      const ref = extractStoredMediaDownloadRef(row.raw_payload);
+      if (!ref) {
+        throw new NotFoundException(
+          'Este mensaje no tiene archivo descargable guardado',
+        );
+      }
+      const phoneNumberId =
+        ref.phoneNumberId ||
+        String(conversation.whatsapp_phone_number_id || '').trim() ||
+        null;
+      try {
+        const fetched = await downloadWhatsAppMediaBuffer({
+          mediaId: ref.mediaId,
+          area: conversation.area,
+          phoneNumberId,
+        });
+        localPreview = await saveChatMediaFromBuffer({
+          buffer: fetched.buffer,
+          conversationId: conversation.id,
+          mimeType: fetched.mimeType,
+          direction: row.direction === 'outbound' ? 'outbound' : 'inbound',
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'No se pudo descargar el archivo';
+        throw new BadRequestException(message);
+      }
+      const nextPayload = withLocalPreview(row.raw_payload, localPreview);
+      await this.prisma.chat_messages.update({
+        where: { id: messageId },
+        data: { raw_payload: nextPayload as PrismaTypes.InputJsonValue },
+      });
+      rawPayload = nextPayload;
     }
 
     await streamMessageMediaDownload(res, {
       localPreview,
-      rawPayload: row.raw_payload,
+      rawPayload,
       messageType: row.message_type,
     });
     await this.auditLog.write({

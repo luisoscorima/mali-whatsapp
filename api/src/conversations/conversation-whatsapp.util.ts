@@ -386,8 +386,12 @@ export async function sendSessionMediaMessage(input: {
 export async function downloadWhatsAppMediaBuffer(input: {
   mediaId: string;
   area: unknown;
+  phoneNumberId?: string | null;
 }): Promise<{ buffer: Buffer; mimeType: string }> {
-  const { token } = resolveWhatsAppSendCredentials({ area: input.area });
+  const { token } = resolveWhatsAppSendCredentials({
+    area: input.area,
+    phoneNumberId: input.phoneNumberId,
+  });
   const id = String(input.mediaId || '').trim();
   if (!id) throw new Error('media id vacío');
 
