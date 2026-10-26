@@ -11,7 +11,7 @@ import {
   originSecondaryFields,
 } from './originDisplay'
 import { LeadOpenChatButton } from './LeadOpenChatButton'
-import { categoryLabel, useCategoryScope } from '@/shared/area/useCategoryScope'
+import { categoryLabel, mixesCategories, useCategoryScope } from '@/shared/area/useCategoryScope'
 
 type ChannelSummary = {
   channel: string
@@ -309,8 +309,8 @@ function LeadsUnifiedList() {
             <table className="w-full text-left text-sm">
               <thead className="border-b border-line text-muted">
                 <tr>
+                  {mixesCategories(scope) ? <th className="px-2 py-2">Categoría</th> : null}
                   <th className="px-2 py-2">Canal</th>
-                  {scope.education ? <th className="px-2 py-2">Categoría</th> : null}
                   <th className="px-2 py-2">Contacto</th>
                   <th className="px-2 py-2">Curso</th>
                   <th className="px-2 py-2">Fuente</th>
@@ -325,17 +325,15 @@ function LeadsUnifiedList() {
                   const secondary = originSecondaryFields(o)
                   return (
                     <tr key={o.id} className="border-b border-line last:border-0">
-                      <td className="px-2 py-2">{channelLabel(o.channel)}</td>
-                      {scope.education ? (
+                      {mixesCategories(scope) ? (
                         <td className="px-2 py-2">
-                          <span className="rounded bg-accent-soft px-1.5 text-[10px] text-accent">
-                            {categoryLabel(o.categoria)}
-                          </span>
+                          {categoryLabel(o.categoria)}
                           {o.linea ? (
                             <div className="mt-1 text-xs text-muted">{o.linea}</div>
                           ) : null}
                         </td>
                       ) : null}
+                      <td className="px-2 py-2">{channelLabel(o.channel)}</td>
                       <td className="px-2 py-2">
                         {o.contacts ? (
                           <Link

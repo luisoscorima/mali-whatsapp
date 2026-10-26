@@ -90,6 +90,33 @@ export function AdminWhatsappPage() {
 
   const selectedArea = data.areas.find((area) => String(area.id) === draft.businessAreaId)
   const programs = (selectedArea?.programs ?? []).filter((program) => program.active)
+  const grouped = data.areas.flatMap((area) => {
+    const lines = data.lines.filter((line) => line.area_slug === area.slug)
+    if (!lines.length) return []
+    const usesCategories =
+      area.programs.some((program) => program.active) || lines.some((line) => line.program_id != null)
+    if (!usesCategories) {
+      return [{ key: area.slug, label: area.label, categories: [{ key: 'lines', label: null, lines }] }]
+    }
+    const placed = new Set<number>()
+    const categories: { key: string; label: string | null; lines: typeof lines }[] = []
+    const general = lines.filter((line) => line.program_id == null)
+    if (general.length) {
+      general.forEach((line) => placed.add(line.id))
+      categories.push({ key: 'general', label: 'General', lines: general })
+    }
+    for (const program of area.programs) {
+      const bucket = lines.filter((line) => line.program_id === program.id)
+      if (!bucket.length) continue
+      bucket.forEach((line) => placed.add(line.id))
+      categories.push({ key: String(program.id), label: program.label, lines: bucket })
+    }
+    const rest = lines.filter((line) => !placed.has(line.id))
+    if (rest.length) {
+      categories.push({ key: 'other', label: rest[0]?.program_label || 'Sin categoría', lines: rest })
+    }
+    return [{ key: area.slug, label: area.label, categories }]
+  })
 
   return (
     <div className="space-y-4">
@@ -121,51 +148,64 @@ export function AdminWhatsappPage() {
         <p className="text-sm text-muted">
           Alta de línea. Hace falta el identificador de número de Meta y la WABA. El token sale de la WABA. Queda inactiva hasta validarla.
         </p>
-        <div className="flex flex-wrap gap-2">
-          <input
-            className="rounded-lg border border-line bg-surface px-3 py-2"
-            placeholder="Nombre"
-            value={draft.label}
-            onChange={(event) => setDraft({ ...draft, label: event.target.value })}
-          />
-          <input
-            className="rounded-lg border border-line bg-surface px-3 py-2"
-            placeholder="Phone number id"
-            value={draft.phoneNumberId}
-            onChange={(event) => setDraft({ ...draft, phoneNumberId: event.target.value })}
-          />
-          <select
-            className="rounded-lg border border-line bg-surface px-3 py-2"
-            value={draft.businessAreaId}
-            onChange={(event) => setDraft({ ...draft, businessAreaId: event.target.value, programId: '' })}
-          >
-            <option value="">Área</option>
-            {data.areas.map((area) => (
-              <option key={area.id} value={area.id}>{area.label}</option>
-            ))}
-          </select>
-          {selectedArea?.slug === 'educacion' ? (
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-sm">
+            <span className="text-muted">Nombre</span>
+            <input
+              className="mt-1 block rounded-lg border border-line bg-surface px-3 py-2"
+              value={draft.label}
+              onChange={(event) => setDraft({ ...draft, label: event.target.value })}
+            />
+          </label>
+          <label className="text-sm">
+            <span className="text-muted">Phone number id</span>
+            <input
+              className="mt-1 block rounded-lg border border-line bg-surface px-3 py-2"
+              value={draft.phoneNumberId}
+              onChange={(event) => setDraft({ ...draft, phoneNumberId: event.target.value })}
+            />
+          </label>
+          <label className="text-sm">
+            <span className="text-muted">Área</span>
             <select
-              className="rounded-lg border border-line bg-surface px-3 py-2"
-              value={draft.programId}
-              onChange={(event) => setDraft({ ...draft, programId: event.target.value })}
+              className="mt-1 block rounded-lg border border-line bg-surface px-3 py-2"
+              value={draft.businessAreaId}
+              onChange={(event) => setDraft({ ...draft, businessAreaId: event.target.value, programId: '' })}
             >
-              <option value="">General</option>
-              {programs.map((program) => (
-                <option key={program.id} value={program.id}>{program.label}</option>
+              <option value="">Elegir</option>
+              {data.areas.map((area) => (
+                <option key={area.id} value={area.id}>{area.label}</option>
               ))}
             </select>
+          </label>
+          {selectedArea?.slug === 'educacion' ? (
+            <label className="text-sm">
+              <span className="text-muted">Categoría</span>
+              <select
+                className="mt-1 block rounded-lg border border-line bg-surface px-3 py-2"
+                value={draft.programId}
+                onChange={(event) => setDraft({ ...draft, programId: event.target.value })}
+              >
+                <option value="">General</option>
+                {programs.map((program) => (
+                  <option key={program.id} value={program.id}>{program.label}</option>
+                ))}
+              </select>
+            </label>
           ) : null}
-          <select
-            className="rounded-lg border border-line bg-surface px-3 py-2"
-            value={draft.wabaId}
-            onChange={(event) => setDraft({ ...draft, wabaId: event.target.value })}
-          >
-            <option value="">WABA</option>
-            {data.wabas.map((waba) => (
-              <option key={waba.id} value={waba.id}>{waba.label}</option>
-            ))}
-          </select>
+          <label className="text-sm">
+            <span className="text-muted">WABA</span>
+            <select
+              className="mt-1 block rounded-lg border border-line bg-surface px-3 py-2"
+              value={draft.wabaId}
+              onChange={(event) => setDraft({ ...draft, wabaId: event.target.value })}
+            >
+              <option value="">Elegir</option>
+              {data.wabas.map((waba) => (
+                <option key={waba.id} value={waba.id}>{waba.label}</option>
+              ))}
+            </select>
+          </label>
           <button type="submit" className="small-btn" disabled={creating}>Crear</button>
         </div>
       </form>
@@ -174,63 +214,79 @@ export function AdminWhatsappPage() {
           ? 'La bóveda de tokens está configurada.'
           : 'La bóveda de tokens no está configurada. Las líneas siguen usando variables de entorno.'}
       </p>
-      <ul className="inbox-chat-list">
-        {data.lines.map((line) => (
-          <li key={line.id} className="inbox-chat-item">
-            <p>
-              {line.label}
-              {line.is_default ? ' · predeterminada' : ''}
-              {line.active ? '' : ' · inactiva'}
-            </p>
-            <p className="muted">
-              {line.area_label}
-              {line.program_label ? ` · ${line.program_label}` : ''}
-              <br />
-              {line.display_phone_number || 'Sin número visible'}
-              {' · WABA …'}
-              {line.meta_waba_id.slice(-6)}
-              {' · estado '}
-              {line.registration_status}
-            </p>
-            {line.area_slug === 'educacion' ? (
-              <label className="mt-2 block text-sm">
-                <span className="text-muted">Categoría</span>
-                <select
-                  className="mt-1 rounded-lg border border-line bg-surface px-3 py-2"
-                  value={line.program_id ?? ''}
-                  onChange={(event) => {
-                    const programId = event.target.value ? Number(event.target.value) : null
-                    void apiClient
-                      .patch(`/api/admin/whatsapp/lines/${line.id}/category`, { program_id: programId })
-                      .then((result) => {
-                        if (!result.ok) {
-                          notify.error(result.error)
-                          return
-                        }
-                        notify.success('La línea quedó en la categoría elegida. Sus chats se ven ahí.')
-                        load()
-                      })
-                  }}
-                >
-                  {categories.map((category) => (
-                    <option key={category.slug} value={category.id ?? ''}>
-                      {category.label}
-                    </option>
+      <div className="space-y-4">
+        {grouped.map((area) => (
+          <section key={area.key} className="overflow-hidden rounded-xl border border-line">
+            <h2 className="border-b border-line bg-surface-strong px-4 py-2 text-sm font-medium">{area.label}</h2>
+            {area.categories.map((category, index) => (
+              <div key={category.key} className={index < area.categories.length - 1 ? 'border-b border-line' : ''}>
+                {category.label ? (
+                  <h3 className="border-b border-line px-4 py-2 text-xs font-medium text-muted">{category.label}</h3>
+                ) : null}
+                <ul>
+                  {category.lines.map((line) => (
+                    <li
+                      key={line.id}
+                      className={`flex flex-wrap items-center justify-between gap-3 border-b border-line py-3 last:border-b-0 ${category.label ? 'pl-8 pr-4' : 'px-4'}`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm">
+                          {line.label}
+                          {line.is_default ? ' · predeterminada' : ''}
+                          {line.active ? '' : ' · inactiva'}
+                        </p>
+                        <p className="text-sm text-muted">
+                          {line.display_phone_number || 'Sin número visible'}
+                          {' · WABA …'}
+                          {line.meta_waba_id.slice(-6)}
+                          {' · '}
+                          {line.registration_status}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap items-center gap-2">
+                        {line.area_slug === 'educacion' ? (
+                          <select
+                            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+                            aria-label="Categoría"
+                            value={line.program_id ?? ''}
+                            onChange={(event) => {
+                              const programId = event.target.value ? Number(event.target.value) : null
+                              void apiClient
+                                .patch(`/api/admin/whatsapp/lines/${line.id}/category`, { program_id: programId })
+                                .then((result) => {
+                                  if (!result.ok) {
+                                    notify.error(result.error)
+                                    return
+                                  }
+                                  notify.success('La línea quedó en la categoría elegida. Sus chats se ven ahí.')
+                                  load()
+                                })
+                            }}
+                          >
+                            {categories.map((item) => (
+                              <option key={item.slug} value={item.id ?? ''}>
+                                {item.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="small-btn"
+                          disabled={validatingId === line.id}
+                          onClick={() => void validateLine(line.id)}
+                        >
+                          {validatingId === line.id ? 'Validando…' : 'Validar en Meta'}
+                        </button>
+                      </div>
+                    </li>
                   ))}
-                </select>
-              </label>
-            ) : null}
-            <button
-              type="button"
-              className="small-btn"
-              disabled={validatingId === line.id}
-              onClick={() => void validateLine(line.id)}
-            >
-              {validatingId === line.id ? 'Validando…' : 'Validar en Meta'}
-            </button>
-          </li>
+                </ul>
+              </div>
+            ))}
+          </section>
         ))}
-      </ul>
+      </div>
     </div>
   )
 }

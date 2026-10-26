@@ -6,7 +6,7 @@ import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import { SortableSidebarList } from '@/shared/ui/SortableSidebarList'
 import { SegmentBadge } from './SegmentBadge'
-import { categoryLabel, useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
+import { categoryLabel, mixesCategories, useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
 import {
   SEGMENTS_LIST_REFRESH_EVENT,
   SEGMENTS_LIST_UPSERT_EVENT,
@@ -232,13 +232,13 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
           items={filteredSegments}
           onReorder={handleReorder}
           renderItem={(seg, dragHandle) =>
-            renderSegmentRow(seg, selectedId, listQuery, dragHandle, scope.education)
+            renderSegmentRow(seg, selectedId, listQuery, dragHandle, mixesCategories(scope))
           }
         />
       ) : (
         <ul className="inbox-chat-list">
           {filteredSegments.map((seg) => (
-            <li key={seg.id}>{renderSegmentRow(seg, selectedId, listQuery, undefined, scope.education)}</li>
+            <li key={seg.id}>{renderSegmentRow(seg, selectedId, listQuery, undefined, mixesCategories(scope))}</li>
           ))}
         </ul>
       )}
@@ -259,14 +259,14 @@ function renderSegmentRow(
       {dragHandle}
       <Link to={`/segments/${seg.id}${listQuery}`} className="inbox-chat-link flex-1">
         <span className="inbox-chat-link-main">
+          {showCategory ? (
+            <span className="inbox-chat-line">
+              <span>{categoryLabel(seg.category)}</span>
+            </span>
+          ) : null}
           <span className="inbox-chat-row-top">
             <span className="inbox-chat-title-line">
               <span className="inbox-chat-title">{seg.label}</span>
-              {showCategory ? (
-                <span className="shrink-0 rounded bg-accent-soft px-1.5 text-[10px] text-accent">
-                  {categoryLabel(seg.category)}
-                </span>
-              ) : null}
             </span>
             <span
               className={`shrink-0 rounded px-1.5 text-[10px] ${

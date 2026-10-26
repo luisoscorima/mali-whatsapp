@@ -6,7 +6,7 @@ import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import { MonthFilterChips } from '@/shared/ui/MonthFilterChips'
 import { campaignStatusClass } from './campaignStatus'
-import { categoryLabel, useCategoryScope } from '@/shared/area/useCategoryScope'
+import { categoryLine, mixesCategories, useCategoryScope } from '@/shared/area/useCategoryScope'
 
 const LIST_POLL_MS = 15000
 
@@ -88,21 +88,16 @@ export function CampaignListSidebar({ selectedId, onRefresh }: CampaignListSideb
               <li key={c.id} className={`inbox-chat-item ${active ? 'is-active' : ''}`}>
                 <Link to={`/campaigns/${c.id}${listQuery}`} className="inbox-chat-link">
                   <span className="inbox-chat-link-main">
+                    {mixesCategories(scope) ? (
+                      <span className="inbox-chat-line">
+                        <span>{categoryLine(c.categories?.length ? c.categories : ['general'])}</span>
+                      </span>
+                    ) : null}
                     <span className="inbox-chat-row-top">
                       <span className="inbox-chat-title-line">
                         <span className="inbox-chat-title">
                           #{c.id} · {c.template_name || '—'}
                         </span>
-                        {scope.education
-                          ? (c.categories?.length ? c.categories : ['general']).map((slug) => (
-                              <span
-                                key={slug}
-                                className="shrink-0 rounded bg-accent-soft px-1.5 text-[10px] text-accent"
-                              >
-                                {categoryLabel(slug)}
-                              </span>
-                            ))
-                          : null}
                       </span>
                       <span className="flex shrink-0 gap-1">
                         {c.send_mode === 'direct' ? (

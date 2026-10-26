@@ -6,6 +6,85 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 
 const AREA_ORDER = ['ti', 'pam', 'patronato', 'educacion'];
+
+const IDENTITY_REASONS: Record<string, string> = {
+  identidades_distintas: 'El teléfono, el DNI o el correo apuntan a otra persona',
+  whatsapp_user_id: 'La identidad de WhatsApp no es de esta persona',
+  dni: 'El DNI no es de esta persona',
+};
+
+function identityReason(reason: string): string {
+  return IDENTITY_REASONS[reason] || 'Llegó un dato que no coincide con la persona';
+}
+
+function fichaArea(area: string): string {
+  if (area === 'educacion_ca') return 'CA';
+  if (area === 'educacion_ep') return 'EP';
+  if (area === 'educacion') return 'General';
+  return area;
+}
+
+type ConsolidationRow = {
+  contact_id: number;
+  canonical_id: number;
+  phone_norm: string;
+  name: string;
+  last_name: string;
+  email: string | null;
+  dni: string | null;
+  area: string;
+  whatsapp_user_id: string | null;
+  status_label: string | null;
+  advisor: string | null;
+  wuid_outside: boolean;
+};
+
+function filled(values: Array<string | null | undefined>): string[] {
+  return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
+}
+
+function groupPhones(rows: ConsolidationRow[]) {
+  const groups = new Map<string, ConsolidationRow[]>();
+  for (const row of rows) {
+    const list = groups.get(row.phone_norm) ?? [];
+    list.push(row);
+    groups.set(row.phone_norm, list);
+  }
+  return [...groups.entries()].map(([phone, members]) => {
+    const dnis = filled(members.map((member) => {
+      const digits = String(member.dni || '').replace(/\D/g, '');
+      return digits.length >= 8 ? digits : '';
+    }));
+    const why = [
+      filled(members.map((member) => member.whatsapp_user_id)).length > 1
+        ? 'Identidades de WhatsApp distintas'
+        : '',
+      dnis.length > 1 ? 'DNI distintos' : '',
+      filled(members.map((member) => member.status_label)).length > 1
+        ? 'Estados de lead distintos'
+        : '',
+      filled(members.map((member) => member.advisor)).length > 1 ? 'Asesores distintos' : '',
+      members.some((member) => member.wuid_outside)
+        ? 'Una identidad de WhatsApp también está en otro teléfono'
+        : '',
+    ].filter(Boolean);
+    return {
+      phone,
+      why: why.length ? why : ['Quedó pendiente al unir las fichas de Educación'],
+      fichas: members.map((member) => ({
+        id: member.contact_id,
+        kept: member.contact_id === member.canonical_id,
+        name: [member.name, member.last_name].filter(Boolean).join(' ') || 'Sin nombre',
+        area: fichaArea(member.area),
+        email: member.email,
+        dni: member.dni,
+        whatsapp_user_id: member.whatsapp_user_id,
+        status: member.status_label,
+        advisor: member.advisor,
+      })),
+    };
+  });
+}
 const EDUCATION_AREAS = ['educacion', 'educacion_ca', 'educacion_ep'];
 
 export type AdminCategorySummary = {
@@ -247,36 +326,106 @@ export class AdminAreasService {
     });
   }
 
-  async listConflicts() {
-    let consolidation: { contact_id: number; phone_norm: string; canonical_id: number }[] = [];
-    try {
-      consolidation = await this.prisma.$queryRaw<
-        { contact_id: number; phone_norm: string; canonical_id: number }[]
-      >`
-        SELECT contact_id, phone_norm, canonical_id
-        FROM education_consolidation_map
-        WHERE decision = 'review'
-        ORDER BY phone_norm
-        LIMIT 200
-      `;
-    } catch {
-      consolidation = [];
-    }
-    const identity = await this.prisma.person_identity_reviews.findMany({
+  async listConflicts(requestedPage = 1) {
+    const identityRows = await this.prisma.person_identity_reviews.findMany({
       where: { resolved_at: null },
       orderBy: { created_at: 'desc' },
-      take: 200,
-      select: {
-        id: true,
-        person_id: true,
-        reason: true,
-        phone: true,
-        dni: true,
-        email: true,
-        created_at: true,
+      take: 100,
+      include: {
+        person: { select: { name: true, last_name: true, phone: true, email: true, dni: true } },
       },
     });
-    return { consolidation, identity };
+    const identity = identityRows.map((row) => ({
+      id: row.id,
+      person_id: row.person_id,
+      person_name: [row.person.name, row.person.last_name].filter(Boolean).join(' ') || 'Sin nombre',
+      reason: identityReason(row.reason),
+      stored_phone: row.person.phone,
+      stored_dni: row.person.dni,
+      stored_email: row.person.email,
+      phone: row.phone,
+      dni: row.dni,
+      email: row.email,
+    }));
+    try {
+      const counts = await this.prisma.$queryRaw<{ pending: number; done: number }[]>`
+        SELECT
+          COUNT(DISTINCT phone_norm) FILTER (WHERE decision = 'review')::int AS pending,
+          COUNT(DISTINCT phone_norm) FILTER (WHERE decision = 'separate')::int AS done
+        FROM education_consolidation_map
+      `;
+      const pending = counts[0]?.pending ?? 0;
+      const done = counts[0]?.done ?? 0;
+      const pageSize = 40;
+      const pages = Math.max(1, Math.ceil(pending / pageSize));
+      const page = Math.min(Math.max(1, Math.floor(requestedPage) || 1), pages);
+      const offset = (page - 1) * pageSize;
+      const rows = await this.prisma.$queryRaw<ConsolidationRow[]>`
+        SELECT
+          m.contact_id::int AS contact_id,
+          m.canonical_id::int AS canonical_id,
+          m.phone_norm,
+          c.name,
+          c.last_name,
+          c.email,
+          c.dni,
+          c.area,
+          c.whatsapp_user_id,
+          ls.label AS status_label,
+          NULLIF(BTRIM(CONCAT(u.first_name, ' ', u.last_name)), '') AS advisor,
+          EXISTS (
+            SELECT 1 FROM contacts other
+            WHERE other.whatsapp_user_id = c.whatsapp_user_id
+              AND other.id <> c.id
+              AND NULLIF(REGEXP_REPLACE(COALESCE(other.phone, ''), '\\D', '', 'g'), '')
+                IS DISTINCT FROM m.phone_norm
+          ) AS wuid_outside
+        FROM education_consolidation_map m
+        JOIN contacts c ON c.id = m.contact_id
+        LEFT JOIN lead_status_definitions ls ON ls.id = c.lead_status_id
+        LEFT JOIN LATERAL (
+          SELECT assigned_user_id
+          FROM education_lead_cycles ec
+          WHERE ec.contact_id = c.id
+          ORDER BY ec.last_interaction_at DESC
+          LIMIT 1
+        ) cycle ON TRUE
+        LEFT JOIN users u ON u.id = cycle.assigned_user_id
+        WHERE m.decision = 'review'
+          AND m.phone_norm IN (
+            SELECT phone_norm
+            FROM education_consolidation_map
+            WHERE decision = 'review'
+            GROUP BY phone_norm
+            ORDER BY phone_norm
+            LIMIT ${pageSize}
+            OFFSET ${offset}
+          )
+        ORDER BY m.phone_norm, (m.contact_id = m.canonical_id) DESC, m.contact_id
+      `;
+      return {
+        page,
+        page_size: pageSize,
+        phone_pending: pending,
+        phone_done: done,
+        phones: groupPhones(rows),
+        identity,
+      };
+    } catch {
+      return { page: 1, page_size: 40, phone_pending: 0, phone_done: 0, phones: [], identity };
+    }
+  }
+
+  async separateConsolidationPhone(phone: string) {
+    const normalized = phone.replace(/\D/g, '');
+    if (!normalized) throw new BadRequestException('Falta el teléfono');
+    const updated = await this.prisma.$executeRaw`
+      UPDATE education_consolidation_map
+      SET decision = 'separate'
+      WHERE phone_norm = ${normalized} AND decision = 'review'
+    `;
+    if (!updated) throw new BadRequestException('Ese teléfono ya no está en revisión');
+    return { phone: normalized, decision: 'separate' };
   }
 
   async separateConsolidation(contactId: number) {

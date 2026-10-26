@@ -4,7 +4,7 @@ import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
-import { categoryLabel, useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
+import { categoryLabel, mixesCategories, useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
 
 const LIST_POLL_MS = 20000
 
@@ -84,14 +84,14 @@ export function FlowsListSidebar({ selectedId }: FlowsListSidebarProps) {
               >
                 <Link to={`/flows/${item.id}`} className="inbox-chat-link">
                   <span className="inbox-chat-link-main">
+                    {mixesCategories(scope) ? (
+                      <span className="inbox-chat-line">
+                        <span>{categoryLabel(item.category)}</span>
+                      </span>
+                    ) : null}
                     <span className="inbox-chat-row-top">
                       <span className="inbox-chat-title-line">
                         <span className="inbox-chat-title">{item.name}</span>
-                        {scope.education ? (
-                          <span className="shrink-0 rounded bg-accent-soft px-1.5 text-[10px] text-accent">
-                            {categoryLabel(item.category)}
-                          </span>
-                        ) : null}
                       </span>
                       <span className="inbox-chat-meta shrink-0 text-[10px]">
                         {STATUS_LABEL[item.status]}

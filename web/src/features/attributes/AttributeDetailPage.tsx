@@ -4,7 +4,7 @@ import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { formatDateTime } from '../../shared/format'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
-import { categoryLabel, useCategoryScope } from '@/shared/area/useCategoryScope'
+import { categoryLabel, mixesCategories, useCategoryScope } from '@/shared/area/useCategoryScope'
 type AttributeDefinition = {
   id: number
   segment_slug: string | null
@@ -162,14 +162,10 @@ export function AttributeDetailPage() {
         <Link to="/attributes" className="text-sm text-accent hover:underline">
           ← Atributos
         </Link>
-        <h1 className="mt-2 flex flex-wrap items-center gap-2 text-2xl font-semibold">
-          {def.label}
-          {categories.education ? (
-            <span className="rounded bg-accent-soft px-1.5 text-[10px] text-accent">
-              {categoryLabel(def.category)}
-            </span>
-          ) : null}
-        </h1>
+        {mixesCategories(categories) ? (
+          <p className="mt-2 text-sm text-muted">{categoryLabel(def.category)}</p>
+        ) : null}
+        <h1 className="mt-2 text-2xl font-semibold">{def.label}</h1>
         <p className="font-mono text-sm text-muted">
           {def.slug} · {scopeLabel(def, segments)}
         </p>

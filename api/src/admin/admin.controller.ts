@@ -60,8 +60,17 @@ export class AdminController {
   }
 
   @Get('conflicts')
-  async listConflicts() {
-    return { ok: true, data: await this.adminAreasService.listConflicts() };
+  async listConflicts(@Query('page') page?: string) {
+    const requested = Number(page);
+    return {
+      ok: true,
+      data: await this.adminAreasService.listConflicts(Number.isFinite(requested) ? requested : 1),
+    };
+  }
+
+  @Post('conflicts/consolidation/phone/separate')
+  async separateConsolidationPhone(@Body() body: { phone?: string }) {
+    return { ok: true, data: await this.adminAreasService.separateConsolidationPhone(String(body.phone || '')) };
   }
 
   @Post('conflicts/consolidation/:contactId/separate')

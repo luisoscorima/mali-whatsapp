@@ -12,6 +12,20 @@ export function categoryLabel(slug: string | null | undefined): string {
   return slug.toUpperCase()
 }
 
+export function categoryLine(slugs: Array<string | null | undefined>): string {
+  const labels: string[] = []
+  for (const slug of slugs) {
+    const label = categoryLabel(slug)
+    if (!labels.includes(label)) labels.push(label)
+  }
+  return labels.join(' · ')
+}
+
+/** La fila nombra la categoría solo cuando el riel mezcla varias. */
+export function mixesCategories(scope: { education: boolean; slugs: string[] | null }): boolean {
+  return Boolean(scope.education && scope.slugs && scope.slugs.length > 1)
+}
+
 export function categorySettingsArea(slug: string): string {
   if (slug === 'general') return 'educacion'
   return `educacion_${slug}`

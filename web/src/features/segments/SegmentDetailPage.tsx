@@ -8,7 +8,7 @@ import { segmentToneClass } from './segmentColors'
 import { SegmentColorPicker } from './SegmentColorPicker'
 import { notifySegmentsListRefresh, notifySegmentsListUpsert } from './segmentsListEvents'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
-import { categoryLabel, useCategoryScope } from '@/shared/area/useCategoryScope'
+import { categoryLabel, mixesCategories, useCategoryScope } from '@/shared/area/useCategoryScope'
 type SegmentDefinition = {
   id: number
   slug: string
@@ -194,14 +194,10 @@ export function SegmentDetailPage() {
         <Link to="/segments" className="text-sm text-accent hover:underline">
           ← Segmentos
         </Link>
-        <h1 className="mt-2 flex flex-wrap items-center gap-2 text-2xl font-semibold">
-          {label}
-          {scope.education ? (
-            <span className="rounded bg-accent-soft px-1.5 text-[10px] text-accent">
-              {categoryLabel(payload.segment.category)}
-            </span>
-          ) : null}
-        </h1>
+        {mixesCategories(scope) ? (
+          <p className="mt-2 text-sm text-muted">{categoryLabel(payload.segment.category)}</p>
+        ) : null}
+        <h1 className="mt-2 text-2xl font-semibold">{label}</h1>
         <p className="font-mono text-sm text-muted">{slug}</p>
         <p className="mt-1 text-sm text-muted">
           Creado: {formatDateTime(payload.segment.created_at)}

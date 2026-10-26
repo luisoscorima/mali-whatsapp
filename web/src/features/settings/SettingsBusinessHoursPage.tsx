@@ -4,6 +4,7 @@ import { notify } from '@/shared/notify'
 import {
   categoryLabel,
   categorySettingsArea,
+  mixesCategories,
   useCategoryScope,
 } from '@/shared/area/useCategoryScope'
 
@@ -103,12 +104,8 @@ function BusinessHoursForm({
 
   return (
     <section className="space-y-4 rounded-xl border border-line bg-surface-strong p-4">
-      <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold">
-        Fuera de horario
-        {heading ? (
-          <span className="rounded bg-accent-soft px-1.5 text-[10px] text-accent">{heading}</span>
-        ) : null}
-      </h2>
+      {heading ? <p className="text-sm text-muted">{heading}</p> : null}
+      <h2 className="text-lg font-semibold">Fuera de horario</h2>
       <p className="text-sm text-muted">
         Fuera de este horario se envía el mensaje predefinido una sola vez por chat
         hasta que un asesor lo abra. No usa IA.
@@ -198,7 +195,7 @@ export function SettingsBusinessHoursPage() {
         <BusinessHoursForm
           key={slug}
           area={categorySettingsArea(slug)}
-          heading={categoryLabel(slug)}
+          heading={mixesCategories(scope) ? categoryLabel(slug) : undefined}
         />
       ))}
     </div>

@@ -21,7 +21,7 @@ import {
 import { resolveMetricAction } from './metricAction'
 import { campaignStatusClass } from './campaignStatus'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
-import { categoryLabel, useCategoryScope } from '@/shared/area/useCategoryScope'
+import { categoryLine, mixesCategories, useCategoryScope } from '@/shared/area/useCategoryScope'
 
 type CampaignLog = {
   id: number
@@ -268,18 +268,13 @@ export function CampaignDetailPage() {
     <div className="space-y-6">
       {confirmDialog}
       <div>
+        {mixesCategories(scope) ? (
+          <p className="text-sm text-muted">
+            {categoryLine(campaign.categories?.length ? campaign.categories : ['general'])}
+          </p>
+        ) : null}
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold">Campaña #{campaign.id}</h1>
-          {scope.education
-            ? (campaign.categories?.length ? campaign.categories : ['general']).map((slug) => (
-                <span
-                  key={slug}
-                  className="rounded bg-accent-soft px-1.5 text-[10px] text-accent"
-                >
-                  {categoryLabel(slug)}
-                </span>
-              ))
-            : null}
           <span
             className={`rounded px-2 py-0.5 text-xs font-medium ${campaignStatusClass(campaign.status)}`}
           >

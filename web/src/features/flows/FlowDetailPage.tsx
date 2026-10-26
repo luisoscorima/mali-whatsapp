@@ -18,7 +18,7 @@ import {
 } from './flowEditorUtils'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard'
-import { categoryLabel, useCategoryScope } from '@/shared/area/useCategoryScope'
+import { categoryLabel, mixesCategories, useCategoryScope } from '@/shared/area/useCategoryScope'
 
 const EMPTY_ANALYTICS: FlowAnalytics = {
   started: 0,
@@ -253,12 +253,8 @@ export function FlowDetailPage() {
         >
           ← Flujos
         </Link>
-        {categories.education ? (
-          <p className="mt-2">
-            <span className="rounded bg-accent-soft px-1.5 text-[10px] text-accent">
-              {categoryLabel(flowCategory)}
-            </span>
-          </p>
+        {mixesCategories(categories) ? (
+          <p className="mt-2 text-sm text-muted">{categoryLabel(flowCategory)}</p>
         ) : null}
       </div>
       <FlowCanvasEditor

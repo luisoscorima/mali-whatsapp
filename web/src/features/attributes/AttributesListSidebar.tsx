@@ -5,7 +5,7 @@ import { notify } from '@/shared/notify'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import { SortableSidebarList } from '@/shared/ui/SortableSidebarList'
-import { categoryLabel, useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
+import { categoryLabel, mixesCategories, useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
 
 const LIST_POLL_MS = 15000
 
@@ -248,13 +248,13 @@ export function AttributesListSidebar({ selectedId }: AttributesListSidebarProps
           items={filteredDefinitions}
           onReorder={handleReorder}
           renderItem={(def, dragHandle) =>
-            renderAttributeRow(def, selectedId, segments, listQuery, dragHandle, scope.education)
+            renderAttributeRow(def, selectedId, segments, listQuery, dragHandle, mixesCategories(scope))
           }
         />
       ) : (
         <ul className="inbox-chat-list">
           {filteredDefinitions.map((def) => (
-            <li key={def.id}>{renderAttributeRow(def, selectedId, segments, listQuery, undefined, scope.education)}</li>
+            <li key={def.id}>{renderAttributeRow(def, selectedId, segments, listQuery, undefined, mixesCategories(scope))}</li>
           ))}
         </ul>
       )}
@@ -276,6 +276,11 @@ function renderAttributeRow(
       {dragHandle}
       <Link to={`/attributes/${def.id}${listQuery}`} className="inbox-chat-link flex-1">
         <span className="inbox-chat-link-main">
+          {showCategory ? (
+            <span className="inbox-chat-line">
+              <span>{categoryLabel(def.category)}</span>
+            </span>
+          ) : null}
           <span className="inbox-chat-row-top">
             <span className="inbox-chat-title-line">
               <FieldTypeIcon fieldType={def.field_type} />
@@ -283,11 +288,6 @@ function renderAttributeRow(
                 {def.label}
                 {def.required ? <span className="text-bad">*</span> : null}
               </span>
-              {showCategory ? (
-                <span className="shrink-0 rounded bg-accent-soft px-1.5 text-[10px] text-accent">
-                  {categoryLabel(def.category)}
-                </span>
-              ) : null}
             </span>
             <span
               className={`shrink-0 rounded px-1.5 text-[10px] ${

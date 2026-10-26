@@ -68,14 +68,7 @@ export function AttributeNewPage() {
         <Link to="/attributes" className="text-sm text-accent hover:underline">
           ← Atributos
         </Link>
-        <h1 className="mt-2 flex flex-wrap items-center gap-2 text-2xl font-semibold">
-          Nuevo atributo
-          {draftCategorySlug(categories) ? (
-            <span className="rounded bg-accent-soft px-1.5 text-[10px] text-accent">
-              {categoryLabel(draftCategorySlug(categories))}
-            </span>
-          ) : null}
-        </h1>
+        <h1 className="mt-2 text-2xl font-semibold">Nuevo atributo</h1>
         {draftCategorySlug(categories) === 'general' && categoryToSave(categories) === undefined ? (
           <p className="text-sm text-muted">Con varias categorías marcadas se guarda en General.</p>
         ) : null}

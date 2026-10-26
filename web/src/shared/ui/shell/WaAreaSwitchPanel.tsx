@@ -110,26 +110,27 @@ export function WaAreaSwitchPanel({
       {currentArea === 'educacion' && categories.length > 1 ? (
         <div className="mt-3">
           <p className="mb-1.5 text-xs font-medium text-muted">Categoría</p>
-          <div className="flex flex-wrap gap-1">
+          <ul className="flex flex-col gap-0.5">
             {categories.map((category) => {
               const on = chosen.includes(category.slug)
               return (
-                <button
-                  key={category.slug}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => onToggleCategory(category.slug)}
-                  className={
-                    on
-                      ? 'rounded-full bg-accent-soft px-2 py-1 text-xs font-medium'
-                      : 'rounded-full px-2 py-1 text-xs text-muted hover:bg-accent-soft'
-                  }
-                >
-                  {category.label}
-                </button>
+                <li key={category.slug}>
+                  <button
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => onToggleCategory(category.slug)}
+                    className={
+                      on
+                        ? 'w-full rounded-md bg-accent-soft px-2 py-1.5 text-left text-sm'
+                        : 'w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent-soft'
+                    }
+                  >
+                    <span className="block font-medium">{category.label}</span>
+                  </button>
+                </li>
               )
             })}
-          </div>
+          </ul>
         </div>
       ) : null}
     </div>
