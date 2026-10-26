@@ -374,6 +374,8 @@ function ProfileBlock({
 
 
 type SegmentOption = {
+  id?: number
+  category?: string
   slug: string
   label: string
   color_key: string
@@ -866,6 +868,7 @@ export function ConversationsInboxPage() {
       if (current === wanted) return
       const next = new URLSearchParams(searchParamsRef.current)
       next.delete('category')
+      next.delete('segment')
       next.delete('page')
       if (stored) stored.forEach((slug) => next.append('category', slug))
       setSearchParams(next, { replace: true })
@@ -2023,6 +2026,13 @@ export function ConversationsInboxPage() {
     unanswered: 'Sin responder', bot: 'Bot', human: 'Atención humana',
     archived: 'Archivados', archived_auto: 'Archivados sin respuesta', archived_manual: 'Archivados manuales',
   }
+  function selectedSegmentLabel(token: string) {
+    if (token === '__none__') return 'Sin segmento'
+    const segment = segments.find(item => token.startsWith('id:') ? item.id === Number(token.slice(3)) : item.slug === token)
+    if (!segment) return 'Segmento seleccionado'
+    const category = segment.category === 'general' ? 'General' : segment.category?.toUpperCase()
+    return canonicalArea(user?.area ?? '') === 'educacion' && category ? category + ' · ' + segment.label : segment.label
+  }
   const activeFilterCount = (chatFilter !== 'all' ? 1 : 0) + selectedSegments.length +
     (windowMaxFilter != null ? 1 : 0) + (dateFromFilter || dateToFilter ? 1 : 0)
   const filterPills = (
@@ -2045,12 +2055,12 @@ export function ConversationsInboxPage() {
                 Filtros{activeFilterCount ? ' · ' + activeFilterCount : ''}
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-80 max-w-[calc(100vw-24px)] max-h-[70vh] overflow-y-auto space-y-4">
+            <PopoverContent side="right" align="start" sideOffset={16} collisionPadding={12} className="w-80 max-w-[calc(100vw-24px)] max-h-[70vh] overflow-y-auto space-y-4">
               <div className="flex items-center justify-between"><strong>Filtros de chats</strong>
                 <button type="button" className="text-xs text-muted underline" onClick={clearListFilters}>Restablecer</button>
               </div>
               <p className="text-xs text-muted">Elige una vista y afínala con segmentos, fechas y ventana.</p>
-              <fieldset className="space-y-2"><legend className="text-sm font-medium">Atención</legend>
+              <fieldset className="inbox-filter-group space-y-2"><legend className="text-sm font-medium">Atención</legend>
                 {(['all','mine','unassigned','unread','unanswered', ...(list?.ai_area_enabled ? ['bot'] : [])] as const).map(key => (
                   <label key={key} className="flex items-center gap-2 text-sm">
                     <input type="radio" name="inbox-view" checked={chatFilter === key} onChange={() => setChatFilter(key as InboxListResult['filters']['chat'])} />
@@ -2058,9 +2068,9 @@ export function ConversationsInboxPage() {
                   </label>
                 ))}
               </fieldset>
-              <fieldset className="space-y-2"><legend className="text-sm font-medium">Clasificación · Segmentos</legend>
+              <fieldset className="inbox-filter-group space-y-2"><legend className="text-sm font-medium">Clasificación · Segmentos</legend>
           <SegmentFilterSelect
-            segments={segments}
+            segments={segments.map(segment => ({ ...segment, slug: segment.id ? 'id:' + segment.id : segment.slug, group: canonicalArea(user?.area ?? '') === 'educacion' ? segment.category === 'general' ? 'General' : segment.category?.toUpperCase() : undefined }))}
             selectedSlugs={selectedSegments}
             onToggle={toggleSegment}
             onClearAll={() => {
@@ -2071,7 +2081,7 @@ export function ConversationsInboxPage() {
             }}
           />
               </fieldset>
-              <fieldset className="space-y-2"><legend className="text-sm font-medium">Tiempo · Último mensaje</legend>
+              <fieldset className="inbox-filter-group space-y-2"><legend className="text-sm font-medium">Tiempo · Último mensaje</legend>
         <div className="flex flex-wrap items-center gap-2 px-3 text-xs">
           <label className="muted flex items-center gap-1">
             Desde
@@ -2120,7 +2130,7 @@ export function ConversationsInboxPage() {
                   </select>
                 </label> : null}
               </fieldset>
-              <fieldset className="space-y-2"><legend className="flex items-center gap-1 text-sm font-medium"><ArchiveChatsIcon /> Archivo{list?.archived_count != null ? ' (' + list.archived_count + ')' : ''}</legend>
+              <fieldset className="inbox-filter-group space-y-2"><legend className="flex items-center gap-1 text-sm font-medium"><ArchiveChatsIcon /> Archivo{list?.archived_count != null ? ' (' + list.archived_count + ')' : ''}</legend>
                 {(['archived','archived_auto','archived_manual'] as const).map(key => (
                   <label key={key} className="flex items-center gap-2 text-sm">
                     <input type="radio" name="inbox-view" checked={chatFilter === key} onChange={() => setChatFilter(key)} />{chatFilterLabels[key]}
@@ -2132,7 +2142,7 @@ export function ConversationsInboxPage() {
         </div>
         <div className="inbox-active-filters" aria-label="Filtros activos">
           {chatFilter !== 'all' ? <button type="button" className="inbox-filter-chip" onClick={() => setChatFilter('all')} aria-label={'Quitar filtro ' + chatFilterLabels[chatFilter]}>{chatFilterLabels[chatFilter]} <span aria-hidden>×</span></button> : null}
-          {selectedSegments.map(slug => <button key={slug} type="button" className="inbox-filter-chip" onClick={() => toggleSegment(slug)} aria-label={'Quitar segmento ' + segmentLabel(slug, segments)}>{slug === '__none__' ? 'Sin segmento' : segmentLabel(slug, segments)} <span aria-hidden>×</span></button>)}
+          {selectedSegments.map(slug => <button key={slug} type="button" className="inbox-filter-chip" onClick={() => toggleSegment(slug)} aria-label={'Quitar segmento ' + selectedSegmentLabel(slug)}>{selectedSegmentLabel(slug)} <span aria-hidden>×</span></button>)}
           {windowMaxFilter != null ? <button type="button" className="inbox-filter-chip" onClick={() => setWindowMaxFilter(null)} aria-label="Quitar filtro de ventana">Ventana ≤{windowMaxFilter}h <span aria-hidden>×</span></button> : null}
           {dateFromFilter || dateToFilter ? <button type="button" className="inbox-filter-chip" onClick={clearDateRangeFilter} aria-label="Quitar filtro de fechas">{showingDefaultRange ? 'Últimos 15 días' : [dateFromFilter ? 'Desde ' + dateFromFilter : '', dateToFilter ? 'Hasta ' + dateToFilter : ''].filter(Boolean).join(' · ')} <span aria-hidden>×</span></button> : null}
         </div>

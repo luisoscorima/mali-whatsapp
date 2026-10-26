@@ -1,4 +1,6 @@
 import { Prisma } from '@prisma/client';
+import { BadRequestException } from '@nestjs/common';
+import { segmentDefinitionCategorySql } from '../config/category-scope';
 import { readSessionWindowMs } from '../campaigns/campaign-conversation-window.util';
 import type { SegmentListFilter } from '../contacts/contacts.types';
 import {
@@ -91,10 +93,7 @@ export const INBOX_DEFAULT_ACTIVITY_DAYS = 15;
 export type InboxDateRangeMode = 'default' | 'all' | 'custom';
 
 export function defaultInboxActivityFromYmd(): string {
-  return addDaysYmd(
-    todayYmdInDisplayTz(),
-    -(INBOX_DEFAULT_ACTIVITY_DAYS - 1),
-  );
+  return addDaysYmd(todayYmdInDisplayTz(), -(INBOX_DEFAULT_ACTIVITY_DAYS - 1));
 }
 
 /**
@@ -175,37 +174,92 @@ export function parseSegmentQueryParam(
     .filter(Boolean);
 }
 
-export function buildConversationSegmentSql(
-  filter: SegmentListFilter,
+export type InboxSegmentFilter = SegmentListFilter & {
+  ids?: number[];
+  categories?: string[] | null;
+};
+
+export function parseInboxSegmentFilter(
+  raw: string[],
+  options: Array<{ id: number; slug: string }>,
+  categories: string[] | null,
+): InboxSegmentFilter {
+  const ids: number[] = [];
+  const slugs: string[] = [];
+  let includeNone = false;
+  for (const token of new Set(raw)) {
+    if (token === '__none__') {
+      includeNone = true;
+      continue;
+    }
+    if (/^id:[1-9][0-9]*$/.test(token)) {
+      const id = Number(token.slice(3));
+      if (
+        !Number.isSafeInteger(id) ||
+        !options.some((option) => option.id === id)
+      )
+        throw new BadRequestException(
+          'El segmento no pertenece al área o categorías seleccionadas',
+        );
+      ids.push(id);
+    } else if (options.some((option) => option.slug === token))
+      slugs.push(token);
+    else
+      throw new BadRequestException('Segmento desconocido para esta selección');
+  }
+  return { ids, slugs, includeNone, categories };
+}
+
+function segmentMembershipSql(
+  filter: InboxSegmentFilter,
+  conversation: boolean,
+  selected: boolean,
+): Prisma.Sql {
+  const selection = selected
+    ? Prisma.sql`AND (sd.id = ANY(${filter.ids ?? []}::int[]) OR sd.slug = ANY(${filter.slugs}::varchar[]))`
+    : Prisma.empty;
+  const line = conversation
+    ? Prisma.sql`AND EXISTS (
+    SELECT 1 FROM conversations seg_conv
+    LEFT JOIN whatsapp_lines seg_line ON seg_line.id = seg_conv.whatsapp_line_id
+    WHERE seg_conv.id = c.id AND (
+      (seg_line.program_id IS NOT NULL AND sd.program_id = seg_line.program_id)
+      OR (seg_line.program_id IS NULL AND NULLIF(BTRIM(seg_line.program_key), '') IS NOT NULL
+        AND EXISTS (SELECT 1 FROM business_programs bp WHERE bp.id = sd.program_id AND bp.slug = BTRIM(seg_line.program_key)))
+      OR ((seg_line.id IS NULL OR (seg_line.program_id IS NULL AND COALESCE(BTRIM(seg_line.program_key), '') = '')) AND sd.program_id IS NULL)
+    )
+  )`
+    : Prisma.empty;
+  return Prisma.sql`EXISTS (
+    SELECT 1 FROM contact_segments csf
+    JOIN segment_definitions sd ON sd.area = csf.area AND sd.slug = csf.segment_slug
+      AND sd.program_id IS NOT DISTINCT FROM csf.program_id
+    WHERE csf.contact_id = ct.id AND csf.area = ct.area
+      AND ${segmentDefinitionCategorySql(filter.categories ?? null)}
+      ${selection} ${line}
+  )`;
+}
+
+function buildSegmentSql(
+  filter: InboxSegmentFilter,
+  conversation: boolean,
 ): Prisma.Sql {
   const clauses: Prisma.Sql[] = [];
-  if (filter.slugs.length > 0) {
-    clauses.push(Prisma.sql`EXISTS (
-      SELECT 1 FROM contact_segments cseg
-      WHERE cseg.contact_id = ct.id AND cseg.segment_slug = ANY(${filter.slugs}::varchar[])
-    )`);
-  }
-  if (filter.includeNone) {
-    clauses.push(Prisma.sql`c.contact_id IS NULL`);
-  }
+  if (filter.slugs.length || filter.ids?.length)
+    clauses.push(segmentMembershipSql(filter, conversation, true));
+  if (filter.includeNone)
+    clauses.push(
+      Prisma.sql`NOT ${segmentMembershipSql(filter, conversation, false)}`,
+    );
   if (!clauses.length) return Prisma.empty;
   return Prisma.sql` AND (${Prisma.join(clauses, ' OR ')})`;
 }
 
-export function buildContactSegmentSql(filter: SegmentListFilter): Prisma.Sql {
-  const clauses: Prisma.Sql[] = [];
-  if (filter.slugs.length > 0) {
-    clauses.push(Prisma.sql`EXISTS (
-      SELECT 1 FROM contact_segments csf
-      WHERE csf.contact_id = ct.id AND csf.segment_slug = ANY(${filter.slugs}::varchar[])
-    )`);
-  }
-  if (filter.includeNone) {
-    clauses.push(Prisma.sql`NOT EXISTS (
-      SELECT 1 FROM contact_segments csn
-      WHERE csn.contact_id = ct.id
-    )`);
-  }
-  if (!clauses.length) return Prisma.empty;
-  return Prisma.sql` AND (${Prisma.join(clauses, ' OR ')})`;
+export function buildConversationSegmentSql(
+  filter: InboxSegmentFilter,
+): Prisma.Sql {
+  return buildSegmentSql(filter, true);
+}
+export function buildContactSegmentSql(filter: InboxSegmentFilter): Prisma.Sql {
+  return buildSegmentSql(filter, false);
 }

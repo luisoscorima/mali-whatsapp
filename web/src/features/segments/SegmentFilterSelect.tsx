@@ -36,7 +36,7 @@ function triggerLabel(
   const noneActive = selectedSlugs.includes(SEGMENT_NONE)
   const active = segments.filter((s) => selectedSlugs.includes(s.slug))
   const parts = [
-    ...active.map((s) => s.label),
+    ...active.map((s) => s.group ? s.group + ' · ' + s.label : s.label),
     ...(noneActive ? ['Sin segmento'] : []),
   ]
   const prefix = variant === 'form' || compact ? '' : 'Segmentos: '
@@ -68,10 +68,15 @@ export function SegmentFilterSelect({
     if (!q) return segments
     return segments.filter(
       (s) =>
-        s.label.toLowerCase().includes(q) || s.slug.toLowerCase().includes(q),
+        s.label.toLowerCase().includes(q) || s.slug.toLowerCase().includes(q) || Boolean(s.group?.toLowerCase().includes(q)),
     )
   }, [segments, query])
 
+  const groupOrder = ['General', 'CA', 'EP']
+  const ordered = [...filtered].sort((a, b) => {
+    const rank = (group?: string) => groupOrder.includes(group ?? '') ? groupOrder.indexOf(group!) : groupOrder.length
+    return rank(a.group) - rank(b.group) || (a.group ?? '').localeCompare(b.group ?? '')
+  })
   const showNoneInList =
     effectiveShowNone &&
     (!query.trim() ||
@@ -155,10 +160,11 @@ export function SegmentFilterSelect({
                 </label>
               </li>
             ) : null}
-            {filtered.map((seg) => {
+            {ordered.map((seg, index) => {
               const checked = selectedSlugs.includes(seg.slug)
               return (
                 <li key={seg.slug}>
+                  {seg.group && (index === 0 || ordered[index - 1].group !== seg.group) ? <div className="mt-3 mb-1 border-t border-line px-2 pt-2 text-xs font-bold text-muted">{seg.group}</div> : null}
                   <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface">
                     <input
                       type="checkbox"

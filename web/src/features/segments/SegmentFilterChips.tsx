@@ -2,6 +2,7 @@ import { useTheme } from '@/shared/theme/useTheme'
 import { segmentFilterPillStyle } from './segmentColors'
 
 export type SegmentFilterOption = {
+  group?: string
   slug: string
   label: string
   color_key: string

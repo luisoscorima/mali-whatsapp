@@ -306,6 +306,27 @@ html[data-theme='dark'] .inbox-layout-wa {
 }
 .inbox-active-filters:empty { display: none; }
 
+.inbox-filter-group {
+  min-width: 0;
+  padding: 0 0 16px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.inbox-filter-group:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.inbox-filter-group > legend {
+  width: 100%;
+  padding: 0;
+  margin-bottom: 10px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
 .inbox-filter-chip {
   display: inline-flex;
   align-items: center;

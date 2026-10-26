@@ -39,7 +39,6 @@ import {
 } from '../campaigns/contact-template-params.util';
 import {
   escapeForLikePattern,
-  parseSegmentListFilter,
 } from '../contacts/contacts-filter.utils';
 import {
   MAX_BODY_PARAM_LEN,
@@ -53,7 +52,7 @@ import {
 } from '../templates/template-definition.util';
 import { sendTemplateWithComponents } from '../templates/whatsapp-meta.util';
 import { PrismaService } from '../prisma/prisma.service';
-import { segmentMatchesConversationSql, segmentMatchesOuterLineSql } from '../config/category-scope';
+import { programScopeWhere, segmentMatchesConversationSql, segmentMatchesOuterLineSql } from '../config/category-scope';
 import { FlowsService } from '../flows/flows.service';
 import { MAX_SESSION_TEXT_LEN } from '../settings/business-hours.util';
 import { parseAiConfigValue } from '../settings/ai-config.util';
@@ -89,6 +88,8 @@ import {
 } from './chat-reaction.util';
 import {
   buildContactSegmentSql,
+  parseInboxSegmentFilter,
+  type InboxSegmentFilter,
   buildConversationSegmentSql,
   buildLastMessageDateRangeSql,
   buildWindowMaxFilterSql,
@@ -186,14 +187,6 @@ export class ConversationsService {
 
   private conversationLookup(area: string, id: number) {
     return visibleConversationWhere(area, id);
-  }
-
-  private async getSegmentSlugSet(area: string): Promise<Set<string>> {
-    const rows = await this.prisma.segment_definitions.findMany({
-      where: { area },
-      select: { slug: true },
-    });
-    return new Set(rows.map((row) => row.slug));
   }
 
   private canAssignConversations(user: AuthUser): boolean {
@@ -296,12 +289,13 @@ export class ConversationsService {
     return Boolean(cfg?.enabled);
   }
 
-  private async loadSegmentOptions(area: string) {
-    return this.prisma.segment_definitions.findMany({
-      where: { area, active: true, show_in_filter: true },
+  private async loadSegmentOptions(area: string, categories: string[] | null = null) {
+    const rows = await this.prisma.segment_definitions.findMany({
+      where: { area: isEducationAreaSlug(area) ? 'educacion' : area, active: true, show_in_filter: true, ...programScopeWhere(categories) },
       orderBy: [{ sort_order: 'asc' }, { slug: 'asc' }],
-      select: { slug: true, label: true, color_key: true },
+      select: { id: true, slug: true, label: true, color_key: true, program: { select: { slug: true } } },
     });
+    return rows.map(({ program, ...row }) => ({ ...row, category: program?.slug || 'general' }));
   }
 
   private async loadAssignableSegmentOptions(area: string) {
@@ -522,7 +516,7 @@ export class ConversationsService {
 
   private async fetchInboxConversations(
     area: string,
-    segmentFilter: ReturnType<typeof parseSegmentListFilter>,
+    segmentFilter: InboxSegmentFilter,
     searchQ: string,
     chatFilter: ReturnType<typeof parseInboxChatFilter>,
     windowMax: ReturnType<typeof parseInboxWindowMaxFilter>,
@@ -714,7 +708,7 @@ export class ConversationsService {
 
   private async countInboxConversations(
     area: string,
-    segmentFilter: ReturnType<typeof parseSegmentListFilter>,
+    segmentFilter: InboxSegmentFilter,
     searchQ: string,
     chatFilter: ReturnType<typeof parseInboxChatFilter>,
     windowMax: ReturnType<typeof parseInboxWindowMaxFilter>,
@@ -804,14 +798,14 @@ export class ConversationsService {
 
   private async countInboxUnread(
     area: string,
-    segmentFilter: ReturnType<typeof parseSegmentListFilter>,
+    segmentFilter: InboxSegmentFilter,
     categories: string[] | null = null,
   ): Promise<number> {
     const segmentSql = buildConversationSegmentSql(segmentFilter);
     const rows = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
       SELECT COUNT(*)::int AS n
       FROM conversations c
-      ${segmentFilter.slugs.length ? this.inboxResolvedContactJoinSql(area) : Prisma.empty}
+      ${this.inboxResolvedContactJoinSql(area)}
       WHERE ${categories ? inboxConversationPredicate('c', area, categories) : conversationAreaPredicate('c', area)}
         AND c.inbox_unread = TRUE
         AND c.archived = FALSE
@@ -823,7 +817,7 @@ export class ConversationsService {
 
   private async countInboxArchived(
     area: string,
-    segmentFilter: ReturnType<typeof parseSegmentListFilter>,
+    segmentFilter: InboxSegmentFilter,
     categories: string[] | null = null,
   ): Promise<number> {
     const segmentSql = buildConversationSegmentSql(segmentFilter);
@@ -920,8 +914,8 @@ export class ConversationsService {
     const categoryOptions = await this.educationCategoryOptions(user);
     const categories = this.selectedEducationCategories(area, categoryOptions, query.category);
     const segmentRaw = parseSegmentQueryParam(query.segment);
-    const slugSet = await this.getSegmentSlugSet(area);
-    const segmentFilter = parseSegmentListFilter(segmentRaw, slugSet);
+    const segmentOptions = await this.loadSegmentOptions(area, categories);
+    const segmentFilter = parseInboxSegmentFilter(segmentRaw, segmentOptions, categories);
     const pageRaw = Array.isArray(query.page) ? query.page[0] : query.page;
     const page = Math.max(1, Number(pageRaw) || 1);
     const limit = INBOX_LIST_PAGE_SIZE;
@@ -934,7 +928,7 @@ export class ConversationsService {
       unreadCount,
       archivedCount,
     ] = await Promise.all([
-      this.loadSegmentOptions(area),
+      Promise.resolve(segmentOptions),
       this.loadAssignableSegmentOptions(area),
       this.countInboxConversations(
         area,
@@ -991,7 +985,7 @@ export class ConversationsService {
         range: dateFilter.range,
         applied_from: dateFilter.appliedFrom,
         applied_to: dateFilter.appliedTo,
-        segment_slugs: segmentFilter.slugs,
+        segment_slugs: [...segmentFilter.slugs, ...(segmentFilter.ids ?? []).map(id => `id:${id}`)],
         include_none: segmentFilter.includeNone,
         categories: categories ?? [],
       },

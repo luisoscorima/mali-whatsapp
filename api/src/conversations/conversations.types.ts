@@ -14,6 +14,8 @@ export type InboxChatFilter =
 export type InboxWindowMaxFilter = 2 | 6 | 12 | 24 | null;
 
 export type InboxSegmentOption = {
+  id?: number;
+  category?: string;
   slug: string;
   label: string;
   color_key: string;
