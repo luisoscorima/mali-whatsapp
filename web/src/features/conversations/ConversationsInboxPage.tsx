@@ -48,14 +48,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/shared/ui/shadcn/context-menu'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/shared/ui/shadcn/dropdown-menu'
+import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/shadcn/popover'
 const ConversationsSummaryPane = lazy(() => import('./ConversationsSummaryPane').then((m) => ({ default: m.ConversationsSummaryPane })))
 import { InboxComposeBar, type ReplyToMessage } from './InboxComposeBar'
 import { InboxMessageScroller, type InboxMessageScrollerHandle } from './InboxMessageScroller'
@@ -68,6 +61,18 @@ import { useAssignedInboxBrowserNotify } from './useAssignedInboxBrowserNotify'
 import { chatDisplayName, chatSecondaryLabel, isContactPhone } from './whatsappIdentity'
 import { leadScoreLabel, leadScoreTone } from './leadScore'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
+
+function InboxSegmentSummary({ items }: { items: Array<{ slug: string; label: string; color: string }> }) {
+  return <div className="inbox-row-segments contact-segment-chips" aria-label="Segmentos">
+    {items.slice(0, 2).map(item => <SegmentBadge key={item.slug} colorKey={item.color} className="inbox-chat-segment">{item.label}</SegmentBadge>)}
+    {items.length > 2 ? <Popover><PopoverTrigger asChild>
+      <button type="button" className="inbox-filter-chip" aria-label={'Ver los ' + items.length + ' segmentos'}>+{items.length - 2}</button>
+    </PopoverTrigger><PopoverContent align="start" className="w-64 max-h-64 overflow-y-auto">
+      <p className="mb-2 text-sm font-medium">Todos los segmentos</p>
+      <div className="contact-segment-chips">{items.map(item => <SegmentBadge key={item.slug} colorKey={item.color}>{item.label}</SegmentBadge>)}</div>
+    </PopoverContent></Popover> : null}
+  </div>
+}
 
 const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000
 const WINDOW_MAX_BUCKETS = [2, 6, 12, 24] as const
@@ -381,6 +386,7 @@ type InboxListItem = {
   whatsapp_user_id: string | null
   recipient: string
   last_message_at: string | null
+  unread_message_count?: number | null
   inbox_unread: boolean
   conversation_status: string | null
   assigned_user_id: number | null
@@ -991,7 +997,8 @@ export function ConversationsInboxPage() {
     rangeAll
 
   function clearListFilters() {
-    const next = new URLSearchParams()
+    const next = new URLSearchParams(searchParams)
+    for (const key of ['q', 'chat', 'window_max', 'from', 'to', 'range', 'segment', 'page', 'msg']) next.delete(key)
     setSearchInput('')
     setSearchParams(next)
   }
@@ -2011,100 +2018,48 @@ export function ConversationsInboxPage() {
     )
   }
 
+  const chatFilterLabels: Record<string, string> = {
+    all: 'Todos', mine: 'Mis chats', unassigned: 'Sin asignar', unread: 'Sin leer',
+    unanswered: 'Sin responder', bot: 'Bot', human: 'Atención humana',
+    archived: 'Archivados', archived_auto: 'Archivados sin respuesta', archived_manual: 'Archivados manuales',
+  }
+  const activeFilterCount = (chatFilter !== 'all' ? 1 : 0) + selectedSegments.length +
+    (windowMaxFilter != null ? 1 : 0) + (dateFromFilter || dateToFilter ? 1 : 0)
   const filterPills = (
     <>
-      {serviceReplies ? (
-        <p className="text-xs text-muted">{formatServiceReplyQuota(serviceReplies)}</p>
-      ) : null}
-      {!isArchivedChatFilter(chatFilter) ? (
-        <div
-          className="inbox-chat-filter-pills inbox-chat-filter-pills--row inbox-chat-filter-pills--compact"
-          aria-label="Filtrar lista"
-        >
-          {(
-            [
-              { key: 'all', label: 'Todos' },
-              { key: 'unread', label: list?.unread_count ? `Sin leer (${list.unread_count})` : 'Sin leer' },
-              { key: 'mine', label: 'Mis chats' },
-              { key: 'unanswered', label: 'Sin responder' },
-              { key: 'unassigned', label: 'Sin asignar' },
-            ] as const
-          ).map((pill) => (
-            <Button
-              key={pill.key}
-              type="button"
-              size="sm"
-              variant={chatFilter === pill.key ? 'default' : 'outline'}
-              className="rounded-full"
-              onClick={() => setChatFilter(pill.key)}
-            >
-              {pill.label}
-            </Button>
-          ))}
-          {list?.ai_area_enabled ? (
-            <Button
-              type="button"
-              size="sm"
-              variant={chatFilter === 'bot' ? 'default' : 'outline'}
-              className="rounded-full"
-              onClick={() => setChatFilter('bot')}
-            >
-              Bot
-            </Button>
-          ) : null}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                size="sm"
-                variant={windowMaxFilter != null ? 'default' : 'outline'}
-                className="rounded-full"
-                aria-label={
-                  windowMaxFilter != null
-                    ? `Ventana ≤${windowMaxFilter}h`
-                    : 'Filtrar por horas de ventana'
-                }
-                title="Filtrar por horas restantes de ventana"
-              >
-                <WindowClockIcon />
-                {windowMaxFilter != null ? `≤${windowMaxFilter}h` : null}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuLabel>Horas restantes</DropdownMenuLabel>
-              <DropdownMenuItem
-                onSelect={() => setWindowMaxFilter(null)}
-                className={windowMaxFilter == null ? 'bg-accent-soft' : undefined}
-              >
-                Todas
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {WINDOW_MAX_BUCKETS.map((hours) => (
-                <DropdownMenuItem
-                  key={hours}
-                  onSelect={() => setWindowMaxFilter(hours)}
-                  className={windowMaxFilter === hours ? 'bg-accent-soft' : undefined}
-                >
-                  ≤{hours}h
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      ) : null}
+      <div className="inbox-chat-filter-pills inbox-chat-filter-pills--row inbox-chat-filter-pills--compact" aria-label="Vistas de chats">
+        {(['all', 'mine', 'unassigned'] as const).map(key => (
+          <Button key={key} type="button" size="sm" variant={chatFilter === key ? 'default' : 'outline'}
+            className="rounded-full" aria-pressed={chatFilter === key} onClick={() => setChatFilter(key)}>
+            {chatFilterLabels[key]}
+          </Button>
+        ))}
+      </div>
       <div className="inbox-filters space-y-2">
         <div className="inbox-search-row">
-          <input
-            type="search"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={onSearchKeyDown}
-            placeholder="Buscar…"
-            className="inbox-search-input"
-            aria-label="Buscar en chats"
-          />
+          <input type="search" value={searchInput} onChange={e => setSearchInput(e.target.value)}
+            onKeyDown={onSearchKeyDown} placeholder="Buscar…" className="inbox-search-input" aria-label="Buscar en chats" />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button type="button" size="sm" variant={activeFilterCount ? 'secondary' : 'outline'}>
+                Filtros{activeFilterCount ? ' · ' + activeFilterCount : ''}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80 max-w-[calc(100vw-24px)] max-h-[70vh] overflow-y-auto space-y-4">
+              <div className="flex items-center justify-between"><strong>Filtros de chats</strong>
+                <button type="button" className="text-xs text-muted underline" onClick={clearListFilters}>Restablecer</button>
+              </div>
+              <p className="text-xs text-muted">Elige una vista y afínala con segmentos, fechas y ventana.</p>
+              <fieldset className="space-y-2"><legend className="text-sm font-medium">Atención</legend>
+                {(['all','mine','unassigned','unread','unanswered', ...(list?.ai_area_enabled ? ['bot'] : [])] as const).map(key => (
+                  <label key={key} className="flex items-center gap-2 text-sm">
+                    <input type="radio" name="inbox-view" checked={chatFilter === key} onChange={() => setChatFilter(key as InboxListResult['filters']['chat'])} />
+                    {chatFilterLabels[key]}{key === 'unread' && list?.unread_count ? ' (' + list.unread_count + ')' : ''}
+                  </label>
+                ))}
+              </fieldset>
+              <fieldset className="space-y-2"><legend className="text-sm font-medium">Clasificación · Segmentos</legend>
           <SegmentFilterSelect
-            compact
             segments={segments}
             selectedSlugs={selectedSegments}
             onToggle={toggleSegment}
@@ -2115,7 +2070,8 @@ export function ConversationsInboxPage() {
               setSearchParams(next)
             }}
           />
-        </div>
+              </fieldset>
+              <fieldset className="space-y-2"><legend className="text-sm font-medium">Tiempo · Último mensaje</legend>
         <div className="flex flex-wrap items-center gap-2 px-3 text-xs">
           <label className="muted flex items-center gap-1">
             Desde
@@ -2156,63 +2112,46 @@ export function ConversationsInboxPage() {
             </button>
           ) : null}
         </div>
-      </div>
-      <button
-        type="button"
-        className={`inbox-archived-row${isArchivedChatFilter(chatFilter) ? ' is-active' : ''}`}
-        onClick={() =>
-          setChatFilter(isArchivedChatFilter(chatFilter) ? 'all' : 'archived')
-        }
-        aria-pressed={isArchivedChatFilter(chatFilter)}
-      >
-        <span className="inbox-archived-row__icon" aria-hidden>
-          <ArchiveChatsIcon />
-        </span>
-        <span className="inbox-archived-row__label">Archivados</span>
-        {list?.archived_count != null ? (
-          <span className="inbox-archived-row__count">{list.archived_count}</span>
-        ) : null}
-      </button>
-      {isArchivedChatFilter(chatFilter) ? (
-        <div
-          className="inbox-chat-filter-pills inbox-chat-filter-pills--row inbox-chat-filter-pills--compact"
-          aria-label="Filtrar archivados"
-        >
-          {(
-            [
-              { key: 'archived', label: 'Todos' },
-              { key: 'archived_auto', label: 'Sin respuesta' },
-              { key: 'archived_manual', label: 'Manuales' },
-            ] as const
-          ).map((pill) => (
-            <Button
-              key={pill.key}
-              type="button"
-              size="sm"
-              variant={chatFilter === pill.key ? 'default' : 'outline'}
-              className="rounded-full"
-              onClick={() => setChatFilter(pill.key)}
-            >
-              {pill.label}
-            </Button>
-          ))}
+                {!isArchivedChatFilter(chatFilter) ? <label className="flex items-center justify-between gap-2 text-xs">
+                  <span className="flex items-center gap-1"><WindowClockIcon /> Ventana restante</span>
+                  <select className="rounded border border-line bg-surface px-2 py-1" aria-label="Horas restantes de ventana" value={windowMaxFilter ?? ''}
+                    onChange={e => setWindowMaxFilter(e.target.value ? Number(e.target.value) as WindowMaxFilter : null)}>
+                    <option value="">Todas</option>{WINDOW_MAX_BUCKETS.map(hours => <option key={hours} value={hours}>≤{hours}h</option>)}
+                  </select>
+                </label> : null}
+              </fieldset>
+              <fieldset className="space-y-2"><legend className="flex items-center gap-1 text-sm font-medium"><ArchiveChatsIcon /> Archivo{list?.archived_count != null ? ' (' + list.archived_count + ')' : ''}</legend>
+                {(['archived','archived_auto','archived_manual'] as const).map(key => (
+                  <label key={key} className="flex items-center gap-2 text-sm">
+                    <input type="radio" name="inbox-view" checked={chatFilter === key} onChange={() => setChatFilter(key)} />{chatFilterLabels[key]}
+                  </label>
+                ))}
+              </fieldset>
+            </PopoverContent>
+          </Popover>
         </div>
-      ) : null}
-      {canBulkSelect ? (
+        <div className="inbox-active-filters" aria-label="Filtros activos">
+          {chatFilter !== 'all' ? <button type="button" className="inbox-filter-chip" onClick={() => setChatFilter('all')} aria-label={'Quitar filtro ' + chatFilterLabels[chatFilter]}>{chatFilterLabels[chatFilter]} <span aria-hidden>×</span></button> : null}
+          {selectedSegments.map(slug => <button key={slug} type="button" className="inbox-filter-chip" onClick={() => toggleSegment(slug)} aria-label={'Quitar segmento ' + segmentLabel(slug, segments)}>{slug === '__none__' ? 'Sin segmento' : segmentLabel(slug, segments)} <span aria-hidden>×</span></button>)}
+          {windowMaxFilter != null ? <button type="button" className="inbox-filter-chip" onClick={() => setWindowMaxFilter(null)} aria-label="Quitar filtro de ventana">Ventana ≤{windowMaxFilter}h <span aria-hidden>×</span></button> : null}
+          {dateFromFilter || dateToFilter ? <button type="button" className="inbox-filter-chip" onClick={clearDateRangeFilter} aria-label="Quitar filtro de fechas">{showingDefaultRange ? 'Últimos 15 días' : [dateFromFilter ? 'Desde ' + dateFromFilter : '', dateToFilter ? 'Hasta ' + dateToFilter : ''].filter(Boolean).join(' · ')} <span aria-hidden>×</span></button> : null}
+        </div>
+      </div>
+      {canBulkSelect && selectedContactIds.size > 0 ? (
         <div className="flex flex-wrap items-center gap-1 px-3 py-1 text-xs">
           <button
             type="button"
             className="small-btn compact"
             onClick={selectAllVisibleContacts}
           >
-            Todos
+            Seleccionar página
           </button>
           <button
             type="button"
             className="small-btn compact"
             onClick={clearContactSelection}
           >
-            Ninguno
+            Cancelar selección
           </button>
           <button
             type="button"
@@ -2234,7 +2173,14 @@ export function ConversationsInboxPage() {
         title={listCount != null ? `Chats (${listCount})` : 'Chats'}
         className="relative conversations-inbox-sidebar"
         actions={
-          browserNotifySupported ? (
+          <>
+          {serviceReplies ? <Popover><PopoverTrigger asChild>
+            <button type="button" className="small-btn compact" aria-label="Ver consumo mensual de respuestas" title="Consumo mensual">ⓘ</button>
+          </PopoverTrigger><PopoverContent align="end" className="w-72 max-w-[calc(100vw-24px)] space-y-2">
+            <strong className="text-sm">Consumo mensual</strong>
+            <p className="text-xs text-muted">{formatServiceReplyQuota(serviceReplies)}</p>
+          </PopoverContent></Popover> : null}
+          {browserNotifySupported ? (
             <button
               type="button"
               className={`small-btn compact inbox-notify-bell-btn${browserNotifyActive ? ' is-active' : ''}`}
@@ -2267,7 +2213,8 @@ export function ConversationsInboxPage() {
                 <InboxNotifyBellIcon active={browserNotifyActive} />
               )}
             </button>
-          ) : null
+          ) : null}
+          </>
         }
         filters={filterPills}
         floating={
@@ -2383,9 +2330,9 @@ export function ConversationsInboxPage() {
                     <li
                       className={`inbox-chat-item ${item.inbox_unread ? 'inbox-chat-item--unread' : ''} ${active ? 'is-active' : ''}`}
                     >
-                      {canBulkSelect ? (
+                      {canBulkSelect && contactIdForBulk(item) != null ? (
                         <label
-                          className="inbox-chat-item-check"
+                          className={`inbox-chat-item-check ${selectedContactIds.has(contactIdForBulk(item)!) ? 'is-selected' : ''}`}
                           onClick={(event) => event.stopPropagation()}
                         >
                           {contactIdForBulk(item) != null ? (
@@ -2438,6 +2385,14 @@ export function ConversationsInboxPage() {
                               ) : null}
                             </span>
                             <span className="inbox-chat-link-main">
+                              {item.line_label || item.line_program ? (
+                                <span className="inbox-chat-line" title={item.line_display_phone || undefined}>
+                                  <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
+                                    <path d="M20.5 3.5A11.8 11.8 0 0 0 2 17.7L.4 23.6l6-1.6A11.8 11.8 0 0 0 20.5 3.5ZM12 21.4a9.7 9.7 0 0 1-5-1.4l-.4-.2-3.6.9 1-3.5-.3-.4A9.8 9.8 0 1 1 12 21.4Zm5.4-7.3c-.3-.2-1.7-.8-2-.9-.2-.1-.4-.2-.6.1l-.9 1.1c-.2.2-.3.2-.6.1a8 8 0 0 1-3.9-3.4c-.3-.5.3-.4.9-1.6.1-.2 0-.4 0-.6l-.9-2.1c-.2-.5-.5-.4-.7-.4H7.9c-.2 0-.5.1-.7.3-.3.3-1 1-1 2.4s1 2.7 1.2 2.9c.1.2 2 3.1 4.9 4.4 1.8.8 2.5.9 3.4.8.5-.1 1.7-.7 1.9-1.4.2-.7.2-1.3.1-1.4l-.3-.3Z" />
+                                  </svg>
+                                  <span>{item.line_label || item.line_program?.toUpperCase()}</span>
+                                </span>
+                              ) : null}
                               <span className="inbox-chat-row-top">
                                 <span className="inbox-chat-title-line">
                                   <span
@@ -2453,15 +2408,13 @@ export function ConversationsInboxPage() {
                               {showPhoneRow ? (
                                 <span className="inbox-chat-phone-row">
                                   <span className="inbox-chat-phone">
-                                    {item.line_label || item.line_program
-                                      ? `${item.line_label || item.line_program?.toUpperCase()} · `
-                                      : ''}
                                     {chatSecondaryLabel(item.phone)}
                                   </span>
                                   {leadScore ? <LeadScoreBadge score={leadScore} /> : null}
                                   <ConversationBadges
                                     status={item.conversation_status}
                                     assignedUserLabel={item.assigned_user_label}
+                                    hideAssignee
                                     archived={item.archived}
                                     unanswered={!item.last_user_message_at}
                                   />
@@ -2470,6 +2423,7 @@ export function ConversationsInboxPage() {
                                 <ConversationBadges
                                   status={item.conversation_status}
                                   assignedUserLabel={item.assigned_user_label}
+                                  hideAssignee
                                   archived={item.archived}
                                   unanswered={!item.last_user_message_at}
                                 />
@@ -2481,33 +2435,25 @@ export function ConversationsInboxPage() {
                               </span>
                             </span>
                           </span>
-                          {item.contact_segment_slugs.length > 0 ? (
-                            <span
-                              className="contact-segment-chips"
-                              role="group"
-                              aria-label="Segmentos"
-                            >
-                              {item.contact_segment_slugs.map((slug) => (
-                                <SegmentBadge
-                                  key={slug}
-                                  colorKey={segmentColorKey(slug, segments)}
-                                  className="inbox-chat-segment"
-                                >
-                                  {segmentLabel(slug, segments)}
-                                </SegmentBadge>
-                              ))}
-                            </span>
-                          ) : null}
+
                         </span>
                       </button>
                       <div className="inbox-chat-side">
+                        {item.assigned_user_label ? (
+                          <span className="inbox-chat-assignee" title={`Asignado a ${item.assigned_user_label}`}>
+                            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><circle cx="12" cy="7" r="3" /><path d="M5 21v-3a7 7 0 0 1 14 0v3Z" /></svg>
+                            <span>{item.assigned_user_label}</span>
+                          </span>
+                        ) : null}
                         <span className="inbox-chat-time-wrap">
                           {item.inbox_unread ? (
                             <span
-                              className="inbox-unread-dot"
-                              title="No leído"
-                              aria-label="No leído"
-                            />
+                              className={`inbox-unread-dot ${(item.unread_message_count ?? 0) > 0 ? 'inbox-unread-dot--count' : ''}`}
+                              title={item.unread_message_count ? `${item.unread_message_count} mensajes sin leer` : 'No leído'}
+                              aria-label={item.unread_message_count ? `${item.unread_message_count} mensajes sin leer` : 'No leído'}
+                            >
+                              {(item.unread_message_count ?? 0) > 0 ? ((item.unread_message_count ?? 0) > 99 ? '99+' : item.unread_message_count) : null}
+                            </span>
                           ) : null}
                           <span
                             className="inbox-chat-msg-times inbox-chat-msg-times--compact"
@@ -2548,6 +2494,7 @@ export function ConversationsInboxPage() {
                           <span aria-hidden>⋮</span>
                         </button>
                       </div>
+                      {item.contact_segment_slugs.length > 0 ? <InboxSegmentSummary items={item.contact_segment_slugs.map(slug => ({ slug, label: segmentLabel(slug, segments), color: segmentColorKey(slug, segments) }))} /> : null}
                     </li>
                   </ContextMenuTrigger>
                   <ContextMenuContent className="w-52">

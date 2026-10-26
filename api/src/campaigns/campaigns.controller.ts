@@ -62,9 +62,14 @@ export class CampaignsController {
   async recipientsPreview(
     @CurrentUser() user: AuthUser,
     @Body() body: RecipientsPreviewDto,
+    @Query('category') category?: string | string[],
   ): Promise<ApiResponse<RecipientsPreviewResult>> {
     assertCanCreateCampaigns(user);
-    const data = await this.campaignsService.previewRecipients(user.area, body);
+    const data = await this.campaignsService.previewRecipients(
+      user.area,
+      body,
+      parseCategorySlugs(category),
+    );
     return { ok: true, data };
   }
 
@@ -72,9 +77,14 @@ export class CampaignsController {
   async send(
     @CurrentUser() user: AuthUser,
     @Body() body: Record<string, unknown>,
+    @Query('category') category?: string | string[],
   ): Promise<ApiResponse<SendCampaignOutcome>> {
     assertCanCreateCampaigns(user);
-    const data = await this.campaignsService.sendCampaign(user, body);
+    const data = await this.campaignsService.sendCampaign(
+      user,
+      body,
+      parseCategorySlugs(category),
+    );
     return { ok: true, data };
   }
 

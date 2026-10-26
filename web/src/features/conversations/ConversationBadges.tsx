@@ -3,6 +3,7 @@ import { Badge } from '@/shared/ui/shadcn/badge'
 export type ConversationBadgeInput = {
   status: string | null
   assignedUserLabel: string | null
+  hideAssignee?: boolean
   archived?: boolean
   unanswered?: boolean
 }
@@ -10,6 +11,7 @@ export type ConversationBadgeInput = {
 export function ConversationBadges({
   status,
   assignedUserLabel,
+  hideAssignee = false,
   archived = false,
   unanswered = false,
 }: ConversationBadgeInput) {
@@ -31,9 +33,9 @@ export function ConversationBadges({
   if (hasAssignee) {
     return (
       <span className="inbox-chat-badges">
-        <Badge variant="success" title={`Asignado a ${assignee}`}>
+        {!hideAssignee ? <Badge variant="success" title={`Asignado a ${assignee}`}>
           {assignee}
-        </Badge>
+        </Badge> : null}
         {archiveBadge}
       </span>
     )

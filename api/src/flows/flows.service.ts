@@ -228,6 +228,7 @@ export class FlowsService {
         flow_nodes: { orderBy: [{ sort_order: 'asc' }, { id: 'asc' }] },
         flow_edges: { orderBy: { id: 'asc' } },
         flow_sessions: { select: { status: true } },
+        program: { select: { slug: true } },
       },
     });
     if (!row) throw new NotFoundException('Flujo no encontrado');
@@ -1767,6 +1768,7 @@ export class FlowsService {
         match_payload: string | null;
       }[];
       flow_sessions: { status: string }[];
+      program?: { slug: string } | null;
     },
     analytics: FlowAnalytics,
   ): FlowDetail {
@@ -1801,6 +1803,7 @@ export class FlowsService {
     return {
       id: row.id,
       name: row.name,
+      category: categoryOfProgram(row.program?.slug),
       status: asStatus(row.status),
       trigger_payload: row.trigger_payload,
       entry_node_id: row.entry_node_id,

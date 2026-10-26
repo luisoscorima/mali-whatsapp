@@ -18,6 +18,7 @@ import {
 } from './flowEditorUtils'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard'
+import { categoryLabel, useCategoryScope } from '@/shared/area/useCategoryScope'
 
 const EMPTY_ANALYTICS: FlowAnalytics = {
   started: 0,
@@ -49,6 +50,8 @@ export function FlowDetailPage() {
   const navigate = useNavigate()
   const { confirm, confirmDialog } = useConfirmDialog()
   const isMobile = useIsMobileViewport()
+  const categories = useCategoryScope()
+  const [flowCategory, setFlowCategory] = useState('general')
   const [name, setName] = useState('')
   const [triggerPayload, setTriggerPayload] = useState('')
   const [status, setStatus] = useState<'draft' | 'active' | 'paused'>('draft')
@@ -81,6 +84,7 @@ export function FlowDetailPage() {
 
   function applyDetail(detail: FlowDetail) {
     const editor = detailToEditor(detail)
+    setFlowCategory(detail.category || 'general')
     setName(editor.name)
     setTriggerPayload(editor.trigger_payload)
     setStatus(editor.status)
@@ -249,6 +253,13 @@ export function FlowDetailPage() {
         >
           ← Flujos
         </Link>
+        {categories.education ? (
+          <p className="mt-2">
+            <span className="rounded bg-accent-soft px-1.5 text-[10px] text-accent">
+              {categoryLabel(flowCategory)}
+            </span>
+          </p>
+        ) : null}
       </div>
       <FlowCanvasEditor
         key={`${id}-${canvasKey}`}

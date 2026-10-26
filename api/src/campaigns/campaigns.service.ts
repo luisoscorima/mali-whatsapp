@@ -12,7 +12,8 @@ import { AuditEvent } from '../audit/audit-events';
 import { auditActor } from '../audit/audit-actor.util';
 import { AuditLogService } from '../audit/audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { recordLineCategorySql } from '../config/category-scope';
+import { businessReadScope } from '../config/areas';
+import { recordLineCategorySql, programScopeWhere } from '../config/category-scope';
 import { parseMonthKey } from '../shared/month-filter.util';
 import {
   buildCampaignDetailAnalytics,
@@ -226,6 +227,50 @@ function buildMonthlySeries(
   });
 }
 
+const AUDIENCE_SLUG = /^[a-z0-9_]+$/;
+
+function audienceFromPayload(payload: unknown, lineCategory: string): string[] {
+  const raw =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as { categories?: unknown }).categories
+      : null;
+  if (!Array.isArray(raw)) return [lineCategory || 'general'];
+  const slugs = [
+    ...new Set(
+      raw
+        .map((item) => String(item).trim().toLowerCase())
+        .filter((item) => item === 'general' || AUDIENCE_SLUG.test(item)),
+    ),
+  ];
+  return slugs.length ? slugs : [lineCategory || 'general'];
+}
+
+function lineLabelOf(
+  label: string | null | undefined,
+  phone: string | null | undefined,
+): string {
+  return [label, phone]
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function campaignAudienceSql(categories: string[] | null): Prisma.Sql {
+  if (!categories?.length) return Prisma.sql`TRUE`;
+  return Prisma.sql`(
+    CASE
+      WHEN jsonb_typeof(c.campaign_payload->'categories') = 'array'
+        AND jsonb_array_length(c.campaign_payload->'categories') > 0
+      THEN EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements_text(c.campaign_payload->'categories') AS audience(slug)
+        WHERE audience.slug IN (${Prisma.join(categories)})
+      )
+      ELSE ${recordLineCategorySql('c', categories)}
+    END
+  )`;
+}
+
 type ListRow = {
   id: number;
   segment: string;
@@ -243,7 +288,8 @@ type ListRow = {
   delivered_count: number;
   read_count: number;
   failed_count: number;
-  category: string | null;
+  line_category: string | null;
+  line_label: string | null;
 };
 
 @Injectable()
@@ -257,9 +303,10 @@ export class CampaignsService {
 
   private async getSegmentSlugSet(
     area: AuthUser['area'],
+    categories: string[] | null = null,
   ): Promise<Set<string>> {
     const rows = await this.prisma.segment_definitions.findMany({
-      where: { area, active: true },
+      where: { area, active: true, ...programScopeWhere(categories) },
       select: { slug: true },
     });
     return new Set(rows.map((row) => row.slug));
@@ -292,8 +339,12 @@ export class CampaignsService {
   async previewRecipients(
     area: AuthUser['area'],
     dto: RecipientsPreviewDto,
+    categories: string[] | null = null,
   ): Promise<RecipientsPreviewResult> {
-    const segmentSet = await this.getSegmentSlugSet(area);
+    const scope = businessReadScope(area);
+    area = scope.canonicalArea;
+    categories = area === 'educacion' ? scope.program ? [scope.program] : categories : null;
+    const segmentSet = await this.getSegmentSlugSet(area, categories);
     const segments = [
       ...new Set(dto.segments.map((s) => String(s).trim()).filter(Boolean)),
     ];
@@ -307,10 +358,11 @@ export class CampaignsService {
     }
 
     const recipientOptions: {
+      categories?: string[] | null;
       excludeSegmentSlugs?: string[];
       excludeContactIds?: number[];
       excludeOpenServiceWindow?: boolean;
-    } = {};
+    } = { categories };
 
     if (dto.excludeSegmentSlugs?.length) {
       const excludeSlugs = [
@@ -429,11 +481,16 @@ export class CampaignsService {
           FROM whatsapp_lines wl
           LEFT JOIN business_programs bp ON bp.id = wl.program_id
           WHERE wl.id = c.whatsapp_line_id
-        ), 'general') AS category
+        ), 'general') AS line_category,
+        COALESCE((
+          SELECT NULLIF(CONCAT_WS(' · ', NULLIF(BTRIM(wl.label), ''), NULLIF(BTRIM(wl.display_phone_number), '')), '')
+          FROM whatsapp_lines wl
+          WHERE wl.id = c.whatsapp_line_id
+        ), '') AS line_label
       FROM campaigns c
       LEFT JOIN latest_logs cl ON cl.campaign_id = c.id
       WHERE c.area = ${area}
-        AND ${recordLineCategorySql('c', categories)}
+        AND ${campaignAudienceSql(categories)}
       GROUP BY c.id
       ORDER BY c.id DESC
       LIMIT 200
@@ -464,7 +521,8 @@ export class CampaignsService {
         sent_percent: sentPercent,
         sent_ratio: denom > 0 ? `${row.salida_ok}/${denom}` : '—',
         send_mode: String(row.send_mode ?? 'mass'),
-        category: row.category || 'general',
+        categories: audienceFromPayload(row.campaign_payload, row.line_category || 'general'),
+        line: row.line_label || '',
       };
     });
     if (!range) return mapped;
@@ -534,6 +592,16 @@ export class CampaignsService {
   async getById(area: AuthUser['area'], id: number): Promise<CampaignDetail> {
     const campaign = await this.prisma.campaigns.findFirst({
       where: { id, area },
+      include: {
+        whatsapp_line: {
+          select: {
+            label: true,
+            display_phone_number: true,
+            program_key: true,
+            program: { select: { slug: true } },
+          },
+        },
+      },
     });
     if (!campaign) {
       throw new NotFoundException('Campaña no encontrada');
@@ -639,6 +707,8 @@ export class CampaignsService {
     );
 
     const firstSendAt = toIso(statusTotals?.first_send_at ?? null);
+    const line = campaign.whatsapp_line;
+    const lineCategory = String(line?.program?.slug || line?.program_key || '').trim().toLowerCase() || 'general';
 
     return {
       id: campaign.id,
@@ -669,6 +739,8 @@ export class CampaignsService {
       exclude_contact_ids: exclusions.exclude_contact_ids,
       exclude_contacts: excludeContacts,
       first_send_at: firstSendAt,
+      categories: audienceFromPayload(campaign.campaign_payload, lineCategory),
+      line: lineLabelOf(line?.label, line?.display_phone_number),
     };
   }
 
@@ -1049,9 +1121,12 @@ export class CampaignsService {
   async sendCampaign(
     user: AuthUser,
     body: Record<string, unknown>,
+    categories: string[] | null = null,
   ): Promise<SendCampaignOutcome> {
-    const area = user.area;
-    const segmentSet = await this.getSegmentSlugSet(area);
+    const scope = businessReadScope(user.area);
+    const area = scope.canonicalArea;
+    categories = area === 'educacion' ? scope.program ? [scope.program] : categories : null;
+    const segmentSet = await this.getSegmentSlugSet(area, categories);
     const templateSyncId = parseInt(
       String(body.templateSyncId || '').trim(),
       10,
@@ -1108,11 +1183,12 @@ export class CampaignsService {
 
     const uniqueExcludeIds = excludeContactIds || [];
     const recipientOptions: {
+      categories?: string[] | null;
       excludeContactIds?: number[];
       excludeSegmentSlugs?: string[];
       excludeOpenServiceWindow?: boolean;
       contactIds?: number[];
-    } = {};
+    } = { categories };
 
     if (uniqueExcludeIds.length > 0) {
       recipientOptions.excludeContactIds = uniqueExcludeIds;
@@ -1225,6 +1301,7 @@ export class CampaignsService {
 
     const campaignPayload: CampaignJobPayload = {
       area,
+      categories,
       segments,
       templateSnapshot,
       staticParams,

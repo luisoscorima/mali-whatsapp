@@ -54,8 +54,11 @@ export class AttributeDefinitionsController {
   }
 
   @Get('segments')
-  async segments(@CurrentUser() user: AuthUser) {
-    const data = await this.service.listSegments(user.area);
+  async segments(
+    @CurrentUser() user: AuthUser,
+    @Query('category') category?: string | string[],
+  ) {
+    const data = await this.service.listSegments(user.area, parseCategorySlugs(category));
     return { ok: true, data };
   }
 

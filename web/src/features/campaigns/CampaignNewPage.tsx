@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCategoryScope, withCategoryQuery, categoryLabel } from '@/shared/area/useCategoryScope'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
@@ -20,6 +21,7 @@ type SegmentDefinition = {
   label: string
   color_key: string
   active: boolean
+  category?: string
 }
 
 type TemplateListItem = {
@@ -106,6 +108,9 @@ function buildSendPayload(input: {
 }
 
 export function CampaignNewPage() {
+  const categoryScope = useCategoryScope()
+  const currentQuery = useRef(categoryScope.query)
+  currentQuery.current = categoryScope.query
   const navigate = useNavigate()
   const { confirm, confirmDialog } = useConfirmDialog()
   const [segments, setSegments] = useState<SegmentDefinition[]>([])
@@ -179,9 +184,9 @@ export function CampaignNewPage() {
   async function loadWizardData() {
     setLoadFailed(false)
     const [segResult, tplResult, attrResult] = await Promise.all([
-      apiClient.get<SegmentDefinition[]>('/api/segments/active'),
+      apiClient.get<SegmentDefinition[]>(withCategoryQuery('/api/segments/active', categoryScope.query)),
       apiClient.get<TemplateListItem[]>('/api/templates'),
-      apiClient.get<AttributeOption[]>('/api/attribute-definitions'),
+      apiClient.get<AttributeOption[]>(withCategoryQuery('/api/attribute-definitions', categoryScope.query)),
     ])
     if (!segResult.ok) {
       notify.error(segResult.error)
@@ -193,7 +198,14 @@ export function CampaignNewPage() {
       setLoadFailed(true)
       return
     }
-    setSegments(segResult.data)
+    if (currentQuery.current !== categoryScope.query) return
+    const grouped = new Map<string, SegmentDefinition>()
+    for (const segment of segResult.data) {
+      const label = categoryScope.education ? segment.label + ' · ' + categoryLabel(segment.category) : segment.label
+      const existing = grouped.get(segment.slug)
+      grouped.set(segment.slug, { ...segment, label: existing ? existing.label + ' / ' + label : label })
+    }
+    setSegments([...grouped.values()])
     setTemplates(tplResult.data)
     if (attrResult.ok) {
       setAttrDefs(
@@ -203,8 +215,12 @@ export function CampaignNewPage() {
   }
 
   useEffect(() => {
-    loadWizardData()
-  }, [])
+    invalidateRecipients()
+    setIncludeSegments(new Set())
+    setExcludeSegments(new Set())
+    setSegments([])
+    void loadWizardData()
+  }, [categoryScope.query])
 
   function invalidateRecipients() {
     setRecipientsLoaded(false)
@@ -261,13 +277,14 @@ export function CampaignNewPage() {
     const result = await apiClient.post<{
       contacts: RecipientPreview[]
       total: number
-    }>('/api/campaigns/recipients-preview', {
+    }>(withCategoryQuery('/api/campaigns/recipients-preview', categoryScope.query), {
       segments: segmentList,
       excludeSegmentSlugs: [...excludeSegments],
       excludeContactIds: [...excludeContactIds].sort((a, b) => a - b),
       excludeOpenServiceWindow: excludeServiceWindow,
     })
     setBusy('')
+    if (currentQuery.current !== categoryScope.query) return
 
     if (!result.ok) {
       setRecipientsStatus('')
@@ -329,7 +346,7 @@ export function CampaignNewPage() {
       confirmLabel:
         scheduleMode === 'scheduled' ? 'Programar' : 'Enviar',
     })
-    if (!ok) return
+    if (!ok || currentQuery.current !== categoryScope.query) return
 
     type SendOutcome =
       | {
@@ -363,7 +380,7 @@ export function CampaignNewPage() {
 
     setBusy('send')
     let result = await apiClient.post<SendOutcome>(
-      '/api/campaigns/send',
+      withCategoryQuery('/api/campaigns/send', categoryScope.query),
       basePayload,
     )
 
@@ -403,10 +420,10 @@ export function CampaignNewPage() {
             : 'Entendido',
         tone: report.ready > 0 ? 'default' : 'danger',
       })
-      if (!proceed || report.ready <= 0) return
+      if (!proceed || report.ready <= 0 || currentQuery.current !== categoryScope.query) return
 
       setBusy('send')
-      result = await apiClient.post<SendOutcome>('/api/campaigns/send', {
+      result = await apiClient.post<SendOutcome>(withCategoryQuery('/api/campaigns/send', categoryScope.query), {
         ...basePayload,
         excludeMissingParams: true,
       })

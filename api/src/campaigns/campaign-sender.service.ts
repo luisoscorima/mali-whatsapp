@@ -44,6 +44,7 @@ export type CampaignTemplateSnapshot = {
 
 export type CampaignJobPayload = {
   area: string;
+  categories?: string[] | null;
   segments?: string[];
   segment?: string;
   recipientContactIds?: number[];
@@ -101,11 +102,12 @@ export class CampaignSenderService {
     ctx: CampaignJobPayload,
   ): Promise<RecipientRow[]> {
     const recipientOptions: {
+      categories?: string[] | null;
       excludeContactIds?: number[];
       excludeSegmentSlugs?: string[];
       excludeOpenServiceWindow?: boolean;
       contactIds?: number[];
-    } = {};
+    } = { categories: ctx.categories };
 
     let mergedExclude =
       Array.isArray(ctx.excludeContactIdsMerged) &&

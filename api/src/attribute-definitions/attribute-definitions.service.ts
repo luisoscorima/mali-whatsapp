@@ -199,12 +199,17 @@ export class AttributeDefinitionsService {
     return mapDefinition(row, usageCount);
   }
 
-  async listSegments(area: AuthUser['area']) {
-    return this.prisma.segment_definitions.findMany({
-      where: { area },
+  async listSegments(area: AuthUser['area'], categories: string[] | null = null) {
+    const rows = await this.prisma.segment_definitions.findMany({
+      where: { area, ...programScopeWhere(categories) },
       orderBy: { sort_order: 'asc' },
-      select: { slug: true, label: true },
+      select: { slug: true, label: true, program: { select: { slug: true } } },
     });
+    return rows.map((row) => ({
+      slug: row.slug,
+      label: row.label,
+      category: categoryOfProgram(row.program?.slug),
+    }));
   }
 
   async create(area: AuthUser['area'], dto: CreateAttributeDefinitionDto) {

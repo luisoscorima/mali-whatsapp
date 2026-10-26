@@ -4,7 +4,7 @@ import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { SegmentColorPicker } from './SegmentColorPicker'
 import { notifySegmentsListRefresh } from './segmentsListEvents'
-import { useCategoryScope } from '@/shared/area/useCategoryScope'
+import { categoryLabel, categoryToSave, draftCategorySlug, useCategoryScope } from '@/shared/area/useCategoryScope'
 export function SegmentNewPage() {
   const navigate = useNavigate()
   const scope = useCategoryScope()
@@ -20,7 +20,7 @@ export function SegmentNewPage() {
       slug,
       label,
       color_key: colorKey,
-      category: scope.stored?.length === 1 ? scope.stored[0] : undefined,
+      category: categoryToSave(scope),
     })
     setSaving(false)
     if (!result.ok) {
@@ -37,7 +37,17 @@ export function SegmentNewPage() {
         <Link to="/segments" className="text-sm text-accent hover:underline">
           ← Segmentos
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold">Añadir segmento</h1>
+        <h1 className="mt-2 flex flex-wrap items-center gap-2 text-2xl font-semibold">
+          Añadir segmento
+          {draftCategorySlug(scope) ? (
+            <span className="rounded bg-accent-soft px-1.5 text-[10px] text-accent">
+              {categoryLabel(draftCategorySlug(scope))}
+            </span>
+          ) : null}
+        </h1>
+        {draftCategorySlug(scope) === 'general' && categoryToSave(scope) === undefined ? (
+          <p className="text-sm text-muted">Con varias categorías marcadas se guarda en General.</p>
+        ) : null}
       </div>
 
       <form

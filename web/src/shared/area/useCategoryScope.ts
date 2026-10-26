@@ -46,6 +46,33 @@ export function useCategoryScope() {
   return { education, slugs, stored, query, revision }
 }
 
+/** Categoría en la que se guardará un alta. null fuera de Educación o mientras carga. */
+export function draftCategorySlug(scope: {
+  education: boolean
+  stored: string[] | null
+  slugs: string[] | null
+}): string | null {
+  if (!scope.education) return null
+  if (!scope.stored && !scope.slugs?.length) return null
+  if (scope.stored?.length === 1) return scope.stored[0]
+  if (!scope.stored && scope.slugs?.length === 1) return scope.slugs[0]
+  return 'general'
+}
+
+/** undefined: varias categorías marcadas, el alta queda en General. */
+export function categoryToSave(scope: {
+  education: boolean
+  stored: string[] | null
+  slugs: string[] | null
+}): string | undefined {
+  const slug = draftCategorySlug(scope)
+  if (!slug) return undefined
+  const single =
+    scope.stored?.length === 1 || (!scope.stored && scope.slugs?.length === 1)
+  if (slug === 'general' && !single) return undefined
+  return slug
+}
+
 export function withCategoryQuery(path: string, query: string): string {
   if (!query) return path
   return path.includes('?') ? `${path}&${query}` : `${path}?${query}`

@@ -26,6 +26,7 @@ export type InboxListItem = {
   whatsapp_user_id: string | null;
   recipient: string;
   last_message_at: string | null;
+  unread_message_count?: number | null;
   inbox_unread: boolean;
   conversation_status: string | null;
   assigned_user_id: number | null;

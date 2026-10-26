@@ -2,10 +2,11 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
-import { useCategoryScope } from '@/shared/area/useCategoryScope'
+import { categoryLabel, categoryToSave, draftCategorySlug, useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
 type SegmentOption = {
   slug: string
   label: string
+  category?: string
 }
 
 export function AttributeNewPage() {
@@ -21,13 +22,17 @@ export function AttributeNewPage() {
   const [required, setRequired] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  const segmentQuery =
+    categories.query ||
+    (categories.slugs?.length === 1 ? `category=${encodeURIComponent(categories.slugs[0])}` : '')
+
   useEffect(() => {
     apiClient
-      .get<SegmentOption[]>('/api/attribute-definitions/segments')
+      .get<SegmentOption[]>(withCategoryQuery('/api/attribute-definitions/segments', segmentQuery))
       .then((result) => {
         if (result.ok) setSegments(result.data)
       })
-  }, [])
+  }, [segmentQuery])
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -47,7 +52,7 @@ export function AttributeNewPage() {
       field_type: fieldType,
       options,
       required,
-      category: categories.stored?.length === 1 ? categories.stored[0] : undefined,
+      category: categoryToSave(categories),
     })
     setSaving(false)
     if (!result.ok) {
@@ -63,7 +68,17 @@ export function AttributeNewPage() {
         <Link to="/attributes" className="text-sm text-accent hover:underline">
           ← Atributos
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold">Nuevo atributo</h1>
+        <h1 className="mt-2 flex flex-wrap items-center gap-2 text-2xl font-semibold">
+          Nuevo atributo
+          {draftCategorySlug(categories) ? (
+            <span className="rounded bg-accent-soft px-1.5 text-[10px] text-accent">
+              {categoryLabel(draftCategorySlug(categories))}
+            </span>
+          ) : null}
+        </h1>
+        {draftCategorySlug(categories) === 'general' && categoryToSave(categories) === undefined ? (
+          <p className="text-sm text-muted">Con varias categorías marcadas se guarda en General.</p>
+        ) : null}
       </div>
 
       <form
@@ -103,8 +118,10 @@ export function AttributeNewPage() {
             >
               <option value="">—</option>
               {segments.map((s) => (
-                <option key={s.slug} value={s.slug}>
-                  {s.label}
+                <option key={`${s.category || 'general'}:${s.slug}`} value={s.slug}>
+                  {categories.education && segments.some((other) => other.slug === s.slug && other.category !== s.category)
+                    ? `${s.label} · ${categoryLabel(s.category)}`
+                    : s.label}
                 </option>
               ))}
             </select>

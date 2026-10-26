@@ -69,6 +69,7 @@ export type FlowEventContactRow = {
 export type FlowDetail = {
   id: number
   name: string
+  category?: string
   status: 'draft' | 'active' | 'paused'
   trigger_payload: string
   entry_node_id: number | null

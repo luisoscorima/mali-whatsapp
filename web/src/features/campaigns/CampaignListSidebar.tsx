@@ -21,7 +21,8 @@ export type CampaignListItem = {
   sent_percent: number | null
   sent_ratio: string
   send_mode: string
-  category?: string
+  categories?: string[]
+  line?: string
 }
 
 type CampaignListSidebarProps = {
@@ -92,11 +93,16 @@ export function CampaignListSidebar({ selectedId, onRefresh }: CampaignListSideb
                         <span className="inbox-chat-title">
                           #{c.id} · {c.template_name || '—'}
                         </span>
-                        {scope.education ? (
-                          <span className="shrink-0 rounded bg-accent-soft px-1.5 text-[10px] text-accent">
-                            {categoryLabel(c.category)}
-                          </span>
-                        ) : null}
+                        {scope.education
+                          ? (c.categories?.length ? c.categories : ['general']).map((slug) => (
+                              <span
+                                key={slug}
+                                className="shrink-0 rounded bg-accent-soft px-1.5 text-[10px] text-accent"
+                              >
+                                {categoryLabel(slug)}
+                              </span>
+                            ))
+                          : null}
                       </span>
                       <span className="flex shrink-0 gap-1">
                         {c.send_mode === 'direct' ? (
@@ -112,6 +118,7 @@ export function CampaignListSidebar({ selectedId, onRefresh }: CampaignListSideb
                       </span>
                     </span>
                     <span className="inbox-chat-preview">{c.segment_display || '—'}</span>
+                    {c.line ? <span className="inbox-chat-preview">{c.line}</span> : null}
                     <span className="inbox-chat-preview">
                       {c.sent_ratio}
                       {sendWhen ? ` · ${formatDateTime(sendWhen).split(',')[0]}` : ''}

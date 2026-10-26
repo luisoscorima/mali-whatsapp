@@ -4,6 +4,7 @@ import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { formatDateTime } from '../../shared/format'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
+import { categoryLabel, useCategoryScope } from '@/shared/area/useCategoryScope'
 type AttributeDefinition = {
   id: number
   segment_slug: string | null
@@ -17,6 +18,7 @@ type AttributeDefinition = {
   created_at: string
   updated_at: string
   usage_count: number
+  category?: string
 }
 
 type SegmentOption = {
@@ -36,6 +38,7 @@ function usageLabel(count: number): string {
 }
 
 export function AttributeDetailPage() {
+  const categories = useCategoryScope()
   const { id } = useParams()
   const navigate = useNavigate()
   const { confirm, confirmDialog } = useConfirmDialog()
@@ -159,7 +162,14 @@ export function AttributeDetailPage() {
         <Link to="/attributes" className="text-sm text-accent hover:underline">
           ← Atributos
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold">{def.label}</h1>
+        <h1 className="mt-2 flex flex-wrap items-center gap-2 text-2xl font-semibold">
+          {def.label}
+          {categories.education ? (
+            <span className="rounded bg-accent-soft px-1.5 text-[10px] text-accent">
+              {categoryLabel(def.category)}
+            </span>
+          ) : null}
+        </h1>
         <p className="font-mono text-sm text-muted">
           {def.slug} · {scopeLabel(def, segments)}
         </p>

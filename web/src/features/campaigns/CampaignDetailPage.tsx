@@ -21,6 +21,7 @@ import {
 import { resolveMetricAction } from './metricAction'
 import { campaignStatusClass } from './campaignStatus'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
+import { categoryLabel, useCategoryScope } from '@/shared/area/useCategoryScope'
 
 type CampaignLog = {
   id: number
@@ -113,6 +114,8 @@ type CampaignDetail = {
     responders: ResponderRow[]
     response_type_summary: { label: string; count: number }[]
   }
+  categories?: string[]
+  line?: string
 }
 
 function actionButtonClass(secondary = false): string {
@@ -133,6 +136,7 @@ function toDateTimeLocal(value: string): string {
 
 export function CampaignDetailPage() {
   const { id } = useParams()
+  const scope = useCategoryScope()
   const user = useAppUser()
   const canViewStats = Boolean(user?.canViewCampaignStats)
   const canEditSchedule = userHasPermission(user, PERMISSION.CAMPAIGNS_CREATE)
@@ -263,13 +267,26 @@ export function CampaignDetailPage() {
   return (
     <div className="space-y-6">
       {confirmDialog}
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">Campaña #{campaign.id}</h1>
-        <span
-          className={`rounded px-2 py-0.5 text-xs font-medium ${campaignStatusClass(campaign.status)}`}
-        >
-          {campaign.status}
-        </span>
+      <div>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-semibold">Campaña #{campaign.id}</h1>
+          {scope.education
+            ? (campaign.categories?.length ? campaign.categories : ['general']).map((slug) => (
+                <span
+                  key={slug}
+                  className="rounded bg-accent-soft px-1.5 text-[10px] text-accent"
+                >
+                  {categoryLabel(slug)}
+                </span>
+              ))
+            : null}
+          <span
+            className={`rounded px-2 py-0.5 text-xs font-medium ${campaignStatusClass(campaign.status)}`}
+          >
+            {campaign.status}
+          </span>
+        </div>
+        {campaign.line ? <p className="mt-1 text-sm text-muted">{campaign.line}</p> : null}
       </div>
 
       <p className="text-sm text-muted">

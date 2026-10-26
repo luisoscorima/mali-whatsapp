@@ -14,6 +14,7 @@ type FormRouteRow = {
   id: number
   form_id: string
   area: string
+  category?: string | null
   form_name: string | null
   advertiser_id: string | null
   area_locked: boolean
@@ -38,8 +39,13 @@ type LeadRow = {
 }
 
 const ROUTE_AREA_OPTIONS = AREA_OPTIONS.filter((o) =>
-  ['educacion', 'educacion_ca', 'educacion_ep'].includes(o.slug),
+  ['ti', 'pam', 'patronato', 'educacion'].includes(o.slug),
 )
+const ROUTE_CATEGORY_OPTIONS = [
+  { slug: 'general', label: 'General' },
+  { slug: 'ca', label: 'CA' },
+  { slug: 'ep', label: 'EP' },
+]
 
 export function TikTokFormsPage() {
   const [routes, setRoutes] = useState<FormRouteRow[]>([])
@@ -177,11 +183,11 @@ export function TikTokFormsPage() {
     setLeadPage(1)
   }
 
-  async function onRouteAreaChange(formIdValue: string, area: string) {
+  async function onRouteChange(formIdValue: string, area: string, category: string | null) {
     setRouteBusyId(formIdValue)
     const res = await apiClient.patch<FormRouteRow>(
       `/api/leads/tiktok-forms/routes/${encodeURIComponent(formIdValue)}`,
-      { area },
+      { area, ...(area === 'educacion' ? { category: category || 'general' } : {}) },
     )
     setRouteBusyId(null)
     if (!res.ok) {
@@ -191,7 +197,7 @@ export function TikTokFormsPage() {
     setRoutes((prev) =>
       prev.map((row) => (row.form_id === formIdValue ? res.data : row)),
     )
-    notify.success('Área actualizada (manual)')
+    notify.success('Ruta actualizada')
   }
 
   return (
@@ -202,8 +208,8 @@ export function TikTokFormsPage() {
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">TikTok Instant Forms</h1>
         <p className="text-sm text-muted">
-          Leads de formularios TikTok Ads. El área se decide por nombre del form
-          (CA / EP / Educación). Requiere Access Token + Advertiser ID.
+          Leads de formularios TikTok Ads. El área es TI, PAM, Patronato o
+          Educación. En Educación, la categoría es General, CA o EP.
         </p>
       </div>
 
@@ -212,8 +218,8 @@ export function TikTokFormsPage() {
           <div>
             <h2 className="font-medium">Rutas form → área</h2>
             <p className="text-xs text-muted">
-              Reglas: «Cursos de Arte…» → CA · «[FORM EP]» → EP · resto →
-              Educación. Un cambio manual queda bloqueado al sincronizar.
+              El nombre del formulario sugiere la categoría. Un cambio manual queda
+              bloqueado al sincronizar.
             </p>
           </div>
           <button
@@ -260,6 +266,7 @@ export function TikTokFormsPage() {
                         <th className="px-2 py-2">Form ID</th>
                         <th className="px-2 py-2">Nombre</th>
                         <th className="px-2 py-2">Área</th>
+                        <th className="px-2 py-2">Categoría</th>
                         <th className="px-2 py-2">Sync</th>
                       </tr>
                     </thead>
@@ -286,9 +293,10 @@ export function TikTokFormsPage() {
                               value={row.area}
                               disabled={routeBusyId === row.form_id}
                               onChange={(e) =>
-                                void onRouteAreaChange(
+                                void onRouteChange(
                                   row.form_id,
                                   e.target.value,
+                                  e.target.value === 'educacion' ? row.category || 'general' : null,
                                 )
                               }
                             >
@@ -303,6 +311,26 @@ export function TikTokFormsPage() {
                                 <option value={row.area}>{row.area}</option>
                               ) : null}
                             </select>
+                          </td>
+                          <td className="px-2 py-2">
+                            {row.area === 'educacion' ? (
+                              <select
+                                className="rounded-lg border border-line bg-bg px-2 py-1"
+                                value={row.category || 'general'}
+                                disabled={routeBusyId === row.form_id}
+                                onChange={(e) =>
+                                  void onRouteChange(row.form_id, 'educacion', e.target.value)
+                                }
+                              >
+                                {ROUTE_CATEGORY_OPTIONS.map((o) => (
+                                  <option key={o.slug} value={o.slug}>
+                                    {o.label}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              '—'
+                            )}
                           </td>
                           <td className="px-2 py-2 text-xs text-muted">
                             {row.last_synced_at

@@ -106,6 +106,7 @@ export type FlowListItem = {
 export type FlowDetail = {
   id: number;
   name: string;
+  category: string;
   status: FlowStatus;
   trigger_payload: string;
   entry_node_id: number | null;

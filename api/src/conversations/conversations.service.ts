@@ -151,6 +151,7 @@ type InboxRow = {
   phone: string | null;
   whatsapp_user_id: string | null;
   last_message_at: Date | null;
+  unread_message_count?: number | null;
   inbox_unread: boolean;
   conversation_status: string | null;
   assigned_user_id: number | null;
@@ -344,6 +345,7 @@ export class ConversationsService {
         ? row.last_message_at.toISOString()
         : null,
       inbox_unread: Boolean(row.inbox_unread),
+      unread_message_count: row.inbox_unread ? row.unread_message_count ?? null : 0,
       conversation_status: row.conversation_status,
       assigned_user_id: row.assigned_user_id
         ? Number(row.assigned_user_id)
@@ -383,7 +385,7 @@ export class ConversationsService {
   }
 
   private inboxAssignedUserLabelSql(): Prisma.Sql {
-    return Prisma.sql`NULLIF(SPLIT_PART(COALESCE(au.email, ''), '@', 1), '')`;
+    return Prisma.sql`COALESCE(NULLIF(TRIM(CONCAT_WS(' ', NULLIF(SPLIT_PART(TRIM(au.first_name), ' ', 1), ''), NULLIF(SPLIT_PART(TRIM(au.last_name), ' ', 1), ''))), ''), NULLIF(SPLIT_PART(COALESCE(au.email, ''), '@', 1), ''))`;
   }
 
   private inboxContactNameSql(alias: string): Prisma.Sql {
@@ -572,6 +574,7 @@ export class ConversationsService {
             AND m_out.direction = 'outbound'
         ) AS last_outbound_message_at,
         c.inbox_unread,
+        c.unread_message_count,
         c.archived,
         c.status AS conversation_status,
         c.assigned_user_id,
@@ -668,6 +671,7 @@ export class ConversationsService {
         NULL::timestamptz AS last_user_message_at,
         NULL::timestamptz AS last_outbound_message_at,
         FALSE AS inbox_unread,
+        0::int AS unread_message_count,
         FALSE AS archived,
         NULL::text AS conversation_status,
         NULL::int AS assigned_user_id,

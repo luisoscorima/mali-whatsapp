@@ -8,6 +8,7 @@ import { segmentToneClass } from './segmentColors'
 import { SegmentColorPicker } from './SegmentColorPicker'
 import { notifySegmentsListRefresh, notifySegmentsListUpsert } from './segmentsListEvents'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
+import { categoryLabel, useCategoryScope } from '@/shared/area/useCategoryScope'
 type SegmentDefinition = {
   id: number
   slug: string
@@ -20,6 +21,7 @@ type SegmentDefinition = {
   assignment_group: string | null
   created_at: string
   updated_at: string
+  category?: string
 }
 
 type SegmentMember = {
@@ -36,6 +38,7 @@ type SegmentDetail = {
 }
 
 export function SegmentDetailPage() {
+  const scope = useCategoryScope()
   const { id } = useParams()
   const navigate = useNavigate()
   const { confirm, confirmDialog } = useConfirmDialog()
@@ -191,7 +194,14 @@ export function SegmentDetailPage() {
         <Link to="/segments" className="text-sm text-accent hover:underline">
           ← Segmentos
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold">{label}</h1>
+        <h1 className="mt-2 flex flex-wrap items-center gap-2 text-2xl font-semibold">
+          {label}
+          {scope.education ? (
+            <span className="rounded bg-accent-soft px-1.5 text-[10px] text-accent">
+              {categoryLabel(payload.segment.category)}
+            </span>
+          ) : null}
+        </h1>
         <p className="font-mono text-sm text-muted">{slug}</p>
         <p className="mt-1 text-sm text-muted">
           Creado: {formatDateTime(payload.segment.created_at)}

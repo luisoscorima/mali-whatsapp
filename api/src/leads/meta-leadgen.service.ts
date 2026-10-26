@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
-  BUSINESS_AREAS,
+  businessReadScope,
   normalizeArea,
   type BusinessArea,
 } from '../config/areas';
@@ -16,7 +16,7 @@ import {
   normalizeSecretValue,
 } from '../meta-settings/meta-settings.store';
 import { PrismaService } from '../prisma/prisma.service';
-import { inferAreaFromFormName } from './lead-form-area.util';
+import { inferAreaFromFormName, presentFormRoute, writeFormRoute } from './lead-form-area.util';
 import { pickCursoFromAnswers } from './lead-curso.util';
 import {
   buildMetaFormLeadsExportBuffer,
@@ -63,7 +63,13 @@ export class MetaLeadgenService {
   }> {
     const cache = getStoredMetaRows();
     const areaNorm = normalizeArea(area);
-    const row = cache[areaNorm] || {};
+    const family = areaNorm ? businessReadScope(areaNorm).areas : [];
+    const row =
+      [areaNorm, ...family]
+        .map((key) => cache[key])
+        .find((candidate) => candidate?.[META_SETTING_KEYS.pageAccessToken]) ||
+      cache[areaNorm] ||
+      {};
     const global = cache.global || {};
     const token = normalizeSecretValue(
       row[META_SETTING_KEYS.pageAccessToken] ||
@@ -291,12 +297,14 @@ export class MetaLeadgenService {
     const area = formName
       ? inferAreaFromFormName(formName)
       : normalizeArea(await this.resolveAreaForPage(pageId));
+    const placed = writeFormRoute(area);
 
     await this.prisma.meta_lead_form_routes.upsert({
       where: { form_id: formIdNorm },
       create: {
         form_id: formIdNorm,
-        area,
+        area: placed.area,
+        program_key: placed.program_key,
         form_name: formName,
         page_id: pageId || null,
         area_locked: false,
@@ -315,30 +323,26 @@ export class MetaLeadgenService {
   }
 
   async listFormRoutes(area?: string, operationalOnly = true) {
-    return this.prisma.meta_lead_form_routes.findMany({
+    const rows = await this.prisma.meta_lead_form_routes.findMany({
       where: {
         ...(area ? { area: normalizeArea(area) } : {}),
         ...(operationalOnly ? { is_operational: true } : {}),
       },
       orderBy: [{ area: 'asc' }, { form_name: 'asc' }, { form_id: 'asc' }],
     });
+    return rows.map((row) => presentFormRoute(row));
   }
 
   async updateFormRoute(
     formId: string,
-    body: { area?: string; is_operational?: boolean },
+    body: { area?: string; category?: string | null; is_operational?: boolean },
   ) {
     const formIdNorm = String(formId ?? '').trim();
     if (!formIdNorm) throw new BadRequestException('form_id requerido');
     if (body.area === undefined && body.is_operational === undefined) {
       throw new BadRequestException('area o is_operational requerido');
     }
-    if (
-      body.area !== undefined &&
-      !(BUSINESS_AREAS as readonly string[]).includes(body.area)
-    ) {
-      throw new BadRequestException(`area inválida: ${body.area}`);
-    }
+    const placed = body.area !== undefined ? writeFormRoute(body.area, body.category) : null;
 
     const existing = await this.prisma.meta_lead_form_routes.findUnique({
       where: { form_id: formIdNorm },
@@ -347,11 +351,11 @@ export class MetaLeadgenService {
       throw new NotFoundException('Ruta de formulario no encontrada');
     }
 
-    return this.prisma.meta_lead_form_routes.update({
+    const updated = await this.prisma.meta_lead_form_routes.update({
       where: { form_id: formIdNorm },
       data: {
-        ...(body.area !== undefined
-          ? { area: body.area, area_locked: true }
+        ...(placed
+          ? { area: placed.area, program_key: placed.program_key, area_locked: true }
           : {}),
         ...(typeof body.is_operational === 'boolean'
           ? { is_operational: body.is_operational }
@@ -359,6 +363,7 @@ export class MetaLeadgenService {
         updated_at: new Date(),
       },
     });
+    return presentFormRoute(updated);
   }
 
   async syncFormsFromGraph(areaHint?: string): Promise<{
@@ -425,7 +430,7 @@ export class MetaLeadgenService {
           continue;
         }
         const formName = String(form.name ?? '').trim() || null;
-        const inferred = inferAreaFromFormName(formName);
+        const placed = writeFormRoute(inferAreaFromFormName(formName));
         const existing = await this.prisma.meta_lead_form_routes.findUnique({
           where: { form_id: formId },
         });
@@ -434,7 +439,8 @@ export class MetaLeadgenService {
           await this.prisma.meta_lead_form_routes.create({
             data: {
               form_id: formId,
-              area: inferred,
+              area: placed.area,
+              program_key: placed.program_key,
               form_name: formName,
               page_id: pageId,
               area_locked: false,
@@ -450,7 +456,9 @@ export class MetaLeadgenService {
             data: {
               form_name: formName ?? existing.form_name,
               page_id: pageId,
-              area: existing.area_locked ? existing.area : inferred,
+              ...(existing.area_locked
+                ? {}
+                : { area: placed.area, program_key: placed.program_key }),
               last_synced_at: new Date(),
               updated_at: new Date(),
             },
@@ -531,13 +539,14 @@ export class MetaLeadgenService {
       },
     });
 
+    const placed = writeFormRoute(route?.area || area, route?.program_key);
     const origin = await this.leads.upsertOrigin({
-      area,
+      area: placed.area,
       channel: 'meta_lead_form',
       external_id: leadgenId,
       source_key: formId,
       source_label: formLabel,
-      program_slug: route?.program_key ?? null,
+      program_slug: placed.program_key,
       payload: {
         field_data: graph.field_data,
         mapped: mapped.raw,

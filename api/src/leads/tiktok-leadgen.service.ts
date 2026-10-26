@@ -7,9 +7,9 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { Request } from 'express';
-import { BUSINESS_AREAS, normalizeArea } from '../config/areas';
+import { normalizeArea } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
-import { inferAreaFromFormName } from './lead-form-area.util';
+import { inferAreaFromFormName, presentFormRoute, writeFormRoute } from './lead-form-area.util';
 import { pickCursoFromAnswers } from './lead-curso.util';
 import { LeadsService } from './leads.service';
 
@@ -382,7 +382,7 @@ export class TikTokLeadgenService {
     formName: string | null;
     advertiserId: string;
   }): Promise<'created' | 'updated'> {
-    const inferred = inferAreaFromFormName(params.formName);
+    const placed = writeFormRoute(inferAreaFromFormName(params.formName));
     const existing = await this.prisma.tiktok_lead_form_routes.findUnique({
       where: { form_id: params.formId },
     });
@@ -391,7 +391,8 @@ export class TikTokLeadgenService {
       await this.prisma.tiktok_lead_form_routes.create({
         data: {
           form_id: params.formId,
-          area: inferred,
+          area: placed.area,
+          program_key: placed.program_key,
           form_name: params.formName,
           advertiser_id: params.advertiserId,
           area_locked: false,
@@ -407,7 +408,9 @@ export class TikTokLeadgenService {
       data: {
         form_name: params.formName ?? existing.form_name,
         advertiser_id: params.advertiserId,
-        area: existing.area_locked ? existing.area : inferred,
+        ...(existing.area_locked
+          ? {}
+          : { area: placed.area, program_key: placed.program_key }),
         last_synced_at: new Date(),
         updated_at: new Date(),
       },
@@ -544,12 +547,17 @@ export class TikTokLeadgenService {
       formId,
       formName,
     });
+    const placed = writeFormRoute(
+      area,
+      existingRoute?.area_locked ? existingRoute.program_key : null,
+    );
 
     await this.prisma.tiktok_lead_form_routes.upsert({
       where: { form_id: formId },
       create: {
         form_id: formId,
-        area,
+        area: placed.area,
+        program_key: placed.program_key,
         form_name: formName,
         advertiser_id: advertiserId || null,
         updated_at: new Date(),
@@ -557,18 +565,20 @@ export class TikTokLeadgenService {
       update: {
         advertiser_id: advertiserId || undefined,
         form_name: formName || undefined,
-        ...(existingRoute?.area_locked ? {} : { area }),
+        ...(existingRoute?.area_locked
+          ? {}
+          : { area: placed.area, program_key: placed.program_key }),
         updated_at: new Date(),
       },
     });
 
     const origin = await this.leads.upsertOrigin({
-      area,
+      area: placed.area,
       channel: 'tiktok',
       external_id: leadId,
       source_key: formId,
       source_label: formName || formId,
-      program_slug: existingRoute?.program_key ?? null,
+      program_slug: placed.program_key,
       payload: {
         mapped: mapped.raw,
         field_data: leadData,
@@ -623,18 +633,16 @@ export class TikTokLeadgenService {
   }
 
   async listFormRoutes() {
-    return this.prisma.tiktok_lead_form_routes.findMany({
+    const rows = await this.prisma.tiktok_lead_form_routes.findMany({
       orderBy: [{ area: 'asc' }, { form_name: 'asc' }, { form_id: 'asc' }],
     });
+    return rows.map((row) => presentFormRoute(row));
   }
 
-  async updateFormRoute(formId: string, body: { area: string }) {
+  async updateFormRoute(formId: string, body: { area: string; category?: string | null }) {
     const formIdNorm = String(formId ?? '').trim();
     if (!formIdNorm) throw new BadRequestException('form_id requerido');
-    const area = normalizeArea(body.area);
-    if (!(BUSINESS_AREAS as readonly string[]).includes(area)) {
-      throw new BadRequestException(`area inválida: ${body.area}`);
-    }
+    const placed = writeFormRoute(body.area, body.category);
 
     const existing = await this.prisma.tiktok_lead_form_routes.findUnique({
       where: { form_id: formIdNorm },
@@ -643,14 +651,16 @@ export class TikTokLeadgenService {
       throw new NotFoundException('Ruta de formulario no encontrada');
     }
 
-    return this.prisma.tiktok_lead_form_routes.update({
+    const updated = await this.prisma.tiktok_lead_form_routes.update({
       where: { form_id: formIdNorm },
       data: {
-        area,
+        area: placed.area,
+        program_key: placed.program_key,
         area_locked: true,
         updated_at: new Date(),
       },
     });
+    return presentFormRoute(updated);
   }
 
   /**

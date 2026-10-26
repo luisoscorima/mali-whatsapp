@@ -1,7 +1,10 @@
+import { businessReadScope } from '../config/areas';
+import { segmentDefinitionCategorySql } from '../config/category-scope';
 import { Prisma } from '@prisma/client';
 import { readSessionWindowMs } from './campaign-conversation-window.util';
 
 export type RecipientFilterOptions = {
+  categories?: string[] | null;
   contactIds?: number[];
   excludeContactIds?: number[];
   excludeSegmentSlugs?: string[];
@@ -24,25 +27,37 @@ function buildRecipientQuery(
   options: RecipientFilterOptions,
   mode: 'count' | 'list',
 ): Prisma.Sql {
+  const scope = businessReadScope(area);
+  const categories =
+    scope.canonicalArea === 'educacion'
+      ? scope.program
+        ? [scope.program]
+        : (options.categories ?? null)
+      : null;
+  const categorySql = segmentDefinitionCategorySql(categories);
   const parts: Prisma.Sql[] = [];
 
   if (mode === 'count') {
-    parts.push(Prisma.sql`SELECT COUNT(DISTINCT c.id)::int AS n`);
+    parts.push(Prisma.sql`SELECT COUNT(DISTINCT c.person_id)::int AS n`);
   } else {
     parts.push(
-      Prisma.sql`SELECT DISTINCT c.id, c.name, COALESCE(c.phone, c.whatsapp_user_id) AS phone, c.phone AS actual_phone, c.email, c.dni, conv.last_user_message_at`,
+      Prisma.sql`SELECT DISTINCT ON (c.person_id) c.id, c.name, COALESCE(c.phone, c.whatsapp_user_id) AS phone, c.phone AS actual_phone, c.email, c.dni, conv.last_user_message_at`,
     );
   }
 
   parts.push(Prisma.sql`
     FROM contacts c
     INNER JOIN contact_segments cs ON cs.contact_id = c.id AND cs.area = c.area
+    INNER JOIN segment_definitions sd ON sd.area = cs.area
+      AND sd.slug = cs.segment_slug
+      AND sd.program_id IS NOT DISTINCT FROM cs.program_id
     LEFT JOIN LATERAL (
       SELECT MAX(last_user_message_at) AS last_user_message_at
       FROM conversations
       WHERE area = c.area AND contact_id = c.id
     ) conv ON TRUE
-    WHERE c.area = ${area}
+    WHERE c.area = ${scope.canonicalArea}
+      AND ${categorySql}
       AND c.opt_in = TRUE
       AND c.active = TRUE
       AND (c.phone IS NOT NULL OR c.whatsapp_user_id IS NOT NULL)
@@ -55,7 +70,11 @@ function buildRecipientQuery(
 
   if (options.excludeContactIds?.length) {
     parts.push(
-      Prisma.sql` AND NOT (c.id = ANY(${options.excludeContactIds}::int[]))`,
+      Prisma.sql` AND NOT EXISTS (
+        SELECT 1 FROM contacts excluded
+        WHERE excluded.area = c.area AND excluded.person_id = c.person_id
+          AND excluded.id = ANY(${options.excludeContactIds}::int[])
+      )`,
     );
   }
 
@@ -63,8 +82,14 @@ function buildRecipientQuery(
     parts.push(Prisma.sql`
       AND NOT EXISTS (
         SELECT 1 FROM contact_segments cs_ex
-        WHERE cs_ex.contact_id = c.id
+        JOIN contacts excluded ON excluded.id = cs_ex.contact_id
+        JOIN segment_definitions sd ON sd.area = cs_ex.area
+          AND sd.slug = cs_ex.segment_slug
+          AND sd.program_id IS NOT DISTINCT FROM cs_ex.program_id
+        WHERE excluded.person_id = c.person_id
+          AND excluded.area = c.area
           AND cs_ex.area = c.area
+          AND ${categorySql}
           AND cs_ex.segment_slug = ANY(${options.excludeSegmentSlugs}::varchar[])
       )
     `);
@@ -81,7 +106,7 @@ function buildRecipientQuery(
   }
 
   if (mode === 'list') {
-    parts.push(Prisma.sql` ORDER BY c.id ASC`);
+    parts.push(Prisma.sql` ORDER BY c.person_id, c.id ASC`);
   }
 
   return Prisma.join(parts, '');

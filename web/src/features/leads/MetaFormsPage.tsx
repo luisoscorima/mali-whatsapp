@@ -21,6 +21,7 @@ type FormRouteRow = {
   id: number
   form_id: string
   area: string
+  category?: string | null
   form_name: string | null
   page_id: string | null
   area_locked: boolean
@@ -46,8 +47,13 @@ type LeadRow = {
 }
 
 const ROUTE_AREA_OPTIONS = AREA_OPTIONS.filter((o) =>
-  ['educacion', 'educacion_ca', 'educacion_ep'].includes(o.slug),
+  ['ti', 'pam', 'patronato', 'educacion'].includes(o.slug),
 )
+const ROUTE_CATEGORY_OPTIONS = [
+  { slug: 'general', label: 'General' },
+  { slug: 'ca', label: 'CA' },
+  { slug: 'ep', label: 'EP' },
+]
 
 const LEADS_PAGE_SIZE = 25
 
@@ -216,11 +222,11 @@ export function MetaFormsPage() {
     setLeadPage(1)
   }
 
-  async function onRouteAreaChange(formIdValue: string, area: string) {
+  async function onRouteChange(formIdValue: string, area: string, category: string | null) {
     setRouteBusyId(formIdValue)
     const res = await apiClient.patch<FormRouteRow>(
       `/api/leads/meta-forms/routes/${encodeURIComponent(formIdValue)}`,
-      { area },
+      { area, ...(area === 'educacion' ? { category: category || 'general' } : {}) },
     )
     setRouteBusyId(null)
     if (!res.ok) {
@@ -230,7 +236,7 @@ export function MetaFormsPage() {
     setRoutes((prev) =>
       prev.map((row) => (row.form_id === formIdValue ? res.data : row)),
     )
-    notify.success('Área actualizada (manual)')
+    notify.success('Ruta actualizada')
   }
 
   async function onRouteOperationalChange(row: FormRouteRow) {
@@ -256,8 +262,8 @@ export function MetaFormsPage() {
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">Instant Forms</h1>
         <p className="text-sm text-muted">
-          Leads de formularios Meta (Lead Ads). El área se decide por form_id
-          (CA / EP / Educación). Requiere Page token para sync e ingestión.
+          Leads de formularios Meta (Lead Ads). El área es TI, PAM, Patronato o
+          Educación. En Educación, la categoría es General, CA o EP.
         </p>
       </div>
 
@@ -266,8 +272,7 @@ export function MetaFormsPage() {
           <div>
             <h2 className="font-medium">Rutas form → área</h2>
             <p className="text-xs text-muted">
-              Reglas: «Cursos de Arte…» / «[FORM CA]» / prefijo «CA …» → CA ·
-              «[FORM EP]» → EP · resto → Educación. Un cambio manual queda
+              El nombre del formulario sugiere la categoría. Un cambio manual queda
               bloqueado al sincronizar. Solo los operativos aparecen en la vista principal.
             </p>
           </div>
@@ -335,6 +340,7 @@ export function MetaFormsPage() {
                         <th className="px-2 py-2">Form ID</th>
                         <th className="px-2 py-2">Nombre</th>
                         <th className="px-2 py-2">Área</th>
+                        <th className="px-2 py-2">Categoría</th>
                         <th className="px-2 py-2">Catálogo</th>
                         <th className="px-2 py-2">Sync</th>
                       </tr>
@@ -362,9 +368,10 @@ export function MetaFormsPage() {
                               value={row.area}
                               disabled={routeBusyId === row.form_id}
                               onChange={(e) =>
-                                void onRouteAreaChange(
+                                void onRouteChange(
                                   row.form_id,
                                   e.target.value,
+                                  e.target.value === 'educacion' ? row.category || 'general' : null,
                                 )
                               }
                             >
@@ -379,6 +386,26 @@ export function MetaFormsPage() {
                                 <option value={row.area}>{row.area}</option>
                               ) : null}
                             </select>
+                          </td>
+                          <td className="px-2 py-2">
+                            {row.area === 'educacion' ? (
+                              <select
+                                className="rounded-lg border border-line bg-bg px-2 py-1"
+                                value={row.category || 'general'}
+                                disabled={routeBusyId === row.form_id}
+                                onChange={(e) =>
+                                  void onRouteChange(row.form_id, 'educacion', e.target.value)
+                                }
+                              >
+                                {ROUTE_CATEGORY_OPTIONS.map((o) => (
+                                  <option key={o.slug} value={o.slug}>
+                                    {o.label}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              '—'
+                            )}
                           </td>
                           <td className="px-2 py-2">
                             <button

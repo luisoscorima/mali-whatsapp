@@ -76,6 +76,11 @@ class UpdateTikTokFormRouteDto {
   @IsString()
   @MaxLength(32)
   area!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  category?: string;
 }
 
 class UpdateMetaFormRouteDto {
@@ -83,6 +88,11 @@ class UpdateMetaFormRouteDto {
   @IsString()
   @MaxLength(32)
   area?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  category?: string;
 
   @IsOptional()
   @IsBoolean()

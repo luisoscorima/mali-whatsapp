@@ -1,4 +1,5 @@
-import type { BusinessArea } from '../config/areas';
+import { BadRequestException } from '@nestjs/common';
+import { businessReadScope, requireBusinessArea, type BusinessArea } from '../config/areas';
 
 /**
  * Infere área Mali desde el nombre del Instant Form (Meta Lead Ads).
@@ -26,4 +27,38 @@ export function inferAreaFromFormName(
     return 'educacion_ca';
   }
   return 'educacion';
+}
+
+/** Área canónica y categoría. Un alias educacion_ca/ep queda como Educación + CA/EP. */
+export function writeFormRoute(
+  areaInput: string,
+  categoryInput?: string | null,
+): { area: string; program_key: string | null } {
+  const scope = businessReadScope(requireBusinessArea(areaInput));
+  if (scope.canonicalArea !== 'educacion') {
+    return { area: scope.canonicalArea, program_key: null };
+  }
+  if (scope.program) return { area: 'educacion', program_key: scope.program };
+  const category = String(categoryInput ?? '').trim().toLowerCase();
+  if (!category || category === 'general') {
+    return { area: 'educacion', program_key: null };
+  }
+  if (category !== 'ca' && category !== 'ep') {
+    throw new BadRequestException('Categoría no válida');
+  }
+  return { area: 'educacion', program_key: category };
+}
+
+export function presentFormRoute<T extends { area: string; program_key?: string | null }>(
+  row: T,
+): T & { category: string | null } {
+  const scope = businessReadScope(requireBusinessArea(row.area));
+  if (scope.canonicalArea !== 'educacion') {
+    return { ...row, area: scope.canonicalArea, category: null };
+  }
+  return {
+    ...row,
+    area: 'educacion',
+    category: scope.program || String(row.program_key || '').trim().toLowerCase() || 'general',
+  };
 }
