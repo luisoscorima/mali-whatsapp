@@ -1,5 +1,5 @@
 // Education workflows remain domain-specific; tenant filtering is shared.
-export { conversationAreaPredicate, contactAreaPredicate, visibleConversationWhere } from './business-scope';
+export { conversationAreaPredicate, contactAreaPredicate, inboxConversationPredicate, visibleConversationWhere } from './business-scope';
 
 export const EDUCATION_AREA_SLUGS = [
   'educacion',

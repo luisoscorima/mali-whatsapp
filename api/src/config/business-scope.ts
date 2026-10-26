@@ -25,13 +25,55 @@ export function contactAccessWhere(): Prisma.contactsWhereInput {
     { conversations: { some: { whatsapp_line_id: { in: access.lineIds } } } },
   ] } : {};
 }
+export function conversationCategoryPredicate(alias: string, slugs: string[]): Prisma.Sql {
+  const selected = [...new Set(slugs.map((slug) => slug.trim().toLowerCase()).filter((slug) => /^[a-z0-9_]+$/.test(slug)))];
+  if (!selected.length) return Prisma.sql`FALSE`;
+  const parts: Prisma.Sql[] = [];
+  if (selected.includes('general')) {
+    parts.push(Prisma.sql`EXISTS (
+      SELECT 1 FROM whatsapp_lines cat_l
+      WHERE cat_l.id = ${col(alias, 'whatsapp_line_id')}
+        AND cat_l.program_id IS NULL
+        AND (cat_l.program_key IS NULL OR BTRIM(cat_l.program_key) = '')
+    )`);
+  }
+  const programs = selected.filter((slug) => slug !== 'general');
+  if (programs.length) {
+    const aliases = programs.map((slug) => `educacion_${slug}`);
+    parts.push(Prisma.sql`(
+      ${col(alias, 'area')} IN (${Prisma.join(aliases)})
+      OR EXISTS (
+        SELECT 1 FROM whatsapp_lines cat_l
+        LEFT JOIN business_programs cat_p ON cat_p.id = cat_l.program_id
+        WHERE cat_l.id = ${col(alias, 'whatsapp_line_id')}
+          AND (cat_p.slug IN (${Prisma.join(programs)}) OR cat_l.program_key IN (${Prisma.join(programs)}))
+      )
+    )`);
+  }
+  return Prisma.sql`(${Prisma.join(parts, ' OR ')})`;
+}
+
+export function inboxConversationPredicate(alias: string, area: string, categories: string[] | null): Prisma.Sql {
+  if (!categories) return conversationAreaPredicate(alias, area);
+  const scope = businessReadScope(area);
+  return Prisma.sql`(
+    ${col(alias, 'area')} IN (${Prisma.join(scope.areas)})
+    AND ${conversationCategoryPredicate(alias, categories)}
+    AND ${conversationAccessPredicate(alias)}
+  )`;
+}
+
 export function conversationAreaPredicate(alias: string, area: string): Prisma.Sql {
   const scope = businessReadScope(area);
   const family = Prisma.sql`${col(alias,'area')} IN (${Prisma.join(scope.areas)})`;
   const program = scope.program ? Prisma.sql`(
     ${col(alias,'area')} = ${area}
-    OR EXISTS (SELECT 1 FROM whatsapp_lines scope_l JOIN business_programs scope_p ON scope_p.id=scope_l.program_id WHERE scope_l.id=${col(alias,'whatsapp_line_id')} AND scope_p.slug=${scope.program})
-    OR EXISTS (SELECT 1 FROM contact_programs scope_cp JOIN business_programs scope_p ON scope_p.id=scope_cp.program_id WHERE scope_cp.contact_id=${col(alias,'contact_id')} AND scope_p.slug=${scope.program})
+    OR EXISTS (
+      SELECT 1 FROM whatsapp_lines scope_l
+      LEFT JOIN business_programs scope_p ON scope_p.id = scope_l.program_id
+      WHERE scope_l.id = ${col(alias,'whatsapp_line_id')}
+        AND (scope_p.slug = ${scope.program} OR scope_l.program_key = ${scope.program})
+    )
   )` : Prisma.sql`TRUE`;
   return Prisma.sql`(${family} AND ${program} AND ${conversationAccessPredicate(alias)})`;
 }
@@ -48,9 +90,10 @@ export function visibleConversationWhere(area: string, id: number): Prisma.conve
   const access = restrictedAccess();
   return { id, area: { in: scope.areas },
     ...(access ? { whatsapp_line_id: { in: access.lineIds } } : {}),
-    ...(scope.program ? { OR: [
-      { area }, { whatsapp_line: { program: { slug: scope.program } } },
-      { contacts: { contact_programs: { some: { program: { slug: scope.program } } } } },
+    ...(scope.canonicalArea !== 'educacion' && scope.program ? { OR: [
+      { area },
+      { whatsapp_line: { program: { slug: scope.program } } },
+      { whatsapp_line: { program_key: scope.program } },
     ] } : {}),
   };
 }

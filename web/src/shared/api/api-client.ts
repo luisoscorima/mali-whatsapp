@@ -284,6 +284,10 @@ export const apiClient = {
     return request<AreaLineInfo[]>('/api/account/area-lines');
   },
 
+  getEducationCategories(): Promise<ApiResponse<Array<{ slug: string; label: string }>>> {
+    return request<Array<{ slug: string; label: string }>>('/api/conversations/categories');
+  },
+
   async getHealth(): Promise<HealthResult> {
     const res = await fetch('/health');
     const body = (await res.json()) as HealthResult;

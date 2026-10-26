@@ -82,6 +82,15 @@ export class ConversationsController {
     return { ok: true, data };
   }
 
+  @Get('categories')
+  async categories(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<Array<{ slug: string; label: string }>>> {
+    assertCanManageConversations(user);
+    const data = await this.conversationsService.listEducationCategories(user);
+    return { ok: true, data };
+  }
+
   @Get('unread-count')
   async unreadCount(
     @CurrentUser() user: AuthUser,

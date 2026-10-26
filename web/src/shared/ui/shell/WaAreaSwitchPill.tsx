@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
-import { apiClient, type AreaLineInfo, type AuthUser } from '@/shared/api'
+import type { AuthUser } from '@/shared/api'
 import { areaLabel } from '@/features/admin/areaLabels'
+import {
+  canonicalArea,
+  onCategorySelection,
+  readCategorySelection,
+} from '@/shared/area/category-selection'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/shadcn/popover'
 import { WaAreaSwitchPanel } from './WaAreaSwitchPanel'
 
@@ -11,21 +16,19 @@ type WaAreaSwitchPillProps = {
 
 export function WaAreaSwitchPill({ user, onUserUpdate }: WaAreaSwitchPillProps) {
   const [open, setOpen] = useState(false)
-  const [areaLines, setAreaLines] = useState<AreaLineInfo[]>([])
-  const allowedAreasKey = user.allowedAreas.join(',')
-  const line = areaLines.find((item) => item.area === user.area)
-  const label = line?.label || areaLabel(user.area)
-  const phone = line?.display_phone_number?.trim() || ''
-  const activeLabel = `Área activa: ${label}${phone ? ` · ${phone}` : ''}`
+  const [selection, setSelection] = useState<string[] | null>(null)
+  const area = canonicalArea(user.area)
+  const label = areaLabel(area)
 
   useEffect(() => {
-    let cancelled = false
-    setAreaLines([])
-    void apiClient.getAreaLines().then((result) => {
-      if (!cancelled && result.ok) setAreaLines(result.data)
-    }).catch(() => {})
-    return () => { cancelled = true }
-  }, [user.id, allowedAreasKey])
+    const sync = () => setSelection(readCategorySelection(user.id, area))
+    sync()
+    return onCategorySelection(sync)
+  }, [user.id, area])
+
+  const detail = area === 'educacion' && selection?.length
+    ? selection.map((slug) => (slug === 'general' ? 'General' : slug.toUpperCase())).join(' ')
+    : ''
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -33,22 +36,21 @@ export function WaAreaSwitchPill({ user, onUserUpdate }: WaAreaSwitchPillProps) 
         <button
           type="button"
           className="area-pill area-pill--rail area-pill--rail-btn"
-          title={`${activeLabel}. Ver áreas`}
-          aria-label={`${activeLabel}. Ver áreas`}
+          title={detail ? `${label}. ${detail}` : label}
+          aria-label={detail ? `${label}. ${detail}` : label}
         >
           <span>{label}</span>
-          {phone ? <span className="area-pill__phone">{phone.replace(/\D/g, '')}</span> : null}
+          {detail ? <span className="area-pill__phone">{detail}</span> : null}
         </button>
       </PopoverTrigger>
       <PopoverContent
         side="right"
         align="start"
         className="wa-rail__account-popover w-64 p-0"
-        onOpenAutoFocus={(e) => e.preventDefault()}
+        onOpenAutoFocus={(event) => event.preventDefault()}
       >
         <WaAreaSwitchPanel
           user={user}
-          areaLines={areaLines}
           onUserUpdate={onUserUpdate}
           onDone={() => setOpen(false)}
           className="px-4 py-3"

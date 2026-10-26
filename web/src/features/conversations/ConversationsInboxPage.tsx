@@ -1,6 +1,7 @@
 import { lazy, Suspense, type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import { useAppUser } from '@/app/appOutletContext'
+import { canonicalArea, onCategorySelection, readCategorySelection } from '@/shared/area/category-selection'
 import { apiClient } from '../../shared/api'
 import { formatChatListTime, chatListReplyStatus } from '../../shared/format'
 import { notify } from '@/shared/notify'
@@ -303,12 +304,8 @@ function ProfileBlock({
           unanswered={!detail.conversation.last_user_message_at}
         />
         <p className="inbox-chat-sub">
-          {detail.conversation.line_label || detail.conversation.line_display_phone
-            ? `${detail.conversation.line_label || 'Línea'}${
-                detail.conversation.line_program
-                  ? ` · ${detail.conversation.line_program.toUpperCase()}`
-                  : ''
-              }${
+          {detail.conversation.line_label || detail.conversation.line_program || detail.conversation.line_display_phone
+            ? `${detail.conversation.line_label || detail.conversation.line_program?.toUpperCase() || 'Línea'}${
                 detail.conversation.line_display_phone
                   ? ` · ${detail.conversation.line_display_phone}`
                   : ''
@@ -419,6 +416,7 @@ type InboxListResult = {
   can_assign_conversations: boolean
   segments: SegmentOption[]
   assignable_segments: SegmentOption[]
+  categories: Array<{ slug: string; label: string }>
   filters: {
     q: string
     chat: 'all' | 'unread' | 'bot' | 'human' | 'mine' | 'unassigned' | 'unanswered' | 'archived' | 'archived_auto' | 'archived_manual'
@@ -430,6 +428,7 @@ type InboxListResult = {
     applied_to: string | null
     segment_slugs: string[]
     include_none: boolean
+    categories: string[]
   }
 }
 
@@ -577,6 +576,7 @@ function inboxApiQuery(searchParams: URLSearchParams, extra?: { msg?: number }):
   if (hasTo) qs.set('to', to.trim())
   if (!hasFrom && !hasTo && searchParams.get('range') === 'all') qs.set('range', 'all')
   searchParams.getAll('segment').forEach((slug) => qs.append('segment', slug))
+  searchParams.getAll('category').forEach((slug) => qs.append('category', slug))
   const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1)
   if (page > 1) qs.set('page', String(page))
   if (extra?.msg) qs.set('msg', String(extra.msg))
@@ -850,6 +850,23 @@ export function ConversationsInboxPage() {
     () => inboxFilterKeyFromParams(searchParams),
     [searchParams],
   )
+
+  useEffect(() => {
+    if (!user || canonicalArea(user.area) !== 'educacion') return
+    const apply = () => {
+      const stored = readCategorySelection(user.id, user.area)
+      const current = [...searchParamsRef.current.getAll('category')].sort().join('\0')
+      const wanted = stored ? [...stored].sort().join('\0') : ''
+      if (current === wanted) return
+      const next = new URLSearchParams(searchParamsRef.current)
+      next.delete('category')
+      next.delete('page')
+      if (stored) stored.forEach((slug) => next.append('category', slug))
+      setSearchParams(next, { replace: true })
+    }
+    apply()
+    return onCategorySelection(apply)
+  }, [user, setSearchParams])
 
   const loadList = useCallback((opts?: { silent?: boolean; skipIfInFlight?: boolean }) => {
     if (opts?.skipIfInFlight && listInFlightRef.current) return Promise.resolve()
@@ -2436,8 +2453,8 @@ export function ConversationsInboxPage() {
                               {showPhoneRow ? (
                                 <span className="inbox-chat-phone-row">
                                   <span className="inbox-chat-phone">
-                                    {item.line_label
-                                      ? `${item.line_label}${item.line_program ? ` ${item.line_program.toUpperCase()}` : ''} · `
+                                    {item.line_label || item.line_program
+                                      ? `${item.line_label || item.line_program?.toUpperCase()} · `
                                       : ''}
                                     {chatSecondaryLabel(item.phone)}
                                   </span>

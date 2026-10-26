@@ -10,6 +10,9 @@ import { Prisma } from '@prisma/client';
 import {
   contactAreaPredicate,
   conversationAreaPredicate,
+  educationProgramOf,
+  inboxConversationPredicate,
+  isEducationAreaSlug,
   visibleConversationWhere,
 } from '../config/education-scope';
 import type { Prisma as PrismaTypes } from '@prisma/client';
@@ -518,6 +521,7 @@ export class ConversationsService {
     userId: number,
     page: number,
     limit: number,
+    categories: string[] | null = null,
   ): Promise<InboxRow[]> {
     const segmentSql = buildConversationSegmentSql(segmentFilter);
     const searchSql = searchQ
@@ -602,7 +606,7 @@ export class ConversationsService {
       LEFT JOIN users au ON au.id = c.assigned_user_id
       LEFT JOIN whatsapp_lines scope_line ON scope_line.id = c.whatsapp_line_id
       LEFT JOIN business_programs scope_program ON scope_program.id = scope_line.program_id
-      WHERE ${conversationAreaPredicate('c', area)}
+      WHERE ${categories ? inboxConversationPredicate('c', area, categories) : conversationAreaPredicate('c', area)}
       ${segmentSql}
       ${searchSql}
       ${chatSql}
@@ -683,7 +687,7 @@ export class ConversationsService {
       AND NOT EXISTS (
         SELECT 1
         FROM conversations c
-        WHERE ${conversationAreaPredicate('c', area)} AND (c.contact_id = ct.id
+        WHERE ${categories ? inboxConversationPredicate('c', area, categories) : conversationAreaPredicate('c', area)} AND (c.contact_id = ct.id
           OR (ct.phone IS NOT NULL AND c.phone = ct.phone)
           OR (ct.whatsapp_user_id IS NOT NULL AND c.whatsapp_user_id = ct.whatsapp_user_id))
       )
@@ -704,6 +708,7 @@ export class ConversationsService {
     dateTo: string | null,
     includeUnreadOutside: boolean,
     userId: number,
+    categories: string[] | null = null,
   ): Promise<number> {
     const segmentSql = buildConversationSegmentSql(segmentFilter);
     const searchSql = searchQ
@@ -724,7 +729,7 @@ export class ConversationsService {
       SELECT COUNT(*)::int AS n
       FROM conversations c
       ${this.inboxResolvedContactJoinSql(area)}
-      WHERE ${conversationAreaPredicate('c', area)}
+      WHERE ${categories ? inboxConversationPredicate('c', area, categories) : conversationAreaPredicate('c', area)}
       ${segmentSql}
       ${searchSql}
       ${chatSql}
@@ -774,7 +779,7 @@ export class ConversationsService {
       AND NOT EXISTS (
         SELECT 1
         FROM conversations c
-        WHERE ${conversationAreaPredicate('c', area)} AND (c.contact_id = ct.id
+        WHERE ${categories ? inboxConversationPredicate('c', area, categories) : conversationAreaPredicate('c', area)} AND (c.contact_id = ct.id
           OR (ct.phone IS NOT NULL AND c.phone = ct.phone)
           OR (ct.whatsapp_user_id IS NOT NULL AND c.whatsapp_user_id = ct.whatsapp_user_id))
       )
@@ -786,13 +791,14 @@ export class ConversationsService {
   private async countInboxUnread(
     area: string,
     segmentFilter: ReturnType<typeof parseSegmentListFilter>,
+    categories: string[] | null = null,
   ): Promise<number> {
     const segmentSql = buildConversationSegmentSql(segmentFilter);
     const rows = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
       SELECT COUNT(*)::int AS n
       FROM conversations c
       ${segmentFilter.slugs.length ? this.inboxResolvedContactJoinSql(area) : Prisma.empty}
-      WHERE ${conversationAreaPredicate('c', area)}
+      WHERE ${categories ? inboxConversationPredicate('c', area, categories) : conversationAreaPredicate('c', area)}
         AND c.inbox_unread = TRUE
         AND c.archived = FALSE
         AND c.last_user_message_at IS NOT NULL
@@ -804,17 +810,69 @@ export class ConversationsService {
   private async countInboxArchived(
     area: string,
     segmentFilter: ReturnType<typeof parseSegmentListFilter>,
+    categories: string[] | null = null,
   ): Promise<number> {
     const segmentSql = buildConversationSegmentSql(segmentFilter);
     const rows = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
       SELECT COUNT(*)::int AS n
       FROM conversations c
       ${this.inboxResolvedContactJoinSql(area)}
-      WHERE ${conversationAreaPredicate('c', area)}
+      WHERE ${categories ? inboxConversationPredicate('c', area, categories) : conversationAreaPredicate('c', area)}
         AND (c.archived = TRUE OR c.last_user_message_at IS NULL)
       ${segmentSql}
     `);
     return rows[0]?.n ?? 0;
+  }
+
+  async listEducationCategories(
+    user: AuthUser,
+  ): Promise<Array<{ slug: string; label: string }>> {
+    return this.educationCategoryOptions(user);
+  }
+
+  private async educationCategoryOptions(
+    user: AuthUser,
+  ): Promise<Array<{ slug: string; label: string }>> {
+    if (!isEducationAreaSlug(user.area)) return [];
+    const programs = await this.prisma.business_programs.findMany({
+      where: { active: true, business_area: { slug: 'educacion', active: true } },
+      orderBy: [{ sort_order: 'asc' }, { slug: 'asc' }],
+      select: { slug: true, label: true },
+    });
+    const all = [
+      { slug: 'general', label: 'General' },
+      ...programs.map((program) => ({
+        slug: program.slug,
+        label: program.slug === 'ca' || program.slug === 'ep' ? program.slug.toUpperCase() : program.label,
+      })),
+    ];
+    if (user.isMaster) return all;
+    const membership = await this.prisma.user_area_memberships.findFirst({
+      where: { user_id: user.id, active: true, business_area: { slug: 'educacion' } },
+      include: { programs: { include: { program: true } } },
+    });
+    if (!membership || membership.access_mode === 'all') return all;
+    const allowed = new Set(
+      membership.programs.filter((grant) => grant.program.active).map((grant) => grant.program.slug),
+    );
+    return all.filter((item) => allowed.has(item.slug));
+  }
+
+  private selectedEducationCategories(
+    area: string,
+    options: Array<{ slug: string }>,
+    raw: string | string[] | undefined,
+  ): string[] | null {
+    if (!options.length) return null;
+    const allowed = options.map((item) => item.slug);
+    const requested = (Array.isArray(raw) ? raw : raw ? [raw] : [])
+      .flatMap((value) => String(value).split(','))
+      .map((value) => value.trim().toLowerCase())
+      .filter((value) => allowed.includes(value));
+    if (requested.length) return [...new Set(requested)];
+    const program = educationProgramOf(area);
+    if (program && allowed.includes(program)) return [program];
+    return allowed;
   }
 
   async list(
@@ -845,6 +903,8 @@ export class ConversationsService {
           .trim()
           .toLowerCase() === 'all',
     });
+    const categoryOptions = await this.educationCategoryOptions(user);
+    const categories = this.selectedEducationCategories(area, categoryOptions, query.category);
     const segmentRaw = parseSegmentQueryParam(query.segment);
     const slugSet = await this.getSegmentSlugSet(area);
     const segmentFilter = parseSegmentListFilter(segmentRaw, slugSet);
@@ -872,10 +932,11 @@ export class ConversationsService {
         dateFilter.appliedTo,
         dateFilter.includeUnreadOutside,
         user.id,
+        categories,
       ),
       this.loadAiAreaEnabled(area),
-      this.countInboxUnread(area, segmentFilter),
-      this.countInboxArchived(area, segmentFilter),
+      this.countInboxUnread(area, segmentFilter, categories),
+      this.countInboxArchived(area, segmentFilter, categories),
     ]);
 
     const pages = totalCount > 0 ? Math.ceil(totalCount / limit) : 0;
@@ -892,6 +953,7 @@ export class ConversationsService {
       user.id,
       pageClamped,
       limit,
+      categories,
     );
 
     return {
@@ -905,6 +967,7 @@ export class ConversationsService {
       can_assign_conversations: this.canAssignConversations(user),
       segments,
       assignable_segments: assignableSegments,
+      categories: categoryOptions,
       filters: {
         q: searchQ,
         chat,
@@ -916,6 +979,7 @@ export class ConversationsService {
         applied_to: dateFilter.appliedTo,
         segment_slugs: segmentFilter.slugs,
         include_none: segmentFilter.includeNone,
+        categories: categories ?? [],
       },
     };
   }

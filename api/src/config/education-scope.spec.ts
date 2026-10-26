@@ -26,7 +26,9 @@ describe('education scope', () => {
 
   it('el predicado de una línea CA exige el programa', () => {
     const sql = conversationAreaPredicate('c', 'educacion_ca');
-    expect(sql.strings.join(' ')).toContain('program_key');
+    const text = sql.strings.join(' ');
+    expect(text).toContain('program_key');
+    expect(text).not.toContain('contact_programs');
     expect(conversationAreaPredicate('c', 'ti').strings.join(' ')).toContain(
       'c.area',
     );

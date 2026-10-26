@@ -61,6 +61,7 @@ export type InboxListResult = {
   can_assign_conversations: boolean;
   segments: InboxSegmentOption[];
   assignable_segments: InboxSegmentOption[];
+  categories: Array<{ slug: string; label: string }>;
   filters: {
     q: string;
     chat: InboxChatFilter;
@@ -72,6 +73,7 @@ export type InboxListResult = {
     applied_to: string | null;
     segment_slugs: string[];
     include_none: boolean;
+    categories: string[];
   };
 };
 
