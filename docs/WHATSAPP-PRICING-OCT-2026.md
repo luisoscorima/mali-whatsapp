@@ -22,7 +22,7 @@ Utilidad y autenticación en Perú subieron. Marketing no está en la lista de s
 
 ## Qué cambió para este proyecto
 
-- Cada respuesta de chat o de flujograma es un mensaje de **servicio**. Hay **1.000 gratis por número y mes** (no se acumulan). Desde la 1.001 se estima con la tarifa de servicio de Perú. El cupo es por área, porque cada área usa un número.
+- Cada respuesta de chat o de flujograma es un mensaje de **servicio**. Hay **1.000 gratis por número y mes** (no se acumulan). Desde la 1.001 se estima con la tarifa de servicio de Perú. En Educación cada categoría es un número: el inbox cuenta solo las categorías elegidas y aplica el cupo a cada número. En las demás áreas el cupo sigue siendo el del único número.
 - Una plantilla de utilidad se cobra siempre, también dentro de la ventana de 24 horas, y **no** descuenta las 1.000 respuestas. La enviada desde el chat sigue en el costo de la campaña.
 - La ventana de 72 horas de un anuncio Click-to-WhatsApp o de un botón de Facebook sigue gratis. El contador del inbox no la separa: el número es referencial.
 - Utilidad y autenticación tienen tramos de volumen en la hoja de niveles PEN. El monto de la app usa solo el primer tramo (tarifa de lista).
@@ -31,6 +31,6 @@ Utilidad y autenticación en Perú subieron. Marketing no está en la lista de s
 ## Dónde se ve en la app
 
 - Campañas: el detalle y el resumen usan la tarifa según la fecha del envío (`primer envío`, si no la programada, si no la de creación), hora de Lima. Antes del 1 oct 2026 se queda la tabla anterior. El texto dice «Estimado de lista (Perú)».
-- Inbox: encima del buscador, una línea con las respuestas del mes que Meta marcó como entregadas o leídas y, si pasan de 1.000, el estimado en soles. No incluye plantillas ni mensajes que no llegaron.
+- Inbox: el botón ⓘ del listado. Cuenta las respuestas del mes que Meta marcó como entregadas o leídas y, si un número pasa de 1.000, el estimado en soles. En Educación separa cada número de las categorías elegidas. No incluye plantillas ni mensajes que no llegaron.
 
 El envío por Graph API no cambia. El monto no es la factura de Meta.

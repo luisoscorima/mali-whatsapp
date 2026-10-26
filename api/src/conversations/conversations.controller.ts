@@ -117,9 +117,12 @@ export class ConversationsController {
   }
 
   @Get('service-replies')
-  async serviceReplies(@CurrentUser() user: AuthUser) {
+  async serviceReplies(
+    @CurrentUser() user: AuthUser,
+    @Query('category') category?: string | string[],
+  ) {
     assertCanManageConversations(user);
-    const data = await this.conversationsService.getServiceReplyEstimate(user);
+    const data = await this.conversationsService.getServiceReplyEstimate(user, category);
     return { ok: true, data };
   }
 

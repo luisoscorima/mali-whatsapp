@@ -53,6 +53,34 @@ export function conversationCategoryPredicate(alias: string, slugs: string[]): P
   return Prisma.sql`(${Prisma.join(parts, ' OR ')})`;
 }
 
+/** Línea de WhatsApp de las categorías elegidas. General es la línea sin programa. */
+export function lineCategoryPredicate(alias: string, slugs: string[]): Prisma.Sql {
+  const selected = [...new Set(slugs.map((slug) => slug.trim().toLowerCase()).filter((slug) => /^[a-z0-9_]+$/.test(slug)))];
+  if (!selected.length) return Prisma.sql`FALSE`;
+  const programId = col(alias, 'program_id');
+  const programKey = col(alias, 'program_key');
+  const parts: Prisma.Sql[] = [];
+  if (selected.includes('general')) {
+    parts.push(Prisma.sql`(
+      ${programId} IS NULL
+      AND (${programKey} IS NULL OR BTRIM(${programKey}) = '')
+    )`);
+  }
+  const programs = selected.filter((slug) => slug !== 'general');
+  if (programs.length) {
+    parts.push(Prisma.sql`(
+      EXISTS (
+        SELECT 1 FROM business_programs line_cat_p
+        WHERE line_cat_p.id = ${programId}
+          AND line_cat_p.slug IN (${Prisma.join(programs)})
+      )
+      OR ${programKey} IN (${Prisma.join(programs)})
+    )`);
+  }
+  if (!parts.length) return Prisma.sql`FALSE`;
+  return Prisma.sql`(${Prisma.join(parts, ' OR ')})`;
+}
+
 export function inboxConversationPredicate(alias: string, area: string, categories: string[] | null): Prisma.Sql {
   if (!categories) return conversationAreaPredicate(alias, area);
   const scope = businessReadScope(area);

@@ -13,8 +13,10 @@ import {
   educationProgramOf,
   inboxConversationPredicate,
   isEducationAreaSlug,
+  lineCategoryPredicate,
   visibleConversationWhere,
 } from '../config/education-scope';
+import { restrictedAccess } from '../business-model/business-access.context';
 import { categoriesFromEducationSlugs, explicitEducationCategories } from '../users/user-areas.service';
 import type { Prisma as PrismaTypes } from '@prisma/client';
 import type { AuthUser } from '../auth/auth.types';
@@ -3237,29 +3239,158 @@ export class ConversationsService {
     });
   }
 
-  async getServiceReplyEstimate(user: AuthUser): Promise<{
+  async getServiceReplyEstimate(
+    user: AuthUser,
+    rawCategory?: string | string[],
+  ): Promise<{
     monthLabel: string;
-    replyCount: number;
-    freeAllowance: number;
-    billableCount: number;
-    usdAmount: number;
-    penAmount: number;
+    lines: Array<{
+      id: number;
+      label: string;
+      replyCount: number;
+      freeAllowance: number;
+      billableCount: number;
+      usdAmount: number;
+      penAmount: number;
+    }>;
   }> {
     const { start, end, label } = limaCalendarMonth(new Date());
-    const [row] = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
-      SELECT COUNT(*)::int AS n
+    const categoryOptions = await this.educationCategoryOptions(user);
+    const categories = this.selectedEducationCategories(
+      user.area,
+      categoryOptions,
+      rawCategory,
+    );
+    if (!categories) {
+      const [row] = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
+        SELECT COUNT(*)::int AS n
+        FROM chat_messages m
+        INNER JOIN conversations c ON c.id = m.conversation_id
+        WHERE ${conversationAreaPredicate('c', user.area)}
+          AND ${deliveredServiceReplySql('m', start, end)}
+      `);
+      return {
+        monthLabel: label,
+        lines: [{ id: 0, label: '', ...estimateServiceReplyOverage(row?.n ?? 0, start) }],
+      };
+    }
+
+    const access = restrictedAccess();
+    const lineIds = access ? (access.lineIds.length ? access.lineIds : [-1]) : null;
+    const rows = await this.prisma.$queryRaw<ServiceReplyLineRow[]>(Prisma.sql`
+      SELECT
+        l.id AS id,
+        l.active AS active,
+        l.is_default AS is_default,
+        COALESCE(NULLIF(BTRIM(p.slug), ''), NULLIF(BTRIM(l.program_key), ''), 'general') AS category,
+        NULLIF(BTRIM(l.label), '') AS line_label,
+        NULLIF(BTRIM(l.display_phone_number), '') AS phone,
+        COUNT(m.id)::int AS n
+      FROM whatsapp_lines l
+      LEFT JOIN business_programs p ON p.id = l.program_id
+      LEFT JOIN conversations c ON c.whatsapp_line_id = l.id
+        AND ${inboxConversationPredicate('c', user.area, categories)}
+      LEFT JOIN chat_messages m ON m.conversation_id = c.id
+        AND ${deliveredServiceReplySql('m', start, end)}
+      WHERE ${lineCategoryPredicate('l', categories)}
+        AND ${lineIds ? Prisma.sql`l.id IN (${Prisma.join(lineIds)})` : Prisma.sql`TRUE`}
+        AND EXISTS (
+          SELECT 1 FROM business_areas line_ba
+          WHERE line_ba.id = l.business_area_id
+            AND line_ba.slug = 'educacion'
+        )
+      GROUP BY l.id, l.active, l.is_default, p.slug, l.program_key, l.label, l.display_phone_number
+    `);
+    const unassigned = await this.prisma.$queryRaw<{ category: string; n: number }[]>(Prisma.sql`
+      SELECT
+        CASE
+          WHEN c.area LIKE 'educacion_%' THEN substring(c.area from 11)
+          ELSE 'general'
+        END AS category,
+        COUNT(*)::int AS n
       FROM chat_messages m
       INNER JOIN conversations c ON c.id = m.conversation_id
-      WHERE ${conversationAreaPredicate('c', user.area)}
-        AND m.direction = 'outbound'
-        AND m.message_type <> 'campaign'
-        AND LOWER(COALESCE(m.raw_payload->'delivery_status'->>'status', '')) IN ('delivered', 'read')
-        AND m.created_at >= ${start}
-        AND m.created_at < ${end}
+      WHERE ${inboxConversationPredicate('c', user.area, categories)}
+        AND c.whatsapp_line_id IS NULL
+        AND ${deliveredServiceReplySql('m', start, end)}
+      GROUP BY 1
     `);
-    const estimate = estimateServiceReplyOverage(row?.n ?? 0, start);
-    return { monthLabel: label, ...estimate };
+    const lines = rows.map((row) => ({
+      id: Number(row.id),
+      active: Boolean(row.active),
+      isDefault: Boolean(row.is_default),
+      category: String(row.category || 'general'),
+      lineLabel: row.line_label,
+      phone: row.phone,
+      n: Number(row.n) || 0,
+    }));
+    for (const bucket of unassigned) {
+      const n = Number(bucket.n) || 0;
+      if (n <= 0) continue;
+      const category = String(bucket.category || 'general');
+      const matches = lines.filter((line) => line.category === category);
+      const target = matches.find((line) => line.isDefault) ?? matches[0];
+      if (target) {
+        target.n += n;
+        continue;
+      }
+      lines.push({
+        id: 0,
+        active: true,
+        isDefault: false,
+        category,
+        lineLabel: null,
+        phone: null,
+        n,
+      });
+    }
+    const visible = lines.filter((line) => line.active || line.n > 0);
+    const order = new Map(categoryOptions.map((item, index) => [item.slug, index]));
+    visible.sort((left, right) => {
+      const byCategory = (order.get(left.category) ?? 99) - (order.get(right.category) ?? 99);
+      if (byCategory !== 0) return byCategory;
+      if (left.isDefault !== right.isDefault) return left.isDefault ? -1 : 1;
+      return (left.lineLabel ?? '').localeCompare(right.lineLabel ?? '', 'es');
+    });
+    const siblings = new Map<string, number>();
+    for (const line of visible) siblings.set(line.category, (siblings.get(line.category) ?? 0) + 1);
+    return {
+      monthLabel: label,
+      lines: visible.map((line) => {
+        const option = categoryOptions.find((item) => item.slug === line.category);
+        const name = option?.label || (line.category === 'general' ? 'General' : line.category.toUpperCase());
+        const extra = (line.phone || line.lineLabel || '').trim();
+        const several = (siblings.get(line.category) ?? 1) > 1;
+        return {
+          id: line.id,
+          label: several && extra ? `${name} · ${extra}` : name,
+          ...estimateServiceReplyOverage(line.n, start),
+        };
+      }),
+    };
   }
+}
+
+type ServiceReplyLineRow = {
+  id: number;
+  active: boolean;
+  is_default: boolean;
+  category: string;
+  line_label: string | null;
+  phone: string | null;
+  n: number;
+};
+
+function deliveredServiceReplySql(messageAlias: string, start: Date, end: Date): Prisma.Sql {
+  if (!/^[a-z_]+$/.test(messageAlias)) return Prisma.sql`FALSE`;
+  const message = Prisma.raw(messageAlias);
+  return Prisma.sql`
+    ${message}.direction = 'outbound'
+    AND ${message}.message_type <> 'campaign'
+    AND LOWER(COALESCE(${message}.raw_payload->'delivery_status'->>'status', '')) IN ('delivered', 'read')
+    AND ${message}.created_at >= ${start}
+    AND ${message}.created_at < ${end}
+  `;
 }
 
 const LIMA_MONTHS = [

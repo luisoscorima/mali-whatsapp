@@ -755,8 +755,9 @@ function chatListPageItems(current: number, total: number): Array<number | 'elli
   return out
 }
 
-type ServiceReplyQuota = {
-  monthLabel: string
+type ServiceReplyLine = {
+  id: number
+  label: string
   replyCount: number
   freeAllowance: number
   billableCount: number
@@ -764,18 +765,24 @@ type ServiceReplyQuota = {
   penAmount: number
 }
 
-function formatServiceReplyQuota(quota: ServiceReplyQuota): string {
-  const count = quota.replyCount.toLocaleString('es-PE')
-  const free = quota.freeAllowance.toLocaleString('es-PE')
-  if (quota.billableCount <= 0) {
-    return `Respuestas de ${quota.monthLabel}: ${count} de ${free}. Referencial.`
-  }
-  const extra = quota.billableCount.toLocaleString('es-PE')
-  const soles = quota.penAmount.toLocaleString('es-PE', {
+type ServiceReplyQuota = {
+  monthLabel: string
+  lines: ServiceReplyLine[]
+}
+
+function serviceReplyMonthTitle(label: string): string {
+  if (!label) return 'Referencial'
+  return `${label.charAt(0).toUpperCase()}${label.slice(1)} · referencial`
+}
+
+function serviceReplyNote(line: ServiceReplyLine): string {
+  if (line.billableCount <= 0) return `de ${line.freeAllowance.toLocaleString('es-PE')}`
+  const extra = line.billableCount.toLocaleString('es-PE')
+  const soles = line.penAmount.toLocaleString('es-PE', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
-  return `Respuestas de ${quota.monthLabel}: ${count}. Gratis ${free}; ${extra} de más, estimado S/ ${soles}. Referencial.`
+  return `${extra} de más · S/ ${soles}`
 }
 
 export function ConversationsInboxPage() {
@@ -820,7 +827,7 @@ export function ConversationsInboxPage() {
   const detailRequestIdRef = useRef(0)
   const listInFlightRef = useRef(false)
   const listAbortRef = useRef<AbortController | null>(null)
-  const quotaInFlightRef = useRef(false)
+  const quotaRequestIdRef = useRef(0)
   const listAreaRef = useRef<string | null>(null)
   const scrollerRef = useRef<InboxMessageScrollerHandle | null>(null)
   const sendingReplyRef = useRef(false)
@@ -907,18 +914,28 @@ export function ConversationsInboxPage() {
       })
   }, [filterQuerySuffix])
 
+  const serviceReplyCategoryKey = searchParams.getAll('category').slice().sort().join('\0')
+
   const loadServiceReplies = useCallback(async () => {
-    if (quotaInFlightRef.current) return
-    quotaInFlightRef.current = true
+    const requestId = ++quotaRequestIdRef.current
+    const qs = new URLSearchParams()
+    if (serviceReplyCategoryKey) {
+      serviceReplyCategoryKey.split('\0').forEach((slug) => qs.append('category', slug))
+    }
+    const suffix = qs.toString()
     try {
-      const result = await apiClient.get<ServiceReplyQuota>('/api/conversations/service-replies')
+      const result = await apiClient.get<ServiceReplyQuota>(
+        `/api/conversations/service-replies${suffix ? `?${suffix}` : ''}`,
+      )
+      if (requestId !== quotaRequestIdRef.current) return
       if (result.ok) setServiceReplies(result.data)
     } catch {
       // Se vuelve a consultar al enviar o en el próximo ciclo.
-    } finally { quotaInFlightRef.current = false }
-  }, [])
+    }
+  }, [serviceReplyCategoryKey])
 
   useEffect(() => {
+    setServiceReplies(null)
     void loadServiceReplies()
   }, [loadServiceReplies, user?.area])
 
@@ -2186,9 +2203,29 @@ export function ConversationsInboxPage() {
           <>
           {serviceReplies ? <Popover><PopoverTrigger asChild>
             <button type="button" className="small-btn compact" aria-label="Ver consumo mensual de respuestas" title="Consumo mensual">ⓘ</button>
-          </PopoverTrigger><PopoverContent align="end" className="w-72 max-w-[calc(100vw-24px)] space-y-2">
-            <strong className="text-sm">Consumo mensual</strong>
-            <p className="text-xs text-muted">{formatServiceReplyQuota(serviceReplies)}</p>
+          </PopoverTrigger><PopoverContent side="right" align="start" sideOffset={16} collisionPadding={12} className="w-80 max-w-[calc(100vw-24px)] p-0">
+            <div className="border-b border-line px-3 py-2.5">
+              <p className="text-sm font-medium">Consumo mensual</p>
+              <p className="text-xs text-muted">{serviceReplyMonthTitle(serviceReplies.monthLabel)}</p>
+            </div>
+            {serviceReplies.lines.length === 0 ? (
+              <p className="px-3 py-2.5 text-xs text-muted">No hay números en esta selección.</p>
+            ) : (
+              <ul>
+                {serviceReplies.lines.map((line, index) => (
+                  <li
+                    key={`${line.id}-${line.label}`}
+                    className={`flex items-baseline justify-between gap-3 px-3 py-2${index > 0 ? ' border-t border-line' : ''}`}
+                  >
+                    <span className="min-w-0 text-sm">{line.label || 'Respuestas'}</span>
+                    <span className="shrink-0 text-right">
+                      <span className="block text-sm tabular-nums">{line.replyCount.toLocaleString('es-PE')}</span>
+                      <span className="block text-xs text-muted">{serviceReplyNote(line)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </PopoverContent></Popover> : null}
           {browserNotifySupported ? (
             <button
