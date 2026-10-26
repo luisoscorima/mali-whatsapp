@@ -43,6 +43,7 @@ import {
   extractInboundProfileName,
   extractInboundSenderIdentity,
   extractInboundUsername,
+  parseWhatsAppInboundTimestamp,
   resolveInboundLinePhoneNumberId,
 } from './webhook-inbound.util';
 import {
@@ -879,13 +880,21 @@ export class WebhookService {
         userId &&
         (!existing?.whatsapp_user_id || existing.whatsapp_user_id === userId);
       const now = new Date();
+      // Ventana 24 h de Meta = timestamp del mensaje, no la hora de llegada del webhook.
+      const messageAt = parseWhatsAppInboundTimestamp(record, now.getTime()) ?? now;
+      const webhookLagMs = now.getTime() - messageAt.getTime();
+      if (webhookLagMs > 2 * 60 * 1000) {
+        this.logger.warn(
+          `Webhook inbound atrasado ${Math.round(webhookLagMs / 60000)} min (wa=${waId || 'n/a'}, area=${area})`,
+        );
+      }
       const createData = {
         area,
         phone,
         whatsapp_user_id: userId,
         contact_id: contactId,
-        last_user_message_at: now,
-        last_message_at: now,
+        last_user_message_at: messageAt,
+        last_message_at: messageAt,
         inbox_unread: true,
         whatsapp_phone_number_id: linePhoneNumberId,
         whatsapp_line_id: catalogLine?.id ?? null,
@@ -902,8 +911,7 @@ export class WebhookService {
           : {}),
         ...(waProfileName ? { wa_profile_name: waProfileName } : {}),
         ...(waUsername ? { wa_username: waUsername } : {}),
-        last_user_message_at: now,
-        last_message_at: now,
+        // last_user/last_message se aplican con GREATEST tras el update (webhooks atrasados).
         inbox_unread: true,
         archived: false,
         whatsapp_phone_number_id: linePhoneNumberId,
@@ -939,6 +947,17 @@ export class WebhookService {
               data: createData,
               select: { id: true },
             });
+
+      // GREATEST: un webhook atrasado no debe adelantar la ventana 24 h ni empujar el inbox.
+      await this.prisma.$executeRaw`
+        UPDATE conversations
+        SET last_user_message_at = GREATEST(
+              COALESCE(last_user_message_at, ${messageAt}::timestamptz),
+              ${messageAt}::timestamptz
+            ),
+            last_message_at = GREATEST(last_message_at, ${messageAt}::timestamptz)
+        WHERE id = ${conversation.id}
+      `;
 
       if (messageType === 'reaction') {
         await this.applyInboundReaction(area, conversation.id, record);
@@ -1021,6 +1040,7 @@ export class WebhookService {
             message_type: messageType,
             raw_payload: inboundPayload as Prisma.InputJsonValue,
             is_ai: false,
+            created_at: messageAt,
           },
         });
         saved += 1;

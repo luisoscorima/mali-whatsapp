@@ -33,7 +33,8 @@ export async function fetchPdfBytes(
 }
 
 export function openPdf(bytes: Uint8Array): Promise<PDFDocumentProxy> {
-  return getDocument({ data: bytes }).promise
+  // pdf.js puede transferir el buffer al worker; una copia evita detaches.
+  return getDocument({ data: bytes.slice() }).promise
 }
 
 export function isCancelledPdfError(error: unknown): boolean {

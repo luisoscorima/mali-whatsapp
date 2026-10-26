@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { PDFDocumentLoadingTask, RenderTask } from 'pdfjs-dist'
 import {
   Dialog,
@@ -23,8 +23,8 @@ export function ChatPdfLightbox({ open, downloadUrl, onOpenChange }: ChatPdfLigh
   const [attempt, setAttempt] = useState(0)
   const [status, setStatus] = useState('')
   const [failed, setFailed] = useState(false)
-  const stageRef = useRef<HTMLDivElement>(null)
-  const pagesRef = useRef<HTMLDivElement>(null)
+  const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null)
+  const [pagesEl, setPagesEl] = useState<HTMLDivElement | null>(null)
 
   function setOpen(next: boolean) {
     if (!next) setZoom(MIN_ZOOM)
@@ -38,25 +38,23 @@ export function ChatPdfLightbox({ open, downloadUrl, onOpenChange }: ChatPdfLigh
   }
 
   useEffect(() => {
-    const stage = stageRef.current
-    if (!open || !stage) return
+    if (!open || !stageEl) return
     const onWheel = (event: WheelEvent) => {
       event.preventDefault()
       changeZoom(event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP)
     }
-    stage.addEventListener('wheel', onWheel, { passive: false })
-    return () => stage.removeEventListener('wheel', onWheel)
-  }, [open])
+    stageEl.addEventListener('wheel', onWheel, { passive: false })
+    return () => stageEl.removeEventListener('wheel', onWheel)
+  }, [open, stageEl])
 
   useEffect(() => {
-    const host = pagesRef.current
-    if (!open || !host) return
+    if (!open || !pagesEl) return
 
     let cancelled = false
     const controller = new AbortController()
     let loadingTask: PDFDocumentLoadingTask | undefined
     const renderTasks: RenderTask[] = []
-    host.replaceChildren()
+    pagesEl.replaceChildren()
     setFailed(false)
     setStatus('Cargando PDF…')
 
@@ -71,7 +69,7 @@ export function ChatPdfLightbox({ open, downloadUrl, onOpenChange }: ChatPdfLigh
           return
         }
 
-        const width = Math.min(host.clientWidth || 720, 920)
+        const width = Math.min(pagesEl.clientWidth || 720, 920)
         const pixelRatio = Math.min(window.devicePixelRatio || 1, 2)
         for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
           if (cancelled) return
@@ -87,7 +85,7 @@ export function ChatPdfLightbox({ open, downloadUrl, onOpenChange }: ChatPdfLigh
           renderTasks.push(renderTask)
           await renderTask.promise
           if (cancelled) return
-          host.appendChild(canvas)
+          pagesEl.appendChild(canvas)
         }
         if (!cancelled) setStatus('')
       } catch (error) {
@@ -103,7 +101,7 @@ export function ChatPdfLightbox({ open, downloadUrl, onOpenChange }: ChatPdfLigh
       for (const renderTask of renderTasks) renderTask.cancel()
       void loadingTask?.destroy()
     }
-  }, [open, downloadUrl, attempt])
+  }, [open, downloadUrl, attempt, pagesEl])
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -113,12 +111,12 @@ export function ChatPdfLightbox({ open, downloadUrl, onOpenChange }: ChatPdfLigh
       >
         <DialogTitle className="sr-only">PDF del chat</DialogTitle>
         <div
-          ref={stageRef}
+          ref={setStageEl}
           className="chat-image-lightbox__stage"
           onClick={() => setOpen(false)}
         >
           <div
-            ref={pagesRef}
+            ref={setPagesEl}
             className="chat-pdf-lightbox__pages"
             style={{ width: `${92 * zoom}vw` }}
             onClick={(event) => event.stopPropagation()}

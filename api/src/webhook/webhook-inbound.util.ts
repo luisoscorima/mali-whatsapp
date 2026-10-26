@@ -204,3 +204,22 @@ export function extractInboundButtonPayload(
   }
   return null;
 }
+
+/**
+ * Hora real del mensaje según Meta (segundos Unix en `timestamp`).
+ * La ventana 24 h de Cloud API usa esta hora, no cuándo llegó el webhook.
+ */
+export function parseWhatsAppInboundTimestamp(
+  msg: Record<string, unknown>,
+  nowMs: number = Date.now(),
+): Date | null {
+  const raw = String(msg.timestamp ?? '').trim();
+  if (!/^\d+$/.test(raw)) return null;
+  const seconds = Number(raw);
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  const ms = seconds * 1000;
+  // Rechazar futuro absurdo (skew de reloj > 5 min) o timestamps inválidos.
+  if (ms > nowMs + 5 * 60 * 1000) return null;
+  const date = new Date(ms);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
