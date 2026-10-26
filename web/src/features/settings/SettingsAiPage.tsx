@@ -97,8 +97,11 @@ function AiSettingsForm({
 
   return (
     <section className="space-y-4 rounded-xl border border-line bg-surface-strong p-4">
-      <h2 className="text-lg font-semibold">
-        Respuesta automática (IA) · {heading || settings.area}
+      <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold">
+        Respuesta automática (IA)
+        {heading ? (
+          <span className="rounded bg-accent-soft px-1.5 text-[10px] text-accent">{heading}</span>
+        ) : null}
       </h2>
 
       <p className="muted campaign-drilldown-dialog__note">

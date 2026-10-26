@@ -5,7 +5,7 @@ import { notify } from '@/shared/notify'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import { defaultReportDateRange } from '../reports/reportDateRange'
 import { ReportScrollableTable } from '@/shared/ui/InboxListPager'
-import { useCategoryScope } from '@/shared/area/useCategoryScope'
+import { categoryLabel, useCategoryScope } from '@/shared/area/useCategoryScope'
 
 type TabId = 'communications' | 'segments' | 'chat'
 
@@ -330,7 +330,19 @@ export function SettingsReporteriaPage() {
 
   return (
     <section className="space-y-4 rounded-xl border border-line bg-surface-strong p-4">
-      <h2 className="text-lg font-semibold">Reportería</h2>
+      <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold">
+        Reportería
+        {scope.education
+          ? (scope.stored ?? scope.slugs ?? []).map((slug) => (
+              <span
+                key={slug}
+                className="rounded bg-accent-soft px-1.5 text-[10px] text-accent"
+              >
+                {categoryLabel(slug)}
+              </span>
+            ))
+          : null}
+      </h2>
 
       <div className="flex flex-wrap gap-2 text-sm">
         {(

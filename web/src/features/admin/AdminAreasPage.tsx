@@ -2,7 +2,18 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
+import { canonicalArea } from '@/shared/area/category-selection'
 import { areaLabel } from './areaLabels'
+
+type AdminCategorySummary = {
+  slug: string
+  label: string
+  segments: number
+  campaigns: number
+  flows: number
+  attributes: number
+  leads: number
+}
 
 type AdminAreaSummary = {
   slug: string
@@ -11,6 +22,10 @@ type AdminAreaSummary = {
   contacts: number
   campaigns: number
   segments: number
+  categories?: AdminCategorySummary[]
+  review_contacts?: number
+  consolidation_reviews?: number
+  identity_reviews?: number
 }
 
 export function AdminAreasPage() {
@@ -62,7 +77,7 @@ export function AdminAreasPage() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted">
-        Resumen por área y cambio rápido de área activa para el usuario master.
+        Cuatro áreas. En Educación, General, CA y EP son categorías de la misma ficha.
       </p>
       <div className="overflow-x-auto rounded-xl border border-line">
         <table className="w-full text-sm">
@@ -82,13 +97,33 @@ export function AdminAreasPage() {
                 <td className="px-4 py-2">
                   {area.label}{' '}
                   <code className="text-xs text-muted">({area.slug})</code>
+                  {area.categories?.length ? (
+                    <ul className="mt-2 space-y-1 text-xs text-muted">
+                      {area.categories.map((category) => (
+                        <li key={category.slug}>
+                          {category.label}: {category.segments} segmentos · {category.campaigns}{' '}
+                          campañas · {category.flows} flujos · {category.attributes} atributos ·{' '}
+                          {category.leads} leads
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {area.consolidation_reviews || area.review_contacts || area.identity_reviews ? (
+                    <p className="mt-2 text-xs text-muted">
+                      Sin fusionar: {area.consolidation_reviews ?? 0} en revisión
+                      {area.review_contacts ? ` · ${area.review_contacts} fichas aún en CA/EP` : ''}
+                      {area.identity_reviews
+                        ? ` · ${area.identity_reviews} conflictos de identidad`
+                        : ''}
+                    </p>
+                  ) : null}
                 </td>
                 <td className="px-4 py-2">{area.users}</td>
                 <td className="px-4 py-2">{area.contacts}</td>
                 <td className="px-4 py-2">{area.segments}</td>
                 <td className="px-4 py-2">{area.campaigns}</td>
                 <td className="px-4 py-2">
-                  {currentArea === area.slug ? (
+                  {currentArea && canonicalArea(currentArea) === area.slug ? (
                     <span className="badge sent">Activa</span>
                   ) : (
                     <button
