@@ -340,7 +340,7 @@ ALTER TABLE contact_attribute_definitions ADD COLUMN program_id INTEGER REFERENC
 CREATE INDEX contact_attribute_definitions_program_idx ON contact_attribute_definitions(program_id);
 
 ALTER TABLE contact_attributes ADD COLUMN program_id INTEGER REFERENCES business_programs(id) ON DELETE SET NULL;
-DROP INDEX IF EXISTS "contact_attributes_contact_id_attr_key_key";
+ALTER TABLE "contact_attributes" DROP CONSTRAINT IF EXISTS "contact_attributes_contact_id_attr_key_key";
 CREATE UNIQUE INDEX contact_attributes_area_key_uq ON contact_attributes (contact_id, attr_key) WHERE program_id IS NULL;
 CREATE UNIQUE INDEX contact_attributes_program_key_uq ON contact_attributes (contact_id, program_id, attr_key) WHERE program_id IS NOT NULL;
 
