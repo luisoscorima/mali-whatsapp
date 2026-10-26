@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { apiClient } from '../../shared/api/api-client'
 import { formatDateTime } from '../../shared/format'
 import { notify } from '../../shared/notify'
@@ -7,6 +8,8 @@ import type { CampaignMessagePreviewData } from '../campaigns/CampaignMessagePre
 import { ChatCampaignPreview } from './ChatCampaignPreview'
 import { ChatDeliveryStatus } from './ChatDeliveryStatus'
 import { ChatMessageBubbleMenu } from './ChatMessageBubbleMenu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/shadcn/tooltip'
+import { ChatImageLightbox } from './ChatImageLightbox'
 import { ChatPdfPreview } from './ChatPdfPreview'
 
 export type ChatMessage = {
@@ -113,6 +116,7 @@ export function ChatMessageBubble({
   onCopy,
   onReact,
 }: ChatMessageBubbleProps) {
+  const [imageOpen, setImageOpen] = useState(false)
   const outbound = message.direction === 'outbound'
   const mt = message.message_type.toLowerCase()
   const mediaUrl = message.media_preview?.url
@@ -213,7 +217,61 @@ export function ChatMessageBubble({
         </div>
       ) : null}
 
-      {mediaUrl && (mt === 'image' || mt === 'sticker') ? (
+      {mediaUrl && mt === 'image' ? (
+        <div className="chat-bubble__media chat-image-frame">
+          <img
+            className="chat-msg-media chat-msg-media--img"
+            src={mediaUrl}
+            alt=""
+            loading="lazy"
+            decoding="async"
+          />
+          <div className="chat-image-actions">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="chat-image-action"
+                  aria-label="Ver imagen"
+                  onClick={() => setImageOpen(true)}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                    <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
+                    <circle cx="12" cy="12" r="2.5" />
+                  </svg>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Ver imagen</TooltipContent>
+            </Tooltip>
+            {canDownload ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <a
+                    className="chat-image-action"
+                    href={downloadHref}
+                    aria-label="Descargar"
+                    onClick={onDownloadClick}
+                  >
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                      <path d="M12 4v12" />
+                      <path d="m7 12 5 5 5-5" />
+                      <path d="M5 20h14" />
+                    </svg>
+                  </a>
+                </TooltipTrigger>
+                <TooltipContent>Descargar</TooltipContent>
+              </Tooltip>
+            ) : null}
+          </div>
+          <ChatImageLightbox
+            open={imageOpen}
+            src={mediaUrl}
+            onOpenChange={setImageOpen}
+          />
+        </div>
+      ) : null}
+
+      {mediaUrl && mt === 'sticker' ? (
         <div className="chat-bubble__media">
           <img
             className="chat-msg-media chat-msg-media--img"
@@ -222,11 +280,6 @@ export function ChatMessageBubble({
             loading="lazy"
             decoding="async"
           />
-          {canDownload ? (
-            <a className="chat-msg-download-link" href={downloadHref} onClick={onDownloadClick}>
-              Descargar
-            </a>
-          ) : null}
         </div>
       ) : null}
 
