@@ -6,7 +6,7 @@ import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import { MonthFilterChips } from '@/shared/ui/MonthFilterChips'
 import { campaignStatusClass } from './campaignStatus'
-import { categoryLabel, useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
+import { categoryLabel, useCategoryScope } from '@/shared/area/useCategoryScope'
 
 const LIST_POLL_MS = 15000
 

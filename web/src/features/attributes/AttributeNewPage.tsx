@@ -10,7 +10,7 @@ type SegmentOption = {
 
 export function AttributeNewPage() {
   const navigate = useNavigate()
-  const scope = useCategoryScope()
+  const categories = useCategoryScope()
   const [segments, setSegments] = useState<SegmentOption[]>([])
   const [scope, setScope] = useState<'area' | 'segment'>('area')
   const [segmentSlug, setSegmentSlug] = useState('')
@@ -47,7 +47,7 @@ export function AttributeNewPage() {
       field_type: fieldType,
       options,
       required,
-      category: scope.stored?.length === 1 ? scope.stored[0] : undefined,
+      category: categories.stored?.length === 1 ? categories.stored[0] : undefined,
     })
     setSaving(false)
     if (!result.ok) {
