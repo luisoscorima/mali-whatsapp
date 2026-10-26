@@ -15,6 +15,16 @@ export function ChatPdfPreview({ downloadUrl }: ChatPdfPreviewProps) {
   const [status, setStatus] = useState('')
 
   useEffect(() => {
+    const host = hostRef.current
+    if (!host || visible) return
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) setVisible(true)
+    })
+    observer.observe(host)
+    return () => observer.disconnect()
+  }, [visible])
+
+  useEffect(() => {
     if (!visible) return
     const canvas = canvasRef.current
     const host = hostRef.current
@@ -76,9 +86,7 @@ export function ChatPdfPreview({ downloadUrl }: ChatPdfPreviewProps) {
         if (!cancelled) setStatus('')
       } catch {
         if (!cancelled)
-          setStatus(
-            'Vista previa no disponible. Puedes abrir o descargar el PDF.',
-          )
+          setStatus('Vista previa no disponible.')
       } finally {
         void loadingTask?.destroy()
       }
@@ -93,15 +101,6 @@ export function ChatPdfPreview({ downloadUrl }: ChatPdfPreviewProps) {
 
   return (
     <div ref={hostRef} className="chat-pdf-preview">
-      {!visible ? (
-        <button
-          type="button"
-          className="small-btn compact"
-          onClick={() => setVisible(true)}
-        >
-          Ver vista previa del PDF
-        </button>
-      ) : null}
       {status ? (
         <p role="status" className="text-xs text-muted">
           {status}

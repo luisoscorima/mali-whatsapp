@@ -1673,12 +1673,15 @@ html[data-theme='dark'] .chat-bubble__reply-to {
   position: relative;
 }
 
-.chat-image-frame .chat-msg-media--img {
+.chat-image-frame .chat-msg-media--img,
+.chat-image-frame .chat-msg-media--pdf {
   transition: filter 0.15s ease;
 }
 
 .chat-image-frame:hover .chat-msg-media--img,
-.chat-image-frame:focus-within .chat-msg-media--img {
+.chat-image-frame:focus-within .chat-msg-media--img,
+.chat-image-frame:hover .chat-msg-media--pdf,
+.chat-image-frame:focus-within .chat-msg-media--pdf {
   filter: blur(4px);
 }
 
@@ -1728,6 +1731,7 @@ html[data-theme='dark'] .chat-bubble__reply-to {
 }
 
 .chat-image-lightbox__stage {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1788,17 +1792,92 @@ html[data-theme='dark'] .chat-bubble__reply-to {
   background: #000;
 }
 
-.chat-msg-media--audio {
-  display: block;
+.chat-audio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+}
+
+.chat-audio__btn {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-strong);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.chat-audio__btn:hover {
+  background: var(--surface);
+}
+
+.chat-audio__track {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.chat-audio__bar {
   width: 100%;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.chat-audio__bar:disabled {
+  cursor: default;
+}
+
+.chat-audio__time {
+  font-size: 0.72rem;
+  color: var(--muted);
 }
 
 .chat-pdf-preview {
   overflow: hidden;
+  min-height: 120px;
   max-height: 180px;
   border-radius: 6px;
   background: var(--surface);
   pointer-events: none;
+}
+
+.chat-image-frame .chat-pdf-preview {
+  pointer-events: auto;
+}
+
+.chat-pdf-lightbox__pages {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-pdf-lightbox__pages canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--surface-strong);
+}
+
+.chat-pdf-lightbox__status {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--ink);
+  transform: translate(-50%, -50%);
 }
 
 .chat-msg-media--pdf {

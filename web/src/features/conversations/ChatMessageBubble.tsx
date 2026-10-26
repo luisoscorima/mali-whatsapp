@@ -9,7 +9,9 @@ import { ChatCampaignPreview } from './ChatCampaignPreview'
 import { ChatDeliveryStatus } from './ChatDeliveryStatus'
 import { ChatMessageBubbleMenu } from './ChatMessageBubbleMenu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/shadcn/tooltip'
+import { ChatAudioPlayer } from './ChatAudioPlayer'
 import { ChatImageLightbox } from './ChatImageLightbox'
+import { ChatPdfLightbox } from './ChatPdfLightbox'
 import { ChatPdfPreview } from './ChatPdfPreview'
 
 export type ChatMessage = {
@@ -95,6 +97,55 @@ function messageAuthorLabel(message: ChatMessage): string | null {
   return label || null
 }
 
+function MediaHoverActions({
+  viewLabel,
+  onView,
+  canDownload,
+  downloadHref,
+  onDownload,
+}: {
+  viewLabel: string
+  onView: () => void
+  canDownload: boolean
+  downloadHref: string
+  onDownload: (event: { preventDefault: () => void }) => void
+}) {
+  return (
+    <div className="chat-image-actions">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" className="chat-image-action" aria-label={viewLabel} onClick={onView}>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+              <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
+              <circle cx="12" cy="12" r="2.5" />
+            </svg>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>{viewLabel}</TooltipContent>
+      </Tooltip>
+      {canDownload ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <a
+              className="chat-image-action"
+              href={downloadHref}
+              aria-label="Descargar"
+              onClick={onDownload}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                <path d="M12 4v12" />
+                <path d="m7 12 5 5 5-5" />
+                <path d="M5 20h14" />
+              </svg>
+            </a>
+          </TooltipTrigger>
+          <TooltipContent>Descargar</TooltipContent>
+        </Tooltip>
+      ) : null}
+    </div>
+  )
+}
+
 type ChatMessageBubbleProps = {
   message: ChatMessage
   conversationId: number
@@ -117,6 +168,7 @@ export function ChatMessageBubble({
   onReact,
 }: ChatMessageBubbleProps) {
   const [imageOpen, setImageOpen] = useState(false)
+  const [pdfOpen, setPdfOpen] = useState(false)
   const outbound = message.direction === 'outbound'
   const mt = message.message_type.toLowerCase()
   const mediaUrl = message.media_preview?.url
@@ -226,43 +278,13 @@ export function ChatMessageBubble({
             loading="lazy"
             decoding="async"
           />
-          <div className="chat-image-actions">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className="chat-image-action"
-                  aria-label="Ver imagen"
-                  onClick={() => setImageOpen(true)}
-                >
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                    <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
-                    <circle cx="12" cy="12" r="2.5" />
-                  </svg>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>Ver imagen</TooltipContent>
-            </Tooltip>
-            {canDownload ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <a
-                    className="chat-image-action"
-                    href={downloadHref}
-                    aria-label="Descargar"
-                    onClick={onDownloadClick}
-                  >
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                      <path d="M12 4v12" />
-                      <path d="m7 12 5 5 5-5" />
-                      <path d="M5 20h14" />
-                    </svg>
-                  </a>
-                </TooltipTrigger>
-                <TooltipContent>Descargar</TooltipContent>
-              </Tooltip>
-            ) : null}
-          </div>
+          <MediaHoverActions
+            viewLabel="Ver imagen"
+            onView={() => setImageOpen(true)}
+            canDownload={canDownload}
+            downloadHref={downloadHref}
+            onDownload={onDownloadClick}
+          />
           <ChatImageLightbox
             open={imageOpen}
             src={mediaUrl}
@@ -302,23 +324,35 @@ export function ChatMessageBubble({
 
       {mediaUrl && (mt === 'audio' || mt === 'voice') ? (
         <div className="chat-bubble__media">
-          <audio
-            className="chat-msg-media chat-msg-media--audio"
-            controls
-            preload="none"
+          <ChatAudioPlayer
             src={mediaUrl}
+            canDownload={canDownload}
+            downloadHref={downloadHref}
+            onDownload={onDownloadClick}
           />
-          {canDownload ? (
-            <a className="chat-msg-download-link" href={downloadHref} onClick={onDownloadClick}>
-              Descargar
-            </a>
-          ) : null}
         </div>
       ) : null}
 
-      {mediaUrl && mt === 'document' ? (
+      {mediaUrl && mt === 'document' && isPdf ? (
+        <div className="chat-bubble__media chat-image-frame">
+          <ChatPdfPreview downloadUrl={downloadHref} />
+          <MediaHoverActions
+            viewLabel="Ver PDF"
+            onView={() => setPdfOpen(true)}
+            canDownload={canDownload}
+            downloadHref={downloadHref}
+            onDownload={onDownloadClick}
+          />
+          <ChatPdfLightbox
+            open={pdfOpen}
+            downloadUrl={downloadHref}
+            onOpenChange={setPdfOpen}
+          />
+        </div>
+      ) : null}
+
+      {mediaUrl && mt === 'document' && !isPdf ? (
         <div className="chat-bubble__media chat-bubble__media--doc">
-          {isPdf ? <ChatPdfPreview downloadUrl={downloadHref} /> : null}
           {canDownload ? (
             <a className="chat-msg-download-link" href={downloadHref} onClick={onDownloadClick}>
               Descargar
