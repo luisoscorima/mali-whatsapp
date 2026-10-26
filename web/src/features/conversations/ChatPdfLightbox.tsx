@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import type { PDFDocumentLoadingTask } from 'pdfjs-dist'
+import type { PDFDocumentLoadingTask, RenderTask } from 'pdfjs-dist'
 import {
   Dialog,
   DialogClose,
   DialogContent,
   DialogTitle,
 } from '@/shared/ui/shadcn/dialog'
-import { getToken } from '../../shared/api/token'
+import { fetchPdfBytes, isCancelledPdfError, openPdf } from './chatPdf'
 
 const MIN_ZOOM = 1
 const MAX_ZOOM = 3
@@ -18,25 +18,11 @@ type ChatPdfLightboxProps = {
   onOpenChange: (open: boolean) => void
 }
 
-async function fetchPdfBytes(downloadUrl: string, signal: AbortSignal): Promise<ArrayBuffer> {
-  const headers: HeadersInit = {}
-  const isAbsolute = /^https?:\/\//i.test(downloadUrl)
-  if (!isAbsolute) {
-    const token = getToken()
-    if (token) headers.Authorization = `Bearer ${token}`
-  }
-  const res = await fetch(downloadUrl, {
-    headers,
-    credentials: isAbsolute ? 'omit' : 'include',
-    signal,
-  })
-  if (!res.ok) throw new Error('PDF no disponible')
-  return res.arrayBuffer()
-}
-
 export function ChatPdfLightbox({ open, downloadUrl, onOpenChange }: ChatPdfLightboxProps) {
   const [zoom, setZoom] = useState(MIN_ZOOM)
+  const [attempt, setAttempt] = useState(0)
   const [status, setStatus] = useState('')
+  const [failed, setFailed] = useState(false)
   const stageRef = useRef<HTMLDivElement>(null)
   const pagesRef = useRef<HTMLDivElement>(null)
 
@@ -69,23 +55,21 @@ export function ChatPdfLightbox({ open, downloadUrl, onOpenChange }: ChatPdfLigh
     let cancelled = false
     const controller = new AbortController()
     let loadingTask: PDFDocumentLoadingTask | undefined
+    const renderTasks: RenderTask[] = []
     host.replaceChildren()
+    setFailed(false)
     setStatus('Cargando PDF…')
 
     void (async () => {
       try {
-        const [{ getDocument, GlobalWorkerOptions }, { default: pdfWorker }] =
-          await Promise.all([
-            import('pdfjs-dist'),
-            import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
-          ])
+        const bytes = await fetchPdfBytes(downloadUrl, controller.signal)
         if (cancelled) return
-        GlobalWorkerOptions.workerSrc = pdfWorker
-        const data = await fetchPdfBytes(downloadUrl, controller.signal)
-        if (cancelled) return
-        loadingTask = getDocument({ data })
-        const pdf = await loadingTask.promise
-        if (cancelled) return
+        const pdf = await openPdf(bytes)
+        loadingTask = pdf.loadingTask
+        if (cancelled) {
+          void loadingTask.destroy()
+          return
+        }
 
         const width = Math.min(host.clientWidth || 720, 920)
         const pixelRatio = Math.min(window.devicePixelRatio || 1, 2)
@@ -99,26 +83,27 @@ export function ChatPdfLightbox({ open, downloadUrl, onOpenChange }: ChatPdfLigh
           const canvas = document.createElement('canvas')
           canvas.width = viewport.width
           canvas.height = viewport.height
-          const context = canvas.getContext('2d')
-          if (!context) continue
-          await page.render({ canvasContext: context, viewport, canvas }).promise
+          const renderTask = page.render({ canvas, viewport })
+          renderTasks.push(renderTask)
+          await renderTask.promise
           if (cancelled) return
           host.appendChild(canvas)
         }
         if (!cancelled) setStatus('')
-      } catch {
-        if (!cancelled) setStatus('No se pudo mostrar el PDF.')
-      } finally {
-        void loadingTask?.destroy()
+      } catch (error) {
+        if (cancelled || isCancelledPdfError(error)) return
+        setFailed(true)
+        setStatus(error instanceof Error ? error.message : 'No se pudo mostrar el PDF.')
       }
     })()
 
     return () => {
       cancelled = true
       controller.abort()
+      for (const renderTask of renderTasks) renderTask.cancel()
       void loadingTask?.destroy()
     }
-  }, [open, downloadUrl])
+  }, [open, downloadUrl, attempt])
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -139,8 +124,17 @@ export function ChatPdfLightbox({ open, downloadUrl, onOpenChange }: ChatPdfLigh
             onClick={(event) => event.stopPropagation()}
           />
           {status ? (
-            <p className="chat-pdf-lightbox__status" role="status">
-              {status}
+            <p
+              className="chat-pdf-lightbox__status"
+              role="status"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <span>{status}</span>
+              {failed ? (
+                <button type="button" onClick={() => setAttempt((current) => current + 1)}>
+                  Reintentar
+                </button>
+              ) : null}
             </p>
           ) : null}
         </div>

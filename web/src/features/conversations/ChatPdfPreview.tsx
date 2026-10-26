@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import type { PDFDocumentLoadingTask } from 'pdfjs-dist'
-import { getToken } from '../../shared/api/token'
+import type { PDFDocumentLoadingTask, RenderTask } from 'pdfjs-dist'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/shadcn/tooltip'
+import { fetchPdfBytes, isCancelledPdfError, openPdf } from './chatPdf'
 
 const PREVIEW_MAX_HEIGHT = 180
 
@@ -12,7 +13,10 @@ export function ChatPdfPreview({ downloadUrl }: ChatPdfPreviewProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [visible, setVisible] = useState(false)
+  const [attempt, setAttempt] = useState(0)
   const [status, setStatus] = useState('')
+  const [failed, setFailed] = useState(false)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     const host = hostRef.current
@@ -33,37 +37,21 @@ export function ChatPdfPreview({ downloadUrl }: ChatPdfPreviewProps) {
     let cancelled = false
     const controller = new AbortController()
     let loadingTask: PDFDocumentLoadingTask | undefined
+    let renderTask: RenderTask | undefined
+    setFailed(false)
+    setReady(false)
     setStatus('Cargando vista previa…')
+
     void (async () => {
       try {
-        const [{ getDocument, GlobalWorkerOptions }, { default: pdfWorker }] =
-          await Promise.all([
-            import('pdfjs-dist'),
-            import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
-          ])
+        const bytes = await fetchPdfBytes(downloadUrl, controller.signal)
         if (cancelled) return
-        GlobalWorkerOptions.workerSrc = pdfWorker
-        const headers: HeadersInit = {}
-        const isAbsolute = /^https?:\/\//i.test(downloadUrl)
-        if (!isAbsolute) {
-          const token = getToken()
-          if (token) headers.Authorization = `Bearer ${token}`
+        const pdf = await openPdf(bytes)
+        loadingTask = pdf.loadingTask
+        if (cancelled) {
+          void loadingTask.destroy()
+          return
         }
-
-        const res = await fetch(downloadUrl, {
-          headers,
-          credentials: isAbsolute ? 'omit' : 'include',
-          signal: controller.signal,
-        })
-        if (cancelled) return
-        if (!res.ok) throw new Error('PDF no disponible')
-
-        const data = await res.arrayBuffer()
-        if (cancelled) return
-
-        loadingTask = getDocument({ data })
-        const pdf = await loadingTask.promise
-        if (cancelled) return
 
         const page = await pdf.getPage(1)
         if (cancelled) return
@@ -77,38 +65,58 @@ export function ChatPdfPreview({ downloadUrl }: ChatPdfPreviewProps) {
           viewport = page.getViewport({ scale })
         }
 
-        const context = canvas.getContext('2d')
-        if (!context || cancelled) return
-
         canvas.width = viewport.width
         canvas.height = viewport.height
-        await page.render({ canvasContext: context, viewport, canvas }).promise
-        if (!cancelled) setStatus('')
-      } catch {
-        if (!cancelled)
-          setStatus('Vista previa no disponible.')
-      } finally {
-        void loadingTask?.destroy()
+        renderTask = page.render({ canvas, viewport })
+        await renderTask.promise
+        if (!cancelled) {
+          setReady(true)
+          setStatus('')
+        }
+      } catch (error) {
+        if (cancelled || isCancelledPdfError(error)) return
+        setReady(false)
+        setFailed(true)
+        setStatus(error instanceof Error ? error.message : 'Vista previa no disponible.')
       }
     })()
 
     return () => {
       cancelled = true
       controller.abort()
+      renderTask?.cancel()
       void loadingTask?.destroy()
     }
-  }, [visible, downloadUrl])
+  }, [visible, downloadUrl, attempt])
 
   return (
     <div ref={hostRef} className="chat-pdf-preview">
       {status ? (
-        <p role="status" className="text-xs text-muted">
-          {status}
+        <p role="status" className="chat-pdf-preview__status">
+          <span>{status}</span>
+          {failed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="chat-pdf-preview__retry"
+                  aria-label="Reintentar"
+                  onClick={() => setAttempt((current) => current + 1)}
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                    <path d="M21 12a9 9 0 1 1-2.6-6.3" />
+                    <path d="M21 3v6h-6" />
+                  </svg>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Reintentar</TooltipContent>
+            </Tooltip>
+          ) : null}
         </p>
       ) : null}
       <canvas
         ref={canvasRef}
-        hidden={!visible}
+        hidden={!ready}
         className="chat-msg-media chat-msg-media--pdf"
       />
     </div>
