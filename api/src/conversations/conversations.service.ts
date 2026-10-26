@@ -3248,7 +3248,7 @@ export class ConversationsService {
     }
 
     let localPreview = getLocalPreview(row.raw_payload);
-    let rawPayload = row.raw_payload;
+    let rawPayload: unknown = row.raw_payload;
     if (!localPreview) {
       const ref = extractStoredMediaDownloadRef(row.raw_payload);
       if (!ref) {
