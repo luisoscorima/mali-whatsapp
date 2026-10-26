@@ -9,6 +9,7 @@ export type AttributeFieldDefinition = {
   options: string[] | null;
   sort_order: number;
   required: boolean;
+  category?: string;
 };
 
 export function getApplicableAttributeDefinitions(

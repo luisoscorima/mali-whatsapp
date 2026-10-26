@@ -5,6 +5,8 @@ import { safeFilenamePart } from '../conversations/conversation-export.util';
 export function buildLeadsOriginsExportBuffer(
   rows: Array<{
     channel: string;
+    categoria: string;
+    linea: string;
     contact_name: string;
     username: string;
     phone: string;
@@ -24,6 +26,8 @@ export function buildLeadsOriginsExportBuffer(
 ): Buffer {
   const headers = [
     'Canal',
+    'Categoría',
+    'Línea',
     'Contacto',
     'Username WhatsApp',
     'Teléfono',
@@ -44,6 +48,8 @@ export function buildLeadsOriginsExportBuffer(
     headers,
     ...rows.map((r) => [
       r.channel,
+      r.categoria,
+      r.linea,
       r.contact_name,
       r.username,
       r.phone,

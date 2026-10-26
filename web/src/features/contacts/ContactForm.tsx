@@ -2,6 +2,7 @@ import { type FormEvent, type ReactNode, useMemo, useState } from 'react'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import {
   getApplicableAttributeDefinitions,
+  groupByCategory,
   inputTypeForField,
   type AttributeFieldDefinition,
 } from './contactFormUtils'
@@ -100,6 +101,8 @@ export function ContactForm({
       ).filter((d) => !NATIVE_ATTR_SLUGS.has(d.slug)),
     [attributeDefinitions, selectedSegments],
   )
+  const attributeGroups = useMemo(() => groupByCategory(applicableDefs), [applicableDefs])
+  const showCategory = attributeGroups.length > 1
 
   const filterSegments = useMemo(
     () =>
@@ -325,8 +328,11 @@ export function ContactForm({
               : 'No hay campos definidos.'}
           </p>
         ) : (
-          applicableDefs.map((def) => (
-            <label key={`${def.slug}:${def.segment_slug ?? ''}`} className="block text-sm">
+          attributeGroups.map((group) => (
+            <div key={group.key} className="space-y-3">
+              {showCategory ? <p className="text-sm font-medium">{group.label}</p> : null}
+              {group.items.map((def) => (
+            <label key={`${def.category || 'general'}:${def.slug}:${def.segment_slug ?? ''}`} className="block text-sm">
               <span className="text-muted">
                 {def.label}
                 {def.segment_slug ? ` · ${def.segment_slug}` : ''}
@@ -365,6 +371,8 @@ export function ContactForm({
                 />
               )}
             </label>
+              ))}
+            </div>
           ))
         )}
       </div>

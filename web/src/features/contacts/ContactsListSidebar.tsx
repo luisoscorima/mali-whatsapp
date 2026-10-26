@@ -4,7 +4,7 @@ import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { formatContactName } from './contactName'
-import { type AttributeFieldDefinition } from './contactFormUtils'
+import { groupByCategory, type AttributeFieldDefinition } from './contactFormUtils'
 import { BulkContactActionsDialog } from './BulkContactActionsDialog'
 import { SegmentBadge } from '../segments/SegmentBadge'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
@@ -57,6 +57,7 @@ type AttributeFilterOption = {
   slug: string
   label: string
   segment_slug: string | null
+  category?: string
 }
 
 type ContactListItem = {
@@ -301,6 +302,8 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
   }, [options])
 
   const segments = options?.segments ?? []
+  const attributeFilterGroups = groupByCategory(options?.attribute_filters ?? [])
+  const showAttrCategory = attributeFilterGroups.length > 1
   const canBulkSelect = segments.length > 0 || bulkAttrDefs.length > 0
 
   async function applyBulkSegment(segmentSlug: string): Promise<boolean> {
@@ -568,11 +571,24 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
               className="max-w-[8rem] rounded border border-line bg-bg px-1 py-0.5"
             >
               <option value="">Atributo</option>
-              {(options?.attribute_filters ?? []).map((opt) => (
-                <option key={`${opt.slug}:${opt.segment_slug ?? ''}`} value={opt.slug}>
-                  {opt.label}
-                </option>
-              ))}
+              {showAttrCategory
+                ? attributeFilterGroups.map((group) => (
+                    <optgroup key={group.key} label={group.label}>
+                      {group.items.map((opt) => (
+                        <option
+                          key={`${opt.category || 'general'}:${opt.slug}:${opt.segment_slug ?? ''}`}
+                          value={opt.slug}
+                        >
+                          {opt.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))
+                : (options?.attribute_filters ?? []).map((opt) => (
+                    <option key={`${opt.slug}:${opt.segment_slug ?? ''}`} value={opt.slug}>
+                      {opt.label}
+                    </option>
+                  ))}
             </select>
 
             {attrKey ? (

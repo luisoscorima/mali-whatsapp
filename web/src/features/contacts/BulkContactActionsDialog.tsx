@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import {
+  groupByCategory,
   inputTypeForField,
   type AttributeFieldDefinition,
 } from './contactFormUtils'
@@ -48,6 +49,8 @@ export function BulkContactActionsDialog({
   const [segmentSlug, setSegmentSlug] = useState('')
   const [attrKey, setAttrKey] = useState('')
   const [attrValue, setAttrValue] = useState('')
+  const attributeGroups = groupByCategory(attributeDefinitions)
+  const showAttrCategory = attributeGroups.length > 1
 
   useEffect(() => {
     if (!open) {
@@ -153,11 +156,21 @@ export function BulkContactActionsDialog({
                 className={FIELD}
               >
                 <option value="">Elegir atributo</option>
-                {attributeDefinitions.map((def) => (
-                  <option key={def.slug} value={def.slug}>
-                    {def.label}
-                  </option>
-                ))}
+                {showAttrCategory
+                  ? attributeGroups.map((group) => (
+                      <optgroup key={group.key} label={group.label}>
+                        {group.items.map((def) => (
+                          <option key={`${def.category || 'general'}:${def.slug}`} value={def.slug}>
+                            {def.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))
+                  : attributeDefinitions.map((def) => (
+                      <option key={def.slug} value={def.slug}>
+                        {def.label}
+                      </option>
+                    ))}
               </select>
               {attrDef?.field_type === 'select' ? (
                 <select

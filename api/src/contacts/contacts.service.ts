@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, ConflictException, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { programIdForCategory, programScopeWhere } from '../config/category-scope';
+import { categoryOfProgram, programIdForCategory, programScopeWhere } from '../config/category-scope';
 import { payloadWithStandardCurso } from '../leads/lead-curso.util';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/auth.types';
@@ -99,6 +99,7 @@ export class ContactsService {
           options: true,
           sort_order: true,
           required: true,
+          program: { select: { slug: true } },
         },
       }),
     ]);
@@ -109,9 +110,10 @@ export class ContactsService {
         slug: row.slug,
         label: row.label,
         segment_slug: row.segment_slug,
+        category: categoryOfProgram(row.program?.slug),
       }))
       .filter((row) => {
-        const key = `${row.slug}:${row.segment_slug ?? ''}`;
+        const key = `${row.category}:${row.slug}:${row.segment_slug ?? ''}`;
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
@@ -121,8 +123,15 @@ export class ContactsService {
       segments,
       attribute_filters,
       attribute_definitions: attributeRows.map((row) => ({
-        ...row,
+        id: row.id,
+        segment_slug: row.segment_slug,
+        slug: row.slug,
+        label: row.label,
+        field_type: row.field_type,
         options: parseStoredOptions(row.options),
+        sort_order: row.sort_order,
+        required: row.required,
+        category: categoryOfProgram(row.program?.slug),
       })),
     };
   }
@@ -156,11 +165,19 @@ export class ContactsService {
         options: true,
         sort_order: true,
         required: true,
+        program: { select: { slug: true } },
       },
     });
     return rows.map((row) => ({
-      ...row,
+      id: row.id,
+      segment_slug: row.segment_slug,
+      slug: row.slug,
+      label: row.label,
+      field_type: row.field_type,
       options: parseStoredOptions(row.options),
+      sort_order: row.sort_order,
+      required: row.required,
+      category: categoryOfProgram(row.program?.slug),
     }));
   }
 

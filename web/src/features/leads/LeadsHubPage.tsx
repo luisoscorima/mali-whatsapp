@@ -154,6 +154,7 @@ type OriginRow = ContactOriginSummary & {
   chat_conversation_id: number | null
   came_with_inbound: boolean
   categoria?: string
+  linea?: string
   contacts: {
     id: number
     name: string
@@ -330,6 +331,9 @@ function LeadsUnifiedList() {
                           <span className="rounded bg-accent-soft px-1.5 text-[10px] text-accent">
                             {categoryLabel(o.categoria)}
                           </span>
+                          {o.linea ? (
+                            <div className="mt-1 text-xs text-muted">{o.linea}</div>
+                          ) : null}
                         </td>
                       ) : null}
                       <td className="px-2 py-2">

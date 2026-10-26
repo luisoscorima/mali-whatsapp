@@ -54,6 +54,29 @@ import {
   type UpsertOriginInput,
 } from './leads.types';
 
+function leadCategoryOf(item: {
+  program?: { slug: string } | null;
+  conversations?: {
+    whatsapp_line?: {
+      label?: string | null;
+      display_phone_number?: string | null;
+      program_key?: string | null;
+      program?: { slug: string } | null;
+    } | null;
+  } | null;
+}): { categoria: string; linea: string } {
+  const line = item.conversations?.whatsapp_line;
+  const slug = String(
+    item.program?.slug || line?.program?.slug || line?.program_key || 'general',
+  )
+    .trim()
+    .toLowerCase() || 'general';
+  return {
+    categoria: slug,
+    linea: [line?.label, line?.display_phone_number].filter(Boolean).join(' · '),
+  };
+}
+
 @Injectable()
 export class LeadsService implements OnModuleInit {
   private readonly logger = new Logger(LeadsService.name);
@@ -1065,7 +1088,19 @@ export class LeadsService implements OnModuleInit {
               lead_status: true,
             },
           },
-          conversations: { select: { wa_username: true } },
+          conversations: {
+            select: {
+              wa_username: true,
+              whatsapp_line: {
+                select: {
+                  label: true,
+                  display_phone_number: true,
+                  program_key: true,
+                  program: { select: { slug: true } },
+                },
+              },
+            },
+          },
           program: { select: { slug: true } },
         },
       }),
@@ -1077,7 +1112,7 @@ export class LeadsService implements OnModuleInit {
       total,
       items: enriched.map((item) => ({
         ...item,
-        categoria: item.program?.slug || 'general',
+        ...leadCategoryOf(item),
         payload: payloadWithStandardCurso(item.payload),
       })),
       limit: take,
@@ -1148,8 +1183,11 @@ export class LeadsService implements OnModuleInit {
       const contactName = o.contacts
         ? [o.contacts.name, o.contacts.last_name].filter(Boolean).join(' ')
         : '';
+      const category = leadCategoryOf(o);
       return {
         channel: o.channel,
+        categoria: category.categoria === 'general' ? 'General' : category.categoria.toUpperCase(),
+        linea: category.linea,
         contact_name: contactName,
         username: o.conversations?.wa_username
           ? `@${o.conversations.wa_username.replace(/^@/, '')}`

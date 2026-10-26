@@ -33,6 +33,7 @@ export type AttributeFilterOption = {
   slug: string;
   label: string;
   segment_slug: string | null;
+  category?: string;
 };
 
 export type AttributeFieldDefinition = {
@@ -44,6 +45,7 @@ export type AttributeFieldDefinition = {
   options: string[] | null;
   sort_order: number;
   required: boolean;
+  category?: string;
 };
 
 export type ContactLeadStatus = {
