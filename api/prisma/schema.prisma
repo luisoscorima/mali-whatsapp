@@ -276,9 +276,8 @@ model contact_attribute_definitions {
   program_id       Int?
   program          business_programs?    @relation(fields: [program_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
-  @@unique([area, segment_slug, slug], map: "idx_contact_attr_defs_area_seg_slug")
-  @@unique([area, slug], map: "idx_contact_attr_defs_area_slug")
   @@index([area], map: "idx_contact_attr_defs_area")
+  @@index([program_id], map: "idx_contact_attr_defs_program")
 }
 
 model contact_attributes {
@@ -696,7 +695,6 @@ model flows {
   flow_sessions       flow_sessions[]
   flow_session_events flow_session_events[]
 
-  @@unique([area, trigger_payload], map: "flows_area_trigger_uq")
   @@index([area, status], map: "idx_flows_area_status")
   @@index([program_id], map: "idx_flows_program")
 }

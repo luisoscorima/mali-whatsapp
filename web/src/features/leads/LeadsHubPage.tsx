@@ -184,7 +184,7 @@ function LeadsUnifiedList() {
 
   useEffect(() => {
     setPage(1)
-  }, [channel])
+  }, [channel, scope.query])
 
   useEffect(() => {
     const qs = new URLSearchParams({
@@ -298,7 +298,7 @@ function LeadsUnifiedList() {
       </form>
       {items.length === 0 ? (
         <p className="text-sm text-muted">
-          {channel || qApplied
+          {channel || qApplied || scope.query
             ? 'No hay orígenes para este filtro.'
             : 'Aún no hay orígenes registrados.'}
         </p>
@@ -309,6 +309,7 @@ function LeadsUnifiedList() {
               <thead className="border-b border-line text-muted">
                 <tr>
                   <th className="px-2 py-2">Canal</th>
+                  {scope.education ? <th className="px-2 py-2">Categoría</th> : null}
                   <th className="px-2 py-2">Contacto</th>
                   <th className="px-2 py-2">Curso</th>
                   <th className="px-2 py-2">Fuente</th>
@@ -324,6 +325,13 @@ function LeadsUnifiedList() {
                   return (
                     <tr key={o.id} className="border-b border-line last:border-0">
                       <td className="px-2 py-2">{channelLabel(o.channel)}</td>
+                      {scope.education ? (
+                        <td className="px-2 py-2">
+                          <span className="rounded bg-accent-soft px-1.5 text-[10px] text-accent">
+                            {categoryLabel(o.categoria)}
+                          </span>
+                        </td>
+                      ) : null}
                       <td className="px-2 py-2">
                         {o.contacts ? (
                           <Link
@@ -364,9 +372,6 @@ function LeadsUnifiedList() {
                         )}
                       </td>
                       <td className="px-2 py-2">
-                        {scope.education ? (
-                          <div className="text-xs text-muted">{categoryLabel(o.categoria)}</div>
-                        ) : null}
                         {primary.fuente || '—'}
                         {primary.programa ? (
                           <div className="text-xs text-muted">

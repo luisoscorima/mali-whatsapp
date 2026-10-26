@@ -537,6 +537,7 @@ export class MetaLeadgenService {
       external_id: leadgenId,
       source_key: formId,
       source_label: formLabel,
+      program_slug: route?.program_key ?? null,
       payload: {
         field_data: graph.field_data,
         mapped: mapped.raw,

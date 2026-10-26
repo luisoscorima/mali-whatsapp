@@ -262,6 +262,11 @@ function renderSegmentRow(
           <span className="inbox-chat-row-top">
             <span className="inbox-chat-title-line">
               <span className="inbox-chat-title">{seg.label}</span>
+              {showCategory ? (
+                <span className="shrink-0 rounded bg-accent-soft px-1.5 text-[10px] text-accent">
+                  {categoryLabel(seg.category)}
+                </span>
+              ) : null}
             </span>
             <span
               className={`shrink-0 rounded px-1.5 text-[10px] ${
@@ -276,7 +281,7 @@ function renderSegmentRow(
               colorKey={seg.color_key}
               className="inbox-chat-segment font-mono text-[10px]"
             >
-              {showCategory ? `${seg.slug} · ${categoryLabel(seg.category)}` : seg.slug}
+              {seg.slug}
             </SegmentBadge>
             <span className="ml-auto shrink-0">
               <FilterVisibilityIcon visible={seg.show_in_filter} />

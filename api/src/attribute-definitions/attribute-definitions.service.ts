@@ -42,8 +42,13 @@ const ATTR_DEF_SELECT = {
   active: true,
   created_at: true,
   updated_at: true,
+  program_id: true,
   program: { select: { slug: true } },
 } as const;
+
+function usageKey(slug: string, programId: number | null | undefined): string {
+  return `${slug}\t${programId ?? ''}`;
+}
 
 function mapDefinition(
   row: {
@@ -100,22 +105,27 @@ export class AttributeDefinitionsService {
   private async loadUsageCounts(
     area: AuthUser['area'],
   ): Promise<Map<string, number>> {
-    const rows = await this.prisma.$queryRaw<{ attr_key: string; usage_count: number }[]>(
+    const rows = await this.prisma.$queryRaw<
+      { attr_key: string; program_id: number | null; usage_count: number }[]
+    >(
       Prisma.sql`
-        SELECT ca.attr_key, COUNT(DISTINCT ca.contact_id)::int AS usage_count
+        SELECT ca.attr_key, ca.program_id, COUNT(DISTINCT ca.contact_id)::int AS usage_count
         FROM contact_attributes ca
         JOIN contacts c ON c.id = ca.contact_id
         WHERE c.area = ${area}
           AND TRIM(COALESCE(ca.attr_value, '')) <> ''
-        GROUP BY ca.attr_key
+        GROUP BY ca.attr_key, ca.program_id
       `,
     );
-    return new Map(rows.map((row) => [row.attr_key, row.usage_count]));
+    return new Map(
+      rows.map((row) => [usageKey(row.attr_key, row.program_id), row.usage_count]),
+    );
   }
 
   private async countUsage(
     area: AuthUser['area'],
     slug: string,
+    programId: number | null,
   ): Promise<number> {
     const rows = await this.prisma.$queryRaw<{ usage_count: number }[]>(
       Prisma.sql`
@@ -124,6 +134,7 @@ export class AttributeDefinitionsService {
         JOIN contacts c ON c.id = ca.contact_id
         WHERE c.area = ${area}
           AND ca.attr_key = ${slug}
+          AND ca.program_id IS NOT DISTINCT FROM ${programId}
           AND TRIM(COALESCE(ca.attr_value, '')) <> ''
       `,
     );
@@ -146,7 +157,9 @@ export class AttributeDefinitionsService {
       }),
       this.loadUsageCounts(area),
     ]);
-    return rows.map((row) => mapDefinition(row, usage.get(row.slug) ?? 0));
+    return rows.map((row) =>
+      mapDefinition(row, usage.get(usageKey(row.slug, row.program_id)) ?? 0),
+    );
   }
 
   async listAll(
@@ -165,7 +178,9 @@ export class AttributeDefinitionsService {
       }),
       this.loadUsageCounts(area),
     ]);
-    return rows.map((row) => mapDefinition(row, usage.get(row.slug) ?? 0));
+    return rows.map((row) =>
+      mapDefinition(row, usage.get(usageKey(row.slug, row.program_id)) ?? 0),
+    );
   }
 
   async getSummary(area: AuthUser['area']): Promise<AttributeSummary> {
@@ -180,7 +195,7 @@ export class AttributeDefinitionsService {
     if (!row) {
       throw new NotFoundException('Atributo no encontrado');
     }
-    const usageCount = await this.countUsage(area, row.slug);
+    const usageCount = await this.countUsage(area, row.slug, row.program_id);
     return mapDefinition(row, usageCount);
   }
 
@@ -335,10 +350,12 @@ export class AttributeDefinitionsService {
     const valuesDeleted = await this.prisma.$transaction(async (tx) => {
       const deleted = await tx.$executeRaw`
         DELETE FROM contact_attributes ca
-        USING contacts c
+        USING contacts c, contact_attribute_definitions def
         WHERE ca.contact_id = c.id
+          AND def.id = ${id}
           AND c.area = ${area}
-          AND ca.attr_key = ${existing.slug}
+          AND ca.attr_key = def.slug
+          AND ca.program_id IS NOT DISTINCT FROM def.program_id
       `;
       await tx.contact_attribute_definitions.delete({ where: { id } });
       return deleted;

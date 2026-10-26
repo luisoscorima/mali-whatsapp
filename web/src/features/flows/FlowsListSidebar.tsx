@@ -87,13 +87,17 @@ export function FlowsListSidebar({ selectedId }: FlowsListSidebarProps) {
                     <span className="inbox-chat-row-top">
                       <span className="inbox-chat-title-line">
                         <span className="inbox-chat-title">{item.name}</span>
+                        {scope.education ? (
+                          <span className="shrink-0 rounded bg-accent-soft px-1.5 text-[10px] text-accent">
+                            {categoryLabel(item.category)}
+                          </span>
+                        ) : null}
                       </span>
                       <span className="inbox-chat-meta shrink-0 text-[10px]">
                         {STATUS_LABEL[item.status]}
                       </span>
                     </span>
                     <span className="inbox-chat-preview font-mono text-xs">
-                      {scope.education ? `${categoryLabel(item.category)} · ` : ''}
                       {item.trigger_payload}
                     </span>
                   </span>

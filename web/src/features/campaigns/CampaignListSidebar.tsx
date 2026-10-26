@@ -92,6 +92,11 @@ export function CampaignListSidebar({ selectedId, onRefresh }: CampaignListSideb
                         <span className="inbox-chat-title">
                           #{c.id} · {c.template_name || '—'}
                         </span>
+                        {scope.education ? (
+                          <span className="shrink-0 rounded bg-accent-soft px-1.5 text-[10px] text-accent">
+                            {categoryLabel(c.category)}
+                          </span>
+                        ) : null}
                       </span>
                       <span className="flex shrink-0 gap-1">
                         {c.send_mode === 'direct' ? (
@@ -106,10 +111,7 @@ export function CampaignListSidebar({ selectedId, onRefresh }: CampaignListSideb
                         </span>
                       </span>
                     </span>
-                    <span className="inbox-chat-preview">
-                      {scope.education ? `${categoryLabel(c.category)} · ` : ''}
-                      {c.segment_display || '—'}
-                    </span>
+                    <span className="inbox-chat-preview">{c.segment_display || '—'}</span>
                     <span className="inbox-chat-preview">
                       {c.sent_ratio}
                       {sendWhen ? ` · ${formatDateTime(sendWhen).split(',')[0]}` : ''}

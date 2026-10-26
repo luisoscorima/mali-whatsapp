@@ -527,7 +527,7 @@ export class TikTokLeadgenService {
     const existingRoute = formId
       ? await this.prisma.tiktok_lead_form_routes.findUnique({
           where: { form_id: formId },
-          select: { form_name: true, area_locked: true },
+          select: { form_name: true, area_locked: true, program_key: true },
         })
       : null;
 
@@ -568,6 +568,7 @@ export class TikTokLeadgenService {
       external_id: leadId,
       source_key: formId,
       source_label: formName || formId,
+      program_slug: existingRoute?.program_key ?? null,
       payload: {
         mapped: mapped.raw,
         field_data: leadData,

@@ -283,6 +283,11 @@ function renderAttributeRow(
                 {def.label}
                 {def.required ? <span className="text-bad">*</span> : null}
               </span>
+              {showCategory ? (
+                <span className="shrink-0 rounded bg-accent-soft px-1.5 text-[10px] text-accent">
+                  {categoryLabel(def.category)}
+                </span>
+              ) : null}
             </span>
             <span
               className={`shrink-0 rounded px-1.5 text-[10px] ${
@@ -292,10 +297,7 @@ function renderAttributeRow(
               {def.active ? 'Activo' : 'Inactivo'}
             </span>
           </span>
-          <span className="inbox-chat-preview font-mono">
-            {def.slug}
-            {showCategory ? ` · ${categoryLabel(def.category)}` : ''}
-          </span>
+          <span className="inbox-chat-preview font-mono">{def.slug}</span>
           <span className="inbox-chat-preview">
             {scopeLabel(def, segments)}
             {def.usage_count > 0

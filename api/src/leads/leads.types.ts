@@ -72,6 +72,7 @@ export type UpsertOriginInput = {
   dni?: string | null;
   email?: string | null;
   conversation_id?: number | null;
+  program_slug?: string | null;
   first_seen_at?: Date;
   last_seen_at?: Date;
   contact?: ContactIdentityInput;

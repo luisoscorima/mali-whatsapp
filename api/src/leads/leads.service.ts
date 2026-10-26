@@ -253,6 +253,10 @@ export class LeadsService implements OnModuleInit {
     messageId?: number;
   }): Promise<void> {
     if (!this.educationAreas().includes(input.area)) return;
+    const conversation = await this.prisma.conversations.findFirst({
+      where: { id: input.conversationId },
+      select: { whatsapp_line: { select: { program: { select: { slug: true } } } } },
+    });
     const attribution = await this.prisma.contact_origins.findFirst({
       where: {
         area: input.area,
@@ -277,6 +281,7 @@ export class LeadsService implements OnModuleInit {
       external_id: `conversation:${input.conversationId}`,
       source_label: 'WhatsApp orgánico',
       conversation_id: input.conversationId,
+      program_slug: conversation?.whatsapp_line?.program?.slug ?? null,
       first_seen_at: firstInbound?.created_at ?? input.seenAt,
       last_seen_at: input.seenAt,
       phone: input.phone,
@@ -739,7 +744,10 @@ export class LeadsService implements OnModuleInit {
           input.channel === 'meta_lead_form' || input.channel === 'tiktok',
       });
       contact_id = resolved.contact_id;
-      programId = await this.attachEducationProgram(contact_id, area);
+      programId = await this.attachEducationProgram(
+        contact_id,
+        input.program_slug || area,
+      );
     } catch (err) {
       if (!(err instanceof BadRequestException)) throw err;
       // allow origin without contact only if truly no identity — still throw
@@ -990,12 +998,17 @@ export class LeadsService implements OnModuleInit {
     const skip = Math.max(params.offset ?? 0, 0);
     const q = String(params.q ?? '').trim();
     const usernameQ = q.replace(/^@/, '');
+    const filters: Prisma.contact_originsWhereInput[] = [
+      { area: areaNorm },
+    ];
+    const categoryWhere = programScopeWhere(params.categories ?? null);
+    if (Object.keys(categoryWhere).length) filters.push(categoryWhere);
+    if (params.channel) filters.push({ channel: params.channel });
     const where: Prisma.contact_originsWhereInput = {
-      area: areaNorm,
-      ...programScopeWhere(params.categories ?? null),
-      ...(params.channel ? { channel: params.channel } : {}),
-      ...(q
-        ? {
+      AND: [
+        ...filters,
+        ...(q
+        ? [{
             OR: [
               { phone: { contains: q } },
               { whatsapp_user_id: { contains: q, mode: 'insensitive' } },
@@ -1027,8 +1040,9 @@ export class LeadsService implements OnModuleInit {
                 },
               },
             ],
-          }
-        : {}),
+          } satisfies Prisma.contact_originsWhereInput]
+        : []),
+      ],
     };
     const [total, items] = await Promise.all([
       this.prisma.contact_origins.count({ where }),

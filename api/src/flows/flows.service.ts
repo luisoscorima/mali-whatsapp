@@ -605,11 +605,19 @@ export class FlowsService {
 
     if (!payload) return { handled: false, waiting: false };
 
+    const conversation = await this.prisma.conversations.findFirst({
+      where: { id: input.conversationId },
+      select: { whatsapp_line: { select: { program_id: true } } },
+    });
+    const area = ['educacion', 'educacion_ca', 'educacion_ep'].includes(input.area)
+      ? 'educacion'
+      : input.area;
     const flow = await this.prisma.flows.findFirst({
       where: {
-        area: input.area,
+        area,
         status: 'active',
         trigger_payload: payload,
+        program_id: conversation?.whatsapp_line?.program_id ?? null,
       },
     });
     if (!flow || !flow.entry_node_id) {
@@ -617,7 +625,7 @@ export class FlowsService {
     }
 
     await this.startFlowById({
-      area: input.area,
+      area,
       conversationId: input.conversationId,
       flowId: flow.id,
       phone: input.phone,
