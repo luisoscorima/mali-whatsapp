@@ -7,6 +7,7 @@ import {
   resolveWhatsAppAreaFromCatalogWaba,
 } from '../templates/whatsapp-meta.util';
 import type { MetaWebhookChangeValue } from './webhook.types';
+import { isKnownWhatsAppPhoneNumberId } from '../meta-settings/meta-settings.store';
 
 export type InboundAreaResolution = {
   area: BusinessArea | null;
@@ -19,6 +20,7 @@ export function resolveAreaFromPhoneNumberId(
   const id = String(phoneNumberId || '').trim();
   const catalogLine = getWhatsAppLineByPhoneNumberId(id);
   if (catalogLine) return catalogLine.area;
+  if (isKnownWhatsAppPhoneNumberId(id)) return null;
   const lines = BUSINESS_AREAS.map((area) => ({
     area,
     pid: getWhatsAppCredentialsForArea(area).phoneNumberId,
@@ -35,6 +37,8 @@ export function resolveInboundArea(
   const metaPid = String(value?.metadata?.phone_number_id ?? '').trim();
   let area = resolveAreaFromPhoneNumberId(metaPid);
   if (area) return { area, source: 'phone_number_id' };
+  // An explicit unknown/inactive PID must never inherit another line's WABA.
+  if (metaPid) return { area: null, source: null };
 
   const waba = String(wabaEntryId ?? '').trim();
   if (waba) {

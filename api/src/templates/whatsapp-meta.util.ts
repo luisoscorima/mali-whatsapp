@@ -2,6 +2,7 @@ import { normalizeArea, type BusinessArea } from '../config/areas';
 import { whatsappRecipientField } from '../conversations/whatsapp-recipient.util';
 import {
   getConfiguredWhatsAppCatalogLines as getCatalogLinesFromStore,
+  isKnownWhatsAppPhoneNumberId,
   getWabaIdOverrideForArea as getWabaFromStore,
   getWhatsAppLineByPhoneNumberId as getLineFromStore,
   getWhatsAppLineForArea as getLineForAreaFromStore,
@@ -540,6 +541,9 @@ export async function sendTemplateWithComponents(input: {
     ? getWhatsAppLineByPhoneNumberId(requestedPhoneNumberId)
     : null;
   const areaCredentials = getWhatsAppCredentialsForArea(input.area);
+  if (requestedPhoneNumberId && !exactLine && isKnownWhatsAppPhoneNumberId(requestedPhoneNumberId)) {
+    throw new Error('La línea está inactiva o no tiene credenciales disponibles. Revisa Administración > Líneas WhatsApp.');
+  }
   const token = exactLine?.token || areaCredentials.token;
   const phoneNumberId =
     exactLine?.phoneNumberId ||

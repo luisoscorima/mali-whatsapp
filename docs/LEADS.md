@@ -35,10 +35,12 @@ Menú Apps Script sobre hojas `Subir leads` → `Condensado` → hojas por aseso
 
 | Pieza | Qué es |
 |-------|--------|
-| **Contacto** (`contacts`) | Persona en un área (teléfono, email, nombre) y estado actual |
-| **Origen** (`contact_origins`) | Evento de captación: widget, Instant Form, CTWA, TikTok, link, orgánico, import |
-| **Entrada** (`education_lead_entries`) | Cada entrada gestionable, clasificada con la ventana de 60 días |
-| **Ciclo** (`education_lead_cycles`) | Periodo de atención con un asesor, estado y calificación; conserva historial |
+| **Persona** (`people`) | Identidad perenne, una sola en el sistema |
+| **Ficha** (`contacts`) | Esa persona dentro de un área. Una ficha activa por área canónica |
+| **Categoría** (`business_programs`) | CA o EP. No es un área ni una línea |
+| **Origen** (`contact_origins`) | Evento de captación: widget, Instant Form, CTWA, TikTok, link, orgánico, import. Lleva la categoría |
+| **Entrada** (`education_lead_entries`) | Cada intento gestionable, clasificado con la ventana de 60 días, hacia una categoría |
+| **Ciclo** (`education_lead_cycles`) | Atención de una categoría: asesor, estado y calificación. Puede haber un ciclo de CA y otro de EP |
 | **CTWA** | Entró escribiendo por WhatsApp desde un anuncio (`referral`) |
 | **Instant Form** | Llenó un formulario Lead Ads (FB/IG); puede abrir WhatsApp después |
 | `lead_status_definitions` | Catálogo de estados editable por área |
@@ -46,13 +48,13 @@ Menú Apps Script sobre hojas `Subir leads` → `Condensado` → hojas por aseso
 | `meta_lead_form_routes` | Instant Form `form_id` → área; override manual (`area_locked`) bloquea el resync |
 | `contact_attributes` | Datos durables de la persona (PAM, demografía). No son el origen de campaña |
 
-Misma persona = mismo teléfono, DNI o email en la **misma área**. CTWA e Instant Form no son dos CRMs: son dos orígenes del mismo contacto si la identidad coincide.
+La persona es única en el sistema. CTWA e Instant Form no son dos CRMs: son dos leads de la misma persona si la identidad coincide. Pueden repetirse los intentos. La persona, no. Los alias `educacion_ca` y `educacion_ep` indican la categoría y no abren otra ficha.
 
 El Sheet de Meta (export de forms) es un espejo temporal. Mali lo reemplaza.
 
 ### Identidad
 
-Match dentro del área, en este orden: identidad de WhatsApp (BSUID) → teléfono → DNI → email. Si no hay match, se crea el contacto. Hace falta al menos uno de teléfono, DNI o email.
+Match global, en este orden: identidad de WhatsApp (BSUID) → teléfono → DNI → email. Si hay una persona, el lead se asocia a su ficha de Educación. Si no hay, se crean la persona y la ficha. Si las claves chocan, el intento queda revisado en `person_identity_reviews` y no se crea otra persona. Hace falta al menos uno de teléfono, DNI, email o identidad de WhatsApp.
 
 Si el contacto ya existe, se conservan los datos que ya tiene y se rellenan los huecos (teléfono, BSUID, DNI, email, apellido). Instant Form de Meta y TikTok son la excepción: reemplazan el nombre, y el apellido si el formulario lo trae, para no dejar el alias de WhatsApp que a veces quedó de un CTWA.
 

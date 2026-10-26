@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
@@ -26,6 +27,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { isWhatsAppBsuid } from '../conversations/whatsapp-recipient.util';
 import { chooseWhatsAppIdentityMatch } from '../conversations/whatsapp-identity.util';
 import { mergeComplementaryContacts } from '../contacts/merge-complementary-contacts.util';
+import { PersonResolverService } from '../people/person-resolver.service';
 import { EducationLeadWorkflowService } from './education-lead-workflow.service';
 import { MaliOneLinksCatalogService } from './mali-one-links-catalog.service';
 import {
@@ -58,7 +60,8 @@ export class LeadsService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly educationWorkflow: EducationLeadWorkflowService,
-    private readonly maliOneLinks: MaliOneLinksCatalogService,
+    @Optional() private readonly maliOneLinks?: MaliOneLinksCatalogService,
+    @Optional() private readonly people?: PersonResolverService,
   ) {}
 
   onModuleInit(): void {
@@ -116,21 +119,23 @@ export class LeadsService implements OnModuleInit {
     return selected === 'all' ? allowed : [selected];
   }
 
+  private async educationProgramId(area: string): Promise<number | null> {
+    const slug = educationProgramOf(area);
+    if (!slug) return null;
+    const program = await this.prisma.business_programs.findFirst({
+      where: { slug, active: true, business_area: { slug: 'educacion' } },
+      select: { id: true },
+    });
+    return program?.id ?? null;
+  }
+
   private async attachEducationProgram(
     contactId: number | null,
     area: string,
-  ): Promise<void> {
-    const slug = educationProgramOf(area);
-    if (!contactId || !slug) return;
-    const program = await this.prisma.business_programs.findFirst({
-      where: {
-        slug,
-        active: true,
-        business_area: { slug: 'educacion' },
-      },
-      select: { id: true },
-    });
-    if (!program) return;
+  ): Promise<number | null> {
+    const programId = await this.educationProgramId(area);
+    if (!contactId || !programId) return programId;
+    const program = { id: programId };
     await this.prisma.contact_programs.upsert({
       where: {
         contact_id_program_id: {
@@ -145,6 +150,7 @@ export class LeadsService implements OnModuleInit {
       },
       update: { last_seen_at: new Date() },
     });
+    return programId;
   }
 
   async listEducationOrigins(params: {
@@ -313,6 +319,9 @@ export class LeadsService implements OnModuleInit {
     sample: Array<{ area: string; conversation_id: number; slug: string; source_label: string }>;
   }> {
     const apply = Boolean(opts?.apply);
+    if (!this.maliOneLinks) {
+      throw new BadRequestException('El catálogo de links MALI ONE no está disponible');
+    }
     const catalog = await this.maliOneLinks.getCatalog();
     if (!catalog.length) {
       throw new BadRequestException('El catálogo de links MALI ONE está vacío');
@@ -528,6 +537,24 @@ export class LeadsService implements OnModuleInit {
   ): Promise<{ contact_id: number; created: boolean }> {
     const areaNorm = normalizeArea(area);
     this.assertHasIdentity(input);
+    if (this.people) {
+      const resolved = await this.people.resolve(this.prisma, {
+        area: areaNorm,
+        name: input.name,
+        last_name: input.last_name,
+        phone: input.phone,
+        whatsapp_user_id: input.whatsapp_user_id,
+        email: input.email,
+        dni: input.dni,
+        opt_in: input.opt_in,
+        opt_in_email: input.opt_in_email,
+        overwriteName: opts?.overwriteName,
+      });
+      const phone = input.phone ? this.normalizeOptionalPhone(input.phone) : null;
+      const userId = String(input.whatsapp_user_id ?? '').trim() || null;
+      await this.linkConversationsToContact(areaNorm, phone, userId, resolved.contact_id);
+      return { contact_id: resolved.contact_id, created: resolved.created };
+    }
 
     const phone = input.phone
       ? this.normalizeOptionalPhone(input.phone)
@@ -702,6 +729,7 @@ export class LeadsService implements OnModuleInit {
     };
 
     let contact_id: number | null = null;
+    let programId: number | null = null;
     try {
       this.assertHasIdentity(identity);
       const resolved = await this.resolveContact(area, identity, {
@@ -710,7 +738,7 @@ export class LeadsService implements OnModuleInit {
           input.channel === 'meta_lead_form' || input.channel === 'tiktok',
       });
       contact_id = resolved.contact_id;
-      await this.attachEducationProgram(contact_id, area);
+      programId = await this.attachEducationProgram(contact_id, area);
     } catch (err) {
       if (!(err instanceof BadRequestException)) throw err;
       // allow origin without contact only if truly no identity — still throw
@@ -757,6 +785,7 @@ export class LeadsService implements OnModuleInit {
           email: email ?? existing.email,
           conversation_id:
             input.conversation_id ?? existing.conversation_id,
+          program_id: programId ?? existing.program_id,
           first_seen_at: input.first_seen_at && input.first_seen_at < existing.first_seen_at
             ? input.first_seen_at : existing.first_seen_at,
           last_seen_at: input.last_seen_at ?? new Date(),
@@ -782,6 +811,7 @@ export class LeadsService implements OnModuleInit {
         whatsapp_user_id,
         dni,
         email,
+        program_id: programId,
         conversation_id: input.conversation_id ?? null,
         ...(input.first_seen_at ? { first_seen_at: input.first_seen_at } : {}),
         ...(input.last_seen_at ? { last_seen_at: input.last_seen_at } : {}),

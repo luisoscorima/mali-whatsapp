@@ -1,6 +1,7 @@
 import {
   IsBoolean,
   IsEmail,
+  IsIn,
   IsObject,
   IsOptional,
   IsString,
@@ -14,6 +15,11 @@ export class CrmIngestOriginDto {
   @IsString()
   @MaxLength(20)
   area?: string;
+
+  /** Categoría de Educación. Con area=educacion se guarda como el intento de esa categoría. */
+  @IsOptional()
+  @IsIn(['ca', 'ep'])
+  categoria?: 'ca' | 'ep';
 
   @IsString()
   @MaxLength(32)

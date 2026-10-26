@@ -8,20 +8,20 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { ApiResponse, AuthUser } from '../auth/auth.types';
-import { MasterGuard } from '../admin/guards/master.guard';
+import { WhatsAppAdminAccessGuard } from './whatsapp-admin-access.guard';
 import { WhatsAppAdminService } from './whatsapp-admin.service';
 import {
   CreateWhatsAppLineDto,
   CreateWhatsAppWabaDto,
+  RotateWhatsAppTokenDto,
   UpdateWhatsAppLineDto,
   UpdateWhatsAppWabaDto,
 } from './dto/whatsapp-admin.dto';
 
 @Controller('admin/whatsapp')
-@UseGuards(JwtAuthGuard, MasterGuard)
+@UseGuards(WhatsAppAdminAccessGuard)
 export class WhatsAppAdminController {
   constructor(private readonly whatsappAdmin: WhatsAppAdminService) {}
 
@@ -72,6 +72,30 @@ export class WhatsAppAdminController {
     return {
       ok: true,
       data: await this.whatsappAdmin.createLine(body, user),
+    };
+  }
+
+  @Post('wabas/:id/token')
+  async rotateWabaToken(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: RotateWhatsAppTokenDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<unknown>> {
+    return {
+      ok: true,
+      data: await this.whatsappAdmin.rotateWabaToken(id, body, user),
+    };
+  }
+
+  @Post('lines/:id/token')
+  async rotateLineToken(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: RotateWhatsAppTokenDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<unknown>> {
+    return {
+      ok: true,
+      data: await this.whatsappAdmin.rotateLineToken(id, body, user),
     };
   }
 

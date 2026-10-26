@@ -14,7 +14,11 @@ import {
   fingerprintMetaToken,
 } from '../meta-settings/credential-vault.util';
 import { MetaSettingsService } from '../meta-settings/meta-settings.service';
-import { normalizeSecretValue } from '../meta-settings/meta-settings.store';
+import {
+  isWhatsAppLineCatalogEnabled,
+  normalizeSecretValue,
+} from '../meta-settings/meta-settings.store';
+import { isValidBusinessArea } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   inspectWhatsAppLine,
@@ -105,10 +109,11 @@ export class WhatsAppAdminService {
       },
     });
     if (!line) throw new NotFoundException('Línea WhatsApp no encontrada');
-    const credential =
-      line.credential_override || line.waba.default_credential;
+    const credential = line.credential_override || line.waba.default_credential;
     if (!credential) {
-      throw new BadRequestException('La línea no tiene una credencial efectiva');
+      throw new BadRequestException(
+        'La línea no tiene una credencial efectiva',
+      );
     }
     return { line, credential };
   }
@@ -138,6 +143,7 @@ export class WhatsAppAdminService {
 
     return {
       vault_configured: vaultConfigured,
+      catalog_enabled: isWhatsAppLineCatalogEnabled(),
       areas: areas.map((area) => ({
         id: area.id,
         slug: area.slug,
@@ -205,8 +211,7 @@ export class WhatsAppAdminService {
         const credential = await tx.meta_credentials.create({
           data: {
             label:
-              input.credential_label?.trim() ||
-              `Token ${input.label.trim()}`,
+              input.credential_label?.trim() || `Token ${input.label.trim()}`,
             secret_source: 'encrypted_db',
             secret_ref: null,
             encrypted_token: encryptMetaToken(token),
@@ -297,10 +302,7 @@ export class WhatsAppAdminService {
 
     try {
       const token = await this.resolveCredentialToken(waba.default_credential);
-      const inspection = await inspectWhatsAppWaba(
-        waba.meta_waba_id,
-        token,
-      );
+      const inspection = await inspectWhatsAppWaba(waba.meta_waba_id, token);
       const now = new Date();
       await this.prisma.$transaction([
         this.prisma.meta_credentials.update({
@@ -368,54 +370,39 @@ export class WhatsAppAdminService {
     const token = normalizeSecretValue(input.token);
 
     // Validate before replacing the live credential, so a typo cannot cut service.
-    const inspection = await inspectWhatsAppWaba(waba.meta_waba_id, token).catch(
-      (error) => {
-        throw new BadRequestException(
-          error instanceof Error ? error.message : String(error),
-        );
-      },
-    );
+    const inspection = await inspectWhatsAppWaba(
+      waba.meta_waba_id,
+      token,
+    ).catch((error) => {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : String(error),
+      );
+    });
     const encrypted = encryptMetaToken(token);
     const fingerprint = fingerprintMetaToken(token);
     const now = new Date();
-    const credential = waba.default_credential
-      ? await this.prisma.meta_credentials.update({
-          where: { id: waba.default_credential.id },
-          data: {
-            label:
-              input.credential_label?.trim() ||
-              waba.default_credential.label,
-            secret_source: 'encrypted_db',
-            secret_ref: null,
-            encrypted_token: encrypted,
-            token_fingerprint: fingerprint,
-            active: true,
-            validation_status: 'valid',
-            validation_error: null,
-            last_validated_at: now,
-            updated_at: now,
-          },
-        })
-      : await this.prisma.meta_credentials.create({
-          data: {
-            label:
-              input.credential_label?.trim() || `Token ${waba.label}`,
-            secret_source: 'encrypted_db',
-            encrypted_token: encrypted,
-            token_fingerprint: fingerprint,
-            validation_status: 'valid',
-            last_validated_at: now,
-          },
-        });
-    await this.prisma.whatsapp_wabas.update({
-      where: { id },
-      data: {
-        default_credential_id: credential.id,
-        active: true,
-        app_subscription_status: inspection.appSubscriptionStatus,
-        last_validated_at: now,
-        updated_at: now,
-      },
+    const credential = await this.prisma.$transaction(async (tx) => {
+      // Fresh credentials preserve explicit overrides on other lines.
+      const created = await tx.meta_credentials.create({
+        data: {
+          label: input.credential_label?.trim() || `Token ${waba.label}`,
+          secret_source: 'encrypted_db',
+          encrypted_token: encrypted,
+          token_fingerprint: fingerprint,
+          validation_status: 'valid',
+          last_validated_at: now,
+        },
+      });
+      await tx.whatsapp_wabas.update({
+        where: { id },
+        data: {
+          default_credential_id: created.id,
+          app_subscription_status: inspection.appSubscriptionStatus,
+          last_validated_at: now,
+          updated_at: now,
+        },
+      });
+      return created;
     });
     await this.metaSettings.refresh();
     await this.writeAudit(
@@ -451,10 +438,27 @@ export class WhatsAppAdminService {
       input.business_area_id,
       input.program_id,
     );
+    if (!isValidBusinessArea(area.slug)) {
+      throw new BadRequestException(
+        'El área no está habilitada en la aplicación',
+      );
+    }
+    // New lines always belong to the canonical business area. Legacy aliases
+    // are only preserved on imported rows, never assigned to new numbers.
+    if (input.legacy_area) {
+      throw new BadRequestException(
+        'Las líneas nuevas usan el área canónica y un programa opcional, sin alias heredado',
+      );
+    }
     const waba = await this.prisma.whatsapp_wabas.findUnique({
       where: { id: input.waba_id },
     });
     if (!waba) throw new BadRequestException('El WABA no existe');
+    if (!input.token && !waba.default_credential_id) {
+      throw new BadRequestException(
+        'Configura un token compartido en el WABA o un token propio para la línea',
+      );
+    }
     if (input.token) this.ensureVault();
 
     try {
@@ -465,8 +469,7 @@ export class WhatsAppAdminService {
           const credential = await tx.meta_credentials.create({
             data: {
               label:
-                input.credential_label?.trim() ||
-                `Token ${input.label.trim()}`,
+                input.credential_label?.trim() || `Token ${input.label.trim()}`,
               secret_source: 'encrypted_db',
               encrypted_token: encryptMetaToken(token),
               token_fingerprint: fingerprintMetaToken(token),
@@ -522,6 +525,14 @@ export class WhatsAppAdminService {
       include: { _count: { select: { conversations: true, campaigns: true } } },
     });
     if (!current) throw new NotFoundException('Línea WhatsApp no encontrada');
+    if (
+      input.legacy_area !== undefined &&
+      (input.legacy_area || null) !== current.legacy_area
+    ) {
+      throw new BadRequestException(
+        'El alias heredado no se cambia desde administración',
+      );
+    }
     const areaId = input.business_area_id ?? current.business_area_id;
     const programId =
       input.program_id !== undefined ? input.program_id : current.program_id;
@@ -530,7 +541,8 @@ export class WhatsAppAdminService {
     const identityChanged =
       (input.business_area_id !== undefined &&
         input.business_area_id !== current.business_area_id) ||
-      (input.program_id !== undefined && input.program_id !== current.program_id) ||
+      (input.program_id !== undefined &&
+        input.program_id !== current.program_id) ||
       (input.waba_id !== undefined && input.waba_id !== current.waba_id) ||
       (input.phone_number_id !== undefined &&
         input.phone_number_id.trim() !== current.phone_number_id) ||
@@ -557,34 +569,49 @@ export class WhatsAppAdminService {
       if (!waba) throw new BadRequestException('El WABA no existe');
     }
 
-    const updated = await this.prisma.whatsapp_lines.update({
-      where: { id },
-      data: {
-        ...(input.business_area_id !== undefined
-          ? { business_area_id: input.business_area_id }
-          : {}),
-        ...(input.program_id !== undefined
-          ? {
-              program_id: input.program_id,
-              program_key: program?.slug || null,
-            }
-          : {}),
-        ...(input.waba_id !== undefined ? { waba_id: input.waba_id } : {}),
-        ...(input.phone_number_id !== undefined
-          ? { phone_number_id: input.phone_number_id.trim() }
-          : {}),
-        ...(input.label !== undefined ? { label: input.label.trim() } : {}),
-        ...(input.legacy_area !== undefined
-          ? { legacy_area: input.legacy_area?.trim() || null }
-          : {}),
-        ...(input.is_default !== undefined
-          ? { is_default: input.is_default }
-          : {}),
-        ...(identityChanged
-          ? { registration_status: 'draft', last_validated_at: null }
-          : {}),
-        updated_at: new Date(),
-      },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // Serialize default changes within an area, including concurrent admins.
+      await tx.$queryRaw`SELECT id FROM business_areas WHERE id = ${areaId} FOR UPDATE`;
+      if (input.is_default === true && current.active) {
+        await tx.whatsapp_lines.updateMany({
+          where: {
+            business_area_id: areaId,
+            active: true,
+            is_default: true,
+            NOT: { id },
+          },
+          data: { is_default: false, updated_at: new Date() },
+        });
+      }
+      return tx.whatsapp_lines.update({
+        where: { id },
+        data: {
+          ...(input.business_area_id !== undefined
+            ? { business_area_id: input.business_area_id }
+            : {}),
+          ...(input.program_id !== undefined
+            ? {
+                program_id: input.program_id,
+                program_key: program?.slug || null,
+              }
+            : {}),
+          ...(input.waba_id !== undefined ? { waba_id: input.waba_id } : {}),
+          ...(input.phone_number_id !== undefined
+            ? { phone_number_id: input.phone_number_id.trim() }
+            : {}),
+          ...(input.label !== undefined ? { label: input.label.trim() } : {}),
+          ...(input.legacy_area !== undefined
+            ? { legacy_area: input.legacy_area?.trim() || null }
+            : {}),
+          ...(input.is_default !== undefined
+            ? { is_default: input.is_default }
+            : {}),
+          ...(identityChanged
+            ? { registration_status: 'draft', last_validated_at: null }
+            : {}),
+          updated_at: new Date(),
+        },
+      });
     });
     await this.metaSettings.refresh();
     await this.writeAudit(
@@ -638,16 +665,8 @@ export class WhatsAppAdminService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const now = new Date();
+      // A line membership failure does not invalidate a token shared by other lines.
       await this.prisma.$transaction([
-        this.prisma.meta_credentials.update({
-          where: { id: credential.id },
-          data: {
-            validation_status: 'invalid',
-            validation_error: message.slice(0, 4000),
-            last_validated_at: now,
-            updated_at: now,
-          },
-        }),
         this.prisma.whatsapp_lines.update({
           where: { id },
           data: {
@@ -674,7 +693,11 @@ export class WhatsAppAdminService {
     actor?: AdminActor,
   ) {
     this.ensureVault();
-    const { line } = await this.effectiveLineCredential(id);
+    const line = await this.prisma.whatsapp_lines.findUnique({
+      where: { id },
+      include: { waba: true },
+    });
+    if (!line) throw new NotFoundException('Línea WhatsApp no encontrada');
     const token = normalizeSecretValue(input.token);
     const inspection = await inspectWhatsAppLine(
       line.waba.meta_waba_id,
@@ -686,43 +709,30 @@ export class WhatsAppAdminService {
       );
     });
     const now = new Date();
-    const credential = line.credential_override_id
-      ? await this.prisma.meta_credentials.update({
-          where: { id: line.credential_override_id },
-          data: {
-            label:
-              input.credential_label?.trim() || `Token ${line.label}`,
-            secret_source: 'encrypted_db',
-            secret_ref: null,
-            encrypted_token: encryptMetaToken(token),
-            token_fingerprint: fingerprintMetaToken(token),
-            active: true,
-            validation_status: 'valid',
-            validation_error: null,
-            last_validated_at: now,
-            updated_at: now,
-          },
-        })
-      : await this.prisma.meta_credentials.create({
-          data: {
-            label: input.credential_label?.trim() || `Token ${line.label}`,
-            secret_source: 'encrypted_db',
-            encrypted_token: encryptMetaToken(token),
-            token_fingerprint: fingerprintMetaToken(token),
-            validation_status: 'valid',
-            last_validated_at: now,
-          },
-        });
-    await this.prisma.whatsapp_lines.update({
-      where: { id },
-      data: {
-        credential_override_id: credential.id,
-        display_phone_number: inspection.displayPhoneNumber,
-        quality_rating: inspection.qualityRating,
-        registration_status: 'validated',
-        last_validated_at: now,
-        updated_at: now,
-      },
+    const credential = await this.prisma.$transaction(async (tx) => {
+      // Fresh credentials preserve explicit overrides on other lines.
+      const created = await tx.meta_credentials.create({
+        data: {
+          label: input.credential_label?.trim() || `Token ${line.label}`,
+          secret_source: 'encrypted_db',
+          encrypted_token: encryptMetaToken(token),
+          token_fingerprint: fingerprintMetaToken(token),
+          validation_status: 'valid',
+          last_validated_at: now,
+        },
+      });
+      await tx.whatsapp_lines.update({
+        where: { id },
+        data: {
+          credential_override_id: created.id,
+          display_phone_number: inspection.displayPhoneNumber,
+          quality_rating: inspection.qualityRating,
+          registration_status: 'validated',
+          last_validated_at: now,
+          updated_at: now,
+        },
+      });
+      return created;
     });
     await this.metaSettings.refresh();
     await this.writeAudit(
@@ -735,11 +745,17 @@ export class WhatsAppAdminService {
   }
 
   async activateLine(id: number, actor?: AdminActor) {
+    if (!isWhatsAppLineCatalogEnabled()) {
+      throw new BadRequestException(
+        'Activa WHATSAPP_LINE_CATALOG_ENABLED antes de habilitar líneas del catálogo',
+      );
+    }
     const { line, credential } = await this.effectiveLineCredential(id);
+    await this.assertProgram(line.business_area_id, line.program_id);
     if (!line.waba.active) {
       throw new BadRequestException('El WABA está inactivo');
     }
-    if (credential.validation_status !== 'valid') {
+    if (!credential.active || credential.validation_status !== 'valid') {
       throw new BadRequestException('La credencial no está validada');
     }
     if (line.registration_status !== 'validated' || !line.last_validated_at) {
@@ -747,6 +763,7 @@ export class WhatsAppAdminService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM business_areas WHERE id = ${line.business_area_id} FOR UPDATE`;
       if (line.is_default) {
         await tx.whatsapp_lines.updateMany({
           where: {
@@ -792,4 +809,3 @@ export class WhatsAppAdminService {
     return updated;
   }
 }
-

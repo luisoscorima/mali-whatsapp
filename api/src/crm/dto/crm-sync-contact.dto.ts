@@ -57,8 +57,17 @@ export class CrmSyncContactDto {
   dni?: string | null;
 
   @IsOptional()
+  @IsIn(['ca', 'ep'])
+  categoria?: 'ca' | 'ep';
+
+  @IsOptional()
   @IsObject()
   attributes?: Record<string, string>;
+
+  /** Datos que pertenecen a la categoría, no a la ficha del área. */
+  @IsOptional()
+  @IsObject()
+  atributos_categoria?: Record<string, string>;
 
   /** External id from product system (e.g. PamRegistration.id) */
   @IsOptional()

@@ -201,20 +201,23 @@ async function reassignContactFks(
     where: { contact_id: dropId },
   });
   for (const attr of dropAttrs) {
-    await tx.contact_attributes.upsert({
+    const existing = await tx.contact_attributes.findFirst({
       where: {
-        contact_id_attr_key: {
-          contact_id: keepId,
-          attr_key: attr.attr_key,
-        },
+        contact_id: keepId,
+        attr_key: attr.attr_key,
+        program_id: attr.program_id,
       },
-      create: {
+      select: { id: true },
+    });
+    if (existing) continue;
+    await tx.contact_attributes.create({
+      data: {
         contact_id: keepId,
         attr_key: attr.attr_key,
         attr_value: attr.attr_value,
+        program_id: attr.program_id,
         updated_at: new Date(),
       },
-      update: {},
     });
   }
 

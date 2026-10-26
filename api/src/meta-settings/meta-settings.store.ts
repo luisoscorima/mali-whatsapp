@@ -14,6 +14,8 @@ export type WhatsAppCredentials = {
 };
 
 export type WhatsAppLineCatalogRow = {
+  /** Includes inactive rows to prevent legacy settings from resurrecting them. */
+  active?: boolean;
   id: number;
   phoneNumberId: string;
   displayPhoneNumber: string | null;
@@ -158,12 +160,12 @@ function buildLegacyWhatsAppCredentialsRaw(norm: BusinessArea): {
 
   const fallbackToken = normalizeSecretValue(process.env.WHATSAPP_TOKEN || '');
   const fallbackPhone = String(process.env.PHONE_NUMBER_ID || '').trim();
-  const envKeys = ENV_BY_AREA[norm] || ENV_BY_AREA.ti;
+  const envKeys = ENV_BY_AREA[norm];
 
-  if (!token) {
+  if (!token && envKeys) {
     token = normalizeSecretValue(process.env[envKeys.token] || fallbackToken);
   }
-  if (!phoneNumberId) {
+  if (!phoneNumberId && envKeys) {
     phoneNumberId = String(process.env[envKeys.phone] || fallbackPhone).trim();
   }
 
@@ -177,6 +179,13 @@ export function getWhatsAppCredentialsForArea(
   if (isWhatsAppLineCatalogEnabled()) {
     const line = getWhatsAppLineForArea(norm);
     if (line) return line;
+    if (
+      lineCatalog.some(
+        (row) => row.legacyArea === norm || row.canonicalArea === norm,
+      )
+    ) {
+      return { area: norm, token: '', phoneNumberId: '' };
+    }
   }
   let { token, phoneNumberId } = buildLegacyWhatsAppCredentialsRaw(norm);
 
@@ -187,9 +196,9 @@ export function getWhatsAppCredentialsForArea(
     const pid = String(phoneNumberId || '').trim();
     if (tiPid && pid && pid === tiPid) {
       const fallbackPhone = String(process.env.PHONE_NUMBER_ID || '').trim();
-      const envKeys = ENV_BY_AREA[norm] || ENV_BY_AREA.ti;
+      const envKeys = ENV_BY_AREA[norm];
       const preferred = String(
-        process.env[envKeys.phone] || fallbackPhone,
+        (envKeys ? process.env[envKeys.phone] : '') || fallbackPhone,
       ).trim();
       if (preferred && preferred !== pid) {
         if (!warnedPhoneIdDupWithTi.has(norm)) {
@@ -221,8 +230,8 @@ export function getWabaIdOverrideForArea(area: unknown): string {
   const fromDb = String(row?.[META_SETTING_KEYS.wabaId] || '').trim();
   if (fromDb) return fromDb;
   const fallbackWaba = String(process.env.WABA_ID || '').trim();
-  const envKeys = ENV_BY_AREA[norm] || ENV_BY_AREA.ti;
-  return String(process.env[envKeys.waba] || fallbackWaba).trim();
+  const envKeys = ENV_BY_AREA[norm];
+  return envKeys ? String(process.env[envKeys.waba] || fallbackWaba).trim() : '';
 }
 
 /** Display phone (+51…) guardado en BD tras sync Graph; vacío si aún no se sincronizó. */
@@ -289,6 +298,7 @@ function effectiveCatalogArea(
 function resolveCatalogLine(
   row: WhatsAppLineCatalogRow,
 ): ResolvedWhatsAppLine | null {
+  if (row.active === false) return null;
   const area = effectiveCatalogArea(row);
   const token = resolveCatalogToken(row);
   if (!area || !token || !row.phoneNumberId) return null;
@@ -311,12 +321,24 @@ export function getWhatsAppLineForArea(
   area: BusinessArea,
 ): ResolvedWhatsAppLine | null {
   if (!isWhatsAppLineCatalogEnabled()) return null;
-  const exactLegacy = lineCatalog.find((row) => row.legacyArea === area);
-  if (exactLegacy) return resolveCatalogLine(exactLegacy);
   const canonicalDefault = lineCatalog.find(
-    (row) => row.canonicalArea === area && row.isDefault,
+    (row) =>
+      row.canonicalArea === area && row.isDefault && row.active !== false,
   );
-  return canonicalDefault ? resolveCatalogLine(canonicalDefault) : null;
+  if (canonicalDefault) return resolveCatalogLine(canonicalDefault);
+  if (lineCatalog.some((row) => row.canonicalArea === area)) return null;
+  // Legacy program aliases retain their original sender during transition.
+  const exactLegacy = lineCatalog.find(
+    (row) => row.legacyArea === area && row.active !== false,
+  );
+  return exactLegacy ? resolveCatalogLine(exactLegacy) : null;
+}
+
+export function isKnownWhatsAppPhoneNumberId(phoneNumberId: string): boolean {
+  return (
+    isWhatsAppLineCatalogEnabled() &&
+    lineCatalog.some((line) => line.phoneNumberId === phoneNumberId)
+  );
 }
 
 export function getWhatsAppLineByPhoneNumberId(
@@ -337,7 +359,7 @@ export function resolveWhatsAppAreaFromCatalogWaba(
   if (!id) return null;
   const areas = new Set(
     lineCatalog
-      .filter((line) => line.wabaId === id)
+      .filter((line) => line.wabaId === id && line.active !== false)
       .map(effectiveCatalogArea)
       .filter((area): area is BusinessArea => Boolean(area)),
   );

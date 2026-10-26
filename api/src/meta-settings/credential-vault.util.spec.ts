@@ -32,7 +32,9 @@ describe('credential vault', () => {
   it('rejects tampered ciphertext', () => {
     const encrypted = encryptMetaToken('token');
     const parts = encrypted.split('.');
-    parts[3] = `${parts[3]!.slice(0, -1)}A`;
+    const ciphertext = Buffer.from(parts[3]!, 'base64url');
+    ciphertext[0] ^= 1;
+    parts[3] = ciphertext.toString('base64url');
     expect(() => decryptMetaToken(parts.join('.'))).toThrow();
   });
 
@@ -50,4 +52,3 @@ describe('credential vault', () => {
     expect(fingerprint).not.toContain('token');
   });
 });
-

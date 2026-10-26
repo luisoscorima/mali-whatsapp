@@ -19,31 +19,61 @@ model app_settings {
 
 /// Canonical business tenants. Legacy string areas remain in place during the migration.
 model business_areas {
-  id             Int                     @id @default(autoincrement())
-  slug           String                  @unique @db.VarChar(40)
-  label          String                  @db.VarChar(120)
-  active         Boolean                 @default(true)
-  sort_order     Int                     @default(0)
-  created_at     DateTime                @default(now()) @db.Timestamptz(6)
-  updated_at     DateTime                @default(now()) @db.Timestamptz(6)
-  aliases        business_area_aliases[]
-  programs       business_programs[]
-  whatsapp_lines whatsapp_lines[]
+  campaigns                     campaigns[]
+  contact_attribute_definitions contact_attribute_definitions[]
+  contact_segments              contact_segments[]
+  contacts                      contacts[]
+  lead_status_definitions       lead_status_definitions[]
+  contact_origins               contact_origins[]
+  education_lead_cycles         education_lead_cycles[]
+  education_lead_entries        education_lead_entries[]
+  meta_lead_forms               meta_lead_forms[]
+  meta_lead_form_routes         meta_lead_form_routes[]
+  meta_leadgen_leads            meta_leadgen_leads[]
+  tiktok_lead_form_routes       tiktok_lead_form_routes[]
+  tiktok_leads                  tiktok_leads[]
+  conversations                 conversations[]
+  whatsapp_identity_events      whatsapp_identity_events[]
+  flows                         flows[]
+  meta_ctwa_ad_leads            meta_ctwa_ad_leads[]
+  meta_ctwa_ads                 meta_ctwa_ads[]
+  segment_definitions           segment_definitions[]
+  user_areas                    user_areas[]
+  users                         users[]
+  whatsapp_templates            whatsapp_templates[]
+  memberships                   user_area_memberships[]
+  identity_reviews              person_identity_reviews[]
+  id                            Int                             @id @default(autoincrement())
+  slug                          String                          @unique @db.VarChar(40)
+  label                         String                          @db.VarChar(120)
+  active                        Boolean                         @default(true)
+  sort_order                    Int                             @default(0)
+  created_at                    DateTime                        @default(now()) @db.Timestamptz(6)
+  updated_at                    DateTime                        @default(now()) @db.Timestamptz(6)
+  aliases                       business_area_aliases[]
+  programs                      business_programs[]
+  whatsapp_lines                whatsapp_lines[]
 }
 
 /// Optional subdivisions inside a business area. A contact may belong to several programs.
 model business_programs {
-  id               Int                @id @default(autoincrement())
+  access_grants                 user_program_grants[]
+  contact_attributes            contact_attributes[]
+  contact_attribute_definitions contact_attribute_definitions[]
+  contact_origins               contact_origins[]
+  education_lead_entries        education_lead_entries[]
+  education_lead_cycles         education_lead_cycles[]
+  id                            Int                   @id @default(autoincrement())
   business_area_id Int
-  slug             String             @db.VarChar(40)
-  label            String             @db.VarChar(120)
-  active           Boolean            @default(true)
-  sort_order       Int                @default(0)
-  created_at       DateTime           @default(now()) @db.Timestamptz(6)
-  updated_at       DateTime           @default(now()) @db.Timestamptz(6)
-  business_area    business_areas     @relation(fields: [business_area_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  contact_programs contact_programs[]
-  whatsapp_lines   whatsapp_lines[]
+  slug             String                @db.VarChar(40)
+  label            String                @db.VarChar(120)
+  active                        Boolean               @default(true)
+  sort_order                    Int                   @default(0)
+  created_at                    DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at                    DateTime              @default(now()) @db.Timestamptz(6)
+  business_area                 business_areas        @relation(fields: [business_area_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  contact_programs              contact_programs[]
+  whatsapp_lines                whatsapp_lines[]
 
   @@unique([business_area_id, slug], map: "business_programs_area_slug_uq")
   @@index([business_area_id], map: "idx_business_programs_area")
@@ -100,6 +130,7 @@ model whatsapp_wabas {
 
 /// A WhatsApp phone number routed to one canonical business area.
 model whatsapp_lines {
+  access_grants          user_line_grants[]
   id                     Int                @id @default(autoincrement())
   business_area_id       Int
   waba_id                Int
@@ -171,6 +202,8 @@ model campaign_logs {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model campaigns {
+  business_area_id     Int             @default(dbgenerated())
+  business_area        business_areas  @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   id                   Int             @id @default(autoincrement())
   whatsapp_line_id     Int?
   area                 String          @default("ti") @db.VarChar(20)
@@ -223,18 +256,22 @@ model chat_messages {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model contact_attribute_definitions {
-  id           Int      @id @default(autoincrement())
-  area         String   @db.VarChar(20)
-  segment_slug String?  @db.VarChar(50)
-  slug         String   @db.VarChar(64)
-  label        String   @db.VarChar(120)
-  field_type   String   @default("text") @db.VarChar(16)
-  options      Json?
-  sort_order   Int      @default(0)
-  required     Boolean  @default(false)
-  active       Boolean  @default(true)
-  created_at   DateTime @default(now()) @db.Timestamptz(6)
-  updated_at   DateTime @default(now()) @db.Timestamptz(6)
+  business_area_id Int            @default(dbgenerated())
+  business_area    business_areas @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  id               Int            @id @default(autoincrement())
+  area             String         @db.VarChar(20)
+  segment_slug     String?        @db.VarChar(50)
+  slug             String         @db.VarChar(64)
+  label            String         @db.VarChar(120)
+  field_type       String         @default("text") @db.VarChar(16)
+  options          Json?
+  sort_order       Int            @default(0)
+  required         Boolean        @default(false)
+  active           Boolean               @default(true)
+  created_at       DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime              @default(now()) @db.Timestamptz(6)
+  program_id       Int?
+  program          business_programs?    @relation(fields: [program_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@unique([area, segment_slug, slug], map: "idx_contact_attr_defs_area_seg_slug")
   @@unique([area, slug], map: "idx_contact_attr_defs_area_slug")
@@ -242,26 +279,30 @@ model contact_attribute_definitions {
 }
 
 model contact_attributes {
-  id         Int      @id @default(autoincrement())
+  id         Int                @id @default(autoincrement())
   contact_id Int
-  attr_key   String   @db.VarChar(64)
-  attr_value String   @default("")
-  updated_at DateTime @default(now()) @db.Timestamptz(6)
-  contacts   contacts @relation(fields: [contact_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  program_id Int?
+  attr_key   String             @db.VarChar(64)
+  attr_value String             @default("")
+  updated_at DateTime           @default(now()) @db.Timestamptz(6)
+  contacts   contacts           @relation(fields: [contact_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  program    business_programs? @relation(fields: [program_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
-  @@unique([contact_id, attr_key])
   @@index([contact_id], map: "idx_contact_attributes_contact")
   @@index([attr_key, attr_value], map: "idx_contact_attributes_key_value")
+  @@index([program_id])
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model contact_segments {
-  id           Int      @id @default(autoincrement())
-  contact_id   Int
-  area         String   @db.VarChar(20)
-  segment_slug String   @db.VarChar(50)
-  created_at   DateTime @default(now()) @db.Timestamp(6)
-  contacts     contacts @relation(fields: [contact_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  business_area_id Int            @default(dbgenerated())
+  business_area    business_areas @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  id               Int            @id @default(autoincrement())
+  contact_id       Int
+  area             String         @db.VarChar(20)
+  segment_slug     String         @db.VarChar(50)
+  created_at       DateTime       @default(now()) @db.Timestamp(6)
+  contacts         contacts       @relation(fields: [contact_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([contact_id, segment_slug])
   @@index([area, segment_slug], map: "idx_contact_segments_area_slug")
@@ -270,6 +311,10 @@ model contact_segments {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model contacts {
+  person_id              Int                      @default(dbgenerated())
+  person                 people                   @relation(fields: [person_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  business_area_id       Int                      @default(dbgenerated())
+  business_area          business_areas           @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   id                     Int                      @id @default(autoincrement())
   name                   String                   @db.VarChar(150)
   last_name              String                   @default("") @db.VarChar(150)
@@ -323,6 +368,8 @@ model contact_programs {
 }
 
 model lead_status_definitions {
+  business_area_id      Int                     @default(dbgenerated())
+  business_area         business_areas          @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   id                    Int                     @id @default(autoincrement())
   area                  String                  @db.VarChar(20)
   slug                  String                  @db.VarChar(50)
@@ -341,6 +388,8 @@ model lead_status_definitions {
 }
 
 model contact_origins {
+  business_area_id       Int                      @default(dbgenerated())
+  business_area          business_areas           @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   id                     Int                      @id @default(autoincrement())
   area                   String                   @db.VarChar(32)
   contact_id             Int?
@@ -358,6 +407,8 @@ model contact_origins {
   last_seen_at           DateTime                 @default(now()) @db.Timestamptz(6)
   created_at             DateTime                 @default(now()) @db.Timestamptz(6)
   updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  program_id             Int?
+  program                business_programs?       @relation(fields: [program_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   contacts               contacts?                @relation(fields: [contact_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   education_lead_entries education_lead_entries[]
   conversations          conversations?           @relation(fields: [conversation_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
@@ -379,6 +430,8 @@ model contact_replacement_history {
 }
 
 model education_lead_cycles {
+  business_area_id    Int                      @default(dbgenerated())
+  business_area       business_areas           @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   id                  Int                      @id @default(autoincrement())
   area                String                   @db.VarChar(20)
   contact_id          Int
@@ -390,6 +443,8 @@ model education_lead_cycles {
   requires_review     Boolean                  @default(false)
   created_at          DateTime                 @default(now()) @db.Timestamptz(6)
   updated_at          DateTime                 @default(now()) @db.Timestamptz(6)
+  program_id          Int?
+  program             business_programs?       @relation(fields: [program_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   contact             contacts                 @relation(fields: [contact_id], references: [id], onDelete: Cascade)
   assigned_user       users?                   @relation("education_lead_assignee", fields: [assigned_user_id], references: [id], onDelete: SetNull)
   lead_status         lead_status_definitions? @relation("education_cycle_status", fields: [lead_status_id], references: [id], onDelete: SetNull)
@@ -401,6 +456,8 @@ model education_lead_cycles {
 }
 
 model education_lead_entries {
+  business_area_id          Int                    @default(dbgenerated())
+  business_area             business_areas         @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   id                        Int                    @id @default(autoincrement())
   area                      String                 @db.VarChar(20)
   contact_id                Int
@@ -423,6 +480,8 @@ model education_lead_entries {
   prospectia_advisor_email  String?                @db.VarChar(255)
   prospectia_checked_at     DateTime?              @db.Timestamptz(6)
   created_at                DateTime               @default(now()) @db.Timestamptz(6)
+  program_id                Int?
+  program                   business_programs?     @relation(fields: [program_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   contact                   contacts               @relation(fields: [contact_id], references: [id], onDelete: Cascade)
   origin                    contact_origins?       @relation(fields: [origin_id], references: [id], onDelete: SetNull)
   cycle                     education_lead_cycles? @relation(fields: [cycle_id], references: [id], onDelete: SetNull)
@@ -436,15 +495,17 @@ model education_lead_entries {
 }
 
 model meta_lead_forms {
-  id           Int       @id @default(autoincrement())
-  area         String    @db.VarChar(32)
-  form_id      String    @db.VarChar(64)
-  name         String?   @db.VarChar(200)
-  page_id      String?   @db.VarChar(64)
-  lead_count   Int       @default(0)
-  last_sync_at DateTime? @db.Timestamptz(6)
-  created_at   DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at   DateTime  @default(now()) @db.Timestamptz(6)
+  business_area_id Int            @default(dbgenerated())
+  business_area    business_areas @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  id               Int            @id @default(autoincrement())
+  area             String         @db.VarChar(32)
+  form_id          String         @db.VarChar(64)
+  name             String?        @db.VarChar(200)
+  page_id          String?        @db.VarChar(64)
+  lead_count       Int            @default(0)
+  last_sync_at     DateTime?      @db.Timestamptz(6)
+  created_at       DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime       @default(now()) @db.Timestamptz(6)
 
   @@unique([area, form_id], map: "meta_lead_forms_area_form_uq")
   @@index([area], map: "idx_meta_lead_forms_area")
@@ -452,22 +513,26 @@ model meta_lead_forms {
 
 /// Mapa Instant Form (form_id) → área Mali. Sync Graph / reglas por nombre.
 model meta_lead_form_routes {
-  id             Int       @id @default(autoincrement())
-  form_id        String    @unique(map: "meta_lead_form_routes_form_uq") @db.VarChar(64)
-  area           String    @db.VarChar(32)
-  program_key    String?   @db.VarChar(40)
-  form_name      String?   @db.VarChar(200)
-  page_id        String?   @db.VarChar(64)
-  area_locked    Boolean   @default(false)
-  is_operational Boolean   @default(false)
-  last_synced_at DateTime? @db.Timestamptz(6)
-  created_at     DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at     DateTime  @default(now()) @db.Timestamptz(6)
+  business_area_id Int            @default(dbgenerated())
+  business_area    business_areas @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  id               Int            @id @default(autoincrement())
+  form_id          String         @unique(map: "meta_lead_form_routes_form_uq") @db.VarChar(64)
+  area             String         @db.VarChar(32)
+  program_key      String?        @db.VarChar(40)
+  form_name        String?        @db.VarChar(200)
+  page_id          String?        @db.VarChar(64)
+  area_locked      Boolean        @default(false)
+  is_operational   Boolean        @default(false)
+  last_synced_at   DateTime?      @db.Timestamptz(6)
+  created_at       DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime       @default(now()) @db.Timestamptz(6)
 
   @@index([area], map: "idx_meta_lead_form_routes_area")
 }
 
 model meta_leadgen_leads {
+  business_area_id  Int              @default(dbgenerated())
+  business_area     business_areas   @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   id                Int              @id @default(autoincrement())
   area              String           @db.VarChar(32)
   leadgen_id        String           @unique(map: "meta_leadgen_leads_leadgen_uq") @db.VarChar(64)
@@ -491,21 +556,25 @@ model meta_leadgen_leads {
 
 /// Instant Form TikTok (page_id) → área Mali. Override manual bloquea resync.
 model tiktok_lead_form_routes {
-  id             Int       @id @default(autoincrement())
-  form_id        String    @unique(map: "tiktok_lead_form_routes_form_uq") @db.VarChar(64)
-  area           String    @db.VarChar(32)
-  program_key    String?   @db.VarChar(40)
-  form_name      String?   @db.VarChar(200)
-  advertiser_id  String?   @db.VarChar(64)
-  area_locked    Boolean   @default(false)
-  last_synced_at DateTime? @db.Timestamptz(6)
-  created_at     DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at     DateTime  @default(now()) @db.Timestamptz(6)
+  business_area_id Int            @default(dbgenerated())
+  business_area    business_areas @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  id               Int            @id @default(autoincrement())
+  form_id          String         @unique(map: "tiktok_lead_form_routes_form_uq") @db.VarChar(64)
+  area             String         @db.VarChar(32)
+  program_key      String?        @db.VarChar(40)
+  form_name        String?        @db.VarChar(200)
+  advertiser_id    String?        @db.VarChar(64)
+  area_locked      Boolean        @default(false)
+  last_synced_at   DateTime?      @db.Timestamptz(6)
+  created_at       DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime       @default(now()) @db.Timestamptz(6)
 
   @@index([area], map: "idx_tiktok_lead_form_routes_area")
 }
 
 model tiktok_leads {
+  business_area_id  Int              @default(dbgenerated())
+  business_area     business_areas   @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   id                Int              @id @default(autoincrement())
   area              String           @db.VarChar(32)
   lead_id           String           @unique(map: "tiktok_leads_lead_uq") @db.VarChar(64)
@@ -540,6 +609,8 @@ model conversation_tags {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model conversations {
+  business_area_id             Int                  @default(dbgenerated())
+  business_area                business_areas       @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   id                           Int                  @id @default(autoincrement())
   whatsapp_line_id             Int?
   area                         String               @db.VarChar(20)
@@ -587,20 +658,24 @@ model conversations {
 
 /// Immutable evidence of Meta identity changes; never used to merge contacts automatically.
 model whatsapp_identity_events {
-  id               Int      @id @default(autoincrement())
-  area             String   @db.VarChar(20)
-  wa_message_id    String?  @db.VarChar(180)
-  event_type       String   @db.VarChar(64)
-  previous_user_id String?  @db.VarChar(132)
-  new_user_id      String?  @db.VarChar(132)
+  business_area_id Int            @default(dbgenerated())
+  business_area    business_areas @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  id               Int            @id @default(autoincrement())
+  area             String         @db.VarChar(20)
+  wa_message_id    String?        @db.VarChar(180)
+  event_type       String         @db.VarChar(64)
+  previous_user_id String?        @db.VarChar(132)
+  new_user_id      String?        @db.VarChar(132)
   raw_payload      Json
-  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  created_at       DateTime       @default(now()) @db.Timestamptz(6)
 
   @@unique([area, wa_message_id])
   @@index([area, created_at(sort: Desc)])
 }
 
 model flows {
+  business_area_id    Int                   @default(dbgenerated())
+  business_area       business_areas        @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   id                  Int                   @id @default(autoincrement())
   area                String                @db.VarChar(20)
   name                String                @db.VarChar(150)
@@ -723,24 +798,28 @@ model login_logs {
 }
 
 model meta_ctwa_ad_leads {
-  id               Int           @id @default(autoincrement())
-  area             String        @db.VarChar(32)
+  business_area_id Int            @default(dbgenerated())
+  business_area    business_areas @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  id               Int            @id @default(autoincrement())
+  area             String         @db.VarChar(32)
   meta_ctwa_ad_id  Int
   conversation_id  Int
   contact_id       Int?
-  phone            String?       @db.VarChar(132)
-  whatsapp_user_id String?       @db.VarChar(132)
-  first_message_at DateTime      @default(now()) @db.Timestamptz(6)
-  created_at       DateTime      @default(now()) @db.Timestamptz(6)
-  contacts         contacts?     @relation(fields: [contact_id], references: [id], onUpdate: NoAction)
-  conversations    conversations @relation(fields: [conversation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  meta_ctwa_ads    meta_ctwa_ads @relation(fields: [meta_ctwa_ad_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  phone            String?        @db.VarChar(132)
+  whatsapp_user_id String?        @db.VarChar(132)
+  first_message_at DateTime       @default(now()) @db.Timestamptz(6)
+  created_at       DateTime       @default(now()) @db.Timestamptz(6)
+  contacts         contacts?      @relation(fields: [contact_id], references: [id], onUpdate: NoAction)
+  conversations    conversations  @relation(fields: [conversation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  meta_ctwa_ads    meta_ctwa_ads  @relation(fields: [meta_ctwa_ad_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([area, meta_ctwa_ad_id, conversation_id])
   @@index([meta_ctwa_ad_id], map: "idx_meta_ctwa_ad_leads_ad")
 }
 
 model meta_ctwa_ads {
+  business_area_id   Int                  @default(dbgenerated())
+  business_area      business_areas       @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   id                 Int                  @id @default(autoincrement())
   area               String               @db.VarChar(32)
   meta_source_id     String               @db.VarChar(128)
@@ -768,18 +847,20 @@ model meta_ctwa_ads {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model segment_definitions {
-  id               Int      @id @default(autoincrement())
-  area             String   @db.VarChar(20)
-  slug             String   @db.VarChar(50)
-  label            String   @db.VarChar(120)
-  sort_order       Int      @default(0)
-  color_key        String   @default("teal") @db.VarChar(16)
-  active           Boolean  @default(true)
-  show_in_filter   Boolean  @default(true)
-  assignable       Boolean  @default(false)
-  assignment_group String?  @db.VarChar(20)
-  created_at       DateTime @default(now()) @db.Timestamp(6)
-  updated_at       DateTime @default(now()) @db.Timestamp(6)
+  business_area_id Int            @default(dbgenerated())
+  business_area    business_areas @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  id               Int            @id @default(autoincrement())
+  area             String         @db.VarChar(20)
+  slug             String         @db.VarChar(50)
+  label            String         @db.VarChar(120)
+  sort_order       Int            @default(0)
+  color_key        String         @default("teal") @db.VarChar(16)
+  active           Boolean        @default(true)
+  show_in_filter   Boolean        @default(true)
+  assignable       Boolean        @default(false)
+  assignment_group String?        @db.VarChar(20)
+  created_at       DateTime       @default(now()) @db.Timestamp(6)
+  updated_at       DateTime       @default(now()) @db.Timestamp(6)
 
   @@unique([area, slug])
   @@index([area], map: "idx_segment_definitions_area")
@@ -787,9 +868,11 @@ model segment_definitions {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model user_areas {
-  user_id Int
-  area    String @db.VarChar(20)
-  users   users  @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  business_area_id Int            @default(dbgenerated())
+  business_area    business_areas @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  user_id          Int
+  area             String         @db.VarChar(20)
+  users            users          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([user_id, area])
   @@index([area], map: "idx_user_areas_area")
@@ -797,6 +880,9 @@ model user_areas {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model users {
+  memberships                    user_area_memberships[]
+  business_area_id               Int                     @default(dbgenerated())
+  business_area                  business_areas          @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   id                             Int                     @id @default(autoincrement())
   email                          String                  @unique @db.VarChar(120)
   password_hash                  String                  @db.VarChar(120)
@@ -845,6 +931,8 @@ model advisor_notes {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model whatsapp_templates {
+  business_area_id         Int             @default(dbgenerated())
+  business_area            business_areas  @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   id                       Int             @id @default(autoincrement())
   whatsapp_waba_id         Int?
   area                     String          @db.VarChar(20)
@@ -865,4 +953,80 @@ model whatsapp_templates {
   @@unique([area, name, language])
   @@index([area], map: "idx_whatsapp_templates_area")
   @@index([whatsapp_waba_id], map: "idx_whatsapp_templates_waba")
+}
+
+/// Global personal identity. contacts is an area-specific relationship, not a separate person.
+model people {
+  id                 Int        @id @default(autoincrement())
+  mali_one_person_id String?    @unique @db.VarChar(100)
+  name               String     @db.VarChar(150)
+  last_name          String     @default("") @db.VarChar(150)
+  phone              String?    @db.VarChar(20)
+  email              String?    @db.VarChar(255)
+  dni                String?    @db.VarChar(32)
+  whatsapp_user_id   String?    @db.VarChar(132)
+  birth_date         DateTime?  @db.Date
+  created_at         DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime   @default(now()) @db.Timestamptz(6)
+  contacts           contacts[]
+  identity_reviews   person_identity_reviews[]
+
+  @@index([phone])
+  @@index([dni])
+  @@index([email])
+  @@index([whatsapp_user_id])
+}
+
+/// A recorded refusal to open a second person when identity keys disagree.
+model person_identity_reviews {
+  id               Int             @id @default(autoincrement())
+  person_id        Int
+  business_area_id Int?
+  reason           String          @db.VarChar(80)
+  phone            String?         @db.VarChar(20)
+  whatsapp_user_id String?         @db.VarChar(132)
+  dni              String?         @db.VarChar(32)
+  email            String?         @db.VarChar(255)
+  detail           Json            @default("{}")
+  created_at       DateTime        @default(now()) @db.Timestamptz(6)
+  person           people          @relation(fields: [person_id], references: [id], onDelete: Cascade)
+  business_area    business_areas? @relation(fields: [business_area_id], references: [id], onDelete: SetNull)
+
+  @@index([person_id])
+}
+
+/// A role applies in one business area; grants are explicit when access_mode=restricted.
+model user_area_memberships {
+  id               Int                   @id @default(autoincrement())
+  user_id          Int
+  business_area_id Int
+  role_slug        String                @db.VarChar(40)
+  access_mode      String                @default("all") @db.VarChar(20)
+  active           Boolean               @default(true)
+  created_at       DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime              @default(now()) @db.Timestamptz(6)
+  user             users                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  business_area    business_areas        @relation(fields: [business_area_id], references: [id], onDelete: Restrict)
+  programs         user_program_grants[]
+  lines            user_line_grants[]
+
+  @@unique([user_id, business_area_id])
+}
+
+model user_program_grants {
+  membership_id Int
+  program_id    Int
+  membership    user_area_memberships @relation(fields: [membership_id], references: [id], onDelete: Cascade)
+  program       business_programs     @relation(fields: [program_id], references: [id], onDelete: Cascade)
+
+  @@id([membership_id, program_id])
+}
+
+model user_line_grants {
+  membership_id Int
+  line_id       Int
+  membership    user_area_memberships @relation(fields: [membership_id], references: [id], onDelete: Cascade)
+  line          whatsapp_lines        @relation(fields: [line_id], references: [id], onDelete: Cascade)
+
+  @@id([membership_id, line_id])
 }

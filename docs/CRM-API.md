@@ -1,8 +1,10 @@
 # CRM API — contrato interno (MALI ONE ↔ WhatsApp)
 
-Fuente de verdad de **personas PAM y Educación**: `mali-whatsapp` (`contacts` por área). La captación multicanal de Educación vive en `contact_origins`.
+Fuente de verdad de la **persona** (`people`) y de su **ficha por área** (`contacts`). La captación de Educación es un lead: `contact_origins` más `education_lead_entries`, asociado a la persona y a una categoría (`ca` o `ep`).
 
-MALI ONE es dueño del **producto** (membresías, pagos) y del **mailing** (SES). No mantiene una BD paralela de clientes.
+MALI ONE es el puesto de trabajo de fichas, leads y líneas. Es dueño del **producto** (membresías, pagos) y del **mailing** (SES). No mantiene una BD paralela de personas ni de leads. El chat sigue en mali-whatsapp.
+
+El contrato canónico de Educación es `area: "educacion"` y `categoria: "ca" | "ep"`. Los alias `educacion_ca` y `educacion_ep` siguen aceptándose y se traducen a esa categoría.
 
 ## Autenticación
 
@@ -24,6 +26,8 @@ Misma clave en:
 - MALI ONE: `WHATSAPP_CRM_SERVICE_TOKEN`
 - Base URL WhatsApp API: `WHATSAPP_CRM_BASE_URL` (ej. `https://whatsapp.mali.pe` o `http://localhost:4000`)
 
+La administración de WABA y líneas (`/api/admin/whatsapp`) usa otro secreto, `WHATSAPP_ADMIN_SERVICE_TOKEN`, en el header `X-Whatsapp-Admin-Service-Token`. No sirve el token de CRM ni la sesión de un asesor. Un master de esta aplicación también puede llamar esos endpoints con su JWT.
+
 ## Endpoints
 
 ### `POST /api/crm/origins`
@@ -32,7 +36,8 @@ Ingestión de **evento de lead** (widget Educación, etc.). Match de persona: **
 
 ```json
 {
-  "area": "educacion_ep",
+  "area": "educacion",
+  "categoria": "ep",
   "channel": "widget",
   "external_id": "educacion-lead-cuid",
   "source_key": "lead-form",
@@ -53,7 +58,11 @@ Ingestión de **evento de lead** (widget Educación, etc.). Match de persona: **
 }
 ```
 
-Respuesta: `{ contact_id, origin_id, created }`.
+La persona se resuelve en todo el sistema: identidad de WhatsApp, teléfono, DNI, correo. Si ya existe, el lead se le asocia y se abre o reutiliza la ficha de Educación. Si no existe, se crean la persona y la ficha. Un conflicto de identidad no crea otra persona: queda en `person_identity_reviews`.
+
+`categoria` (o el alias `educacion_ca` / `educacion_ep`, o `programa`) fija la categoría del intento. Los atributos del cuerpo siguen siendo de área. Los de la categoría van en `atributos_categoria`.
+
+Respuesta: `{ contact_id, origin_id, created }`. `contact_id` es la ficha del área.
 
 Leads: [LEADS.md](./LEADS.md).
 
@@ -84,10 +93,11 @@ Upsert de contacto desde producto (`PamRegistration`).
 ```
 
 - Teléfono: E.164 **sin** `+`.
-- Match: `(area, phone)`.
-- Columnas nativas: `name`, `last_name`, `email`, `dni` (opcional).
-- Atributos se upsertan en `contact_attributes` (incl. `mali_one_id` si hay `external_id`).
-- `segment_slugs`: asigna segmentos del contacto (p. ej. plan PAM → `amigo`, `circulo`, `comunidad`).
+- Match de persona global: identidad de WhatsApp, teléfono, DNI, correo. La ficha es una por persona y área canónica.
+- Columnas nativas de la persona: `name`, `last_name`, `email`, `dni` (opcional).
+- `attributes`: datos del área (`contact_attributes` sin categoría), incluido `mali_one_id` si hay `external_id`.
+- `atributos_categoria`: datos de la categoría. Hace falta `categoria` o `programa`.
+- `segment_slugs`: asigna segmentos de la ficha (p. ej. plan PAM → `amigo`, `circulo`, `comunidad`).
 
 ### `POST /api/crm/send-template`
 
@@ -124,7 +134,7 @@ Query: `area`, `q`, `segment`, `has_email`, `opt_in_email`, `attr_key`, `attr_va
 
 Listado unificado para CRM Educación en MALI ONE. `area=all` (por defecto) consulta **únicamente** `educacion`, `educacion_ca` y `educacion_ep`; también se puede indicar una de esas tres áreas. La búsqueda, los filtros, el total y la paginación se aplican sobre la unión de las tres áreas, ordenada por ID de contacto descendente. Admite `q`, `segment`, `has_email`, `opt_in_email`, `attr_key`, `attr_value`, `page` y `limit` (máximo 2000).
 
-Respuesta: `{ ok: true, data: { area, items, total, page, limit, pages } }`. Cada item tiene `contact_id`, **`area`**, nombre, `phone` nullable, `whatsapp_user_id`, `wa_username`, email, DNI, consentimientos, `segment_slugs`, `attributes`, fechas, `assigned_user_id`, `assigned_user_label`, `lead_status_id` y `lead_status_label`. La columna **Número** de MALI ONE representa `area`, no el teléfono del contacto; la columna **Usuario WhatsApp** muestra el alias y BSUID sin fingir un teléfono. Si una persona existe en dos áreas, hay dos filas y cada edición usa su `contact_id` y `area`. Los datos de persona y segmentos se editan vía `PATCH /api/crm/contacts/:id?area=…`; asesor y estado del ciclo actual vía el endpoint de gestión de Educación.
+Respuesta: `{ ok: true, data: { area, items, total, page, limit, pages } }`. Cada item tiene `contact_id`, `person_id`, **`area`**, `categorias`, nombre, `phone` nullable, `whatsapp_user_id`, `wa_username`, email, DNI, consentimientos, `segment_slugs`, `attributes` (del área), `atributos_categoria`, fechas, `assigned_user_id`, `assigned_user_label`, `lead_status_id` y `lead_status_label`. El estado vigente de una categoría es el de su ciclo, no `contacts.lead_status_id`. La columna **Número** de MALI ONE representa `area`, no el teléfono del contacto; la columna **Usuario WhatsApp** muestra el alias y BSUID sin fingir un teléfono. Cada edición usa `contact_id` y `area`. Los datos de persona y segmentos se editan vía `PATCH /api/crm/contacts/:id?area=…`; asesor y estado del ciclo de la categoría vía el endpoint de gestión de Educación.
 
 ### `GET /api/crm/education/leads`
 

@@ -1,3 +1,5 @@
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { BusinessAccessInterceptor } from './business-model/business-access.interceptor';
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -50,6 +52,6 @@ import { AdvisorNotesModule } from './advisor-notes/advisor-notes.module';
     AdminModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, { provide: APP_INTERCEPTOR, useClass: BusinessAccessInterceptor }],
 })
 export class AppModule {}

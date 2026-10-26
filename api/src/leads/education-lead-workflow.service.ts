@@ -3,6 +3,8 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { classifyEducationIntake, EDUCATION_LEAD_WINDOW_MS } from './education-lead-classification.util';
 import { syncEducationLeadStatuses } from './education-lead-statuses';
+import { educationProgramOf } from '../config/education-scope';
+import { userWorksArea } from '../users/area-membership.where';
 import { ProspectiaAdvisorService } from './prospectia-advisor.service';
 
 const EDUCATION_AREAS = ['educacion', 'educacion_ca', 'educacion_ep'];
@@ -11,6 +13,28 @@ const INBOUND_SESSION_MS = 24 * 60 * 60 * 1000;
 
 function advisorLabel(user: { first_name: string | null; last_name: string | null; email: string }) {
   return [user.first_name, user.last_name].filter(Boolean).join(' ') || user.email;
+}
+
+function educationAreasOf(user: {
+  area: string;
+  user_areas: { area: string }[];
+  memberships: {
+    access_mode: string;
+    business_area: { slug: string };
+    programs: { program: { slug: string; active: boolean } }[];
+  }[];
+}): string[] {
+  const fromMembership = user.memberships.flatMap((membership) => {
+    if (membership.business_area.slug !== 'educacion') return [];
+    if (membership.access_mode === 'all') return [...EDUCATION_AREAS];
+    return membership.programs
+      .filter((grant) => grant.program.active)
+      .map((grant) => grant.program.slug === 'ca'
+        ? 'educacion_ca'
+        : grant.program.slug === 'ep' ? 'educacion_ep' : 'educacion');
+  });
+  return [...new Set([user.area, ...user.user_areas.map((item) => item.area), ...fromMembership])]
+    .filter((area) => EDUCATION_AREAS.includes(area));
 }
 
 @Injectable()
@@ -35,6 +59,7 @@ export class EducationLeadWorkflowService {
       area: origin.area, contactId: origin.contact_id, originId,
       channel: origin.channel, sourceKey: origin.source_key, sourceLabel: origin.source_label,
       eventKey: `origin:${origin.id}`, occurredAt: origin.first_seen_at,
+      programId: origin.program_id,
     });
   }
 
@@ -44,13 +69,28 @@ export class EducationLeadWorkflowService {
     channel?: string; sourceKey?: string | null; sourceLabel?: string | null;
   }): Promise<void> {
     if (!input.contactId || !EDUCATION_AREAS.includes(input.area)) return;
+    const conversation = await this.prisma.conversations.findUnique({
+      where: { id: input.conversationId },
+      select: { whatsapp_line: { select: { program_id: true } } },
+    });
+    const programId = conversation?.whatsapp_line?.program_id ?? null;
     const latestEntry = await this.prisma.education_lead_entries.findFirst({
-      where: { area: input.area, contact_id: input.contactId },
+      where: {
+        contact_id: input.contactId,
+        ...(programId
+          ? { OR: [{ program_id: programId }, { program_id: null, area: input.area }] }
+          : { area: input.area }),
+      },
       orderBy: [{ occurred_at: 'desc' }, { id: 'desc' }],
       select: { occurred_at: true, classification: true },
     });
     const latestCycle = await this.prisma.education_lead_cycles.findFirst({
-      where: { area: input.area, contact_id: input.contactId },
+      where: {
+        contact_id: input.contactId,
+        ...(programId
+          ? { OR: [{ program_id: programId }, { program_id: null, area: input.area }] }
+          : { area: input.area }),
+      },
       orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
     });
     const previousInbound = await this.prisma.chat_messages.findFirst({
@@ -80,13 +120,14 @@ export class EducationLeadWorkflowService {
       sourceKey: input.sourceKey ?? null,
       sourceLabel: input.sourceLabel ?? 'WhatsApp orgánico',
       eventKey: `inbound:${input.messageId}`, occurredAt: input.occurredAt,
+      programId,
     });
   }
 
   private async recordEntry(input: {
     area: string; contactId: number; originId: number | null;
     channel: string; sourceKey: string | null; sourceLabel: string | null;
-    eventKey: string; occurredAt: Date;
+    eventKey: string; occurredAt: Date; programId?: number | null;
   }): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(20260924::integer, ${input.contactId}::integer)`;
@@ -95,7 +136,13 @@ export class EducationLeadWorkflowService {
       });
       if (existing) return null;
       const previous = await tx.education_lead_cycles.findFirst({
-        where: { area: input.area, contact_id: input.contactId, started_at: { lte: input.occurredAt } },
+        where: {
+          contact_id: input.contactId,
+          started_at: { lte: input.occurredAt },
+          ...(input.programId
+            ? { OR: [{ program_id: input.programId }, { program_id: null, area: input.area }] }
+            : { area: input.area }),
+        },
         orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
         include: { lead_status: true,
           assigned_user: { select: { first_name: true, last_name: true, email: true } } },
@@ -122,7 +169,7 @@ export class EducationLeadWorkflowService {
         }) : null;
         const cycle = await tx.education_lead_cycles.create({
           data: {
-            area: input.area, contact_id: input.contactId,
+            area: input.area, contact_id: input.contactId, program_id: input.programId ?? null,
             started_at: input.occurredAt, last_interaction_at: input.occurredAt,
             lead_status_id: contactSnapshot?.lead_status_id ?? status?.id ?? null,
             lead_score: contactSnapshot?.lead_score ?? null,
@@ -155,7 +202,7 @@ export class EducationLeadWorkflowService {
       }
       await tx.education_lead_entries.create({
         data: {
-          area: input.area, contact_id: input.contactId,
+          area: input.area, contact_id: input.contactId, program_id: input.programId ?? null,
           origin_id: input.originId, cycle_id: cycleId,
           channel: input.channel, source_key: input.sourceKey, source_label: input.sourceLabel,
           event_key: input.eventKey, occurred_at: input.occurredAt,
@@ -218,7 +265,7 @@ export class EducationLeadWorkflowService {
   private async assignKnownAdvisor(contactId: number, area: string, cycleId: number, email: string): Promise<void> {
     const advisor = await this.prisma.users.findFirst({
       where: { email: { equals: email, mode: 'insensitive' }, is_provisioned: true,
-        OR: [{ area }, { is_master: true }, { user_areas: { some: { area } } }],
+        OR: [{ area }, { is_master: true }, { user_areas: { some: { area } } }, userWorksArea(area)],
       }, select: { id: true },
     });
     if (!advisor) return;
@@ -335,7 +382,8 @@ export class EducationLeadWorkflowService {
         where, orderBy: [{ occurred_at: 'desc' }, { id: 'desc' }],
         skip: (page - 1) * limit, take: limit,
         include: {
-          contact: { select: { id: true, name: true, last_name: true, phone: true,
+          program: { select: { slug: true } },
+          contact: { select: { id: true, person_id: true, name: true, last_name: true, phone: true,
             whatsapp_user_id: true, email: true,
             conversations: { where: { wa_username: { not: null } },
               orderBy: { updated_at: 'desc' }, take: 1, select: { wa_username: true } },
@@ -375,6 +423,8 @@ export class EducationLeadWorkflowService {
     return {
       items: items.map((item) => ({
         id: item.id, area: item.area, contact_id: item.contact_id,
+        person_id: item.contact.person_id,
+        categoria: item.program?.slug ?? educationProgramOf(item.area),
         channel: item.channel,
         source_key: item.source_key,
         source_label: item.source_label,
@@ -420,10 +470,15 @@ export class EducationLeadWorkflowService {
       this.prisma.users.findMany({
         where: { is_provisioned: true,
           OR: [{ area: { in: EDUCATION_AREAS } }, { is_master: true },
-            { user_areas: { some: { area: { in: EDUCATION_AREAS } } } }],
+            { user_areas: { some: { area: { in: EDUCATION_AREAS } } } },
+            userWorksArea('educacion')],
         },
         select: { id: true, email: true, first_name: true, last_name: true, area: true, is_master: true,
-          user_areas: { select: { area: true } } },
+          user_areas: { select: { area: true } },
+          memberships: { where: { active: true }, include: {
+            business_area: { select: { slug: true } },
+            programs: { include: { program: { select: { slug: true, active: true } } } },
+          } } },
         orderBy: { id: 'asc' },
       }),
       this.prisma.lead_status_definitions.findMany({
@@ -434,9 +489,7 @@ export class EducationLeadWorkflowService {
     ]);
     return { advisors: users.map((user) => ({
       id: user.id, label: advisorLabel(user),
-      areas: user.is_master ? EDUCATION_AREAS
-        : [...new Set([user.area, ...user.user_areas.map((item) => item.area)])]
-          .filter((area) => EDUCATION_AREAS.includes(area)),
+      areas: user.is_master ? EDUCATION_AREAS : educationAreasOf(user),
     })), statuses };
   }
 
@@ -452,7 +505,7 @@ export class EducationLeadWorkflowService {
     if (changes.assigned_user_id !== undefined && changes.assigned_user_id !== null) {
       const advisor = await this.prisma.users.findFirst({
         where: { id: changes.assigned_user_id, is_provisioned: true,
-          OR: [{ area }, { is_master: true }, { user_areas: { some: { area } } }],
+          OR: [{ area }, { is_master: true }, { user_areas: { some: { area } } }, userWorksArea(area)],
         }, select: { id: true },
       });
       if (!advisor) throw new BadRequestException('Asesor no habilitado para este número');
@@ -530,7 +583,7 @@ export class EducationLeadWorkflowService {
       for (const currentArea of areas) {
         const advisors = await tx.users.findMany({
           where: { is_provisioned: true, role_slug: 'asesor_comercial',
-            OR: [{ area: currentArea }, { user_areas: { some: { area: currentArea } } }],
+            OR: [{ area: currentArea }, { user_areas: { some: { area: currentArea } } }, userWorksArea(currentArea)],
           }, select: { id: true }, orderBy: { id: 'asc' },
         });
         const workload = new Map(advisors.map((advisor) => [advisor.id, 0]));

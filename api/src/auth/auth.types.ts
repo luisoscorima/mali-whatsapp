@@ -1,8 +1,10 @@
+import type { BusinessAccessScope } from '../business-model/business-access.context';
 import type { BusinessArea } from '../config/areas';
 import type { PermissionCode } from './roles/permission-codes';
 import type { RoleSlug } from './roles/role-permissions';
 
 export interface AuthUser {
+  businessAccess?: BusinessAccessScope;
   id: number;
   email: string;
   area: BusinessArea;

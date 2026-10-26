@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { payloadWithStandardCurso } from '../leads/lead-curso.util';
 import { PrismaService } from '../prisma/prisma.service';
@@ -44,6 +44,8 @@ import {
 import { AuditEvent } from '../audit/audit-events';
 import { auditActor, phoneMetaTail } from '../audit/audit-actor.util';
 import { AuditLogService } from '../audit/audit-log.service';
+import { upsertScopedAttribute } from './contact-attribute.util';
+import { PersonResolverService } from '../people/person-resolver.service';
 
 type ContactRow = {
   id: number;
@@ -67,6 +69,7 @@ export class ContactsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
+    @Optional() private readonly people?: PersonResolverService,
   ) {}
 
   async getFilterOptions(area: AuthUser['area']): Promise<ContactsFilterOptions> {
@@ -157,7 +160,7 @@ export class ContactsService {
     contactId: number,
   ): Promise<Record<string, string>> {
     const rows = await this.prisma.contact_attributes.findMany({
-      where: { contact_id: contactId },
+      where: { contact_id: contactId, program_id: null },
       orderBy: { attr_key: 'asc' },
       select: { attr_key: true, attr_value: true },
     });
@@ -671,13 +674,7 @@ export class ContactsService {
     attributes: Record<string, string>,
   ): Promise<void> {
     for (const [attr_key, attr_value] of Object.entries(attributes)) {
-      await tx.contact_attributes.upsert({
-        where: {
-          contact_id_attr_key: { contact_id: contactId, attr_key },
-        },
-        create: { contact_id: contactId, attr_key, attr_value },
-        update: { attr_value, updated_at: new Date() },
-      });
+      await upsertScopedAttribute(tx, contactId, attr_key, attr_value, null);
     }
   }
 
@@ -818,6 +815,56 @@ export class ContactsService {
       dto.opt_in_email !== undefined ? Boolean(dto.opt_in_email) : true;
 
     try {
+      if (this.people) {
+        const resolved = await this.people.resolve(this.prisma, {
+          area,
+          name,
+          last_name,
+          phone,
+          whatsapp_user_id,
+          email,
+          dni,
+          opt_in: true,
+          opt_in_email,
+        });
+        const created = await this.prisma.$transaction(async (tx) => {
+          await this.assertConversationIdentityCompatible(tx, area, phone, whatsapp_user_id);
+          const change = await this.replaceContactSegments(tx, resolved.contact_id, area, segments);
+          await this.upsertContactAttributes(tx, resolved.contact_id, attrs);
+          if (dni) await this.upsertContactAttributes(tx, resolved.contact_id, { dni });
+          await tx.conversations.updateMany({
+            where: { area, contact_id: null, OR: [
+              ...(phone ? [{ phone }] : []),
+              ...(whatsapp_user_id ? [{ whatsapp_user_id }] : []),
+            ] },
+            data: { contact_id: resolved.contact_id, updated_at: new Date() },
+          });
+          return { contactId: resolved.contact_id, change };
+        });
+        await this.auditLog.write({
+          event_type: resolved.created ? AuditEvent.CONTACT_CREATED : AuditEvent.CONTACT_UPDATED,
+          message: resolved.created
+            ? `Contacto creado (id ${created.contactId})`
+            : `Ficha reutilizada (id ${created.contactId})`,
+          actor: auditActor(user),
+          meta: {
+            contact_id: created.contactId,
+            person_id: resolved.person_id,
+            conflict: resolved.conflict,
+            phone,
+            phone_tail: phone ? phoneMetaTail(phone) : null,
+            email,
+            dni,
+            segments: validation.value.segments,
+          },
+        });
+        await this.auditSegmentChange(user, created.contactId, area, created.change, phone);
+        const stored = await this.prisma.contacts.findFirst({
+          where: { id: created.contactId },
+          select: { area: true },
+        });
+        return this.getById(stored?.area ?? area, created.contactId);
+      }
       const created = await this.prisma.$transaction(async (tx) => {
         await this.assertConversationIdentityCompatible(tx, area, phone, whatsapp_user_id);
         const contact = await tx.contacts.create({

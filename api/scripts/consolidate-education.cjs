@@ -301,15 +301,38 @@ async function main() {
              AND lead.contact_id = m.contact_id`,
         );
 
-        await sql(
+        const scopedAttrs = await query(
           tx,
-          `INSERT INTO contact_attributes (contact_id, attr_key, attr_value, updated_at)
-           SELECT m.canonical_id, attr.attr_key, attr.attr_value, attr.updated_at
-           FROM contact_attributes attr
-           JOIN edu_map m ON m.contact_id = attr.contact_id
-           WHERE m.decision = 'merge' AND m.contact_id <> m.canonical_id
-           ON CONFLICT (contact_id, attr_key) DO NOTHING`,
+          `SELECT 1 AS ok FROM pg_indexes WHERE indexname = 'contact_attributes_area_key_uq'`,
         );
+        if (scopedAttrs.length) {
+          await sql(
+            tx,
+            `INSERT INTO contact_attributes (contact_id, attr_key, attr_value, program_id, updated_at)
+             SELECT m.canonical_id, attr.attr_key, attr.attr_value,
+                    COALESCE(attr.program_id, program.id), attr.updated_at
+             FROM contact_attributes attr
+             JOIN edu_map m ON m.contact_id = attr.contact_id
+             JOIN contacts donor ON donor.id = attr.contact_id
+             LEFT JOIN business_area_aliases alias
+               ON alias.alias = donor.area AND alias.program_key IS NOT NULL
+             LEFT JOIN business_programs program
+               ON program.business_area_id = alias.business_area_id
+              AND program.slug = alias.program_key
+             WHERE m.decision = 'merge' AND m.contact_id <> m.canonical_id
+             ON CONFLICT DO NOTHING`,
+          );
+        } else {
+          await sql(
+            tx,
+            `INSERT INTO contact_attributes (contact_id, attr_key, attr_value, updated_at)
+             SELECT m.canonical_id, attr.attr_key, attr.attr_value, attr.updated_at
+             FROM contact_attributes attr
+             JOIN edu_map m ON m.contact_id = attr.contact_id
+             WHERE m.decision = 'merge' AND m.contact_id <> m.canonical_id
+             ON CONFLICT (contact_id, attr_key) DO NOTHING`,
+          );
+        }
         await sql(
           tx,
           `DELETE FROM contact_attributes attr
@@ -412,6 +435,102 @@ async function main() {
              AND m.contact_id <> m.canonical_id
              AND loser.id = m.contact_id`,
         );
+
+        const peopleReady = await query(
+          tx,
+          `SELECT to_regclass('public.people') AS rel`,
+        );
+        if (peopleReady[0] && peopleReady[0].rel) {
+          await sql(tx, `ALTER TABLE contacts DISABLE TRIGGER USER`);
+          await sql(tx, `ALTER TABLE people DISABLE TRIGGER USER`);
+          await sql(
+            tx,
+            `UPDATE people winner
+             SET phone = COALESCE(winner.phone, gaps.phone),
+                 email = COALESCE(winner.email, gaps.email),
+                 dni = COALESCE(winner.dni, gaps.dni),
+                 whatsapp_user_id = COALESCE(winner.whatsapp_user_id, gaps.wuid),
+                 birth_date = COALESCE(winner.birth_date, gaps.birth_date),
+                 name = CASE WHEN BTRIM(winner.name) = '' THEN COALESCE(gaps.name, winner.name) ELSE winner.name END,
+                 last_name = CASE WHEN BTRIM(winner.last_name) = '' THEN COALESCE(gaps.last_name, winner.last_name) ELSE winner.last_name END,
+                 updated_at = NOW()
+             FROM (
+               SELECT win.person_id,
+                 (ARRAY_AGG(donor.phone) FILTER (WHERE donor.phone IS NOT NULL))[1] AS phone,
+                 (ARRAY_AGG(donor.email) FILTER (WHERE donor.email IS NOT NULL))[1] AS email,
+                 (ARRAY_AGG(donor.dni) FILTER (WHERE donor.dni IS NOT NULL))[1] AS dni,
+                 (ARRAY_AGG(donor.whatsapp_user_id) FILTER (WHERE donor.whatsapp_user_id IS NOT NULL))[1] AS wuid,
+                 (ARRAY_AGG(donor.birth_date) FILTER (WHERE donor.birth_date IS NOT NULL))[1] AS birth_date,
+                 (ARRAY_AGG(donor.name) FILTER (WHERE BTRIM(donor.name) <> ''))[1] AS name,
+                 (ARRAY_AGG(donor.last_name) FILTER (WHERE BTRIM(donor.last_name) <> ''))[1] AS last_name
+               FROM edu_map m
+               JOIN contacts win ON win.id = m.canonical_id
+               JOIN contacts lose ON lose.id = m.contact_id
+               JOIN people donor ON donor.id = lose.person_id
+               WHERE m.decision = 'merge' AND m.contact_id <> m.canonical_id
+               GROUP BY win.person_id
+             ) gaps
+             WHERE winner.id = gaps.person_id`,
+          );
+          await sql(
+            tx,
+            `UPDATE contacts lose
+             SET person_id = win.person_id,
+                 phone = NULL,
+                 email = NULL,
+                 dni = NULL,
+                 whatsapp_user_id = NULL
+             FROM edu_map m
+             JOIN contacts win ON win.id = m.canonical_id
+             WHERE lose.id = m.contact_id
+               AND m.decision = 'merge'
+               AND m.contact_id <> m.canonical_id
+               AND lose.person_id IS DISTINCT FROM win.person_id`,
+          );
+          await sql(
+            tx,
+            `DELETE FROM people p
+             WHERE NOT EXISTS (SELECT 1 FROM contacts c WHERE c.person_id = p.id)`,
+          );
+          await sql(tx, `ALTER TABLE people ENABLE TRIGGER USER`);
+          await sql(tx, `ALTER TABLE contacts ENABLE TRIGGER USER`);
+        }
+
+        const categoryColumns = await query(
+          tx,
+          `SELECT 1 AS ok FROM information_schema.columns
+           WHERE table_name = 'education_lead_entries' AND column_name = 'program_id'`,
+        );
+        if (categoryColumns.length) {
+          await sql(
+            tx,
+            `UPDATE contact_attributes attr
+             SET program_id = program.id
+             FROM contacts c
+             JOIN business_area_aliases alias
+               ON alias.alias = c.area AND alias.program_key IS NOT NULL
+             JOIN business_programs program
+               ON program.business_area_id = alias.business_area_id
+              AND program.slug = alias.program_key
+             WHERE attr.contact_id = c.id
+               AND attr.program_id IS NULL
+               AND c.area IN ('educacion_ca','educacion_ep')`,
+          );
+          for (const table of ['contact_origins', 'education_lead_cycles', 'education_lead_entries']) {
+            await sql(
+              tx,
+              `UPDATE ${table} moved
+               SET program_id = program.id
+               FROM business_area_aliases alias
+               JOIN business_programs program
+                 ON program.business_area_id = alias.business_area_id
+                AND program.slug = alias.program_key
+               WHERE moved.program_id IS NULL
+                 AND alias.alias = moved.area
+                 AND alias.program_key IS NOT NULL`,
+            );
+          }
+        }
 
         await sql(
           tx,

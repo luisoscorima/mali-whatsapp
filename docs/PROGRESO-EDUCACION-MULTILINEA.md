@@ -1,5 +1,7 @@
 # Progreso: Educación, un área y varias líneas
 
+> **Actualización del 24 de octubre de 2026:** el usuario confirma que producción sigue en `e18791b`, con CA/EP inbound y outbound probados. El código descrito abajo como «sin commit» ya está en `d4b263a`, todavía sin desplegar. Hay **seis líneas operativas en total y otras seis nuevas por incorporar**; la tabla histórica de la WABA Educación no es el inventario global. La prioridad es administrar múltiples líneas por área sin cambiar el entorno por cada alta. Hay nuevos cambios locales sin commit/PR. Ver [despliegue y pruebas de administración multilínea](./DESPLIEGUE-ADMIN-MULTILINEA.md). Las secciones siguientes conservan el registro del ensayo del 23 de octubre.
+
 Actualizado el 23 de octubre de 2026. Rama `migrate/v2`, al día con `origin/migrate/v2` en el commit `e18791b`. Los cambios de código de esta sesión están sin commit y sin desplegar.
 
 ## Objetivo

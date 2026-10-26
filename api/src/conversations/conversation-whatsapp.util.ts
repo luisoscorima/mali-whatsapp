@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { isKnownWhatsAppPhoneNumberId } from '../meta-settings/meta-settings.store';
 import {
   getWhatsAppCredentialsForArea,
   getWhatsAppLineByPhoneNumberId,
@@ -53,6 +54,9 @@ export function resolveWhatsAppSendCredentials(input: {
         phoneNumberId: line.phoneNumberId,
         area: line.area,
       };
+    }
+    if (isKnownWhatsAppPhoneNumberId(override)) {
+      throw new Error('La línea está inactiva o no tiene credenciales disponibles. Revisa Administración > Líneas WhatsApp.');
     }
     const creds = getWhatsAppCredentialsForArea(input.area);
     if (!creds.token) {

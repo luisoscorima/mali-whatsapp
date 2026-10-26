@@ -1,9 +1,10 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import type { AuthUser } from '../auth/auth.types';
 import { AuditEvent } from '../audit/audit-events';
 import { AuditLogService } from '../audit/audit-log.service';
 import {
   AREA_LABELS,
+  setBusinessAreaCatalog,
   BUSINESS_AREAS,
   isValidBusinessArea,
   normalizeArea,
@@ -30,7 +31,9 @@ export type AreaLineInfo = {
 };
 
 @Injectable()
-export class MetaSettingsService implements OnModuleInit {
+export class MetaSettingsService implements OnModuleInit, OnModuleDestroy {
+  private refreshTimer?: ReturnType<typeof setInterval>;
+  private refreshInFlight?: Promise<void>;
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
@@ -38,8 +41,21 @@ export class MetaSettingsService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     await this.refresh();
+    // Other API replicas/workers also observe changes without a restart.
+    this.refreshTimer = setInterval(() => {
+      void this.refresh().catch(() => {
+        console.warn(
+          'No se pudo actualizar el catálogo Meta; se conserva la última configuración cargada.',
+        );
+      });
+    }, 15000);
+    this.refreshTimer.unref();
     // No bloquear el arranque: rellena display_phone_number faltantes en background.
     void this.syncMissingDisplayPhoneNumbersOnBoot();
+  }
+
+  onModuleDestroy(): void {
+    if (this.refreshTimer) clearInterval(this.refreshTimer);
   }
 
   /** Solo áreas con token+PID y sin display en BD (números ya existentes). */
@@ -71,29 +87,48 @@ export class MetaSettingsService implements OnModuleInit {
   }
 
   async refresh(): Promise<void> {
-    const [rows, lines] = await Promise.all([
+    // Serialize snapshots so an older read cannot overwrite a newer mutation.
+    const previous = this.refreshInFlight;
+    const next = (async () => {
+      if (previous) await previous.catch(() => undefined);
+      await this.loadSnapshot();
+    })();
+    this.refreshInFlight = next;
+    try {
+      await next;
+    } finally {
+      if (this.refreshInFlight === next) this.refreshInFlight = undefined;
+    }
+  }
+
+  private async loadSnapshot(): Promise<void> {
+    const [areas, aliases, rows, lines] = await Promise.all([
+      this.prisma.business_areas.findMany({ orderBy: [{ sort_order: 'asc' }, { id: 'asc' }] }),
+      this.prisma.business_area_aliases.findMany({ orderBy: { alias: 'asc' } }),
       this.prisma.app_settings.findMany({
         where: { key: { startsWith: 'meta.' } },
         select: { area: true, key: true, value: true },
       }),
       this.prisma.whatsapp_lines.findMany({
-        where: { active: true },
         orderBy: [{ business_area_id: 'asc' }, { id: 'asc' }],
         select: {
           id: true,
+          active: true,
           phone_number_id: true,
           display_phone_number: true,
           legacy_area: true,
           program_id: true,
           program_key: true,
           is_default: true,
-          business_area: { select: { slug: true } },
+          business_area: { select: { slug: true, active: true } },
           waba: {
             select: {
               meta_waba_id: true,
+              active: true,
               default_credential: {
                 select: {
                   secret_source: true,
+                  active: true,
                   secret_ref: true,
                   encrypted_token: true,
                 },
@@ -103,6 +138,7 @@ export class MetaSettingsService implements OnModuleInit {
           credential_override: {
             select: {
               secret_source: true,
+              active: true,
               secret_ref: true,
               encrypted_token: true,
             },
@@ -110,6 +146,7 @@ export class MetaSettingsService implements OnModuleInit {
         },
       }),
     ]);
+    setBusinessAreaCatalog(areas, aliases);
     setMetaSettingsCache(rows);
     setWhatsAppLineCatalog(
       lines.map((line) => {
@@ -117,6 +154,11 @@ export class MetaSettingsService implements OnModuleInit {
           line.credential_override || line.waba.default_credential;
         return {
           id: line.id,
+          active:
+            line.active &&
+            line.business_area.active &&
+            line.waba.active &&
+            Boolean(credential?.active),
           phoneNumberId: line.phone_number_id,
           displayPhoneNumber: line.display_phone_number,
           legacyArea: line.legacy_area,

@@ -248,11 +248,6 @@ const AdminAreasPage = lazy(() =>
     default: m.AdminAreasPage,
   })),
 )
-const AdminWhatsappPage = lazy(() =>
-  import('../features/admin/AdminWhatsappPage').then((m) => ({
-    default: m.AdminWhatsappPage,
-  })),
-)
 const AdminRolesPage = lazy(() =>
   import('../features/admin/AdminRolesPage').then((m) => ({
     default: m.AdminRolesPage,
@@ -418,7 +413,6 @@ export function AppRouter() {
                 <Route path="roles" element={<AdminRolesPage />} />
                 <Route path="areas" element={<AdminAreasPage />} />
                 <Route path="meta" element={<AdminMetaPage />} />
-                <Route path="whatsapp" element={<AdminWhatsappPage />} />
                 <Route path="audit-logs" element={<AdminAuditPage />} />
               </Route>
             </Route>

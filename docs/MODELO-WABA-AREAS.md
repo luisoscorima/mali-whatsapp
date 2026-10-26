@@ -1,103 +1,56 @@
-# Modelo: Área + WABA + Línea (no solo WABA)
+# Modelo: persona, área, categoría y línea
 
-Documento de decisión / hoja de ruta. Relacionado: [CRM-API.md](./CRM-API.md), [LEADS.md](./LEADS.md), [ROLES-PERMISOS.md](./ROLES-PERMISOS.md).
+Documento de decisión. Relacionado: [CRM-API.md](./CRM-API.md), [LEADS.md](./LEADS.md), [ROLES-PERMISOS.md](./ROLES-PERMISOS.md), [REGLAS-CONSOLIDACION-EDUCACION.md](./REGLAS-CONSOLIDACION-EDUCACION.md).
 
-## Veredicto corto
+mali-whatsapp es el motor y la fuente de verdad. MALI ONE es el puesto de trabajo de fichas, leads, categorías y líneas, y habla con este sistema por API. El chat de los asesores permanece aquí. MALI ONE no guarda otra base de personas ni de leads.
 
-**Sí conviene mejorar el modelo. No conviene agrupar el producto “por WABA en lugar de por línea”.**
+## Entidades
 
-- **Área** = tenant de negocio (PAM, Educación, Patronato): contactos, permisos, CRM ↔ MALI ONE.
-- **WABA** = cuenta Meta: plantillas, `subscribed_apps`, facturación, token compartido.
-- **Línea** (`phone_number_id`) = canal de envío/recepción; N líneas pueden vivir bajo **una misma área** y **una misma WABA**.
+| Nombre | Tabla | Qué es |
+|--------|--------|--------|
+| Línea | `whatsapp_lines` | Número de la API de WhatsApp. Varias por área. La conversación es una por línea. |
+| WABA | `whatsapp_wabas` | Cuenta Meta: plantillas, suscripción y token compartido. No es el tenant. |
+| Área | `business_areas` | Tenant aislado: inbox, permisos y ficha. PAM, Patronato y TI no se fusionan con Educación. |
+| Categoría | `business_programs` | Producto o servicio del área. En la API se llama `categoria`. Educación tiene `ca` y `ep`. Las demás áreas pueden no tener categorías. |
+| Persona | `people` | Una sola. Datos perennes: nombre, apellido, teléfono, correo, DNI, fecha de nacimiento e identidad de WhatsApp. |
+| Ficha de área | `contacts` | Una ficha activa por persona y área canónica. Opt-in y relación con esa área. |
+| Datos del área | `contact_attributes` con `program_id` nulo | Información que cambia según el área (suscripción, sede). |
+| Datos de la categoría | `contact_attributes.program_id` | Información que cambia según la categoría (curso, modalidad). |
+| Lead | `contact_origins` + `education_lead_entries` | Solo Educación. Un intento de contacto hacia una categoría. Puede haber muchos. |
+| Ciclo | `education_lead_cycles` | Estado y asesor de una categoría. Una persona puede tener un ciclo de CA y otro de EP. |
 
-La decisión inicial (1 área ≈ 1 línea) **no fue mala de producto** para un MVP. Lo costoso fue el parche: inventar `educacion_ca` / `educacion_ep` como “áreas” solo porque el schema asumía 1 PID por área. Eso mezcla **programa comercial** con **infraestructura Meta**.
-
-Hoy el CRM ya habla por `area` ([CRM-API.md](./CRM-API.md): `pam`, `educacion_ep`, …). Unificar MALI ONE no exige un cliente API distinto por línea; exige un **tenant de negocio estable**.
+Los alias `educacion_ca` y `educacion_ep` se aceptan en la API y se guardan como categoría. No crean otra persona ni otra ficha.
 
 ```mermaid
 flowchart TB
-  subgraph negocio [Tenant de negocio]
-    Area["Area: educacion | pam | patronato"]
-  end
-  subgraph meta [Capa Meta]
-    Waba["WABA"]
-    Line1["Line phone_number_id A"]
-    Line2["Line phone_number_id B"]
-    Waba --> Line1
-    Waba --> Line2
-  end
-  Area --> Waba
-  Area --> Contacts["contacts / campaigns / leads"]
-  Line1 --> Conversations["conversations.whatsapp_phone_number_id"]
-  Line2 --> Conversations
+  Line[Linea] --> Area[Area]
+  Category[Categoria] --> Area
+  Person[Persona] --> Profile[Ficha de area]
+  Profile --> Area
+  Profile --> AttrArea[Datos del area]
+  Category --> AttrCat[Datos de la categoria]
+  Lead[Lead] --> Person
+  Lead --> Category
+  Conv[Conversacion] --> Line
+  Conv --> Person
 ```
 
-## Qué hay hoy (acoplamiento)
+## Identidad
 
-- Tenant = string `area` en casi todo (`api/src/config/areas.ts`).
-- Credenciales Meta en `app_settings` **1 PID + 1 token + 1 waba_id por área** (`api/src/meta-settings/`).
-- Webhook: primero `phone_number_id` → área; fallback WABA ambiguo si varias áreas comparten WABA (`api/src/webhook/webhook-area.util.ts`).
-- Educación ya tiene **3 tenants** (`educacion`, `educacion_ca`, `educacion_ep`) con Page token duplicado; Instant Forms se separan por `form_id`, CTWA por línea ([LEADS.md](./LEADS.md)).
+El match de la persona es global, en este orden: identidad de WhatsApp, teléfono, DNI, correo. Si hay una sola persona, se reutiliza y se completan los huecos. Si no hay ninguna, se crea la persona y la ficha del área. Si las claves apuntan a personas distintas, o el DNI o la identidad de WhatsApp no coinciden, se anota en `person_identity_reviews` y no se abre otra persona.
 
-Si se “agrupa solo por WABA” como tenant: se rompe aislamiento de contactos PAM vs Educación (si algún día compartieran infra), plantillas keyed por área, y el contrato CRM que MALI ONE ya usa.
+La ficha se busca por persona y área canónica. El aislamiento entre áreas es de la ficha, del inbox y de los permisos. La persona sigue siendo la misma.
 
-## Enfoque recomendado (3 capas)
+## Límite con MALI ONE
 
-| Capa | Responsabilidad | Ejemplo Educación |
-|------|-----------------|-------------------|
-| **Área de negocio** | Identidad de persona, permisos, CRM, campañas, leads | `educacion` (una sola) |
-| **WABA** | Sync plantillas, suscripción webhook apps | 1 WABA Educación |
-| **Línea WA** | Inbound/outbound, CTWA, `conversations.whatsapp_phone_number_id` | 3 PIDs bajo esa área |
-| **Programa** (CA/EP) | Segmento, atributo u origen — **no** área | `programa=ca\|ep` en origen/attrs |
+| mali-whatsapp | MALI ONE |
+|---------------|----------|
+| Líneas, envío, recepción y webhook | Pantallas de fichas, leads y administración de líneas |
+| Persona, ficha, categoría, lead y conversación | El trabajo sobre esos datos, sin cambiar de línea en esta aplicación |
+| Reglas de identidad y de lead | `CRM_SERVICE_TOKEN` para fichas y leads; `WHATSAPP_ADMIN_SERVICE_TOKEN` para líneas |
 
-Para PAM: área `pam` + 1 línea (hoy) + CRM ya alineado. Educación se alinea al **mismo patrón** sin un “CRM Educación” separado por línea.
+El chat no se mueve a MALI ONE. La campaña sigue usando la línea de la conversación o, si no hay, la predeterminada del área.
 
-## Coste realista
+## Datos históricos
 
-| Fase | Esfuerzo | Qué desbloquea |
-|------|----------|----------------|
-| **A — Modelo de líneas (sin fusionar CA/EP)** | Medio (~1–2 sprints) | Varias líneas por área; Admin Meta; webhook PID→área (área ya no = PID); outbound elige línea |
-| **B — Entidad WABA explícita** | Bajo–medio (puede ir con A) | Un token/WABA compartido; sync plantillas una vez; deja de duplicar `waba_id` |
-| **C — Fusionar `educacion_*` → `educacion`** | Alto (datos + UX) | Una persona Educación; CRM MALI ONE con `area=educacion`; programas como metadata |
-| **D — Contrato CRM unificado** | Bajo si C hecho; medio si no | MALI ONE llama siempre `area` de negocio; no N clientes por línea |
-
-**No hace falta C para empezar Educación en MALI ONE:** el contrato actual ya acepta `area: "educacion_ep"`. C es deuda de producto (personas duplicadas entre CA/EP), no bloqueo de integración.
-
-## Plan de implementación
-
-### Fase A+B (prioridad técnica)
-
-1. Introducir tabla (o settings) **`whatsapp_lines`**: `area`, `phone_number_id`, `display_phone`, `waba_id` (o FK a `wabas`), `token` (o heredar del WABA), `is_default`, `label`.
-2. Resolver inbound **solo por PID → área** (el fallback WABA solo si 1 área posee esa WABA).
-3. Outbound / campañas: línea default del área o línea de la conversación (ya existe `whatsapp_phone_number_id` en conversaciones).
-4. Admin Meta: editar N líneas por área; WABA compartido.
-5. Migrar settings actuales 1:1 a filas de línea (sin cambiar slugs de área todavía).
-
-### Fase C (prioridad de producto, cuando toque unificar Educación)
-
-1. Decidir mapping: contactos/conversaciones/campañas de `educacion_ca` / `educacion_ep` → `educacion`, con `programa` / segmento / origen preservado.
-2. Merge de personas por phone/dni/email **dentro** del área unificada.
-3. Actualizar rutas Instant Form → siempre `educacion` + metadata de programa.
-4. Usuarios `user_areas`: colapsar a `educacion`.
-5. CRM: documentar `area=educacion` como canónico; deprecar `educacion_ca` / `educacion_ep` en el contrato.
-
-### Qué no hacer
-
-- Reemplazar `area` por `waba_id` como tenant de contactos/CRM.
-- Crear un cliente MALI ONE distinto por cada línea WA.
-- Inbox multiárea combinado (ya fuera de alcance en [ROLES-PERMISOS.md](./ROLES-PERMISOS.md)); multi-**línea** dentro de un área sí.
-
-## Checklist
-
-- [ ] Fase A+B: modelo `whatsapp_lines` + WABA compartido; webhook/outbound por PID; migrar `app_settings` 1:1
-- [ ] Fase C (cuando se decida): fusionar `educacion_ca` / `educacion_ep` → `educacion` con programa como metadata + merge de contactos
-- [ ] CRM MALI ONE Educación: usar área de negocio (hoy `educacion_*`; luego `educacion` canónico) sin un cliente por línea
-
-## Respuesta directa
-
-| Pregunta | Respuesta |
-|----------|-----------|
-| ¿Buen enfoque agrupar por WABA y por área? | **Área + líneas; WABA como contenedor Meta.** No WABA como único eje. |
-| ¿Mala decisión de producto? | **MVP OK; el error fue modelar CA/EP como áreas.** |
-| ¿Cómo se resuelve? | Capas + migración por fases; CRM puede seguir con slugs actuales hasta fusionar. |
-| ¿Costoso? | **A+B medio; C alto** (migración de datos). Integrar Educación en MALI ONE **sin** fusionar es barato. |
+Hasta ejecutar la consolidación de Educación, pueden quedar varias fichas con el mismo teléfono en `educacion`, `educacion_ca` y `educacion_ep`. El script [api/scripts/consolidate-education.cjs](../api/scripts/consolidate-education.cjs) deja una ficha y una persona por grupo fusionable, y conserva la categoría. Los grupos en revisión no se fusionan. No se ejecuta sobre producción hasta ensayarlo en una copia con este código.

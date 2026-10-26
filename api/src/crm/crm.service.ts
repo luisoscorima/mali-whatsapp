@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AttributeDefinitionsService } from '../attribute-definitions/attribute-definitions.service';
@@ -20,6 +21,8 @@ import {
 } from '../contacts/contacts-validation.utils';
 import { buildCampaignMessagePreview } from '../campaigns/campaign-message-preview.util';
 import { persistCampaignChatMessage } from '../campaigns/campaign-chat-message.util';
+import { upsertScopedAttribute } from '../contacts/contact-attribute.util';
+import { PersonResolverService } from '../people/person-resolver.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   buildTemplateDefinition,
@@ -60,6 +63,9 @@ export type CrmAudienceResult = {
 
 export type CrmContactRow = {
   contact_id: number;
+  person_id?: number | null;
+  categorias?: string[];
+  atributos_categoria?: Record<string, Record<string, string>>;
   area: string;
   name: string;
   last_name: string;
@@ -118,12 +124,15 @@ export class CrmService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly attributeDefinitions: AttributeDefinitionsService,
+    @Optional() private readonly people?: PersonResolverService,
   ) {}
 
   async syncFromProduct(dto: CrmSyncContactDto): Promise<CrmSyncResult> {
     const requestedArea = this.normalizeArea(dto.area ?? 'pam');
     const program =
-      educationProgramOf(dto.programa) || educationProgramOf(requestedArea);
+      educationProgramOf(dto.categoria) ||
+      educationProgramOf(dto.programa) ||
+      educationProgramOf(requestedArea);
     const area = isEducationAreaSlug(requestedArea) ? 'educacion' : requestedArea;
     const phone = normalizePhone(dto.phone);
     if (!E164_NO_PLUS_REGEX.test(phone)) {
@@ -149,17 +158,32 @@ export class CrmService {
       attributes.dni = dni;
     }
 
-    const existing = await this.prisma.contacts.findFirst({
-      where: {
-        phone,
-        area: {
-          in: isEducationAreaSlug(requestedArea)
-            ? [...EDUCATION_AREA_SLUGS]
-            : [area],
-        },
-      },
-      orderBy: { updated_at: 'desc' },
-    });
+    const resolved = this.people
+      ? await this.people.resolve(this.prisma, {
+          area,
+          name,
+          last_name,
+          phone,
+          email,
+          dni,
+          opt_in,
+          opt_in_email,
+          overwriteName: true,
+        })
+      : null;
+    const existing = resolved
+      ? await this.prisma.contacts.findFirst({ where: { id: resolved.contact_id } })
+      : await this.prisma.contacts.findFirst({
+          where: {
+            phone,
+            area: {
+              in: isEducationAreaSlug(requestedArea)
+                ? [...EDUCATION_AREA_SLUGS]
+                : [area],
+            },
+          },
+          orderBy: { updated_at: 'desc' },
+        });
 
     let segmentSlugs = dto.segment_slugs;
     if (segmentSlugs?.length) {
@@ -206,13 +230,21 @@ export class CrmService {
       }
 
       for (const [attr_key, attr_value] of Object.entries(attributes)) {
-        await tx.contact_attributes.upsert({
-          where: {
-            contact_id_attr_key: { contact_id: row.id, attr_key },
-          },
-          create: { contact_id: row.id, attr_key, attr_value },
-          update: { attr_value, updated_at: new Date() },
+        await upsertScopedAttribute(tx, row.id, attr_key, attr_value, null);
+      }
+      const categoryAttributes = this.normalizeAttributes(dto.atributos_categoria);
+      let categoryProgramId: number | null = null;
+      if (program && Object.keys(categoryAttributes).length) {
+        const programRow = await tx.business_programs.findFirst({
+          where: { slug: program, active: true, business_area: { slug: 'educacion' } },
+          select: { id: true },
         });
+        categoryProgramId = programRow?.id ?? null;
+        if (categoryProgramId) {
+          for (const [attr_key, attr_value] of Object.entries(categoryAttributes)) {
+            await upsertScopedAttribute(tx, row.id, attr_key, attr_value, categoryProgramId);
+          }
+        }
       }
 
       await tx.conversations.updateMany({
@@ -266,7 +298,7 @@ export class CrmService {
       area,
       phone: contact.phone,
       email: contact.email,
-      created: !existing,
+      created: resolved ? resolved.created : !existing,
     };
   }
 
@@ -470,23 +502,9 @@ export class CrmService {
       });
 
       if (idempotencyKey) {
-        await this.prisma.contact_attributes.upsert({
-          where: {
-            contact_id_attr_key: {
-              contact_id: contact.id,
-              attr_key: PAM_WA_IDEMPOTENCY_ATTR,
-            },
-          },
-          create: {
-            contact_id: contact.id,
-            attr_key: PAM_WA_IDEMPOTENCY_ATTR,
-            attr_value: idempotencyKey,
-          },
-          update: {
-            attr_value: idempotencyKey,
-            updated_at: new Date(),
-          },
-        });
+        await this.prisma.$transaction((tx) =>
+          upsertScopedAttribute(tx, contact.id, PAM_WA_IDEMPOTENCY_ATTR, idempotencyKey, null),
+        );
       }
 
       return {
@@ -593,7 +611,15 @@ export class CrmService {
         take: limit,
         include: {
           contact_attributes: {
-            select: { attr_key: true, attr_value: true },
+            select: {
+              attr_key: true,
+              attr_value: true,
+              program_id: true,
+              program: { select: { slug: true } },
+            },
+          },
+          contact_programs: {
+            select: { program: { select: { slug: true } } },
           },
         },
       }),
@@ -610,7 +636,9 @@ export class CrmService {
         last_name: row.last_name,
         phone: row.phone,
         attributes: Object.fromEntries(
-          row.contact_attributes.map((a) => [a.attr_key, a.attr_value]),
+          row.contact_attributes
+            .filter((attr) => attr.program_id == null)
+            .map((attr) => [attr.attr_key, attr.attr_value]),
         ),
       });
     }
@@ -793,7 +821,15 @@ export class CrmService {
         take: limit,
         include: {
           contact_attributes: {
-            select: { attr_key: true, attr_value: true },
+            select: {
+              attr_key: true,
+              attr_value: true,
+              program_id: true,
+              program: { select: { slug: true } },
+            },
+          },
+          contact_programs: {
+            select: { program: { select: { slug: true } } },
           },
           contact_segments: {
             select: { segment_slug: true },
@@ -838,6 +874,9 @@ export class CrmService {
 
     const items: CrmContactRow[] = rows.map((row) => ({
       contact_id: row.id,
+      person_id: row.person_id,
+      categorias: (row.contact_programs ?? []).map((item) => item.program.slug),
+      ...this.splitAttributes(row.contact_attributes),
       area: row.area,
       name: row.name,
       last_name: row.last_name,
@@ -850,9 +889,6 @@ export class CrmService {
       opt_in_email: row.opt_in_email,
       active: row.active,
       segment_slugs: row.contact_segments.map((s) => s.segment_slug),
-      attributes: Object.fromEntries(
-        row.contact_attributes.map((a) => [a.attr_key, a.attr_value]),
-      ),
       created_at: row.created_at.toISOString(),
       updated_at: row.updated_at.toISOString(),
       assigned_user_id: row.education_lead_cycles[0]?.assigned_user_id ?? null,
@@ -986,11 +1022,7 @@ export class CrmService {
       }
 
       for (const [attr_key, attr_value] of Object.entries(attributes)) {
-        await tx.contact_attributes.upsert({
-          where: { contact_id_attr_key: { contact_id: id, attr_key } },
-          create: { contact_id: id, attr_key, attr_value },
-          update: { attr_value, updated_at: new Date() },
-        });
+        await upsertScopedAttribute(tx, id, attr_key, attr_value, null);
       }
     });
 
@@ -998,7 +1030,15 @@ export class CrmService {
       where: { id },
       include: {
         contact_attributes: {
-          select: { attr_key: true, attr_value: true },
+          select: {
+            attr_key: true,
+            attr_value: true,
+            program_id: true,
+            program: { select: { slug: true } },
+          },
+        },
+        contact_programs: {
+          select: { program: { select: { slug: true } } },
         },
         contact_segments: {
           select: { segment_slug: true },
@@ -1015,6 +1055,9 @@ export class CrmService {
 
     return {
       contact_id: updated.id,
+      person_id: updated.person_id,
+      categorias: updated.contact_programs.map((item) => item.program.slug),
+      ...this.splitAttributes(updated.contact_attributes),
       area: updated.area,
       name: updated.name,
       last_name: updated.last_name,
@@ -1027,12 +1070,26 @@ export class CrmService {
       opt_in_email: updated.opt_in_email,
       active: updated.active,
       segment_slugs: updated.contact_segments.map((s) => s.segment_slug),
-      attributes: Object.fromEntries(
-        updated.contact_attributes.map((a) => [a.attr_key, a.attr_value]),
-      ),
       created_at: updated.created_at.toISOString(),
       updated_at: updated.updated_at.toISOString(),
     };
+  }
+
+  private splitAttributes(
+    rows: { attr_key: string; attr_value: string; program_id: number | null; program: { slug: string } | null }[],
+  ): { attributes: Record<string, string>; atributos_categoria: Record<string, Record<string, string>> } {
+    const attributes: Record<string, string> = {};
+    const atributos_categoria: Record<string, Record<string, string>> = {};
+    for (const row of rows) {
+      if (row.program_id == null || !row.program) {
+        attributes[row.attr_key] = row.attr_value;
+        continue;
+      }
+      const bucket = atributos_categoria[row.program.slug] ?? {};
+      bucket[row.attr_key] = row.attr_value;
+      atributos_categoria[row.program.slug] = bucket;
+    }
+    return { attributes, atributos_categoria };
   }
 
   private softEmail(value: unknown): string | null {

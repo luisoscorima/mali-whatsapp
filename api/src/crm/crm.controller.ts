@@ -91,7 +91,7 @@ export class CrmController {
 
   /**
    * Ingest lead origin (widget / multichannel). No lead-campaign attributes.
-   * Match: phone → dni → email.
+   * Match global de persona: identidad de WhatsApp, teléfono, DNI, correo.
    */
   @Post('origins')
   async ingestOrigin(@Body() body: CrmIngestOriginDto) {
@@ -99,8 +99,13 @@ export class CrmController {
     if (!(LEAD_CHANNELS as readonly string[]).includes(channel)) {
       throw new BadRequestException(`channel inválido: ${body.channel}`);
     }
+    const categoria = body.categoria;
+    const requested = String(body.area || 'ti').trim().toLowerCase();
+    const area = categoria && (requested === 'educacion' || requested === `educacion_${categoria}`)
+      ? `educacion_${categoria}`
+      : requested;
     const data = await this.leads.upsertOrigin({
-      area: body.area || 'ti',
+      area,
       channel,
       external_id: body.external_id,
       source_key: body.source_key,

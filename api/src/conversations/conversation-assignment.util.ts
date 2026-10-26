@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { AuditEvent } from '../audit/audit-events';
 import type { AuditLogService } from '../audit/audit-log.service';
 import { formatAdvisorLabel } from '../users/advisor-label.util';
+import { userWorksArea } from '../users/area-membership.where';
 import type { PrismaService } from '../prisma/prisma.service';
 import {
   isHumanAdvisorOutboundMessage,
@@ -64,7 +65,7 @@ async function markBackfillDone(
 function assigneeWhere(area: string) {
   return {
     is_provisioned: true,
-    OR: [{ area }, { is_master: true }, { user_areas: { some: { area } } }],
+    OR: [{ area }, { is_master: true }, { user_areas: { some: { area } } }, userWorksArea(area)],
   };
 }
 

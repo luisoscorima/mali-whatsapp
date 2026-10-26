@@ -1668,6 +1668,27 @@ export class ConversationsService {
             SELECT 1 FROM user_areas ua
             WHERE ua.user_id = u.id AND ua.area = ${area}
           )
+          OR EXISTS (
+            SELECT 1
+            FROM user_area_memberships m
+            JOIN business_areas ba ON ba.id = m.business_area_id
+            LEFT JOIN business_area_aliases al
+              ON al.business_area_id = ba.id AND al.alias = ${area}
+            WHERE m.user_id = u.id
+              AND m.active = TRUE
+              AND (ba.slug = ${area} OR al.alias = ${area})
+              AND (
+                m.access_mode = 'all'
+                OR EXISTS (
+                  SELECT 1
+                  FROM user_program_grants g
+                  JOIN business_programs p ON p.id = g.program_id
+                  WHERE g.membership_id = m.id
+                    AND p.active = TRUE
+                    AND (al.program_key IS NULL OR p.slug = al.program_key)
+                )
+              )
+          )
         )
       ORDER BY u.email ASC
     `);

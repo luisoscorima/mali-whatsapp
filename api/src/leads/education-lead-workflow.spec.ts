@@ -78,6 +78,7 @@ describe('Education lead cycle creation', () => {
           last_interaction_at: new Date(now.getTime() - 60 * 60 * 1000) }),
         update: jest.fn(),
       },
+      conversations: { findUnique: jest.fn().mockResolvedValue({ whatsapp_line: null }) },
       chat_messages: { findFirst: jest.fn().mockResolvedValue({
         created_at: new Date(now.getTime() - 60 * 60 * 1000),
       }) },

@@ -8,6 +8,8 @@ import {
   type WhatsAppLineCatalogRow,
 } from './meta-settings.store';
 import { resolveInboundArea } from '../webhook/webhook-area.util';
+import { resolveWhatsAppSendCredentials } from '../conversations/conversation-whatsapp.util';
+import { sendTemplateWithComponents } from '../templates/whatsapp-meta.util';
 
 const ENV_KEYS = [
   'WHATSAPP_LINE_CATALOG_ENABLED',
@@ -103,6 +105,97 @@ describe('WhatsApp line catalog compatibility store', () => {
     expect(getWhatsAppLineForArea('educacion_ca')).toMatchObject({ id: 11 });
   });
 
+  it('changes the canonical default without changing the historical CA sender', () => {
+    const rows = catalogRows();
+    rows[0].isDefault = false;
+    rows.push({
+      ...rows[0],
+      id: 12,
+      legacyArea: null,
+      phoneNumberId: 'pid-new',
+      isDefault: true,
+    });
+    setWhatsAppLineCatalog(rows);
+    expect(getWhatsAppCredentialsForArea('educacion').phoneNumberId).toBe(
+      'pid-new',
+    );
+    expect(getWhatsAppCredentialsForArea('educacion_ca').phoneNumberId).toBe(
+      'pid-ca',
+    );
+    expect(
+      resolveWhatsAppSendCredentials({
+        area: 'educacion',
+        phoneNumberId: 'pid-ca',
+      }).token,
+    ).toBe('token-t2');
+  });
+
+  it('never resurrects a disabled line through environment or WABA fallbacks', async () => {
+    const rows = catalogRows();
+    rows[1].active = false;
+    rows[1].phoneNumberId = 'legacy-pid-ca';
+    setWhatsAppLineCatalog(rows);
+    expect(getWhatsAppCredentialsForArea('educacion_ca').token).toBe('');
+    expect(
+      resolveInboundArea(
+        { metadata: { phone_number_id: 'legacy-pid-ca' } },
+        'shared-waba',
+      ).area,
+    ).toBeNull();
+    expect(() =>
+      resolveWhatsAppSendCredentials({
+        area: 'educacion',
+        phoneNumberId: 'legacy-pid-ca',
+      }),
+    ).toThrow('inactiva');
+    await expect(
+      sendTemplateWithComponents({
+        area: 'educacion',
+        phoneNumberId: 'legacy-pid-ca',
+        to: '51900000001',
+        templateName: 'test',
+        languageCode: 'es',
+      }),
+    ).rejects.toThrow('inactiva');
+  });
+
+  it('does not route an unknown PID into the only active area in its WABA', () => {
+    setWhatsAppLineCatalog([catalogRows()[0]]);
+    expect(
+      resolveInboundArea(
+        { metadata: { phone_number_id: 'unknown-pid' } },
+        'shared-waba',
+      ).area,
+    ).toBeNull();
+  });
+
+  it('loads a newly activated line from a replacement snapshot without changing env', () => {
+    const rows = catalogRows();
+    const added = {
+      ...rows[0],
+      id: 12,
+      phoneNumberId: 'pid-new',
+      legacyArea: null,
+      isDefault: false,
+      active: false,
+    };
+    setWhatsAppLineCatalog([...rows, added]);
+    expect(getWhatsAppLineByPhoneNumberId('pid-new')).toBeNull();
+    setWhatsAppLineCatalog([...rows, { ...added, active: true }]);
+    expect(
+      resolveInboundArea(
+        { metadata: { phone_number_id: 'pid-new' } },
+        'shared-waba',
+      ).area,
+    ).toBe('educacion');
+    expect(
+      resolveWhatsAppSendCredentials({
+        area: 'educacion',
+        phoneNumberId: 'pid-new',
+      }).phoneNumberId,
+    ).toBe('pid-new');
+  });
+
   it('does not guess an area from a WABA shared by legacy areas', () => {
     setWhatsAppLineCatalog(catalogRows());
     expect(resolveWhatsAppAreaFromCatalogWaba('shared-waba')).toBeNull();
@@ -160,7 +253,8 @@ describe('WhatsApp line catalog compatibility store', () => {
     process.env.WHATSAPP_CREDENTIALS_MASTER_KEY = Buffer.alloc(32, 9).toString(
       'base64',
     );
-    const { encryptMetaToken } = require('./credential-vault.util') as typeof import('./credential-vault.util');
+    const { encryptMetaToken } =
+      require('./credential-vault.util') as typeof import('./credential-vault.util');
     const rows = catalogRows();
     rows[1] = {
       ...rows[1],

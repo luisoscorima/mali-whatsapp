@@ -517,9 +517,10 @@ export class AuthService {
         )
       : primaryArea;
 
-    const roleSlug: RoleSlug | null = isRoleSlug(row.role_slug)
-      ? row.role_slug
-      : null;
+    const access = isProvisioned && !isMaster
+      ? await this.userAreas.resolveBusinessAccess(row.id, area) : undefined;
+    const selectedRole = access?.roleSlug ?? row.role_slug;
+    const roleSlug: RoleSlug | null = isRoleSlug(selectedRole) ? selectedRole : null;
 
     let permissions: PermissionCode[];
     if (isBootstrapAdmin || isMaster || roleSlug === 'master') {
@@ -549,6 +550,7 @@ export class AuthService {
       email: row.email,
       area,
       allowedAreas,
+      businessAccess: access?.scope,
       roleSlug: isMaster || isBootstrapAdmin ? 'master' : roleSlug,
       permissions,
       isMaster,
