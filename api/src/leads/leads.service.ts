@@ -1187,7 +1187,7 @@ export class LeadsService implements OnModuleInit {
       return {
         channel: o.channel,
         categoria: category.categoria === 'general' ? 'General' : category.categoria.toUpperCase(),
-        linea: category.linea,
+        linea: category.linea || 'Solo contacto',
         contact_name: contactName,
         username: o.conversations?.wa_username
           ? `@${o.conversations.wa_username.replace(/^@/, '')}`
