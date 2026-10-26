@@ -515,6 +515,33 @@ export class WhatsAppAdminService {
     }
   }
 
+  async moveLineCategory(id: number, programId: number | null, actor?: AdminActor) {
+    const current = await this.prisma.whatsapp_lines.findUnique({ where: { id } });
+    if (!current) throw new NotFoundException('Línea WhatsApp no encontrada');
+    const { program } = await this.assertProgram(current.business_area_id, programId);
+    const updated = await this.prisma.whatsapp_lines.update({
+      where: { id },
+      data: {
+        program_id: program?.id ?? null,
+        program_key: program?.slug ?? null,
+        updated_at: new Date(),
+      },
+      select: { id: true, label: true, program_id: true, program_key: true },
+    });
+    await this.metaSettings.refresh();
+    await this.writeAudit(
+      'admin.whatsapp_line_category_moved',
+      'Línea movida de categoría',
+      actor,
+      {
+        line_id: id,
+        program_id: updated.program_id,
+        program_key: updated.program_key,
+      },
+    );
+    return updated;
+  }
+
   async updateLine(
     id: number,
     input: UpdateWhatsAppLineDto,

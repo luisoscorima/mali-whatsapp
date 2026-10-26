@@ -1,8 +1,8 @@
-import { formatExportDate } from '../campaigns/campaign-format.util';
+﻿import { formatExportDate } from '../campaigns/campaign-format.util';
 import { exportFilenameDateStamp } from '../campaigns/campaign-format.util';
 import * as XLSX from 'xlsx';
 import type { BusinessArea } from '../config/areas';
-import { REPORT_SOURCE_HEADERS, reportExportSourceCells } from './report-export-source.util';
+import { REPORT_SOURCE_HEADERS, reportExportSourceCells, type ReportSource } from './report-export-source.util';
 import { auditCreatedDateSql } from './audit-log-query.util';
 import { resolveReportDateRange } from './report-date-range.util';
 import {
@@ -24,7 +24,7 @@ export const SEGMENT_HISTORY_HEADERS = [
   'Actor',
 ] as const;
 
-export type SegmentHistoryRow = {
+export type SegmentHistoryRow = ReportSource & {
   id: string;
   created_at: string;
   created_display: string;
@@ -95,9 +95,18 @@ export async function fetchSegmentHistoryReport(
       created_at: Date;
       actor_email: string | null;
       meta: unknown;
+      category?: string | null;
     }[]
   >(
-    `SELECT id, created_at, actor_email, meta
+    `SELECT id, created_at, actor_email, meta,
+       CASE
+         WHEN meta ? 'program_id' AND NULLIF(meta->>'program_id', '') IS NULL THEN 'general'
+         WHEN (meta->>'program_id') ~ '^[0-9]+$' THEN (
+           SELECT bp.slug FROM business_programs bp
+           WHERE bp.id = (meta->>'program_id')::int
+         )
+         ELSE NULLIF(meta->>'category', '')
+       END AS category
      FROM audit_logs ${whereSql}
      ORDER BY created_at DESC, id DESC
      LIMIT $5 OFFSET $6`,
@@ -137,6 +146,8 @@ export async function fetchSegmentHistoryReport(
       const phone =
         String(meta.phone ?? '').trim() || contact?.phone || '';
       return {
+        category: row.category,
+        whatsapp_line: '',
         id: String(row.id),
         created_at: new Date(row.created_at).toISOString(),
         created_display: formatExportDate(row.created_at) || '—',
@@ -159,11 +170,10 @@ export function buildSegmentHistoryXlsxBuffer(
   rows: SegmentHistoryRow[],
   area: BusinessArea,
 ): Buffer {
-  const source = reportExportSourceCells(area);
   const aoa: string[][] = [
     [...REPORT_SOURCE_HEADERS, ...SEGMENT_HISTORY_HEADERS],
     ...rows.map((r) => [
-      ...source,
+      ...reportExportSourceCells(area, r),
       r.created_display,
       r.contact_id != null ? String(r.contact_id) : '',
       r.phone,

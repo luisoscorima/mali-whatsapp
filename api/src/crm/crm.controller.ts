@@ -26,7 +26,8 @@ import { CrmSyncContactDto } from './dto/crm-sync-contact.dto';
 import { CrmSendTemplateDto } from './dto/crm-send-template.dto';
 import { LeadsService } from '../leads/leads.service';
 import { EducationLeadWorkflowService } from '../leads/education-lead-workflow.service';
-import { IsArray, IsIn, IsInt, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, Min, ValidateNested } from 'class-validator';
+import { educationProgramOf, isEducationAreaSlug } from '../config/education-scope';
 import { Type } from 'class-transformer';
 import { ProspectiaAdvisorService } from '../leads/prospectia-advisor.service';
 import { ProspectiaSyncService } from '../leads/prospectia-sync.service';
@@ -58,7 +59,8 @@ class ProspectiaCheckDto {
 }
 
 class EducationDistributeDto {
-  @IsIn(['all', 'educacion', 'educacion_ca', 'educacion_ep']) area!: string;
+  @Matches(/^(all|educacion(_[a-z][a-z0-9_]{0,9})?|[a-z][a-z0-9_]{0,9})$/)
+  area!: string;
   @IsOptional() @IsIn(LEAD_CHANNELS) channel?: string;
   @IsOptional() @IsString() @MaxLength(120) q?: string;
   @IsOptional() @IsString() @MaxLength(120) actor_email?: string;
@@ -99,13 +101,15 @@ export class CrmController {
     if (!(LEAD_CHANNELS as readonly string[]).includes(channel)) {
       throw new BadRequestException(`channel inválido: ${body.channel}`);
     }
-    const categoria = body.categoria;
     const requested = String(body.area || 'ti').trim().toLowerCase();
-    const area = categoria && (requested === 'educacion' || requested === `educacion_${categoria}`)
-      ? `educacion_${categoria}`
-      : requested;
+    const program = educationProgramOf(body.categoria) || educationProgramOf(requested);
+    let area = requested;
+    if (program === 'ca') area = 'educacion_ca';
+    else if (program === 'ep') area = 'educacion_ep';
+    else if (program || requested === 'educacion' || isEducationAreaSlug(requested)) area = 'educacion';
     const data = await this.leads.upsertOrigin({
       area,
+      program_slug: program,
       channel,
       external_id: body.external_id,
       source_key: body.source_key,

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { apiClient } from '@/shared/api'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { AdminUserFormSheet } from './AdminUserFormSheet'
+import { canonicalArea } from '@/shared/area/category-selection'
 import { areaLabel } from './areaLabels'
 import { ROLE_OPTIONS } from '@/shared/auth/permissions'
 
@@ -98,7 +99,7 @@ export function AdminUsersShell() {
                       </span>
                     </span>
                     <span className="inbox-chat-preview">
-                      {areaLabel(user.area)}
+                      {areaLabel(canonicalArea(user.area))}
                       {user.role_slug
                         ? ` · ${ROLE_OPTIONS.find((r) => r.slug === user.role_slug)?.label ?? user.role_slug}`
                         : ''}

@@ -58,6 +58,7 @@ const ROUTE_CATEGORY_OPTIONS = [
 const LEADS_PAGE_SIZE = 25
 
 export function MetaFormsPage() {
+  const [categoryOptions, setCategoryOptions] = useState(ROUTE_CATEGORY_OPTIONS)
   const [forms, setForms] = useState<FormRow[]>([])
   const [routes, setRoutes] = useState<FormRouteRow[]>([])
   const [leads, setLeads] = useState<LeadRow[]>([])
@@ -145,6 +146,12 @@ export function MetaFormsPage() {
     await reloadLeads(1)
     setLeadPage(1)
   }
+
+  useEffect(() => {
+    void apiClient.getEducationCategories().then((result) => {
+      if (result.ok && result.data.length) setCategoryOptions(result.data)
+    })
+  }, [])
 
   useEffect(() => {
     void reloadCatalog(showAllRoutes)
@@ -397,7 +404,7 @@ export function MetaFormsPage() {
                                   void onRouteChange(row.form_id, 'educacion', e.target.value)
                                 }
                               >
-                                {ROUTE_CATEGORY_OPTIONS.map((o) => (
+                                {categoryOptions.map((o) => (
                                   <option key={o.slug} value={o.slug}>
                                     {o.label}
                                   </option>

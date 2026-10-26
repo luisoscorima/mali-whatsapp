@@ -5,6 +5,7 @@ import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
 import { WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
 import { MetricsGrid } from '../campaigns/MetricsGrid'
+import { useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
 import type { MetricCard } from '../campaigns/campaignMetricActions'
 
 type FlowSummary = {
@@ -12,6 +13,7 @@ type FlowSummary = {
 }
 
 export function FlowsSummaryPane() {
+  const scope = useCategoryScope()
   const user = useAppUser()
   const area = user?.area
   const [summary, setSummary] = useState<FlowSummary | null>(null)
@@ -23,7 +25,7 @@ export function FlowsSummaryPane() {
     setSummary(null)
     setError('')
     let cancelled = false
-    void apiClient.get<FlowSummary>('/api/flows/summary').then((res) => {
+    void apiClient.get<FlowSummary>(withCategoryQuery('/api/flows/summary', scope.query)).then((res) => {
       if (cancelled) return
       if (!res.ok) {
         notify.error(res.error)
@@ -36,7 +38,7 @@ export function FlowsSummaryPane() {
     return () => {
       cancelled = true
     }
-  }, [area, reloadToken])
+  }, [area, reloadToken, scope.query, scope.revision])
 
   if (error) {
     return (

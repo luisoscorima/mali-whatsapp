@@ -52,9 +52,14 @@ export class CampaignsController {
   async summary(
     @CurrentUser() user: AuthUser,
     @Query('month') month?: string,
+    @Query('category') category?: string | string[],
   ): Promise<ApiResponse<CampaignSummary>> {
     assertCanViewCampaignStats(user);
-    const data = await this.campaignsService.getSummary(user.area, month);
+    const data = await this.campaignsService.getSummary(
+      user.area,
+      month,
+      parseCategorySlugs(category),
+    );
     return { ok: true, data };
   }
 
@@ -71,6 +76,21 @@ export class CampaignsController {
       parseCategorySlugs(category),
     );
     return { ok: true, data };
+  }
+
+  @Get('lines')
+  async lines(
+    @CurrentUser() user: AuthUser,
+    @Query('category') category?: string | string[],
+  ) {
+    assertCanCreateCampaigns(user);
+    return {
+      ok: true,
+      data: await this.campaignsService.listSendableLines(
+        user.area,
+        parseCategorySlugs(category),
+      ),
+    };
   }
 
   @Post('send')

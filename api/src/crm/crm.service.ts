@@ -128,11 +128,16 @@ export class CrmService {
   ) {}
 
   async syncFromProduct(dto: CrmSyncContactDto): Promise<CrmSyncResult> {
-    const requestedArea = this.normalizeArea(dto.area ?? 'pam');
+    const rawArea = String(dto.area ?? 'pam').trim().toLowerCase();
+    const prefixedProgram = rawArea.startsWith('educacion_') && !isEducationAreaSlug(rawArea)
+      ? educationProgramOf(rawArea)
+      : null;
+    const requestedArea = prefixedProgram ? 'educacion' : this.normalizeArea(rawArea);
     const program =
       educationProgramOf(dto.categoria) ||
       educationProgramOf(dto.programa) ||
-      educationProgramOf(requestedArea);
+      educationProgramOf(requestedArea) ||
+      prefixedProgram;
     const area = isEducationAreaSlug(requestedArea) ? 'educacion' : requestedArea;
     const phone = normalizePhone(dto.phone);
     if (!E164_NO_PLUS_REGEX.test(phone)) {
@@ -234,16 +239,15 @@ export class CrmService {
       }
       const categoryAttributes = this.normalizeAttributes(dto.atributos_categoria);
       let categoryProgramId: number | null = null;
-      if (program && Object.keys(categoryAttributes).length) {
+      if (program) {
         const programRow = await tx.business_programs.findFirst({
           where: { slug: program, active: true, business_area: { slug: 'educacion' } },
           select: { id: true },
         });
-        categoryProgramId = programRow?.id ?? null;
-        if (categoryProgramId) {
-          for (const [attr_key, attr_value] of Object.entries(categoryAttributes)) {
-            await upsertScopedAttribute(tx, row.id, attr_key, attr_value, categoryProgramId);
-          }
+        if (!programRow) throw new BadRequestException('Categoría no válida');
+        categoryProgramId = programRow.id;
+        for (const [attr_key, attr_value] of Object.entries(categoryAttributes)) {
+          await upsertScopedAttribute(tx, row.id, attr_key, attr_value, categoryProgramId);
         }
       }
 
@@ -259,31 +263,21 @@ export class CrmService {
         data: { contact_id: row.id, updated_at: new Date() },
       });
 
-      if (program) {
-        const programRow = await tx.business_programs.findFirst({
+      if (categoryProgramId) {
+        await tx.contact_programs.upsert({
           where: {
-            slug: program,
-            active: true,
-            business_area: { slug: 'educacion' },
-          },
-          select: { id: true },
-        });
-        if (programRow) {
-          await tx.contact_programs.upsert({
-            where: {
-              contact_id_program_id: {
-                contact_id: row.id,
-                program_id: programRow.id,
-              },
-            },
-            create: {
+            contact_id_program_id: {
               contact_id: row.id,
-              program_id: programRow.id,
-              source: 'crm',
+              program_id: categoryProgramId,
             },
-            update: { last_seen_at: new Date() },
-          });
-        }
+          },
+          create: {
+            contact_id: row.id,
+            program_id: categoryProgramId,
+            source: 'crm',
+          },
+          update: { last_seen_at: new Date() },
+        });
       }
 
       return row;
@@ -679,13 +673,7 @@ export class CrmService {
     limit?: number;
   }): Promise<CrmContactsResult> {
     const selected = query.area?.trim().toLowerCase() || 'all';
-    if (
-      selected !== 'all' &&
-      selected !== 'educacion' &&
-      !isEducationAreaSlug(selected) &&
-      selected !== 'ca' &&
-      selected !== 'ep'
-    ) {
+    if (selected !== 'all' && !educationReadScope(selected).areas.includes('educacion')) {
       throw new BadRequestException(
         `Área de educación inválida: ${query.area}`,
       );
@@ -714,7 +702,7 @@ export class CrmService {
     areas: string[],
     resultArea: string,
     includeLatestProspectia = false,
-    program: 'ca' | 'ep' | null = null,
+    program: string | null = null,
   ): Promise<CrmContactsResult> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 100;
@@ -740,10 +728,10 @@ export class CrmService {
     const andFilters: Prisma.contactsWhereInput[] = [];
 
     if (program) {
-      const legacy = program === 'ca' ? 'educacion_ca' : 'educacion_ep';
+      const legacy = program === 'ca' ? 'educacion_ca' : program === 'ep' ? 'educacion_ep' : null;
       andFilters.push({
         OR: [
-          { area: legacy },
+          ...(legacy ? [{ area: legacy }] : []),
           { contact_programs: { some: { program: { slug: program } } } },
         ],
       });

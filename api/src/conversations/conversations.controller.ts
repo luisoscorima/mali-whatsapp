@@ -13,6 +13,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { parseCategorySlugs } from '../config/category-scope';
 import type { Response } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -60,6 +61,7 @@ export class ConversationsController {
     @CurrentUser() user: AuthUser,
     @Query('days') days?: string,
     @Query('advisor_id') advisorId?: string,
+    @Query('category') category?: string | string[],
   ) {
     if (
       !hasPermission(user, PERMISSION.CONVERSATIONS_STATS_GLOBAL) &&
@@ -68,7 +70,12 @@ export class ConversationsController {
     ) {
       assertPermission(user, PERMISSION.CONVERSATIONS_STATS_OWN);
     }
-    const data = await this.conversationsService.getSummary(user, days, advisorId);
+    const data = await this.conversationsService.getSummary(
+      user,
+      days,
+      advisorId,
+      parseCategorySlugs(category),
+    );
     return { ok: true, data };
   }
 

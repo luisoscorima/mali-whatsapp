@@ -88,6 +88,11 @@ export class CreateAdminUserDto {
   @IsArray()
   @IsString({ each: true })
   extra_areas?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  categories?: string[];
 }
 
 export class UpdateAdminUserDto {
@@ -162,6 +167,11 @@ export class UpdateAdminUserDto {
   @IsArray()
   @IsString({ each: true })
   extra_areas?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  categories?: string[];
 }
 
 export class UpdateAdminMetaDto {

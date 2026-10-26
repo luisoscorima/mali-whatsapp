@@ -13,7 +13,7 @@ import { auditActor } from '../audit/audit-actor.util';
 import { AuditLogService } from '../audit/audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { businessReadScope } from '../config/areas';
-import { recordLineCategorySql, programScopeWhere } from '../config/category-scope';
+import { applyCategoryGrant, recordLineCategorySql, programScopeWhere } from '../config/category-scope';
 import { parseMonthKey } from '../shared/month-filter.util';
 import {
   buildCampaignDetailAnalytics,
@@ -256,7 +256,9 @@ function lineLabelOf(
 }
 
 function campaignAudienceSql(categories: string[] | null): Prisma.Sql {
-  if (!categories?.length) return Prisma.sql`TRUE`;
+  categories = applyCategoryGrant(categories);
+  if (!categories) return Prisma.sql`TRUE`;
+  if (!categories.length) return Prisma.sql`FALSE`;
   return Prisma.sql`(
     CASE
       WHEN jsonb_typeof(c.campaign_payload->'categories') = 'array'
@@ -536,6 +538,7 @@ export class CampaignsService {
   async getSummary(
     area: AuthUser['area'],
     month?: string,
+    categories: string[] | null = null,
   ): Promise<CampaignSummary> {
     const rows = await this.prisma.$queryRaw<SummaryCampaignRow[]>(Prisma.sql`
       WITH latest_logs AS (
@@ -568,6 +571,7 @@ export class CampaignsService {
       FROM campaigns c
       LEFT JOIN latest_logs cl ON cl.campaign_id = c.id
       WHERE c.area = ${area}
+        AND ${campaignAudienceSql(categories)}
       GROUP BY c.id
       ORDER BY c.id DESC
     `);
@@ -1118,6 +1122,60 @@ export class CampaignsService {
     };
   }
 
+  async listSendableLines(areaRaw: string, categories: string[] | null) {
+    const area = businessReadScope(areaRaw).canonicalArea;
+    const lines = await this.prisma.whatsapp_lines.findMany({
+      where: { active: true, business_area: { slug: area } },
+      orderBy: [{ is_default: 'desc' }, { label: 'asc' }],
+      select: {
+        id: true,
+        label: true,
+        display_phone_number: true,
+        is_default: true,
+        program: { select: { slug: true, label: true } },
+      },
+    });
+    return lines
+      .filter((line) => {
+        const slug = line.program?.slug || 'general';
+        return !categories?.length || categories.includes(slug);
+      })
+      .map((line) => ({
+        id: line.id,
+        label: line.label,
+        phone: line.display_phone_number,
+        is_default: line.is_default,
+        category: line.program?.slug || 'general',
+        category_label: line.program?.label || 'General',
+      }));
+  }
+
+  private async resolveCampaignLine(
+    area: string,
+    raw: unknown,
+    categories: string[] | null,
+  ): Promise<{ id: number }> {
+    const requested = Number(raw);
+    if (!requested) {
+      if (categories?.length) {
+        throw new BadRequestException('Elige la línea que enviará la campaña');
+      }
+      const fallback = getWhatsAppLineForArea(area);
+      if (!fallback?.id) throw new BadRequestException('No hay una línea activa para enviar');
+      return { id: fallback.id };
+    }
+    const line = await this.prisma.whatsapp_lines.findFirst({
+      where: { id: requested, active: true, business_area: { slug: area } },
+      select: { id: true, program: { select: { slug: true } } },
+    });
+    if (!line) throw new BadRequestException('La línea no está activa en esta área');
+    const slug = line.program?.slug || 'general';
+    if (categories?.length && !categories.includes(slug)) {
+      throw new BadRequestException('La línea no pertenece a las categorías de la audiencia');
+    }
+    return { id: line.id };
+  }
+
   async sendCampaign(
     user: AuthUser,
     body: Record<string, unknown>,
@@ -1333,12 +1391,12 @@ export class CampaignsService {
     }
 
     const campaignStatus = isScheduled ? 'scheduled' : 'queued';
-    const whatsappLine = getWhatsAppLineForArea(area);
+    const whatsappLine = await this.resolveCampaignLine(area, body.whatsappLineId, categories);
 
     const campaign = await this.prisma.campaigns.create({
       data: {
         area,
-        whatsapp_line_id: whatsappLine?.id ?? null,
+        whatsapp_line_id: whatsappLine.id,
         segment,
         template_name: tRow.name,
         message_text: messageText,

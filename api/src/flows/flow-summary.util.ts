@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import type { MetricCard } from '../campaigns/campaign-analytics.util';
+import { segmentDefinitionCategorySql } from '../config/category-scope';
 
 export type FlowSummary = {
   kpis: MetricCard[];
@@ -17,7 +18,9 @@ function pct(num: number, den: number): string {
 export async function fetchFlowSummary(
   prisma: { $queryRaw: <T>(query: Prisma.Sql) => Promise<T> },
   area: string,
+  categories: string[] | null = null,
 ): Promise<FlowSummary> {
+  const categorySql = segmentDefinitionCategorySql(categories, 'f');
   const counts = await prisma.$queryRaw<
     {
       flows_active: number;
@@ -32,26 +35,26 @@ export async function fetchFlowSummary(
   >(Prisma.sql`
     SELECT
       (SELECT COUNT(*)::int FROM flows f
-       WHERE f.area = ${area} AND LOWER(TRIM(f.status)) = 'active') AS flows_active,
+       WHERE f.area = ${area} AND LOWER(TRIM(f.status)) = 'active' AND ${categorySql}) AS flows_active,
       (SELECT COUNT(*)::int FROM flows f
-       WHERE f.area = ${area} AND LOWER(TRIM(f.status)) = 'draft') AS flows_draft,
+       WHERE f.area = ${area} AND LOWER(TRIM(f.status)) = 'draft' AND ${categorySql}) AS flows_draft,
       (SELECT COUNT(*)::int FROM flows f
-       WHERE f.area = ${area} AND LOWER(TRIM(f.status)) = 'paused') AS flows_paused,
+       WHERE f.area = ${area} AND LOWER(TRIM(f.status)) = 'paused' AND ${categorySql}) AS flows_paused,
       (SELECT COUNT(*)::int FROM flow_sessions fs
        JOIN flows f ON f.id = fs.flow_id
-       WHERE f.area = ${area} AND fs.status = 'active') AS sessions_active,
+       WHERE f.area = ${area} AND fs.status = 'active' AND ${categorySql}) AS sessions_active,
       (SELECT COUNT(*)::int FROM flow_sessions fs
        JOIN flows f ON f.id = fs.flow_id
-       WHERE f.area = ${area} AND fs.status = 'completed') AS sessions_completed,
+       WHERE f.area = ${area} AND fs.status = 'completed' AND ${categorySql}) AS sessions_completed,
       (SELECT COUNT(*)::int FROM flow_sessions fs
        JOIN flows f ON f.id = fs.flow_id
-       WHERE f.area = ${area} AND fs.status = 'handed_off') AS sessions_handed_off,
+       WHERE f.area = ${area} AND fs.status = 'handed_off' AND ${categorySql}) AS sessions_handed_off,
       (SELECT COUNT(*)::int FROM flow_sessions fs
        JOIN flows f ON f.id = fs.flow_id
-       WHERE f.area = ${area}) AS sessions_started,
+       WHERE f.area = ${area} AND ${categorySql}) AS sessions_started,
       (SELECT COUNT(*)::int FROM flow_session_events e
        JOIN flows f ON f.id = e.flow_id
-       WHERE f.area = ${area} AND e.event_type = 'timeout_closed') AS timeout_closed
+       WHERE f.area = ${area} AND e.event_type = 'timeout_closed' AND ${categorySql}) AS timeout_closed
   `);
 
   const c = counts[0] ?? {

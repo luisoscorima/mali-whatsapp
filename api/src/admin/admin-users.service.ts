@@ -15,13 +15,7 @@ import {
 } from '../auth/roles';
 import { AuditEvent } from '../audit/audit-events';
 import { AuditLogService } from '../audit/audit-log.service';
-import {
-  isValidBusinessArea,
-  isValidMaliEmail,
-  normalizeArea,
-  normalizeEmail,
-  type BusinessArea,
-} from '../config/areas';
+import { isValidMaliEmail, normalizeEmail } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserAreasService } from '../users/user-areas.service';
 import type {
@@ -188,8 +182,13 @@ export class AdminUsersService {
       select: USER_SELECT,
     });
     if (!row) throw new NotFoundException('Usuario no encontrado');
-    const extraAreas = await this.userAreas.fetchExtraAreasForUser(id);
-    return { ...mapUserRow(row), extra_areas: extraAreas };
+    const placement = await this.userAreas.presentForAdmin(id, row.area);
+    return {
+      ...mapUserRow(row),
+      area: placement.primary,
+      extra_areas: placement.extras,
+      categories: placement.categories ?? [],
+    };
   }
 
   async create(
@@ -200,10 +199,8 @@ export class AdminUsersService {
     if (!isValidMaliEmail(email)) {
       throw new BadRequestException('Correo invalido (debe ser @mali.pe)');
     }
-    const area = normalizeArea(dto.area);
-    if (!isValidBusinessArea(area)) {
-      throw new BadRequestException('Area invalida');
-    }
+    const placement = this.userAreas.resolvePlacement(dto.area, dto.extra_areas, dto.categories);
+    const area = placement.primary;
 
     const resolved = resolveRoleAndFlags(dto);
     const hash = await bcrypt.hash(
@@ -226,11 +223,7 @@ export class AdminUsersService {
         },
         select: { id: true },
       });
-      await this.userAreas.replaceExtraAreasForUser(
-        created.id,
-        area,
-        (dto.extra_areas ?? []).map((item) => normalizeArea(item)),
-      );
+      await this.userAreas.replaceExtraAreasForUser(created.id, placement);
       await this.auditLog.write({
         event_type: AuditEvent.ADMIN_USER_CREATED,
         message: `Usuario creado: ${email}`,
@@ -266,10 +259,8 @@ export class AdminUsersService {
     const existing = await this.prisma.users.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Usuario no encontrado');
 
-    const area = normalizeArea(dto.area);
-    if (!isValidBusinessArea(area)) {
-      throw new BadRequestException('Area invalida');
-    }
+    const placement = this.userAreas.resolvePlacement(dto.area, dto.extra_areas, dto.categories);
+    const area = placement.primary;
     if (dto.password && dto.password.length < 6) {
       throw new BadRequestException(
         'La contraseña debe tener al menos 6 caracteres',
@@ -293,11 +284,7 @@ export class AdminUsersService {
       },
     });
 
-    await this.userAreas.replaceExtraAreasForUser(
-      id,
-      area as BusinessArea,
-      (dto.extra_areas ?? []).map((item) => normalizeArea(item)),
-    );
+    await this.userAreas.replaceExtraAreasForUser(id, placement);
 
     await this.auditLog.write({
       event_type: AuditEvent.ADMIN_USER_UPDATED,

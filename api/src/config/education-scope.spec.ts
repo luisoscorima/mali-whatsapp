@@ -10,6 +10,9 @@ describe('education scope', () => {
     expect(educationProgramOf('educacion_ca')).toBe('ca');
     expect(educationProgramOf('ep')).toBe('ep');
     expect(educationProgramOf('educacion')).toBeNull();
+    expect(educationProgramOf('norte')).toBe('norte');
+    expect(educationProgramOf('educacion_norte')).toBe('norte');
+    expect(educationProgramOf('pam')).toBeNull();
     expect(isEducationAreaSlug('educacion_ep')).toBe(true);
     expect(isEducationAreaSlug('pam')).toBe(false);
   });
@@ -22,6 +25,10 @@ describe('education scope', () => {
     expect(educationReadScope('educacion_ep').program).toBe('ep');
     expect(educationReadScope('all').program).toBeNull();
     expect(educationReadScope('pam').areas).toEqual(['pam']);
+    expect(educationReadScope('norte')).toEqual({
+      areas: ['educacion', 'educacion_ca', 'educacion_ep'],
+      program: 'norte',
+    });
   });
 
   it('el predicado de una línea CA exige el programa', () => {

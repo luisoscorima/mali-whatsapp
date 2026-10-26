@@ -1,4 +1,5 @@
-import { NavLink, Outlet, useLocation, Link } from 'react-router-dom'
+import type { AppShellOutletContext } from '@/app/appOutletContext'
+import { NavLink, Outlet, useLocation, Link, useOutletContext } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
@@ -20,6 +21,7 @@ function sectionFromPath(pathname: string): string {
 }
 
 export function SettingsShell() {
+  const appContext = useOutletContext<AppShellOutletContext>()
   const location = useLocation()
   const [modules, setModules] = useState<SettingsModule[]>([])
   const [loadFailed, setLoadFailed] = useState(false)
@@ -92,7 +94,7 @@ export function SettingsShell() {
           </WaMainHeader>
         ) : null}
         <WaMainBody variant="form">
-          <Outlet context={{ modules }} />
+          <Outlet context={{ ...appContext, modules }} />
         </WaMainBody>
       </WaMainPane>
     </WaPageContents>

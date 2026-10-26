@@ -13,7 +13,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/shared/ui/shadcn/sheet'
-import { AREA_OPTIONS } from './areaLabels'
+import { CANONICAL_AREA_OPTIONS } from './areaLabels'
 
 type AdminUserDetail = {
   id: number
@@ -33,6 +33,7 @@ type AdminUserDetail = {
   can_view_campaign_stats: boolean
   can_manage_leads: boolean
   extra_areas: string[]
+  categories: string[]
 }
 
 export type AdminUserFormSheetProps = {
@@ -61,6 +62,8 @@ export function AdminUserFormSheet({
   const [roleSlug, setRoleSlug] = useState('asesor_comercial')
   const [isMaster, setIsMaster] = useState(false)
   const [extraAreas, setExtraAreas] = useState<string[]>([])
+  const [categories, setCategories] = useState<string[]>([])
+  const [categoryOptions, setCategoryOptions] = useState<{ slug: string; label: string }[]>([])
 
   useEffect(() => {
     if (!open) return
@@ -76,6 +79,7 @@ export function AdminUserFormSheet({
       setRoleSlug('asesor_comercial')
       setIsMaster(false)
       setExtraAreas([])
+      setCategories([])
       return
     }
 
@@ -105,6 +109,7 @@ export function AdminUserFormSheet({
             : 'asesor_comercial',
       )
       setExtraAreas(user.extra_areas)
+      setCategories(user.categories)
     })
 
     return () => {
@@ -112,13 +117,39 @@ export function AdminUserFormSheet({
     }
   }, [open, isNew, userId])
 
+  useEffect(() => {
+    if (!open) return
+    void apiClient
+      .get<{ slug: string; label: string; active: boolean }[]>('/api/admin/areas/educacion/categories')
+      .then((result) => {
+        if (!result.ok) return
+        const active = result.data.filter((item) => item.active)
+        setCategoryOptions(active.map((item) => ({ slug: item.slug, label: item.label })))
+        if (isNew) setCategories(active.map((item) => item.slug))
+      })
+  }, [open, isNew])
+
   function toggleExtraArea(slug: string) {
+    const adding = !extraAreas.includes(slug)
     setExtraAreas((current) =>
-      current.includes(slug)
-        ? current.filter((item) => item !== slug)
-        : [...current, slug],
+      current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug],
     )
+    if (slug === 'educacion' && adding && categories.length === 0) {
+      setCategories(categoryOptions.map((item) => item.slug))
+    }
   }
+
+  function toggleCategory(slug: string) {
+    setCategories((current) => {
+      if (current.includes(slug)) {
+        const next = current.filter((item) => item !== slug)
+        return next.length ? next : current
+      }
+      return [...current, slug]
+    })
+  }
+
+  const educationSelected = area === 'educacion' || extraAreas.includes('educacion')
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
@@ -129,6 +160,7 @@ export function AdminUserFormSheet({
       is_master: isMaster || effectiveRole === 'master',
       role_slug: effectiveRole,
       extra_areas: extraAreas.filter((slug) => slug !== area),
+      categories: educationSelected ? categories : [],
     }
 
     const result = isNew
@@ -181,7 +213,7 @@ export function AdminUserFormSheet({
             <SheetDescription>
               {isNew
                 ? 'El usuario entrará con Google Workspace (@mali.pe). El rol define los permisos.'
-                : 'Área, áreas adicionales y rol. Los permisos salen de la plantilla del rol.'}
+                : 'Área, categorías de Educación y rol. El rol define los permisos.'}
             </SheetDescription>
           </SheetHeader>
 
@@ -215,10 +247,16 @@ export function AdminUserFormSheet({
                   <span className="text-sm font-medium">Área principal</span>
                   <select
                     value={area}
-                    onChange={(e) => setArea(e.target.value)}
+                    onChange={(e) => {
+                      const next = e.target.value
+                      setArea(next)
+                      if (next === 'educacion' && categories.length === 0) {
+                        setCategories(categoryOptions.map((item) => item.slug))
+                      }
+                    }}
                     className="w-full rounded-lg border border-line px-3 py-2 text-sm"
                   >
-                    {AREA_OPTIONS.map((item) => (
+                    {CANONICAL_AREA_OPTIONS.map((item) => (
                       <option key={item.slug} value={item.slug}>
                         {item.label}
                       </option>
@@ -229,7 +267,7 @@ export function AdminUserFormSheet({
                 <fieldset className="space-y-2">
                   <legend className="text-sm font-medium">Áreas adicionales</legend>
                   <div className="flex flex-wrap gap-2">
-                    {AREA_OPTIONS.filter((item) => item.slug !== area).map((item) => (
+                    {CANONICAL_AREA_OPTIONS.filter((item) => item.slug !== area).map((item) => (
                       <label key={item.slug} className="flex items-center gap-1 text-sm">
                         <input
                           type="checkbox"
@@ -241,6 +279,27 @@ export function AdminUserFormSheet({
                     ))}
                   </div>
                 </fieldset>
+
+                {educationSelected ? (
+                  <fieldset className="space-y-2">
+                    <legend className="text-sm font-medium">Categorías de Educación</legend>
+                    <div className="flex flex-wrap gap-2">
+                      {categoryOptions.map((item) => (
+                        <label key={item.slug} className="flex items-center gap-1 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={categories.includes(item.slug)}
+                            onChange={() => toggleCategory(item.slug)}
+                          />
+                          {item.label}
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted">
+                      Solo ve chats, campañas, flujos, segmentos, atributos, leads y reportería de las categorías marcadas.
+                    </p>
+                  </fieldset>
+                ) : null}
 
                 <label className="block space-y-1">
                   <span className="text-sm font-medium">Rol</span>

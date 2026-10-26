@@ -15,6 +15,7 @@ import {
   isEducationAreaSlug,
   visibleConversationWhere,
 } from '../config/education-scope';
+import { categoriesFromEducationSlugs, explicitEducationCategories } from '../users/user-areas.service';
 import type { Prisma as PrismaTypes } from '@prisma/client';
 import type { AuthUser } from '../auth/auth.types';
 import { AuditEvent } from '../audit/audit-events';
@@ -859,10 +860,16 @@ export class ConversationsService {
       where: { user_id: user.id, active: true, business_area: { slug: 'educacion' } },
       include: { programs: { include: { program: true } } },
     });
-    if (!membership || membership.access_mode === 'all') return all;
-    const allowed = new Set(
-      membership.programs.filter((grant) => grant.program.active).map((grant) => grant.program.slug),
-    );
+    const marked = await this.prisma.users.findUnique({
+      where: { id: user.id },
+      select: { area: true, user_areas: { select: { area: true } } },
+    });
+    const inherited = categoriesFromEducationSlugs([
+      marked?.area ?? '',
+      ...(marked?.user_areas ?? []).map((item) => item.area),
+    ]);
+    const allowed = new Set(explicitEducationCategories(membership) ?? inherited);
+    if (!allowed.size || all.every((item) => allowed.has(item.slug))) return all;
     return all.filter((item) => allowed.has(item.slug));
   }
 
@@ -879,7 +886,7 @@ export class ConversationsService {
       .filter((value) => allowed.includes(value));
     if (requested.length) return [...new Set(requested)];
     const program = educationProgramOf(area);
-    if (program && allowed.includes(program)) return [program];
+    if (program && allowed.length === 1 && allowed.includes(program)) return [program];
     return allowed;
   }
 
@@ -1000,7 +1007,12 @@ export class ConversationsService {
     return { unread_count };
   }
 
-  async getSummary(user: AuthUser, daysRaw?: string, advisorIdRaw?: string) {
+  async getSummary(
+    user: AuthUser,
+    daysRaw?: string,
+    advisorIdRaw?: string,
+    categories: string[] | null = null,
+  ) {
     const days = Number(daysRaw ?? 30) || 30;
     const requestedAdvisorId = Number(advisorIdRaw ?? 0) || null;
     // Sin flag: solo stats propias. Con flag: global del área o filtro por asesor.
@@ -1013,7 +1025,7 @@ export class ConversationsService {
         ? user.id
         : null;
 
-    return fetchConversationSummary(this.prisma, user.area, days, advisorId);
+    return fetchConversationSummary(this.prisma, user.area, days, advisorId, categories);
   }
 
   async sendDirectTemplate(

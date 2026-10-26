@@ -1,57 +1,54 @@
 import * as XLSX from 'xlsx';
-import { setMetaSettingsCache } from '../meta-settings/meta-settings.store';
 import { buildContactCommunicationXlsxBuffer } from './contact-communication-export.util';
 import { buildConversationHistoryXlsxBuffer } from './conversation-history-report.util';
 import { buildSegmentHistoryXlsxBuffer } from './segment-history-report.util';
 import { reportExportSourceCells } from './report-export-source.util';
 
 describe('report export source', () => {
-  beforeEach(() => {
-    setMetaSettingsCache([
-      { area: 'educacion_ca', key: 'meta.display_phone_number', value: '+51 902 043 388' },
-      { area: 'pam', key: 'meta.display_phone_number', value: '+51 923 998 190' },
-    ]);
-  });
-
-  afterEach(() => setMetaSettingsCache([]));
-
   it.each([
     ['communications', buildContactCommunicationXlsxBuffer],
     ['conversation history', buildConversationHistoryXlsxBuffer],
     ['segment history', buildSegmentHistoryXlsxBuffer],
-  ] as const)('identifies the source in an empty %s workbook', (_name, build) => {
-    const workbook = XLSX.read(build([], 'educacion_ca'), { type: 'buffer' });
+  ] as const)('identifies category and line in an empty %s workbook', (_name, build) => {
+    const workbook = XLSX.read(build([], 'educacion'), { type: 'buffer' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    expect(sheet.A1.v).toBe('Área');
-    expect(sheet.B1.v).toBe('Número del área');
+    expect(sheet.A1.v).toBe('Categoría');
+    expect(sheet.B1.v).toBe('Línea');
     expect(sheet.C1.v).toBeTruthy();
     expect(XLSX.utils.decode_range(sheet['!ref']!).e.r).toBe(0);
   });
 
-  it('keeps report data below its original column headers', () => {
+  it('keeps the contact phone under its own header', () => {
     const record = {
       id: '1', created_at: '2026-10-21T12:00:00Z', created_display: '21/10/2026',
       contact_id: 12, phone: '001234567', name: 'Ana', last_name: 'Pérez',
       dni: '00112233', email: '', added: 'Cursos', removed: '',
       segments: 'Cursos', actor_email: 'test@example.test',
+      category: 'ca', whatsapp_line: '',
     };
-    const buffer = buildSegmentHistoryXlsxBuffer([record, { ...record, id: '2', name: 'Luis' }], 'educacion_ca');
+    const buffer = buildSegmentHistoryXlsxBuffer(
+      [record, { ...record, id: '2', name: 'Luis', category: 'ep' }],
+      'educacion',
+    );
     const workbook = XLSX.read(buffer, { type: 'buffer' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     expect(sheet.E1.v).toBe('Número');
-    for (const row of [2, 3]) {
-      expect(sheet[`A${row}`].v).toBe('Educación CA');
-      expect(sheet[`B${row}`]).toMatchObject({ t: 's', v: '902043388' });
-      expect(sheet[`E${row}`]).toMatchObject({ t: 's', v: '001234567' });
-    }
+    expect(sheet.A2.v).toBe('CA');
+    expect(sheet.B2.v).toBe('Sin línea');
+    expect(sheet.A3.v).toBe('EP');
+    expect(sheet.E2).toMatchObject({ t: 's', v: '001234567' });
     expect(sheet.F2.v).toBe('Ana');
     expect(sheet.F3.v).toBe('Luis');
-    expect(reportExportSourceCells('pam')).toEqual(['PAM', '923998190']);
   });
 
-  it('does not substitute another area or an internal phone ID for a missing number', () => {
-    expect(reportExportSourceCells('educacion_ep')).toEqual([
-      'Educación EP', 'Sin número configurado',
-    ]);
+  it('uses the row category and line, not the area phone', () => {
+    expect(reportExportSourceCells('educacion', {
+      category: 'general',
+      whatsapp_line: 'Educación · 51900000000',
+    })).toEqual(['General', 'Educación · 51900000000']);
+    expect(reportExportSourceCells('pam', {
+      whatsapp_line: 'PAM · 51923998190',
+    })).toEqual(['No aplica', 'PAM · 51923998190']);
+    expect(reportExportSourceCells('educacion_ep')).toEqual(['Sin categoría', 'Sin línea']);
   });
 });

@@ -99,6 +99,19 @@ export class WhatsAppAdminController {
     };
   }
 
+  @Patch('lines/:id/category')
+  async moveLineCategory(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { program_id?: number | null },
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<unknown>> {
+    const programId = body.program_id == null ? null : Number(body.program_id);
+    return {
+      ok: true,
+      data: await this.whatsappAdmin.moveLineCategory(id, programId, user),
+    };
+  }
+
   @Patch('lines/:id')
   async updateLine(
     @Param('id', ParseIntPipe) id: number,

@@ -5,6 +5,7 @@ import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
 import { WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
 import { MetricsGrid } from '../campaigns/MetricsGrid'
+import { useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
 import type { MetricCard } from '../campaigns/campaignMetricActions'
 
 type AttributeSummary = {
@@ -17,6 +18,7 @@ const KPI_FILTER_MAP: Record<string, { status?: string }> = {
 }
 
 export function AttributesSummaryPane() {
+  const scope = useCategoryScope()
   const user = useAppUser()
   const area = user?.area
   const [, setSearchParams] = useSearchParams()
@@ -30,7 +32,7 @@ export function AttributesSummaryPane() {
     setError('')
     let cancelled = false
     void apiClient
-      .get<AttributeSummary>('/api/attribute-definitions/summary')
+      .get<AttributeSummary>(withCategoryQuery('/api/attribute-definitions/summary', scope.query))
       .then((res) => {
         if (cancelled) return
         if (!res.ok) {
@@ -44,7 +46,7 @@ export function AttributesSummaryPane() {
     return () => {
       cancelled = true
     }
-  }, [area, reloadToken])
+  }, [area, reloadToken, scope.query, scope.revision])
 
   const metrics = useMemo(
     () =>

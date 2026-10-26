@@ -37,6 +37,8 @@ const ADMIN_LINKS = [
   { to: '/admin/users', label: 'Usuarios' },
   { to: '/admin/roles', label: 'Roles' },
   { to: '/admin/areas', label: 'Áreas' },
+  { to: '/admin/lines', label: 'Líneas' },
+  { to: '/admin/conflicts', label: 'Conflictos' },
   { to: '/admin/meta', label: 'Credenciales Meta' },
   { to: '/admin/audit-logs', label: 'Bitácora' },
 ]

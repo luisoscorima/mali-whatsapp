@@ -59,6 +59,49 @@ export class AdminController {
     return { ok: true, data };
   }
 
+  @Get('conflicts')
+  async listConflicts() {
+    return { ok: true, data: await this.adminAreasService.listConflicts() };
+  }
+
+  @Post('conflicts/consolidation/:contactId/separate')
+  async separateConsolidation(@Param('contactId', ParseIntPipe) contactId: number) {
+    return { ok: true, data: await this.adminAreasService.separateConsolidation(contactId) };
+  }
+
+  @Post('conflicts/identity/:id/resolve')
+  async resolveIdentity(@Param('id', ParseIntPipe) id: number) {
+    return { ok: true, data: await this.adminAreasService.resolveIdentityReview(id) };
+  }
+
+  @Get('areas/:slug/categories')
+  async listCategories(@Param('slug') slug: string) {
+    return { ok: true, data: await this.adminAreasService.listCategories(slug) };
+  }
+
+  @Post('areas/:slug/categories')
+  async createCategory(
+    @Param('slug') slug: string,
+    @Body() body: { slug?: string; label?: string },
+  ) {
+    return {
+      ok: true,
+      data: await this.adminAreasService.createCategory(slug, {
+        slug: String(body.slug || ''),
+        label: String(body.label || ''),
+      }),
+    };
+  }
+
+  @Patch('areas/:slug/categories/:category')
+  async updateCategory(
+    @Param('slug') slug: string,
+    @Param('category') category: string,
+    @Body() body: { label?: string; active?: boolean },
+  ) {
+    return { ok: true, data: await this.adminAreasService.updateCategory(slug, category, body) };
+  }
+
   @Get('users')
   async listUsers(): Promise<ApiResponse<AdminUserListItem[]>> {
     const data = await this.adminUsersService.list();

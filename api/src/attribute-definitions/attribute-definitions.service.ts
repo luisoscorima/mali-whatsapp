@@ -183,8 +183,11 @@ export class AttributeDefinitionsService {
     );
   }
 
-  async getSummary(area: AuthUser['area']): Promise<AttributeSummary> {
-    return fetchAttributeSummary(this.prisma, area);
+  async getSummary(
+    area: AuthUser['area'],
+    categories: string[] | null = null,
+  ): Promise<AttributeSummary> {
+    return fetchAttributeSummary(this.prisma, area, categories);
   }
 
   async getById(area: AuthUser['area'], id: number): Promise<AttributeDefinition> {

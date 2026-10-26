@@ -662,6 +662,7 @@ export class ContactsService {
     slugs: string[],
     programId: number | null = null,
   ): Promise<{
+    program_id: number | null;
     previous: string[];
     next: string[];
     added: string[];
@@ -701,7 +702,7 @@ export class ContactsService {
         })),
       });
     }
-    return { previous, next, added, removed };
+    return { previous, next, added, removed, program_id: programId };
   }
 
   private async programIdFromCategory(category: unknown): Promise<number | null> {
@@ -723,7 +724,7 @@ export class ContactsService {
     user: AuthUser,
     contactId: number,
     area: string,
-    change: { added: string[]; removed: string[]; next: string[] },
+    change: { added: string[]; removed: string[]; next: string[]; program_id?: number | null },
     phone?: string | null,
   ): Promise<void> {
     if (!change.added.length && !change.removed.length) return;
@@ -736,6 +737,7 @@ export class ContactsService {
         added: change.added,
         removed: change.removed,
         segments: change.next,
+        ...(change.program_id !== undefined ? { program_id: change.program_id } : {}),
         ...(phone ? { phone, phone_tail: phoneMetaTail(phone) } : {}),
       },
     });

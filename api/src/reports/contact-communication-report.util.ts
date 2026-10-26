@@ -1,3 +1,4 @@
+import { reportConversationSourceSql, type ReportSource } from './report-export-source.util';
 import { escapeForLikePattern } from '../contacts/contacts-filter.utils';
 import { Prisma } from '@prisma/client';
 import { formatExportDate } from '../campaigns/campaign-format.util';
@@ -12,7 +13,7 @@ const PREVIEW_TRUNCATE = 120;
 const SEGMENT_NONE = '__none__';
 
 export const REPORT_HEADERS = [
-  'Número',
+  'Teléfono del contacto',
   'Usuario de WhatsApp',
   'Nombre',
   'Apellido',
@@ -37,7 +38,8 @@ export const REPORT_HEADERS = [
   'Asesor asignado',
 ] as const;
 
-export type ContactCommunicationRow = {
+export type ContactCommunicationRow = ReportSource & {
+  conversation_id?: number;
   contact_id: number;
   phone: string;
   wa_identity_display: string;
@@ -145,6 +147,9 @@ function isoAt(msg: MessageRow | undefined): string | null {
 function buildRowFromMessages(
   contact: {
     id: number;
+    conversation_id?: number;
+    category?: string | null;
+    whatsapp_line?: string | null;
     phone: string;
     wa_username: string | null;
     whatsapp_user_id: string | null;
@@ -174,6 +179,9 @@ function buildRowFromMessages(
 
   return {
     contact_id: contact.id,
+    conversation_id: contact.conversation_id,
+    category: contact.category,
+    whatsapp_line: contact.whatsapp_line,
     phone: contact.phone,
     wa_identity_display: formatWaIdentityDisplay(
       contact.wa_username,
@@ -291,6 +299,8 @@ async function fetchContactIdsForReport(
     email: string;
     dni: string;
     conversation_id: number;
+    category?: string | null;
+    whatsapp_line?: string | null;
     segments: string;
     origins: string;
     lead_status: string;
@@ -330,6 +340,8 @@ async function fetchContactIdsForReport(
       email: string;
       dni: string;
       conversation_id: number;
+      category?: string | null;
+      whatsapp_line?: string | null;
       segments: string;
       origins: string;
       lead_status: string;
@@ -347,6 +359,7 @@ async function fetchContactIdsForReport(
       COALESCE(c.email, '') AS email,
       COALESCE(c.dni, '') AS dni,
       conv.id AS conversation_id,
+      ${reportConversationSourceSql()},
       NULLIF(TRIM(conv.wa_username), '') AS wa_username,
       COALESCE(c.whatsapp_user_id, conv.whatsapp_user_id) AS whatsapp_user_id,
       COALESCE((

@@ -15,6 +15,9 @@ type FilterOptions = {
 }
 
 type CommRow = {
+  conversation_id?: number
+  category?: string
+  whatsapp_line?: string
   contact_id: number
   phone: string
   wa_identity_display: string
@@ -54,6 +57,8 @@ type CommResult = {
 }
 
 type SegmentHistRow = {
+  category?: string
+  whatsapp_line?: string
   id: string
   created_display: string
   contact_id: number | null
@@ -77,6 +82,8 @@ type SegmentHistResult = {
 }
 
 type ChatHistRow = {
+  category?: string
+  whatsapp_line?: string
   id: string
   created_display: string
   phone: string
@@ -500,7 +507,9 @@ export function SettingsReporteriaPage() {
               <table className="min-w-full text-left text-sm">
                 <thead className="sticky top-0 border-b border-line bg-surface text-xs text-muted">
                   <tr>
-                    <th className="px-3 py-2">Número</th>
+                    <th className="px-3 py-2">Categoría</th>
+                    <th className="px-3 py-2">Línea de WhatsApp</th>
+                    <th className="px-3 py-2">Teléfono del contacto</th>
                     <th className="px-3 py-2">Usuario WA</th>
                     <th className="px-3 py-2">Cliente</th>
                     <th className="px-3 py-2">Segmentos / Origen</th>
@@ -513,13 +522,15 @@ export function SettingsReporteriaPage() {
                 <tbody className="divide-y divide-line">
                   {commData.rows.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-3 py-4 text-muted">
+                      <td colSpan={10} className="px-3 py-4 text-muted">
                         No hay contactos en el rango.
                       </td>
                     </tr>
                   ) : (
                     commData.rows.map((row) => (
-                      <tr key={row.contact_id}>
+                      <tr key={row.conversation_id ?? row.contact_id}>
+                        <td className="px-3 py-2 text-xs">{row.category || 'Sin categoría registrada'}</td>
+                        <td className="px-3 py-2 text-xs">{row.whatsapp_line || 'Sin línea registrada'}</td>
                         <td className="px-3 py-2 font-mono text-xs">
                           {row.phone || '—'}
                         </td>
@@ -576,7 +587,9 @@ export function SettingsReporteriaPage() {
                 <thead className="sticky top-0 border-b border-line bg-surface text-xs text-muted">
                   <tr>
                     <th className="px-3 py-2">Fecha</th>
-                    <th className="px-3 py-2">Número</th>
+                    <th className="px-3 py-2">Categoría</th>
+                    <th className="px-3 py-2">Línea de WhatsApp</th>
+                    <th className="px-3 py-2">Teléfono del contacto</th>
                     <th className="px-3 py-2">Cliente</th>
                     <th className="px-3 py-2">Agregados</th>
                     <th className="px-3 py-2">Quitados</th>
@@ -587,7 +600,7 @@ export function SettingsReporteriaPage() {
                 <tbody className="divide-y divide-line">
                   {segData.rows.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-3 py-4 text-muted">
+                      <td colSpan={9} className="px-3 py-4 text-muted">
                         Sin eventos de segmentos en el rango.
                       </td>
                     </tr>
@@ -597,6 +610,8 @@ export function SettingsReporteriaPage() {
                         <td className="whitespace-nowrap px-3 py-2 text-xs">
                           {row.created_display}
                         </td>
+                        <td className="px-3 py-2 text-xs">{row.category || 'Sin categoría registrada'}</td>
+                        <td className="px-3 py-2 text-xs">{row.whatsapp_line || 'Sin línea registrada'}</td>
                         <td className="px-3 py-2 font-mono text-xs">
                           {row.phone || '—'}
                         </td>
@@ -626,7 +641,9 @@ export function SettingsReporteriaPage() {
                 <thead className="sticky top-0 border-b border-line bg-surface text-xs text-muted">
                   <tr>
                     <th className="px-3 py-2">Fecha</th>
-                    <th className="px-3 py-2">Número</th>
+                    <th className="px-3 py-2">Categoría</th>
+                    <th className="px-3 py-2">Línea de WhatsApp</th>
+                    <th className="px-3 py-2">Teléfono del contacto</th>
                     <th className="px-3 py-2">Cliente</th>
                     <th className="px-3 py-2">Segmentos / Origen</th>
                     <th className="px-3 py-2">Tipo</th>
@@ -638,7 +655,7 @@ export function SettingsReporteriaPage() {
                 <tbody className="divide-y divide-line">
                   {chatData.rows.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-3 py-4 text-muted">
+                      <td colSpan={10} className="px-3 py-4 text-muted">
                         Sin eventos de chat en el rango.
                       </td>
                     </tr>
@@ -648,6 +665,8 @@ export function SettingsReporteriaPage() {
                         <td className="whitespace-nowrap px-3 py-2 text-xs">
                           {row.created_display}
                         </td>
+                        <td className="px-3 py-2 text-xs">{row.category || 'Sin categoría registrada'}</td>
+                        <td className="px-3 py-2 text-xs">{row.whatsapp_line || 'Sin línea registrada'}</td>
                         <td className="px-3 py-2 font-mono text-xs">
                           {row.phone || '—'}
                         </td>

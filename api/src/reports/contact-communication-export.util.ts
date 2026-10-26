@@ -20,10 +20,9 @@ export function buildContactCommunicationXlsxBuffer(
   rows: ContactCommunicationRow[],
   area: BusinessArea,
 ): Buffer {
-  const source = reportExportSourceCells(area);
   const aoa: string[][] = [
     [...REPORT_SOURCE_HEADERS, ...REPORT_HEADERS],
-    ...rows.map((r) => [...source, ...reportRowToExportCells(r)]),
+    ...rows.map((r) => [...reportExportSourceCells(area, r), ...reportRowToExportCells(r)]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols'] = [...REPORT_SOURCE_HEADERS, ...REPORT_HEADERS].map((h, i) => ({

@@ -92,9 +92,10 @@ export class SegmentsService {
   async getSummary(
     area: AuthUser['area'],
     daysRaw?: string,
+    categories: string[] | null = null,
   ): Promise<SegmentSummary> {
     const days = Number(daysRaw ?? 30) || 30;
-    return fetchSegmentSummary(this.prisma, area, days);
+    return fetchSegmentSummary(this.prisma, area, days, categories);
   }
 
   async listForFilters(area: AuthUser['area']): Promise<SegmentDefinition[]> {

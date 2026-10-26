@@ -47,9 +47,10 @@ export class AttributeDefinitionsController {
   @Get('summary')
   async summary(
     @CurrentUser() user: AuthUser,
+    @Query('category') category?: string | string[],
   ): Promise<ApiResponse<AttributeSummary>> {
     assertCanManageAttributes(user);
-    const data = await this.service.getSummary(user.area);
+    const data = await this.service.getSummary(user.area, parseCategorySlugs(category));
     return { ok: true, data };
   }
 

@@ -998,6 +998,7 @@ model person_identity_reviews {
   email            String?         @db.VarChar(255)
   detail           Json            @default("{}")
   created_at       DateTime        @default(now()) @db.Timestamptz(6)
+  resolved_at      DateTime?       @db.Timestamptz(6)
   person           people          @relation(fields: [person_id], references: [id], onDelete: Cascade)
   business_area    business_areas? @relation(fields: [business_area_id], references: [id], onDelete: SetNull)
 
@@ -1011,6 +1012,7 @@ model user_area_memberships {
   business_area_id Int
   role_slug        String                @db.VarChar(40)
   access_mode      String                @default("all") @db.VarChar(20)
+  include_general  Boolean               @default(false)
   active           Boolean               @default(true)
   created_at       DateTime              @default(now()) @db.Timestamptz(6)
   updated_at       DateTime              @default(now()) @db.Timestamptz(6)

@@ -16,6 +16,7 @@ import { notify } from '@/shared/notify'
 import { WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
 import { chartTooltipProps } from '@/shared/charts/chartTooltip'
 import { MetricsGrid } from './MetricsGrid'
+import { useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
 
 type MetricCard = {
   label: string
@@ -41,6 +42,7 @@ type CampaignSummary = {
 }
 
 export function CampaignsSummaryPane() {
+  const scope = useCategoryScope()
   const user = useAppUser()
   const canViewStats = Boolean(user?.canViewCampaignStats)
   const [searchParams] = useSearchParams()
@@ -54,7 +56,7 @@ export function CampaignsSummaryPane() {
     setError('')
     let cancelled = false
     const qs = month ? `?month=${encodeURIComponent(month)}` : ''
-    void apiClient.get<CampaignSummary>(`/api/campaigns/summary${qs}`).then((result) => {
+    void apiClient.get<CampaignSummary>(withCategoryQuery(`/api/campaigns/summary${qs}`, scope.query)).then((result) => {
       if (cancelled) return
       if (!result.ok) {
         notify.error(result.error)
@@ -66,7 +68,7 @@ export function CampaignsSummaryPane() {
     return () => {
       cancelled = true
     }
-  }, [canViewStats, month])
+  }, [canViewStats, month, scope.query, scope.revision])
 
   if (user && !canViewStats) {
     return (

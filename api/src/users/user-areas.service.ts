@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, Injectable, ForbiddenException } from '@nestjs/common';
 import { AppConfigService } from '../config/app-config.service';
 import {
   BUSINESS_AREAS,
@@ -12,6 +12,53 @@ import {
   type PermissionCode,
 } from '../auth/roles';
 import { PrismaService } from '../prisma/prisma.service';
+
+const EDUCATION_CATEGORIES = ['general', 'ca', 'ep'] as const;
+
+/** El área Educación del formulario viejo es la categoría General. CA y EP siguen siendo su categoría. */
+export function categoriesFromEducationSlugs(slugs: string[]): string[] {
+  const found = new Set<string>();
+  for (const slug of slugs) {
+    if (!isValidBusinessArea(slug)) continue;
+    const scope = businessReadScope(slug);
+    if (scope.canonicalArea !== 'educacion') continue;
+    found.add(scope.program ?? 'general');
+  }
+  return EDUCATION_CATEGORIES.filter((slug) => found.has(slug));
+}
+
+type EducationMembership = {
+  access_mode: string;
+  include_general: boolean;
+  programs: { program: { slug: string; active: boolean } }[];
+};
+
+/** null: la membresía todavía es la vieja y hay que leer las áreas marcadas. */
+export function explicitEducationCategories(membership: EducationMembership | null): string[] | null {
+  if (!membership) return null;
+  const explicit = membership.access_mode === 'restricted'
+    || membership.include_general
+    || membership.programs.length > 0;
+  if (!explicit) return null;
+  if (membership.access_mode === 'all') {
+    const granted = membership.programs
+      .filter((grant) => grant.program.active)
+      .map((grant) => grant.program.slug);
+    if (membership.include_general || granted.length === 0) granted.unshift('general');
+    return granted.length ? [...new Set(granted)] : [...EDUCATION_CATEGORIES];
+  }
+  const categories = membership.programs
+    .filter((grant) => grant.program.active)
+    .map((grant) => grant.program.slug);
+  if (membership.include_general) categories.unshift('general');
+  return [...new Set(categories)];
+}
+
+export type UserAccessPlacement = {
+  primary: BusinessArea;
+  extras: BusinessArea[];
+  categories: string[] | null;
+};
 
 @Injectable()
 export class UserAreasService {
@@ -45,16 +92,47 @@ export class UserAreasService {
       .filter((area) => isValidBusinessArea(area));
   }
 
+  resolvePlacement(
+    primaryArea: string,
+    extraAreas: string[] | undefined,
+    categories: string[] | undefined,
+  ): UserAccessPlacement {
+    const raw = [primaryArea, ...(extraAreas ?? [])].map((area) => normalizeArea(area));
+    const scopes = raw.filter((area) => isValidBusinessArea(area)).map((area) => businessReadScope(area));
+    if (!scopes.length) throw new BadRequestException('Area invalida');
+    const primary = scopes[0].canonicalArea;
+    if (!isValidBusinessArea(primary)) throw new BadRequestException('Area invalida');
+    const extras = [...new Set(scopes.slice(1).map((scope) => scope.canonicalArea))]
+      .filter((area) => area !== primary && isValidBusinessArea(area));
+    const education = scopes.some((scope) => scope.canonicalArea === 'educacion');
+    if (!education) return { primary, extras, categories: null };
+    const requested = (categories ?? [])
+      .map((slug) => slug.trim().toLowerCase())
+      .filter((slug) => slug === 'general' || /^[a-z][a-z0-9_]{0,9}$/.test(slug));
+    const selected = categories
+      ? [...new Set(requested)]
+      : categoriesFromEducationSlugs(raw.filter((area) => isValidBusinessArea(area)));
+    if (!selected.length) throw new BadRequestException('Elige al menos una categoría');
+    return { primary, extras, categories: selected };
+  }
+
+  async presentForAdmin(userId: number, primaryArea: string): Promise<UserAccessPlacement> {
+    const extras = await this.fetchExtraAreasForUser(userId);
+    const placement = this.resolvePlacement(primaryArea, extras, undefined);
+    const membership = await this.prisma.user_area_memberships.findFirst({
+      where: { user_id: userId, active: true, business_area: { slug: 'educacion' } },
+      include: { programs: { include: { program: true } } },
+    });
+    if (!placement.categories) return placement;
+    const explicit = explicitEducationCategories(membership);
+    return { ...placement, categories: explicit ?? placement.categories };
+  }
+
   async replaceExtraAreasForUser(
     userId: number,
-    primaryArea: BusinessArea,
-    extraAreas: BusinessArea[],
+    placement: UserAccessPlacement,
   ): Promise<void> {
-    const primary = normalizeArea(primaryArea);
-    const extras = (extraAreas ?? [])
-      .map((area) => normalizeArea(area))
-      .filter((area) => isValidBusinessArea(area) && area !== primary);
-
+    const { primary, extras } = placement;
     await this.prisma.user_areas.deleteMany({ where: { user_id: userId } });
     if (extras.length > 0) {
       await this.prisma.user_areas.createMany({
@@ -62,13 +140,14 @@ export class UserAreasService {
         skipDuplicates: true,
       });
     }
-    await this.syncMemberships(userId, primary, extras);
+    await this.syncMemberships(userId, primary, extras, placement.categories);
   }
 
   private async syncMemberships(
     userId: number,
     primary: BusinessArea,
     extras: BusinessArea[],
+    educationCategories: string[] | null,
   ): Promise<void> {
     const user = await this.prisma.users.findUnique({
       where: { id: userId },
@@ -76,29 +155,30 @@ export class UserAreasService {
     });
     if (!user || user.is_master) return;
     const slugs = [primary, ...extras].filter((area) => isValidBusinessArea(area));
-    const grouped = new Map<string, { program: string | null }[]>();
-    for (const slug of slugs) {
-      const scope = businessReadScope(slug);
-      const current = grouped.get(scope.canonicalArea) ?? [];
-      current.push({ program: scope.program });
-      grouped.set(scope.canonicalArea, current);
-    }
     const areas = await this.prisma.business_areas.findMany({
-      where: { slug: { in: [...grouped.keys()] } },
+      where: { slug: { in: slugs } },
       select: { id: true, slug: true },
     });
     if (!areas.length) return;
     await this.prisma.user_area_memberships.deleteMany({
       where: {
         user_id: userId,
-        business_area: { slug: { notIn: [...grouped.keys()] } },
+        business_area: { slug: { notIn: slugs } },
       },
     });
     const roleSlug = user.role_slug || 'asesor_comercial';
-    for (const [canonical, grants] of grouped) {
-      const area = areas.find((item) => item.slug === canonical);
+    const selected = educationCategories ?? [];
+    const activePrograms = await this.prisma.business_programs.findMany({
+      where: { active: true, business_area: { slug: 'educacion' } },
+      select: { slug: true },
+    });
+    const catalog = ['general', ...activePrograms.map((item) => item.slug)];
+    const educationOpen = selected.length > 0 && catalog.every((slug) => selected.includes(slug));
+    for (const slug of slugs) {
+      const area = areas.find((item) => item.slug === slug);
       if (!area) continue;
-      const open = grants.some((grant) => !grant.program);
+      const education = slug === 'educacion';
+      const open = !education || educationOpen;
       const membership = await this.prisma.user_area_memberships.upsert({
         where: {
           user_id_business_area_id: {
@@ -111,25 +191,31 @@ export class UserAreasService {
           business_area_id: area.id,
           role_slug: roleSlug,
           access_mode: open ? 'all' : 'restricted',
+          include_general: education && selected.includes('general'),
         },
         update: {
           role_slug: roleSlug,
           access_mode: open ? 'all' : 'restricted',
+          include_general: education && selected.includes('general'),
           active: true,
         },
       });
       await this.prisma.user_program_grants.deleteMany({
         where: { membership_id: membership.id },
       });
-      if (open) continue;
+      if (!education) continue;
+      const wanted = selected.filter((item) => item !== 'general');
       const programs = await this.prisma.business_programs.findMany({
         where: {
           business_area_id: area.id,
           active: true,
-          slug: { in: grants.map((grant) => grant.program).filter((slug): slug is string => Boolean(slug)) },
+          slug: { in: wanted },
         },
         select: { id: true },
       });
+      if (programs.length !== wanted.length) {
+        throw new BadRequestException('Categoría no válida');
+      }
       if (!programs.length) continue;
       await this.prisma.user_program_grants.createMany({
         data: programs.map((program) => ({
@@ -151,10 +237,16 @@ export class UserAreasService {
       where: { user_id: input.userId, active: true, business_area: { active: true } },
       include: { business_area: true, programs: { include: { program: true } } },
     });
+    const marked = categoriesFromEducationSlugs(await this.areaSlugsForUser(input.userId));
     return BUSINESS_AREAS.filter(slug => {
       const scope = businessReadScope(slug);
       const membership = memberships.find(m => m.business_area.slug === scope.canonicalArea);
-      return membership && (!scope.program || membership.access_mode === 'all' || membership.programs.some(g => g.program.slug === scope.program && g.program.active));
+      if (!membership) return false;
+      if (scope.canonicalArea !== 'educacion') return true;
+      const categories = explicitEducationCategories(membership) ?? marked;
+      const open = !categories.length || EDUCATION_CATEGORIES.every((item) => categories.includes(item));
+      if (open || !scope.program) return true;
+      return categories.includes(scope.program);
     });
 
   }
@@ -167,9 +259,15 @@ export class UserAreasService {
     const primary = normalizeArea(primaryArea);
     const allowed = allowedAreas.filter(isValidBusinessArea);
     if (!allowed.length) throw new ForbiddenException('No tienes acceso a un área activa');
-    const candidate = normalizeArea(sessionArea);
-    if (allowed.includes(candidate)) return candidate;
-    return allowed.includes(primary) ? primary : allowed[0];
+    let candidate = normalizeArea(sessionArea);
+    if (!allowed.includes(candidate)) {
+      candidate = allowed.includes(primary) ? primary : allowed[0];
+    }
+    if (isValidBusinessArea(candidate)) {
+      const canonical = businessReadScope(candidate).canonicalArea;
+      if (canonical !== candidate && allowed.includes(canonical)) return canonical;
+    }
+    return candidate;
   }
 
   async resolveBusinessAccess(userId: number, area: string) {
@@ -179,17 +277,60 @@ export class UserAreasService {
       include: { programs: { include: { program: true } }, lines: true },
     });
     if (!membership) throw new ForbiddenException('Sin membresía activa en el área');
-    const programIds = membership.programs.filter(g => g.program.active).map(g => g.program_id);
+    let programIds = membership.programs.filter(g => g.program.active).map(g => g.program_id);
     const directIds = membership.lines.map(g => g.line_id);
+    let restricted = membership.access_mode === 'restricted';
+    let includeGeneral = membership.include_general;
+    let categorySlugs: string[] | null = restricted && scope.canonicalArea === 'educacion'
+      ? [
+          ...(includeGeneral ? ['general'] : []),
+          ...membership.programs.filter((grant) => grant.program.active).map((grant) => grant.program.slug),
+        ]
+      : null;
+    if (scope.canonicalArea === 'educacion') {
+      const inherited = explicitEducationCategories(membership)
+        ?? categoriesFromEducationSlugs(await this.areaSlugsForUser(userId));
+      const activePrograms = await this.prisma.business_programs.findMany({
+        where: { business_area_id: membership.business_area_id, active: true },
+        select: { id: true, slug: true },
+      });
+      const coversAll = inherited.length > 0
+        && ['general', ...activePrograms.map((item) => item.slug)].every((slug) => inherited.includes(slug));
+      if (!coversAll && inherited.length) {
+        restricted = true;
+        includeGeneral = inherited.includes('general');
+        categorySlugs = inherited;
+        programIds = activePrograms
+          .filter((program) => inherited.includes(program.slug))
+          .map((program) => program.id);
+      }
+    }
+    const lineOr = [
+      ...(membership.access_mode === 'restricted' && directIds.length ? [{ id: { in: directIds } }] : []),
+      ...(programIds.length ? [{ program_id: { in: programIds } }] : []),
+      ...(includeGeneral ? [{ program_id: null }] : []),
+    ];
     const lines = await this.prisma.whatsapp_lines.findMany({
-      where: { business_area_id: membership.business_area_id,
-        ...(membership.access_mode === 'restricted' ? { OR: [{ id: { in: directIds } }, { program_id: { in: programIds } }] } : {}),
-      }, select: { id: true },
+      where: {
+        business_area_id: membership.business_area_id,
+        ...(restricted ? { OR: lineOr.length ? lineOr : [{ id: -1 }] } : {}),
+      },
+      select: { id: true },
     });
     return { roleSlug: membership.role_slug, scope: {
       businessAreaId: membership.business_area_id, canonicalArea: scope.canonicalArea,
-      mode: membership.access_mode as 'all' | 'restricted', programIds, lineIds: lines.map(l => l.id),
+      mode: (restricted ? 'restricted' : 'all') as 'all' | 'restricted', programIds, lineIds: lines.map(l => l.id),
+      categorySlugs,
     } };
+  }
+
+  private async areaSlugsForUser(userId: number): Promise<string[]> {
+    const user = await this.prisma.users.findUnique({
+      where: { id: userId },
+      select: { area: true },
+    });
+    const extras = await this.fetchExtraAreasForUser(userId);
+    return [user?.area ?? '', ...extras];
   }
 
   canAccessArea(

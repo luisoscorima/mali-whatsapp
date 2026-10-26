@@ -1,11 +1,34 @@
-import { AREA_LABELS, type BusinessArea } from '../config/areas';
-import { getStoredDisplayPhoneNumber } from '../meta-settings/meta-settings.store';
+import { Prisma } from '@prisma/client';
+import { businessReadScope, type BusinessArea } from '../config/areas';
 
-export const REPORT_SOURCE_HEADERS = ['Área', 'Número del área'];
+export const REPORT_SOURCE_HEADERS = ['Categoría', 'Línea'];
+export type ReportSource = { category?: string | null; whatsapp_line?: string | null };
 
-/** Mantiene el número como texto y muestra las líneas peruanas sin el prefijo 51. */
-export function reportExportSourceCells(area: BusinessArea): string[] {
-  const digits = getStoredDisplayPhoneNumber(area).replace(/\D/g, '');
-  const phone = digits.replace(/^51(\d{9})$/, '$1');
-  return [AREA_LABELS[area], phone || 'Sin número configurado'];
+function categoryCell(area: BusinessArea, slug: string | null | undefined): string {
+  if (businessReadScope(area).canonicalArea !== 'educacion') return 'No aplica';
+  const value = String(slug ?? '').trim().toLowerCase();
+  if (!value) return 'Sin categoría';
+  if (value === 'general') return 'General';
+  return value.toUpperCase();
+}
+
+/** Categoría y línea de la fila. No usa el número por defecto del área. */
+export function reportExportSourceCells(area: BusinessArea, source: ReportSource = {}): string[] {
+  return [
+    categoryCell(area, source.category),
+    source.whatsapp_line?.trim() || 'Sin línea',
+  ];
+}
+
+/** Categoría y línea de la conversación ya unida como conv. */
+export function reportConversationSourceSql(): Prisma.Sql {
+  return Prisma.sql`
+    (SELECT COALESCE(bp.slug, NULLIF(BTRIM(wl.program_key), ''), 'general')
+     FROM whatsapp_lines wl
+     LEFT JOIN business_programs bp ON bp.id = wl.program_id
+     WHERE wl.id = conv.whatsapp_line_id) AS category,
+    (SELECT NULLIF(CONCAT_WS(' · ', NULLIF(BTRIM(wl.label), ''), NULLIF(BTRIM(wl.display_phone_number), '')), '')
+     FROM whatsapp_lines wl
+     WHERE wl.id = conv.whatsapp_line_id) AS whatsapp_line
+  `;
 }

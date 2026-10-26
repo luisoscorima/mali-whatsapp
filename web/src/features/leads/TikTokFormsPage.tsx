@@ -48,6 +48,7 @@ const ROUTE_CATEGORY_OPTIONS = [
 ]
 
 export function TikTokFormsPage() {
+  const [categoryOptions, setCategoryOptions] = useState(ROUTE_CATEGORY_OPTIONS)
   const [routes, setRoutes] = useState<FormRouteRow[]>([])
   const [leads, setLeads] = useState<LeadRow[]>([])
   const [leadsTotal, setLeadsTotal] = useState(0)
@@ -128,6 +129,9 @@ export function TikTokFormsPage() {
   }
 
   useEffect(() => {
+    void apiClient.getEducationCategories().then((result) => {
+      if (result.ok && result.data.length) setCategoryOptions(result.data)
+    })
     void reloadCatalog()
   }, [])
 
@@ -322,7 +326,7 @@ export function TikTokFormsPage() {
                                   void onRouteChange(row.form_id, 'educacion', e.target.value)
                                 }
                               >
-                                {ROUTE_CATEGORY_OPTIONS.map((o) => (
+                                {categoryOptions.map((o) => (
                                   <option key={o.slug} value={o.slug}>
                                     {o.label}
                                   </option>

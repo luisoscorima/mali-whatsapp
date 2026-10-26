@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import type { MetricCard } from '../campaigns/campaign-analytics.util';
+import { segmentDefinitionCategorySql } from '../config/category-scope';
 
 export type SegmentTopRow = {
   slug: string;
@@ -21,9 +22,11 @@ export async function fetchSegmentSummary(
   prisma: { $queryRaw: <T>(query: Prisma.Sql) => Promise<T> },
   area: string,
   days: number,
+  categories: string[] | null = null,
 ): Promise<SegmentSummary> {
   const safeDays = Math.min(Math.max(Math.round(days) || 30, 1), 90);
   const since = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000);
+  const categorySql = segmentDefinitionCategorySql(categories);
 
   const [counts, topRows] = await Promise.all([
     prisma.$queryRaw<
@@ -37,26 +40,35 @@ export async function fetchSegmentSummary(
     >(Prisma.sql`
       SELECT
         (SELECT COUNT(*)::int FROM segment_definitions sd
-         WHERE sd.area = ${area} AND sd.active = true) AS defs_active,
+         WHERE sd.area = ${area} AND sd.active = true AND ${categorySql}) AS defs_active,
         (SELECT COUNT(*)::int FROM segment_definitions sd
-         WHERE sd.area = ${area} AND sd.active = true AND sd.assignable = true) AS defs_assignable,
+         WHERE sd.area = ${area} AND sd.active = true AND sd.assignable = true AND ${categorySql}) AS defs_assignable,
         (SELECT COUNT(DISTINCT c.id)::int FROM contacts c
          WHERE c.area = ${area}
            AND c.active = true
            AND EXISTS (
-             SELECT 1 FROM contact_segments cs WHERE cs.contact_id = c.id
+             SELECT 1 FROM contact_segments cs
+             JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+               AND sd.program_id IS NOT DISTINCT FROM cs.program_id
+             WHERE cs.contact_id = c.id AND ${categorySql}
            )) AS labeled_contacts,
         (SELECT COUNT(*)::int FROM contacts c
          WHERE c.area = ${area}
            AND c.active = true
            AND NOT EXISTS (
-             SELECT 1 FROM contact_segments cs WHERE cs.contact_id = c.id
+             SELECT 1 FROM contact_segments cs
+             JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+               AND sd.program_id IS NOT DISTINCT FROM cs.program_id
+             WHERE cs.contact_id = c.id AND ${categorySql}
            )) AS unlabeled_contacts,
         (SELECT COUNT(*)::int FROM contact_segments cs
          JOIN contacts c ON c.id = cs.contact_id
+         JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug
+           AND sd.program_id IS NOT DISTINCT FROM cs.program_id
          WHERE cs.area = ${area}
            AND c.active = true
-           AND cs.created_at >= ${since}) AS joins_in_period
+           AND cs.created_at >= ${since}
+           AND ${categorySql}) AS joins_in_period
     `),
     prisma.$queryRaw<{ slug: string; label: string; total: number }[]>(Prisma.sql`
       SELECT
@@ -65,11 +77,13 @@ export async function fetchSegmentSummary(
         COUNT(cs.contact_id)::int AS total
       FROM segment_definitions sd
       LEFT JOIN contact_segments cs ON cs.area = sd.area AND cs.segment_slug = sd.slug
+        AND cs.program_id IS NOT DISTINCT FROM sd.program_id
       LEFT JOIN contacts c ON c.id = cs.contact_id
         AND c.active = true
       WHERE sd.area = ${area}
         AND sd.active = true
-      GROUP BY sd.slug, sd.label, sd.sort_order
+        AND ${categorySql}
+      GROUP BY sd.id, sd.slug, sd.label, sd.sort_order
       ORDER BY total DESC, sd.sort_order ASC, sd.label ASC
       LIMIT 5
     `),

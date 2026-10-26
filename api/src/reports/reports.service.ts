@@ -1,3 +1,4 @@
+import { reportExportSourceCells } from './report-export-source.util';
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import type { AuthUser } from '../auth/auth.types';
 import { AREA_LABELS } from '../config/areas';
@@ -284,7 +285,10 @@ export class ReportsService {
     const pageClamped = Math.min(page, totalPages);
 
     return {
-      rows,
+      rows: rows.map(row => {
+        const [category, whatsapp_line] = reportExportSourceCells(area, row);
+        return { ...row, category, whatsapp_line };
+      }),
       pagination: {
         page: pageClamped,
         total_pages: totalPages,
@@ -339,7 +343,10 @@ export class ReportsService {
     const totalPages = Math.max(1, Math.ceil(total / REPORT_PAGE_SIZE));
     const pageClamped = Math.min(page, totalPages);
     return {
-      rows,
+      rows: rows.map(row => {
+        const [category, whatsapp_line] = reportExportSourceCells(area, row);
+        return { ...row, category, whatsapp_line };
+      }),
       pagination: {
         page: pageClamped,
         total_pages: totalPages,
@@ -387,7 +394,10 @@ export class ReportsService {
     const pageClamped = Math.min(page, totalPages);
     const retention = readAuditRetentionDays();
     return {
-      rows,
+      rows: rows.map(row => {
+        const [category, whatsapp_line] = reportExportSourceCells(area, row);
+        return { ...row, category, whatsapp_line };
+      }),
       pagination: {
         page: pageClamped,
         total_pages: totalPages,

@@ -47,9 +47,14 @@ export class SegmentsController {
   async summary(
     @CurrentUser() user: AuthUser,
     @Query('days') days?: string,
+    @Query('category') category?: string | string[],
   ): Promise<ApiResponse<SegmentSummary>> {
     assertCanManageSegments(user);
-    const data = await this.segmentsService.getSummary(user.area, days);
+    const data = await this.segmentsService.getSummary(
+      user.area,
+      days,
+      parseCategorySlugs(category),
+    );
     return { ok: true, data };
   }
 

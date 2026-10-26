@@ -43,7 +43,7 @@ export function writeFormRoute(
   if (!category || category === 'general') {
     return { area: 'educacion', program_key: null };
   }
-  if (category !== 'ca' && category !== 'ep') {
+  if (!/^[a-z][a-z0-9_]{0,9}$/.test(category)) {
     throw new BadRequestException('Categoría no válida');
   }
   return { area: 'educacion', program_key: category };

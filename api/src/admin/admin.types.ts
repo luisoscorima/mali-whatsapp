@@ -24,6 +24,7 @@ export type AdminUserListItem = {
 
 export type AdminUserDetail = AdminUserListItem & {
   extra_areas: string[];
+  categories: string[];
 };
 
 export type AdminOnlineUser = {

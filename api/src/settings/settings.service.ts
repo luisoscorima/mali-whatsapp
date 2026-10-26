@@ -7,7 +7,7 @@ import type { AuthUser } from '../auth/auth.types';
 import { AuditEvent } from '../audit/audit-events';
 import { auditActor } from '../audit/audit-actor.util';
 import { AuditLogService } from '../audit/audit-log.service';
-import { canonicalBusinessArea, isValidBusinessArea, normalizeArea } from '../config/areas';
+import { businessReadScope, canonicalBusinessArea, isValidBusinessArea, normalizeArea } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   defaultAiConfig,
@@ -78,7 +78,23 @@ export class SettingsService {
     };
   }
 
+  private settingsCanonical(area: string): string {
+    return /^educacion_[a-z0-9_]{1,10}$/.test(area) ? 'educacion' : canonicalBusinessArea(area);
+  }
+
   private resolveArea(user: AuthUser, areaParam?: string): string {
+    const raw = String(areaParam || user.area || '').trim().toLowerCase();
+    const categoryKey = raw.match(/^educacion_([a-z0-9_]{1,10})$/);
+    if (categoryKey && categoryKey[1] !== 'ca' && categoryKey[1] !== 'ep') {
+      if (!user.isMaster && canonicalBusinessArea(user.area) !== 'educacion') {
+        throw new ForbiddenException('No autorizado para otra área');
+      }
+      const allowed = user.businessAccess?.categorySlugs;
+      if (!user.isMaster && allowed && !allowed.includes(categoryKey[1])) {
+        throw new ForbiddenException('No autorizado para esta categoría');
+      }
+      return raw;
+    }
     const area = normalizeArea(areaParam || user.area);
     if (!isValidBusinessArea(area)) {
       throw new BadRequestException('Area invalida');
@@ -88,6 +104,13 @@ export class SettingsService {
       canonicalBusinessArea(user.area) !== canonicalBusinessArea(area)
     ) {
       throw new ForbiddenException('No autorizado para otra área');
+    }
+    const allowed = user.businessAccess?.categorySlugs;
+    if (!user.isMaster && allowed && canonicalBusinessArea(area) === 'educacion') {
+      const category = businessReadScope(area).program ?? 'general';
+      if (!allowed.includes(category)) {
+        throw new ForbiddenException('No autorizado para esta categoría');
+      }
     }
     return area;
   }
@@ -136,7 +159,7 @@ export class SettingsService {
     const isMaster = user.isMaster;
     const canEditPrompt =
       user.canEditAiPrompt &&
-      canonicalBusinessArea(user.area) === canonicalBusinessArea(area);
+      canonicalBusinessArea(user.area) === this.settingsCanonical(area);
 
     if (!isMaster && !canEditPrompt) {
       throw new ForbiddenException('No autorizado');
@@ -259,7 +282,7 @@ export class SettingsService {
     const isMaster = user.isMaster;
     const canEdit =
       user.canEditBusinessHours &&
-      canonicalBusinessArea(user.area) === canonicalBusinessArea(area);
+      canonicalBusinessArea(user.area) === this.settingsCanonical(area);
 
     if (!isMaster && !canEdit) {
       throw new ForbiddenException('No autorizado');

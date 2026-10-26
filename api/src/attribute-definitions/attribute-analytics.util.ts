@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import type { MetricCard } from '../campaigns/campaign-analytics.util';
+import { segmentDefinitionCategorySql } from '../config/category-scope';
 
 export type AttributeSummary = {
   kpis: MetricCard[];
@@ -12,7 +13,9 @@ function fmt(n: number): string {
 export async function fetchAttributeSummary(
   prisma: { $queryRaw: <T>(query: Prisma.Sql) => Promise<T> },
   area: string,
+  categories: string[] | null = null,
 ): Promise<AttributeSummary> {
+  const categorySql = segmentDefinitionCategorySql(categories, 'd');
   const counts = await prisma.$queryRaw<
     {
       defs_active: number;
@@ -22,15 +25,18 @@ export async function fetchAttributeSummary(
   >(Prisma.sql`
     SELECT
       (SELECT COUNT(*)::int FROM contact_attribute_definitions d
-       WHERE d.area = ${area} AND d.active = true) AS defs_active,
+       WHERE d.area = ${area} AND d.active = true AND ${categorySql}) AS defs_active,
       (SELECT COUNT(*)::int FROM contact_attribute_definitions d
-       WHERE d.area = ${area} AND d.active = true AND d.required = true) AS defs_required,
+       WHERE d.area = ${area} AND d.active = true AND d.required = true AND ${categorySql}) AS defs_required,
       (SELECT COUNT(DISTINCT ca.contact_id)::int
        FROM contact_attributes ca
        JOIN contacts c ON c.id = ca.contact_id
+       JOIN contact_attribute_definitions d ON d.area = c.area AND d.slug = ca.attr_key
+         AND d.program_id IS NOT DISTINCT FROM ca.program_id
        WHERE c.area = ${area}
          AND c.active = true
-         AND TRIM(COALESCE(ca.attr_value, '')) <> '') AS contacts_with_attr
+         AND TRIM(COALESCE(ca.attr_value, '')) <> ''
+         AND ${categorySql}) AS contacts_with_attr
   `);
 
   const c = counts[0] ?? {

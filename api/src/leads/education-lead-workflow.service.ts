@@ -20,21 +20,24 @@ function educationAreasOf(user: {
   user_areas: { area: string }[];
   memberships: {
     access_mode: string;
+    include_general?: boolean;
     business_area: { slug: string };
     programs: { program: { slug: string; active: boolean } }[];
   }[];
 }): string[] {
   const fromMembership = user.memberships.flatMap((membership) => {
     if (membership.business_area.slug !== 'educacion') return [];
-    if (membership.access_mode === 'all') return [...EDUCATION_AREAS];
-    return membership.programs
+    const granted = membership.programs
       .filter((grant) => grant.program.active)
       .map((grant) => grant.program.slug === 'ca'
         ? 'educacion_ca'
-        : grant.program.slug === 'ep' ? 'educacion_ep' : 'educacion');
+        : grant.program.slug === 'ep' ? 'educacion_ep' : grant.program.slug);
+    if (membership.include_general) granted.unshift('educacion');
+    if (membership.access_mode === 'all' && granted.length === 0) return [...EDUCATION_AREAS];
+    return granted;
   });
   return [...new Set([user.area, ...user.user_areas.map((item) => item.area), ...fromMembership])]
-    .filter((area) => EDUCATION_AREAS.includes(area));
+    .filter((area) => EDUCATION_AREAS.includes(area) || /^[a-z][a-z0-9_]{0,9}$/.test(area));
 }
 
 @Injectable()
@@ -45,11 +48,19 @@ export class EducationLeadWorkflowService {
   ) {}
 
   private areas(area?: string): string[] {
+    return this.leadScope(area).areas;
+  }
+
+  private leadScope(area?: string): { areas: string[]; program: string | null; onlyGeneral: boolean } {
     const selected = String(area ?? 'all').trim().toLowerCase() || 'all';
-    if (selected !== 'all' && !EDUCATION_AREAS.includes(selected)) {
-      throw new BadRequestException('Área de educación inválida');
+    if (selected === 'all') return { areas: [...EDUCATION_AREAS], program: null, onlyGeneral: false };
+    if (selected === 'educacion') return { areas: ['educacion'], program: null, onlyGeneral: true };
+    if (EDUCATION_AREAS.includes(selected)) {
+      return { areas: [selected], program: educationProgramOf(selected), onlyGeneral: false };
     }
-    return selected === 'all' ? EDUCATION_AREAS : [selected];
+    const program = educationProgramOf(selected);
+    if (!program) throw new BadRequestException('Área de educación inválida');
+    return { areas: [...EDUCATION_AREAS], program, onlyGeneral: false };
   }
 
   async recordOrigin(originId: number): Promise<void> {
@@ -343,18 +354,27 @@ export class EducationLeadWorkflowService {
     area?: string; channel?: string; q?: string; view?: string;
     unassigned?: boolean; page?: number; limit?: number;
   }) {
-    const areas = this.areas(params.area);
+    const scope = this.leadScope(params.area);
+    const areas = scope.areas;
     const view = params.view || 'recent';
     if (!['recent', 'new_number', 'duplicate', 'reassignable', 'conflict', 'in_progress', 'all'].includes(view)) {
       throw new BadRequestException('Vista de leads inválida');
     }
     const cutoff = new Date(Date.now() - SIXTY_DAYS_MS);
     const q = String(params.q ?? '').trim();
-    const base: Prisma.education_lead_entriesWhereInput = {
-      area: { in: areas }, occurred_at: { gte: cutoff },
-      classification: { not: 'dismissed' },
-      ...(params.channel ? { channel: params.channel } : {}),
-      ...(q ? { OR: [
+    const and: Prisma.education_lead_entriesWhereInput[] = [];
+    if (scope.onlyGeneral) and.push({ program_id: null });
+    else if (scope.program && areas.length > 1) {
+      and.push({
+        OR: [
+          { program: { is: { slug: scope.program } } },
+          ...(scope.program === 'ca' ? [{ program_id: null, area: 'educacion_ca' }] : []),
+          ...(scope.program === 'ep' ? [{ program_id: null, area: 'educacion_ep' }] : []),
+        ],
+      });
+    }
+    if (q) {
+      and.push({ OR: [
         { contact: { is: { name: { contains: q, mode: 'insensitive' } } } },
         { contact: { is: { last_name: { contains: q, mode: 'insensitive' } } } },
         { contact: { is: { phone: { contains: q } } } },
@@ -362,7 +382,13 @@ export class EducationLeadWorkflowService {
         { contact: { is: { conversations: { some: { wa_username: { contains: q.replace(/^@/, ''), mode: 'insensitive' } } } } } },
         { origin: { is: { whatsapp_user_id: { contains: q, mode: 'insensitive' } } } },
         { source_label: { contains: q, mode: 'insensitive' } },
-      ] } : {}),
+      ] });
+    }
+    const base: Prisma.education_lead_entriesWhereInput = {
+      area: { in: areas }, occurred_at: { gte: cutoff },
+      classification: { not: 'dismissed' },
+      ...(params.channel ? { channel: params.channel } : {}),
+      ...(and.length ? { AND: and } : {}),
     };
     const where: Prisma.education_lead_entriesWhereInput = {
       ...base,
@@ -573,8 +599,115 @@ export class EducationLeadWorkflowService {
     });
   }
 
+  private async distributeCategory(
+    program: string,
+    params: { channel?: string; q?: string; actor_email?: string },
+  ) {
+    const programRow = await this.prisma.business_programs.findFirst({
+      where: { slug: program, active: true, business_area: { slug: 'educacion' } },
+      select: { id: true },
+    });
+    if (!programRow) throw new BadRequestException('Categoría no válida');
+    const cutoff = new Date(Date.now() - SIXTY_DAYS_MS);
+    const q = String(params.q ?? '').trim();
+    const legacy = program === 'ca' ? 'educacion_ca' : program === 'ep' ? 'educacion_ep' : null;
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(20260924::bigint)`;
+      const advisors = await tx.users.findMany({
+        where: {
+          is_provisioned: true,
+          role_slug: 'asesor_comercial',
+          OR: [
+            { memberships: { some: {
+              active: true,
+              business_area: { slug: 'educacion' },
+              programs: { some: { program: { slug: program, active: true } } },
+            } } },
+            ...(legacy ? [{ area: legacy }, { user_areas: { some: { area: legacy } } }] : []),
+          ],
+        },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+      });
+      const workload = new Map(advisors.map((advisor) => [advisor.id, 0]));
+      if (advisors.length) {
+        const assignedCycles = await tx.$queryRaw<Array<{ assigned_user_id: number; workload: bigint }>>(Prisma.sql`
+          SELECT cycle.assigned_user_id, COUNT(*)::bigint AS workload
+          FROM education_lead_cycles cycle
+          LEFT JOIN lead_status_definitions status ON status.id = cycle.lead_status_id
+          WHERE cycle.program_id = ${programRow.id}
+            AND cycle.assigned_user_id IN (${Prisma.join(advisors.map((advisor) => advisor.id))})
+            AND cycle.last_interaction_at >= ${cutoff}
+            AND status.is_terminal IS DISTINCT FROM TRUE
+            AND cycle.id = (
+              SELECT latest.id FROM education_lead_cycles latest
+              WHERE latest.contact_id = cycle.contact_id
+              ORDER BY latest.started_at DESC, latest.id DESC LIMIT 1
+            )
+          GROUP BY cycle.assigned_user_id
+        `);
+        for (const row of assignedCycles) workload.set(row.assigned_user_id, Number(row.workload));
+      }
+      const entries = await tx.education_lead_entries.findMany({
+        where: {
+          area: { in: [...EDUCATION_AREAS] },
+          assignment_rule: 'new_number',
+          occurred_at: { gte: cutoff },
+          cycle: { is: { assigned_user_id: null } },
+          OR: [
+            { program_id: programRow.id },
+            ...(legacy ? [{ program_id: null, area: legacy }] : []),
+          ],
+          ...(params.channel ? { channel: params.channel } : {}),
+          ...(q ? { AND: [{ OR: [
+            { contact: { is: { name: { contains: q, mode: 'insensitive' } } } },
+            { contact: { is: { phone: { contains: q } } } },
+            { source_label: { contains: q, mode: 'insensitive' } },
+          ] }] } : {}),
+        },
+        orderBy: [{ occurred_at: 'asc' }, { id: 'asc' }],
+        select: { cycle_id: true, contact_id: true },
+      });
+      let assigned = 0;
+      for (const entry of entries) {
+        if (!entry.cycle_id || !advisors.length) break;
+        const latest = await tx.education_lead_cycles.findFirst({
+          where: { contact_id: entry.contact_id, program_id: programRow.id },
+          orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+          select: { id: true },
+        });
+        if (latest?.id !== entry.cycle_id) continue;
+        const advisor = [...advisors].sort((a, b) =>
+          (workload.get(a.id) ?? 0) - (workload.get(b.id) ?? 0) || a.id - b.id)[0];
+        const updated = await tx.education_lead_cycles.updateMany({
+          where: { id: entry.cycle_id, assigned_user_id: null },
+          data: { assigned_user_id: advisor.id, requires_review: false, updated_at: new Date() },
+        });
+        if (!updated.count) continue;
+        await tx.conversations.updateMany({
+          where: { area: { in: [...EDUCATION_AREAS] }, contact_id: entry.contact_id },
+          data: { assigned_user_id: advisor.id, assigned_at: new Date(), updated_at: new Date() },
+        });
+        await tx.audit_logs.create({ data: {
+          event_type: 'education.lead.distributed',
+          message: `Lead ${entry.cycle_id} distribuido al asesor ${advisor.id}`,
+          actor_email: params.actor_email ?? 'mali-one@system', area: 'educacion',
+          meta: { contact_id: entry.contact_id, cycle_id: entry.cycle_id,
+            assigned_user_id: advisor.id, category: program, source: 'mali_one_batch' },
+        } });
+        workload.set(advisor.id, (workload.get(advisor.id) ?? 0) + 1);
+        assigned += 1;
+      }
+      return { assigned, by_area: [{ area: program, assigned }] };
+    }, { timeout: 30000 });
+  }
+
   async distribute(params: { area?: string; channel?: string; q?: string; actor_email?: string }) {
-    const areas = this.areas(params.area);
+    const scope = this.leadScope(params.area);
+    if (scope.program && scope.areas.length > 1) {
+      return this.distributeCategory(scope.program, params);
+    }
+    const areas = scope.onlyGeneral ? ['educacion'] : scope.areas;
     const cutoff = new Date(Date.now() - SIXTY_DAYS_MS);
     const q = String(params.q ?? '').trim();
     return this.prisma.$transaction(async (tx) => {
@@ -610,7 +743,8 @@ export class EducationLeadWorkflowService {
           }
         }
         const entries = await tx.education_lead_entries.findMany({
-          where: { area: currentArea, assignment_rule: 'new_number', occurred_at: { gte: cutoff },
+          where: { area: currentArea, ...(scope.onlyGeneral ? { program_id: null } : {}),
+            assignment_rule: 'new_number', occurred_at: { gte: cutoff },
             ...(params.channel ? { channel: params.channel } : {}),
             ...(q ? { OR: [
               { contact: { is: { name: { contains: q, mode: 'insensitive' } } } },

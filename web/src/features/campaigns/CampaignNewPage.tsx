@@ -66,6 +66,7 @@ function buildSendPayload(input: {
   excludeContactIds: number[]
   excludeServiceWindow: boolean
   templateId: string
+  whatsappLineId: string
   scheduleMode: 'now' | 'scheduled'
   scheduledAt: string
   batchSize: number
@@ -78,6 +79,7 @@ function buildSendPayload(input: {
     excludeSegmentSlugs: input.excludeSegments,
     excludeOpenServiceWindow: input.excludeServiceWindow,
     templateSyncId: Number(input.templateId),
+    whatsappLineId: Number(input.whatsappLineId) || undefined,
     scheduleMode: input.scheduleMode,
     batchSize: input.batchSize,
     batchDelayMs: input.batchDelayMs,
@@ -135,6 +137,8 @@ export function CampaignNewPage() {
   const [recipientsStatus, setRecipientsStatus] = useState('')
 
   const [templateId, setTemplateId] = useState('')
+  const [lines, setLines] = useState<{ id: number; label: string; phone: string | null; category_label: string }[]>([])
+  const [whatsappLineId, setWhatsappLineId] = useState('')
   const [templateForm, setTemplateForm] = useState<CampaignTemplateFormState>(
     emptyTemplateFormState(),
   )
@@ -183,10 +187,13 @@ export function CampaignNewPage() {
 
   async function loadWizardData() {
     setLoadFailed(false)
-    const [segResult, tplResult, attrResult] = await Promise.all([
+    const [segResult, tplResult, attrResult, lineResult] = await Promise.all([
       apiClient.get<SegmentDefinition[]>(withCategoryQuery('/api/segments/active', categoryScope.query)),
       apiClient.get<TemplateListItem[]>('/api/templates'),
       apiClient.get<AttributeOption[]>(withCategoryQuery('/api/attribute-definitions', categoryScope.query)),
+      apiClient.get<{ id: number; label: string; phone: string | null; category_label: string }[]>(
+        withCategoryQuery('/api/campaigns/lines', categoryScope.query),
+      ),
     ])
     if (!segResult.ok) {
       notify.error(segResult.error)
@@ -207,6 +214,16 @@ export function CampaignNewPage() {
     }
     setSegments([...grouped.values()])
     setTemplates(tplResult.data)
+    if (lineResult.ok) {
+      setLines(lineResult.data)
+      setWhatsappLineId((current) =>
+        lineResult.data.some((line) => String(line.id) === current)
+          ? current
+          : lineResult.data.length === 1
+            ? String(lineResult.data[0].id)
+            : '',
+      )
+    }
     if (attrResult.ok) {
       setAttrDefs(
         attrResult.data.map((a) => ({ slug: a.slug, label: a.label })),
@@ -320,6 +337,7 @@ export function CampaignNewPage() {
     recipientsLoaded &&
     selectedIds.size > 0 &&
     templateId &&
+    whatsappLineId &&
     templateReady &&
     (scheduleMode === 'now' || Boolean(scheduledAt.trim()))
 
@@ -371,6 +389,7 @@ export function CampaignNewPage() {
       excludeContactIds: [...excludeContactIds].sort((a, b) => a - b),
       excludeServiceWindow,
       templateId,
+      whatsappLineId,
       scheduleMode,
       scheduledAt,
       batchSize,
@@ -616,6 +635,22 @@ export function CampaignNewPage() {
       </section>
 
       <section className="space-y-3 rounded-xl border border-line bg-surface-strong p-4">
+        <label className="block text-sm">
+          <span className="text-muted">Línea que envía</span>
+          <select
+            className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2"
+            value={whatsappLineId}
+            onChange={(event) => setWhatsappLineId(event.target.value)}
+          >
+            <option value="">Elige el número</option>
+            {lines.map((line) => (
+              <option key={line.id} value={line.id}>
+                {line.category_label} · {line.label}
+                {line.phone ? ` · ${line.phone}` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
         {fieldLabel('Plantilla (Meta)', '3')}
         <div className="flex flex-wrap items-end gap-3">
           <label className="min-w-[240px] flex-1 text-sm">

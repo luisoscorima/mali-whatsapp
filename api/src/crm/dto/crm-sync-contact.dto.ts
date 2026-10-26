@@ -3,8 +3,8 @@ import {
   IsBoolean,
   IsEmail,
   IsObject,
-  IsIn,
   IsOptional,
+  Matches,
   IsString,
   MaxLength,
   MinLength,
@@ -17,10 +17,11 @@ export class CrmSyncContactDto {
   @MaxLength(20)
   area?: string;
 
-  /** CA o EP cuando el área canónica ya es educacion. */
+  /** Categoría cuando el área canónica ya es educacion. */
   @IsOptional()
-  @IsIn(['ca', 'ep'])
-  programa?: 'ca' | 'ep';
+  @IsString()
+  @Matches(/^[a-z][a-z0-9_]{0,9}$/)
+  programa?: string;
 
   @IsString()
   @MinLength(1)
@@ -57,8 +58,9 @@ export class CrmSyncContactDto {
   dni?: string | null;
 
   @IsOptional()
-  @IsIn(['ca', 'ep'])
-  categoria?: 'ca' | 'ep';
+  @IsString()
+  @Matches(/^[a-z][a-z0-9_]{0,9}$/)
+  categoria?: string;
 
   @IsOptional()
   @IsObject()

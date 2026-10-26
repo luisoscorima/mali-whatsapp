@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   AREA_LABELS,
   canonicalBusinessAreas,
@@ -173,5 +173,138 @@ export class AdminAreasService {
       consolidation_reviews: consolidationReviews[0]?.n ?? 0,
       identity_reviews: identityReviews,
     };
+  }
+
+  async listCategories(areaSlug: string) {
+    const area = await this.requireArea(areaSlug);
+    const programs = await this.prisma.business_programs.findMany({
+      where: { business_area_id: area.id },
+      orderBy: [{ sort_order: 'asc' }, { slug: 'asc' }],
+      select: { id: true, slug: true, label: true, active: true },
+    });
+    const lines = await this.prisma.whatsapp_lines.groupBy({
+      by: ['program_id'],
+      where: { business_area_id: area.id, active: true },
+      _count: { _all: true },
+    });
+    const lineCount = new Map(lines.map((row) => [row.program_id, row._count._all]));
+    return [
+      { id: null, slug: 'general', label: 'General', active: true, lines: lineCount.get(null) ?? 0 },
+      ...programs.map((program) => ({
+        id: program.id,
+        slug: program.slug,
+        label: program.label,
+        active: program.active,
+        lines: lineCount.get(program.id) ?? 0,
+      })),
+    ];
+  }
+
+  async createCategory(areaSlug: string, input: { slug: string; label: string }) {
+    const area = await this.requireArea(areaSlug);
+    const slug = input.slug.trim().toLowerCase();
+    const label = input.label.trim();
+    if (slug === 'general' || !/^[a-z][a-z0-9_]{0,9}$/.test(slug)) {
+      throw new BadRequestException('Usa un identificador corto, sin la palabra general');
+    }
+    if (label.length < 2) throw new BadRequestException('Falta el nombre');
+    try {
+      return await this.prisma.business_programs.create({
+        data: { business_area_id: area.id, slug, label },
+        select: { id: true, slug: true, label: true, active: true },
+      });
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && (error as { code?: string }).code === 'P2002') {
+        throw new BadRequestException('Esa categoría ya existe');
+      }
+      throw error;
+    }
+  }
+
+  async updateCategory(areaSlug: string, slug: string, input: { label?: string; active?: boolean }) {
+    if (slug === 'general') throw new BadRequestException('General no se desactiva');
+    const area = await this.requireArea(areaSlug);
+    const program = await this.prisma.business_programs.findFirst({
+      where: { business_area_id: area.id, slug },
+    });
+    if (!program) throw new NotFoundException('Categoría no encontrada');
+    if (input.active === false) {
+      const lines = await this.prisma.whatsapp_lines.count({
+        where: { program_id: program.id, active: true },
+      });
+      if (lines > 0) {
+        throw new BadRequestException('Pasa sus líneas a otra categoría antes de darla de baja');
+      }
+    }
+    return this.prisma.business_programs.update({
+      where: { id: program.id },
+      data: {
+        ...(input.label?.trim() ? { label: input.label.trim() } : {}),
+        ...(input.active === undefined ? {} : { active: input.active }),
+        updated_at: new Date(),
+      },
+      select: { id: true, slug: true, label: true, active: true },
+    });
+  }
+
+  async listConflicts() {
+    let consolidation: { contact_id: number; phone_norm: string; canonical_id: number }[] = [];
+    try {
+      consolidation = await this.prisma.$queryRaw<
+        { contact_id: number; phone_norm: string; canonical_id: number }[]
+      >`
+        SELECT contact_id, phone_norm, canonical_id
+        FROM education_consolidation_map
+        WHERE decision = 'review'
+        ORDER BY phone_norm
+        LIMIT 200
+      `;
+    } catch {
+      consolidation = [];
+    }
+    const identity = await this.prisma.person_identity_reviews.findMany({
+      where: { resolved_at: null },
+      orderBy: { created_at: 'desc' },
+      take: 200,
+      select: {
+        id: true,
+        person_id: true,
+        reason: true,
+        phone: true,
+        dni: true,
+        email: true,
+        created_at: true,
+      },
+    });
+    return { consolidation, identity };
+  }
+
+  async separateConsolidation(contactId: number) {
+    const updated = await this.prisma.$executeRaw`
+      UPDATE education_consolidation_map
+      SET decision = 'separate'
+      WHERE contact_id = ${contactId} AND decision = 'review'
+    `;
+    if (!updated) throw new BadRequestException('Ese caso ya no está en revisión');
+    return { contact_id: contactId, decision: 'separate' };
+  }
+
+  async resolveIdentityReview(id: number) {
+    const row = await this.prisma.person_identity_reviews.findUnique({ where: { id } });
+    if (!row || row.resolved_at) throw new NotFoundException('Ese conflicto ya no está pendiente');
+    await this.prisma.person_identity_reviews.update({
+      where: { id },
+      data: { resolved_at: new Date() },
+    });
+    return { id, resolved: true };
+  }
+
+  private async requireArea(slug: string) {
+    const area = await this.prisma.business_areas.findFirst({
+      where: { slug, active: true },
+      select: { id: true, slug: true },
+    });
+    if (!area) throw new NotFoundException('Área no encontrada');
+    return area;
   }
 }

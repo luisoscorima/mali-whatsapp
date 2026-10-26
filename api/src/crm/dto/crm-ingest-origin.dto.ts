@@ -1,8 +1,8 @@
 import {
   IsBoolean,
   IsEmail,
-  IsIn,
   IsObject,
+  Matches,
   IsOptional,
   IsString,
   MaxLength,
@@ -16,10 +16,11 @@ export class CrmIngestOriginDto {
   @MaxLength(20)
   area?: string;
 
-  /** Categoría de Educación. Con area=educacion se guarda como el intento de esa categoría. */
+  /** Categoría de Educación. ca y ep siguen siendo los alias históricos. */
   @IsOptional()
-  @IsIn(['ca', 'ep'])
-  categoria?: 'ca' | 'ep';
+  @IsString()
+  @Matches(/^[a-z][a-z0-9_]{0,9}$/)
+  categoria?: string;
 
   @IsString()
   @MaxLength(32)

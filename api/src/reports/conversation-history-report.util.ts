@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import type { BusinessArea } from '../config/areas';
-import { REPORT_SOURCE_HEADERS, reportExportSourceCells } from './report-export-source.util';
+import { REPORT_SOURCE_HEADERS, reportExportSourceCells, reportConversationSourceSql, type ReportSource } from './report-export-source.util';
 import { Prisma } from '@prisma/client';
 import {
   auditConversationCategorySql,
@@ -19,7 +19,7 @@ const EVENT_TYPES = [
 
 export const CONVERSATION_HISTORY_HEADERS = [
   'Fecha',
-  'Número',
+  'Teléfono del contacto',
   'Nombre',
   'Apellido',
   'DNI',
@@ -34,7 +34,7 @@ export const CONVERSATION_HISTORY_HEADERS = [
   'Detalle',
 ] as const;
 
-export type ConversationHistoryRow = {
+export type ConversationHistoryRow = ReportSource & {
   id: string;
   created_at: string;
   created_display: string;
@@ -65,7 +65,7 @@ function eventLabel(eventType: string): string {
   return eventType;
 }
 
-type ContactEnrich = {
+type ContactEnrich = ReportSource & {
   phone: string;
   name: string;
   last_name: string;
@@ -144,6 +144,8 @@ export async function fetchConversationHistoryReport(
     const ids = [...conversationIds];
     const enrichRows = await prisma.$queryRaw<
       {
+        category?: string | null;
+        whatsapp_line?: string | null;
         conversation_id: number;
         phone: string;
         name: string;
@@ -156,6 +158,7 @@ export async function fetchConversationHistoryReport(
     >(Prisma.sql`
       SELECT
         conv.id AS conversation_id,
+        ${reportConversationSourceSql()},
         conv.phone,
         COALESCE(c.name, '') AS name,
         COALESCE(c.last_name, '') AS last_name,
@@ -184,6 +187,8 @@ export async function fetchConversationHistoryReport(
     `);
     for (const er of enrichRows) {
       enrichByConv.set(Number(er.conversation_id), {
+        category: er.category,
+        whatsapp_line: er.whatsapp_line,
         phone: er.phone || '',
         name: er.name || '',
         last_name: er.last_name || '',
@@ -249,6 +254,8 @@ export async function fetchConversationHistoryReport(
       }
 
       return {
+        category: enrich?.category,
+        whatsapp_line: enrich?.whatsapp_line,
         id: String(row.id),
         created_at: new Date(row.created_at).toISOString(),
         created_display: formatExportDate(row.created_at) || '—',
@@ -274,11 +281,10 @@ export function buildConversationHistoryXlsxBuffer(
   rows: ConversationHistoryRow[],
   area: BusinessArea,
 ): Buffer {
-  const source = reportExportSourceCells(area);
   const aoa: string[][] = [
     [...REPORT_SOURCE_HEADERS, ...CONVERSATION_HISTORY_HEADERS],
     ...rows.map((r) => [
-      ...source,
+      ...reportExportSourceCells(area, r),
       r.created_display,
       r.phone,
       r.name,

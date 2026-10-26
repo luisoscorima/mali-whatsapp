@@ -325,8 +325,9 @@ export class WebhookService {
     phone: string;
     phoneNumberId: string | null;
   }): Promise<boolean> {
+    const settingsArea = await this.settingsAreaForConversation(input.conversationId, input.area);
     const settingsRow = await this.prisma.app_settings.findFirst({
-      where: { area: input.area, key: 'business_hours' },
+      where: { area: settingsArea, key: 'business_hours' },
       select: { value: true },
     });
     const bhCfg = parseBusinessHoursConfig(settingsRow?.value);
@@ -391,6 +392,26 @@ export class WebhookService {
     }
   }
 
+  private async settingsAreaForConversation(conversationId: number, fallback: string): Promise<string> {
+    const row = await this.prisma.conversations.findUnique({
+      where: { id: conversationId },
+      select: {
+        area: true,
+        whatsapp_line: {
+          select: { program_key: true, business_area: { select: { slug: true } } },
+        },
+      },
+    });
+    const program = String(row?.whatsapp_line?.program_key || '').trim().toLowerCase();
+    if (
+      row?.whatsapp_line?.business_area?.slug === 'educacion' &&
+      /^[a-z][a-z0-9_]{0,9}$/.test(program)
+    ) {
+      return `educacion_${program}`;
+    }
+    return row?.area || fallback;
+  }
+
   private async maybeAutoReplyWithAi(input: {
     area: BusinessArea;
     conversationId: number;
@@ -409,8 +430,9 @@ export class WebhookService {
     });
     if (!conv || String(conv.status || '').trim() !== 'bot') return;
 
+    const settingsArea = await this.settingsAreaForConversation(input.conversationId, input.area);
     const settingsRow = await this.prisma.app_settings.findFirst({
-      where: { area: input.area, key: 'ai_config' },
+      where: { area: settingsArea, key: 'ai_config' },
       select: { value: true },
     });
     const aiCfg = parseAiConfigValue(settingsRow?.value);

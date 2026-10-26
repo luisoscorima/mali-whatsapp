@@ -18,7 +18,6 @@ import { programScopeWhere } from '../config/category-scope';
 import {
   educationProgramOf,
   educationReadScope,
-  isEducationAreaSlug,
 } from '../config/education-scope';
 import {
   E164_NO_PLUS_REGEX,
@@ -150,7 +149,8 @@ export class LeadsService implements OnModuleInit {
       where: { slug, active: true, business_area: { slug: 'educacion' } },
       select: { id: true },
     });
-    return program?.id ?? null;
+    if (!program) throw new BadRequestException('Categoría no válida');
+    return program.id;
   }
 
   private async attachEducationProgram(
@@ -185,9 +185,14 @@ export class LeadsService implements OnModuleInit {
     limit?: number;
   }) {
     const scope = educationReadScope(params.area);
-    const areas = isEducationAreaSlug(params.area) || !params.area || params.area === 'all'
-      ? scope.areas
-      : this.educationAreas(params.area);
+    if (
+      params.area
+      && params.area !== 'all'
+      && !scope.areas.includes('educacion')
+    ) {
+      throw new BadRequestException(`Área de educación inválida: ${params.area}`);
+    }
+    const areas = scope.areas.includes('educacion') ? scope.areas : this.educationAreas(params.area);
     const program = scope.program;
     const page = params.page ?? 1;
     const limit = params.limit ?? 50;
@@ -195,10 +200,11 @@ export class LeadsService implements OnModuleInit {
     const usernameQ = q.replace(/^@/, '');
     const and: Prisma.contact_originsWhereInput[] = [];
     if (program) {
-      const legacy = program === 'ca' ? 'educacion_ca' : 'educacion_ep';
+      const legacy = program === 'ca' ? 'educacion_ca' : program === 'ep' ? 'educacion_ep' : null;
       and.push({
         OR: [
-          { area: legacy },
+          ...(legacy ? [{ area: legacy }] : []),
+          { program: { slug: program } },
           {
             contacts: {
               is: {

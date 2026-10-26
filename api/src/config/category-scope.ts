@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { restrictedAccess } from '../business-model/business-access.context';
 import { conversationCategoryPredicate } from './business-scope';
 
 const SLUG = /^[a-z0-9_]+$/;
@@ -17,7 +18,15 @@ export function parseCategorySlugs(
         .filter((item) => item === 'general' || SLUG.test(item)),
     ),
   ];
-  return selected.length ? selected : null;
+  return applyCategoryGrant(selected.length ? selected : null);
+}
+
+/** Recorta a las categorías del usuario. null sigue siendo “sin recorte”. */
+export function applyCategoryGrant(requested: string[] | null): string[] | null {
+  const allowed = restrictedAccess()?.categorySlugs;
+  if (!allowed) return requested;
+  const next = (requested?.length ? requested : allowed).filter((slug) => allowed.includes(slug));
+  return next.length ? next : ['__none__'];
 }
 
 type ProgramScope = {
@@ -28,6 +37,7 @@ type ProgramScope = {
 
 /** program_id null es General. */
 export function programScopeWhere(slugs: string[] | null): ProgramScope {
+  slugs = applyCategoryGrant(slugs);
   if (!slugs?.length) return {};
   const or: NonNullable<ProgramScope['OR']> = [];
   if (slugs.includes('general')) or.push({ program_id: null });
@@ -93,15 +103,22 @@ export function segmentMatchesConversationSql(conversationId: number): Prisma.Sq
   )`;
 }
 
-export function segmentDefinitionCategorySql(slugs: string[] | null): Prisma.Sql {
-  if (!slugs?.length) return Prisma.sql`TRUE`;
+export function segmentDefinitionCategorySql(
+  slugs: string[] | null,
+  alias = 'sd',
+): Prisma.Sql {
+  if (!/^[a-z_]+$/.test(alias)) return Prisma.sql`FALSE`;
+  const column = Prisma.raw(`${alias}.program_id`);
+  slugs = applyCategoryGrant(slugs);
+  if (!slugs) return Prisma.sql`TRUE`;
+  if (!slugs.length) return Prisma.sql`FALSE`;
   const parts: Prisma.Sql[] = [];
-  if (slugs.includes('general')) parts.push(Prisma.sql`sd.program_id IS NULL`);
+  if (slugs.includes('general')) parts.push(Prisma.sql`${column} IS NULL`);
   const programs = slugs.filter((slug) => slug !== 'general');
   if (programs.length) {
     parts.push(Prisma.sql`EXISTS (
       SELECT 1 FROM business_programs seg_p
-      WHERE seg_p.id = sd.program_id AND seg_p.slug IN (${Prisma.join(programs)})
+      WHERE seg_p.id = ${column} AND seg_p.slug IN (${Prisma.join(programs)})
     )`);
   }
   if (!parts.length) return Prisma.sql`FALSE`;
@@ -113,7 +130,9 @@ export function recordLineCategorySql(
   alias: string,
   slugs: string[] | null,
 ): Prisma.Sql {
-  if (!slugs?.length) return Prisma.sql`TRUE`;
+  slugs = applyCategoryGrant(slugs);
+  if (!slugs) return Prisma.sql`TRUE`;
+  if (!slugs.length) return Prisma.sql`FALSE`;
   const column = Prisma.raw(`${alias}.whatsapp_line_id`);
   const missing = slugs.includes('general')
     ? Prisma.sql`${column} IS NULL`

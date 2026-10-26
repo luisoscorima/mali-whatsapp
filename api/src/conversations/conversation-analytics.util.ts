@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import type { MetricCard } from '../campaigns/campaign-analytics.util';
 import { readSessionWindowMs } from '../campaigns/campaign-conversation-window.util';
+import { conversationCategoryPredicate } from '../config/business-scope';
 export { isWithinUserServiceWindow } from '../campaigns/campaign-conversation-window.util';
 
 export type ConversationDailyPoint = {
@@ -31,6 +32,7 @@ export async function fetchConversationSummary(
   area: string,
   days: number,
   advisorId?: number | null,
+  categories: string[] | null = null,
 ): Promise<ConversationSummary> {
   const safeDays = Math.min(Math.max(Math.round(days) || 30, 1), 90);
   const since = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000);
@@ -39,6 +41,9 @@ export async function fetchConversationSummary(
     advisorId != null && advisorId > 0
       ? Prisma.sql` AND c.assigned_user_id = ${advisorId}`
       : Prisma.empty;
+  const categoryFilter = categories?.length
+    ? Prisma.sql` AND ${conversationCategoryPredicate('c', categories)}`
+    : Prisma.empty;
 
   const [counts, dailyRows, topRows, advisorResponded] = await Promise.all([
     prisma.$queryRaw<
@@ -87,6 +92,7 @@ export async function fetchConversationSummary(
       WHERE c.area = ${area}
         AND c.last_message_at >= ${since}
         ${advisorFilter}
+        ${categoryFilter}
     `),
     prisma.$queryRaw<{ day: Date; count: number }[]>(Prisma.sql`
       SELECT date_trunc('day', c.last_message_at)::date AS day, COUNT(*)::int AS count
@@ -94,6 +100,7 @@ export async function fetchConversationSummary(
       WHERE c.area = ${area}
         AND c.last_message_at >= ${since}
         ${advisorFilter}
+        ${categoryFilter}
       GROUP BY 1
       ORDER BY 1 ASC
     `),
@@ -114,6 +121,7 @@ export async function fetchConversationSummary(
         AND c.last_message_at >= ${since}
         AND c.assigned_user_id IS NOT NULL
         ${advisorFilter}
+        ${categoryFilter}
       GROUP BY u.id, label
       ORDER BY count DESC, label ASC
       LIMIT 5
@@ -128,6 +136,7 @@ export async function fetchConversationSummary(
         AND c.last_message_at >= ${since}
         AND c.assigned_user_id IS NOT NULL
         ${advisorFilter}
+        ${categoryFilter}
     `),
   ]);
 

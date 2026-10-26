@@ -15,6 +15,7 @@ import { notify } from '@/shared/notify'
 import { WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
 import { chartTooltipProps } from '@/shared/charts/chartTooltip'
 import { MetricsGrid } from '../campaigns/MetricsGrid'
+import { useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
 import type { MetricCard } from '../campaigns/campaignMetricActions'
 
 type ConversationSummary = {
@@ -36,6 +37,7 @@ const KPI_FILTER_MAP: Record<string, { chat?: string }> = {
 }
 
 export function ConversationsSummaryPane() {
+  const scope = useCategoryScope()
   const user = useAppUser()
   const area = user?.area
   const canViewGlobal = Boolean(user?.canViewConversationStats)
@@ -68,7 +70,7 @@ export function ConversationsSummaryPane() {
     let cancelled = false
     const qs = new URLSearchParams({ days: String(days) })
     if (canViewGlobal && advisorId) qs.set('advisor_id', advisorId)
-    void apiClient.get<ConversationSummary>(`/api/conversations/summary?${qs}`).then((res) => {
+    void apiClient.get<ConversationSummary>(withCategoryQuery(`/api/conversations/summary?${qs}`, scope.query)).then((res) => {
       if (cancelled) return
       if (!res.ok) {
         notify.error(res.error)
@@ -81,7 +83,7 @@ export function ConversationsSummaryPane() {
     return () => {
       cancelled = true
     }
-  }, [area, days, advisorId, canViewGlobal, reloadToken])
+  }, [area, days, advisorId, canViewGlobal, reloadToken, scope.query, scope.revision])
 
   const chartData = useMemo(
     () =>

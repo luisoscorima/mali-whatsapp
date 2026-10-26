@@ -6,6 +6,8 @@ export type BusinessAccessScope = {
   mode: 'all' | 'restricted';
   programIds: number[];
   lineIds: number[];
+  /** null: ve todas las categorías. En Educación restringida, las que tiene marcadas. */
+  categorySlugs: string[] | null;
 };
 export const businessAccessContext = new AsyncLocalStorage<BusinessAccessScope | undefined>();
 export function restrictedAccess(): BusinessAccessScope | undefined {

@@ -5,6 +5,7 @@ import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
 import { WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
 import { MetricsGrid } from '../campaigns/MetricsGrid'
+import { useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
 import type { MetricCard } from '../campaigns/campaignMetricActions'
 
 type SegmentSummary = {
@@ -19,6 +20,7 @@ const KPI_FILTER_MAP: Record<string, { status?: string }> = {
 }
 
 export function SegmentsSummaryPane() {
+  const scope = useCategoryScope()
   const user = useAppUser()
   const area = user?.area
   const [searchParams, setSearchParams] = useSearchParams()
@@ -34,7 +36,7 @@ export function SegmentsSummaryPane() {
     setError('')
     let cancelled = false
     const qs = new URLSearchParams({ days: String(days) })
-    void apiClient.get<SegmentSummary>(`/api/segments/summary?${qs}`).then((res) => {
+    void apiClient.get<SegmentSummary>(withCategoryQuery(`/api/segments/summary?${qs}`, scope.query)).then((res) => {
       if (cancelled) return
       if (!res.ok) {
         notify.error(res.error)
@@ -47,7 +49,7 @@ export function SegmentsSummaryPane() {
     return () => {
       cancelled = true
     }
-  }, [area, days, reloadToken])
+  }, [area, days, reloadToken, scope.query, scope.revision])
 
   const metrics = useMemo(
     () =>

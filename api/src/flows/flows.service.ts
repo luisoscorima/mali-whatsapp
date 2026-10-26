@@ -127,8 +127,8 @@ export class FlowsService {
     });
   }
 
-  async getSummary(area: string): Promise<FlowSummary> {
-    return fetchFlowSummary(this.prisma, area);
+  async getSummary(area: string, categories: string[] | null = null): Promise<FlowSummary> {
+    return fetchFlowSummary(this.prisma, area, categories);
   }
 
   async listAdvisors(

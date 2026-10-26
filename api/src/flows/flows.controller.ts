@@ -59,9 +59,13 @@ export class FlowsController {
   @Get('summary')
   async summary(
     @CurrentUser() user: AuthUser,
+    @Query('category') category?: string | string[],
   ): Promise<ApiResponse<FlowSummary>> {
     assertCanListFlows(user);
-    const data = await this.flowsService.getSummary(user.area);
+    const data = await this.flowsService.getSummary(
+      user.area,
+      parseCategorySlugs(category),
+    );
     return { ok: true, data };
   }
 
