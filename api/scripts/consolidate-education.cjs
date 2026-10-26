@@ -438,7 +438,7 @@ async function main() {
 
         const peopleReady = await query(
           tx,
-          `SELECT to_regclass('public.people') AS rel`,
+          `SELECT to_regclass('public.people')::text AS rel`,
         );
         if (peopleReady[0] && peopleReady[0].rel) {
           await sql(tx, `ALTER TABLE contacts DISABLE TRIGGER USER`);
