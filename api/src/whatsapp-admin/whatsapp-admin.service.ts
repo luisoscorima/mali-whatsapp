@@ -368,9 +368,6 @@ export class WhatsAppAdminService {
       include: { default_credential: true },
     });
     if (!waba) throw new NotFoundException('WABA no encontrado');
-    if (!waba.default_credential) {
-      throw new BadRequestException('El WABA no tiene credencial');
-    }
 
     const existing = await this.prisma.whatsapp_lines.findMany({
       where: { waba_id: id },
@@ -383,7 +380,17 @@ export class WhatsAppAdminService {
         active: true,
         registration_status: true,
         business_area_id: true,
+        credential_override: {
+          select: {
+            id: true,
+            active: true,
+            secret_source: true,
+            secret_ref: true,
+            encrypted_token: true,
+          },
+        },
       },
+      orderBy: [{ active: 'desc' }, { id: 'asc' }],
     });
     const areaIds = Array.from(
       new Set(existing.map((line) => line.business_area_id)),
@@ -407,9 +414,20 @@ export class WhatsAppAdminService {
       throw new BadRequestException('El área de esta WABA no está habilitada');
     }
 
+    // Prefer WABA token; if the catalog only has per-line env tokens (Educación), use one of those.
+    const lineCredential = existing.find(
+      (line) => line.credential_override?.active,
+    )?.credential_override;
+    const credential = waba.default_credential || lineCredential || null;
+    if (!credential) {
+      throw new BadRequestException(
+        'Esta WABA no tiene token. Configura uno en la WABA o en alguna de sus líneas.',
+      );
+    }
+
     let metaLines;
     try {
-      const token = await this.resolveCredentialToken(waba.default_credential);
+      const token = await this.resolveCredentialToken(credential);
       metaLines = await listWhatsAppWabaPhoneNumbers(waba.meta_waba_id, token);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

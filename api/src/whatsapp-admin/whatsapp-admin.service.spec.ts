@@ -224,6 +224,7 @@ describe('WhatsApp administration lifecycle', () => {
         active: true,
         registration_status: 'validated',
         business_area_id: 1,
+        credential_override: null,
       },
     ]);
     db.whatsapp_lines.findUnique.mockResolvedValue(null);
@@ -265,5 +266,60 @@ describe('WhatsApp administration lifecycle', () => {
     });
     expect(refresh).toHaveBeenCalled();
     delete process.env.TEST_WABA_SYNC_TOKEN;
+  });
+
+  it('syncs using a per-line credential when the WABA has no default token', async () => {
+    process.env.TEST_LINE_SYNC_TOKEN = 'line-token-for-sync';
+    db.whatsapp_wabas.findUnique.mockResolvedValue({
+      id: 4,
+      meta_waba_id: '958313150113818',
+      default_credential: null,
+    });
+    db.whatsapp_lines.findMany.mockResolvedValue([
+      {
+        id: 4,
+        phone_number_id: '1178134562043416',
+        label: 'Educación general',
+        display_phone_number: '+51934595514',
+        quality_rating: 'GREEN',
+        active: true,
+        registration_status: 'validated',
+        business_area_id: 1,
+        credential_override: {
+          id: 4,
+          active: true,
+          secret_source: 'env',
+          secret_ref: 'TEST_LINE_SYNC_TOKEN',
+          encrypted_token: null,
+        },
+      },
+    ]);
+    db.whatsapp_lines.findUnique.mockResolvedValue(null);
+    db.whatsapp_lines.create.mockResolvedValue({
+      id: 40,
+      phone_number_id: '1473593759161176',
+      label: 'MALI Educación 4',
+    });
+    jest.mocked(listWhatsAppWabaPhoneNumbers).mockResolvedValue([
+      {
+        id: '1178134562043416',
+        displayPhoneNumber: '+51 934 595 514',
+        verifiedName: 'MALI Educación',
+        qualityRating: 'GREEN',
+        registrationStatus: 'connected',
+      },
+      {
+        id: '1473593759161176',
+        displayPhoneNumber: '+51 937 008 339',
+        verifiedName: 'MALI Educación 4',
+        qualityRating: 'UNKNOWN',
+        registrationStatus: 'connected',
+      },
+    ]);
+
+    const result = await service.syncWabaLines(4, { email: 'master@mali.pe' });
+    expect(result.created).toHaveLength(1);
+    expect(listWhatsAppWabaPhoneNumbers).toHaveBeenCalled();
+    delete process.env.TEST_LINE_SYNC_TOKEN;
   });
 });
