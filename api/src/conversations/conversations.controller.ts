@@ -90,11 +90,11 @@ export class ConversationsController {
     return { ok: true, data };
   }
 
+  /** Alias de GET /me/categories (sin exigir conversations.manage). */
   @Get('categories')
   async categories(
     @CurrentUser() user: AuthUser,
   ): Promise<ApiResponse<Array<{ slug: string; label: string }>>> {
-    assertCanManageConversations(user);
     const data = await this.conversationsService.listEducationCategories(user);
     return { ok: true, data };
   }

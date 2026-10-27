@@ -93,6 +93,7 @@ export type ContactsFilterOptions = {
     slug: string;
     label: string;
     color_key: string;
+    category?: string;
   }>;
   attribute_filters: AttributeFilterOption[];
   attribute_definitions: AttributeFieldDefinition[];

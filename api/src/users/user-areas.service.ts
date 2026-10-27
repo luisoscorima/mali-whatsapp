@@ -11,6 +11,7 @@ import {
   permissionsForRole,
   type PermissionCode,
 } from '../auth/roles';
+import type { AuthUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 
 const EDUCATION_CATEGORIES = ['general', 'ca', 'ep'] as const;
@@ -66,6 +67,68 @@ export class UserAreasService {
     private readonly prisma: PrismaService,
     private readonly config: AppConfigService,
   ) {}
+
+  /**
+   * Categorías del área actual del usuario (general + programas),
+   * filtradas por membership / grants. Usable sin permiso de inbox.
+   */
+  async listEducationCategories(
+    user: AuthUser,
+  ): Promise<Array<{ slug: string; label: string }>> {
+    const canonical = businessReadScope(user.area).canonicalArea;
+    const programs = await this.prisma.business_programs.findMany({
+      where: {
+        active: true,
+        business_area: { slug: canonical, active: true },
+      },
+      orderBy: [{ sort_order: 'asc' }, { slug: 'asc' }],
+      select: { slug: true, label: true },
+    });
+    if (!programs.length && canonical !== 'educacion') return [];
+    const all = [
+      { slug: 'general', label: 'General' },
+      ...programs.map((program) => ({
+        slug: program.slug,
+        label:
+          program.slug === 'ca' || program.slug === 'ep'
+            ? program.slug.toUpperCase()
+            : program.label,
+      })),
+    ];
+    if (user.isMaster) return all;
+    const membership = await this.prisma.user_area_memberships.findFirst({
+      where: {
+        user_id: user.id,
+        active: true,
+        business_area: { slug: canonical },
+      },
+      include: { programs: { include: { program: true } } },
+    });
+    if (canonical === 'educacion') {
+      const marked = await this.prisma.users.findUnique({
+        where: { id: user.id },
+        select: { area: true, user_areas: { select: { area: true } } },
+      });
+      const inherited = categoriesFromEducationSlugs([
+        marked?.area ?? '',
+        ...(marked?.user_areas ?? []).map((item) => item.area),
+      ]);
+      const allowed = new Set(
+        explicitEducationCategories(membership) ?? inherited,
+      );
+      if (!allowed.size || all.every((item) => allowed.has(item.slug))) return all;
+      return all.filter((item) => allowed.has(item.slug));
+    }
+    if (!membership || membership.access_mode !== 'restricted') return all;
+    const allowed = new Set([
+      ...(membership.include_general ? ['general'] : []),
+      ...membership.programs
+        .filter((grant) => grant.program.active)
+        .map((grant) => grant.program.slug),
+    ]);
+    if (!allowed.size || all.every((item) => allowed.has(item.slug))) return all;
+    return all.filter((item) => allowed.has(item.slug));
+  }
 
   mergeAllowedAreas(
     primaryArea: BusinessArea,

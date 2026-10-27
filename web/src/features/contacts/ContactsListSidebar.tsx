@@ -7,6 +7,7 @@ import { formatContactName } from './contactName'
 import { groupByCategory, type AttributeFieldDefinition } from './contactFormUtils'
 import { BulkContactActionsDialog } from './BulkContactActionsDialog'
 import { useOpenContactChat } from './openContactChat'
+import { categoryLabel, useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
 import { SegmentBadge } from '../segments/SegmentBadge'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
@@ -52,6 +53,7 @@ type SegmentOption = {
   slug: string
   label: string
   color_key: string
+  category?: string
 }
 
 type AttributeFilterOption = {
@@ -113,6 +115,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
   const [listCanScroll, setListCanScroll] = useState(false)
   const fabRef = useRef<HTMLDetailsElement>(null)
   const { openContactChat, linePickerDialog } = useOpenContactChat()
+  const categoryScope = useCategoryScope()
 
   const selectedSegments = searchParams.getAll('segment')
   const attrKey = searchParams.get('attr_key') ?? ''
@@ -130,8 +133,10 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
     }
     if (attrKey) sp.set('attr_key', attrKey)
     if (attrValue) sp.set('attr_value', attrValue)
-    return sp.toString()
-  }, [searchParams, page, selectedSegments, attrKey, attrValue])
+    const base = sp.toString()
+    if (!categoryScope.query) return base
+    return base ? `${base}&${categoryScope.query}` : categoryScope.query
+  }, [searchParams, page, selectedSegments, attrKey, attrValue, categoryScope.query])
 
   const exportQuery = useMemo(() => {
     const sp = new URLSearchParams()
@@ -142,15 +147,23 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
     }
     if (attrKey) sp.set('attr_key', attrKey)
     if (attrValue) sp.set('attr_value', attrValue)
+    if (categoryScope.query) {
+      for (const part of categoryScope.query.split('&')) {
+        const [key, value] = part.split('=')
+        if (key && value) sp.append(key, decodeURIComponent(value))
+      }
+    }
     const value = sp.toString()
     return value ? `?${value}` : ''
-  }, [searchParams, selectedSegments, attrKey, attrValue])
+  }, [searchParams, selectedSegments, attrKey, attrValue, categoryScope.query])
 
   useEffect(() => {
-    apiClient.get<FilterOptions>('/api/contacts/filter-options').then((res) => {
-      if (res.ok) setOptions(res.data)
-    })
-  }, [])
+    apiClient
+      .get<FilterOptions>(withCategoryQuery('/api/contacts/filter-options', categoryScope.query))
+      .then((res) => {
+        if (res.ok) setOptions(res.data)
+      })
+  }, [categoryScope.query])
 
   function refresh() {
     void apiClient.get<ContactsListResult>(`/api/contacts?${apiQuery}`).then((res) => {
@@ -539,7 +552,12 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
             {segments.length > 0 ? (
               <SegmentFilterSelect
                 compact
-                segments={segments}
+                segments={segments.map((seg) => ({
+                  ...seg,
+                  group: categoryScope.education
+                    ? categoryLabel(seg.category)
+                    : undefined,
+                }))}
                 selectedSlugs={selectedSegments}
                 onToggle={toggleSegment}
                 onClearAll={() =>

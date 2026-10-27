@@ -21,8 +21,10 @@ import {
   MetaSettingsService,
   type AreaLineInfo,
 } from '../meta-settings/meta-settings.service';
+import { UserAreasService } from '../users/user-areas.service';
 import { AuthService } from './auth.service';
 import type { ApiResponse, AuthUser } from './auth.types';
+import { ProvisionedGuard } from './guards/provisioned.guard';
 
 @Controller()
 export class AuthController {
@@ -30,6 +32,7 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly config: AppConfigService,
     private readonly metaSettings: MetaSettingsService,
+    private readonly userAreas: UserAreasService,
   ) {}
 
   @Post('auth/login')
@@ -146,6 +149,16 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: AuthUser): ApiResponse<AuthUser> {
     return { ok: true, data: user };
+  }
+
+  /** Catálogo de categorías del área actual (sin exigir permiso de inbox). */
+  @Get('me/categories')
+  @UseGuards(JwtAuthGuard, ProvisionedGuard)
+  async meCategories(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<Array<{ slug: string; label: string }>>> {
+    const data = await this.userAreas.listEducationCategories(user);
+    return { ok: true, data };
   }
 
   @Get('account/area-lines')

@@ -82,7 +82,13 @@ export class ContactsService {
       this.prisma.segment_definitions.findMany({
         where: { area, active: true, show_in_filter: true, ...programScopeWhere(categories) },
         orderBy: [{ sort_order: 'asc' }, { slug: 'asc' }],
-        select: { id: true, slug: true, label: true, color_key: true },
+        select: {
+          id: true,
+          slug: true,
+          label: true,
+          color_key: true,
+          program: { select: { slug: true } },
+        },
       }),
       this.prisma.contact_attribute_definitions.findMany({
         where: { area, active: true, ...programScopeWhere(categories) },
@@ -121,7 +127,13 @@ export class ContactsService {
       });
 
     return {
-      segments,
+      segments: segments.map((row) => ({
+        id: row.id,
+        slug: row.slug,
+        label: row.label,
+        color_key: row.color_key,
+        category: categoryOfProgram(row.program?.slug),
+      })),
       attribute_filters,
       attribute_definitions: attributeRows.map((row) => ({
         id: row.id,

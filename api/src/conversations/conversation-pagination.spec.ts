@@ -48,6 +48,7 @@ describe('bounded conversation history', () => {
       prisma as any,
       {} as any,
       {} as any,
+      {} as any,
     );
     jest
       .spyOn(service as any, 'loadConversationTimelineEvents')

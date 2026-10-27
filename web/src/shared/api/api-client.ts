@@ -285,7 +285,7 @@ export const apiClient = {
   },
 
   getEducationCategories(): Promise<ApiResponse<Array<{ slug: string; label: string }>>> {
-    return request<Array<{ slug: string; label: string }>>('/api/conversations/categories');
+    return request<Array<{ slug: string; label: string }>>('/api/me/categories');
   },
 
   async getHealth(): Promise<HealthResult> {
