@@ -148,10 +148,34 @@ export class MetaSettingsService implements OnModuleInit, OnModuleDestroy {
     ]);
     setBusinessAreaCatalog(areas, aliases);
     setMetaSettingsCache(rows);
+    // Líneas nuevas (sync) a menudo no tienen token propio: reutilizar uno de la misma WABA.
+    const wabaCredentialFallback = new Map<
+      string,
+      {
+        secret_source: string | null;
+        active: boolean;
+        secret_ref: string | null;
+        encrypted_token: string | null;
+      }
+    >();
+    for (const line of lines) {
+      const wabaId = line.waba.meta_waba_id;
+      if (wabaCredentialFallback.has(wabaId)) continue;
+      const own =
+        line.credential_override?.active === true
+          ? line.credential_override
+          : line.waba.default_credential?.active === true
+            ? line.waba.default_credential
+            : null;
+      if (own) wabaCredentialFallback.set(wabaId, own);
+    }
     setWhatsAppLineCatalog(
       lines.map((line) => {
         const credential =
-          line.credential_override || line.waba.default_credential;
+          line.credential_override ||
+          line.waba.default_credential ||
+          wabaCredentialFallback.get(line.waba.meta_waba_id) ||
+          null;
         return {
           id: line.id,
           active:

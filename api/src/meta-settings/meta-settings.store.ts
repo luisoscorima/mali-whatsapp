@@ -289,6 +289,14 @@ function effectiveCatalogArea(
   if (row.legacyArea && isValidBusinessArea(row.legacyArea)) {
     return normalizeArea(row.legacyArea);
   }
+  // Líneas sincronizadas suelen tener solo program_key (ca/ep); el inbox usa los alias.
+  const programKey = String(row.programKey || '')
+    .trim()
+    .toLowerCase();
+  if (programKey && row.canonicalArea === 'educacion') {
+    const alias = `educacion_${programKey}`;
+    if (isValidBusinessArea(alias)) return normalizeArea(alias);
+  }
   if (isValidBusinessArea(row.canonicalArea)) {
     return normalizeArea(row.canonicalArea);
   }

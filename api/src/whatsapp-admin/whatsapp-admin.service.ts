@@ -739,11 +739,18 @@ export class WhatsAppAdminService {
     const current = await this.prisma.whatsapp_lines.findUnique({ where: { id } });
     if (!current) throw new NotFoundException('Línea WhatsApp no encontrada');
     const { program } = await this.assertProgram(current.business_area_id, programId);
+    const legacyArea =
+      program?.slug === 'ca'
+        ? 'educacion_ca'
+        : program?.slug === 'ep'
+          ? 'educacion_ep'
+          : null;
     const updated = await this.prisma.whatsapp_lines.update({
       where: { id },
       data: {
         program_id: program?.id ?? null,
         program_key: program?.slug ?? null,
+        legacy_area: legacyArea,
         updated_at: new Date(),
       },
       select: { id: true, label: true, program_id: true, program_key: true },
@@ -1133,6 +1140,13 @@ export class WhatsAppAdminService {
       throw new BadRequestException('Valida la línea antes de activarla');
     }
 
+    const legacyArea =
+      line.legacy_area ||
+      (line.program_key === 'ca'
+        ? 'educacion_ca'
+        : line.program_key === 'ep'
+          ? 'educacion_ep'
+          : null);
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM business_areas WHERE id = ${line.business_area_id} FOR UPDATE`;
       if (line.is_default) {
@@ -1148,7 +1162,17 @@ export class WhatsAppAdminService {
       }
       return tx.whatsapp_lines.update({
         where: { id },
-        data: { active: true, updated_at: new Date() },
+        data: {
+          active: true,
+          // Persistir token de la WABA si la línea vino del sync sin credencial propia.
+          ...(!line.credential_override_id
+            ? { credential_override_id: credential.id }
+            : {}),
+          ...(legacyArea && legacyArea !== line.legacy_area
+            ? { legacy_area: legacyArea }
+            : {}),
+          updated_at: new Date(),
+        },
       });
     });
     await this.metaSettings.refresh();

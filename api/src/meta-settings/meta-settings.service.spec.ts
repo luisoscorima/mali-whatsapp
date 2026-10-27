@@ -48,6 +48,12 @@ describe('live catalog refresh', () => {
     process.env.TEST_CATALOG_TOKEN = 'test-token';
     let current = row(false);
     const db = {
+      business_areas: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 4, slug: 'educacion', label: 'Educación', active: true, sort_order: 1 },
+        ]),
+      },
+      business_area_aliases: { findMany: jest.fn().mockResolvedValue([]) },
       app_settings: { findMany: jest.fn().mockResolvedValue([]) },
       whatsapp_lines: { findMany: jest.fn(async () => [current]) },
     };

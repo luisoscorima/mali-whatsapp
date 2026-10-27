@@ -443,7 +443,13 @@ export function AdminWhatsappPage() {
                         <button
                           type="button"
                           className="small-btn secondary"
+                          title={
+                            line.registration_status === 'validated'
+                              ? 'Ya registrado en Cloud API'
+                              : undefined
+                          }
                           disabled={
+                            line.registration_status === 'validated' ||
                             validatingId === line.id ||
                             switchingId === line.id ||
                             registering

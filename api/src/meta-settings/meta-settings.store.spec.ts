@@ -19,6 +19,7 @@ const ENV_KEYS = [
   'WHATSAPP_TOKEN_EDUCACION_CA',
   'PHONE_NUMBER_ID_EDUCACION_CA',
   'WABA_ID_EDUCACION_CA',
+  'WHATSAPP_TOKEN_EDUCACION_EP',
   'WHATSAPP_CREDENTIALS_MASTER_KEY',
 ] as const;
 
@@ -167,6 +168,36 @@ describe('WhatsApp line catalog compatibility store', () => {
         'shared-waba',
       ).area,
     ).toBeNull();
+  });
+
+  it('routes synced Education lines by program_key when legacy_area is empty', () => {
+    setWhatsAppLineCatalog([
+      {
+        id: 28,
+        phoneNumberId: 'pid-edu-5',
+        displayPhoneNumber: '+51 924 970 373',
+        legacyArea: null,
+        canonicalArea: 'educacion',
+        programId: 2,
+        programKey: 'ep',
+        isDefault: false,
+        wabaId: 'shared-waba',
+        credentialSource: 'env',
+        credentialRef: 'WHATSAPP_TOKEN_EDUCACION_EP',
+        encryptedToken: null,
+      },
+    ]);
+    process.env.WHATSAPP_TOKEN_EDUCACION_EP = 'token-ep5';
+    expect(getWhatsAppLineByPhoneNumberId('pid-edu-5')).toMatchObject({
+      area: 'educacion_ep',
+      token: 'token-ep5',
+    });
+    expect(
+      resolveInboundArea(
+        { metadata: { phone_number_id: 'pid-edu-5' } },
+        'shared-waba',
+      ).area,
+    ).toBe('educacion_ep');
   });
 
   it('loads a newly activated line from a replacement snapshot without changing env', () => {
