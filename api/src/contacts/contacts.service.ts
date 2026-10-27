@@ -1,7 +1,15 @@
 import { Injectable, BadRequestException, ConflictException, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { businessReadScope } from '../config/areas';
-import { categoryOfProgram, programIdForCategory, programScopeWhere } from '../config/category-scope';
+import {
+  applyCategoryGrant,
+  categoryOfProgram,
+  programIdForCategory,
+  programScopeWhere,
+} from '../config/category-scope';
+import {
+  contactAccessPredicate,
+} from '../config/business-scope';
 import { payloadWithStandardCurso } from '../leads/lead-curso.util';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/auth.types';
@@ -28,6 +36,7 @@ import {
 } from './contacts-import.utils';
 import {
   buildContactsExportBuffer,
+  categoryExportPrefix,
   contactsExportFilename,
   type ContactExportRow,
 } from './contacts-export.util';
@@ -149,12 +158,91 @@ export class ContactsService {
     };
   }
 
-  private async getSegmentSlugSet(area: string): Promise<Set<string>> {
+  private async getSegmentSlugSet(
+    area: string,
+    programId?: number | null,
+  ): Promise<Set<string>> {
     const rows = await this.prisma.segment_definitions.findMany({
-      where: { area },
+      where: {
+        area,
+        ...(programId !== undefined ? { program_id: programId } : {}),
+      },
       select: { slug: true },
     });
     return new Set(rows.map((row) => row.slug));
+  }
+
+  /** null = sin filtro. */
+  private async resolveCategoryFilter(
+    area: string,
+    categories: string[] | null | undefined,
+  ): Promise<{ includeGeneral: boolean; programIds: number[] } | null> {
+    const granted = applyCategoryGrant(categories ?? null);
+    if (!granted?.length) return null;
+    if (granted.includes('__none__')) {
+      return { includeGeneral: false, programIds: [-1] };
+    }
+    const includeGeneral = granted.includes('general');
+    const slugs = granted.filter((slug) => slug !== 'general');
+    if (!slugs.length) return { includeGeneral, programIds: [] };
+    const canonical = businessReadScope(area).canonicalArea;
+    const rows = await this.prisma.business_programs.findMany({
+      where: {
+        slug: { in: slugs },
+        business_area: { slug: canonical },
+      },
+      select: { id: true },
+    });
+    return {
+      includeGeneral,
+      programIds: rows.map((row) => row.id),
+    };
+  }
+
+  private contactCategoryMatchSql(
+    filter: { includeGeneral: boolean; programIds: number[] },
+  ): Prisma.Sql {
+    const parts: Prisma.Sql[] = [];
+    if (filter.includeGeneral) {
+      parts.push(Prisma.sql`EXISTS (
+        SELECT 1 FROM contact_segments cs_g
+        WHERE cs_g.contact_id = c.id AND cs_g.program_id IS NULL
+      )`);
+      parts.push(Prisma.sql`EXISTS (
+        SELECT 1 FROM contact_attributes ca_g
+        WHERE ca_g.contact_id = c.id AND ca_g.program_id IS NULL
+      )`);
+      parts.push(Prisma.sql`(
+        NOT EXISTS (
+          SELECT 1 FROM contact_segments cs_ng
+          WHERE cs_ng.contact_id = c.id AND cs_ng.program_id IS NOT NULL
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM contact_attributes ca_ng
+          WHERE ca_ng.contact_id = c.id AND ca_ng.program_id IS NOT NULL
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM contact_programs cp_ng WHERE cp_ng.contact_id = c.id
+        )
+      )`);
+    }
+    if (filter.programIds.length) {
+      const ids = Prisma.join(filter.programIds);
+      parts.push(Prisma.sql`EXISTS (
+        SELECT 1 FROM contact_segments cs_p
+        WHERE cs_p.contact_id = c.id AND cs_p.program_id IN (${ids})
+      )`);
+      parts.push(Prisma.sql`EXISTS (
+        SELECT 1 FROM contact_attributes ca_p
+        WHERE ca_p.contact_id = c.id AND ca_p.program_id IN (${ids})
+      )`);
+      parts.push(Prisma.sql`EXISTS (
+        SELECT 1 FROM contact_programs cp_p
+        WHERE cp_p.contact_id = c.id AND cp_p.program_id IN (${ids})
+      )`);
+    }
+    if (!parts.length) return Prisma.sql`FALSE`;
+    return Prisma.sql`(${Prisma.join(parts, ' OR ')})`;
   }
 
   private async loadAttributeDefinitions(area: string, programId?: number | null) {
@@ -237,7 +325,18 @@ export class ContactsService {
     slugSet: Set<string>,
   ): Promise<Prisma.Sql> {
     const segmentFilter = parseSegmentListFilter(params.segment, slugSet);
-    const conditions: Prisma.Sql[] = [Prisma.sql`c.area = ${area}`];
+    const conditions: Prisma.Sql[] = [
+      Prisma.sql`c.area = ${area}`,
+      contactAccessPredicate('c'),
+    ];
+
+    const categoryFilter = await this.resolveCategoryFilter(
+      area,
+      params.categories,
+    );
+    if (categoryFilter) {
+      conditions.push(this.contactCategoryMatchSql(categoryFilter));
+    }
 
     const segmentClauses: Prisma.Sql[] = [];
     if (segmentFilter.slugs.length > 0) {
@@ -620,8 +719,26 @@ export class ContactsService {
     });
     const slugSet = new Set(segments.map((row) => row.slug));
     const where = await this.buildListWhereClause(area, params, slugSet);
+    const categoryFilter = await this.resolveCategoryFilter(
+      area,
+      params.categories,
+    );
+    const prefixCategories =
+      !categoryFilter ||
+      (categoryFilter.includeGeneral ? 1 : 0) + categoryFilter.programIds.length !==
+        1;
 
-    const rows = await this.prisma.$queryRaw<ContactExportRow[]>(Prisma.sql`
+    const baseRows = await this.prisma.$queryRaw<
+      Array<{
+        id: number;
+        name: string;
+        last_name: string;
+        phone: string | null;
+        wa_username: string | null;
+        email: string | null;
+        dni: string | null;
+      }>
+    >(Prisma.sql`
       SELECT
         c.id,
         c.name,
@@ -631,38 +748,133 @@ export class ContactsService {
          WHERE conv.area = c.area AND conv.contact_id = c.id AND conv.wa_username IS NOT NULL
          ORDER BY conv.updated_at DESC LIMIT 1) AS wa_username,
         c.email,
-        c.dni,
-        COALESCE((
-          SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
-          FROM contact_segments cs
-          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
-          WHERE cs.contact_id = c.id AND cs.area = ${area}
-        ), '') AS segment_labels
+        c.dni
       FROM contacts c
       WHERE ${where}
       ORDER BY COALESCE(NULLIF(c.name, ''), c.phone) ASC, c.id DESC
       LIMIT ${MAX_CSV_ROWS + 1}
     `);
 
-    if (rows.length > MAX_CSV_ROWS) {
+    if (baseRows.length > MAX_CSV_ROWS) {
       throw new BadRequestException(
-        `Demasiados contactos (${rows.length}). Máximo ${MAX_CSV_ROWS}; acota los filtros.`,
+        `Demasiados contactos (${baseRows.length}). Máximo ${MAX_CSV_ROWS}; acota los filtros.`,
       );
     }
 
-    const contactIds = rows.map((r) => r.id);
+    const contactIds = baseRows.map((r) => r.id);
+    const segWhere: Prisma.contact_segmentsWhereInput = {
+      contact_id: { in: contactIds },
+      area,
+      ...(categoryFilter
+        ? {
+            OR: [
+              ...(categoryFilter.includeGeneral ? [{ program_id: null }] : []),
+              ...(categoryFilter.programIds.length
+                ? [{ program_id: { in: categoryFilter.programIds } }]
+                : []),
+            ],
+          }
+        : {}),
+    };
+    const segRows = contactIds.length
+      ? await this.prisma.contact_segments.findMany({
+          where: segWhere,
+          select: {
+            contact_id: true,
+            segment_slug: true,
+            program_id: true,
+            program: { select: { slug: true } },
+          },
+          orderBy: [{ contact_id: 'asc' }, { segment_slug: 'asc' }],
+        })
+      : [];
+
+    const categoriesByContact = new Map<number, Set<string>>();
+    const segmentsByContact = new Map<number, string[]>();
+    for (const row of segRows) {
+      const cat = categoryOfProgram(row.program?.slug);
+      if (!categoriesByContact.has(row.contact_id)) {
+        categoriesByContact.set(row.contact_id, new Set());
+      }
+      categoriesByContact.get(row.contact_id)!.add(cat);
+      const label = prefixCategories
+        ? `${categoryExportPrefix(cat)}:${row.segment_slug}`
+        : row.segment_slug;
+      if (!segmentsByContact.has(row.contact_id)) {
+        segmentsByContact.set(row.contact_id, []);
+      }
+      segmentsByContact.get(row.contact_id)!.push(label);
+    }
+
     const attrMap = new Map<number, Record<string, string>>();
     if (includeAttributes && contactIds.length > 0) {
+      const attrWhere: Prisma.contact_attributesWhereInput = {
+        contact_id: { in: contactIds },
+        ...(categoryFilter
+          ? {
+              OR: [
+                ...(categoryFilter.includeGeneral ? [{ program_id: null }] : []),
+                ...(categoryFilter.programIds.length
+                  ? [{ program_id: { in: categoryFilter.programIds } }]
+                  : []),
+              ],
+            }
+          : {}),
+      };
       const attrRows = await this.prisma.contact_attributes.findMany({
-        where: { contact_id: { in: contactIds } },
+        where: attrWhere,
         orderBy: [{ contact_id: 'asc' }, { attr_key: 'asc' }],
-        select: { contact_id: true, attr_key: true, attr_value: true },
+        select: {
+          contact_id: true,
+          attr_key: true,
+          attr_value: true,
+          program: { select: { slug: true } },
+        },
       });
       for (const row of attrRows) {
+        const cat = categoryOfProgram(row.program?.slug);
+        if (!categoriesByContact.has(row.contact_id)) {
+          categoriesByContact.set(row.contact_id, new Set());
+        }
+        categoriesByContact.get(row.contact_id)!.add(cat);
         if (!attrMap.has(row.contact_id)) attrMap.set(row.contact_id, {});
-        attrMap.get(row.contact_id)![row.attr_key] = row.attr_value;
+        const key = prefixCategories
+          ? `${cat}.${row.attr_key}`
+          : row.attr_key;
+        attrMap.get(row.contact_id)![key] = row.attr_value;
       }
     }
+
+    const programRows = contactIds.length
+      ? await this.prisma.contact_programs.findMany({
+          where: {
+            contact_id: { in: contactIds },
+            ...(categoryFilter?.programIds.length
+              ? { program_id: { in: categoryFilter.programIds } }
+              : {}),
+          },
+          select: {
+            contact_id: true,
+            program: { select: { slug: true } },
+          },
+        })
+      : [];
+    for (const row of programRows) {
+      const cat = categoryOfProgram(row.program?.slug);
+      if (!categoriesByContact.has(row.contact_id)) {
+        categoriesByContact.set(row.contact_id, new Set());
+      }
+      categoriesByContact.get(row.contact_id)!.add(cat);
+    }
+
+    const rows: ContactExportRow[] = baseRows.map((c) => {
+      const cats = [...(categoriesByContact.get(c.id) ?? [])].sort();
+      return {
+        ...c,
+        categories_label: cats.length ? cats.join(', ') : 'general',
+        segment_labels: (segmentsByContact.get(c.id) ?? []).join(', '),
+      };
+    });
 
     const buffer = buildContactsExportBuffer(rows, attrMap, { includeAttributes });
     return { buffer, filename: contactsExportFilename() };
@@ -767,10 +979,34 @@ export class ContactsService {
     tx: Prisma.TransactionClient,
     contactId: number,
     attributes: Record<string, string>,
+    programId: number | null = null,
   ): Promise<void> {
     for (const [attr_key, attr_value] of Object.entries(attributes)) {
-      await upsertScopedAttribute(tx, contactId, attr_key, attr_value, null);
+      await upsertScopedAttribute(tx, contactId, attr_key, attr_value, programId);
     }
+  }
+
+  private async ensureContactProgram(
+    tx: Prisma.TransactionClient,
+    contactId: number,
+    programId: number | null,
+    source: string,
+  ): Promise<void> {
+    if (!programId) return;
+    await tx.contact_programs.upsert({
+      where: {
+        contact_id_program_id: {
+          contact_id: contactId,
+          program_id: programId,
+        },
+      },
+      create: {
+        contact_id: contactId,
+        program_id: programId,
+        source,
+      },
+      update: { last_seen_at: new Date() },
+    });
   }
 
   private async mapContactDetail(
@@ -941,8 +1177,9 @@ export class ContactsService {
         const created = await this.prisma.$transaction(async (tx) => {
           await this.assertConversationIdentityCompatible(tx, area, phone, whatsapp_user_id);
           const change = await this.replaceContactSegments(tx, resolved.contact_id, area, segments, segmentProgramId);
-          await this.upsertContactAttributes(tx, resolved.contact_id, attrs);
-          if (dni) await this.upsertContactAttributes(tx, resolved.contact_id, { dni });
+          await this.upsertContactAttributes(tx, resolved.contact_id, attrs, segmentProgramId);
+          if (dni) await this.upsertContactAttributes(tx, resolved.contact_id, { dni }, segmentProgramId);
+          await this.ensureContactProgram(tx, resolved.contact_id, segmentProgramId, 'contact');
           await tx.conversations.updateMany({
             where: { area, contact_id: null, OR: [
               ...(phone ? [{ phone }] : []),
@@ -1000,10 +1237,11 @@ export class ContactsService {
           segments,
           segmentProgramId,
         );
-        await this.upsertContactAttributes(tx, contact.id, attrs);
+        await this.upsertContactAttributes(tx, contact.id, attrs, segmentProgramId);
         if (dni) {
-          await this.upsertContactAttributes(tx, contact.id, { dni });
+          await this.upsertContactAttributes(tx, contact.id, { dni }, segmentProgramId);
         }
+        await this.ensureContactProgram(tx, contact.id, segmentProgramId, 'contact');
         await tx.conversations.updateMany({
           where: { area, contact_id: null, OR: [
             ...(phone ? [{ phone }] : []),
@@ -1156,12 +1394,16 @@ export class ContactsService {
           segments,
           segmentProgramId,
         );
-        await this.upsertContactAttributes(tx, id, attrs);
+        await this.upsertContactAttributes(tx, id, attrs, segmentProgramId);
         if (dto.dni !== undefined) {
-          await this.upsertContactAttributes(tx, id, {
-            dni: dni ?? '',
-          });
+          await this.upsertContactAttributes(
+            tx,
+            id,
+            { dni: dni ?? '' },
+            segmentProgramId,
+          );
         }
+        await this.ensureContactProgram(tx, id, segmentProgramId, 'contact');
         await tx.conversations.updateMany({
           where: { area, AND: [
             { OR: [{ contact_id: null }, { contact_id: id }] },
@@ -1224,16 +1466,27 @@ export class ContactsService {
     return this.getById(area, id);
   }
 
+  private defaultImportCategory(categories: string[] | null | undefined): string {
+    const granted = applyCategoryGrant(categories ?? null);
+    if (granted?.length === 1 && granted[0] !== '__none__') return granted[0];
+    return 'general';
+  }
+
   async previewImport(
     area: string,
     buffer: Buffer,
     filename: string,
+    categories: string[] | null = null,
   ): Promise<import('./contacts.types').ContactsImportPreview> {
     const segmentSet = await this.getSegmentSlugSet(area);
     const lower = String(filename ?? '').toLowerCase();
     const parsed = lower.endsWith('.xlsx')
       ? parseContactXlsxBuffer(buffer, segmentSet)
       : parseContactCsvBuffer(buffer, segmentSet);
+    const fallbackCategory = this.defaultImportCategory(categories);
+    for (const row of parsed.rows) {
+      if (!row.category) row.category = fallbackCategory;
+    }
 
     if (parsed.rows.length === 0 && parsed.errors.length === 0) {
       throw new BadRequestException('Archivo sin datos');
@@ -1305,6 +1558,7 @@ export class ContactsService {
     user: AuthUser,
     buffer: Buffer,
     filename: string,
+    categories: string[] | null = null,
   ): Promise<ContactsImportResult> {
     const area = user.area;
     const segmentSet = await this.getSegmentSlugSet(area);
@@ -1312,6 +1566,10 @@ export class ContactsService {
     const parsed = lower.endsWith('.xlsx')
       ? parseContactXlsxBuffer(buffer, segmentSet)
       : parseContactCsvBuffer(buffer, segmentSet);
+    const fallbackCategory = this.defaultImportCategory(categories);
+    for (const row of parsed.rows) {
+      if (!row.category) row.category = fallbackCategory;
+    }
 
     if (parsed.rows.length === 0 && parsed.errors.length === 0) {
       throw new BadRequestException('Archivo sin datos');
@@ -1323,11 +1581,9 @@ export class ContactsService {
       );
     }
 
-    const allDefs = await this.loadAttributeDefinitions(area);
-
     let imported = 0;
     for (const row of parsed.rows) {
-      await this.importSingleRow(user, area, row, allDefs);
+      await this.importSingleRow(user, area, row);
       imported += 1;
     }
 
@@ -1359,8 +1615,9 @@ export class ContactsService {
     user: AuthUser,
     area: string,
     row: ImportContactRow,
-    allDefs: Awaited<ReturnType<ContactsService['loadAttributeDefinitions']>>,
   ): Promise<void> {
+    const programId = await this.programIdFromCategory(area, row.category || 'general');
+    const allDefs = await this.loadAttributeDefinitions(area, programId);
     const applicable = getApplicableAttributeDefinitions(allDefs, row.segments);
     const attrs = filterAttributesForDefinitions(
       normalizeAttributesInput(row.attributes),
@@ -1415,13 +1672,15 @@ export class ContactsService {
         contact.id,
         area,
         row.segments,
+        programId,
       );
       if (Object.keys(attrs).length > 0) {
-        await this.upsertContactAttributes(tx, contact.id, attrs);
+        await this.upsertContactAttributes(tx, contact.id, attrs, programId);
       }
       if (row.dni) {
-        await this.upsertContactAttributes(tx, contact.id, { dni: row.dni });
+        await this.upsertContactAttributes(tx, contact.id, { dni: row.dni }, programId);
       }
+      await this.ensureContactProgram(tx, contact.id, programId, 'import');
       await tx.conversations.updateMany({
         where: { area, phone: row.phone, OR: [{ contact_id: null }, { contact_id: contact.id }] },
         data: { contact_id: contact.id, updated_at: new Date() },

@@ -105,6 +105,7 @@ export class ContactsController {
   async importPreview(
     @CurrentUser() user: AuthUser,
     @UploadedFile() file: { buffer: Buffer; originalname: string } | undefined,
+    @Query('category') category?: string | string[],
   ): Promise<ApiResponse<ContactsImportPreview>> {
     assertCanImportContacts(user);
     if (!file?.buffer?.length) {
@@ -117,6 +118,7 @@ export class ContactsController {
       user.area,
       file.buffer,
       file.originalname,
+      parseCategorySlugs(category),
     );
     return { ok: true, data };
   }
@@ -130,6 +132,7 @@ export class ContactsController {
   async import(
     @CurrentUser() user: AuthUser,
     @UploadedFile() file: { buffer: Buffer; originalname: string } | undefined,
+    @Query('category') category?: string | string[],
   ): Promise<ApiResponse<ContactsImportResult>> {
     assertCanImportContacts(user);
     if (!file?.buffer?.length) {
@@ -142,6 +145,7 @@ export class ContactsController {
       user,
       file.buffer,
       file.originalname,
+      parseCategorySlugs(category),
     );
     return { ok: true, data };
   }
@@ -162,6 +166,7 @@ export class ContactsController {
         segment: normalizeSegmentParam(query.segment),
         attr_key: query.attr_key,
         attr_value: query.attr_value,
+        categories: parseCategorySlugs(query.category),
       },
       String(query.attrs ?? '1') !== '0',
     );
@@ -216,6 +221,7 @@ export class ContactsController {
       segment: normalizeSegmentParam(query.segment),
       attr_key: query.attr_key,
       attr_value: query.attr_value,
+      categories: parseCategorySlugs(query.category),
     });
     return { ok: true, data };
   }

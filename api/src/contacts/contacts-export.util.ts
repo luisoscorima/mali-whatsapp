@@ -2,7 +2,16 @@ import * as XLSX from 'xlsx';
 import { exportFilenameDateStamp } from '../campaigns/campaign-format.util';
 import { safeFilenamePart } from '../conversations/conversation-export.util';
 
-const BASE_HEADERS = ['Nombre', 'Apellidos', 'Teléfono', 'Usuario de WhatsApp', 'Email', 'DNI', 'Segmentos'];
+const BASE_HEADERS = [
+  'Nombre',
+  'Apellidos',
+  'Teléfono',
+  'Usuario de WhatsApp',
+  'Email',
+  'DNI',
+  'Categoría',
+  'Segmentos',
+];
 
 /** Slugs nativos que no deben salir como columnas de atributo dinámico. */
 const NATIVE_ATTR_KEYS = new Set(['dni', 'email', 'correo']);
@@ -15,6 +24,7 @@ export type ContactExportRow = {
   wa_username: string | null;
   email: string | null;
   dni: string | null;
+  categories_label: string;
   segment_labels: string;
 };
 
@@ -32,6 +42,12 @@ export function collectAttributeKeys(
     }
   }
   return [...keys].sort();
+}
+
+export function categoryExportPrefix(slug: string | null | undefined): string {
+  const s = String(slug ?? '').trim().toLowerCase() || 'general';
+  if (s === 'general') return 'General';
+  return s.toUpperCase();
 }
 
 export function buildContactsExportBuffer(
@@ -54,6 +70,7 @@ export function buildContactsExportBuffer(
         c.wa_username ? `@${c.wa_username.replace(/^@/, '')}` : '',
         String(c.email || ''),
         String(c.dni || ''),
+        String(c.categories_label || ''),
         String(c.segment_labels || ''),
       ];
       if (includeAttributes) {
@@ -71,6 +88,7 @@ export function buildContactsExportBuffer(
     { wch: 24 },
     { wch: 28 },
     { wch: 16 },
+    { wch: 18 },
     { wch: 36 },
     ...attrKeys.map(() => ({ wch: 20 })),
   ];

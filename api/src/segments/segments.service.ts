@@ -501,8 +501,25 @@ export class SegmentsService {
     includeAttributes = true,
   ): Promise<{ buffer: Buffer; filename: string }> {
     const segment = await this.getById(area, id);
+    const segmentRow = await this.prisma.segment_definitions.findFirst({
+      where: { id, area },
+      select: { slug: true, program_id: true },
+    });
+    if (!segmentRow) {
+      throw new NotFoundException('Segmento no encontrado');
+    }
 
-    const rows = await this.prisma.$queryRaw<ContactExportRow[]>(Prisma.sql`
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: number;
+        name: string;
+        last_name: string;
+        phone: string | null;
+        email: string | null;
+        dni: string | null;
+        segment_labels: string;
+      }>
+    >(Prisma.sql`
       SELECT
         c.id,
         c.name,
@@ -515,6 +532,7 @@ export class SegmentsService {
           FROM contact_segments cs
           JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
           WHERE cs.contact_id = c.id AND cs.area = ${area}
+            AND cs.program_id IS NOT DISTINCT FROM ${segmentRow.program_id}
         ), '') AS segment_labels
       FROM contacts c
       WHERE c.area = ${area}
@@ -523,7 +541,8 @@ export class SegmentsService {
           FROM contact_segments csf
           WHERE csf.contact_id = c.id
             AND csf.area = c.area
-            AND csf.segment_slug = ${segment.slug}
+            AND csf.segment_slug = ${segmentRow.slug}
+            AND csf.program_id IS NOT DISTINCT FROM ${segmentRow.program_id}
         )
       ORDER BY COALESCE(NULLIF(c.name, ''), c.phone) ASC, c.id DESC
       LIMIT ${MAX_CSV_ROWS + 1}
@@ -539,7 +558,10 @@ export class SegmentsService {
     const attrMap = new Map<number, Record<string, string>>();
     if (includeAttributes && contactIds.length > 0) {
       const attrRows = await this.prisma.contact_attributes.findMany({
-        where: { contact_id: { in: contactIds } },
+        where: {
+          contact_id: { in: contactIds },
+          program_id: segmentRow.program_id,
+        },
         orderBy: [{ contact_id: 'asc' }, { attr_key: 'asc' }],
         select: { contact_id: true, attr_key: true, attr_value: true },
       });
@@ -549,7 +571,21 @@ export class SegmentsService {
       }
     }
 
-    const buffer = buildContactsExportBuffer(rows, attrMap, { includeAttributes });
+    const exportRows: ContactExportRow[] = rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      last_name: row.last_name,
+      phone: row.phone,
+      wa_username: null,
+      email: row.email,
+      dni: row.dni,
+      categories_label: segment.category,
+      segment_labels: row.segment_labels,
+    }));
+
+    const buffer = buildContactsExportBuffer(exportRows, attrMap, {
+      includeAttributes,
+    });
     return {
       buffer,
       filename: segmentContactsExportFilename(segment.slug),

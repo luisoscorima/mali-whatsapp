@@ -106,6 +106,8 @@ export type ListContactsParams = {
   segment?: string[];
   attr_key?: string;
   attr_value?: string;
+  /** null = sin filtro de categoría (todas las autorizadas). */
+  categories?: string[] | null;
 };
 
 export type ContactsImportResult = {

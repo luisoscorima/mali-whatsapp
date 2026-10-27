@@ -39,4 +39,8 @@ export class ListContactsQueryDto {
   @IsOptional()
   @IsString()
   attrs?: string;
+
+  /** Categorías del riel (`general`, `ca`, `ep`, …). */
+  @IsOptional()
+  category?: string | string[];
 }

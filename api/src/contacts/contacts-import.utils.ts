@@ -38,6 +38,9 @@ const KNOWN_COLUMNS = new Set([
   'mail',
   'dni',
   'documento',
+  'category',
+  'categoría',
+  'categoria',
 ]);
 
 export type ImportContactRow = {
@@ -46,6 +49,8 @@ export type ImportContactRow = {
   phone: string;
   email?: string | null;
   dni?: string | null;
+  /** general | ca | ep | …; vacío → default del request. */
+  category: string;
   segments: string[];
   attributes: Record<string, string>;
 };
@@ -72,6 +77,7 @@ type PickedRecord = {
   prefix?: string;
   email?: string;
   dni?: string;
+  category?: string;
   attributes: Record<string, string>;
 };
 
@@ -107,6 +113,8 @@ function pickContactFieldsFromRecord(
   const prefix = r.prefix || r.prefijo || r.country_code || r.country || r.pais;
   const email = r.email || r.correo || r.mail || undefined;
   const dni = r.dni || r.documento || undefined;
+  const category =
+    r.category || r['categoría'] || r.categoria || undefined;
 
   const attributes: Record<string, string> = {};
   for (const [key, value] of Object.entries(r)) {
@@ -124,6 +132,7 @@ function pickContactFieldsFromRecord(
     prefix,
     email,
     dni,
+    category,
     attributes,
   };
 }
@@ -221,12 +230,17 @@ function normalizeImportRecord(
     };
   }
 
+  const categoryRaw = String(picked.category ?? '')
+    .trim()
+    .toLowerCase();
+
   return {
     ok: true,
     value: {
       name: validated.value.name,
       last_name: validated.value.last_name,
       phone: validated.value.phone,
+      category: categoryRaw,
       segments: validated.value.segments,
       email: (() => {
         const raw = String(picked.email ?? '')
@@ -367,6 +381,7 @@ export function buildContactImportSampleXlsxBuffer(): Buffer {
       phone: '982160981',
       email: 'maria.garcia@example.com',
       dni: '12345678',
+      category: 'general',
       segment: 'suscriptor_1',
       prefix: '',
       sede: 'Lima Norte',
@@ -379,6 +394,7 @@ export function buildContactImportSampleXlsxBuffer(): Buffer {
       phone: '987654321',
       email: '',
       dni: '',
+      category: 'ca',
       segment: 'suscriptor_1;suscriptor_2',
       prefix: '',
       sede: '',
@@ -391,6 +407,7 @@ export function buildContactImportSampleXlsxBuffer(): Buffer {
       phone: '51911111111',
       email: 'ana.torres@example.com',
       dni: '87654321',
+      category: 'ep',
       segment: 'suscriptor_1,suscriptor_2,suscriptor_3',
       prefix: '',
       sede: 'Cusco',

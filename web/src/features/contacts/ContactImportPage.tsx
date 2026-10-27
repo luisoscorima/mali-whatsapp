@@ -2,6 +2,7 @@ import { type DragEvent, type FormEvent, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
+import { useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
 import {
   Dialog,
   DialogContent,
@@ -34,6 +35,7 @@ type ImportResult = {
 }
 
 export function ContactImportPage() {
+  const categoryScope = useCategoryScope()
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<ImportPreview | null>(null)
   const [result, setResult] = useState<ImportResult | null>(null)
@@ -78,7 +80,7 @@ export function ContactImportPage() {
     formData.append('file', file)
 
     const response = await apiClient.postFormData<ImportPreview>(
-      '/api/contacts/import/preview',
+      withCategoryQuery('/api/contacts/import/preview', categoryScope.query),
       formData,
     )
     setLoading(false)
@@ -98,7 +100,7 @@ export function ContactImportPage() {
     formData.append('file', file)
 
     const response = await apiClient.postFormData<ImportResult>(
-      '/api/contacts/import',
+      withCategoryQuery('/api/contacts/import', categoryScope.query),
       formData,
     )
     setConfirming(false)
@@ -118,7 +120,10 @@ export function ContactImportPage() {
           ← Contactos
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">Importar contactos</h1>
-        <p className="text-sm text-muted">CSV o Excel (.xlsx) masivo</p>
+        <p className="text-sm text-muted">
+          CSV o Excel (.xlsx) masivo. Sin columna categoría se usa la del riel
+          (si hay una sola) o General.
+        </p>
       </div>
 
       {result ? (
@@ -212,7 +217,8 @@ export function ContactImportPage() {
         Columnas: <code className="font-mono">name</code>,{' '}
         <code className="font-mono">last_name</code> (o apellido, opcional),{' '}
         <code className="font-mono">phone</code>, <code className="font-mono">segment</code>.
-        Opcional: <code className="font-mono">email</code> (o correo/mail),{' '}
+        Opcional: <code className="font-mono">category</code> (general / ca / ep),{' '}
+        <code className="font-mono">email</code> (o correo/mail),{' '}
         <code className="font-mono">dni</code> (o documento),{' '}
         <code className="font-mono">prefix</code> y columnas extra como atributos
         (slugs definidos en Atributos). Varios segmentos separados por ; o ,.
