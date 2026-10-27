@@ -1881,10 +1881,16 @@ html[data-theme='dark'] .chat-bubble__reply-to {
   pointer-events: auto;
 }
 
+.chat-pdf-lightbox__stage {
+  align-items: flex-start;
+  padding: 16px 0 72px;
+}
+
 .chat-pdf-lightbox__pages {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  margin-inline: auto;
 }
 
 .chat-pdf-lightbox__pages canvas {
