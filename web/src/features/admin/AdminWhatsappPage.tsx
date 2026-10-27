@@ -400,10 +400,19 @@ export function AdminWhatsappPage() {
                       className={`flex flex-wrap items-center justify-between gap-3 border-b border-line py-3 last:border-b-0 ${category.label ? 'pl-8 pr-4' : 'px-4'}`}
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm">
-                          {line.label}
-                          {line.is_default ? ' · predeterminada' : ''}
-                          {line.active ? '' : ' · inactiva'}
+                        <p className="flex items-center gap-1.5 text-sm">
+                          {line.registration_status === 'validated' ? (
+                            <span
+                              className="admin-online-dot"
+                              title="Validada en Cloud API"
+                              aria-label="Validada"
+                            />
+                          ) : null}
+                          <span>
+                            {line.label}
+                            {line.is_default ? ' · predeterminada' : ''}
+                            {line.active ? '' : ' · inactiva'}
+                          </span>
                         </p>
                         <p className="text-sm text-muted">
                           {line.display_phone_number || 'Sin número visible'}

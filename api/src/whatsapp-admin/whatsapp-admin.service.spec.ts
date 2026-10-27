@@ -333,6 +333,9 @@ describe('WhatsApp administration lifecycle', () => {
       id: 11,
       waba_id: 4,
       phone_number_id: '1473593759161176',
+      credential_override_id: null,
+      legacy_area: null,
+      program_key: 'ca',
       waba: {
         meta_waba_id: '958313150113818',
         active: true,
@@ -340,11 +343,12 @@ describe('WhatsApp administration lifecycle', () => {
       },
       credential_override: null,
       business_area_id: 1,
-      program_id: null,
+      business_area: { slug: 'educacion' },
+      program_id: 1,
     });
     db.whatsapp_lines.findFirst = jest.fn().mockResolvedValue({
       credential_override: {
-        id: 4,
+        id: 5,
         active: true,
         secret_source: 'env',
         secret_ref: 'TEST_REGISTER_TOKEN',
@@ -367,9 +371,18 @@ describe('WhatsApp administration lifecycle', () => {
       'register-token-value',
       '123456',
     );
+    expect(db.whatsapp_lines.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ program_key: 'ca' }),
+      }),
+    );
     expect(db.whatsapp_lines.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ registration_status: 'validated' }),
+        data: expect.objectContaining({
+          registration_status: 'validated',
+          credential_override_id: 5,
+          legacy_area: 'educacion_ca',
+        }),
       }),
     );
     delete process.env.TEST_REGISTER_TOKEN;

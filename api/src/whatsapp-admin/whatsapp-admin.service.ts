@@ -104,12 +104,27 @@ export class WhatsAppAdminService {
     throw new Error('La credencial no tiene una fuente compatible');
   }
 
+  /** Alias de inbox (educacion / educacion_ca / educacion_ep) según categoría. */
+  private legacyAreaForProgram(
+    programKey: string | null | undefined,
+    areaSlug?: string | null,
+  ): string | null {
+    const key = String(programKey || '')
+      .trim()
+      .toLowerCase();
+    if (key === 'ca') return 'educacion_ca';
+    if (key === 'ep') return 'educacion_ep';
+    if (!key && areaSlug === 'educacion') return 'educacion';
+    return null;
+  }
+
   private async effectiveLineCredential(lineId: number) {
     const line = await this.prisma.whatsapp_lines.findUnique({
       where: { id: lineId },
       include: {
         credential_override: true,
         waba: { include: { default_credential: true } },
+        business_area: { select: { slug: true } },
       },
     });
     if (!line) throw new NotFoundException('Línea WhatsApp no encontrada');
@@ -117,15 +132,27 @@ export class WhatsAppAdminService {
       line.credential_override || line.waba.default_credential || null;
     // Líneas nuevas (sync) suelen heredar el token de otra línea de la misma WABA.
     if (!credential) {
-      const sibling = await this.prisma.whatsapp_lines.findFirst({
+      const siblingWhere = {
+        waba_id: line.waba_id,
+        NOT: { id: lineId },
+        credential_override: { is: { active: true } },
+      };
+      // Preferir hermana de la misma categoría (CA/EP/general).
+      let sibling = await this.prisma.whatsapp_lines.findFirst({
         where: {
-          waba_id: line.waba_id,
-          NOT: { id: lineId },
-          credential_override: { is: { active: true } },
+          ...siblingWhere,
+          program_key: line.program_key ?? null,
         },
         orderBy: [{ active: 'desc' }, { id: 'asc' }],
         select: { credential_override: true },
       });
+      if (!sibling?.credential_override) {
+        sibling = await this.prisma.whatsapp_lines.findFirst({
+          where: siblingWhere,
+          orderBy: [{ active: 'desc' }, { id: 'asc' }],
+          select: { credential_override: true },
+        });
+      }
       credential = sibling?.credential_override ?? null;
     }
     if (!credential) {
@@ -503,13 +530,10 @@ export class WhatsAppAdminService {
 
       const nextDisplay = meta.displayPhoneNumber;
       const nextQuality = meta.qualityRating;
-      const nextLabel =
-        !local.active &&
-        (local.registration_status === 'draft' ||
-          local.registration_status === 'unknown') &&
-        meta.verifiedName
-          ? meta.verifiedName.slice(0, 120)
-          : local.label;
+      // El nombre visible en Meta (p. ej. «MALI Educación CA») manda sobre el label local corto.
+      const nextLabel = meta.verifiedName
+        ? meta.verifiedName.slice(0, 120)
+        : local.label;
       const displayChanged =
         (nextDisplay || null) !== (local.display_phone_number || null);
       const qualityChanged =
@@ -736,15 +760,16 @@ export class WhatsAppAdminService {
   }
 
   async moveLineCategory(id: number, programId: number | null, actor?: AdminActor) {
-    const current = await this.prisma.whatsapp_lines.findUnique({ where: { id } });
+    const current = await this.prisma.whatsapp_lines.findUnique({
+      where: { id },
+      include: { business_area: { select: { slug: true } } },
+    });
     if (!current) throw new NotFoundException('Línea WhatsApp no encontrada');
     const { program } = await this.assertProgram(current.business_area_id, programId);
-    const legacyArea =
-      program?.slug === 'ca'
-        ? 'educacion_ca'
-        : program?.slug === 'ep'
-          ? 'educacion_ep'
-          : null;
+    const legacyArea = this.legacyAreaForProgram(
+      program?.slug ?? null,
+      current.business_area.slug,
+    );
     const updated = await this.prisma.whatsapp_lines.update({
       where: { id },
       data: {
@@ -904,6 +929,9 @@ export class WhatsAppAdminService {
             quality_rating: inspection.qualityRating,
             registration_status: 'validated',
             last_validated_at: now,
+            ...(inspection.verifiedName
+              ? { label: inspection.verifiedName.slice(0, 120) }
+              : {}),
             updated_at: now,
           },
         }),
@@ -961,6 +989,12 @@ export class WhatsAppAdminService {
         token,
       );
       const now = new Date();
+      const legacyArea =
+        line.legacy_area ||
+        this.legacyAreaForProgram(
+          line.program_key,
+          line.business_area?.slug,
+        );
       await this.prisma.$transaction([
         this.prisma.meta_credentials.update({
           where: { id: credential.id },
@@ -978,6 +1012,16 @@ export class WhatsAppAdminService {
             quality_rating: inspection.qualityRating,
             registration_status: 'validated',
             last_validated_at: now,
+            ...(inspection.verifiedName
+              ? { label: inspection.verifiedName.slice(0, 120) }
+              : {}),
+            // Fijar token + alias de categoría (todas las líneas sync, no solo una).
+            ...(!line.credential_override_id
+              ? { credential_override_id: credential.id }
+              : {}),
+            ...(legacyArea && legacyArea !== line.legacy_area
+              ? { legacy_area: legacyArea }
+              : {}),
             updated_at: now,
           },
         }),
@@ -1142,11 +1186,7 @@ export class WhatsAppAdminService {
 
     const legacyArea =
       line.legacy_area ||
-      (line.program_key === 'ca'
-        ? 'educacion_ca'
-        : line.program_key === 'ep'
-          ? 'educacion_ep'
-          : null);
+      this.legacyAreaForProgram(line.program_key, line.business_area?.slug);
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM business_areas WHERE id = ${line.business_area_id} FOR UPDATE`;
       if (line.is_default) {
