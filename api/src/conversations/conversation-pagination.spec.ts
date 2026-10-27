@@ -133,10 +133,12 @@ describe('bounded conversation history', () => {
     const { service, prisma } = setup();
     prisma.conversations.findFirst.mockResolvedValue(null);
     await expect(
-      service.getOlderMessages({ area: 'other' } as AuthUser, 7, '50'),
+      service.getOlderMessages({ area: 'pam' } as AuthUser, 7, '50'),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.conversations.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 7, area: 'other' } }),
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 7, area: { in: ['pam'] } }),
+      }),
     );
     expect(prisma.chat_messages.findMany).not.toHaveBeenCalled();
   });
@@ -144,7 +146,7 @@ describe('bounded conversation history', () => {
   it('returns bounded messages and timeline events through the history endpoint', async () => {
     const { service } = setup();
     const result = await service.getOlderMessages(
-      { area: 'test' } as AuthUser,
+      { area: 'ti' } as AuthUser,
       7,
       '100',
     );
@@ -163,12 +165,12 @@ describe('bounded conversation history', () => {
       .spyOn(service as any, 'clearInboxUnreadOnOpen')
       .mockResolvedValue(undefined);
     jest.spyOn(service as any, 'loadAiAreaEnabled').mockResolvedValue(false);
-    const first = await service.getUpdates({ area: 'test' } as AuthUser, 7, 0);
+    const first = await service.getUpdates({ area: 'ti' } as AuthUser, 7, 0);
     expect(first.messages.map((m) => m.id)).toEqual(
       rows.slice(0, 50).map((r) => r.id),
     );
     expect(first.has_newer_messages).toBe(true);
-    const next = await service.getUpdates({ area: 'test' } as AuthUser, 7, 50);
+    const next = await service.getUpdates({ area: 'ti' } as AuthUser, 7, 50);
     expect(next.messages.map((m) => m.id)).toEqual(
       rows.slice(50, 100).map((r) => r.id),
     );

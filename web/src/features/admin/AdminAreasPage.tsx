@@ -37,13 +37,14 @@ export function AdminAreasPage() {
   const [categorySlug, setCategorySlug] = useState('')
   const [categoryLabel, setCategoryLabel] = useState('')
   const [categoryBusy, setCategoryBusy] = useState(false)
+  const [catalogArea, setCatalogArea] = useState('educacion')
   const [catalog, setCatalog] = useState<{ slug: string; label: string; active: boolean; lines: number }[]>([])
 
-  function load() {
+  function load(catalogSlug = catalogArea) {
     void Promise.all([
       apiClient.get<AdminAreaSummary[]>('/api/admin/areas'),
       apiClient.get<{ slug: string; label: string; active: boolean; lines: number }[]>(
-        '/api/admin/areas/educacion/categories',
+        `/api/admin/areas/${encodeURIComponent(catalogSlug)}/categories`,
       ),
       apiClient.getMe(),
     ]).then(([areasRes, catalogRes, meRes]) => {
@@ -54,6 +55,7 @@ export function AdminAreasPage() {
       }
       setAreas(areasRes.data)
       if (catalogRes.ok) setCatalog(catalogRes.data)
+      else setCatalog([])
       if (meRes.ok) setCurrentArea(meRes.data.area)
     })
   }
@@ -85,15 +87,33 @@ export function AdminAreasPage() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted">
-        Cuatro áreas. En Educación cada categoría es un producto de la misma ficha. General no es una fila: es la ausencia de categoría.
+        Cada área puede tener categorías (productos). General no es una fila: es la ausencia de categoría.
       </p>
+      <label className="block text-sm">
+        <span className="text-muted">Área del catálogo</span>
+        <select
+          className="mt-1 block rounded-lg border border-line bg-surface px-3 py-2"
+          value={catalogArea}
+          onChange={(event) => {
+            const next = event.target.value
+            setCatalogArea(next)
+            load(next)
+          }}
+        >
+          {(areas ?? []).map((area) => (
+            <option key={area.slug} value={area.slug}>
+              {area.label}
+            </option>
+          ))}
+        </select>
+      </label>
       <form
         className="flex flex-wrap items-end gap-2"
         onSubmit={(event) => {
           event.preventDefault()
           setCategoryBusy(true)
           void apiClient
-            .post('/api/admin/areas/educacion/categories', {
+            .post(`/api/admin/areas/${encodeURIComponent(catalogArea)}/categories`, {
               slug: categorySlug,
               label: categoryLabel,
             })
@@ -145,7 +165,10 @@ export function AdminAreasPage() {
                 className="small-btn secondary"
                 onClick={() => {
                   void apiClient
-                    .patch(`/api/admin/areas/educacion/categories/${item.slug}`, { active: false })
+                    .patch(
+                      `/api/admin/areas/${encodeURIComponent(catalogArea)}/categories/${item.slug}`,
+                      { active: false },
+                    )
                     .then((result) => {
                       if (!result.ok) {
                         notify.error(result.error)

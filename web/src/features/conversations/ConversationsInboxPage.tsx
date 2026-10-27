@@ -24,6 +24,8 @@ import { Button } from '@/shared/ui/shadcn/button'
 import { formatContactName } from '../contacts/contactName'
 import { type AttributeFieldDefinition } from '../contacts/contactFormUtils'
 import { BulkContactActionsDialog } from '../contacts/BulkContactActionsDialog'
+import { useOpenContactChat } from '../contacts/openContactChat'
+import { useCategoryScope } from '@/shared/area/useCategoryScope'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import { SegmentBadge } from '../segments/SegmentBadge'
 import { ChatMessageBubble } from './ChatMessageBubble'
@@ -792,6 +794,12 @@ export function ConversationsInboxPage() {
   const user = useAppUser()
   const canSendTemplate = userHasPermission(user, PERMISSION.TEMPLATES_SEND_FROM_CHAT)
   const { confirm, confirmDialog } = useConfirmDialog()
+  const categoryScope = useCategoryScope()
+  const { openContactChat, linePickerDialog } = useOpenContactChat({
+    categoryQuery: categoryScope.query,
+  })
+  const openContactChatRef = useRef(openContactChat)
+  openContactChatRef.current = openContactChat
   const [list, setList] = useState<InboxListResult | null>(null)
   const [serviceReplies, setServiceReplies] = useState<ServiceReplyQuota | null>(null)
   const [detail, setDetail] = useState<InboxDetail | null>(null)
@@ -1363,18 +1371,27 @@ export function ConversationsInboxPage() {
     if (selectedId < 0) {
       const contactId = -selectedId
       const requestId = ++detailRequestIdRef.current
-      apiClient
-        .post<{ id: number }>(`/api/conversations/from-contact/${contactId}`, {})
-        .then((result) => {
+      void openContactChatRef.current(contactId, {
+        navigateTo: (id) => {
           if (requestId !== detailRequestIdRef.current) return
-          if (!result.ok) {
-            notify.error(result.error)
-            setError(result.error)
-            setLoadingDetail(false)
-            return
-          }
-          navigate(conversationPath(result.data.id), { replace: true })
-        })
+          navigate(conversationPath(id), { replace: true })
+        },
+        onCancel: () => {
+          if (requestId !== detailRequestIdRef.current) return
+          setLoadingDetail(false)
+          navigate('/conversations', { replace: true })
+        },
+      }).then((result) => {
+        if (requestId !== detailRequestIdRef.current) return
+        if (result === 'picking') {
+          setLoadingDetail(false)
+          return
+        }
+        if (result === 'failed') {
+          setLoadingDetail(false)
+          setError('No se pudo abrir el chat')
+        }
+      })
       return
     }
 
@@ -1620,17 +1637,12 @@ export function ConversationsInboxPage() {
   async function onSelectItem(item: InboxListItem) {
     if (item.is_virtual && item.contact_id) {
       setLoadingDetail(true)
-      const result = await apiClient.post<{ id: number }>(
-        `/api/conversations/from-contact/${item.contact_id}`,
-        {},
-      )
-      setLoadingDetail(false)
-      if (!result.ok) {
-        notify.error(result.error)
-        setError(result.error)
-        return
-      }
-      navigate(conversationPath(result.data.id, item))
+      const result = await openContactChat(item.contact_id, {
+        navigateTo: (id) => navigate(conversationPath(id, item)),
+        onCancel: () => setLoadingDetail(false),
+      })
+      if (result !== 'opened') setLoadingDetail(false)
+      if (result === 'failed') setError('No se pudo abrir el chat')
       return
     }
     navigate(conversationPath(item.id, item))
@@ -2964,6 +2976,7 @@ export function ConversationsInboxPage() {
         onApplyAttribute={applyBulkAttribute}
       />
       {confirmDialog}
+      {linePickerDialog}
     </WaPageContents>
   )
 }

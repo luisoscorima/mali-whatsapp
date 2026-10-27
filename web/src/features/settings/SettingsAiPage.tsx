@@ -173,14 +173,14 @@ function AiSettingsForm({
 
 export function SettingsAiPage() {
   const scope = useCategoryScope()
-  if (!scope.education) return <AiSettingsForm />
+  if (!scope.enabled) return <AiSettingsForm />
   if (!scope.slugs?.length) return <p className="text-muted">Cargando…</p>
   return (
     <div className="space-y-4">
       {scope.slugs.map((slug) => (
         <AiSettingsForm
           key={slug}
-          area={categorySettingsArea(slug)}
+          area={categorySettingsArea(slug, scope.areaCanonical)}
           heading={mixesCategories(scope) ? categoryLabel(slug) : undefined}
         />
       ))}

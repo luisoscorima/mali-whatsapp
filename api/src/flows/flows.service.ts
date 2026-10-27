@@ -11,6 +11,7 @@ import {
   programIdForCategory,
   programScopeWhere,
 } from '../config/category-scope';
+import { businessReadScope } from '../config/areas';
 import { conversationRecipient } from '../conversations/whatsapp-recipient.util';
 import { setMessageSender } from '../conversations/chat-sender.util';
 import {
@@ -226,7 +227,7 @@ export class FlowsService {
 
   async getDetail(area: string, id: number): Promise<FlowDetail> {
     const row = await this.prisma.flows.findFirst({
-      where: { id, area },
+      where: { id, area, ...programScopeWhere(null) },
       include: {
         flow_nodes: { orderBy: [{ sort_order: 'asc' }, { id: 'asc' }] },
         flow_edges: { orderBy: { id: 'asc' } },
@@ -248,7 +249,7 @@ export class FlowsService {
     },
   ): Promise<FlowEventContactRow[]> {
     const flow = await this.prisma.flows.findFirst({
-      where: { id: flowId, area },
+      where: { id: flowId, area, ...programScopeWhere(null) },
       select: { id: true },
     });
     if (!flow) throw new NotFoundException('Flujo no encontrado');
@@ -498,7 +499,10 @@ export class FlowsService {
     const programId = await programIdForCategory(
       (slug) =>
         this.prisma.business_programs.findFirst({
-          where: { slug, business_area: { slug: 'educacion' } },
+          where: {
+            slug,
+            business_area: { slug: businessReadScope(area).canonicalArea },
+          },
           select: { id: true },
         }),
       dto.category,
@@ -530,7 +534,7 @@ export class FlowsService {
     dto: UpdateFlowDto,
   ): Promise<FlowDetail> {
     const existing = await this.prisma.flows.findFirst({
-      where: { id, area },
+      where: { id, area, ...programScopeWhere(null) },
       select: { id: true },
     });
     if (!existing) throw new NotFoundException('Flujo no encontrado');
@@ -568,7 +572,9 @@ export class FlowsService {
   }
 
   async remove(area: string, id: number): Promise<void> {
-    const result = await this.prisma.flows.deleteMany({ where: { id, area } });
+    const result = await this.prisma.flows.deleteMany({
+      where: { id, area, ...programScopeWhere(null) },
+    });
     if (result.count === 0) throw new NotFoundException('Flujo no encontrado');
   }
 

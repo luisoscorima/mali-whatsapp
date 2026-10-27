@@ -11,15 +11,37 @@ export type StaticTemplateParams = {
   headerMediaUrl: string;
 };
 
+/** Generales (program_id null) + atributos de la categoría de la línea. */
 export async function fetchContactAttributesMap(
   prisma: PrismaService,
   contactIds: number[],
+  options?: { programId?: number | null },
 ): Promise<Map<number, Record<string, string>>> {
   if (!contactIds.length) return new Map();
+  const programId = options?.programId;
   const rows = await prisma.contact_attributes.findMany({
-    where: { contact_id: { in: contactIds } },
-    select: { contact_id: true, attr_key: true, attr_value: true },
+    where: {
+      contact_id: { in: contactIds },
+      ...(options
+        ? {
+            OR:
+              programId == null
+                ? [{ program_id: null }]
+                : [{ program_id: null }, { program_id: programId }],
+          }
+        : {}),
+    },
+    select: {
+      contact_id: true,
+      attr_key: true,
+      attr_value: true,
+      program_id: true,
+    },
   });
+  // Generales primero; la categoría de la línea sobrescribe la misma clave.
+  rows.sort(
+    (a, b) => Number(a.program_id != null) - Number(b.program_id != null),
+  );
   const map = new Map<number, Record<string, string>>();
   for (const row of rows) {
     if (!map.has(row.contact_id)) map.set(row.contact_id, {});

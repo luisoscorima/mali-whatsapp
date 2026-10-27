@@ -79,18 +79,28 @@ export class SettingsService {
   }
 
   private settingsCanonical(area: string): string {
-    return /^educacion_[a-z0-9_]{1,10}$/.test(area) ? 'educacion' : canonicalBusinessArea(area);
+    const categoryKey = area.match(/^([a-z]+)_([a-z0-9_]{1,10})$/);
+    if (categoryKey && isValidBusinessArea(categoryKey[1])) {
+      return categoryKey[1];
+    }
+    return canonicalBusinessArea(area);
   }
 
   private resolveArea(user: AuthUser, areaParam?: string): string {
     const raw = String(areaParam || user.area || '').trim().toLowerCase();
-    const categoryKey = raw.match(/^educacion_([a-z0-9_]{1,10})$/);
-    if (categoryKey && categoryKey[1] !== 'ca' && categoryKey[1] !== 'ep') {
-      if (!user.isMaster && canonicalBusinessArea(user.area) !== 'educacion') {
+    const categoryKey = raw.match(/^([a-z]+)_([a-z0-9_]{1,10})$/);
+    if (
+      categoryKey &&
+      isValidBusinessArea(categoryKey[1]) &&
+      !isValidBusinessArea(raw)
+    ) {
+      const canonical = categoryKey[1];
+      const programSlug = categoryKey[2];
+      if (!user.isMaster && canonicalBusinessArea(user.area) !== canonical) {
         throw new ForbiddenException('No autorizado para otra área');
       }
       const allowed = user.businessAccess?.categorySlugs;
-      if (!user.isMaster && allowed && !allowed.includes(categoryKey[1])) {
+      if (!user.isMaster && allowed && !allowed.includes(programSlug)) {
         throw new ForbiddenException('No autorizado para esta categoría');
       }
       return raw;
@@ -106,7 +116,7 @@ export class SettingsService {
       throw new ForbiddenException('No autorizado para otra área');
     }
     const allowed = user.businessAccess?.categorySlugs;
-    if (!user.isMaster && allowed && canonicalBusinessArea(area) === 'educacion') {
+    if (!user.isMaster && allowed) {
       const category = businessReadScope(area).program ?? 'general';
       if (!allowed.includes(category)) {
         throw new ForbiddenException('No autorizado para esta categoría');

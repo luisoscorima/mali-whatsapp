@@ -28,12 +28,9 @@ function buildRecipientQuery(
   mode: 'count' | 'list',
 ): Prisma.Sql {
   const scope = businessReadScope(area);
-  const categories =
-    scope.canonicalArea === 'educacion'
-      ? scope.program
-        ? [scope.program]
-        : (options.categories ?? null)
-      : null;
+  const categories = scope.program
+    ? [scope.program]
+    : (options.categories ?? null);
   const categorySql = segmentDefinitionCategorySql(categories);
   const parts: Prisma.Sql[] = [];
 

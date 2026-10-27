@@ -22,51 +22,71 @@ export function categoryLine(slugs: Array<string | null | undefined>): string {
 }
 
 /** La fila nombra la categoría solo cuando el riel mezcla varias. */
-export function mixesCategories(scope: { education: boolean; slugs: string[] | null }): boolean {
-  return Boolean(scope.education && scope.slugs && scope.slugs.length > 1)
+export function mixesCategories(scope: {
+  enabled: boolean
+  education: boolean
+  slugs: string[] | null
+}): boolean {
+  return Boolean(scope.enabled && scope.slugs && scope.slugs.length > 1)
 }
 
-export function categorySettingsArea(slug: string): string {
-  if (slug === 'general') return 'educacion'
-  return `educacion_${slug}`
+export function categorySettingsArea(
+  slug: string,
+  areaCanonical = 'educacion',
+): string {
+  if (slug === 'general') return areaCanonical
+  return `${areaCanonical}_${slug}`
 }
 
-/** Selección del riel. `query` va vacío cuando están todas, para no recortar de más. */
+/** Selección del riel. `query` va vacío cuando van todas, para no recortar de más. */
 export function useCategoryScope() {
   const user = useAppUser()
-  const education = !!user && canonicalArea(user.area) === 'educacion'
+  const areaCanonical = user ? canonicalArea(user.area) : ''
+  const education = areaCanonical === 'educacion'
   const [allowed, setAllowed] = useState<string[]>([])
   const [revision, setRevision] = useState(0)
 
   useEffect(() => onCategorySelection(() => setRevision((n) => n + 1)), [])
 
   useEffect(() => {
-    if (!education) return
+    if (!user) return
     void apiClient.getEducationCategories().then((result) => {
       if (result.ok) setAllowed(result.data.map((item) => item.slug))
+      else setAllowed([])
     })
-  }, [education, user?.id])
+  }, [areaCanonical, user?.id])
 
+  const enabled = allowed.length > 0
   const stored =
-    education && user && revision >= 0
+    enabled && user && revision >= 0
       ? readCategorySelection(user.id, user.area)
       : null
-  const slugs = !education ? null : stored ?? (allowed.length ? allowed : null)
+  const slugs = !enabled ? null : stored ?? (allowed.length ? allowed : null)
   const query =
     stored && stored.length
       ? stored.map((slug) => `category=${encodeURIComponent(slug)}`).join('&')
       : ''
 
-  return { education, slugs, stored, query, revision }
+  return {
+    enabled,
+    education,
+    areaCanonical,
+    slugs,
+    stored,
+    query,
+    revision,
+  }
 }
 
-/** Categoría en la que se guardará un alta. null fuera de Educación o mientras carga. */
+/** Categoría en la que se guardará un alta. null si el área no usa categorías o mientras carga. */
 export function draftCategorySlug(scope: {
+  enabled?: boolean
   education: boolean
   stored: string[] | null
   slugs: string[] | null
 }): string | null {
-  if (!scope.education) return null
+  const active = scope.enabled ?? scope.education
+  if (!active) return null
   if (!scope.stored && !scope.slugs?.length) return null
   if (scope.stored?.length === 1) return scope.stored[0]
   if (!scope.stored && scope.slugs?.length === 1) return scope.slugs[0]
@@ -75,6 +95,7 @@ export function draftCategorySlug(scope: {
 
 /** undefined: varias categorías marcadas, el alta queda en General. */
 export function categoryToSave(scope: {
+  enabled?: boolean
   education: boolean
   stored: string[] | null
   slugs: string[] | null

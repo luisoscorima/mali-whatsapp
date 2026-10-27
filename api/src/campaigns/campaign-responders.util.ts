@@ -125,37 +125,46 @@ async function fetchCampaignResponders(
         cl.phone,
         cl.contact_id,
         cl.created_at,
-        cl.status
+        cl.status,
+        c.whatsapp_line_id
       FROM campaign_logs cl
       JOIN campaigns c ON c.id = cl.campaign_id AND c.area = ${area}
       WHERE cl.campaign_id = ${campaignId}
       ORDER BY cl.phone, cl.id DESC
+    ),
+    matched AS (
+      SELECT
+        latest_logs.phone,
+        COALESCE(ct.name, '') AS contact_name,
+        COALESCE(ct.email, '') AS contact_email,
+        COALESCE(ct.dni, '') AS contact_dni,
+        COALESCE((
+          SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
+          FROM contact_segments cs
+          JOIN segment_definitions sd ON sd.area = ${area} AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
+          WHERE cs.contact_id = COALESCE(latest_logs.contact_id, conv.contact_id) AND cs.area = ${area}
+        ), '') AS segment_labels,
+        COALESCE(latest_logs.contact_id, conv.contact_id) AS contact_id,
+        conv.id AS conversation_id,
+        MIN(cm.created_at) AS first_response_at
+      FROM latest_logs
+      INNER JOIN conversations conv ON conv.area = ${area}
+        AND (conv.phone = latest_logs.phone OR conv.whatsapp_user_id = latest_logs.phone)
+        AND (
+          latest_logs.whatsapp_line_id IS NULL
+          OR conv.whatsapp_line_id = latest_logs.whatsapp_line_id
+        )
+      INNER JOIN chat_messages cm ON cm.conversation_id = conv.id
+        AND cm.direction = 'inbound'
+        AND cm.created_at > latest_logs.created_at
+        AND cm.created_at <= latest_logs.created_at + ${Prisma.raw(`INTERVAL '${windowDays} days'`)}
+      LEFT JOIN contacts ct ON ct.id = COALESCE(latest_logs.contact_id, conv.contact_id)
+      WHERE ${Prisma.raw(sqlCampaignLogIsSalidaOk('latest_logs.status'))}
+      GROUP BY latest_logs.phone, ct.name, ct.email, ct.dni, latest_logs.contact_id, conv.contact_id, conv.id
     )
-    SELECT
-      latest_logs.phone,
-      COALESCE(ct.name, '') AS contact_name,
-      COALESCE(ct.email, '') AS contact_email,
-      COALESCE(ct.dni, '') AS contact_dni,
-      COALESCE((
-        SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
-        FROM contact_segments cs
-        JOIN segment_definitions sd ON sd.area = ${area} AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
-        WHERE cs.contact_id = COALESCE(latest_logs.contact_id, conv.contact_id) AND cs.area = ${area}
-      ), '') AS segment_labels,
-      COALESCE(latest_logs.contact_id, conv.contact_id) AS contact_id,
-      conv.id AS conversation_id,
-      MIN(cm.created_at) AS first_response_at
-    FROM latest_logs
-    INNER JOIN conversations conv ON conv.area = ${area}
-      AND (conv.phone = latest_logs.phone OR conv.whatsapp_user_id = latest_logs.phone)
-    INNER JOIN chat_messages cm ON cm.conversation_id = conv.id
-      AND cm.direction = 'inbound'
-      AND cm.created_at > latest_logs.created_at
-      AND cm.created_at <= latest_logs.created_at + ${Prisma.raw(`INTERVAL '${windowDays} days'`)}
-    LEFT JOIN contacts ct ON ct.id = COALESCE(latest_logs.contact_id, conv.contact_id)
-    WHERE ${Prisma.raw(sqlCampaignLogIsSalidaOk('latest_logs.status'))}
-    GROUP BY latest_logs.phone, ct.name, ct.email, ct.dni, latest_logs.contact_id, conv.contact_id, conv.id
-    ORDER BY first_response_at DESC
+    SELECT DISTINCT ON (phone) *
+    FROM matched
+    ORDER BY phone, first_response_at ASC
   `);
   return rows.map(mapResponderRow);
 }
@@ -172,48 +181,57 @@ async function fetchCampaignInteractiveResponders(
         cl.phone,
         cl.contact_id,
         cl.created_at,
-        cl.status
+        cl.status,
+        c.whatsapp_line_id
       FROM campaign_logs cl
       JOIN campaigns c ON c.id = cl.campaign_id AND c.area = ${area}
       WHERE cl.campaign_id = ${campaignId}
       ORDER BY cl.phone, cl.id DESC
-    )
-    SELECT
-      latest_logs.phone,
-      COALESCE(ct.name, '') AS contact_name,
-      COALESCE(ct.email, '') AS contact_email,
-      COALESCE(ct.dni, '') AS contact_dni,
-      COALESCE((
-        SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
-        FROM contact_segments cs
-        JOIN segment_definitions sd ON sd.area = ${area} AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
-        WHERE cs.contact_id = COALESCE(latest_logs.contact_id, conv.contact_id) AND cs.area = ${area}
-      ), '') AS segment_labels,
-      COALESCE(latest_logs.contact_id, conv.contact_id) AS contact_id,
-      conv.id AS conversation_id,
-      first_btn.created_at AS interactive_response_at,
-      first_btn.response_text AS interactive_response_text,
-      first_btn.created_at AS first_response_at
-    FROM latest_logs
-    INNER JOIN conversations conv ON conv.area = ${area}
-      AND (conv.phone = latest_logs.phone OR conv.whatsapp_user_id = latest_logs.phone)
-    INNER JOIN LATERAL (
+    ),
+    matched AS (
       SELECT
-        cm.created_at,
-        ${Prisma.raw(SQL_INTERACTIVE_RESPONSE_TEXT)} AS response_text
-      FROM chat_messages cm
-      WHERE cm.conversation_id = conv.id
-        AND cm.direction = 'inbound'
-        AND cm.created_at > latest_logs.created_at
-        AND cm.created_at <= latest_logs.created_at + ${Prisma.raw(`INTERVAL '${windowDays} days'`)}
-        AND ${Prisma.raw(SQL_IS_INTERACTIVE_INBOUND)}
-      ORDER BY cm.created_at ASC
-      LIMIT 1
-    ) first_btn ON TRUE
-    LEFT JOIN contacts ct ON ct.id = COALESCE(latest_logs.contact_id, conv.contact_id)
-    WHERE ${Prisma.raw(sqlCampaignLogIsSalidaOk('latest_logs.status'))}
-      AND first_btn.response_text IS NOT NULL
-    ORDER BY first_btn.created_at DESC
+        latest_logs.phone,
+        COALESCE(ct.name, '') AS contact_name,
+        COALESCE(ct.email, '') AS contact_email,
+        COALESCE(ct.dni, '') AS contact_dni,
+        COALESCE((
+          SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
+          FROM contact_segments cs
+          JOIN segment_definitions sd ON sd.area = ${area} AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
+          WHERE cs.contact_id = COALESCE(latest_logs.contact_id, conv.contact_id) AND cs.area = ${area}
+        ), '') AS segment_labels,
+        COALESCE(latest_logs.contact_id, conv.contact_id) AS contact_id,
+        conv.id AS conversation_id,
+        first_btn.created_at AS interactive_response_at,
+        first_btn.response_text AS interactive_response_text,
+        first_btn.created_at AS first_response_at
+      FROM latest_logs
+      INNER JOIN conversations conv ON conv.area = ${area}
+        AND (conv.phone = latest_logs.phone OR conv.whatsapp_user_id = latest_logs.phone)
+        AND (
+          latest_logs.whatsapp_line_id IS NULL
+          OR conv.whatsapp_line_id = latest_logs.whatsapp_line_id
+        )
+      INNER JOIN LATERAL (
+        SELECT
+          cm.created_at,
+          ${Prisma.raw(SQL_INTERACTIVE_RESPONSE_TEXT)} AS response_text
+        FROM chat_messages cm
+        WHERE cm.conversation_id = conv.id
+          AND cm.direction = 'inbound'
+          AND cm.created_at > latest_logs.created_at
+          AND cm.created_at <= latest_logs.created_at + ${Prisma.raw(`INTERVAL '${windowDays} days'`)}
+          AND ${Prisma.raw(SQL_IS_INTERACTIVE_INBOUND)}
+        ORDER BY cm.created_at ASC
+        LIMIT 1
+      ) first_btn ON TRUE
+      LEFT JOIN contacts ct ON ct.id = COALESCE(latest_logs.contact_id, conv.contact_id)
+      WHERE ${Prisma.raw(sqlCampaignLogIsSalidaOk('latest_logs.status'))}
+        AND first_btn.response_text IS NOT NULL
+    )
+    SELECT DISTINCT ON (phone) *
+    FROM matched
+    ORDER BY phone, interactive_response_at ASC
   `);
 }
 

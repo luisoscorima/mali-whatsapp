@@ -1,7 +1,5 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { apiClient } from '../../shared/api'
-import { notify } from '@/shared/notify'
+import { Link } from 'react-router-dom'
+import { useOpenContactChat } from '../contacts/openContactChat'
 
 type LeadOpenChatButtonProps = {
   contactId?: number | null
@@ -35,8 +33,7 @@ export function LeadOpenChatButton({
   conversationId,
   cameWithInbound = false,
 }: LeadOpenChatButtonProps) {
-  const navigate = useNavigate()
-  const [busy, setBusy] = useState(false)
+  const { openContactChat, linePickerDialog, busy } = useOpenContactChat()
 
   const title = cameWithInbound
     ? conversationId
@@ -47,21 +44,6 @@ export function LeadOpenChatButton({
       : contactId
         ? 'Abrir o crear chat (captado solo como contacto)'
         : 'Sin contacto vinculado'
-
-  async function openFromContact() {
-    if (!contactId || busy) return
-    setBusy(true)
-    const res = await apiClient.post<{ id: number }>(
-      `/api/conversations/from-contact/${contactId}`,
-      {},
-    )
-    setBusy(false)
-    if (!res.ok) {
-      notify.error(res.error)
-      return
-    }
-    navigate(`/conversations/${res.data.id}`)
-  }
 
   const contactOnlyLabel = busy ? '…' : 'Solo contacto'
 
@@ -87,23 +69,26 @@ export function LeadOpenChatButton({
 
   if (contactId) {
     return (
-      <div className="flex flex-col items-start gap-0.5">
-        <button
-          type="button"
-          className="contact-row-action-btn disabled:opacity-60"
-          title={title}
-          aria-label={title}
-          disabled={busy}
-          onClick={() => void openFromContact()}
-        >
-          <ChatIcon />
-        </button>
-        {!cameWithInbound ? (
-          <span className="text-[10px] leading-none text-muted">
-            {contactOnlyLabel}
-          </span>
-        ) : null}
-      </div>
+      <>
+        <div className="flex flex-col items-start gap-0.5">
+          <button
+            type="button"
+            className="contact-row-action-btn disabled:opacity-60"
+            title={title}
+            aria-label={title}
+            disabled={busy}
+            onClick={() => void openContactChat(contactId)}
+          >
+            <ChatIcon />
+          </button>
+          {!cameWithInbound ? (
+            <span className="text-[10px] leading-none text-muted">
+              {contactOnlyLabel}
+            </span>
+          ) : null}
+        </div>
+        {linePickerDialog}
+      </>
     )
   }
 

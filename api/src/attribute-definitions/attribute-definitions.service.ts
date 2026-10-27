@@ -29,6 +29,7 @@ import {
   programIdForCategory,
   programScopeWhere,
 } from '../config/category-scope';
+import { businessReadScope } from '../config/areas';
 
 const ATTR_DEF_SELECT = {
   id: true,
@@ -192,7 +193,7 @@ export class AttributeDefinitionsService {
 
   async getById(area: AuthUser['area'], id: number): Promise<AttributeDefinition> {
     const row = await this.prisma.contact_attribute_definitions.findFirst({
-      where: { id, area },
+      where: { id, area, ...programScopeWhere(null) },
       select: ATTR_DEF_SELECT,
     });
     if (!row) {
@@ -244,7 +245,10 @@ export class AttributeDefinitionsService {
     const programId = await programIdForCategory(
       (slug) =>
         this.prisma.business_programs.findFirst({
-          where: { slug, business_area: { slug: 'educacion' } },
+          where: {
+            slug,
+            business_area: { slug: businessReadScope(area).canonicalArea },
+          },
           select: { id: true },
         }),
       dto.category,

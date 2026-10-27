@@ -25,7 +25,10 @@ describe('reprogramación de campañas', () => {
     const findFirst = jest.fn().mockResolvedValue({ status, scheduled_at: scheduledAt });
     const updateMany = jest.fn().mockResolvedValue({ count: 1 });
     const write = jest.fn().mockResolvedValue(undefined);
-    const prisma = { campaigns: { findFirst, updateMany } } as unknown as PrismaService;
+    const prisma = {
+      campaigns: { findFirst, updateMany },
+      $queryRaw: jest.fn().mockResolvedValue([{ id: 7 }]),
+    } as unknown as PrismaService;
     const auditLog = { write } as unknown as AuditLogService;
     const service = new CampaignsService(
       prisma,

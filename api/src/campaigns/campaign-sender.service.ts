@@ -234,13 +234,16 @@ export class CampaignSenderService {
         select: {
           image_url: true,
           whatsapp_line_id: true,
-          whatsapp_line: { select: { phone_number_id: true } },
+          whatsapp_line: {
+            select: { phone_number_id: true, program_id: true },
+          },
         },
       });
       const campaignImageUrl = campaignMeta?.image_url ?? null;
       const whatsappLineId = campaignMeta?.whatsapp_line_id ?? null;
       const whatsappPhoneNumberId =
         campaignMeta?.whatsapp_line?.phone_number_id ?? null;
+      const lineProgramId = campaignMeta?.whatsapp_line?.program_id ?? null;
 
       const allRecipients = await this.buildCampaignRecipients(area, ctx);
       await this.prisma.campaigns.update({
@@ -279,6 +282,7 @@ export class CampaignSenderService {
         attrsMap = await fetchContactAttributesMap(
           this.prisma,
           recipients.map((c) => c.id),
+          { programId: lineProgramId },
         );
       }
 

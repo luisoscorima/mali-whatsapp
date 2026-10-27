@@ -762,24 +762,50 @@ export class WhatsAppAdminService {
   async moveLineCategory(id: number, programId: number | null, actor?: AdminActor) {
     const current = await this.prisma.whatsapp_lines.findUnique({
       where: { id },
-      include: { business_area: { select: { slug: true } } },
+      include: {
+        business_area: { select: { id: true, slug: true } },
+        program: { select: { id: true, slug: true } },
+      },
     });
     if (!current) throw new NotFoundException('Línea WhatsApp no encontrada');
     const { program } = await this.assertProgram(current.business_area_id, programId);
+    const previousCategory =
+      current.program?.slug || current.program_key || 'general';
+    const nextCategory = program?.slug || 'general';
+    const canonicalArea = current.business_area.slug;
     const legacyArea = this.legacyAreaForProgram(
       program?.slug ?? null,
-      current.business_area.slug,
+      canonicalArea,
     );
-    const updated = await this.prisma.whatsapp_lines.update({
-      where: { id },
-      data: {
-        program_id: program?.id ?? null,
-        program_key: program?.slug ?? null,
-        legacy_area: legacyArea,
-        updated_at: new Date(),
+
+    const { updated, conversationsMoved } = await this.prisma.$transaction(
+      async (tx) => {
+        const updatedLine = await tx.whatsapp_lines.update({
+          where: { id },
+          data: {
+            program_id: program?.id ?? null,
+            program_key: program?.slug ?? null,
+            legacy_area: legacyArea,
+            updated_at: new Date(),
+          },
+          select: { id: true, label: true, program_id: true, program_key: true },
+        });
+        // conversations.area = área canónica; la categoría viva vive en la línea.
+        const moved = await tx.conversations.updateMany({
+          where: { whatsapp_line_id: id },
+          data: {
+            area: canonicalArea,
+            business_area_id: current.business_area.id,
+            updated_at: new Date(),
+          },
+        });
+        return {
+          updated: updatedLine,
+          conversationsMoved: moved.count,
+        };
       },
-      select: { id: true, label: true, program_id: true, program_key: true },
-    });
+    );
+
     await this.metaSettings.refresh();
     await this.writeAudit(
       'admin.whatsapp_line_category_moved',
@@ -787,8 +813,12 @@ export class WhatsAppAdminService {
       actor,
       {
         line_id: id,
+        previous_category: previousCategory,
+        next_category: nextCategory,
         program_id: updated.program_id,
         program_key: updated.program_key,
+        conversations_moved: conversationsMoved,
+        canonical_area: canonicalArea,
       },
     );
     return updated;

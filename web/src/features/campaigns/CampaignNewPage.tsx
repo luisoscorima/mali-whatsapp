@@ -185,11 +185,14 @@ export function CampaignNewPage() {
     (t) => String(t.id) === templateId,
   )
 
-  async function loadWizardData() {
+  async function loadWizardData(lineIdForTemplates = whatsappLineId) {
     setLoadFailed(false)
+    const templatesUrl = lineIdForTemplates
+      ? `/api/templates?whatsappLineId=${encodeURIComponent(lineIdForTemplates)}`
+      : '/api/templates'
     const [segResult, tplResult, attrResult, lineResult] = await Promise.all([
       apiClient.get<SegmentDefinition[]>(withCategoryQuery('/api/segments/active', categoryScope.query)),
-      apiClient.get<TemplateListItem[]>('/api/templates'),
+      apiClient.get<TemplateListItem[]>(templatesUrl),
       apiClient.get<AttributeOption[]>(withCategoryQuery('/api/attribute-definitions', categoryScope.query)),
       apiClient.get<{ id: number; label: string; phone: string | null; category_label: string }[]>(
         withCategoryQuery('/api/campaigns/lines', categoryScope.query),
@@ -208,7 +211,7 @@ export function CampaignNewPage() {
     if (currentQuery.current !== categoryScope.query) return
     const grouped = new Map<string, SegmentDefinition>()
     for (const segment of segResult.data) {
-      const label = categoryScope.education ? segment.label + ' · ' + categoryLabel(segment.category) : segment.label
+      const label = categoryScope.enabled ? segment.label + ' · ' + categoryLabel(segment.category) : segment.label
       const existing = grouped.get(segment.slug)
       grouped.set(segment.slug, { ...segment, label: existing ? existing.label + ' / ' + label : label })
     }
@@ -238,6 +241,24 @@ export function CampaignNewPage() {
     setSegments([])
     void loadWizardData()
   }, [categoryScope.query])
+
+  useEffect(() => {
+    if (!whatsappLineId) return
+    void apiClient
+      .get<TemplateListItem[]>(
+        `/api/templates?whatsappLineId=${encodeURIComponent(whatsappLineId)}`,
+      )
+      .then((tplResult) => {
+        if (!tplResult.ok) return
+        setTemplates(tplResult.data)
+        setTemplateId((current) => {
+          if (tplResult.data.some((t) => String(t.id) === current)) return current
+          setTemplateReady(false)
+          setTemplateForm(emptyTemplateFormState())
+          return ''
+        })
+      })
+  }, [whatsappLineId])
 
   function invalidateRecipients() {
     setRecipientsLoaded(false)
@@ -640,7 +661,12 @@ export function CampaignNewPage() {
           <select
             className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2"
             value={whatsappLineId}
-            onChange={(event) => setWhatsappLineId(event.target.value)}
+            onChange={(event) => {
+              setWhatsappLineId(event.target.value)
+              setTemplateId('')
+              setTemplateReady(false)
+              setTemplateForm(emptyTemplateFormState())
+            }}
           >
             <option value="">Elige el número</option>
             {lines.map((line) => (

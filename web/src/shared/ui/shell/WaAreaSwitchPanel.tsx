@@ -39,15 +39,16 @@ export function WaAreaSwitchPanel({
   )
 
   useEffect(() => {
-    if (currentArea !== 'educacion') {
-      setCategories([])
-      return
-    }
     let cancelled = false
     void apiClient.getEducationCategories().then((result) => {
-      if (cancelled || !result.ok) return
+      if (cancelled) return
+      if (!result.ok || !result.data.length) {
+        setCategories([])
+        setSelected(null)
+        return
+      }
       setCategories(result.data)
-      setSelected(readCategorySelection(user.id, 'educacion'))
+      setSelected(readCategorySelection(user.id, currentArea))
     }).catch(() => {})
     return () => {
       cancelled = true
@@ -75,7 +76,7 @@ export function WaAreaSwitchPanel({
       : [...current, slug]
     if (!next.length) return
     const every = allowed.every((item) => next.includes(item))
-    writeCategorySelection(user.id, 'educacion', every ? null : next)
+    writeCategorySelection(user.id, currentArea, every ? null : next)
     setSelected(every ? null : next)
   }
 
@@ -107,7 +108,7 @@ export function WaAreaSwitchPanel({
           )
         })}
       </ul>
-      {currentArea === 'educacion' && categories.length > 1 ? (
+      {categories.length > 1 ? (
         <div className="mt-3">
           <p className="mb-1.5 text-xs font-medium text-muted">Categoría</p>
           <ul className="flex flex-col gap-0.5">

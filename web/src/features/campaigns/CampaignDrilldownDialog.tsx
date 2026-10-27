@@ -1,8 +1,7 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { apiClient } from '@/shared/api'
 import { formatDateTime } from '@/shared/format'
 import { formatContactName } from '../contacts/contactName'
+import { useOpenContactChat } from '../contacts/openContactChat'
 import { chatSecondaryLabel } from '../conversations/whatsappIdentity'
 import {
   Dialog,
@@ -85,26 +84,20 @@ function buildRetryHint(rs: RetryStats): string {
 }
 
 function ChatLinkButton({ contactId }: { contactId?: number | null }) {
-  const navigate = useNavigate()
-  const [busy, setBusy] = useState(false)
+  const { openContactChat, linePickerDialog, busy } = useOpenContactChat()
   if (!contactId) return null
   return (
-    <button
-      type="button"
-      disabled={busy}
-      className="mt-1 text-xs text-accent hover:underline disabled:opacity-60"
-      onClick={() => {
-        setBusy(true)
-        void apiClient
-          .post<{ id: number }>(`/api/conversations/from-contact/${contactId}`, {})
-          .then((res) => {
-            setBusy(false)
-            if (res.ok) navigate(`/conversations/${res.data.id}`)
-          })
-      }}
-    >
-      {busy ? 'Abriendo…' : 'Ir al chat'}
-    </button>
+    <>
+      <button
+        type="button"
+        disabled={busy}
+        className="mt-1 text-xs text-accent hover:underline disabled:opacity-60"
+        onClick={() => void openContactChat(contactId)}
+      >
+        {busy ? 'Abriendo…' : 'Ir al chat'}
+      </button>
+      {linePickerDialog}
+    </>
   )
 }
 

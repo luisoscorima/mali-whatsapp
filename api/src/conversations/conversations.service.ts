@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { businessReadScope } from '../config/areas';
 import {
   contactAreaPredicate,
   conversationAreaPredicate,
@@ -16,6 +17,7 @@ import {
   lineCategoryPredicate,
   visibleConversationWhere,
 } from '../config/education-scope';
+import { contactAccessWhere } from '../config/business-scope';
 import { restrictedAccess } from '../business-model/business-access.context';
 import { categoriesFromEducationSlugs, explicitEducationCategories } from '../users/user-areas.service';
 import type { Prisma as PrismaTypes } from '@prisma/client';
@@ -55,7 +57,13 @@ import {
 } from '../templates/template-definition.util';
 import { sendTemplateWithComponents } from '../templates/whatsapp-meta.util';
 import { PrismaService } from '../prisma/prisma.service';
-import { programScopeWhere, segmentMatchesConversationSql, segmentMatchesOuterLineSql } from '../config/category-scope';
+import {
+  applyCategoryGrant,
+  categoryOfProgram,
+  programScopeWhere,
+  segmentMatchesConversationSql,
+  segmentMatchesOuterLineSql,
+} from '../config/category-scope';
 import { FlowsService } from '../flows/flows.service';
 import { MAX_SESSION_TEXT_LEN } from '../settings/business-hours.util';
 import { parseAiConfigValue } from '../settings/ai-config.util';
@@ -123,6 +131,7 @@ import type {
   InboxMessageDelivery,
   InboxOlderMessagesResult,
   InboxUnreadCountResult,
+  OpenChatLine,
   ReplyResult,
   UpdateConversationModeResult,
   InboxConversationUpdates,
@@ -844,39 +853,63 @@ export class ConversationsService {
   async listEducationCategories(
     user: AuthUser,
   ): Promise<Array<{ slug: string; label: string }>> {
-    return this.educationCategoryOptions(user);
+    return this.areaCategoryOptions(user);
   }
 
-  private async educationCategoryOptions(
+  private async areaCategoryOptions(
     user: AuthUser,
   ): Promise<Array<{ slug: string; label: string }>> {
-    if (!isEducationAreaSlug(user.area)) return [];
+    const canonical = businessReadScope(user.area).canonicalArea;
     const programs = await this.prisma.business_programs.findMany({
-      where: { active: true, business_area: { slug: 'educacion', active: true } },
+      where: {
+        active: true,
+        business_area: { slug: canonical, active: true },
+      },
       orderBy: [{ sort_order: 'asc' }, { slug: 'asc' }],
       select: { slug: true, label: true },
     });
+    if (!programs.length && !isEducationAreaSlug(user.area)) return [];
     const all = [
       { slug: 'general', label: 'General' },
       ...programs.map((program) => ({
         slug: program.slug,
-        label: program.slug === 'ca' || program.slug === 'ep' ? program.slug.toUpperCase() : program.label,
+        label:
+          program.slug === 'ca' || program.slug === 'ep'
+            ? program.slug.toUpperCase()
+            : program.label,
       })),
     ];
     if (user.isMaster) return all;
     const membership = await this.prisma.user_area_memberships.findFirst({
-      where: { user_id: user.id, active: true, business_area: { slug: 'educacion' } },
+      where: {
+        user_id: user.id,
+        active: true,
+        business_area: { slug: canonical },
+      },
       include: { programs: { include: { program: true } } },
     });
-    const marked = await this.prisma.users.findUnique({
-      where: { id: user.id },
-      select: { area: true, user_areas: { select: { area: true } } },
-    });
-    const inherited = categoriesFromEducationSlugs([
-      marked?.area ?? '',
-      ...(marked?.user_areas ?? []).map((item) => item.area),
+    if (canonical === 'educacion') {
+      const marked = await this.prisma.users.findUnique({
+        where: { id: user.id },
+        select: { area: true, user_areas: { select: { area: true } } },
+      });
+      const inherited = categoriesFromEducationSlugs([
+        marked?.area ?? '',
+        ...(marked?.user_areas ?? []).map((item) => item.area),
+      ]);
+      const allowed = new Set(
+        explicitEducationCategories(membership) ?? inherited,
+      );
+      if (!allowed.size || all.every((item) => allowed.has(item.slug))) return all;
+      return all.filter((item) => allowed.has(item.slug));
+    }
+    if (!membership || membership.access_mode !== 'restricted') return all;
+    const allowed = new Set([
+      ...(membership.include_general ? ['general'] : []),
+      ...membership.programs
+        .filter((grant) => grant.program.active)
+        .map((grant) => grant.program.slug),
     ]);
-    const allowed = new Set(explicitEducationCategories(membership) ?? inherited);
     if (!allowed.size || all.every((item) => allowed.has(item.slug))) return all;
     return all.filter((item) => allowed.has(item.slug));
   }
@@ -926,7 +959,7 @@ export class ConversationsService {
           .trim()
           .toLowerCase() === 'all',
     });
-    const categoryOptions = await this.educationCategoryOptions(user);
+    const categoryOptions = await this.areaCategoryOptions(user);
     const categories = this.selectedEducationCategories(area, categoryOptions, query.category);
     const segmentRaw = parseSegmentQueryParam(query.segment);
     const segmentOptions = await this.loadSegmentOptions(area, categories);
@@ -1055,6 +1088,7 @@ export class ConversationsService {
             dni: true,
           },
         },
+        whatsapp_line: { select: { program_id: true, waba_id: true } },
       },
     });
     if (!conversation) {
@@ -1073,8 +1107,15 @@ export class ConversationsService {
       throw new BadRequestException('Plantilla inválida');
     }
 
+    const lineWabaId = conversation.whatsapp_line?.waba_id;
     const templateRow = await this.prisma.whatsapp_templates.findFirst({
-      where: { id: templateSyncId, area, status: 'APPROVED', active: true },
+      where: {
+        id: templateSyncId,
+        area,
+        status: 'APPROVED',
+        active: true,
+        ...(lineWabaId != null ? { whatsapp_waba_id: lineWabaId } : {}),
+      },
       select: {
         id: true,
         name: true,
@@ -1129,7 +1170,9 @@ export class ConversationsService {
     }
     const contact = conversation.contacts;
     const attrsMap = contact
-      ? await fetchContactAttributesMap(this.prisma, [contact.id])
+      ? await fetchContactAttributesMap(this.prisma, [contact.id], {
+          programId: conversation.whatsapp_line?.program_id ?? null,
+        })
       : new Map();
     const resolvedParams = paramMapping
       ? buildParamsForContact(
@@ -1895,26 +1938,96 @@ export class ConversationsService {
     };
   }
 
+  async listOpenChatLines(
+    user: AuthUser,
+    categories: string[] | null = null,
+  ): Promise<OpenChatLine[]> {
+    const scope = businessReadScope(user.area);
+    const access = restrictedAccess();
+    const granted = applyCategoryGrant(categories);
+    const lines = await this.prisma.whatsapp_lines.findMany({
+      where: {
+        active: true,
+        business_area: { slug: scope.canonicalArea },
+        ...(access
+          ? { id: { in: access.lineIds.length ? access.lineIds : [-1] } }
+          : {}),
+        ...programScopeWhere(granted),
+      },
+      orderBy: [{ is_default: 'desc' }, { label: 'asc' }],
+      select: {
+        id: true,
+        label: true,
+        display_phone_number: true,
+        program: { select: { slug: true, label: true } },
+      },
+    });
+    return lines.map((line) => {
+      const category = categoryOfProgram(line.program?.slug);
+      return {
+        id: line.id,
+        label: line.label,
+        phone: line.display_phone_number,
+        category,
+        category_label:
+          category === 'general'
+            ? 'General'
+            : line.program?.label || category.toUpperCase(),
+      };
+    });
+  }
+
   async ensureFromContact(
     user: AuthUser,
     contactId: number,
+    whatsappLineId?: number | null,
   ): Promise<EnsureConversationResult> {
     if (!Number.isInteger(contactId) || contactId <= 0) {
       throw new BadRequestException('Id de contacto invalido');
     }
-    const area = user.area;
+    const scope = businessReadScope(user.area);
+    const area = scope.canonicalArea;
 
     const contact = await this.prisma.contacts.findFirst({
-      where: { id: contactId, area },
+      where: {
+        id: contactId,
+        area: { in: scope.areas },
+        ...contactAccessWhere(),
+      },
       select: { id: true, phone: true, whatsapp_user_id: true },
     });
     if (!contact) {
       throw new NotFoundException('Contacto no encontrado');
     }
 
+    const available = await this.listOpenChatLines(user, null);
+    let lineId = Number(whatsappLineId) || 0;
+    if (!lineId) {
+      if (available.length === 1) lineId = available[0].id;
+      else if (!available.length) {
+        throw new BadRequestException(
+          'No hay una línea activa autorizada para escribir',
+        );
+      } else {
+        throw new BadRequestException(
+          'Elige la línea desde la que escribirás',
+        );
+      }
+    } else if (!available.some((line) => line.id === lineId)) {
+      throw new BadRequestException('La línea no está disponible');
+    }
+
+    const line = await this.prisma.whatsapp_lines.findFirst({
+      where: { id: lineId, active: true, business_area: { slug: area } },
+      select: { id: true, phone_number_id: true },
+    });
+    if (!line) {
+      throw new BadRequestException('La línea no está activa en esta área');
+    }
+
     const existing = await this.prisma.conversations.findFirst({
       where: {
-        area,
+        whatsapp_line_id: line.id,
         OR: [
           { contact_id: contactId },
           ...(contact.phone ? [{ phone: contact.phone }] : []),
@@ -1928,9 +2041,12 @@ export class ConversationsService {
     });
 
     if (existing) {
-      const cycle = ['educacion', 'educacion_ca', 'educacion_ep'].includes(area)
+      const cycle = area === 'educacion'
         ? await this.prisma.education_lead_cycles.findFirst({
-            where: { contact_id: contactId, area },
+            where: {
+              contact_id: contactId,
+              area: { in: scope.areas },
+            },
             orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
             select: { assigned_user_id: true },
           })
@@ -1940,6 +2056,7 @@ export class ConversationsService {
           where: { id: existing.id },
           data: {
             contact_id: contactId,
+            area,
             updated_at: new Date(),
             ...(cycle
               ? {
@@ -1959,24 +2076,31 @@ export class ConversationsService {
       );
     }
 
+    const assignedUserId =
+      area === 'educacion'
+        ? (
+            await this.prisma.education_lead_cycles.findFirst({
+              where: {
+                contact_id: contactId,
+                area: { in: scope.areas },
+              },
+              orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+              select: { assigned_user_id: true },
+            })
+          )?.assigned_user_id ?? null
+        : null;
+
     const created = await this.prisma.conversations.create({
       data: {
         area,
+        whatsapp_line_id: line.id,
+        whatsapp_phone_number_id: line.phone_number_id,
         phone: contact.phone,
         whatsapp_user_id: contact.whatsapp_user_id,
         contact_id: contactId,
         status: 'human',
-        ...(['educacion', 'educacion_ca', 'educacion_ep'].includes(area)
-          ? {
-              assigned_user_id:
-                (
-                  await this.prisma.education_lead_cycles.findFirst({
-                    where: { contact_id: contactId, area },
-                    orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
-                    select: { assigned_user_id: true },
-                  })
-                )?.assigned_user_id ?? null,
-            }
+        ...(assignedUserId
+          ? { assigned_user_id: assignedUserId, assigned_at: new Date() }
           : {}),
       },
       select: { id: true },
@@ -3320,7 +3444,7 @@ export class ConversationsService {
     }>;
   }> {
     const { start, end, label } = limaCalendarMonth(new Date());
-    const categoryOptions = await this.educationCategoryOptions(user);
+    const categoryOptions = await this.areaCategoryOptions(user);
     const categories = this.selectedEducationCategories(
       user.area,
       categoryOptions,

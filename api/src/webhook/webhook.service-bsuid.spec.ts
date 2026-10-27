@@ -53,6 +53,7 @@ describe('WebhookService BSUID inbound', () => {
             .mockResolvedValue({ id: 123, created_at: new Date() }),
         },
         campaign_logs: { findMany: jest.fn().mockResolvedValue([]) },
+        $executeRaw: jest.fn().mockResolvedValue(0),
       };
       const flows = {
         handleInbound: jest.fn().mockResolvedValue({ handled: true }),
@@ -212,6 +213,7 @@ describe('WebhookService BSUID inbound', () => {
         create: jest.fn().mockResolvedValue({ id: 1, created_at: new Date() }),
       },
       campaign_logs: { findMany: jest.fn().mockResolvedValue([]) },
+      $executeRaw: jest.fn().mockResolvedValue(0),
     };
     const flows = {
       handleInbound: jest.fn().mockResolvedValue({ handled: true }),
@@ -384,6 +386,7 @@ describe('WebhookService BSUID inbound', () => {
           .mockResolvedValue({ id: 123, created_at: new Date() }),
       },
       campaign_logs: { findMany: jest.fn().mockResolvedValue([]) },
+      $executeRaw: jest.fn().mockResolvedValue(0),
       meta_ctwa_ads: {
         upsert: jest.fn().mockResolvedValue({
           id: 3,

@@ -164,12 +164,15 @@ export function auditConversationCategorySql(slugs: string[] | null): string {
     const list = sqlList(programs);
     const aliases = sqlList(programs.map((slug) => `educacion_${slug}`));
     parts.push(`(
-      conv.area IN (${aliases})
-      OR EXISTS (
+      EXISTS (
         SELECT 1 FROM whatsapp_lines wl
         LEFT JOIN business_programs p ON p.id = wl.program_id
         WHERE wl.id = conv.whatsapp_line_id
           AND (p.slug IN (${list}) OR wl.program_key IN (${list}))
+      )
+      OR (
+        conv.whatsapp_line_id IS NULL
+        AND conv.area IN (${aliases})
       )
     )`);
   }

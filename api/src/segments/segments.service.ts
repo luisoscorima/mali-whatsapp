@@ -10,6 +10,7 @@ import { auditActor } from '../audit/audit-actor.util';
 import { AuditLogService } from '../audit/audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/auth.types';
+import { businessReadScope } from '../config/areas';
 import {
   programIdForCategory,
   programScopeWhere,
@@ -157,7 +158,7 @@ export class SegmentsService {
 
   async getById(area: AuthUser['area'], id: number): Promise<SegmentDefinition> {
     const row = await this.prisma.segment_definitions.findFirst({
-      where: { id, area },
+      where: { id, area, ...programScopeWhere(null) },
       select: SEGMENT_SELECT,
     });
     if (!row) {
@@ -238,7 +239,10 @@ export class SegmentsService {
     const programId = await programIdForCategory(
       (programSlug) =>
         this.prisma.business_programs.findFirst({
-          where: { slug: programSlug, business_area: { slug: 'educacion' } },
+          where: {
+            slug: programSlug,
+            business_area: { slug: businessReadScope(area).canonicalArea },
+          },
           select: { id: true },
         }),
       dto.category,

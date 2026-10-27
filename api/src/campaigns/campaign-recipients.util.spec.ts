@@ -113,7 +113,7 @@ describe('audiencia de campañas por área y categoría', () => {
     ['patronato', 7],
     ['ti', 8],
   ])('conserva el área %s', async (area, id) => {
-    await expectAudience(area as string, { categories: ['ca'] }, [
+    await expectAudience(area as string, { categories: null }, [
       id as number,
     ]);
   });
@@ -207,6 +207,14 @@ describe('audiencia de campañas por área y categoría', () => {
         {
           ...prisma,
           campaigns: { create },
+          whatsapp_lines: {
+            findFirst: jest.fn().mockResolvedValue({
+              id: 55,
+              program_id: 20,
+              waba_id: 9,
+              program: { slug: 'ep' },
+            }),
+          },
           whatsapp_templates: {
             findFirst: jest.fn().mockResolvedValue({
               id: 1,
@@ -218,6 +226,7 @@ describe('audiencia de campañas por área y categoría', () => {
               placeholder_aliases_json: null,
             }),
           },
+          users: { findUnique: jest.fn().mockResolvedValue(null) },
         } as never,
         { enqueueSendJob } as never,
         {} as never,
@@ -228,6 +237,7 @@ describe('audiencia de campañas por área y categoría', () => {
         {
           segment: 'interesados',
           templateSyncId: 1,
+          whatsappLineId: 55,
           scheduleMode,
           scheduledAt: new Date(Date.now() + 86400000).toISOString(),
         },

@@ -187,14 +187,14 @@ function BusinessHoursForm({
 
 export function SettingsBusinessHoursPage() {
   const scope = useCategoryScope()
-  if (!scope.education) return <BusinessHoursForm />
+  if (!scope.enabled) return <BusinessHoursForm />
   if (!scope.slugs?.length) return <p className="text-muted">Cargando…</p>
   return (
     <div className="space-y-4">
       {scope.slugs.map((slug) => (
         <BusinessHoursForm
           key={slug}
-          area={categorySettingsArea(slug)}
+          area={categorySettingsArea(slug, scope.areaCanonical)}
           heading={mixesCategories(scope) ? categoryLabel(slug) : undefined}
         />
       ))}

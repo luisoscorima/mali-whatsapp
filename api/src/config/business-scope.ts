@@ -30,23 +30,36 @@ export function conversationCategoryPredicate(alias: string, slugs: string[]): P
   if (!selected.length) return Prisma.sql`FALSE`;
   const parts: Prisma.Sql[] = [];
   if (selected.includes('general')) {
-    parts.push(Prisma.sql`EXISTS (
-      SELECT 1 FROM whatsapp_lines cat_l
-      WHERE cat_l.id = ${col(alias, 'whatsapp_line_id')}
-        AND cat_l.program_id IS NULL
-        AND (cat_l.program_key IS NULL OR BTRIM(cat_l.program_key) = '')
+    parts.push(Prisma.sql`(
+      (
+        ${col(alias, 'whatsapp_line_id')} IS NOT NULL
+        AND EXISTS (
+          SELECT 1 FROM whatsapp_lines cat_l
+          WHERE cat_l.id = ${col(alias, 'whatsapp_line_id')}
+            AND cat_l.program_id IS NULL
+            AND (cat_l.program_key IS NULL OR BTRIM(cat_l.program_key) = '')
+        )
+      )
+      OR (
+        ${col(alias, 'whatsapp_line_id')} IS NULL
+        AND ${col(alias, 'area')} NOT LIKE ${'educacion_%'}
+      )
     )`);
   }
   const programs = selected.filter((slug) => slug !== 'general');
   if (programs.length) {
+    // Fuente de verdad: categoría actual de la línea. Alias histórico solo sin línea.
     const aliases = programs.map((slug) => `educacion_${slug}`);
     parts.push(Prisma.sql`(
-      ${col(alias, 'area')} IN (${Prisma.join(aliases)})
-      OR EXISTS (
+      EXISTS (
         SELECT 1 FROM whatsapp_lines cat_l
         LEFT JOIN business_programs cat_p ON cat_p.id = cat_l.program_id
         WHERE cat_l.id = ${col(alias, 'whatsapp_line_id')}
           AND (cat_p.slug IN (${Prisma.join(programs)}) OR cat_l.program_key IN (${Prisma.join(programs)}))
+      )
+      OR (
+        ${col(alias, 'whatsapp_line_id')} IS NULL
+        AND ${col(alias, 'area')} IN (${Prisma.join(aliases)})
       )
     )`);
   }

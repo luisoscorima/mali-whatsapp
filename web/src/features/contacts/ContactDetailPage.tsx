@@ -7,6 +7,7 @@ import { splitPhoneForForm } from './phoneUtils'
 import { segmentOptionsForAssignment, pruneSegmentSlugsToOptions } from '../segments/segmentOptions'
 
 import { formatContactName } from './contactName'
+import { useOpenContactChat } from './openContactChat'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 import { formatDateTime } from '../../shared/format'
 import {
@@ -79,7 +80,7 @@ export function ContactDetailPage() {
   const [leadStatusBusy, setLeadStatusBusy] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [chatBusy, setChatBusy] = useState(false)
+  const { openContactChat, linePickerDialog, busy: chatBusy } = useOpenContactChat()
 
   useEffect(() => {
     if (!id) return
@@ -193,18 +194,9 @@ export function ContactDetailPage() {
   }
 
   async function onOpenChat() {
-    if (!id) return
-    setChatBusy(true)
-    const result = await apiClient.post<{ id: number }>(
-      `/api/conversations/from-contact/${id}`,
-      {},
-    )
-    setChatBusy(false)
-    if (!result.ok) {
-      notify.error(result.error)
-      return
-    }
-    navigate(`/conversations/${result.data.id}`)
+    const contactId = Number(id)
+    if (!contactId) return
+    await openContactChat(contactId)
   }
 
   async function onLeadStatusChange(statusId: number) {
@@ -400,6 +392,7 @@ export function ContactDetailPage() {
           </ul>
         </section>
       ) : null}
+      {linePickerDialog}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, ConflictException, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { businessReadScope } from '../config/areas';
 import { categoryOfProgram, programIdForCategory, programScopeWhere } from '../config/category-scope';
 import { payloadWithStandardCurso } from '../leads/lead-curso.util';
 import { PrismaService } from '../prisma/prisma.service';
@@ -503,7 +504,7 @@ export class ContactsService {
       throw new BadRequestException('Segmento invalido');
     }
 
-    const segmentProgramId = await this.programIdFromCategory(category);
+    const segmentProgramId = await this.programIdFromCategory(area, category);
     const assignableRows = await this.prisma.segment_definitions.findMany({
       where: {
         area,
@@ -705,13 +706,20 @@ export class ContactsService {
     return { previous, next, added, removed, program_id: programId };
   }
 
-  private async programIdFromCategory(category: unknown): Promise<number | null> {
+  private async programIdFromCategory(
+    area: string,
+    category: unknown,
+  ): Promise<number | null> {
     const slug = String(category ?? '').trim().toLowerCase();
     if (!slug || slug === 'general') return null;
+    const canonical = businessReadScope(area).canonicalArea;
     const id = await programIdForCategory(
       (programSlug) =>
         this.prisma.business_programs.findFirst({
-          where: { slug: programSlug, business_area: { slug: 'educacion' } },
+          where: {
+            slug: programSlug,
+            business_area: { slug: canonical },
+          },
           select: { id: true },
         }),
       slug,
@@ -848,14 +856,7 @@ export class ContactsService {
       ? undefined
       : category === 'general'
         ? null
-        : (await programIdForCategory(
-            (slug) =>
-              this.prisma.business_programs.findFirst({
-                where: { slug, business_area: { slug: 'educacion' } },
-                select: { id: true },
-              }),
-            category,
-          )) ?? -1;
+        : (await this.programIdFromCategory(area, category)) ?? -1;
     const segmentSlugs = await this.loadContactSegmentSlugs(
       id,
       scoped ? area : undefined,
@@ -910,7 +911,7 @@ export class ContactsService {
     const dni = this.normalizeOptionalDni(dto.dni);
     const opt_in_email =
       dto.opt_in_email !== undefined ? Boolean(dto.opt_in_email) : true;
-    const segmentProgramId = await this.programIdFromCategory(dto.category);
+    const segmentProgramId = await this.programIdFromCategory(area, dto.category);
 
     try {
       if (this.people) {
@@ -1117,7 +1118,7 @@ export class ContactsService {
       dto.opt_in_email !== undefined
         ? Boolean(dto.opt_in_email)
         : current.opt_in_email;
-    const segmentProgramId = await this.programIdFromCategory(dto.category);
+    const segmentProgramId = await this.programIdFromCategory(area, dto.category);
     {
       const change = await this.prisma.$transaction(async (tx) => {
         await this.assertConversationIdentityCompatible(tx, area, phone, whatsapp_user_id);

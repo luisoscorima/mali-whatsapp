@@ -201,6 +201,14 @@ export type EnsureConversationResult = {
   id: number;
 };
 
+export type OpenChatLine = {
+  id: number;
+  label: string;
+  phone: string | null;
+  category: string;
+  category_label: string;
+};
+
 export type ReplyResult = {
   messages: InboxMessage[];
 };

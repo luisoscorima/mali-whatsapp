@@ -41,6 +41,7 @@ import type {
 import {
   createMessageTemplateOnWaba,
   fetchAllMessageTemplates,
+  getConfiguredWhatsAppCatalogLines,
   getWhatsAppCredentialsForArea,
   resolveWabaId,
   uploadTemplateHeaderHandle,
@@ -49,11 +50,17 @@ import {
   fetchTemplateSummary,
   type TemplateSummary,
 } from './template-analytics.util';
+import { businessReadScope } from '../config/areas';
 
 function toIso(value: Date | null | undefined): string | null {
   if (!value) return null;
   return value.toISOString();
 }
+
+type TemplateListOptions = {
+  whatsappLineId?: number | null;
+  conversationId?: number | null;
+};
 
 @Injectable()
 export class TemplatesService {
@@ -62,9 +69,16 @@ export class TemplatesService {
     private readonly auditLog: AuditLogService,
   ) {}
 
-  async list(area: AuthUser['area']): Promise<TemplateListItem[]> {
+  async list(
+    area: AuthUser['area'],
+    options: TemplateListOptions = {},
+  ): Promise<TemplateListItem[]> {
+    const wabaId = await this.resolveFilterWabaId(area, options);
     const rows = await this.prisma.whatsapp_templates.findMany({
-      where: { area },
+      where: {
+        area,
+        ...(wabaId != null ? { whatsapp_waba_id: wabaId } : {}),
+      },
       orderBy: [{ id: 'desc' }],
       select: {
         id: true,
@@ -87,9 +101,16 @@ export class TemplatesService {
 
   async listSendable(
     area: AuthUser['area'],
+    options: TemplateListOptions = {},
   ): Promise<SendableTemplateListItem[]> {
+    const wabaId = await this.resolveFilterWabaId(area, options);
     return this.prisma.whatsapp_templates.findMany({
-      where: { area, status: 'APPROVED', active: true },
+      where: {
+        area,
+        status: 'APPROVED',
+        active: true,
+        ...(wabaId != null ? { whatsapp_waba_id: wabaId } : {}),
+      },
       orderBy: [{ name: 'asc' }, { language: 'asc' }],
       select: {
         id: true,
@@ -233,12 +254,19 @@ export class TemplatesService {
         category,
       });
 
+    const whatsappWabaId = await this.resolveDefaultLocalWabaId(area);
+
     const row = await this.prisma.whatsapp_templates.upsert({
       where: {
-        area_name_language: { area, name, language },
+        whatsapp_waba_id_name_language: {
+          whatsapp_waba_id: whatsappWabaId,
+          name,
+          language,
+        },
       },
       create: {
         area,
+        whatsapp_waba_id: whatsappWabaId,
         meta_id: metaId,
         name,
         language,
@@ -360,16 +388,123 @@ export class TemplatesService {
 
   async sync(user: AuthUser): Promise<TemplateSyncResult> {
     const area = user.area;
-    const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
-    if (!token) {
+    const targets = await this.resolveSyncTargets(area);
+    if (!targets.length) {
       throw new BadRequestException(
-        'Falta token de WhatsApp para esta área',
+        'Falta token o WABA de WhatsApp para esta área',
       );
     }
 
-    const wabaId = await resolveWabaId(area, token, phoneNumberId);
-    const templates = await fetchAllMessageTemplates(wabaId, token);
+    let count = 0;
+    for (const target of targets) {
+      const templates = await fetchAllMessageTemplates(
+        target.metaWabaId,
+        target.token,
+      );
+      await this.upsertTemplatesForWaba(area, target.localWabaId, templates);
+      count += templates.length;
+    }
 
+    await this.auditLog.write({
+      event_type: AuditEvent.TEMPLATE_SYNC,
+      message: `Sincronización de plantillas Meta (área ${area})`,
+      actor: auditActor(user),
+      meta: { area, count, wabas: targets.length },
+    });
+
+    return { count };
+  }
+
+  private async resolveFilterWabaId(
+    area: AuthUser['area'],
+    options: TemplateListOptions,
+  ): Promise<number | null> {
+    if (options.whatsappLineId) {
+      const line = await this.prisma.whatsapp_lines.findFirst({
+        where: {
+          id: options.whatsappLineId,
+          business_area: { slug: businessReadScope(area).canonicalArea },
+        },
+        select: { waba_id: true },
+      });
+      return line?.waba_id ?? null;
+    }
+    if (options.conversationId) {
+      const conversation = await this.prisma.conversations.findFirst({
+        where: {
+          id: options.conversationId,
+          area: { in: businessReadScope(area).areas },
+        },
+        select: { whatsapp_line: { select: { waba_id: true } } },
+      });
+      return conversation?.whatsapp_line?.waba_id ?? null;
+    }
+    return null;
+  }
+
+  private async resolveDefaultLocalWabaId(area: AuthUser['area']): Promise<number> {
+    const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
+    if (!token) {
+      throw new BadRequestException('Falta token de WhatsApp para esta área');
+    }
+    const metaWabaId = await resolveWabaId(area, token, phoneNumberId);
+    return this.ensureLocalWabaId(metaWabaId);
+  }
+
+  private async ensureLocalWabaId(metaWabaId: string): Promise<number> {
+    const id = String(metaWabaId || '').trim();
+    if (!id) {
+      throw new BadRequestException('WABA de Meta no resuelta');
+    }
+    const existing = await this.prisma.whatsapp_wabas.findUnique({
+      where: { meta_waba_id: id },
+      select: { id: true },
+    });
+    if (existing) return existing.id;
+    const created = await this.prisma.whatsapp_wabas.create({
+      data: {
+        meta_waba_id: id,
+        label: `WABA ${id.slice(-6)}`,
+        active: true,
+      },
+      select: { id: true },
+    });
+    return created.id;
+  }
+
+  private async resolveSyncTargets(
+    area: AuthUser['area'],
+  ): Promise<{ metaWabaId: string; token: string; localWabaId: number }[]> {
+    const canonical = businessReadScope(area).canonicalArea;
+    const byMeta = new Map<string, string>();
+    for (const line of getConfiguredWhatsAppCatalogLines()) {
+      if (line.canonicalArea !== canonical) continue;
+      if (!line.token || !line.wabaId) continue;
+      if (!byMeta.has(line.wabaId)) byMeta.set(line.wabaId, line.token);
+    }
+    if (!byMeta.size) {
+      const { token, phoneNumberId } = getWhatsAppCredentialsForArea(area);
+      if (!token) return [];
+      const metaWabaId = await resolveWabaId(area, token, phoneNumberId);
+      byMeta.set(metaWabaId, token);
+    }
+    const targets: { metaWabaId: string; token: string; localWabaId: number }[] =
+      [];
+    for (const [metaWabaId, token] of byMeta) {
+      targets.push({
+        metaWabaId,
+        token,
+        localWabaId: await this.ensureLocalWabaId(metaWabaId),
+      });
+    }
+    return targets;
+  }
+
+  private async upsertTemplatesForWaba(
+    area: AuthUser['area'],
+    localWabaId: number,
+    templates: Awaited<ReturnType<typeof fetchAllMessageTemplates>>,
+  ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       const keys: { name: string; language: string }[] = [];
 
@@ -386,10 +521,15 @@ export class TemplatesService {
 
         await tx.whatsapp_templates.upsert({
           where: {
-            area_name_language: { area, name, language },
+            whatsapp_waba_id_name_language: {
+              whatsapp_waba_id: localWabaId,
+              name,
+              language,
+            },
           },
           create: {
             area,
+            whatsapp_waba_id: localWabaId,
             meta_id: metaId,
             name,
             language,
@@ -410,10 +550,13 @@ export class TemplatesService {
       }
 
       if (keys.length === 0) {
-        await tx.whatsapp_templates.deleteMany({ where: { area } });
+        await tx.whatsapp_templates.deleteMany({
+          where: { whatsapp_waba_id: localWabaId, area },
+        });
       } else {
         await tx.whatsapp_templates.deleteMany({
           where: {
+            whatsapp_waba_id: localWabaId,
             area,
             NOT: {
               OR: keys.map((k) => ({
@@ -425,15 +568,6 @@ export class TemplatesService {
         });
       }
     });
-
-    await this.auditLog.write({
-      event_type: AuditEvent.TEMPLATE_SYNC,
-      message: `Sincronización de plantillas Meta (área ${area})`,
-      actor: auditActor(user),
-      meta: { area, count: templates.length },
-    });
-
-    return { count: templates.length };
   }
 
   private async loadUsage(

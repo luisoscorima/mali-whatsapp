@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiClient } from '@/shared/api'
 import { formatDateTime } from '@/shared/format'
+import { useOpenContactChat } from '@/features/contacts/openContactChat'
 import {
   Dialog,
   DialogBody,
@@ -35,29 +36,27 @@ function ChatLinkButton({
   contactId?: number | null
 }) {
   const navigate = useNavigate()
-  const [busy, setBusy] = useState(false)
+  const { openContactChat, linePickerDialog, busy } = useOpenContactChat()
   return (
-    <button
-      type="button"
-      disabled={busy}
-      className="mt-1 text-xs text-accent hover:underline disabled:opacity-60"
-      onClick={() => {
-        if (contactId) {
-          setBusy(true)
-          void apiClient
-            .post<{ id: number }>(`/api/conversations/from-contact/${contactId}`, {})
-            .then((res) => {
-              setBusy(false)
-              if (res.ok) navigate(`/conversations/${res.data.id}`)
-              else navigate(`/conversations/${conversationId}`)
+    <>
+      <button
+        type="button"
+        disabled={busy}
+        className="mt-1 text-xs text-accent hover:underline disabled:opacity-60"
+        onClick={() => {
+          if (contactId) {
+            void openContactChat(contactId).then((result) => {
+              if (result === 'failed') navigate(`/conversations/${conversationId}`)
             })
-          return
-        }
-        navigate(`/conversations/${conversationId}`)
-      }}
-    >
-      {busy ? 'Abriendo…' : 'Ir al chat'}
-    </button>
+            return
+          }
+          navigate(`/conversations/${conversationId}`)
+        }}
+      >
+        {busy ? 'Abriendo…' : 'Ir al chat'}
+      </button>
+      {linePickerDialog}
+    </>
   )
 }
 

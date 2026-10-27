@@ -79,7 +79,11 @@ type CampaignBackfillRow = {
   id: number;
   area: string;
   whatsapp_line_id: number | null;
-  whatsapp_line: { phone_number_id: string } | null;
+  whatsapp_line: {
+    phone_number_id: string;
+    program_id: number | null;
+    waba_id?: number;
+  } | null;
   template_name: string;
   message_text: string;
   image_url: string | null;
@@ -134,7 +138,9 @@ async function fetchCampaignRow(
       id: true,
       area: true,
       whatsapp_line_id: true,
-      whatsapp_line: { select: { phone_number_id: true } },
+      whatsapp_line: {
+        select: { phone_number_id: true, program_id: true, waba_id: true },
+      },
       template_name: true,
       message_text: true,
       image_url: true,
@@ -258,7 +264,7 @@ export async function backfillCampaignChatFromLogs(
             dni: string | null;
           }
         >();
-    const attrsMap = await fetchContactAttributesMap(prisma, contactIds);
+    const attrsMaps = new Map<string, Map<number, Record<string, string>>>();
 
     for (const row of batch) {
       stats.scanned += 1;
@@ -293,7 +299,17 @@ export async function backfillCampaignChatFromLogs(
           name: '',
           phone: isWhatsAppBsuid(row.phone) ? null : row.phone,
         };
-        const attrs = row.contact_id ? attrsMap.get(row.contact_id) : undefined;
+        const programId = campaignRow.whatsapp_line?.program_id ?? null;
+        const attrsKey = programId == null ? 'null' : String(programId);
+        if (!attrsMaps.has(attrsKey)) {
+          attrsMaps.set(
+            attrsKey,
+            await fetchContactAttributesMap(prisma, contactIds, { programId }),
+          );
+        }
+        const attrs = row.contact_id
+          ? attrsMaps.get(attrsKey)!.get(row.contact_id)
+          : undefined;
         const preview = rebuildPreviewForContact(
           sendCtx,
           contact,
@@ -445,7 +461,7 @@ export async function backfillCampaignChatPreviews(
       contactsByAreaPhone.set(area, map);
     }
 
-    const attrsMap = await fetchContactAttributesMap(prisma, [...contactIds]);
+    const attrsMaps = new Map<string, Map<number, Record<string, string>>>();
 
     for (const row of batch) {
       stats.scanned += 1;
@@ -516,7 +532,19 @@ export async function backfillCampaignChatPreviews(
           };
         }
 
-        const attrs = contact.id ? attrsMap.get(contact.id) : undefined;
+        const programId = campaignRow.whatsapp_line?.program_id ?? null;
+        const attrsKey = programId == null ? 'null' : String(programId);
+        if (!attrsMaps.has(attrsKey)) {
+          attrsMaps.set(
+            attrsKey,
+            await fetchContactAttributesMap(prisma, [...contactIds], {
+              programId,
+            }),
+          );
+        }
+        const attrs = contact.id
+          ? attrsMaps.get(attrsKey)!.get(contact.id)
+          : undefined;
         const preview = rebuildPreviewForContact(
           sendCtx,
           contact,

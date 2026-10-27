@@ -194,11 +194,19 @@ export class WebhookService {
       return;
     }
 
+    const wabaId = String(wabaEntryId || '').trim();
+    const waba = wabaId
+      ? await this.prisma.whatsapp_wabas.findUnique({
+          where: { meta_waba_id: wabaId },
+          select: { id: true },
+        })
+      : null;
     await this.prisma.whatsapp_templates.updateMany({
       where: {
         area,
         name: templateName,
         ...(templateLanguage ? { language: templateLanguage } : {}),
+        ...(waba ? { whatsapp_waba_id: waba.id } : {}),
       },
       data: {
         status: event,

@@ -6,6 +6,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -45,9 +46,22 @@ export class TemplatesController {
   @Get('sendable')
   async sendable(
     @CurrentUser() user: AuthUser,
+    @Query('conversationId') conversationIdRaw?: string,
+    @Query('whatsappLineId') whatsappLineIdRaw?: string,
   ): Promise<ApiResponse<SendableTemplateListItem[]>> {
     assertCanSendTemplatesFromChat(user);
-    const data = await this.templatesService.listSendable(user.area);
+    const conversationId = Number(conversationIdRaw);
+    const whatsappLineId = Number(whatsappLineIdRaw);
+    const data = await this.templatesService.listSendable(user.area, {
+      conversationId:
+        Number.isInteger(conversationId) && conversationId > 0
+          ? conversationId
+          : null,
+      whatsappLineId:
+        Number.isInteger(whatsappLineId) && whatsappLineId > 0
+          ? whatsappLineId
+          : null,
+    });
     return { ok: true, data };
   }
 
@@ -67,9 +81,16 @@ export class TemplatesController {
   @Get()
   async list(
     @CurrentUser() user: AuthUser,
+    @Query('whatsappLineId') whatsappLineIdRaw?: string,
   ): Promise<ApiResponse<TemplateListItem[]>> {
     assertCanListTemplates(user);
-    const data = await this.templatesService.list(user.area);
+    const whatsappLineId = Number(whatsappLineIdRaw);
+    const data = await this.templatesService.list(user.area, {
+      whatsappLineId:
+        Number.isInteger(whatsappLineId) && whatsappLineId > 0
+          ? whatsappLineId
+          : null,
+    });
     return { ok: true, data };
   }
 

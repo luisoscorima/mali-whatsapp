@@ -84,6 +84,7 @@ describe('CRM Educación', () => {
       Promise.resolve(orderBy?.id ? { id: 3 } : { created_at: firstSeen }));
     const recordInbound = jest.fn();
     const service = new LeadsService({
+      conversations: { findFirst: jest.fn().mockResolvedValue(null) },
       contact_origins: { findFirst },
       chat_messages: { findFirst: firstInbound },
     } as never, { recordInbound } as never);
@@ -108,6 +109,11 @@ describe('CRM Educación', () => {
   it('registra como lead orgánico una identidad BSUID sin teléfono', async () => {
     const seenAt = new Date('2026-09-24T10:00:00Z');
     const service = new LeadsService({
+      conversations: {
+        findFirst: jest.fn().mockResolvedValue({
+          whatsapp_line: { program: { slug: 'ca' } },
+        }),
+      },
       contact_origins: { findFirst: jest.fn().mockResolvedValue(null) },
       chat_messages: { findFirst: jest.fn().mockResolvedValue({ created_at: seenAt }) },
     } as never, { recordInbound: jest.fn() } as never);

@@ -340,8 +340,22 @@ export class CrmService {
       }
     }
 
+    const whatsappLine = getWhatsAppLineForArea(area);
+    const lineWabaId = whatsappLine?.id
+      ? (
+          await this.prisma.whatsapp_lines.findFirst({
+            where: { id: whatsappLine.id },
+            select: { waba_id: true },
+          })
+        )?.waba_id
+      : null;
     const templateRow = await this.prisma.whatsapp_templates.findFirst({
-      where: { area, name: templateName, status: 'APPROVED' },
+      where: {
+        area,
+        name: templateName,
+        status: 'APPROVED',
+        ...(lineWabaId != null ? { whatsapp_waba_id: lineWabaId } : {}),
+      },
       select: {
         id: true,
         name: true,
@@ -396,8 +410,6 @@ export class CrmService {
       templateRow.components_json,
       staticParams,
     );
-    const whatsappLine = getWhatsAppLineForArea(area);
-
     const campaign = await this.prisma.campaigns.create({
       data: {
         area,

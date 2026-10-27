@@ -6,6 +6,7 @@ import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { formatContactName } from './contactName'
 import { groupByCategory, type AttributeFieldDefinition } from './contactFormUtils'
 import { BulkContactActionsDialog } from './BulkContactActionsDialog'
+import { useOpenContactChat } from './openContactChat'
 import { SegmentBadge } from '../segments/SegmentBadge'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
@@ -111,6 +112,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
   const [listScrollAtEnd, setListScrollAtEnd] = useState(false)
   const [listCanScroll, setListCanScroll] = useState(false)
   const fabRef = useRef<HTMLDetailsElement>(null)
+  const { openContactChat, linePickerDialog } = useOpenContactChat()
 
   const selectedSegments = searchParams.getAll('segment')
   const attrKey = searchParams.get('attr_key') ?? ''
@@ -367,16 +369,8 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
 
   async function openChat(contactId: number) {
     setChatOpeningId(contactId)
-    const res = await apiClient.post<{ id: number }>(
-      `/api/conversations/from-contact/${contactId}`,
-      {},
-    )
+    await openContactChat(contactId)
     setChatOpeningId(null)
-    if (!res.ok) {
-      notify.error(res.error)
-      return
-    }
-    navigate(`/conversations/${res.data.id}`)
   }
 
   const listQuery = location.search
@@ -829,6 +823,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
       onApplySegment={applyBulkSegment}
       onApplyAttribute={applyBulkAttribute}
     />
+    {linePickerDialog}
     </>
   )
 }

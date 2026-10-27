@@ -281,7 +281,7 @@ export class UserAreasService {
     const directIds = membership.lines.map(g => g.line_id);
     let restricted = membership.access_mode === 'restricted';
     let includeGeneral = membership.include_general;
-    let categorySlugs: string[] | null = restricted && scope.canonicalArea === 'educacion'
+    let categorySlugs: string[] | null = restricted
       ? [
           ...(includeGeneral ? ['general'] : []),
           ...membership.programs.filter((grant) => grant.program.active).map((grant) => grant.program.slug),
@@ -304,6 +304,8 @@ export class UserAreasService {
           .filter((program) => inherited.includes(program.slug))
           .map((program) => program.id);
       }
+    } else if (restricted && (!categorySlugs || !categorySlugs.length)) {
+      categorySlugs = ['__none__'];
     }
     const lineOr = [
       ...(membership.access_mode === 'restricted' && directIds.length ? [{ id: { in: directIds } }] : []),

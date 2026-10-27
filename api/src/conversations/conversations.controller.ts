@@ -35,6 +35,7 @@ import type {
   InboxListResult,
   InboxOlderMessagesResult,
   InboxUnreadCountResult,
+  OpenChatLine,
   ReplyResult,
   UpdateConversationModeResult,
   InboxConversationUpdates,
@@ -126,15 +127,30 @@ export class ConversationsController {
     return { ok: true, data };
   }
 
+  @Get('open-lines')
+  async openLines(
+    @CurrentUser() user: AuthUser,
+    @Query('category') category?: string | string[],
+  ): Promise<ApiResponse<OpenChatLine[]>> {
+    assertCanManageConversations(user);
+    const data = await this.conversationsService.listOpenChatLines(
+      user,
+      parseCategorySlugs(category),
+    );
+    return { ok: true, data };
+  }
+
   @Post('from-contact/:contactId')
   async ensureFromContact(
     @CurrentUser() user: AuthUser,
     @Param('contactId', ParseIntPipe) contactId: number,
+    @Body() body?: { whatsappLineId?: number },
   ): Promise<ApiResponse<EnsureConversationResult>> {
     assertCanManageConversations(user);
     const data = await this.conversationsService.ensureFromContact(
       user,
       contactId,
+      body?.whatsappLineId,
     );
     return { ok: true, data };
   }

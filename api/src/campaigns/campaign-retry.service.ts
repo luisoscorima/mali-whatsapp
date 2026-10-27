@@ -271,7 +271,9 @@ export class CampaignRetryService {
         auto_retry_done: true,
         manual_retry_count: true,
         whatsapp_line_id: true,
-        whatsapp_line: { select: { phone_number_id: true } },
+        whatsapp_line: {
+          select: { phone_number_id: true, program_id: true },
+        },
       },
     });
 
@@ -352,7 +354,9 @@ export class CampaignRetryService {
 
     const attrsMap =
       sendCtx.paramMapping && contactIds.length > 0
-        ? await fetchContactAttributesMap(this.prisma, contactIds)
+        ? await fetchContactAttributesMap(this.prisma, contactIds, {
+            programId: campaign.whatsapp_line?.program_id ?? null,
+          })
         : new Map();
 
     if (candidates.length === 0) {

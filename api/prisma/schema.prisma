@@ -940,26 +940,26 @@ model advisor_notes {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model whatsapp_templates {
-  business_area_id         Int             @default(dbgenerated())
-  business_area            business_areas  @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  id                       Int             @id @default(autoincrement())
-  whatsapp_waba_id         Int?
-  area                     String          @db.VarChar(20)
-  meta_id                  String?         @db.VarChar(64)
-  name                     String          @db.VarChar(200)
-  language                 String          @db.VarChar(32)
-  category                 String?         @db.VarChar(80)
-  status                   String          @db.VarChar(40)
-  components_json          Json            @default("[]")
-  synced_at                DateTime        @default(now()) @db.Timestamptz(6)
+  business_area_id         Int            @default(dbgenerated())
+  business_area            business_areas @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  id                       Int            @id @default(autoincrement())
+  whatsapp_waba_id         Int
+  area                     String         @db.VarChar(20)
+  meta_id                  String?        @db.VarChar(64)
+  name                     String         @db.VarChar(200)
+  language                 String         @db.VarChar(32)
+  category                 String?        @db.VarChar(80)
+  status                   String         @db.VarChar(40)
+  components_json          Json           @default("[]")
+  synced_at                DateTime       @default(now()) @db.Timestamptz(6)
   rejection_reason         String?
-  submitted_at             DateTime?       @db.Timestamptz(6)
+  submitted_at             DateTime?      @db.Timestamptz(6)
   submitted_by             Int?
   placeholder_aliases_json Json?
-  active                   Boolean         @default(true)
-  whatsapp_waba            whatsapp_wabas? @relation(fields: [whatsapp_waba_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  active                   Boolean        @default(true)
+  whatsapp_waba            whatsapp_wabas @relation(fields: [whatsapp_waba_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
-  @@unique([area, name, language])
+  @@unique([whatsapp_waba_id, name, language])
   @@index([area], map: "idx_whatsapp_templates_area")
   @@index([whatsapp_waba_id], map: "idx_whatsapp_templates_waba")
 }

@@ -345,7 +345,7 @@ export class CampaignsService {
   ): Promise<RecipientsPreviewResult> {
     const scope = businessReadScope(area);
     area = scope.canonicalArea;
-    categories = area === 'educacion' ? scope.program ? [scope.program] : categories : null;
+    categories = scope.program ? [scope.program] : categories;
     const segmentSet = await this.getSegmentSlugSet(area, categories);
     const segments = [
       ...new Set(dto.segments.map((s) => String(s).trim()).filter(Boolean)),
@@ -594,6 +594,7 @@ export class CampaignsService {
   }
 
   async getById(area: AuthUser['area'], id: number): Promise<CampaignDetail> {
+    await this.assertCampaignInArea(area, id);
     const campaign = await this.prisma.campaigns.findFirst({
       where: { id, area },
       include: {
@@ -758,6 +759,7 @@ export class CampaignsService {
       throw new BadRequestException(schedule.message);
     }
 
+    await this.assertCampaignInArea(user.area, id);
     const campaign = await this.prisma.campaigns.findFirst({
       where: { id, area: user.area },
       select: { status: true, scheduled_at: true },
@@ -810,6 +812,7 @@ export class CampaignsService {
     campaign: {
       template_name: string;
       campaign_payload: unknown;
+      whatsapp_line_id?: number | null;
     },
   ): Promise<{
     id: number;
@@ -840,8 +843,21 @@ export class CampaignsService {
 
     if (!templateName) return null;
 
+    const lineId = campaign.whatsapp_line_id;
+    const lineWabaId = lineId
+      ? (
+          await this.prisma.whatsapp_lines.findFirst({
+            where: { id: lineId },
+            select: { waba_id: true },
+          })
+        )?.waba_id
+      : null;
     const row = await this.prisma.whatsapp_templates.findFirst({
-      where: { area, name: templateName },
+      where: {
+        area,
+        name: templateName,
+        ...(lineWabaId != null ? { whatsapp_waba_id: lineWabaId } : {}),
+      },
       orderBy: { id: 'desc' },
       select: {
         id: true,
@@ -859,11 +875,15 @@ export class CampaignsService {
     area: AuthUser['area'],
     id: number,
   ): Promise<void> {
-    const campaign = await this.prisma.campaigns.findFirst({
-      where: { id, area },
-      select: { id: true },
-    });
-    if (!campaign) {
+    const rows = await this.prisma.$queryRaw<{ id: number }[]>(Prisma.sql`
+      SELECT c.id
+      FROM campaigns c
+      WHERE c.id = ${id}
+        AND c.area = ${area}
+        AND ${campaignAudienceSql(null)}
+      LIMIT 1
+    `);
+    if (!rows.length) {
       throw new NotFoundException('Campaña no encontrada');
     }
   }
@@ -1154,7 +1174,7 @@ export class CampaignsService {
     area: string,
     raw: unknown,
     categories: string[] | null,
-  ): Promise<{ id: number }> {
+  ): Promise<{ id: number; programId: number | null; wabaId: number }> {
     const requested = Number(raw);
     if (!requested) {
       if (categories?.length) {
@@ -1162,18 +1182,34 @@ export class CampaignsService {
       }
       const fallback = getWhatsAppLineForArea(area);
       if (!fallback?.id) throw new BadRequestException('No hay una línea activa para enviar');
-      return { id: fallback.id };
+      const fallbackRow = await this.prisma.whatsapp_lines.findFirst({
+        where: { id: fallback.id },
+        select: { id: true, program_id: true, waba_id: true },
+      });
+      if (!fallbackRow) {
+        throw new BadRequestException('No hay una línea activa para enviar');
+      }
+      return {
+        id: fallbackRow.id,
+        programId: fallbackRow.program_id,
+        wabaId: fallbackRow.waba_id,
+      };
     }
     const line = await this.prisma.whatsapp_lines.findFirst({
       where: { id: requested, active: true, business_area: { slug: area } },
-      select: { id: true, program: { select: { slug: true } } },
+      select: {
+        id: true,
+        program_id: true,
+        waba_id: true,
+        program: { select: { slug: true } },
+      },
     });
     if (!line) throw new BadRequestException('La línea no está activa en esta área');
     const slug = line.program?.slug || 'general';
     if (categories?.length && !categories.includes(slug)) {
       throw new BadRequestException('La línea no pertenece a las categorías de la audiencia');
     }
-    return { id: line.id };
+    return { id: line.id, programId: line.program_id, wabaId: line.waba_id };
   }
 
   async sendCampaign(
@@ -1183,7 +1219,7 @@ export class CampaignsService {
   ): Promise<SendCampaignOutcome> {
     const scope = businessReadScope(user.area);
     const area = scope.canonicalArea;
-    categories = area === 'educacion' ? scope.program ? [scope.program] : categories : null;
+    categories = scope.program ? [scope.program] : categories;
     const segmentSet = await this.getSegmentSlugSet(area, categories);
     const templateSyncId = parseInt(
       String(body.templateSyncId || '').trim(),
@@ -1200,9 +1236,19 @@ export class CampaignsService {
       placeholder_aliases_json: unknown;
     } | null = null;
 
+    const whatsappLine = await this.resolveCampaignLine(
+      area,
+      body.whatsappLineId,
+      categories,
+    );
+
     if (Number.isInteger(templateSyncId) && templateSyncId > 0) {
       templateRow = await this.prisma.whatsapp_templates.findFirst({
-        where: { id: templateSyncId, area },
+        where: {
+          id: templateSyncId,
+          area,
+          whatsapp_waba_id: whatsappLine.wabaId,
+        },
         select: {
           id: true,
           name: true,
@@ -1320,6 +1366,7 @@ export class CampaignsService {
         ? await fetchContactAttributesMap(
             this.prisma,
             recipients.map((r) => r.id),
+            { programId: whatsappLine.programId },
           )
         : new Map<number, Record<string, string>>();
       const gapReport = analyzeRecipientTemplateParams(
@@ -1391,7 +1438,6 @@ export class CampaignsService {
     }
 
     const campaignStatus = isScheduled ? 'scheduled' : 'queued';
-    const whatsappLine = await this.resolveCampaignLine(area, body.whatsappLineId, categories);
 
     const campaign = await this.prisma.campaigns.create({
       data: {
@@ -1447,6 +1493,7 @@ export class CampaignsService {
     id: number,
   ): Promise<CampaignRetryActionResult> {
     const area = user.area;
+    await this.assertCampaignInArea(area, id);
     const campaign = await this.prisma.campaigns.findFirst({
       where: { id, area },
       select: { id: true, status: true, manual_retry_count: true },

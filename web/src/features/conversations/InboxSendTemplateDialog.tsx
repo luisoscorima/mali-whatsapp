@@ -75,7 +75,11 @@ export function InboxSendTemplateDialog({
     setHeaderParamSources([])
     setBodyParamSources([])
     setButtonParamSources([])
-    void apiClient.get<TemplateItem[]>('/api/templates/sendable').then((res) => {
+    void apiClient
+      .get<TemplateItem[]>(
+        `/api/templates/sendable?conversationId=${encodeURIComponent(String(conversationId))}`,
+      )
+      .then((res) => {
       setTemplatesLoading(false)
       if (!res.ok) {
         setTemplatesError(res.error)
@@ -92,7 +96,7 @@ export function InboxSendTemplateDialog({
           )
         }
       })
-  }, [open])
+  }, [open, conversationId])
 
   useEffect(() => {
     if (!templateId) {
