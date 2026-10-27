@@ -1,7 +1,15 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { insertAtSelection } from '@/shared/textSelection'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
+import { categoryLabel } from '@/shared/area/useCategoryScope'
 import { Button } from '@/shared/ui/shadcn/button'
 import {
   DropdownMenu,
@@ -19,7 +27,13 @@ type AdvisorNote = {
   sort_order: number
 }
 
-type AttrDef = { slug: string; label: string }
+type AttrDef = { slug: string; label: string; category?: string }
+
+type FixedVariable = {
+  key: string
+  label: string
+  group: string
+}
 
 type InboxAdvisorNotesPopoverProps = {
   onInsert: (text: string) => void
@@ -85,13 +99,62 @@ export function InboxAdvisorNotesPopover({
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [saving, setSaving] = useState(false)
+  const [varQuery, setVarQuery] = useState('')
   const bodyRef = useRef<HTMLTextAreaElement>(null)
+
+  const fixedVariables: FixedVariable[] = useMemo(
+    () => [
+      { key: CONTACT_NAME_KEY, label: 'Nombre del contacto', group: 'Contacto' },
+      {
+        key: CONTACT_PHONE_KEY,
+        label: 'Teléfono del contacto',
+        group: 'Contacto',
+      },
+      { key: CONTACT_EMAIL_KEY, label: 'Email del contacto', group: 'Contacto' },
+      { key: CONTACT_DNI_KEY, label: 'DNI del contacto', group: 'Contacto' },
+    ],
+    [],
+  )
+
+  const showAttrCategory = useMemo(() => {
+    return new Set(attrDefs.map((a) => a.category || 'general')).size > 1
+  }, [attrDefs])
+
+  const filteredFixed = useMemo(() => {
+    const q = varQuery.trim().toLowerCase()
+    if (!q) return fixedVariables
+    return fixedVariables.filter(
+      (v) =>
+        v.label.toLowerCase().includes(q) ||
+        v.key.toLowerCase().includes(q) ||
+        v.group.toLowerCase().includes(q),
+    )
+  }, [fixedVariables, varQuery])
+
+  const filteredAttrs = useMemo(() => {
+    const q = varQuery.trim().toLowerCase()
+    const list = !q
+      ? attrDefs
+      : attrDefs.filter(
+          (a) =>
+            a.label.toLowerCase().includes(q) ||
+            a.slug.toLowerCase().includes(q) ||
+            Boolean(a.category?.toLowerCase().includes(q)),
+        )
+    return [...list].sort((a, b) => {
+      const ga = categoryLabel(a.category)
+      const gb = categoryLabel(b.category)
+      return ga.localeCompare(gb) || a.label.localeCompare(b.label)
+    })
+  }, [attrDefs, varQuery])
 
   const load = useCallback(async () => {
     setLoading(true)
     const [notesRes, attrsRes] = await Promise.all([
       apiClient.get<AdvisorNote[]>('/api/advisor-notes'),
-      apiClient.get<{ slug: string; label: string }[]>('/api/attribute-definitions'),
+      apiClient.get<{ slug: string; label: string; category?: string }[]>(
+        '/api/attribute-definitions',
+      ),
     ])
     setLoading(false)
     if (!notesRes.ok) {
@@ -100,7 +163,13 @@ export function InboxAdvisorNotesPopover({
     }
     setNotes(notesRes.data)
     if (attrsRes.ok) {
-      setAttrDefs(attrsRes.data.map((a) => ({ slug: a.slug, label: a.label })))
+      setAttrDefs(
+        attrsRes.data.map((a) => ({
+          slug: a.slug,
+          label: a.label,
+          category: a.category,
+        })),
+      )
     }
   }, [])
 
@@ -272,66 +341,84 @@ export function InboxAdvisorNotesPopover({
               maxLength={4000}
               onChange={(e) => setBody(e.target.value)}
             />
-            <DropdownMenu>
+            <DropdownMenu
+              onOpenChange={(next) => {
+                if (!next) setVarQuery('')
+              }}
+            >
               <DropdownMenuTrigger asChild>
                 <Button type="button" size="sm" variant="outline">
                   Variable
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="max-h-56 overflow-y-auto">
-                <DropdownMenuItem
-                  onSelect={() => insertVariable(CONTACT_NAME_KEY)}
+              <DropdownMenuContent
+                align="start"
+                className="max-h-64 w-64 overflow-y-auto p-1"
+              >
+                <div
+                  className="sticky top-0 z-10 bg-surface-strong p-1"
+                  onKeyDown={(e) => e.stopPropagation()}
                 >
-                  <span className="flex flex-col">
-                    <span>Nombre del contacto</span>
-                    <span className="font-mono text-[10px] text-muted">
-                      {`{{${CONTACT_NAME_KEY}}}`}
-                    </span>
-                  </span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() => insertVariable(CONTACT_PHONE_KEY)}
-                >
-                  <span className="flex flex-col">
-                    <span>Teléfono del contacto</span>
-                    <span className="font-mono text-[10px] text-muted">
-                      {`{{${CONTACT_PHONE_KEY}}}`}
-                    </span>
-                  </span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() => insertVariable(CONTACT_EMAIL_KEY)}
-                >
-                  <span className="flex flex-col">
-                    <span>Email del contacto</span>
-                    <span className="font-mono text-[10px] text-muted">
-                      {`{{${CONTACT_EMAIL_KEY}}}`}
-                    </span>
-                  </span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() => insertVariable(CONTACT_DNI_KEY)}
-                >
-                  <span className="flex flex-col">
-                    <span>DNI del contacto</span>
-                    <span className="font-mono text-[10px] text-muted">
-                      {`{{${CONTACT_DNI_KEY}}}`}
-                    </span>
-                  </span>
-                </DropdownMenuItem>
-                {attrDefs.map((a) => (
-                  <DropdownMenuItem
-                    key={a.slug}
-                    onSelect={() => insertVariable(a.slug)}
-                  >
-                    <span className="flex flex-col">
-                      <span>Atributo: {a.label}</span>
-                      <span className="font-mono text-[10px] text-muted">
-                        {`{{${a.slug}}}`}
+                  <input
+                    type="search"
+                    value={varQuery}
+                    onChange={(e) => setVarQuery(e.target.value)}
+                    placeholder="Buscar variable…"
+                    className="w-full rounded-lg border border-line bg-bg px-2 py-1.5 text-sm"
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  />
+                </div>
+                {filteredFixed.map((v, index) => (
+                  <div key={v.key}>
+                    {index === 0 ||
+                    filteredFixed[index - 1].group !== v.group ? (
+                      <div className="mt-2 mb-1 border-t border-line px-2 pt-2 text-xs font-bold text-muted">
+                        {v.group}
+                      </div>
+                    ) : null}
+                    <DropdownMenuItem onSelect={() => insertVariable(v.key)}>
+                      <span className="flex flex-col">
+                        <span>{v.label}</span>
+                        <span className="font-mono text-[10px] text-muted">
+                          {`{{${v.key}}}`}
+                        </span>
                       </span>
-                    </span>
-                  </DropdownMenuItem>
+                    </DropdownMenuItem>
+                  </div>
                 ))}
+                {filteredAttrs.map((a, index) => {
+                  const group = showAttrCategory
+                    ? categoryLabel(a.category)
+                    : 'Atributos'
+                  const prevGroup =
+                    index === 0
+                      ? null
+                      : showAttrCategory
+                        ? categoryLabel(filteredAttrs[index - 1]?.category)
+                        : 'Atributos'
+                  const showHeader = index === 0 || prevGroup !== group
+                  return (
+                    <div key={a.slug}>
+                      {showHeader ? (
+                        <div className="mt-2 mb-1 border-t border-line px-2 pt-2 text-xs font-bold text-muted">
+                          {group}
+                        </div>
+                      ) : null}
+                      <DropdownMenuItem onSelect={() => insertVariable(a.slug)}>
+                        <span className="flex flex-col">
+                          <span>Atributo: {a.label}</span>
+                          <span className="font-mono text-[10px] text-muted">
+                            {`{{${a.slug}}}`}
+                          </span>
+                        </span>
+                      </DropdownMenuItem>
+                    </div>
+                  )
+                })}
+                {filteredFixed.length === 0 && filteredAttrs.length === 0 ? (
+                  <p className="px-2 py-2 text-xs text-muted">Sin coincidencias</p>
+                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
             <div className="flex gap-2">

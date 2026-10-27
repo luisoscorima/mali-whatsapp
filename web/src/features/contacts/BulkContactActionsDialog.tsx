@@ -1,6 +1,7 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { categoryLabel } from '@/shared/area/useCategoryScope'
+import { SearchableSelect } from '@/shared/ui/SearchableSelect'
 import {
-  groupByCategory,
   inputTypeForField,
   type AttributeFieldDefinition,
 } from './contactFormUtils'
@@ -18,7 +19,7 @@ import {
 export type BulkSegmentOption = {
   slug: string
   label: string
-  /** Si hay grupos, se renderizan como optgroup. */
+  /** Si hay grupos, se muestran como cabeceras en el selector. */
   group?: string
 }
 
@@ -49,8 +50,36 @@ export function BulkContactActionsDialog({
   const [segmentSlug, setSegmentSlug] = useState('')
   const [attrKey, setAttrKey] = useState('')
   const [attrValue, setAttrValue] = useState('')
-  const attributeGroups = groupByCategory(attributeDefinitions)
-  const showAttrCategory = attributeGroups.length > 1
+
+  const showAttrCategory = useMemo(() => {
+    const cats = new Set(
+      attributeDefinitions.map((d) => d.category || 'general'),
+    )
+    return cats.size > 1
+  }, [attributeDefinitions])
+
+  const segmentOptions = useMemo(
+    () =>
+      segments.map((seg) => ({
+        value: seg.slug,
+        label: seg.label,
+        group: seg.group,
+      })),
+    [segments],
+  )
+
+  const attributeOptions = useMemo(
+    () =>
+      attributeDefinitions.map((def) => ({
+        value: def.slug,
+        label: def.label,
+        group: showAttrCategory
+          ? categoryLabel(def.category)
+          : undefined,
+        keywords: def.slug,
+      })),
+    [attributeDefinitions, showAttrCategory],
+  )
 
   useEffect(() => {
     if (!open) {
@@ -62,19 +91,6 @@ export function BulkContactActionsDialog({
 
   const attrDef =
     attributeDefinitions.find((d) => d.slug === attrKey) ?? null
-
-  const segmentGroups = (() => {
-    const hasGroups = segments.some((s) => Boolean(s.group))
-    if (!hasGroups) return null
-    const map = new Map<string, BulkSegmentOption[]>()
-    for (const seg of segments) {
-      const key = (seg.group ?? '').trim() || 'otros'
-      const rows = map.get(key) ?? []
-      rows.push(seg)
-      map.set(key, rows)
-    }
-    return [...map.entries()]
-  })()
 
   async function submitSegment(e: FormEvent) {
     e.preventDefault()
@@ -107,29 +123,15 @@ export function BulkContactActionsDialog({
           {segments.length > 0 ? (
             <form onSubmit={(e) => void submitSegment(e)} className="flex flex-col gap-2">
               <label className="text-sm font-medium text-ink">Segmento</label>
-              <select
+              <SearchableSelect
                 value={segmentSlug}
-                onChange={(e) => setSegmentSlug(e.target.value)}
-                required
-                className={FIELD}
-              >
-                <option value="">Elegir segmento</option>
-                {segmentGroups
-                  ? segmentGroups.map(([group, segs]) => (
-                      <optgroup key={group} label={group}>
-                        {segs.map((seg) => (
-                          <option key={seg.slug} value={seg.slug}>
-                            {seg.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))
-                  : segments.map((seg) => (
-                      <option key={seg.slug} value={seg.slug}>
-                        {seg.label}
-                      </option>
-                    ))}
-              </select>
+                onChange={setSegmentSlug}
+                placeholder="Elegir segmento"
+                searchPlaceholder="Buscar segmento…"
+                clearOption={{ label: 'Elegir segmento' }}
+                aria-label="Elegir segmento"
+                options={segmentOptions}
+              />
               <button
                 type="submit"
                 disabled={busy || !segmentSlug}
@@ -146,32 +148,18 @@ export function BulkContactActionsDialog({
               className="flex flex-col gap-2"
             >
               <label className="text-sm font-medium text-ink">Atributo</label>
-              <select
+              <SearchableSelect
                 value={attrKey}
-                onChange={(e) => {
-                  setAttrKey(e.target.value)
+                onChange={(next) => {
+                  setAttrKey(next)
                   setAttrValue('')
                 }}
-                required
-                className={FIELD}
-              >
-                <option value="">Elegir atributo</option>
-                {showAttrCategory
-                  ? attributeGroups.map((group) => (
-                      <optgroup key={group.key} label={group.label}>
-                        {group.items.map((def) => (
-                          <option key={`${def.category || 'general'}:${def.slug}`} value={def.slug}>
-                            {def.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))
-                  : attributeDefinitions.map((def) => (
-                      <option key={def.slug} value={def.slug}>
-                        {def.label}
-                      </option>
-                    ))}
-              </select>
+                placeholder="Elegir atributo"
+                searchPlaceholder="Buscar atributo…"
+                clearOption={{ label: 'Elegir atributo' }}
+                aria-label="Elegir atributo"
+                options={attributeOptions}
+              />
               {attrDef?.field_type === 'select' ? (
                 <select
                   value={attrValue}

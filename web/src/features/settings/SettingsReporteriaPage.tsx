@@ -5,13 +5,25 @@ import { notify } from '@/shared/notify'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import { defaultReportDateRange } from '../reports/reportDateRange'
 import { ReportScrollableTable } from '@/shared/ui/InboxListPager'
-import { categoryLine, mixesCategories, useCategoryScope } from '@/shared/area/useCategoryScope'
+import { SearchableSelect } from '@/shared/ui/SearchableSelect'
+import {
+  categoryLabel,
+  categoryLine,
+  mixesCategories,
+  useCategoryScope,
+  withCategoryQuery,
+} from '@/shared/area/useCategoryScope'
 
 type TabId = 'communications' | 'segments' | 'chat'
 
 type FilterOptions = {
-  segments: { slug: string; label: string; color_key: string }[]
-  attribute_filters: { slug: string; label: string; segment_slug?: string | null }[]
+  segments: { slug: string; label: string; color_key: string; category?: string }[]
+  attribute_filters: {
+    slug: string
+    label: string
+    segment_slug?: string | null
+    category?: string
+  }[]
 }
 
 type CommRow = {
@@ -135,6 +147,42 @@ export function SettingsReporteriaPage() {
   const attrValue = searchParams.get('attr_value') ?? ''
   const [attrValueDraft, setAttrValueDraft] = useState(attrValue)
 
+  const showSegmentCategory = useMemo(() => {
+    if (!scope.education || !filterOptions?.segments?.length) return false
+    return (
+      new Set(filterOptions.segments.map((s) => s.category || 'general')).size >
+      1
+    )
+  }, [scope.education, filterOptions?.segments])
+
+  const showAttrCategory = useMemo(() => {
+    const attrs = filterOptions?.attribute_filters ?? []
+    if (attrs.length === 0) return false
+    return new Set(attrs.map((a) => a.category || 'general')).size > 1
+  }, [filterOptions?.attribute_filters])
+
+  const reporteriaSegmentOptions = useMemo(
+    () =>
+      (filterOptions?.segments ?? []).map((seg) => ({
+        ...seg,
+        group: showSegmentCategory
+          ? categoryLabel(seg.category)
+          : undefined,
+      })),
+    [filterOptions?.segments, showSegmentCategory],
+  )
+
+  const reporteriaAttrOptions = useMemo(
+    () =>
+      (filterOptions?.attribute_filters ?? []).map((opt) => ({
+        value: opt.slug,
+        label: opt.label,
+        group: showAttrCategory ? categoryLabel(opt.category) : undefined,
+        keywords: opt.slug,
+      })),
+    [filterOptions?.attribute_filters, showAttrCategory],
+  )
+
   useEffect(() => {
     setAttrValueDraft(attrValue)
   }, [attrValue])
@@ -155,10 +203,14 @@ export function SettingsReporteriaPage() {
   }, [searchParams, setSearchParams])
 
   useEffect(() => {
-    apiClient.get<FilterOptions>('/api/contacts/filter-options').then((res) => {
-      if (res.ok) setFilterOptions(res.data)
-    })
-  }, [])
+    apiClient
+      .get<FilterOptions>(
+        withCategoryQuery('/api/contacts/filter-options', scope.query),
+      )
+      .then((res) => {
+        if (res.ok) setFilterOptions(res.data)
+      })
+  }, [scope.query])
 
   // Debounce valor de atributo: no refetch en cada tecla (preview ágil).
   useEffect(() => {
@@ -387,9 +439,9 @@ export function SettingsReporteriaPage() {
 
         {tab === 'communications' ? (
           <>
-            {filterOptions?.segments?.length ? (
+            {reporteriaSegmentOptions.length ? (
               <SegmentFilterSelect
-                segments={filterOptions.segments}
+                segments={reporteriaSegmentOptions}
                 selectedSlugs={selectedSegments}
                 onToggle={toggleSegment}
                 onClearAll={() => {
@@ -402,12 +454,12 @@ export function SettingsReporteriaPage() {
             ) : null}
             <label>
               <span className="text-muted">Atributo</span>
-              <select
-                className="mt-1 block rounded-lg border border-line bg-surface px-2 py-1.5"
+              <SearchableSelect
+                className="mt-1"
                 value={attrKey}
-                onChange={(e) => {
+                onChange={(next) => {
                   const sp = new URLSearchParams(searchParams)
-                  if (e.target.value) sp.set('attr_key', e.target.value)
+                  if (next) sp.set('attr_key', next)
                   else {
                     sp.delete('attr_key')
                     sp.delete('attr_value')
@@ -415,17 +467,12 @@ export function SettingsReporteriaPage() {
                   sp.delete('page')
                   setSearchParams(sp)
                 }}
-              >
-                <option value="">Todos</option>
-                {(filterOptions?.attribute_filters ?? []).map((opt) => (
-                  <option
-                    key={`${opt.slug}:${opt.segment_slug ?? ''}`}
-                    value={opt.slug}
-                  >
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+                placeholder="Todos"
+                searchPlaceholder="Buscar atributo…"
+                clearOption={{ label: 'Todos' }}
+                aria-label="Atributo"
+                options={reporteriaAttrOptions}
+              />
             </label>
             {attrKey ? (
               <label>

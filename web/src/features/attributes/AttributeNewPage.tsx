@@ -1,8 +1,10 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { categoryLabel, categoryToSave, draftCategorySlug, useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
+import { SearchableSelect } from '@/shared/ui/SearchableSelect'
+
 type SegmentOption = {
   slug: string
   label: string
@@ -26,6 +28,30 @@ export function AttributeNewPage() {
     categories.query ||
     (categories.slugs?.length === 1 ? `category=${encodeURIComponent(categories.slugs[0])}` : '')
 
+  const showSegmentCategory = useMemo(() => {
+    const cats = new Set(segments.map((s) => s.category || 'general'))
+    return cats.size > 1
+  }, [segments])
+
+  const segmentOptions = useMemo(
+    () =>
+      segments.map((s) => ({
+        value: s.slug,
+        label:
+          categories.education &&
+          segments.some(
+            (other) => other.slug === s.slug && other.category !== s.category,
+          )
+            ? `${s.label} · ${categoryLabel(s.category)}`
+            : s.label,
+        group: showSegmentCategory
+          ? categoryLabel(s.category)
+          : undefined,
+        keywords: s.slug,
+      })),
+    [segments, categories.education, showSegmentCategory],
+  )
+
   useEffect(() => {
     apiClient
       .get<SegmentOption[]>(withCategoryQuery('/api/attribute-definitions/segments', segmentQuery))
@@ -36,6 +62,10 @@ export function AttributeNewPage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
+    if (scope === 'segment' && !segmentSlug.trim()) {
+      notify.error('Selecciona un segmento')
+      return
+    }
     setSaving(true)
     const options =
       fieldType === 'select'
@@ -103,21 +133,16 @@ export function AttributeNewPage() {
         {scope === 'segment' ? (
           <label className="block text-sm">
             <span className="text-muted">Segmento</span>
-            <select
+            <SearchableSelect
+              className="mt-1"
               value={segmentSlug}
-              onChange={(e) => setSegmentSlug(e.target.value)}
-              required
-              className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
-            >
-              <option value="">—</option>
-              {segments.map((s) => (
-                <option key={`${s.category || 'general'}:${s.slug}`} value={s.slug}>
-                  {categories.education && segments.some((other) => other.slug === s.slug && other.category !== s.category)
-                    ? `${s.label} · ${categoryLabel(s.category)}`
-                    : s.label}
-                </option>
-              ))}
-            </select>
+              onChange={setSegmentSlug}
+              placeholder="—"
+              searchPlaceholder="Buscar segmento…"
+              clearOption={{ label: '—' }}
+              aria-label="Segmento"
+              options={segmentOptions}
+            />
           </label>
         ) : null}
 

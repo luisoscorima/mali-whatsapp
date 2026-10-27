@@ -7,6 +7,7 @@ import {
 import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
 import { Button } from '@/shared/ui/shadcn/button'
+import { SearchableSelect } from '@/shared/ui/SearchableSelect'
 import {
   Dialog,
   DialogBody,
@@ -21,6 +22,7 @@ type TemplateItem = {
   id: number
   name: string
   language: string
+  category?: string
   status: string
   active: boolean
 }
@@ -88,11 +90,15 @@ export function InboxSendTemplateDialog({
       setTemplates(res.data)
     })
     void apiClient
-      .get<AttributeOption[]>('/api/attribute-definitions')
+      .get<(AttributeOption & { category?: string })[]>('/api/attribute-definitions')
       .then((res) => {
         if (res.ok) {
           setAttrDefs(
-            res.data.map((attr) => ({ slug: attr.slug, label: attr.label })),
+            res.data.map((attr) => ({
+              slug: attr.slug,
+              label: attr.label,
+              category: attr.category,
+            })),
           )
         }
       })
@@ -227,19 +233,24 @@ export function InboxSendTemplateDialog({
           </p>
           <label className="block text-sm">
             Plantilla
-            <select
+            <SearchableSelect
+              className="mt-1"
               value={templateId}
-              onChange={(e) => setTemplateId(e.target.value)}
+              onChange={setTemplateId}
               disabled={templatesLoading}
-              className="mt-1 w-full rounded-lg border border-line bg-bg px-2 py-1.5"
-            >
-              <option value="">{templatesLoading ? 'Cargando…' : 'Seleccionar…'}</option>
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} ({t.language})
-                </option>
-              ))}
-            </select>
+              placeholder={templatesLoading ? 'Cargando…' : 'Seleccionar…'}
+              searchPlaceholder="Buscar plantilla…"
+              clearOption={{
+                label: templatesLoading ? 'Cargando…' : 'Seleccionar…',
+              }}
+              aria-label="Seleccionar plantilla"
+              options={templates.map((t) => ({
+                value: String(t.id),
+                label: `${t.name} (${t.language})`,
+                group: (t.category || '—').toUpperCase(),
+                keywords: t.name,
+              }))}
+            />
           </label>
 
           {templatesError ? (

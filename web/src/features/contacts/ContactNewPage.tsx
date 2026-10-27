@@ -7,7 +7,13 @@ import { splitPhoneForForm } from './phoneUtils'
 import { segmentOptionsForAssignment } from '../segments/segmentOptions'
 
 type FilterOptions = {
-  segments: Array<{ id: number; slug: string; label: string; color_key?: string }>
+  segments: Array<{
+    id: number
+    slug: string
+    label: string
+    color_key?: string
+    category?: string
+  }>
   attribute_definitions: Array<{
     id: number
     segment_slug: string | null
@@ -17,6 +23,7 @@ type FilterOptions = {
     options?: string[] | null
     sort_order: number
     required: boolean
+    category?: string
   }>
 }
 
@@ -26,6 +33,7 @@ type ApiSegment = {
   label: string
   color_key?: string
   active?: boolean
+  category?: string
 }
 
 function safeReturnTo(raw: string | null): string | null {

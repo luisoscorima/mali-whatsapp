@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
+import { categoryLabel } from '@/shared/area/useCategoryScope'
+import { SearchableSelect } from '@/shared/ui/SearchableSelect'
 
 export type TemplateParamDef = {
   index: number
@@ -21,6 +23,7 @@ export type WizardTemplateDefinition = {
 export type AttributeOption = {
   slug: string
   label: string
+  category?: string
 }
 
 export type CampaignTemplateFormState = {
@@ -73,22 +76,50 @@ export function TemplateParamRow({
   onSourceChange,
 }: TemplateParamRowProps) {
   const isStatic = source === 'static'
+  const sourceOptions = useMemo(
+    () => [
+      {
+        value: 'static',
+        label: 'Valor fijo (igual para todos)',
+        group: 'Fijo',
+      },
+      {
+        value: 'user.name',
+        label: 'Nombre de quien envía',
+        group: 'Remitente',
+      },
+      {
+        value: 'contact.name',
+        label: 'Nombre del contacto',
+        group: 'Contacto',
+      },
+      {
+        value: 'contact.phone',
+        label: 'Teléfono del contacto',
+        group: 'Contacto',
+      },
+      {
+        value: 'contact.email',
+        label: 'Email del contacto',
+        group: 'Contacto',
+      },
+      {
+        value: 'contact.dni',
+        label: 'DNI del contacto',
+        group: 'Contacto',
+      },
+      ...attrs.map((a) => ({
+        value: `attr.${a.slug}`,
+        label: a.label,
+        group: a.category ? categoryLabel(a.category) : 'Atributos',
+        keywords: a.slug,
+      })),
+    ],
+    [attrs],
+  )
   const sourceLabel =
-    source === 'static'
-      ? 'valor fijo'
-      : source === 'contact.name'
-        ? 'nombre del contacto'
-        : source === 'user.name'
-          ? 'nombre de quien envía'
-          : source === 'contact.phone'
-            ? 'teléfono del contacto'
-            : source === 'contact.email'
-              ? 'email del contacto'
-              : source === 'contact.dni'
-                ? 'DNI del contacto'
-                : attrs
-                    .find((a) => `attr.${a.slug}` === source)
-                    ?.label?.toLowerCase() || 'valor por contacto'
+    sourceOptions.find((o) => o.value === source)?.label.toLowerCase() ||
+    'valor por contacto'
 
   return (
     <div className="space-y-2 rounded-lg border border-line bg-surface p-3">
@@ -111,23 +142,15 @@ export function TemplateParamRow({
       </label>
       <label className="block text-sm">
         <span className="text-muted">Origen del valor</span>
-        <select
-          className="mt-1 w-full rounded-lg border border-line bg-surface-strong px-3 py-2 text-sm"
+        <SearchableSelect
+          className="mt-1"
           value={source}
-          onChange={(e) => onSourceChange(e.target.value)}
-        >
-          <option value="static">Valor fijo (igual para todos)</option>
-          <option value="user.name">Nombre de quien envía</option>
-          <option value="contact.name">Nombre del contacto</option>
-          <option value="contact.phone">Teléfono del contacto</option>
-          <option value="contact.email">Email del contacto</option>
-          <option value="contact.dni">DNI del contacto</option>
-          {attrs.map((a) => (
-            <option key={a.slug} value={`attr.${a.slug}`}>
-              Atributo: {a.label}
-            </option>
-          ))}
-        </select>
+          onChange={onSourceChange}
+          placeholder="Origen del valor"
+          searchPlaceholder="Buscar origen…"
+          aria-label={`Origen del valor: ${label}`}
+          options={sourceOptions}
+        />
       </label>
       <p className="text-xs text-muted">
         {isStatic

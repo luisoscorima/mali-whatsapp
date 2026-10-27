@@ -1,4 +1,5 @@
 import { type FormEvent, type ReactNode, useMemo, useState } from 'react'
+import { categoryLabel } from '@/shared/area/useCategoryScope'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import {
   getApplicableAttributeDefinitions,
@@ -18,6 +19,7 @@ type SegmentOption = {
   slug: string
   label: string
   color_key?: string
+  category?: string
 }
 
 type ContactFormValues = {
@@ -104,14 +106,24 @@ export function ContactForm({
   const attributeGroups = useMemo(() => groupByCategory(applicableDefs), [applicableDefs])
   const showCategory = attributeGroups.length > 1
 
+  const showSegmentCategory = useMemo(() => {
+    const cats = new Set(
+      segments.map((s) => s.category || 'general').filter(Boolean),
+    )
+    return cats.size > 1
+  }, [segments])
+
   const filterSegments = useMemo(
     () =>
       segments.map((seg) => ({
         slug: seg.slug,
         label: seg.label,
         color_key: seg.color_key ?? 'slate',
+        group: showSegmentCategory
+          ? categoryLabel(seg.category)
+          : undefined,
       })),
-    [segments],
+    [segments, showSegmentCategory],
   )
 
   const disabled = segments.length === 0

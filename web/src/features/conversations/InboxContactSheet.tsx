@@ -51,7 +51,13 @@ type LeadStatusOption = {
 }
 
 type FilterOptions = {
-  segments: Array<{ id: number; slug: string; label: string; color_key?: string }>
+  segments: Array<{
+    id: number
+    slug: string
+    label: string
+    color_key?: string
+    category?: string
+  }>
   attribute_definitions: AttributeDefinition[]
 }
 
@@ -61,6 +67,7 @@ type ApiSegment = {
   label: string
   color_key?: string
   active?: boolean
+  category?: string
 }
 
 export type InboxContactSheetProps = {

@@ -4,12 +4,13 @@ import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { formatContactName } from './contactName'
-import { groupByCategory, type AttributeFieldDefinition } from './contactFormUtils'
+import { type AttributeFieldDefinition } from './contactFormUtils'
 import { BulkContactActionsDialog } from './BulkContactActionsDialog'
 import { useOpenContactChat } from './openContactChat'
 import { categoryLabel, useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
 import { SegmentBadge } from '../segments/SegmentBadge'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
+import { SearchableSelect } from '@/shared/ui/SearchableSelect'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import { Button } from '@/shared/ui/shadcn/button'
 
@@ -317,8 +318,21 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
   }, [options])
 
   const segments = options?.segments ?? []
-  const attributeFilterGroups = groupByCategory(options?.attribute_filters ?? [])
-  const showAttrCategory = attributeFilterGroups.length > 1
+  const showAttrCategory = useMemo(() => {
+    const attrs = options?.attribute_filters ?? []
+    if (attrs.length === 0) return false
+    return new Set(attrs.map((a) => a.category || 'general')).size > 1
+  }, [options?.attribute_filters])
+  const attrFilterOptions = useMemo(
+    () =>
+      (options?.attribute_filters ?? []).map((opt) => ({
+        value: opt.slug,
+        label: opt.label,
+        group: showAttrCategory ? categoryLabel(opt.category) : undefined,
+        keywords: opt.slug,
+      })),
+    [options?.attribute_filters, showAttrCategory],
+  )
   const canBulkSelect = segments.length > 0 || bulkAttrDefs.length > 0
 
   async function applyBulkSegment(segmentSlug: string): Promise<boolean> {
@@ -570,38 +584,22 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
           </div>
 
           <div className="flex flex-wrap items-end gap-2 text-xs">
-            <select
+            <SearchableSelect
+              className="min-w-[8rem] max-w-[12rem] shrink-0"
               value={attrKey}
-              onChange={(e) =>
+              onChange={(value) =>
                 updateParams((sp) => {
-                  const value = e.target.value
                   if (value) sp.set('attr_key', value)
                   else sp.delete('attr_key')
                   if (!value) sp.delete('attr_value')
                 })
               }
-              className="max-w-[8rem] rounded border border-line bg-bg px-1 py-0.5"
-            >
-              <option value="">Atributo</option>
-              {showAttrCategory
-                ? attributeFilterGroups.map((group) => (
-                    <optgroup key={group.key} label={group.label}>
-                      {group.items.map((opt) => (
-                        <option
-                          key={`${opt.category || 'general'}:${opt.slug}:${opt.segment_slug ?? ''}`}
-                          value={opt.slug}
-                        >
-                          {opt.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))
-                : (options?.attribute_filters ?? []).map((opt) => (
-                    <option key={`${opt.slug}:${opt.segment_slug ?? ''}`} value={opt.slug}>
-                      {opt.label}
-                    </option>
-                  ))}
-            </select>
+              placeholder="Atributo"
+              searchPlaceholder="Buscar atributo…"
+              clearOption={{ label: 'Atributo' }}
+              aria-label="Filtrar por atributo"
+              options={attrFilterOptions}
+            />
 
             {attrKey ? (
               <input

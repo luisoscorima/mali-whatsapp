@@ -13,6 +13,7 @@ import {
   type CampaignTemplateFormState,
 } from './CampaignTemplateFields'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
+import { SearchableSelect } from '@/shared/ui/SearchableSelect'
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard'
 
 type SegmentDefinition = {
@@ -22,6 +23,7 @@ type SegmentDefinition = {
   color_key: string
   active: boolean
   category?: string
+  group?: string
 }
 
 type TemplateListItem = {
@@ -211,9 +213,23 @@ export function CampaignNewPage() {
     if (currentQuery.current !== categoryScope.query) return
     const grouped = new Map<string, SegmentDefinition>()
     for (const segment of segResult.data) {
-      const label = categoryScope.enabled ? segment.label + ' · ' + categoryLabel(segment.category) : segment.label
+      const group = categoryScope.enabled
+        ? categoryLabel(segment.category)
+        : undefined
       const existing = grouped.get(segment.slug)
-      grouped.set(segment.slug, { ...segment, label: existing ? existing.label + ' / ' + label : label })
+      if (existing) {
+        const groups = [existing.group, group].filter(Boolean) as string[]
+        const uniqueGroups = [...new Set(groups)]
+        grouped.set(segment.slug, {
+          ...existing,
+          group:
+            uniqueGroups.length > 1
+              ? uniqueGroups.join(' / ')
+              : uniqueGroups[0],
+        })
+      } else {
+        grouped.set(segment.slug, { ...segment, group })
+      }
     }
     setSegments([...grouped.values()])
     setTemplates(tplResult.data)
@@ -229,7 +245,11 @@ export function CampaignNewPage() {
     }
     if (attrResult.ok) {
       setAttrDefs(
-        attrResult.data.map((a) => ({ slug: a.slug, label: a.label })),
+        attrResult.data.map((a) => ({
+          slug: a.slug,
+          label: a.label,
+          category: a.category,
+        })),
       )
     }
   }
@@ -681,23 +701,26 @@ export function CampaignNewPage() {
         <div className="flex flex-wrap items-end gap-3">
           <label className="min-w-[240px] flex-1 text-sm">
             <span className="text-muted">Seleccionar plantilla</span>
-            <select
-              className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2"
+            <SearchableSelect
+              className="mt-1"
               value={templateId}
-              onChange={(e) => {
-                setTemplateId(e.target.value)
+              onChange={(next) => {
+                setTemplateId(next)
                 setTemplateReady(false)
                 setTemplateForm(emptyTemplateFormState())
               }}
               disabled={approvedTemplates.length === 0}
-            >
-              <option value="">— Elige una plantilla —</option>
-              {approvedTemplates.map((t) => (
-                <option key={t.id} value={String(t.id)}>
-                  {t.name} · {t.language} · {t.category || '—'}
-                </option>
-              ))}
-            </select>
+              placeholder="— Elige una plantilla —"
+              searchPlaceholder="Buscar plantilla…"
+              clearOption={{ label: '— Elige una plantilla —' }}
+              aria-label="Seleccionar plantilla"
+              options={approvedTemplates.map((t) => ({
+                value: String(t.id),
+                label: `${t.name} · ${t.language}`,
+                group: (t.category || '—').toUpperCase(),
+                keywords: t.name,
+              }))}
+            />
           </label>
           <button
             type="button"

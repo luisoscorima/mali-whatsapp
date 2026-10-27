@@ -5,6 +5,7 @@ export type SegmentSelectOption = {
   label: string
   color_key?: string
   active?: boolean
+  category?: string
 }
 
 /** Solo segmentos activos (elegibles para asignar). */
@@ -18,6 +19,7 @@ export function segmentOptionsForAssignment(
       slug: s.slug,
       label: s.label,
       color_key: s.color_key,
+      category: s.category,
     }))
 }
 

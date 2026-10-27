@@ -1,10 +1,12 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { formatDateTime } from '../../shared/format'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
+import { SearchableSelect } from '@/shared/ui/SearchableSelect'
 import { categoryLabel, mixesCategories, useCategoryScope } from '@/shared/area/useCategoryScope'
+
 type AttributeDefinition = {
   id: number
   segment_slug: string | null
@@ -24,6 +26,7 @@ type AttributeDefinition = {
 type SegmentOption = {
   slug: string
   label: string
+  category?: string
 }
 
 function scopeLabel(def: AttributeDefinition, segments: SegmentOption[]): string {
@@ -53,6 +56,24 @@ export function AttributeDetailPage() {
   const [active, setActive] = useState(true)
   const [loadFailed, setLoadFailed] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  const showSegmentCategory = useMemo(() => {
+    const cats = new Set(segments.map((s) => s.category || 'general'))
+    return cats.size > 1
+  }, [segments])
+
+  const segmentOptions = useMemo(
+    () =>
+      segments.map((s) => ({
+        value: s.slug,
+        label: s.label,
+        group: showSegmentCategory
+          ? categoryLabel(s.category)
+          : undefined,
+        keywords: s.slug,
+      })),
+    [segments, showSegmentCategory],
+  )
 
   useEffect(() => {
     if (!id) return
@@ -223,19 +244,16 @@ export function AttributeDetailPage() {
         {scope === 'segment' ? (
           <label className="block text-sm">
             <span className="text-muted">Segmento</span>
-            <select
+            <SearchableSelect
+              className="mt-1"
               value={segmentSlug}
-              onChange={(e) => setSegmentSlug(e.target.value)}
-              required
-              className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
-            >
-              <option value="">—</option>
-              {segments.map((s) => (
-                <option key={s.slug} value={s.slug}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+              onChange={setSegmentSlug}
+              placeholder="—"
+              searchPlaceholder="Buscar segmento…"
+              clearOption={{ label: '—' }}
+              aria-label="Segmento"
+              options={segmentOptions}
+            />
           </label>
         ) : null}
 
