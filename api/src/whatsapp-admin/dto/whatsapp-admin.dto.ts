@@ -55,6 +55,13 @@ export class RotateWhatsAppTokenDto {
   credential_label?: string;
 }
 
+export class RegisterWhatsAppLineDto {
+  /** PIN de verificación en dos pasos (6 dígitos) del número en Meta. */
+  @IsString()
+  @Matches(/^\d{6}$/)
+  pin!: string;
+}
+
 export class CreateWhatsAppLineDto {
   @IsInt()
   @Min(1)

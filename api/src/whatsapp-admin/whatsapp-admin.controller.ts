@@ -15,6 +15,7 @@ import { WhatsAppAdminService } from './whatsapp-admin.service';
 import {
   CreateWhatsAppLineDto,
   CreateWhatsAppWabaDto,
+  RegisterWhatsAppLineDto,
   RotateWhatsAppTokenDto,
   UpdateWhatsAppLineDto,
   UpdateWhatsAppWabaDto,
@@ -72,6 +73,17 @@ export class WhatsAppAdminController {
     return {
       ok: true,
       data: await this.whatsappAdmin.syncWabaLines(id, user),
+    };
+  }
+
+  @Post('wabas/:id/subscribe')
+  async subscribeWaba(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<unknown>> {
+    return {
+      ok: true,
+      data: await this.whatsappAdmin.subscribeWaba(id, user),
     };
   }
 
@@ -143,6 +155,18 @@ export class WhatsAppAdminController {
     return {
       ok: true,
       data: await this.whatsappAdmin.validateLine(id, user),
+    };
+  }
+
+  @Post('lines/:id/register')
+  async registerLine(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: RegisterWhatsAppLineDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<unknown>> {
+    return {
+      ok: true,
+      data: await this.whatsappAdmin.registerLine(id, body, user),
     };
   }
 

@@ -3,6 +3,8 @@ import {
   inspectWhatsAppLine,
   inspectWhatsAppWaba,
   listWhatsAppWabaPhoneNumbers,
+  registerWhatsAppPhoneNumber,
+  subscribeWhatsAppWabaApp,
 } from '../templates/whatsapp-meta.util';
 import { decryptMetaToken } from '../meta-settings/credential-vault.util';
 
@@ -10,6 +12,8 @@ jest.mock('../templates/whatsapp-meta.util', () => ({
   inspectWhatsAppLine: jest.fn(),
   inspectWhatsAppWaba: jest.fn(),
   listWhatsAppWabaPhoneNumbers: jest.fn(),
+  registerWhatsAppPhoneNumber: jest.fn(),
+  subscribeWhatsAppWabaApp: jest.fn(),
 }));
 
 describe('WhatsApp administration lifecycle', () => {
@@ -321,5 +325,77 @@ describe('WhatsApp administration lifecycle', () => {
     expect(result.created).toHaveLength(1);
     expect(listWhatsAppWabaPhoneNumbers).toHaveBeenCalled();
     delete process.env.TEST_LINE_SYNC_TOKEN;
+  });
+
+  it('registers a line in Cloud API with a 6-digit PIN and marks it validated', async () => {
+    process.env.TEST_REGISTER_TOKEN = 'register-token-value';
+    db.whatsapp_lines.findUnique.mockResolvedValue({
+      phone_number_id: '1473593759161176',
+      waba: { meta_waba_id: '958313150113818', active: true },
+      credential_override: {
+        id: 4,
+        active: true,
+        secret_source: 'env',
+        secret_ref: 'TEST_REGISTER_TOKEN',
+        encrypted_token: null,
+      },
+      business_area_id: 1,
+      program_id: null,
+    });
+    jest.mocked(registerWhatsAppPhoneNumber).mockResolvedValue({ success: true });
+    jest.mocked(inspectWhatsAppLine).mockResolvedValue({
+      id: '1473593759161176',
+      displayPhoneNumber: '+51 937 008 339',
+      verifiedName: 'MALI Educación 4',
+      qualityRating: 'UNKNOWN',
+      registrationStatus: 'connected',
+    });
+
+    await service.registerLine(11, { pin: '123456' }, { email: 'master@mali.pe' });
+
+    expect(registerWhatsAppPhoneNumber).toHaveBeenCalledWith(
+      '1473593759161176',
+      'register-token-value',
+      '123456',
+    );
+    expect(db.whatsapp_lines.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ registration_status: 'validated' }),
+      }),
+    );
+    delete process.env.TEST_REGISTER_TOKEN;
+  });
+
+  it('subscribes the app to a WABA using a line credential fallback', async () => {
+    process.env.TEST_SUBSCRIBE_TOKEN = 'subscribe-token-value';
+    db.whatsapp_wabas.findUnique.mockResolvedValue({
+      id: 4,
+      meta_waba_id: '958313150113818',
+      default_credential: null,
+    });
+    db.whatsapp_wabas.update = jest.fn().mockResolvedValue({});
+    db.whatsapp_lines.findMany.mockResolvedValue([
+      {
+        credential_override: {
+          id: 4,
+          active: true,
+          secret_source: 'env',
+          secret_ref: 'TEST_SUBSCRIBE_TOKEN',
+          encrypted_token: null,
+        },
+      },
+    ]);
+    jest.mocked(subscribeWhatsAppWabaApp).mockResolvedValue({ success: true });
+    jest.mocked(inspectWhatsAppWaba).mockResolvedValue({
+      id: '958313150113818',
+      name: 'Educación',
+      appSubscriptionStatus: 'subscribed',
+      subscriptionWarning: null,
+    });
+
+    const result = await service.subscribeWaba(4, { email: 'master@mali.pe' });
+    expect(subscribeWhatsAppWabaApp).toHaveBeenCalled();
+    expect(result.inspection.appSubscriptionStatus).toBe('subscribed');
+    delete process.env.TEST_SUBSCRIBE_TOKEN;
   });
 });

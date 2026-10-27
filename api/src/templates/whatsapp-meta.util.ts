@@ -240,6 +240,72 @@ export async function listWhatsAppWabaPhoneNumbers(
   return lines;
 }
 
+/** Registra el número en Cloud API (Pendiente → Conectado). */
+export async function registerWhatsAppPhoneNumber(
+  phoneNumberId: string,
+  token: string,
+  pin: string,
+): Promise<{ success: boolean }> {
+  const id = String(phoneNumberId || '').trim();
+  const pinNorm = String(pin || '').trim();
+  if (!id || !token) {
+    throw new Error('Phone Number ID y token son obligatorios');
+  }
+  if (!/^\d{6}$/.test(pinNorm)) {
+    throw new Error('El PIN de verificación en dos pasos debe ser de 6 dígitos');
+  }
+  // form-urlencoded: en la práctica suele ir mejor que JSON para /register.
+  const body = new URLSearchParams();
+  body.set('messaging_product', 'whatsapp');
+  body.set('pin', pinNorm);
+  const response = await fetch(`${GRAPH_BASE}/${id}/register`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body,
+  });
+  const parsed = (await response.json()) as { success?: boolean } & GraphErrorBody;
+  if (!response.ok) {
+    throw new Error(
+      formatGraphError(
+        parsed,
+        `Meta Graph API error ${response.status} en ${id}/register`,
+      ),
+    );
+  }
+  return { success: parsed.success === true };
+}
+
+/** Suscribe la app del token a la WABA (webhooks). */
+export async function subscribeWhatsAppWabaApp(
+  wabaId: string,
+  token: string,
+): Promise<{ success: boolean }> {
+  const id = String(wabaId || '').trim();
+  if (!id || !token) throw new Error('WABA y token son obligatorios');
+  const body = new URLSearchParams();
+  const response = await fetch(`${GRAPH_BASE}/${id}/subscribed_apps`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body,
+  });
+  const parsed = (await response.json()) as { success?: boolean } & GraphErrorBody;
+  if (!response.ok) {
+    throw new Error(
+      formatGraphError(
+        parsed,
+        `Meta Graph API error ${response.status} en ${id}/subscribed_apps`,
+      ),
+    );
+  }
+  return { success: parsed.success !== false };
+}
+
 /** Validates that the phone number belongs to the selected WABA. */
 export async function inspectWhatsAppLine(
   wabaId: string,

@@ -24,10 +24,13 @@ import {
   inspectWhatsAppLine,
   inspectWhatsAppWaba,
   listWhatsAppWabaPhoneNumbers,
+  registerWhatsAppPhoneNumber,
+  subscribeWhatsAppWabaApp,
 } from '../templates/whatsapp-meta.util';
 import type {
   CreateWhatsAppLineDto,
   CreateWhatsAppWabaDto,
+  RegisterWhatsAppLineDto,
   RotateWhatsAppTokenDto,
   UpdateWhatsAppLineDto,
   UpdateWhatsAppWabaDto,
@@ -913,6 +916,130 @@ export class WhatsAppAdminService {
         actor,
         { line_id: id, error: message },
       );
+      throw new BadRequestException(message);
+    }
+  }
+
+  /** Registra el número en Cloud API (Pendiente → Conectado) y deja la línea validada. */
+  async registerLine(
+    id: number,
+    input: RegisterWhatsAppLineDto,
+    actor?: AdminActor,
+  ) {
+    const { line, credential } = await this.effectiveLineCredential(id);
+    try {
+      const token = await this.resolveCredentialToken(credential);
+      await registerWhatsAppPhoneNumber(
+        line.phone_number_id,
+        token,
+        input.pin,
+      );
+      const inspection = await inspectWhatsAppLine(
+        line.waba.meta_waba_id,
+        line.phone_number_id,
+        token,
+      );
+      const now = new Date();
+      await this.prisma.$transaction([
+        this.prisma.meta_credentials.update({
+          where: { id: credential.id },
+          data: {
+            validation_status: 'valid',
+            validation_error: null,
+            last_validated_at: now,
+            updated_at: now,
+          },
+        }),
+        this.prisma.whatsapp_lines.update({
+          where: { id },
+          data: {
+            display_phone_number: inspection.displayPhoneNumber,
+            quality_rating: inspection.qualityRating,
+            registration_status: 'validated',
+            last_validated_at: now,
+            updated_at: now,
+          },
+        }),
+      ]);
+      await this.metaSettings.refresh();
+      await this.writeAudit(
+        'admin.whatsapp_line_registered',
+        'Número registrado en Cloud API',
+        actor,
+        { line_id: id, phone_number_id: line.phone_number_id },
+      );
+      return { success: true, inspection };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await this.writeAudit(
+        'admin.whatsapp_line_register_failed',
+        'Falló el registro Cloud API de la línea',
+        actor,
+        { line_id: id, error: message },
+      );
+      throw new BadRequestException(message);
+    }
+  }
+
+  /** Suscribe la app del token a la WABA para recibir webhooks. */
+  async subscribeWaba(id: number, actor?: AdminActor) {
+    const waba = await this.prisma.whatsapp_wabas.findUnique({
+      where: { id },
+      include: { default_credential: true },
+    });
+    if (!waba) throw new NotFoundException('WABA no encontrado');
+
+    const lines = await this.prisma.whatsapp_lines.findMany({
+      where: { waba_id: id },
+      select: {
+        credential_override: {
+          select: {
+            id: true,
+            active: true,
+            secret_source: true,
+            secret_ref: true,
+            encrypted_token: true,
+          },
+        },
+      },
+      orderBy: [{ active: 'desc' }, { id: 'asc' }],
+    });
+    const lineCredential = lines.find(
+      (line) => line.credential_override?.active,
+    )?.credential_override;
+    const credential = waba.default_credential || lineCredential || null;
+    if (!credential) {
+      throw new BadRequestException(
+        'Esta WABA no tiene token. Configura uno en la WABA o en alguna de sus líneas.',
+      );
+    }
+
+    try {
+      const token = await this.resolveCredentialToken(credential);
+      const result = await subscribeWhatsAppWabaApp(waba.meta_waba_id, token);
+      const inspection = await inspectWhatsAppWaba(waba.meta_waba_id, token);
+      const now = new Date();
+      await this.prisma.whatsapp_wabas.update({
+        where: { id },
+        data: {
+          app_subscription_status: inspection.appSubscriptionStatus,
+          last_validated_at: now,
+          updated_at: now,
+        },
+      });
+      await this.metaSettings.refresh();
+      await this.writeAudit(
+        'admin.whatsapp_waba_subscribed',
+        'App suscrita a la WABA',
+        actor,
+        {
+          waba_id: id,
+          subscription_status: inspection.appSubscriptionStatus,
+        },
+      );
+      return { ...result, inspection };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       throw new BadRequestException(message);
     }
   }

@@ -2,6 +2,15 @@ import { useEffect, useState } from 'react'
 import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/ui/shadcn/dialog'
 
 type WhatsAppOverview = {
   vault_configured: boolean
@@ -34,6 +43,15 @@ type WhatsAppOverview = {
   }[]
 }
 
+/** Convención MALI: PIN = 6 primeros dígitos del número nacional (sin 51). */
+function defaultPinFromDisplayPhone(displayPhone: string | null | undefined): string {
+  const digits = String(displayPhone || '').replace(/\D/g, '')
+  if (!digits) return ''
+  const national =
+    digits.startsWith('51') && digits.length > 8 ? digits.slice(2) : digits
+  return national.slice(0, 6)
+}
+
 export function AdminWhatsappPage() {
   const { confirm, confirmDialog } = useConfirmDialog()
   const [data, setData] = useState<WhatsAppOverview | null>(null)
@@ -50,6 +68,10 @@ export function AdminWhatsappPage() {
   })
   const [creating, setCreating] = useState(false)
   const [syncingWabaId, setSyncingWabaId] = useState<number | null>(null)
+  const [subscribingWabaId, setSubscribingWabaId] = useState<number | null>(null)
+  const [registerLine, setRegisterLine] = useState<WhatsAppOverview['lines'][number] | null>(null)
+  const [registerPin, setRegisterPin] = useState('')
+  const [registering, setRegistering] = useState(false)
 
   function load() {
     void apiClient.get<WhatsAppOverview>('/api/admin/whatsapp').then((result) => {
@@ -116,6 +138,48 @@ export function AdminWhatsappPage() {
     if (missing_in_meta.length) parts.push(`${missing_in_meta.length} solo en Mali`)
     if (skipped.length) parts.push(`${skipped.length} omitidas`)
     notify.success(`Sincronización: ${parts.join(' · ')}.`)
+    load()
+  }
+
+  async function subscribeWaba(wabaId: number, wabaLabel: string) {
+    const accepted = await confirm({
+      title: 'Suscribir app a la WABA',
+      description: `Suscribe esta app a «${wabaLabel}» para recibir webhooks de mensajes entrantes.`,
+      confirmLabel: 'Suscribir',
+    })
+    if (!accepted) return
+    setSubscribingWabaId(wabaId)
+    const result = await apiClient.post<{
+      inspection?: { appSubscriptionStatus?: string }
+    }>(`/api/admin/whatsapp/wabas/${wabaId}/subscribe`, {})
+    setSubscribingWabaId(null)
+    if (!result.ok) {
+      notify.error(result.error)
+      return
+    }
+    const status = result.data.inspection?.appSubscriptionStatus || 'ok'
+    notify.success(`Suscripción: ${status}.`)
+    load()
+  }
+
+  async function submitRegister() {
+    if (!registerLine) return
+    if (!/^\d{6}$/.test(registerPin.trim())) {
+      notify.error('El PIN debe ser de 6 dígitos.')
+      return
+    }
+    setRegistering(true)
+    const result = await apiClient.post(`/api/admin/whatsapp/lines/${registerLine.id}/register`, {
+      pin: registerPin.trim(),
+    })
+    setRegistering(false)
+    if (!result.ok) {
+      notify.error(result.error)
+      return
+    }
+    notify.success('Número registrado en Cloud API. Ya puedes Activar.')
+    setRegisterLine(null)
+    setRegisterPin('')
     load()
   }
 
@@ -279,7 +343,7 @@ export function AdminWhatsappPage() {
       <section className="space-y-2 rounded-xl border border-line p-4">
         <h2 className="text-sm font-medium">WABA</h2>
         <p className="text-sm text-muted">
-          Sincronizar consulta los números en Meta y crea borradores inactivos para los que falten. Luego Valida en Meta y Activa de a uno.
+          Sincronizar trae números nuevos como borrador. Suscribir enlaza la app a la WABA (webhooks). En cada línea Pendiente: Registrar en Cloud API (PIN) → Activar.
         </p>
         <ul className="space-y-2">
           {data.wabas.map((waba) => (
@@ -298,14 +362,24 @@ export function AdminWhatsappPage() {
                   {waba.app_subscription_status || 'suscripción desconocida'}
                 </p>
               </div>
-              <button
-                type="button"
-                className="small-btn"
-                disabled={syncingWabaId === waba.id}
-                onClick={() => void syncWabaLines(waba.id, waba.label)}
-              >
-                {syncingWabaId === waba.id ? 'Sincronizando…' : 'Sincronizar con Meta'}
-              </button>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="small-btn secondary"
+                  disabled={subscribingWabaId === waba.id || syncingWabaId === waba.id}
+                  onClick={() => void subscribeWaba(waba.id, waba.label)}
+                >
+                  {subscribingWabaId === waba.id ? 'Suscribiendo…' : 'Suscribir app'}
+                </button>
+                <button
+                  type="button"
+                  className="small-btn"
+                  disabled={syncingWabaId === waba.id || subscribingWabaId === waba.id}
+                  onClick={() => void syncWabaLines(waba.id, waba.label)}
+                >
+                  {syncingWabaId === waba.id ? 'Sincronizando…' : 'Sincronizar con Meta'}
+                </button>
+              </div>
             </li>
           ))}
         </ul>
@@ -368,6 +442,21 @@ export function AdminWhatsappPage() {
                         ) : null}
                         <button
                           type="button"
+                          className="small-btn secondary"
+                          disabled={
+                            validatingId === line.id ||
+                            switchingId === line.id ||
+                            registering
+                          }
+                          onClick={() => {
+                            setRegisterPin(defaultPinFromDisplayPhone(line.display_phone_number))
+                            setRegisterLine(line)
+                          }}
+                        >
+                          Registrar Cloud API
+                        </button>
+                        <button
+                          type="button"
                           className="small-btn"
                           disabled={validatingId === line.id || switchingId === line.id}
                           onClick={() => void validateLine(line.id)}
@@ -396,6 +485,50 @@ export function AdminWhatsappPage() {
         ))}
       </div>
       {confirmDialog}
+      <Dialog
+        open={registerLine != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRegisterLine(null)
+            setRegisterPin('')
+          }
+        }}
+      >
+        <DialogContent className="w-[min(96vw,420px)]">
+          <DialogHeader>
+            <DialogTitle>Registrar en Cloud API</DialogTitle>
+            <DialogDescription>
+              {registerLine
+                ? `Pasa «${registerLine.label}» de Pendiente a Conectado. Se sugiere el PIN con los 6 primeros dígitos del número (${registerLine.display_phone_number || '—'}). Si en Meta ya tenías otro PIN, cámbialo aquí.`
+                : null}
+            </DialogDescription>
+          </DialogHeader>
+          <label className="block text-sm">
+            <span className="text-muted">PIN (6 dígitos)</span>
+            <input
+              className="mt-1 block w-full rounded-lg border border-line bg-surface px-3 py-2 tracking-widest"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={registerPin}
+              onChange={(event) =>
+                setRegisterPin(event.target.value.replace(/\D/g, '').slice(0, 6))
+              }
+            />
+          </label>
+          <DialogFooter>
+            <DialogClose disabled={registering}>Cancelar</DialogClose>
+            <button
+              type="button"
+              className="small-btn"
+              disabled={registering || registerPin.length !== 6}
+              onClick={() => void submitRegister()}
+            >
+              {registering ? 'Registrando…' : 'Registrar'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
