@@ -2,12 +2,14 @@ import { WhatsAppAdminService } from './whatsapp-admin.service';
 import {
   inspectWhatsAppLine,
   inspectWhatsAppWaba,
+  listWhatsAppWabaPhoneNumbers,
 } from '../templates/whatsapp-meta.util';
 import { decryptMetaToken } from '../meta-settings/credential-vault.util';
 
 jest.mock('../templates/whatsapp-meta.util', () => ({
   inspectWhatsAppLine: jest.fn(),
   inspectWhatsAppWaba: jest.fn(),
+  listWhatsAppWabaPhoneNumbers: jest.fn(),
 }));
 
 describe('WhatsApp administration lifecycle', () => {
@@ -40,6 +42,7 @@ describe('WhatsApp administration lifecycle', () => {
       },
       whatsapp_lines: {
         create: jest.fn().mockResolvedValue({ id: 4 }),
+        findMany: jest.fn().mockResolvedValue([]),
         findUnique: jest.fn(),
         update: jest.fn().mockResolvedValue({ id: 4 }),
         updateMany: jest.fn(),
@@ -196,5 +199,71 @@ describe('WhatsApp administration lifecycle', () => {
     ).rejects.toThrow('Invalid token');
     expect(db.meta_credentials.create).not.toHaveBeenCalled();
     expect(db.whatsapp_lines.update).not.toHaveBeenCalled();
+  });
+
+  it('syncs Meta numbers as inactive drafts without activating or deleting', async () => {
+    process.env.TEST_WABA_SYNC_TOKEN = 'sync-token-value-for-tests';
+    db.whatsapp_wabas.findUnique.mockResolvedValue({
+      id: 2,
+      meta_waba_id: '12345',
+      default_credential: {
+        id: 3,
+        active: true,
+        secret_source: 'env',
+        secret_ref: 'TEST_WABA_SYNC_TOKEN',
+        encrypted_token: null,
+      },
+    });
+    db.whatsapp_lines.findMany.mockResolvedValue([
+      {
+        id: 10,
+        phone_number_id: '111',
+        label: 'Vieja',
+        display_phone_number: '+51111',
+        quality_rating: 'GREEN',
+        active: true,
+        registration_status: 'validated',
+        business_area_id: 1,
+      },
+    ]);
+    db.whatsapp_lines.findUnique.mockResolvedValue(null);
+    db.whatsapp_lines.create.mockResolvedValue({
+      id: 11,
+      phone_number_id: '222',
+      label: 'MALI Educación 4',
+    });
+    jest.mocked(listWhatsAppWabaPhoneNumbers).mockResolvedValue([
+      {
+        id: '111',
+        displayPhoneNumber: '+51111',
+        verifiedName: 'Vieja',
+        qualityRating: 'GREEN',
+        registrationStatus: 'connected',
+      },
+      {
+        id: '222',
+        displayPhoneNumber: '+51222',
+        verifiedName: 'MALI Educación 4',
+        qualityRating: 'UNKNOWN',
+        registrationStatus: 'connected',
+      },
+    ]);
+
+    const result = await service.syncWabaLines(2, { email: 'master@mali.pe' });
+
+    expect(result.created).toHaveLength(1);
+    expect(result.unchanged).toHaveLength(1);
+    expect(result.missing_in_meta).toHaveLength(0);
+    expect(db.whatsapp_lines.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        phone_number_id: '222',
+        active: false,
+        is_default: false,
+        registration_status: 'draft',
+      }),
+      select: expect.any(Object),
+    });
+    expect(refresh).toHaveBeenCalled();
+    delete process.env.TEST_WABA_SYNC_TOKEN;
   });
 });

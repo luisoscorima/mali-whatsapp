@@ -23,6 +23,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   inspectWhatsAppLine,
   inspectWhatsAppWaba,
+  listWhatsAppWabaPhoneNumbers,
 } from '../templates/whatsapp-meta.util';
 import type {
   CreateWhatsAppLineDto,
@@ -354,6 +355,190 @@ export class WhatsAppAdminService {
       );
       throw new BadRequestException(message);
     }
+  }
+
+  /**
+   * Trae los números de Meta para esta WABA.
+   * Crea borradores inactivos para los nuevos; actualiza display/quality de los ya registrados.
+   * No activa, no borra, no toca tokens.
+   */
+  async syncWabaLines(id: number, actor?: AdminActor) {
+    const waba = await this.prisma.whatsapp_wabas.findUnique({
+      where: { id },
+      include: { default_credential: true },
+    });
+    if (!waba) throw new NotFoundException('WABA no encontrado');
+    if (!waba.default_credential) {
+      throw new BadRequestException('El WABA no tiene credencial');
+    }
+
+    const existing = await this.prisma.whatsapp_lines.findMany({
+      where: { waba_id: id },
+      select: {
+        id: true,
+        phone_number_id: true,
+        label: true,
+        display_phone_number: true,
+        quality_rating: true,
+        active: true,
+        registration_status: true,
+        business_area_id: true,
+      },
+    });
+    const areaIds = Array.from(
+      new Set(existing.map((line) => line.business_area_id)),
+    );
+    if (areaIds.length === 0) {
+      throw new BadRequestException(
+        'Esta WABA no tiene líneas. Crea al menos una a mano para fijar el área y luego sincroniza.',
+      );
+    }
+    if (areaIds.length > 1) {
+      throw new BadRequestException(
+        'Esta WABA tiene líneas en más de un área; no se puede sincronizar automáticamente.',
+      );
+    }
+    const businessAreaId = areaIds[0];
+    const area = await this.prisma.business_areas.findUnique({
+      where: { id: businessAreaId },
+      select: { id: true, slug: true, active: true },
+    });
+    if (!area?.active || !isValidBusinessArea(area.slug)) {
+      throw new BadRequestException('El área de esta WABA no está habilitada');
+    }
+
+    let metaLines;
+    try {
+      const token = await this.resolveCredentialToken(waba.default_credential);
+      metaLines = await listWhatsAppWabaPhoneNumbers(waba.meta_waba_id, token);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new BadRequestException(message);
+    }
+
+    const byPid = new Map(
+      existing.map((line) => [line.phone_number_id, line] as const),
+    );
+    const created: { id: number; phone_number_id: string; label: string }[] =
+      [];
+    const updated: { id: number; phone_number_id: string; label: string }[] =
+      [];
+    const unchanged: { id: number; phone_number_id: string; label: string }[] =
+      [];
+    const skipped: { phone_number_id: string; reason: string }[] = [];
+    const now = new Date();
+
+    for (const meta of metaLines) {
+      const local = byPid.get(meta.id);
+      if (!local) {
+        const elsewhere = await this.prisma.whatsapp_lines.findUnique({
+          where: { phone_number_id: meta.id },
+          select: { id: true, waba_id: true, label: true },
+        });
+        if (elsewhere) {
+          skipped.push({
+            phone_number_id: meta.id,
+            reason: `Ya existe en otra WABA (línea #${elsewhere.id} «${elsewhere.label}»)`,
+          });
+          continue;
+        }
+        const label = (
+          meta.verifiedName ||
+          meta.displayPhoneNumber ||
+          `Línea ${meta.id.slice(-6)}`
+        ).slice(0, 120);
+        const row = await this.prisma.whatsapp_lines.create({
+          data: {
+            business_area_id: businessAreaId,
+            waba_id: id,
+            phone_number_id: meta.id,
+            display_phone_number: meta.displayPhoneNumber,
+            label,
+            quality_rating: meta.qualityRating,
+            is_default: false,
+            active: false,
+            registration_status: 'draft',
+            last_validated_at: now,
+          },
+          select: { id: true, phone_number_id: true, label: true },
+        });
+        created.push(row);
+        continue;
+      }
+
+      const nextDisplay = meta.displayPhoneNumber;
+      const nextQuality = meta.qualityRating;
+      const nextLabel =
+        !local.active &&
+        (local.registration_status === 'draft' ||
+          local.registration_status === 'unknown') &&
+        meta.verifiedName
+          ? meta.verifiedName.slice(0, 120)
+          : local.label;
+      const displayChanged =
+        (nextDisplay || null) !== (local.display_phone_number || null);
+      const qualityChanged =
+        (nextQuality || null) !== (local.quality_rating || null);
+      const labelChanged = nextLabel !== local.label;
+      if (!displayChanged && !qualityChanged && !labelChanged) {
+        unchanged.push({
+          id: local.id,
+          phone_number_id: local.phone_number_id,
+          label: local.label,
+        });
+        continue;
+      }
+      await this.prisma.whatsapp_lines.update({
+        where: { id: local.id },
+        data: {
+          ...(displayChanged
+            ? { display_phone_number: nextDisplay }
+            : {}),
+          ...(qualityChanged ? { quality_rating: nextQuality } : {}),
+          ...(labelChanged ? { label: nextLabel } : {}),
+          updated_at: now,
+        },
+      });
+      updated.push({
+        id: local.id,
+        phone_number_id: local.phone_number_id,
+        label: nextLabel,
+      });
+    }
+
+    const metaIds = new Set(metaLines.map((line) => line.id));
+    const missing_in_meta = existing
+      .filter((line) => !metaIds.has(line.phone_number_id))
+      .map((line) => ({
+        id: line.id,
+        phone_number_id: line.phone_number_id,
+        label: line.label,
+      }));
+
+    await this.metaSettings.refresh();
+    await this.writeAudit(
+      'admin.whatsapp_waba_lines_synced',
+      'Números de WABA sincronizados desde Meta',
+      actor,
+      {
+        waba_id: id,
+        created: created.length,
+        updated: updated.length,
+        unchanged: unchanged.length,
+        missing_in_meta: missing_in_meta.length,
+        skipped: skipped.length,
+      },
+    );
+
+    return {
+      waba_id: id,
+      meta_count: metaLines.length,
+      created,
+      updated,
+      unchanged,
+      missing_in_meta,
+      skipped,
+    };
   }
 
   async rotateWabaToken(

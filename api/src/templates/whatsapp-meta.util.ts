@@ -179,18 +179,17 @@ export async function inspectWhatsAppWaba(
   };
 }
 
-/** Validates that the phone number belongs to the selected WABA. */
-export async function inspectWhatsAppLine(
+/** Lista todos los números de una WABA (paginado). */
+export async function listWhatsAppWabaPhoneNumbers(
   wabaId: string,
-  phoneNumberId: string,
   token: string,
-): Promise<WhatsAppLineInspection> {
+): Promise<WhatsAppLineInspection[]> {
   const waba = String(wabaId || '').trim();
-  const phoneId = String(phoneNumberId || '').trim();
-  if (!waba || !phoneId || !token) {
-    throw new Error('WABA, Phone Number ID y token son obligatorios');
+  if (!waba || !token) {
+    throw new Error('WABA y token son obligatorios');
   }
 
+  const lines: WhatsAppLineInspection[] = [];
   let after: string | null = null;
   for (let page = 0; page < 20; page += 1) {
     const params: Record<string, string> = {
@@ -212,26 +211,25 @@ export async function inspectWhatsAppLine(
       paging?: { cursors?: { after?: string }; next?: string };
     }>(`${waba}/phone_numbers`, token, params);
 
-    const match = (response.data || []).find(
-      (line) => String(line.id || '') === phoneId,
-    );
-    if (match) {
-      return {
-        id: phoneId,
+    for (const row of response.data || []) {
+      const id = String(row.id || '').trim();
+      if (!id) continue;
+      lines.push({
+        id,
         displayPhoneNumber:
-          String(match.display_phone_number || '').trim() || null,
-        verifiedName: String(match.verified_name || '').trim() || null,
-        qualityRating: String(match.quality_rating || '').trim() || null,
+          String(row.display_phone_number || '').trim() || null,
+        verifiedName: String(row.verified_name || '').trim() || null,
+        qualityRating: String(row.quality_rating || '').trim() || null,
         registrationStatus:
           String(
-            match.code_verification_status ||
-              match.status ||
-              match.name_status ||
+            row.code_verification_status ||
+              row.status ||
+              row.name_status ||
               'validated',
           )
             .trim()
             .toLowerCase() || 'validated',
-      };
+      });
     }
 
     after = response.paging?.next
@@ -239,10 +237,28 @@ export async function inspectWhatsAppLine(
       : null;
     if (!after) break;
   }
+  return lines;
+}
 
-  throw new Error(
-    `El Phone Number ID ${phoneId} no pertenece al WABA ${waba} o el token no permite consultarlo`,
+/** Validates that the phone number belongs to the selected WABA. */
+export async function inspectWhatsAppLine(
+  wabaId: string,
+  phoneNumberId: string,
+  token: string,
+): Promise<WhatsAppLineInspection> {
+  const phoneId = String(phoneNumberId || '').trim();
+  if (!phoneId) {
+    throw new Error('WABA, Phone Number ID y token son obligatorios');
+  }
+  const match = (await listWhatsAppWabaPhoneNumbers(wabaId, token)).find(
+    (line) => line.id === phoneId,
   );
+  if (!match) {
+    throw new Error(
+      `El Phone Number ID ${phoneId} no pertenece al WABA ${String(wabaId || '').trim()} o el token no permite consultarlo`,
+    );
+  }
+  return match;
 }
 
 async function fetchWabaIdFromPhoneNumberId(

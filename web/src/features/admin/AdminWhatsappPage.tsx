@@ -49,6 +49,7 @@ export function AdminWhatsappPage() {
     phoneNumberId: '',
   })
   const [creating, setCreating] = useState(false)
+  const [syncingWabaId, setSyncingWabaId] = useState<number | null>(null)
 
   function load() {
     void apiClient.get<WhatsAppOverview>('/api/admin/whatsapp').then((result) => {
@@ -81,6 +82,40 @@ export function AdminWhatsappPage() {
       return
     }
     notify.success('Línea validada contra Meta.')
+    load()
+  }
+
+  async function syncWabaLines(wabaId: number, wabaLabel: string) {
+    const accepted = await confirm({
+      title: 'Sincronizar números con Meta',
+      description: `Consulta la WABA «${wabaLabel}» en Meta. Los números nuevos se crean inactivos; no se activan solos ni se borran líneas.`,
+      confirmLabel: 'Sincronizar',
+    })
+    if (!accepted) return
+    setSyncingWabaId(wabaId)
+    const result = await apiClient.post<{
+      created: { label: string }[]
+      updated: { label: string }[]
+      unchanged: unknown[]
+      missing_in_meta: { label: string }[]
+      skipped: { reason: string }[]
+      meta_count: number
+    }>(`/api/admin/whatsapp/wabas/${wabaId}/sync-lines`, {})
+    setSyncingWabaId(null)
+    if (!result.ok) {
+      notify.error(result.error)
+      return
+    }
+    const { created, updated, unchanged, missing_in_meta, skipped, meta_count } = result.data
+    const parts = [
+      `${meta_count} en Meta`,
+      `${created.length} nuevas`,
+      `${updated.length} actualizadas`,
+      `${unchanged.length} igual`,
+    ]
+    if (missing_in_meta.length) parts.push(`${missing_in_meta.length} solo en Mali`)
+    if (skipped.length) parts.push(`${skipped.length} omitidas`)
+    notify.success(`Sincronización: ${parts.join(' · ')}.`)
     load()
   }
 
@@ -241,6 +276,40 @@ export function AdminWhatsappPage() {
           ? 'La bóveda de tokens está configurada.'
           : 'La bóveda de tokens no está configurada. Las líneas siguen usando variables de entorno.'}
       </p>
+      <section className="space-y-2 rounded-xl border border-line p-4">
+        <h2 className="text-sm font-medium">WABA</h2>
+        <p className="text-sm text-muted">
+          Sincronizar consulta los números en Meta y crea borradores inactivos para los que falten. Luego Valida en Meta y Activa de a uno.
+        </p>
+        <ul className="space-y-2">
+          {data.wabas.map((waba) => (
+            <li
+              key={waba.id}
+              className="flex flex-wrap items-center justify-between gap-3 border-b border-line py-2 last:border-b-0"
+            >
+              <div className="min-w-0">
+                <p className="text-sm">
+                  {waba.label}
+                  {waba.active ? '' : ' · inactiva'}
+                </p>
+                <p className="text-sm text-muted">
+                  …{waba.meta_waba_id.slice(-6)}
+                  {' · '}
+                  {waba.app_subscription_status || 'suscripción desconocida'}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="small-btn"
+                disabled={syncingWabaId === waba.id}
+                onClick={() => void syncWabaLines(waba.id, waba.label)}
+              >
+                {syncingWabaId === waba.id ? 'Sincronizando…' : 'Sincronizar con Meta'}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
       <div className="space-y-4">
         {grouped.map((area) => (
           <section key={area.key} className="overflow-hidden rounded-xl border border-line">

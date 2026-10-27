@@ -64,6 +64,17 @@ export class WhatsAppAdminController {
     };
   }
 
+  @Post('wabas/:id/sync-lines')
+  async syncWabaLines(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<unknown>> {
+    return {
+      ok: true,
+      data: await this.whatsappAdmin.syncWabaLines(id, user),
+    };
+  }
+
   @Post('lines')
   async createLine(
     @Body() body: CreateWhatsAppLineDto,
