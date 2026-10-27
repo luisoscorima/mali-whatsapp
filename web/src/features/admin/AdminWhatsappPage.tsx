@@ -401,11 +401,11 @@ export function AdminWhatsappPage() {
                     >
                       <div className="min-w-0 flex-1">
                         <p className="flex items-center gap-1.5 text-sm">
-                          {line.registration_status === 'validated' ? (
+                          {line.active && line.registration_status === 'validated' ? (
                             <span
                               className="admin-online-dot"
-                              title="Validada en Cloud API"
-                              aria-label="Validada"
+                              title="Activa y validada"
+                              aria-label="Activa y validada"
                             />
                           ) : null}
                           <span>
