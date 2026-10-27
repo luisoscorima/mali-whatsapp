@@ -113,7 +113,21 @@ export class WhatsAppAdminService {
       },
     });
     if (!line) throw new NotFoundException('Línea WhatsApp no encontrada');
-    const credential = line.credential_override || line.waba.default_credential;
+    let credential =
+      line.credential_override || line.waba.default_credential || null;
+    // Líneas nuevas (sync) suelen heredar el token de otra línea de la misma WABA.
+    if (!credential) {
+      const sibling = await this.prisma.whatsapp_lines.findFirst({
+        where: {
+          waba_id: line.waba_id,
+          NOT: { id: lineId },
+          credential_override: { is: { active: true } },
+        },
+        orderBy: [{ active: 'desc' }, { id: 'asc' }],
+        select: { credential_override: true },
+      });
+      credential = sibling?.credential_override ?? null;
+    }
     if (!credential) {
       throw new BadRequestException(
         'La línea no tiene una credencial efectiva',

@@ -330,8 +330,19 @@ describe('WhatsApp administration lifecycle', () => {
   it('registers a line in Cloud API with a 6-digit PIN and marks it validated', async () => {
     process.env.TEST_REGISTER_TOKEN = 'register-token-value';
     db.whatsapp_lines.findUnique.mockResolvedValue({
+      id: 11,
+      waba_id: 4,
       phone_number_id: '1473593759161176',
-      waba: { meta_waba_id: '958313150113818', active: true },
+      waba: {
+        meta_waba_id: '958313150113818',
+        active: true,
+        default_credential: null,
+      },
+      credential_override: null,
+      business_area_id: 1,
+      program_id: null,
+    });
+    db.whatsapp_lines.findFirst = jest.fn().mockResolvedValue({
       credential_override: {
         id: 4,
         active: true,
@@ -339,8 +350,6 @@ describe('WhatsApp administration lifecycle', () => {
         secret_ref: 'TEST_REGISTER_TOKEN',
         encrypted_token: null,
       },
-      business_area_id: 1,
-      program_id: null,
     });
     jest.mocked(registerWhatsAppPhoneNumber).mockResolvedValue({ success: true });
     jest.mocked(inspectWhatsAppLine).mockResolvedValue({
