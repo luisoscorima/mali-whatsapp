@@ -19,6 +19,8 @@ export function buildLeadsOriginsExportBuffer(
     fuente: string;
     programa: string;
     sede: string;
+    captura: string;
+    tiene_chat: string;
     first_lead_chat: string;
     external_id: string;
     first_seen_at: string;
@@ -40,6 +42,8 @@ export function buildLeadsOriginsExportBuffer(
     'Fuente',
     'Programa',
     'Sede',
+    'Captura',
+    'Tiene chat',
     'Primer mensaje',
     'External ID',
     'Fecha de captura',
@@ -62,6 +66,8 @@ export function buildLeadsOriginsExportBuffer(
       r.fuente,
       r.programa,
       r.sede,
+      r.captura,
+      r.tiene_chat,
       r.first_lead_chat,
       r.external_id,
       r.first_seen_at,

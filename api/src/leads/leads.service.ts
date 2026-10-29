@@ -1305,17 +1305,22 @@ export class LeadsService implements OnModuleInit {
       offset: 0,
     });
 
-    // Mensaje del intento: primer inbound en la conversación del origen
-    // en/tras first_seen_at (no el primer mensaje histórico del chat).
-    const originIds = [
-      ...new Set(
-        listed.items.flatMap((origin) =>
-          origin.conversation_id == null ? [] : [origin.id],
-        ),
-      ),
-    ];
+    // Primer inbound: conversación resuelta (origen o enrich por contacto/teléfono).
+    // El widget casi nunca guarda conversation_id en el origen.
+    const chatTargets = listed.items.flatMap((origin) => {
+      const conversationId =
+        origin.chat_conversation_id ?? origin.conversation_id;
+      if (conversationId == null) return [];
+      return [
+        {
+          originId: origin.id,
+          conversationId,
+          firstSeenAt: origin.first_seen_at,
+        },
+      ];
+    });
     const firstChats = new Map<number, string>();
-    if (originIds.length > 0) {
+    if (chatTargets.length > 0) {
       const firstMessages = await this.prisma.$queryRaw<
         Array<{
           origin_id: number;
@@ -1323,17 +1328,24 @@ export class LeadsService implements OnModuleInit {
           message_type: string;
         }>
       >(Prisma.sql`
-        SELECT DISTINCT ON (co.id)
-          co.id AS origin_id,
+        WITH targets(origin_id, conversation_id, first_seen_at) AS (
+          VALUES ${Prisma.join(
+            chatTargets.map(
+              (t) =>
+                Prisma.sql`(${t.originId}::int, ${t.conversationId}::int, ${t.firstSeenAt}::timestamptz)`,
+            ),
+          )}
+        )
+        SELECT DISTINCT ON (t.origin_id)
+          t.origin_id,
           cm.body_text,
           cm.message_type
-        FROM contact_origins co
+        FROM targets t
         INNER JOIN chat_messages cm
-          ON cm.conversation_id = co.conversation_id
+          ON cm.conversation_id = t.conversation_id
          AND cm.direction = 'inbound'
-         AND cm.created_at >= co.first_seen_at - INTERVAL '5 seconds'
-        WHERE co.id IN (${Prisma.join(originIds)})
-        ORDER BY co.id, cm.created_at ASC, cm.id ASC
+         AND cm.created_at >= t.first_seen_at - INTERVAL '5 seconds'
+        ORDER BY t.origin_id, cm.created_at ASC, cm.id ASC
       `);
       for (const message of firstMessages) {
         firstChats.set(
@@ -1344,6 +1356,17 @@ export class LeadsService implements OnModuleInit {
       }
     }
 
+    const channelLabels: Record<string, string> = {
+      widget: 'Widget web',
+      meta_lead_form: 'Instant Forms',
+      meta_ctwa: 'Click-to-WhatsApp',
+      organic_wa: 'WhatsApp orgánico',
+      mali_one_link: 'Links / QR MALI ONE',
+      import: 'Importar',
+      tiktok: 'TikTok',
+      other: 'Otros',
+    };
+
     const rows = listed.items.map((o) => {
       const payload =
         o.payload && typeof o.payload === 'object' && !Array.isArray(o.payload)
@@ -1353,10 +1376,16 @@ export class LeadsService implements OnModuleInit {
         ? [o.contacts.name, o.contacts.last_name].filter(Boolean).join(' ')
         : '';
       const category = leadCategoryOf(o);
+      const hasResolvedChat =
+        (o.chat_conversation_id ?? o.conversation_id) != null;
+      const firstMessage = firstChats.get(o.id) ?? '';
+      // Igual que la UI: modalidad al captar. Meta/TikTok quedan "Solo contacto"
+      // aunque luego abran chat (eso va en Tiene chat / Primer mensaje).
+      const captura = o.came_with_inbound ? 'Con mensaje' : 'Solo contacto';
       return {
-        channel: o.channel,
+        channel: channelLabels[o.channel] || o.channel,
         categoria: category.categoria === 'general' ? 'General' : category.categoria.toUpperCase(),
-        linea: category.linea || 'Solo contacto',
+        linea: category.linea,
         contact_name: contactName,
         username: o.conversations?.wa_username
           ? `@${o.conversations.wa_username.replace(/^@/, '')}`
@@ -1371,7 +1400,9 @@ export class LeadsService implements OnModuleInit {
         fuente: String(payload.fuente ?? '').trim(),
         programa: String(payload.programa ?? '').trim(),
         sede: String(payload.sede ?? '').trim(),
-        first_lead_chat: firstChats.get(o.id) ?? '',
+        captura,
+        tiene_chat: hasResolvedChat ? 'Sí' : 'No',
+        first_lead_chat: firstMessage,
         external_id: o.external_id,
         first_seen_at: formatExportDate(o.first_seen_at),
       };
