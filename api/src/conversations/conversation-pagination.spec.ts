@@ -49,6 +49,7 @@ describe('bounded conversation history', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     );
     jest
       .spyOn(service as any, 'loadConversationTimelineEvents')

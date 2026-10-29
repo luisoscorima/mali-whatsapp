@@ -6,34 +6,55 @@ describe('education lead 60-day classification', () => {
   it('opens a cycle only after more than 60 days without a customer interaction', () => {
     expect(classifyEducationIntake({ occurredAt }).classification).toBe('new');
     expect(classifyEducationIntake({ occurredAt }).assignmentRule).toBe('new_number');
-    expect(classifyEducationIntake({ occurredAt,
+    expect(classifyEducationIntake({
+      occurredAt,
       previousInteractionAt: new Date(occurredAt.getTime() - EDUCATION_LEAD_WINDOW_MS),
     }).classification).toBe('duplicate');
-    expect(classifyEducationIntake({ occurredAt,
+    expect(classifyEducationIntake({
+      occurredAt,
       previousInteractionAt: new Date(occurredAt.getTime() - EDUCATION_LEAD_WINDOW_MS),
     }).assignmentRule).toBe('same_advisor');
-    expect(classifyEducationIntake({ occurredAt,
+    expect(classifyEducationIntake({
+      occurredAt,
       previousInteractionAt: new Date(occurredAt.getTime() - EDUCATION_LEAD_WINDOW_MS - 1),
     }).classification).toBe('new');
-    expect(classifyEducationIntake({ occurredAt,
+    expect(classifyEducationIntake({
+      occurredAt,
       previousInteractionAt: new Date(occurredAt.getTime() - EDUCATION_LEAD_WINDOW_MS - 1),
     }).assignmentRule).toBe('reassignable');
   });
 
   it('treats a return one month after a new cycle as duplicate', () => {
     const returnAt = new Date(occurredAt.getTime() - 30 * 24 * 60 * 60 * 1000);
-    expect(classifyEducationIntake({ occurredAt: returnAt,
+    expect(classifyEducationIntake({
+      occurredAt: returnAt,
       previousInteractionAt: new Date(returnAt.getTime() - 180 * 24 * 60 * 60 * 1000),
     }).classification).toBe('new');
-    expect(classifyEducationIntake({ occurredAt, previousInteractionAt: returnAt }).classification).toBe('duplicate');
+    expect(classifyEducationIntake({
+      occurredAt,
+      previousInteractionAt: returnAt,
+    }).classification).toBe('duplicate');
   });
 
-  it('sends converted and recent no-interested leads to manual review', () => {
-    expect(classifyEducationIntake({ occurredAt, previousStatusSlug: 'convertido',
+  it('opens a new opportunity after a closed or terminal previous cycle', () => {
+    expect(classifyEducationIntake({
+      occurredAt,
+      previousStatusSlug: 'convertido',
       previousInteractionAt: new Date(occurredAt.getTime() - 120 * 24 * 60 * 60 * 1000),
-    })).toEqual({ classification: 'conflict', assignmentRule: 'conflict', conflictReason: 'estado_convertido' });
-    expect(classifyEducationIntake({ occurredAt, previousStatusSlug: 'no_interesado',
+    })).toEqual({
+      classification: 'new',
+      assignmentRule: 'reassignable',
+      conflictReason: null,
+    });
+    expect(classifyEducationIntake({
+      occurredAt,
+      previousStatusSlug: 'no_interesado',
+      previousClosedAt: new Date(occurredAt.getTime() - 10 * 24 * 60 * 60 * 1000),
       previousInteractionAt: new Date(occurredAt.getTime() - 10 * 24 * 60 * 60 * 1000),
-    })).toEqual({ classification: 'conflict', assignmentRule: 'conflict', conflictReason: 'no_interesado_reciente' });
+    })).toEqual({
+      classification: 'new',
+      assignmentRule: 'reassignable',
+      conflictReason: null,
+    });
   });
 });

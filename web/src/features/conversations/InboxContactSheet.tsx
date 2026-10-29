@@ -75,6 +75,7 @@ export type InboxContactSheetProps = {
   onOpenChange: (open: boolean) => void
   mode: 'edit' | 'create'
   contactId?: number | null
+  conversationId?: number | null
   prefillPhone?: string
   prefillUserId?: string | null
   prefillUsername?: string | null
@@ -88,6 +89,7 @@ export function InboxContactSheet({
   onOpenChange,
   mode,
   contactId = null,
+  conversationId = null,
   prefillPhone = '',
   prefillUserId = null,
   prefillUsername = null,
@@ -101,6 +103,13 @@ export function InboxContactSheet({
   const [attributeDefinitions, setAttributeDefinitions] = useState<AttributeDefinition[]>([])
   const [leadStatuses, setLeadStatuses] = useState<LeadStatusOption[]>([])
   const [leadStatusBusy, setLeadStatusBusy] = useState(false)
+  const [attentionBusy, setAttentionBusy] = useState(false)
+  const [openLead, setOpenLead] = useState<{
+    id: number
+    assigned_user_label: string | null
+    lead_status: { label: string } | null
+    closed_at: string | null
+  } | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -121,12 +130,15 @@ export function InboxContactSheet({
     setLoadFailed(false)
     setLoading(true)
     setContact(null)
+    setOpenLead(null)
     setSelectedSegmentSlugs([])
 
     const categoryQs = category ? `category=${encodeURIComponent(category)}` : ''
     async function load() {
       if (mode === 'edit' && contactId) {
-        const [detail, opts, activeSegs, statuses] = await Promise.all([
+        const attentionQs = new URLSearchParams({ contact_id: String(contactId) })
+        if (conversationId) attentionQs.set('conversation_id', String(conversationId))
+        const [detail, opts, activeSegs, statuses, attention] = await Promise.all([
           apiClient.get<ContactDetail>(
             categoryQs ? `/api/contacts/${contactId}?${categoryQs}` : `/api/contacts/${contactId}`,
           ),
@@ -137,6 +149,12 @@ export function InboxContactSheet({
             categoryQs ? `/api/segments/active?${categoryQs}` : '/api/segments/active',
           ),
           apiClient.get<LeadStatusOption[]>('/api/leads/statuses'),
+          apiClient.get<{
+            id: number
+            assigned_user_label: string | null
+            lead_status: { label: string } | null
+            closed_at: string | null
+          } | null>(`/api/leads/attention/current?${attentionQs}`),
         ])
         if (cancelled) return
         if (!detail.ok) {
@@ -159,6 +177,7 @@ export function InboxContactSheet({
           pruneSegmentSlugsToOptions(detail.data.segment_slugs, options),
         )
         if (statuses.ok) setLeadStatuses(statuses.data)
+        setOpenLead(attention.ok && attention.data ? attention.data : null)
         setLoading(false)
         return
       }
@@ -192,7 +211,7 @@ export function InboxContactSheet({
     return () => {
       cancelled = true
     }
-  }, [open, mode, contactId, category])
+  }, [open, mode, contactId, conversationId, category])
 
   async function onSubmit(values: {
     name: string
@@ -263,7 +282,11 @@ export function InboxContactSheet({
     const result = await apiClient.patch<{
       lead_status_id: number | null
       lead_status: ContactDetail['lead_status']
-    }>(`/api/leads/contacts/${contactId}/status`, { status_id: statusId })
+    }>(`/api/leads/contacts/${contactId}/status`, {
+      status_id: statusId,
+      ...(openLead?.id ? { lead_id: openLead.id } : {}),
+      ...(category ? { category } : {}),
+    })
     setLeadStatusBusy(false)
     if (!result.ok) {
       notify.error(result.error)
@@ -278,7 +301,49 @@ export function InboxContactSheet({
           }
         : prev,
     )
+    const terminal = leadStatuses.find((s) => s.id === statusId)
+    if (terminal && !terminal.active) {
+      /* keep sheet consistent */
+    }
+    setOpenLead((prev) =>
+      prev
+        ? {
+            ...prev,
+            lead_status: result.data.lead_status
+              ? { label: result.data.lead_status.label }
+              : prev.lead_status,
+          }
+        : prev,
+    )
     notify.success('Estado actualizado')
+    onSaved()
+  }
+
+  async function onStartAttention() {
+    if (!contactId) return
+    setAttentionBusy(true)
+    const result = await apiClient.post<{
+      id: number
+      assigned_user_id: number | null
+      lead_status_id: number | null
+    }>('/api/leads/attention/start', {
+      contact_id: contactId,
+      conversation_id: conversationId,
+    })
+    setAttentionBusy(false)
+    if (!result.ok) {
+      notify.error(result.error)
+      return
+    }
+    setOpenLead({
+      id: result.data.id,
+      assigned_user_label: null,
+      lead_status: contact?.lead_status
+        ? { label: contact.lead_status.label }
+        : { label: 'Por contactar' },
+      closed_at: null,
+    })
+    notify.success('Nueva atención iniciada')
     onSaved()
   }
 
@@ -320,6 +385,33 @@ export function InboxContactSheet({
             <p className="text-sm text-muted">Cargando formulario…</p>
           ) : (
             <>
+              {mode === 'edit' ? (
+                <div className="mb-4 space-y-2 rounded-lg border border-line bg-bg p-3">
+                  <p className="text-sm font-medium">Atención actual</p>
+                  {openLead ? (
+                    <p className="muted text-sm">
+                      Estado: {openLead.lead_status?.label || '—'}
+                      <br />
+                      Asesor: {openLead.assigned_user_label || 'Sin asignar'}
+                    </p>
+                  ) : (
+                    <p className="muted text-sm">
+                      No hay oportunidad abierta. Puedes chatear y, si corresponde, iniciar una nueva atención.
+                    </p>
+                  )}
+                  {!openLead ? (
+                    <button
+                      type="button"
+                      disabled={attentionBusy}
+                      onClick={() => void onStartAttention()}
+                      className="rounded-lg border border-line bg-surface-strong px-3 py-1.5 text-sm disabled:opacity-60"
+                    >
+                      {attentionBusy ? 'Iniciando…' : 'Iniciar atención'}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+              <p className="mb-2 text-sm font-medium">Perfil del contacto</p>
               <ContactForm
                 key={formKey}
                 mode={mode}
@@ -357,12 +449,12 @@ export function InboxContactSheet({
                 saving={saving}
                 onSubmit={onSubmit}
                 leadStatusOptions={
-                  mode === 'edit' ? statusOptions : undefined
+                  mode === 'edit' && openLead ? statusOptions : undefined
                 }
                 leadStatusId={contact?.lead_status_id ?? null}
                 leadStatusBusy={leadStatusBusy}
                 onLeadStatusChange={
-                  mode === 'edit'
+                  mode === 'edit' && openLead
                     ? (statusId) => void onLeadStatusChange(statusId)
                     : undefined
                 }

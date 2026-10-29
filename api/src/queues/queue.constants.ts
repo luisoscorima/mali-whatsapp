@@ -12,6 +12,8 @@ export const MaintenanceJobName = {
   PROMOTE_FLOW_TIMEOUTS: 'promote-flow-timeouts',
   AUDIT_PURGE: 'audit-purge',
   STARTUP_CAMPAIGNS: 'startup-campaigns',
+  EXPIRE_EDUCATION_LEADS: 'expire-education-leads',
 } as const;
 
 export const AUDIT_PURGE_MS = 24 * 60 * 60 * 1000;
+export const EDUCATION_LEAD_EXPIRE_MS = 60 * 60 * 1000;

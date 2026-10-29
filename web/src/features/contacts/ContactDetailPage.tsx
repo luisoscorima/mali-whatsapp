@@ -212,7 +212,11 @@ export function ContactDetailPage() {
     const result = await apiClient.patch<{
       lead_status_id: number | null
       lead_status: ContactDetail['lead_status']
-    }>(`/api/leads/contacts/${id}/status`, { status_id: statusId })
+    }>(`/api/leads/contacts/${id}/status`, {
+      status_id: statusId,
+      category:
+        new URLSearchParams(location.search).get('category') || undefined,
+    })
     setLeadStatusBusy(false)
     if (!result.ok) {
       notify.error(result.error)

@@ -55,7 +55,14 @@ import {
 import { AuditEvent } from '../audit/audit-events';
 import { auditActor, phoneMetaTail } from '../audit/audit-actor.util';
 import { AuditLogService } from '../audit/audit-log.service';
-import { upsertScopedAttribute } from './contact-attribute.util';
+import {
+  upsertContactAttributeAuthoritative,
+  upsertLeadOwnedAttribute,
+} from './contact-attribute.util';
+import {
+  exactOpenCycleWhere,
+  isEducationAttentionArea,
+} from '../leads/education-lead-context.util';
 import { PersonResolverService } from '../people/person-resolver.service';
 
 type ContactRow = {
@@ -294,6 +301,30 @@ export class ContactsService {
     const map: Record<string, string> = {};
     for (const row of rows) {
       map[row.attr_key] = row.attr_value;
+    }
+    const contact = await this.prisma.contacts.findUnique({
+      where: { id: contactId },
+      select: { person_id: true, area: true },
+    });
+    if (contact && isEducationAttentionArea(contact.area)) {
+      const cycle = await this.prisma.education_lead_cycles.findFirst({
+        where: exactOpenCycleWhere({
+          personId: contact.person_id,
+          area: contact.area,
+          programId,
+        }),
+        orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+        select: { id: true },
+      });
+      if (cycle) {
+        const leadRows = await this.prisma.education_lead_attributes.findMany({
+          where: { cycle_id: cycle.id },
+          select: { attr_key: true, attr_value: true },
+        });
+        for (const row of leadRows) {
+          map[row.attr_key] = row.attr_value;
+        }
+      }
     }
     return map;
   }
@@ -981,8 +1012,50 @@ export class ContactsService {
     attributes: Record<string, string>,
     programId: number | null = null,
   ): Promise<void> {
+    const keys = Object.keys(attributes);
+    if (!keys.length) return;
+    const contact = await tx.contacts.findUnique({
+      where: { id: contactId },
+      select: { area: true, person_id: true },
+    });
+    if (!contact) return;
+    const defs = await tx.contact_attribute_definitions.findMany({
+      where: {
+        area: contact.area,
+        slug: { in: keys },
+        active: true,
+      },
+      select: {
+        id: true, slug: true, owner_kind: true, shared_scope: true, area: true, program_id: true,
+      },
+    });
+    const bySlug = new Map(defs.map((def) => [def.slug, def]));
     for (const [attr_key, attr_value] of Object.entries(attributes)) {
-      await upsertScopedAttribute(tx, contactId, attr_key, attr_value, programId);
+      const def = bySlug.get(attr_key);
+      const kind = await upsertContactAttributeAuthoritative(
+        tx,
+        contactId,
+        attr_key,
+        attr_value,
+        programId,
+        def
+          ? {
+              slug: def.slug,
+              owner_kind: def.owner_kind,
+              shared_scope: def.shared_scope,
+              area: def.area,
+            }
+          : null,
+      );
+      if (kind !== 'lead' || !def) continue;
+      await upsertLeadOwnedAttribute(
+        tx,
+        contactId,
+        attr_key,
+        attr_value,
+        programId,
+        def.id,
+      );
     }
   }
 

@@ -21,7 +21,11 @@ import {
 } from '../contacts/contacts-validation.utils';
 import { buildCampaignMessagePreview } from '../campaigns/campaign-message-preview.util';
 import { persistCampaignChatMessage } from '../campaigns/campaign-chat-message.util';
-import { upsertScopedAttribute } from '../contacts/contact-attribute.util';
+import {
+  upsertContactAttributeAuthoritative,
+  upsertLeadOwnedAttribute,
+  upsertScopedAttribute,
+} from '../contacts/contact-attribute.util';
 import { PersonResolverService } from '../people/person-resolver.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -235,7 +239,16 @@ export class CrmService {
       }
 
       for (const [attr_key, attr_value] of Object.entries(attributes)) {
-        await upsertScopedAttribute(tx, row.id, attr_key, attr_value, null);
+        const kind = await upsertContactAttributeAuthoritative(
+          tx,
+          row.id,
+          attr_key,
+          attr_value,
+          null,
+        );
+        if (kind === 'lead') {
+          await upsertLeadOwnedAttribute(tx, row.id, attr_key, attr_value, null);
+        }
       }
       const categoryAttributes = this.normalizeAttributes(dto.atributos_categoria);
       let categoryProgramId: number | null = null;
@@ -247,7 +260,22 @@ export class CrmService {
         if (!programRow) throw new BadRequestException('Categoría no válida');
         categoryProgramId = programRow.id;
         for (const [attr_key, attr_value] of Object.entries(categoryAttributes)) {
-          await upsertScopedAttribute(tx, row.id, attr_key, attr_value, categoryProgramId);
+          const kind = await upsertContactAttributeAuthoritative(
+            tx,
+            row.id,
+            attr_key,
+            attr_value,
+            categoryProgramId,
+          );
+          if (kind === 'lead') {
+            await upsertLeadOwnedAttribute(
+              tx,
+              row.id,
+              attr_key,
+              attr_value,
+              categoryProgramId,
+            );
+          }
         }
       }
 
@@ -1022,7 +1050,16 @@ export class CrmService {
       }
 
       for (const [attr_key, attr_value] of Object.entries(attributes)) {
-        await upsertScopedAttribute(tx, id, attr_key, attr_value, null);
+        const kind = await upsertContactAttributeAuthoritative(
+          tx,
+          id,
+          attr_key,
+          attr_value,
+          null,
+        );
+        if (kind === 'lead') {
+          await upsertLeadOwnedAttribute(tx, id, attr_key, attr_value, null);
+        }
       }
     });
 

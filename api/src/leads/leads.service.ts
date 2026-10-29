@@ -8,17 +8,22 @@ import {
   Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import type { AuthUser } from '../auth/auth.types';
 import {
   BUSINESS_AREAS,
   normalizeArea,
   normalizeEmail,
   type BusinessArea,
 } from '../config/areas';
-import { programScopeWhere } from '../config/category-scope';
+import { programIdForCategory, programScopeWhere } from '../config/category-scope';
 import {
   educationProgramOf,
   educationReadScope,
 } from '../config/education-scope';
+import {
+  exactOpenCycleWhere,
+  isEducationAttentionArea,
+} from './education-lead-context.util';
 import {
   E164_NO_PLUS_REGEX,
   normalizePhone,
@@ -29,6 +34,7 @@ import { chooseWhatsAppIdentityMatch } from '../conversations/whatsapp-identity.
 import { mergeComplementaryContacts } from '../contacts/merge-complementary-contacts.util';
 import { PersonResolverService } from '../people/person-resolver.service';
 import { EducationLeadWorkflowService } from './education-lead-workflow.service';
+import { endLeadConversationLinks } from './education-lead-lifecycle.util';
 import { MaliOneLinksCatalogService } from './mali-one-links-catalog.service';
 import {
   cursoFromOriginPayload,
@@ -944,7 +950,16 @@ export class LeadsService implements OnModuleInit {
     });
   }
 
-  async setContactStatus(area: string, contactId: number, statusId: number) {
+  async setContactStatus(
+    area: string,
+    contactId: number,
+    statusId: number,
+    opts?: {
+      leadId?: number | null;
+      category?: string | null;
+      user?: AuthUser;
+    },
+  ) {
     const areaNorm = normalizeArea(area);
     const contact = await this.prisma.contacts.findFirst({
       where: { id: contactId, area: areaNorm },
@@ -954,8 +969,23 @@ export class LeadsService implements OnModuleInit {
       where: { id: statusId, area: areaNorm, active: true },
     });
     if (!status) throw new NotFoundException('Estado no encontrado');
+    const programId =
+      opts?.category != null
+        ? await programIdForCategory(
+            (slug) =>
+              this.prisma.business_programs.findFirst({
+                where: {
+                  slug,
+                  active: true,
+                  business_area: { slug: 'educacion' },
+                },
+                select: { id: true },
+              }),
+            opts.category,
+          )
+        : undefined;
     return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(20260924::integer, ${contactId}::integer)`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${contact.person_id}::integer, ${programId ?? opts?.leadId ?? 0}::integer)`;
       const updated = await tx.contacts.update({
         where: { id: contactId },
         data: {
@@ -965,14 +995,95 @@ export class LeadsService implements OnModuleInit {
         },
         include: { lead_status: true },
       });
-      if (this.educationAreas().includes(areaNorm)) {
-        const cycle = await tx.education_lead_cycles.findFirst({
-          where: { contact_id: contactId, area: areaNorm },
-          orderBy: [{ started_at: 'desc' }, { id: 'desc' }], select: { id: true },
-        });
-        if (cycle) await tx.education_lead_cycles.update({
-          where: { id: cycle.id }, data: { lead_status_id: statusId, updated_at: new Date() },
-        });
+      if (isEducationAttentionArea(areaNorm)) {
+        let cycle: {
+          id: number;
+          area: string;
+          program_id: number | null;
+          program: { slug: string } | null;
+        } | null = null;
+        if (opts?.leadId) {
+          cycle = await tx.education_lead_cycles.findFirst({
+            where: {
+              id: opts.leadId,
+              person_id: contact.person_id,
+              closed_at: null,
+            },
+            select: {
+              id: true,
+              area: true,
+              program_id: true,
+              program: { select: { slug: true } },
+            },
+          });
+          if (!cycle) {
+            throw new BadRequestException(
+              'Lead no encontrado o ya cerrado para este contacto',
+            );
+          }
+        } else if (programId !== undefined) {
+          cycle = await tx.education_lead_cycles.findFirst({
+            where: exactOpenCycleWhere({
+              personId: contact.person_id,
+              area: areaNorm,
+              programId,
+            }),
+            orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+            select: {
+              id: true,
+              area: true,
+              program_id: true,
+              program: { select: { slug: true } },
+            },
+          });
+        } else {
+          const openCycles = await tx.education_lead_cycles.findMany({
+            where: {
+              person_id: contact.person_id,
+              closed_at: null,
+              area: { in: this.educationAreas() },
+            },
+            orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+            take: 2,
+            select: {
+              id: true,
+              area: true,
+              program_id: true,
+              program: { select: { slug: true } },
+            },
+          });
+          if (openCycles.length > 1) {
+            throw new BadRequestException(
+              'Indica lead_id o category: hay más de una oportunidad abierta',
+            );
+          }
+          cycle = openCycles[0] ?? null;
+        }
+        if (cycle && opts?.user && this.educationWorkflow) {
+          this.educationWorkflow.assertCanAccessLeadContext(opts.user, cycle);
+        }
+        if (cycle) {
+          const now = new Date();
+          await tx.education_lead_cycles.update({
+            where: { id: cycle.id },
+            data: {
+              lead_status_id: statusId,
+              updated_at: now,
+              ...(status.is_terminal
+                ? {
+                    closed_at: now,
+                    close_reason:
+                      status.slug === 'venta_exitosa' || status.slug === 'convertido'
+                        ? 'sold'
+                        : status.slug === 'perdido' || status.slug === 'no_interesado'
+                          ? 'lost'
+                          : 'terminal_status',
+                  }
+                : {}),
+            },
+          });
+          if (status.is_terminal) await endLeadConversationLinks(tx, cycle.id, now);
+        }
       }
       return updated;
     });

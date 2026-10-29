@@ -1,11 +1,38 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { classifyEducationIntake, EDUCATION_LEAD_WINDOW_MS } from './education-lead-classification.util';
+import type { AuthUser } from '../auth/auth.types';
+import {
+  classifyEducationIntake,
+  EDUCATION_LEAD_WINDOW_MS,
+  isTerminalEducationStatusSlug,
+} from './education-lead-classification.util';
+import {
+  ATTENTION_V1_SETTING_KEY,
+  categorySlugOfCycle,
+  exactCategoryCycleWhere,
+  exactOpenCycleWhere,
+  inactivityDeadlineFrom,
+  isCommercialLeadChannel,
+  isEducationAttentionArea,
+} from './education-lead-context.util';
 import { syncEducationLeadStatuses } from './education-lead-statuses';
 import { educationProgramOf } from '../config/education-scope';
 import { userWorksArea } from '../users/area-membership.where';
 import { ProspectiaAdvisorService } from './prospectia-advisor.service';
+import { endLeadConversationLinks, projectLeadAssignee, withLeadCreateSavepoint } from './education-lead-lifecycle.util';
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
+  );
+}
 
 const EDUCATION_AREAS = ['educacion', 'educacion_ca', 'educacion_ep'];
 const SIXTY_DAYS_MS = EDUCATION_LEAD_WINDOW_MS;
@@ -63,6 +90,49 @@ export class EducationLeadWorkflowService {
     return { areas: [...EDUCATION_AREAS], program, onlyGeneral: false };
   }
 
+  async isAttentionV1Enabled(): Promise<boolean> {
+    const row = await this.prisma.app_settings.findUnique({
+      where: { area_key: { area: 'educacion', key: ATTENTION_V1_SETTING_KEY } },
+      select: { value: true },
+    });
+    const value = String(row?.value ?? '').trim().toLowerCase();
+    return value === '1' || value === 'true' || value === 'on';
+  }
+
+  /** Area + category (+ optional WhatsApp line) must match the caller's business access. */
+  assertCanAccessLeadContext(
+    user: AuthUser,
+    cycle: {
+      area: string;
+      program_id?: number | null;
+      program?: { slug?: string | null } | null;
+    },
+    lineId?: number | null,
+  ): void {
+    if (user.isMaster) return;
+    const allowedAreas = new Set<string>([
+      user.area,
+      ...(user.allowedAreas ?? []),
+    ]);
+    if (!allowedAreas.has(cycle.area)) {
+      throw new ForbiddenException('No autorizado para el área de este lead');
+    }
+    const access = user.businessAccess;
+    if (access?.mode === 'restricted') {
+      const category = categorySlugOfCycle(cycle);
+      if (access.categorySlugs && !access.categorySlugs.includes(category)) {
+        throw new ForbiddenException('No autorizado para esta categoría');
+      }
+      if (
+        lineId != null &&
+        access.lineIds.length > 0 &&
+        !access.lineIds.includes(lineId)
+      ) {
+        throw new ForbiddenException('No autorizado para esta línea');
+      }
+    }
+  }
+
   async recordOrigin(originId: number): Promise<void> {
     const origin = await this.prisma.contact_origins.findUnique({ where: { id: originId } });
     if (!origin || !origin.contact_id || !EDUCATION_AREAS.includes(origin.area)) return;
@@ -85,25 +155,74 @@ export class EducationLeadWorkflowService {
       select: { whatsapp_line: { select: { program_id: true } } },
     });
     const programId = conversation?.whatsapp_line?.program_id ?? null;
+    const contact = await this.prisma.contacts.findUnique({
+      where: { id: input.contactId },
+      select: { person_id: true },
+    });
+    if (!contact) return;
+    const channel = input.channel ?? 'organic_wa';
+    const openWhere = exactOpenCycleWhere({
+      personId: contact.person_id,
+      area: input.area,
+      programId,
+    });
+    const historyWhere = exactCategoryCycleWhere({
+      personId: contact.person_id,
+      area: input.area,
+      programId,
+    });
     const latestEntry = await this.prisma.education_lead_entries.findFirst({
       where: {
         contact_id: input.contactId,
-        ...(programId
-          ? { OR: [{ program_id: programId }, { program_id: null, area: input.area }] }
-          : { area: input.area }),
+        ...(programId != null
+          ? {
+              OR: [
+                { program_id: programId },
+                ...(input.area === 'educacion_ca' || input.area === 'educacion_ep'
+                  ? [{ program_id: null, area: input.area }]
+                  : []),
+              ],
+            }
+          : { program_id: null }),
       },
       orderBy: [{ occurred_at: 'desc' }, { id: 'desc' }],
       select: { occurred_at: true, classification: true },
     });
-    const latestCycle = await this.prisma.education_lead_cycles.findFirst({
-      where: {
-        contact_id: input.contactId,
-        ...(programId
-          ? { OR: [{ program_id: programId }, { program_id: null, area: input.area }] }
-          : { area: input.area }),
-      },
+    const openCycle = await this.prisma.education_lead_cycles.findFirst({
+      where: openWhere,
       orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+      include: { lead_status: { select: { slug: true, is_terminal: true } } },
     });
+    const historicalCycle = openCycle
+      ? null
+      : await this.prisma.education_lead_cycles.findFirst({
+          where: historyWhere,
+          orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+          include: { lead_status: { select: { slug: true, is_terminal: true } } },
+        });
+    const previousClosed =
+      !openCycle &&
+      Boolean(historicalCycle) &&
+      (Boolean(historicalCycle?.closed_at) ||
+        Boolean(historicalCycle?.lead_status?.is_terminal) ||
+        isTerminalEducationStatusSlug(historicalCycle?.lead_status?.slug));
+    // Ambiguous/organic after close: keep chat; only explicit commercial channels reopen.
+    if (previousClosed && !isCommercialLeadChannel(channel)) {
+      if (historicalCycle && !historicalCycle.closed_at) {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.education_lead_cycles.update({
+            where: { id: historicalCycle.id },
+            data: {
+              closed_at: input.occurredAt,
+              close_reason: historicalCycle.close_reason ?? 'terminal_status',
+              updated_at: new Date(),
+            },
+          });
+          await endLeadConversationLinks(tx, historicalCycle.id, input.occurredAt);
+        });
+      }
+      return;
+    }
     const previousInbound = await this.prisma.chat_messages.findFirst({
       where: { conversation_id: input.conversationId, direction: 'inbound',
         id: { lt: input.messageId } },
@@ -116,22 +235,31 @@ export class EducationLeadWorkflowService {
     const sameCapture = Boolean(latestEntry &&
       input.occurredAt.getTime() - latestEntry.occurred_at.getTime() < INBOUND_SESSION_MS);
     if (sameSession || sameCapture) {
-      if (latestEntry?.classification !== 'conflict' && latestCycle &&
-          input.occurredAt > latestCycle.last_interaction_at) {
+      if (latestEntry?.classification !== 'conflict' && openCycle &&
+          input.occurredAt > openCycle.last_interaction_at) {
         await this.prisma.education_lead_cycles.update({
-          where: { id: latestCycle.id },
-          data: { last_interaction_at: input.occurredAt, updated_at: new Date() },
+          where: { id: openCycle.id },
+          data: {
+            last_interaction_at: input.occurredAt,
+            inactivity_deadline_at: inactivityDeadlineFrom(input.occurredAt),
+            first_inbound_at: openCycle.first_inbound_at ?? input.occurredAt,
+            updated_at: new Date(),
+          },
         });
+      }
+      if (openCycle) {
+        await this.linkConversation(openCycle.id, input.conversationId);
       }
       return;
     }
     await this.recordEntry({
       area: input.area, contactId: input.contactId, originId: input.originId ?? null,
-      channel: input.channel ?? 'organic_wa',
+      channel,
       sourceKey: input.sourceKey ?? null,
       sourceLabel: input.sourceLabel ?? 'WhatsApp orgánico',
       eventKey: `inbound:${input.messageId}`, occurredAt: input.occurredAt,
       programId,
+      conversationId: input.conversationId,
     });
   }
 
@@ -139,76 +267,171 @@ export class EducationLeadWorkflowService {
     area: string; contactId: number; originId: number | null;
     channel: string; sourceKey: string | null; sourceLabel: string | null;
     eventKey: string; occurredAt: Date; programId?: number | null;
+    conversationId?: number | null;
   }): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(20260924::integer, ${input.contactId}::integer)`;
+      const contact = await tx.contacts.findUnique({
+        where: { id: input.contactId },
+        select: {
+          person_id: true, business_area_id: true,
+          lead_status_id: true, lead_score: true,
+        },
+      });
+      if (!contact) return null;
+      const programKey = input.programId ?? 0;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${contact.person_id}::integer, ${programKey}::integer)`;
       const existing = await tx.education_lead_entries.findUnique({
         where: { area_event_key: { area: input.area, event_key: input.eventKey } },
       });
       if (existing) return null;
       const previous = await tx.education_lead_cycles.findFirst({
         where: {
-          contact_id: input.contactId,
+          ...exactCategoryCycleWhere({
+            personId: contact.person_id,
+            area: input.area,
+            programId: input.programId ?? null,
+          }),
           started_at: { lte: input.occurredAt },
-          ...(input.programId
-            ? { OR: [{ program_id: input.programId }, { program_id: null, area: input.area }] }
-            : { area: input.area }),
         },
         orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
-        include: { lead_status: true,
-          assigned_user: { select: { first_name: true, last_name: true, email: true } } },
+        include: {
+          lead_status: true,
+          assigned_user: { select: { first_name: true, last_name: true, email: true } },
+        },
       });
       const { classification: intakeClass, assignmentRule, conflictReason } = classifyEducationIntake({
         occurredAt: input.occurredAt,
         previousInteractionAt: previous?.last_interaction_at,
         previousStatusSlug: previous?.lead_status?.slug,
+        previousClosedAt: previous?.closed_at,
       });
 
       let cycleId = previous?.id ?? null;
-      const classification = intakeClass;
+      let classification = intakeClass;
+      const attentionV1 = await this.isAttentionV1Enabled();
+      // Flag off: never open a second concurrent opportunity; reuse the open cycle.
+      if (
+        classification === 'new' &&
+        !attentionV1 &&
+        previous &&
+        !previous.closed_at
+      ) {
+        classification = 'duplicate';
+      }
+      // Forms without chat leave first_inbound_at null (response time N/A).
+      const inboundEvidence = !isCommercialLeadChannel(input.channel);
       if (classification === 'new') {
+        if (previous && !previous.closed_at) {
+          await tx.education_lead_cycles.update({
+            where: { id: previous.id },
+            data: {
+              closed_at: input.occurredAt,
+              close_reason: previous.lead_status?.is_terminal ? 'terminal_status' : 'expired',
+              updated_at: new Date(),
+            },
+          });
+          await endLeadConversationLinks(tx, previous.id, input.occurredAt);
+        }
         const status = await tx.lead_status_definitions.findFirst({
           where: { area: input.area, is_default: true, active: true },
           select: { id: true },
         });
-        const contactSnapshot = !previous ? await tx.contacts.findUnique({
-          where: { id: input.contactId }, select: { lead_status_id: true, lead_score: true },
-        }) : null;
         const existingConversation = !previous ? await tx.conversations.findFirst({
           where: { area: input.area, contact_id: input.contactId },
           orderBy: { id: 'desc' }, select: { assigned_user_id: true },
         }) : null;
-        const cycle = await tx.education_lead_cycles.create({
-          data: {
-            area: input.area, contact_id: input.contactId, program_id: input.programId ?? null,
-            started_at: input.occurredAt, last_interaction_at: input.occurredAt,
-            lead_status_id: contactSnapshot?.lead_status_id ?? status?.id ?? null,
-            lead_score: contactSnapshot?.lead_score ?? null,
-            assigned_user_id: previous?.assigned_user_id ?? existingConversation?.assigned_user_id ?? null,
-            requires_review: Boolean(previous),
-          },
-        });
-        cycleId = cycle.id;
-        if (previous) {
-          // Keep the previous advisor until a person confirms or changes ownership.
-          if (previous.assigned_user_id) {
-            await tx.conversations.updateMany({
-              where: { area: input.area, contact_id: input.contactId,
-                assigned_user_id: { not: previous.assigned_user_id } },
-              data: { assigned_user_id: previous.assigned_user_id,
-                assigned_at: new Date(), updated_at: new Date() },
+        let cycle: { id: number } | null = null;
+        try {
+          cycle = await withLeadCreateSavepoint(tx, () => tx.education_lead_cycles.create({
+            data: {
+              area: input.area,
+              contact_id: input.contactId,
+              person_id: contact.person_id,
+              business_area_id: contact.business_area_id,
+              program_id: input.programId ?? null,
+              started_at: input.occurredAt,
+              last_interaction_at: input.occurredAt,
+              // Forms without chat: first_inbound_at stays null (response time N/A).
+              first_inbound_at: inboundEvidence ? input.occurredAt : null,
+              inactivity_deadline_at: inactivityDeadlineFrom(input.occurredAt),
+              lead_status_id: previous ? (status?.id ?? null) : (contact.lead_status_id ?? status?.id ?? null),
+              lead_score: previous ? null : contact.lead_score,
+              assigned_user_id: previous?.assigned_user_id ?? existingConversation?.assigned_user_id ?? null,
+              first_assigned_at: (previous?.assigned_user_id ?? existingConversation?.assigned_user_id)
+                ? input.occurredAt
+                : null,
+              requires_review: Boolean(previous),
+            },
+          }));
+        } catch (error) {
+          if (!isUniqueViolation(error)) throw error;
+          // Concurrent create lost the race: attach to the winning open cycle.
+          const winner = await tx.education_lead_cycles.findFirst({
+            where: exactOpenCycleWhere({
+              personId: contact.person_id,
+              area: input.area,
+              programId: input.programId ?? null,
+            }),
+            orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+            select: { id: true, first_inbound_at: true, last_interaction_at: true },
+          });
+          if (!winner) throw error;
+          classification = 'duplicate';
+          cycleId = winner.id;
+          if (input.occurredAt > winner.last_interaction_at) {
+            await tx.education_lead_cycles.update({
+              where: { id: winner.id },
+              data: {
+                last_interaction_at: input.occurredAt,
+                inactivity_deadline_at: inactivityDeadlineFrom(input.occurredAt),
+                ...(inboundEvidence
+                  ? { first_inbound_at: winner.first_inbound_at ?? input.occurredAt }
+                  : {}),
+                updated_at: new Date(),
+              },
             });
           }
-          await tx.contacts.update({
-            where: { id: input.contactId },
-            data: { lead_status_id: status?.id ?? null, lead_status_updated_at: new Date(), lead_score: null },
-          });
+        }
+        if (cycle) {
+          cycleId = cycle.id;
+          if (attentionV1) {
+            await tx.education_lead_alerts.create({
+              data: {
+                cycle_id: cycle.id,
+                business_area_id: contact.business_area_id,
+                program_id: input.programId ?? null,
+                area: input.area,
+                event_type: 'new_lead',
+              },
+            }).catch(() => undefined);
+          }
+          if (previous) {
+            if (previous.assigned_user_id) {
+              await projectLeadAssignee(tx, cycle.id, previous.assigned_user_id, new Date());
+            }
+            await tx.contacts.update({
+              where: { id: input.contactId },
+              data: {
+                lead_status_id: status?.id ?? null,
+                lead_status_updated_at: new Date(),
+                lead_score: null,
+              },
+            });
+          }
         }
       } else if (classification === 'duplicate' && previous &&
           input.occurredAt > previous.last_interaction_at) {
         await tx.education_lead_cycles.update({
           where: { id: previous.id },
-          data: { last_interaction_at: input.occurredAt, updated_at: new Date() },
+          data: {
+            last_interaction_at: input.occurredAt,
+            inactivity_deadline_at: inactivityDeadlineFrom(input.occurredAt),
+            // Only real inbound evidence may fill first_inbound_at.
+            ...(inboundEvidence
+              ? { first_inbound_at: previous.first_inbound_at ?? input.occurredAt }
+              : {}),
+            updated_at: new Date(),
+          },
         });
       }
       await tx.education_lead_entries.create({
@@ -224,6 +447,21 @@ export class EducationLeadWorkflowService {
           previous_interaction_at: previous?.last_interaction_at ?? null,
         },
       });
+      if (cycleId && input.conversationId) {
+        const openLink = await tx.education_lead_conversation_links.findFirst({
+          where: {
+            cycle_id: cycleId,
+            conversation_id: input.conversationId,
+            unlinked_at: null,
+          },
+          select: { id: true },
+        });
+        if (!openLink) {
+          await tx.education_lead_conversation_links.create({
+            data: { cycle_id: cycleId, conversation_id: input.conversationId },
+          });
+        }
+      }
       return classification === 'new' && !previous ? cycleId : null;
     });
     if (this.prospectia) await this.captureProspectia(input.area, input.eventKey);
@@ -289,14 +527,20 @@ export class EducationLeadWorkflowService {
       });
       if (latest?.id !== cycleId) return;
       const updated = await tx.education_lead_cycles.updateMany({
-        where: { id: cycleId, assigned_user_id: null, requires_review: false },
-        data: { assigned_user_id: advisor.id, updated_at: new Date() },
+        where: {
+          id: cycleId,
+          assigned_user_id: null,
+          requires_review: false,
+          closed_at: null,
+        },
+        data: {
+          assigned_user_id: advisor.id,
+          first_assigned_at: new Date(),
+          updated_at: new Date(),
+        },
       });
       if (!updated.count) return;
-      await tx.conversations.updateMany({
-        where: { area, contact_id: contactId, assigned_user_id: null },
-        data: { assigned_user_id: advisor.id, assigned_at: new Date(), updated_at: new Date() },
-      });
+      await projectLeadAssignee(tx, cycleId, advisor.id, new Date(), true);
       await tx.audit_logs.create({ data: {
         event_type: 'education.lead.prospectia_assigned',
         message: `Lead ${cycleId} asignado según Prospectia`,
@@ -521,6 +765,7 @@ export class EducationLeadWorkflowService {
 
   async updateManagement(contactId: number, area: string, changes: {
     assigned_user_id?: number | null; lead_status_id?: number | null; actor_email?: string;
+    lead_id?: number;
   }) {
     this.areas(area);
     const contact = await this.prisma.contacts.findFirst({ where: { id: contactId, area } });
@@ -536,47 +781,87 @@ export class EducationLeadWorkflowService {
       });
       if (!advisor) throw new BadRequestException('Asesor no habilitado para este número');
     }
+    let nextStatus: { id: number; is_terminal: boolean; slug: string } | null = null;
     if (changes.lead_status_id !== undefined && changes.lead_status_id !== null) {
-      const status = await this.prisma.lead_status_definitions.findFirst({
-        where: { id: changes.lead_status_id, area, active: true }, select: { id: true },
+      nextStatus = await this.prisma.lead_status_definitions.findFirst({
+        where: { id: changes.lead_status_id, area, active: true },
+        select: { id: true, is_terminal: true, slug: true },
       });
-      if (!status) throw new BadRequestException('Estado no disponible para este número');
+      if (!nextStatus) throw new BadRequestException('Estado no disponible para este número');
     }
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(20260924::integer, ${contactId}::integer)`;
-      let cycle = await tx.education_lead_cycles.findFirst({
-        where: { contact_id: contactId, area }, orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
-      });
+      let cycle = changes.lead_id
+        ? await tx.education_lead_cycles.findFirst({
+            where: { id: changes.lead_id, contact_id: contactId, area },
+          })
+        : await tx.education_lead_cycles.findFirst({
+            where: { contact_id: contactId, area, closed_at: null },
+            orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+          });
+      if (!cycle && !changes.lead_id) {
+        cycle = await tx.education_lead_cycles.findFirst({
+          where: { contact_id: contactId, area },
+          orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+        });
+      }
       if (!cycle) {
         cycle = await tx.education_lead_cycles.create({ data: {
-          contact_id: contactId, area, started_at: contact.created_at,
-          last_interaction_at: contact.created_at, lead_status_id: contact.lead_status_id,
+          contact_id: contactId,
+          person_id: contact.person_id,
+          area,
+          started_at: contact.created_at,
+          last_interaction_at: contact.created_at,
+          inactivity_deadline_at: inactivityDeadlineFrom(contact.created_at),
+          lead_status_id: contact.lead_status_id,
           lead_score: contact.lead_score,
         } });
+        await tx.education_lead_alerts.create({
+          data: {
+            cycle_id: cycle.id,
+            business_area_id: contact.business_area_id,
+            area,
+            event_type: 'new_lead',
+          },
+        }).catch(() => undefined);
+      }
+      if (cycle.closed_at && changes.lead_status_id === undefined && changes.assigned_user_id === undefined) {
+        return cycle;
+      }
+      if (cycle.closed_at && (changes.assigned_user_id !== undefined || changes.lead_status_id !== undefined)) {
+        throw new BadRequestException('El lead está cerrado; inicia una nueva atención');
       }
       const previousAssigneeId = cycle.assigned_user_id;
       const previousStatusId = cycle.lead_status_id;
+      const now = new Date();
+      const closing = Boolean(nextStatus?.is_terminal || isTerminalEducationStatusSlug(nextStatus?.slug));
       cycle = await tx.education_lead_cycles.update({
         where: { id: cycle.id },
         data: {
           ...(changes.assigned_user_id !== undefined ? {
             assigned_user_id: changes.assigned_user_id,
             requires_review: false,
+            first_assigned_at: cycle.first_assigned_at ?? now,
           } : {}),
           ...(changes.lead_status_id !== undefined ? { lead_status_id: changes.lead_status_id } : {}),
-          updated_at: new Date(),
+          ...(closing ? {
+            closed_at: now,
+            close_reason: nextStatus?.slug === 'venta_exitosa' || nextStatus?.slug === 'convertido'
+              ? 'sold'
+              : nextStatus?.slug === 'perdido' || nextStatus?.slug === 'no_interesado'
+                ? 'lost'
+                : 'terminal_status',
+          } : {}),
+          updated_at: now,
         },
       });
       if (changes.assigned_user_id !== undefined) {
-        await tx.conversations.updateMany({
-          where: { area, contact_id: contactId },
-          data: { assigned_user_id: changes.assigned_user_id,
-            assigned_at: new Date(), updated_at: new Date() },
-        });
+        await projectLeadAssignee(tx, cycle.id, changes.assigned_user_id!, now);
       }
+      if (closing) await endLeadConversationLinks(tx, cycle.id, now);
       if (changes.lead_status_id !== undefined) {
         await tx.contacts.update({ where: { id: contactId }, data: {
-          lead_status_id: changes.lead_status_id, lead_status_updated_at: new Date(), updated_at: new Date(),
+          lead_status_id: changes.lead_status_id, lead_status_updated_at: now, updated_at: now,
         } });
       }
       if (changes.assigned_user_id !== undefined || changes.lead_status_id !== undefined) {
@@ -592,6 +877,7 @@ export class EducationLeadWorkflowService {
             from_lead_status_id: previousStatusId,
             to_lead_status_id: changes.lead_status_id === undefined
               ? previousStatusId : changes.lead_status_id,
+            closed_at: cycle.closed_at,
           },
         } });
       }
@@ -680,14 +966,11 @@ export class EducationLeadWorkflowService {
         const advisor = [...advisors].sort((a, b) =>
           (workload.get(a.id) ?? 0) - (workload.get(b.id) ?? 0) || a.id - b.id)[0];
         const updated = await tx.education_lead_cycles.updateMany({
-          where: { id: entry.cycle_id, assigned_user_id: null },
-          data: { assigned_user_id: advisor.id, requires_review: false, updated_at: new Date() },
+          where: { id: entry.cycle_id, assigned_user_id: null, closed_at: null },
+          data: { assigned_user_id: advisor.id, first_assigned_at: new Date(), requires_review: false, updated_at: new Date() },
         });
         if (!updated.count) continue;
-        await tx.conversations.updateMany({
-          where: { area: { in: [...EDUCATION_AREAS] }, contact_id: entry.contact_id },
-          data: { assigned_user_id: advisor.id, assigned_at: new Date(), updated_at: new Date() },
-        });
+        await projectLeadAssignee(tx, entry.cycle_id, advisor.id, new Date());
         await tx.audit_logs.create({ data: {
           event_type: 'education.lead.distributed',
           message: `Lead ${entry.cycle_id} distribuido al asesor ${advisor.id}`,
@@ -769,14 +1052,11 @@ export class EducationLeadWorkflowService {
           const advisor = [...advisors].sort((a, b) =>
             (workload.get(a.id) ?? 0) - (workload.get(b.id) ?? 0) || a.id - b.id)[0];
           const updated = await tx.education_lead_cycles.updateMany({
-            where: { id: entry.cycle_id, assigned_user_id: null },
-            data: { assigned_user_id: advisor.id, requires_review: false, updated_at: new Date() },
+            where: { id: entry.cycle_id, assigned_user_id: null, closed_at: null },
+            data: { assigned_user_id: advisor.id, first_assigned_at: new Date(), requires_review: false, updated_at: new Date() },
           });
           if (!updated.count) continue;
-          await tx.conversations.updateMany({
-            where: { area: currentArea, contact_id: entry.contact_id },
-            data: { assigned_user_id: advisor.id, assigned_at: new Date(), updated_at: new Date() },
-          });
+          await projectLeadAssignee(tx, entry.cycle_id, advisor.id, new Date());
           await tx.audit_logs.create({ data: {
             event_type: 'education.lead.distributed',
             message: `Lead ${entry.cycle_id} distribuido al asesor ${advisor.id}`,
@@ -801,9 +1081,21 @@ export class EducationLeadWorkflowService {
       if (!entry) throw new NotFoundException('Entrada no encontrada');
       if (entry.classification !== 'conflict') throw new BadRequestException('La entrada no tiene conflicto');
       if (entry.reviewed_at) throw new BadRequestException('El conflicto ya fue revisado');
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(20260924::integer, ${entry.contact_id}::integer)`;
+      const contact = await tx.contacts.findUnique({
+        where: { id: entry.contact_id },
+        select: { person_id: true, business_area_id: true },
+      });
+      if (!contact) throw new NotFoundException('Contacto no encontrado');
+      const programKey = entry.program_id ?? 0;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${contact.person_id}::integer, ${programKey}::integer)`;
       const latestCycle = await tx.education_lead_cycles.findFirst({
-        where: { contact_id: entry.contact_id, area },
+        where: {
+          ...exactCategoryCycleWhere({
+            personId: contact.person_id,
+            area,
+            programId: entry.program_id,
+          }),
+        },
         orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
       });
       if (action !== 'dismiss' && latestCycle && latestCycle.started_at > entry.occurred_at) {
@@ -814,14 +1106,39 @@ export class EducationLeadWorkflowService {
         const status = await tx.lead_status_definitions.findFirst({
           where: { area, active: true, is_default: true }, select: { id: true },
         });
+        if (latestCycle && !latestCycle.closed_at) {
+          await tx.education_lead_cycles.update({
+            where: { id: latestCycle.id },
+            data: {
+              closed_at: entry.occurred_at,
+              close_reason: 'superseded_review',
+              updated_at: new Date(),
+            },
+          });
+          await endLeadConversationLinks(tx, latestCycle.id, entry.occurred_at);
+        }
         const cycle = await tx.education_lead_cycles.create({ data: {
-          area, contact_id: entry.contact_id, started_at: entry.occurred_at,
+          area, contact_id: entry.contact_id, person_id: contact.person_id,
+          business_area_id: contact.business_area_id,
+          program_id: entry.program_id ?? null,
+          started_at: entry.occurred_at,
           last_interaction_at: entry.occurred_at,
+          first_inbound_at: isCommercialLeadChannel(entry.channel) ? null : entry.occurred_at,
+          inactivity_deadline_at: inactivityDeadlineFrom(entry.occurred_at),
           lead_status_id: status?.id ?? null,
           assigned_user_id: latestCycle?.assigned_user_id ?? null,
+          first_assigned_at: latestCycle?.assigned_user_id ? entry.occurred_at : null,
           requires_review: true,
         } });
         cycleId = cycle.id;
+        await tx.education_lead_alerts.create({
+          data: {
+            cycle_id: cycle.id,
+            business_area_id: contact.business_area_id,
+            area,
+            event_type: 'new_lead',
+          },
+        }).catch(() => undefined);
         await tx.contacts.update({ where: { id: entry.contact_id }, data: {
           lead_status_id: status?.id ?? null, lead_status_updated_at: new Date(), lead_score: null,
         } });
@@ -847,5 +1164,685 @@ export class EducationLeadWorkflowService {
       } });
       return reviewed;
     });
+  }
+
+  /** Atomically claim an open lead before sending a human reply. */
+  async reserveClaim(input: {
+    leadId: number;
+    userId: number;
+    conversationId?: number;
+    actorEmail?: string;
+  }): Promise<{ claimed: boolean; leadId: number; assignedUserId: number | null }> {
+    if (!(await this.isAttentionV1Enabled())) {
+      return { claimed: false, leadId: input.leadId, assignedUserId: null };
+    }
+    return this.prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM education_lead_cycles WHERE id = ${input.leadId} FOR UPDATE`;
+    const cycle = await tx.education_lead_cycles.findUnique({
+      where: { id: input.leadId },
+      select: {
+        id: true, area: true, contact_id: true, assigned_user_id: true,
+        requires_review: true, closed_at: true,
+      },
+    });
+    if (!cycle) throw new NotFoundException('Lead no encontrado');
+    if (cycle.closed_at) throw new BadRequestException('El lead está cerrado');
+    if (cycle.requires_review && !cycle.assigned_user_id) {
+      throw new BadRequestException('El lead requiere revisión antes de reclamarlo');
+    }
+    if (cycle.assigned_user_id && cycle.assigned_user_id !== input.userId) {
+      return {
+        claimed: false,
+        leadId: cycle.id,
+        assignedUserId: cycle.assigned_user_id,
+      };
+    }
+    if (cycle.assigned_user_id === input.userId) {
+      if (input.conversationId) await this.linkConversationInTransaction(tx, cycle.id, input.conversationId);
+      return { claimed: true, leadId: cycle.id, assignedUserId: input.userId };
+    }
+    const now = new Date();
+    const updated = await tx.education_lead_cycles.updateMany({
+      where: {
+        id: cycle.id,
+        assigned_user_id: null,
+        requires_review: false,
+        closed_at: null,
+      },
+      data: {
+        assigned_user_id: input.userId,
+        first_assigned_at: now,
+        updated_at: now,
+      },
+    });
+    if (!updated.count) {
+      const latest = await tx.education_lead_cycles.findUnique({
+        where: { id: cycle.id },
+        select: { assigned_user_id: true },
+      });
+      return {
+        claimed: latest?.assigned_user_id === input.userId,
+        leadId: cycle.id,
+        assignedUserId: latest?.assigned_user_id ?? null,
+      };
+    }
+    await projectLeadAssignee(tx, cycle.id, input.userId, now);
+    if (input.conversationId) await this.linkConversationInTransaction(tx, cycle.id, input.conversationId);
+    await tx.audit_logs.create({
+      data: {
+        event_type: 'education.lead.claim_reserved',
+        message: `Lead ${cycle.id} reservado por asesor ${input.userId}`,
+        actor_email: input.actorEmail ?? 'system@mali',
+        area: cycle.area,
+        meta: {
+          cycle_id: cycle.id,
+          contact_id: cycle.contact_id,
+          assigned_user_id: input.userId,
+          conversation_id: input.conversationId ?? null,
+        },
+      },
+    });
+    return { claimed: true, leadId: cycle.id, assignedUserId: input.userId };
+    });
+  }
+
+  async markFirstHumanReply(leadId: number, at = new Date()): Promise<void> {
+    await this.prisma.education_lead_cycles.updateMany({
+      where: { id: leadId, first_human_reply_at: null, closed_at: null },
+      data: { first_human_reply_at: at, updated_at: at },
+    });
+  }
+
+  async linkConversation(cycleId: number, conversationId: number): Promise<void> {
+    if (!cycleId || !conversationId) return;
+    await this.prisma.$transaction((tx) => this.linkConversationInTransaction(tx, cycleId, conversationId));
+  }
+
+  private async linkConversationInTransaction(tx: Prisma.TransactionClient, cycleId: number, conversationId: number): Promise<void> {
+    // Serialize against closure: no new live link may appear after closed_at is set.
+    const rows = await tx.$queryRaw<Array<{ closed_at: Date | null }>>`
+      SELECT closed_at FROM education_lead_cycles WHERE id = ${cycleId} FOR UPDATE`;
+    if (!rows.length || rows[0].closed_at) throw new BadRequestException('El lead está cerrado o no existe');
+    const inserted = await tx.$executeRaw`
+      INSERT INTO education_lead_conversation_links (cycle_id, conversation_id)
+      SELECT lead.id, c.id FROM education_lead_cycles lead
+      JOIN conversations c ON c.id = ${conversationId} AND c.business_area_id = lead.business_area_id
+      JOIN contacts ct ON ct.id = c.contact_id AND ct.person_id = lead.person_id
+      LEFT JOIN whatsapp_lines line ON line.id = c.whatsapp_line_id
+      WHERE lead.id = ${cycleId} AND line.program_id IS NOT DISTINCT FROM lead.program_id
+      ON CONFLICT (cycle_id, conversation_id) WHERE unlinked_at IS NULL DO NOTHING`;
+    if (!inserted) {
+      const existing = await tx.education_lead_conversation_links.findFirst({
+        where: { cycle_id: cycleId, conversation_id: conversationId, unlinked_at: null },
+        select: { id: true },
+      });
+      if (!existing) throw new BadRequestException('La conversación no pertenece al contexto del lead');
+    }
+  }
+
+  async findOpenLeadForConversation(conversationId: number, area: string) {
+    if (!isEducationAttentionArea(area)) return null;
+    const conversation = await this.prisma.conversations.findFirst({
+      where: { id: conversationId, area },
+      select: {
+        id: true,
+        contact_id: true,
+        whatsapp_line: { select: { program_id: true } },
+        contacts: { select: { person_id: true } },
+      },
+    });
+    if (!conversation?.contact_id || !conversation.contacts) return null;
+    const programId = conversation.whatsapp_line?.program_id ?? null;
+    const linked = await this.prisma.education_lead_conversation_links.findFirst({
+      where: {
+        conversation_id: conversationId,
+        unlinked_at: null,
+        cycle: exactOpenCycleWhere({
+          personId: conversation.contacts.person_id,
+          area,
+          programId,
+        }),
+      },
+      orderBy: [{ linked_at: 'desc' }, { id: 'desc' }],
+      include: { cycle: true },
+    });
+    if (linked?.cycle) return linked.cycle;
+    return this.prisma.education_lead_cycles.findFirst({
+      where: exactOpenCycleWhere({
+        personId: conversation.contacts.person_id,
+        area,
+        programId,
+      }),
+      orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+    });
+  }
+
+  async getAttentionForContext(input: {
+    contactId: number;
+    area: string;
+    conversationId?: number | null;
+    programId?: number | null;
+    user?: AuthUser;
+  }) {
+    this.areas(input.area);
+    const contact = await this.prisma.contacts.findFirst({
+      where: { id: input.contactId, area: input.area },
+      select: { id: true, person_id: true },
+    });
+    if (!contact) throw new NotFoundException('Contacto no encontrado');
+    let programId = input.programId ?? null;
+    let lineId: number | null = null;
+    if (input.conversationId) {
+      const conversation = await this.prisma.conversations.findFirst({
+        where: { id: input.conversationId, area: input.area },
+        select: {
+          contact_id: true,
+          whatsapp_line_id: true,
+          whatsapp_line: { select: { program_id: true } },
+        },
+      });
+      if (!conversation || conversation.contact_id !== contact.id) {
+        throw new BadRequestException('La conversación no pertenece a este contacto');
+      }
+      programId = conversation.whatsapp_line?.program_id ?? null;
+      lineId = conversation.whatsapp_line_id ?? null;
+    }
+    const cycle = await this.prisma.education_lead_cycles.findFirst({
+      where: exactOpenCycleWhere({
+        personId: contact.person_id,
+        area: input.area,
+        programId,
+      }),
+      orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+      include: {
+        program: { select: { slug: true } },
+        lead_status: { select: { id: true, label: true, slug: true } },
+        assigned_user: {
+          select: { id: true, first_name: true, last_name: true, email: true },
+        },
+      },
+    });
+    if (!cycle) return null;
+    if (input.user) {
+      this.assertCanAccessLeadContext(input.user, cycle, lineId);
+    }
+    return {
+      id: cycle.id,
+      contact_id: cycle.contact_id,
+      person_id: cycle.person_id,
+      program_id: cycle.program_id,
+      area: cycle.area,
+      closed_at: cycle.closed_at,
+      assigned_user_id: cycle.assigned_user_id,
+      assigned_user_label: cycle.assigned_user ? advisorLabel(cycle.assigned_user) : null,
+      lead_status: cycle.lead_status,
+      requires_review: cycle.requires_review,
+    };
+  }
+
+  /** Explicit CTA after close / ambiguous inbound: open a fresh opportunity. */
+  async startAttention(input: {
+    contactId: number;
+    area: string;
+    programId?: number | null;
+    actorEmail?: string;
+    conversationId?: number | null;
+    user?: AuthUser;
+  }) {
+    this.areas(input.area);
+    if (!(await this.isAttentionV1Enabled())) {
+      throw new BadRequestException('Atención v1 no está activada en este entorno');
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const contact = await tx.contacts.findFirst({
+        where: { id: input.contactId, area: input.area },
+        select: { id: true, person_id: true, business_area_id: true, created_at: true },
+      });
+      if (!contact) throw new NotFoundException('Contacto no encontrado');
+      let programId = input.programId ?? null;
+      let lineId: number | null = null;
+      if (input.conversationId) {
+        const conversation = await tx.conversations.findFirst({
+          where: { id: input.conversationId, area: input.area },
+          select: {
+            contact_id: true,
+            whatsapp_line_id: true,
+            whatsapp_line: { select: { program_id: true } },
+          },
+        });
+        if (!conversation || conversation.contact_id !== contact.id) {
+          throw new BadRequestException('La conversación no pertenece a este contacto');
+        }
+        programId = conversation.whatsapp_line?.program_id ?? null;
+        lineId = conversation.whatsapp_line_id ?? null;
+      }
+      let programSlug: string | null = null;
+      if (programId != null) {
+        const program = await tx.business_programs.findUnique({
+          where: { id: programId },
+          select: { slug: true },
+        });
+        programSlug = program?.slug ?? null;
+      }
+      if (input.user) {
+        this.assertCanAccessLeadContext(
+          input.user,
+          {
+            area: input.area,
+            program_id: programId,
+            program: { slug: programSlug },
+          },
+          lineId,
+        );
+      }
+      const programKey = programId ?? 0;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${contact.person_id}::integer, ${programKey}::integer)`;
+      const open = await tx.education_lead_cycles.findFirst({
+        where: exactOpenCycleWhere({
+          personId: contact.person_id,
+          area: input.area,
+          programId,
+        }),
+        orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+      });
+      if (open) {
+        if (input.conversationId) {
+          const existing = await tx.education_lead_conversation_links.findFirst({
+            where: {
+              cycle_id: open.id,
+              conversation_id: input.conversationId,
+              unlinked_at: null,
+            },
+          });
+          if (!existing) {
+            await tx.education_lead_conversation_links.create({
+              data: { cycle_id: open.id, conversation_id: input.conversationId },
+            });
+          }
+        }
+        return open;
+      }
+      const status = await tx.lead_status_definitions.findFirst({
+        where: { area: input.area, is_default: true, active: true },
+        select: { id: true },
+      });
+      const now = new Date();
+      const cycle = await tx.education_lead_cycles.create({
+        data: {
+          area: input.area,
+          contact_id: contact.id,
+          person_id: contact.person_id,
+          program_id: programId,
+          started_at: now,
+          last_interaction_at: now,
+          // Explicit CTA without inbound evidence: leave first_inbound_at null.
+          first_inbound_at: null,
+          inactivity_deadline_at: inactivityDeadlineFrom(now),
+          lead_status_id: status?.id ?? null,
+          requires_review: false,
+        },
+      });
+      await tx.education_lead_alerts.create({
+        data: {
+          cycle_id: cycle.id,
+          business_area_id: contact.business_area_id,
+          program_id: programId,
+          area: input.area,
+          event_type: 'new_lead',
+        },
+      });
+      if (input.conversationId) {
+        await tx.education_lead_conversation_links.create({
+          data: { cycle_id: cycle.id, conversation_id: input.conversationId },
+        });
+      }
+      await tx.audit_logs.create({
+        data: {
+          event_type: 'education.lead.attention_started',
+          message: `Nueva atención iniciada para contacto ${contact.id}`,
+          actor_email: input.actorEmail ?? 'system@mali',
+          area: input.area,
+          meta: { contact_id: contact.id, cycle_id: cycle.id, program_id: programId },
+        },
+      });
+      return cycle;
+    });
+  }
+
+  async listOpenCycles(params: {
+    area?: string; channel?: string; q?: string; unassigned?: boolean;
+    page?: number; limit?: number;
+  }) {
+    const scope = this.leadScope(params.area);
+    const page = params.page ?? 1;
+    const limit = params.limit ?? 50;
+    const q = String(params.q ?? '').trim();
+    const and: Prisma.education_lead_cyclesWhereInput[] = [{ closed_at: null }];
+    if (scope.onlyGeneral) and.push({ program_id: null, area: 'educacion' });
+    else if (scope.program && scope.areas.length > 1) {
+      and.push({
+        OR: [
+          { program: { is: { slug: scope.program } } },
+          ...(scope.program === 'ca' ? [{ program_id: null, area: 'educacion_ca' as const }] : []),
+          ...(scope.program === 'ep' ? [{ program_id: null, area: 'educacion_ep' as const }] : []),
+        ],
+      });
+    } else {
+      and.push({ area: { in: scope.areas } });
+    }
+    if (params.unassigned) and.push({ assigned_user_id: null });
+    if (q) {
+      and.push({
+        OR: [
+          { contact: { is: { name: { contains: q, mode: 'insensitive' } } } },
+          { contact: { is: { last_name: { contains: q, mode: 'insensitive' } } } },
+          { contact: { is: { phone: { contains: q } } } },
+          { contact: { is: { email: { contains: q, mode: 'insensitive' } } } },
+        ],
+      });
+    }
+    const where: Prisma.education_lead_cyclesWhereInput = { AND: and };
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.education_lead_cycles.count({ where }),
+      this.prisma.education_lead_cycles.findMany({
+        where,
+        orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+        include: {
+          program: { select: { slug: true } },
+          lead_status: { select: { id: true, label: true, slug: true } },
+          assigned_user: {
+            select: { id: true, first_name: true, last_name: true, email: true },
+          },
+          contact: {
+            select: {
+              id: true, person_id: true, name: true, last_name: true,
+              phone: true, email: true, whatsapp_user_id: true,
+            },
+          },
+          conversation_links: {
+            where: { unlinked_at: null },
+            orderBy: { linked_at: 'desc' },
+            take: 1,
+            select: { conversation_id: true },
+          },
+          entries: {
+            orderBy: [{ occurred_at: 'desc' }, { id: 'desc' }],
+            take: 1,
+            select: { channel: true, source_label: true },
+          },
+        },
+      }),
+    ]);
+    return {
+      items: items.map((item) => ({
+        id: item.id,
+        area: item.area,
+        contact_id: item.contact_id,
+        person_id: item.person_id,
+        categoria: item.program?.slug ?? educationProgramOf(item.area),
+        channel: item.entries[0]?.channel ?? null,
+        source_label: item.entries[0]?.source_label ?? null,
+        started_at: item.started_at,
+        last_interaction_at: item.last_interaction_at,
+        closed_at: item.closed_at,
+        assigned_user_id: item.assigned_user_id,
+        assigned_user_label: item.assigned_user ? advisorLabel(item.assigned_user) : null,
+        lead_status_id: item.lead_status_id,
+        lead_status: item.lead_status,
+        lead_score: item.lead_score,
+        requires_review: item.requires_review,
+        conversation_id: item.conversation_links[0]?.conversation_id ?? null,
+        contacts: item.contact,
+      })),
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit),
+    };
+  }
+
+  async listAlertsForUser(user: {
+    id: number;
+    area: string;
+    is_master?: boolean;
+    email?: string;
+    businessAccess?: {
+      mode: 'all' | 'restricted';
+      programIds: number[];
+      categorySlugs: string[] | null;
+      canonicalArea?: string;
+    };
+    allowedAreas?: string[];
+  }, params?: { limit?: number }) {
+    if (!(await this.isAttentionV1Enabled())) return { items: [] };
+    const allowed = new Set(
+      (user.allowedAreas ?? []).filter((area) => EDUCATION_AREAS.includes(area)),
+    );
+    if (user.is_master) EDUCATION_AREAS.forEach((area) => allowed.add(area));
+    if (isEducationAttentionArea(user.area)) allowed.add(user.area);
+    // Never expand to all educación* for PAM/other areas.
+    if (!user.is_master && !isEducationAttentionArea(user.area) && allowed.size === 0) {
+      return { items: [] };
+    }
+    const areas = user.is_master ? [...EDUCATION_AREAS] : [...allowed];
+    if (!areas.length) return { items: [] };
+
+    const access = user.businessAccess;
+    const categoryFilter: Prisma.education_lead_alertsWhereInput =
+      user.is_master || !access || access.mode === 'all'
+        ? {}
+        : {
+            OR: [
+              ...(access.programIds.length
+                ? [{ program_id: { in: access.programIds } }]
+                : []),
+              ...(access.categorySlugs?.includes('general')
+                ? [{ program_id: null }]
+                : []),
+            ],
+          };
+    if (
+      !user.is_master &&
+      access?.mode === 'restricted' &&
+      !access.programIds.length &&
+      !access.categorySlugs?.includes('general')
+    ) {
+      return { items: [] };
+    }
+
+    const limit = Math.min(Math.max(params?.limit ?? 30, 1), 100);
+    const alerts = await this.prisma.education_lead_alerts.findMany({
+      where: {
+        area: { in: areas },
+        event_type: 'new_lead',
+        reads: { none: { user_id: user.id } },
+        cycle: { closed_at: null },
+        ...categoryFilter,
+      },
+      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+      take: limit,
+      include: {
+        cycle: {
+          select: {
+            id: true,
+            area: true,
+            contact_id: true,
+            program_id: true,
+            assigned_user_id: true,
+            contact: {
+              select: { id: true, name: true, last_name: true, phone: true },
+            },
+          },
+        },
+      },
+    });
+    return {
+      items: alerts.map((alert) => ({
+        id: alert.id,
+        cycle_id: alert.cycle_id,
+        area: alert.area,
+        program_id: alert.program_id,
+        created_at: alert.created_at,
+        contact_id: alert.cycle.contact_id,
+        contact_name: [alert.cycle.contact.name, alert.cycle.contact.last_name]
+          .filter(Boolean).join(' '),
+        phone: alert.cycle.contact.phone,
+        assigned_user_id: alert.cycle.assigned_user_id,
+      })),
+    };
+  }
+
+  async markAlertRead(alertId: number, userId: number) {
+    await this.prisma.education_lead_alert_reads.upsert({
+      where: { alert_id_user_id: { alert_id: alertId, user_id: userId } },
+      create: { alert_id: alertId, user_id: userId },
+      update: { read_at: new Date() },
+    });
+    return { ok: true };
+  }
+
+  async setLeadAttributes(
+    cycleId: number,
+    values: Record<string, string>,
+    actorEmail?: string,
+    user?: AuthUser,
+  ) {
+    if (!(await this.isAttentionV1Enabled())) {
+      throw new BadRequestException('Atención v1 no está activada en este entorno');
+    }
+    const cycle = await this.prisma.education_lead_cycles.findUnique({
+      where: { id: cycleId },
+      select: {
+        id: true,
+        area: true,
+        closed_at: true,
+        program_id: true,
+        program: { select: { slug: true } },
+      },
+    });
+    if (!cycle) throw new NotFoundException('Lead no encontrado');
+    if (cycle.closed_at) throw new BadRequestException('No se editan atributos de un lead cerrado');
+    if (user) this.assertCanAccessLeadContext(user, cycle);
+    const keys = Object.keys(values);
+    if (!keys.length) return [];
+    const defs = await this.prisma.contact_attribute_definitions.findMany({
+      where: {
+        area: cycle.area,
+        owner_kind: 'lead',
+        active: true,
+        slug: { in: keys },
+        ...(cycle.program_id != null
+          ? { OR: [{ program_id: cycle.program_id }, { program_id: null }] }
+          : { program_id: null }),
+      },
+    });
+    const bySlug = new Map(defs.map((def) => [def.slug, def]));
+    await this.prisma.$transaction(async (tx) => {
+      for (const [slug, raw] of Object.entries(values)) {
+        const def = bySlug.get(slug);
+        if (!def) continue;
+        if (def.program_id != null && def.program_id !== cycle.program_id) continue;
+        await tx.education_lead_attributes.upsert({
+          where: {
+            cycle_id_definition_id: { cycle_id: cycleId, definition_id: def.id },
+          },
+          create: {
+            cycle_id: cycleId,
+            definition_id: def.id,
+            attr_key: def.slug,
+            attr_value: String(raw ?? ''),
+          },
+          update: { attr_value: String(raw ?? ''), updated_at: new Date() },
+        });
+      }
+      await tx.audit_logs.create({
+        data: {
+          event_type: 'education.lead.attributes',
+          message: `Atributos de lead ${cycleId} actualizados`,
+          actor_email: actorEmail ?? user?.email ?? 'system@mali',
+          area: cycle.area,
+          meta: { cycle_id: cycleId, keys },
+        },
+      });
+    });
+    return this.prisma.education_lead_attributes.findMany({
+      where: { cycle_id: cycleId },
+      select: { attr_key: true, attr_value: true, definition_id: true },
+    });
+  }
+
+  /**
+   * Auto-expire only cycles that already have inactivity_deadline_at
+   * (set by post-activation writers). Historical opens with NULL deadline
+   * are excluded; close them via the reviewable historical batch script.
+   */
+  async expireDueCycles(limit = 200) {
+    if (!(await this.isAttentionV1Enabled())) return { expired: 0 };
+    const now = new Date();
+    const due = await this.prisma.education_lead_cycles.findMany({
+      where: {
+        closed_at: null,
+        inactivity_deadline_at: { not: null, lte: now },
+      },
+      orderBy: { inactivity_deadline_at: 'asc' },
+      take: limit,
+      select: { id: true, inactivity_deadline_at: true },
+    });
+    let expired = 0;
+    for (const row of due) {
+      const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.education_lead_cycles.updateMany({
+        where: {
+          id: row.id,
+          closed_at: null,
+          // Re-check so a concurrent renewal does not get closed.
+          inactivity_deadline_at: { not: null, lte: now },
+        },
+        data: {
+          closed_at: now,
+          close_reason: 'expired',
+          updated_at: now,
+        },
+      });
+      if (result.count) await endLeadConversationLinks(tx, row.id, now);
+      return result;
+      });
+      expired += updated.count;
+    }
+    return { expired };
+  }
+
+  /** Route lead-owned attribute writes from contact save onto the open cycle. */
+  async writeLeadAttributesFromContactSave(
+    contactId: number,
+    area: string,
+    programId: number | null,
+    values: Record<string, string>,
+    actorEmail?: string,
+  ) {
+    const contact = await this.prisma.contacts.findFirst({
+      where: { id: contactId, area },
+      select: { person_id: true },
+    });
+    if (!contact) return [];
+    const cycle = await this.prisma.education_lead_cycles.findFirst({
+      where: exactOpenCycleWhere({
+        personId: contact.person_id,
+        area,
+        programId,
+      }),
+      orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+      select: { id: true },
+    });
+    if (!cycle) return [];
+    return this.setLeadAttributes(cycle.id, values, actorEmail);
+  }
+
+  assertClaimAvailable(assignedUserId: number | null | undefined, actorId: number) {
+    if (assignedUserId != null && assignedUserId !== actorId) {
+      throw new ConflictException('Lead ya asignado a otro asesor');
+    }
   }
 }

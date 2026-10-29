@@ -41,6 +41,8 @@ const ATTR_DEF_SELECT = {
   sort_order: true,
   required: true,
   active: true,
+  owner_kind: true,
+  shared_scope: true,
   created_at: true,
   updated_at: true,
   program_id: true,
@@ -62,6 +64,8 @@ function mapDefinition(
     sort_order: number;
     required: boolean;
     active: boolean;
+    owner_kind?: string | null;
+    shared_scope?: string | null;
     created_at: Date;
     updated_at: Date;
     program?: { slug: string } | null;
@@ -78,6 +82,8 @@ function mapDefinition(
     sort_order: row.sort_order,
     required: row.required,
     active: row.active,
+    owner_kind: row.owner_kind === 'lead' ? 'lead' : 'contact',
+    shared_scope: row.shared_scope === 'shared' ? 'shared' : 'contextual',
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
     category: categoryOfProgram(row.program?.slug),
@@ -266,6 +272,8 @@ export class AttributeDefinitionsService {
           sort_order: sortOrder,
           required,
           active: true,
+          owner_kind: dto.owner_kind === 'lead' ? 'lead' : 'contact',
+          shared_scope: dto.shared_scope === 'shared' ? 'shared' : 'contextual',
           program_id: programId,
         },
         select: ATTR_DEF_SELECT,
@@ -327,6 +335,15 @@ export class AttributeDefinitionsService {
           sort_order: Number(dto.sort_order ?? 0) || 0,
           required: Boolean(dto.required),
           active: dto.active !== false,
+          ...(dto.owner_kind
+            ? { owner_kind: dto.owner_kind === 'lead' ? 'lead' : 'contact' }
+            : {}),
+          ...(dto.shared_scope
+            ? {
+                shared_scope:
+                  dto.shared_scope === 'shared' ? 'shared' : 'contextual',
+              }
+            : {}),
           updated_at: new Date(),
         },
         select: ATTR_DEF_SELECT,

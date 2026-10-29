@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -19,6 +20,7 @@ import { assertCanManageLeads } from '../auth/permission.util';
 import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { parseCategorySlugs } from '../config/category-scope';
 import { LeadsService } from './leads.service';
+import { EducationLeadWorkflowService } from './education-lead-workflow.service';
 import { MetaLeadgenService } from './meta-leadgen.service';
 import { TikTokLeadgenService } from './tiktok-leadgen.service';
 
@@ -103,6 +105,32 @@ class SetContactStatusDto {
   @IsInt()
   @Min(1)
   status_id!: number;
+
+  /** Preferred: target the open attention cycle explicitly. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  lead_id?: number;
+
+  /** Fallback when lead_id is unknown: category slug (general|ca|ep|…). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  category?: string;
+}
+
+class StartAttentionDto {
+  @IsInt()
+  @Min(1)
+  contact_id!: number;
+
+  @IsOptional()
+  @IsInt()
+  program_id?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  conversation_id?: number | null;
 }
 
 @Controller('leads')
@@ -110,6 +138,7 @@ class SetContactStatusDto {
 export class LeadsController {
   constructor(
     private readonly leadsService: LeadsService,
+    private readonly educationWorkflow: EducationLeadWorkflowService,
     private readonly metaLeadgen: MetaLeadgenService,
     private readonly tiktokLeadgen: TikTokLeadgenService,
   ) {}
@@ -135,6 +164,110 @@ export class LeadsController {
     const data = await this.leadsService.channelSummary(
       user.area,
       parseCategorySlugs(category),
+    );
+    return { ok: true, data };
+  }
+
+  /** Open opportunities (one row per lead), including leads without chat. */
+  @Get('cycles')
+  async listCycles(
+    @CurrentUser() user: AuthUser,
+    @Query('q') q?: string,
+    @Query('unassigned') unassigned?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('category') category?: string | string[],
+  ): Promise<ApiResponse<unknown>> {
+    assertCanManageLeads(user);
+    const categories = parseCategorySlugs(category) ?? [];
+    const data = await this.educationWorkflow.listOpenCycles({
+      area: categories[0] ?? user.area,
+      q,
+      unassigned: unassigned === '1' || unassigned === 'true',
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
+    return { ok: true, data };
+  }
+
+  @Get('attention/current')
+  async currentAttention(
+    @CurrentUser() user: AuthUser,
+    @Query('contact_id') contactIdRaw?: string,
+    @Query('conversation_id') conversationIdRaw?: string,
+  ): Promise<ApiResponse<unknown>> {
+    const contactId = Number(contactIdRaw);
+    if (!Number.isInteger(contactId) || contactId <= 0) {
+      throw new BadRequestException('contact_id inválido');
+    }
+    const conversationId = conversationIdRaw ? Number(conversationIdRaw) : null;
+    const data = await this.educationWorkflow.getAttentionForContext({
+      contactId,
+      area: user.area,
+      conversationId:
+        conversationId && Number.isInteger(conversationId) && conversationId > 0
+          ? conversationId
+          : null,
+      user,
+    });
+    return { ok: true, data };
+  }
+
+  @Post('attention/start')
+  async startAttention(
+    @CurrentUser() user: AuthUser,
+    @Body() body: StartAttentionDto,
+  ): Promise<ApiResponse<unknown>> {
+    const data = await this.educationWorkflow.startAttention({
+      contactId: body.contact_id,
+      area: user.area,
+      programId: body.program_id ?? null,
+      conversationId: body.conversation_id ?? null,
+      actorEmail: user.email,
+      user,
+    });
+    return { ok: true, data };
+  }
+
+  @Get('alerts')
+  async listAlerts(
+    @CurrentUser() user: AuthUser,
+    @Query('limit') limit?: string,
+  ): Promise<ApiResponse<unknown>> {
+    const data = await this.educationWorkflow.listAlertsForUser(
+      {
+        id: user.id,
+        area: user.area,
+        is_master: user.isMaster,
+        email: user.email,
+        businessAccess: user.businessAccess,
+        allowedAreas: user.allowedAreas,
+      },
+      { limit: limit ? Number(limit) : undefined },
+    );
+    return { ok: true, data };
+  }
+
+  @Post('alerts/:id/read')
+  async markAlertRead(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<ApiResponse<unknown>> {
+    const data = await this.educationWorkflow.markAlertRead(id, user.id);
+    return { ok: true, data };
+  }
+
+  @Patch('cycles/:id/attributes')
+  async setCycleAttributes(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { attributes: Record<string, string> },
+  ): Promise<ApiResponse<unknown>> {
+    const data = await this.educationWorkflow.setLeadAttributes(
+      id,
+      body.attributes ?? {},
+      user.email,
+      user,
     );
     return { ok: true, data };
   }
@@ -224,6 +357,11 @@ export class LeadsController {
       user.area,
       contactId,
       body.status_id,
+      {
+        leadId: body.lead_id ?? null,
+        category: body.category ?? null,
+        user,
+      },
     );
     return { ok: true, data };
   }

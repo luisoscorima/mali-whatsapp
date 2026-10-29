@@ -60,6 +60,7 @@ import {
   type ChatActionsContext,
 } from './inboxChatActions'
 import { useAssignedInboxBrowserNotify } from './useAssignedInboxBrowserNotify'
+import { useLeadAlertsNotify } from '../leads/useLeadAlertsNotify'
 import { chatDisplayName, chatSecondaryLabel, isContactPhone } from './whatsappIdentity'
 import { leadScoreLabel, leadScoreTone } from './leadScore'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
@@ -1195,6 +1196,11 @@ export function ConversationsInboxPage() {
     onOpenConversation: openConversationFromNotify,
   })
 
+  const {
+    items: leadAlerts,
+    markRead: markLeadAlertRead,
+  } = useLeadAlertsNotify(Boolean(user?.id))
+
   const pollConversationUpdates = useCallback(
     async (conversationId: number) => {
       const current = detailRef.current
@@ -1745,7 +1751,10 @@ export function ConversationsInboxPage() {
     const result = await apiClient.patch<{
       lead_status_id: number | null
       lead_status: { id: number; slug: string; label: string } | null
-    }>(`/api/leads/contacts/${contactId}/status`, { status_id: statusId })
+    }>(`/api/leads/contacts/${contactId}/status`, {
+      status_id: statusId,
+      category: detail?.conversation.line_program || 'general',
+    })
     if (!result.ok) {
       notify.error(result.error)
       return
@@ -2339,6 +2348,26 @@ export function ConversationsInboxPage() {
           ) : null
         }
       >
+        {leadAlerts.length > 0 ? (
+          <div className="border-b border-line px-3 py-2">
+            <p className="muted text-sm">
+              {leadAlerts.length} lead(s) nuevo(s) en tu categoría
+              {leadAlerts[0]
+                ? `: ${leadAlerts[0].contact_name || leadAlerts[0].phone || 'Sin nombre'}`
+                : ''}
+              {leadAlerts.length > 1 ? '…' : ''}
+            </p>
+            <button
+              type="button"
+              className="small-btn compact mt-1"
+              onClick={() => {
+                void markLeadAlertRead(leadAlerts[0].id)
+              }}
+            >
+              Marcar visto
+            </button>
+          </div>
+        ) : null}
         <ul className="inbox-chat-list">
           {!listMatchesFilters ? (
             <li className="inbox-empty-list">Cargando…</li>
@@ -2924,6 +2953,7 @@ export function ConversationsInboxPage() {
         onOpenChange={setContactSheetOpen}
         mode={contactSheetMode}
         contactId={contactSheetContactId}
+        conversationId={selectedId}
         prefillPhone={contactSheetPhone}
         prefillUserId={contactSheetUserId}
         prefillUsername={detail?.conversation.whatsapp_user_id === contactSheetUserId ? detail.conversation.wa_username : null}

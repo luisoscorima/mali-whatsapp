@@ -27,6 +27,7 @@ model business_areas {
   contact_origins               contact_origins[]
   education_lead_cycles         education_lead_cycles[]
   education_lead_entries        education_lead_entries[]
+  education_lead_alerts         education_lead_alerts[]
   meta_lead_forms               meta_lead_forms[]
   meta_lead_form_routes         meta_lead_form_routes[]
   meta_leadgen_leads            meta_leadgen_leads[]
@@ -271,10 +272,15 @@ model contact_attribute_definitions {
   sort_order       Int            @default(0)
   required         Boolean        @default(false)
   active           Boolean               @default(true)
+  /// contact = perfil; lead = oportunidad
+  owner_kind       String                @default("contact") @db.VarChar(16)
+  /// shared = una escritura por persona; contextual = por ficha/categoría
+  shared_scope     String                @default("contextual") @db.VarChar(16)
   created_at       DateTime              @default(now()) @db.Timestamptz(6)
   updated_at       DateTime              @default(now()) @db.Timestamptz(6)
   program_id       Int?
   program          business_programs?    @relation(fields: [program_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  lead_attributes  education_lead_attributes[]
 
   @@index([area], map: "idx_contact_attr_defs_area")
   @@index([program_id], map: "idx_contact_attr_defs_program")
@@ -434,29 +440,97 @@ model contact_replacement_history {
 }
 
 model education_lead_cycles {
-  business_area_id    Int                      @default(dbgenerated())
-  business_area       business_areas           @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  id                  Int                      @id @default(autoincrement())
-  area                String                   @db.VarChar(20)
-  contact_id          Int
-  started_at          DateTime                 @db.Timestamptz(6)
-  last_interaction_at DateTime                 @db.Timestamptz(6)
-  assigned_user_id    Int?
-  lead_status_id      Int?
-  lead_score          Int?                     @db.SmallInt
-  requires_review     Boolean                  @default(false)
-  created_at          DateTime                 @default(now()) @db.Timestamptz(6)
-  updated_at          DateTime                 @default(now()) @db.Timestamptz(6)
-  program_id          Int?
-  program             business_programs?       @relation(fields: [program_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  contact             contacts                 @relation(fields: [contact_id], references: [id], onDelete: Cascade)
-  assigned_user       users?                   @relation("education_lead_assignee", fields: [assigned_user_id], references: [id], onDelete: SetNull)
-  lead_status         lead_status_definitions? @relation("education_cycle_status", fields: [lead_status_id], references: [id], onDelete: SetNull)
-  entries             education_lead_entries[]
+  business_area_id         Int                      @default(dbgenerated())
+  business_area            business_areas           @relation(fields: [business_area_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  id                       Int                      @id @default(autoincrement())
+  area                     String                   @db.VarChar(20)
+  contact_id               Int
+  person_id                Int
+  started_at               DateTime                 @db.Timestamptz(6)
+  last_interaction_at      DateTime                 @db.Timestamptz(6)
+  assigned_user_id         Int?
+  lead_status_id           Int?
+  lead_score               Int?                     @db.SmallInt
+  requires_review          Boolean                  @default(false)
+  closed_at                DateTime?                @db.Timestamptz(6)
+  close_reason             String?                  @db.VarChar(40)
+  first_assigned_at        DateTime?                @db.Timestamptz(6)
+  first_human_reply_at     DateTime?                @db.Timestamptz(6)
+  first_inbound_at         DateTime?                @db.Timestamptz(6)
+  inactivity_deadline_at   DateTime?                @db.Timestamptz(6)
+  created_at               DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime                 @default(now()) @db.Timestamptz(6)
+  program_id               Int?
+  program                  business_programs?       @relation(fields: [program_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  contact                  contacts                 @relation(fields: [contact_id], references: [id], onDelete: Cascade)
+  person                   people                   @relation(fields: [person_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  assigned_user            users?                   @relation("education_lead_assignee", fields: [assigned_user_id], references: [id], onDelete: SetNull)
+  lead_status              lead_status_definitions? @relation("education_cycle_status", fields: [lead_status_id], references: [id], onDelete: SetNull)
+  entries                  education_lead_entries[]
+  conversation_links       education_lead_conversation_links[]
+  alerts                   education_lead_alerts[]
+  attributes               education_lead_attributes[]
 
   @@unique([contact_id, started_at], map: "education_lead_cycles_contact_started_key")
   @@index([contact_id, started_at(sort: Desc)], map: "education_lead_cycles_contact_started_idx")
+  @@index([person_id, started_at(sort: Desc)], map: "education_lead_cycles_person_started_idx")
   @@index([area, assigned_user_id], map: "education_lead_cycles_area_assignee_idx")
+}
+
+/// Historical link between an opportunity and a conversation (messages stay on conversation).
+model education_lead_conversation_links {
+  id              Int                   @id @default(autoincrement())
+  cycle_id        Int
+  conversation_id Int
+  linked_at       DateTime              @default(now()) @db.Timestamptz(6)
+  unlinked_at     DateTime?             @db.Timestamptz(6)
+  cycle           education_lead_cycles @relation(fields: [cycle_id], references: [id], onDelete: Cascade)
+  conversation    conversations         @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+
+  @@index([cycle_id, linked_at(sort: Desc)], map: "education_lead_conv_links_cycle_idx")
+  @@index([conversation_id, linked_at(sort: Desc)], map: "education_lead_conv_links_conversation_idx")
+}
+
+/// Persistent in-app alert for every new lead (with or without chat).
+model education_lead_alerts {
+  id               Int                         @id @default(autoincrement())
+  cycle_id         Int
+  business_area_id Int
+  program_id       Int?
+  area             String                      @db.VarChar(20)
+  event_type       String                      @default("new_lead") @db.VarChar(40)
+  created_at       DateTime                    @default(now()) @db.Timestamptz(6)
+  cycle            education_lead_cycles       @relation(fields: [cycle_id], references: [id], onDelete: Cascade)
+  business_area    business_areas              @relation(fields: [business_area_id], references: [id], onDelete: Restrict)
+  reads            education_lead_alert_reads[]
+
+  @@unique([cycle_id, event_type], map: "education_lead_alerts_cycle_type_uq")
+  @@index([area, created_at(sort: Desc)], map: "education_lead_alerts_area_created_idx")
+}
+
+model education_lead_alert_reads {
+  id       Int                   @id @default(autoincrement())
+  alert_id Int
+  user_id  Int
+  read_at  DateTime              @default(now()) @db.Timestamptz(6)
+  alert    education_lead_alerts @relation(fields: [alert_id], references: [id], onDelete: Cascade)
+  user     users                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([alert_id, user_id], map: "education_lead_alert_reads_uq")
+}
+
+model education_lead_attributes {
+  id            Int                           @id @default(autoincrement())
+  cycle_id      Int
+  definition_id Int
+  attr_key      String                        @db.VarChar(64)
+  attr_value    String                        @default("")
+  updated_at    DateTime                      @default(now()) @db.Timestamptz(6)
+  cycle         education_lead_cycles         @relation(fields: [cycle_id], references: [id], onDelete: Cascade)
+  definition    contact_attribute_definitions @relation(fields: [definition_id], references: [id], onDelete: Restrict)
+
+  @@unique([cycle_id, definition_id], map: "education_lead_attributes_cycle_def_uq")
+  @@index([cycle_id], map: "education_lead_attributes_cycle_idx")
 }
 
 model education_lead_entries {
@@ -649,6 +723,7 @@ model conversations {
   meta_ctwa_ad_leads           meta_ctwa_ad_leads[]
   assigned_user                users?               @relation("conversation_assignee", fields: [assigned_user_id], references: [id], onUpdate: NoAction)
   whatsapp_line                whatsapp_lines?      @relation(fields: [whatsapp_line_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  education_lead_links         education_lead_conversation_links[]
 
   @@unique([whatsapp_line_id, phone], map: "conversations_line_phone_uq")
   @@unique([whatsapp_line_id, whatsapp_user_id], map: "conversations_line_wuid_uq")
@@ -919,6 +994,7 @@ model users {
   user_areas                     user_areas[]
   assigned_conversations         conversations[]         @relation("conversation_assignee")
   assigned_education_lead_cycles education_lead_cycles[] @relation("education_lead_assignee")
+  education_lead_alert_reads     education_lead_alert_reads[]
   advisor_notes                  advisor_notes[]
   flow_node_handoffs             flow_nodes[]            @relation("flow_node_handoff")
 
@@ -977,8 +1053,9 @@ model people {
   birth_date         DateTime?  @db.Date
   created_at         DateTime   @default(now()) @db.Timestamptz(6)
   updated_at         DateTime   @default(now()) @db.Timestamptz(6)
-  contacts           contacts[]
-  identity_reviews   person_identity_reviews[]
+  contacts               contacts[]
+  education_lead_cycles  education_lead_cycles[]
+  identity_reviews       person_identity_reviews[]
 
   @@index([phone])
   @@index([dni])

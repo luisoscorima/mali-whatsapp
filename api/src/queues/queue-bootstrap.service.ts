@@ -4,6 +4,7 @@ import type { Queue } from 'bullmq';
 import { CAMPAIGN_SCHEDULE_POLL_MS } from '../campaigns/campaign-config.util';
 import {
   AUDIT_PURGE_MS,
+  EDUCATION_LEAD_EXPIRE_MS,
   MAINTENANCE_QUEUE,
   MaintenanceJobName,
 } from './queue.constants';
@@ -68,6 +69,15 @@ export class QueueBootstrapService implements OnModuleInit {
       MaintenanceJobName.AUDIT_PURGE,
       { source: 'startup' },
       REPEAT_JOB_OPTS,
+    );
+
+    await this.maintenanceQueue.add(
+      MaintenanceJobName.EXPIRE_EDUCATION_LEADS,
+      {},
+      {
+        ...REPEAT_JOB_OPTS,
+        repeat: { every: EDUCATION_LEAD_EXPIRE_MS, key: 'expire-education-leads' },
+      },
     );
 
     this.logger.log('Colas BullMQ registradas (campañas + mantenimiento)');

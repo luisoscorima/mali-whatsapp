@@ -56,6 +56,8 @@ export type AttributeDefinition = {
   sort_order: number;
   required: boolean;
   active: boolean;
+  owner_kind: 'contact' | 'lead';
+  shared_scope: 'shared' | 'contextual';
   created_at: string;
   updated_at: string;
   /** general, ca, ep… */

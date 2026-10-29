@@ -7,10 +7,9 @@ import { backfillUnassignedConversationAssignments, backfillFirstSenderHistorica
 import { CampaignJobsService } from '../campaigns/campaign-jobs.service';
 import { CampaignRetryService } from '../campaigns/campaign-retry.service';
 import { FlowsService } from '../flows/flows.service';
+import { EducationLeadWorkflowService } from '../leads/education-lead-workflow.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { CAMPAIGN_SCHEDULE_POLL_MS } from '../campaigns/campaign-config.util';
 import {
-  AUDIT_PURGE_MS,
   MAINTENANCE_QUEUE,
   MaintenanceJobName,
 } from './queue.constants';
@@ -26,6 +25,7 @@ export class MaintenanceQueueProcessor extends WorkerHost {
     private readonly auditLog: AuditLogService,
     private readonly prisma: PrismaService,
     private readonly flows: FlowsService,
+    private readonly educationLeads: EducationLeadWorkflowService,
   ) {
     super();
   }
@@ -104,6 +104,14 @@ export class MaintenanceQueueProcessor extends WorkerHost {
         await this.campaignJobs.resumeInterruptedCampaigns();
         await this.campaignJobs.resumeQueuedCampaigns();
         return;
+
+      case MaintenanceJobName.EXPIRE_EDUCATION_LEADS: {
+        const result = await this.educationLeads.expireDueCycles();
+        if (result.expired > 0) {
+          this.logger.log(`Leads Educación: ${result.expired} ciclo(s) vencido(s)`);
+        }
+        return;
+      }
 
       default:
         this.logger.warn(`Job de mantenimiento desconocido: ${job.name}`);

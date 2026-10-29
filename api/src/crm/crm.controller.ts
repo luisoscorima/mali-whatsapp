@@ -158,6 +158,27 @@ export class CrmController {
     return { ok: true, data };
   }
 
+  /** Open opportunities (ciclo = lead), independent of entries list. */
+  @Get('education/cycles')
+  async educationCycles(@Query() query: CrmEducationLeadsQueryDto) {
+    const data = await this.educationWorkflow.listOpenCycles(query);
+    return { ok: true, data };
+  }
+
+  @Post('education/attention/start')
+  async educationStartAttention(
+    @Body() body: { contact_id: number; area: string; program_id?: number | null; conversation_id?: number | null; actor_email?: string },
+  ) {
+    const data = await this.educationWorkflow.startAttention({
+      contactId: body.contact_id,
+      area: body.area,
+      programId: body.program_id ?? null,
+      conversationId: body.conversation_id ?? null,
+      actorEmail: body.actor_email,
+    });
+    return { ok: true, data };
+  }
+
   @Post('education/prospectia/check')
   async educationProspectiaCheck(@Body() body: ProspectiaCheckDto) {
     if (body.subjects.length > 50 || body.subjects.some((subject) =>

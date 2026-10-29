@@ -53,6 +53,14 @@ export class CreateAttributeDefinitionDto {
   @IsOptional()
   @IsBoolean()
   required?: boolean;
+
+  @IsOptional()
+  @IsIn(['contact', 'lead'])
+  owner_kind?: 'contact' | 'lead';
+
+  @IsOptional()
+  @IsIn(['shared', 'contextual'])
+  shared_scope?: 'shared' | 'contextual';
 }
 
 export class UpdateAttributeDefinitionDto {
@@ -92,4 +100,12 @@ export class UpdateAttributeDefinitionDto {
   @IsOptional()
   @IsBoolean()
   active?: boolean;
+
+  @IsOptional()
+  @IsIn(['contact', 'lead'])
+  owner_kind?: 'contact' | 'lead';
+
+  @IsOptional()
+  @IsIn(['shared', 'contextual'])
+  shared_scope?: 'shared' | 'contextual';
 }
