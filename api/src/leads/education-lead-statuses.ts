@@ -20,14 +20,9 @@ export async function syncEducationLeadStatuses(
       await tx.lead_status_definitions.upsert({
         where: { area_slug: { area, slug: status.slug } },
         create: { area, ...status, active: true },
-        update: {
-          label: status.label,
-          sort_order: status.sort_order,
-          is_default: status.is_default,
-          is_terminal: status.is_terminal,
-          active: true,
-          updated_at: new Date(),
-        },
+        // Los valores existentes pueden administrarse desde MALI ONE. Este
+        // sync solo repone estados base que todavía no existen.
+        update: {},
       });
     }
     for (const [legacy, target] of Object.entries(EDUCATION_LEGACY_STATUS_SLUGS)) {

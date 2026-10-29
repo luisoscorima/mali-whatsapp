@@ -19,6 +19,7 @@ import { CrmAudienceBodyDto } from './dto/crm-audience-body.dto';
 import { CrmAudienceQueryDto } from './dto/crm-audience-query.dto';
 import { CrmContactsQueryDto } from './dto/crm-contacts-query.dto';
 import { CrmEducationLeadsQueryDto } from './dto/crm-education-leads-query.dto';
+import { CrmEducationCyclesQueryDto } from './dto/crm-education-cycles-query.dto';
 import { CrmEnsureAttributeDefinitionsDto } from './dto/crm-ensure-attribute-definitions.dto';
 import { CrmIngestOriginDto } from './dto/crm-ingest-origin.dto';
 import { CrmPatchContactDto } from './dto/crm-patch-contact.dto';
@@ -26,7 +27,7 @@ import { CrmSyncContactDto } from './dto/crm-sync-contact.dto';
 import { CrmSendTemplateDto } from './dto/crm-send-template.dto';
 import { LeadsService } from '../leads/leads.service';
 import { EducationLeadWorkflowService } from '../leads/education-lead-workflow.service';
-import { IsArray, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, Min, ValidateNested } from 'class-validator';
 import { educationProgramOf, isEducationAreaSlug } from '../config/education-scope';
 import { Type } from 'class-transformer';
 import { ProspectiaAdvisorService } from '../leads/prospectia-advisor.service';
@@ -38,6 +39,7 @@ import { LEAD_CHANNELS } from '../leads/leads.types';
 class EducationManagementDto {
   @IsOptional() @IsInt() @Min(1) assigned_user_id?: number | null;
   @IsOptional() @IsInt() @Min(1) lead_status_id?: number | null;
+  @IsOptional() @IsInt() @Min(1) lead_id?: number;
   @IsOptional() @IsString() @MaxLength(120) actor_email?: string;
 }
 
@@ -64,6 +66,24 @@ class EducationDistributeDto {
   @IsOptional() @IsIn(LEAD_CHANNELS) channel?: string;
   @IsOptional() @IsString() @MaxLength(120) q?: string;
   @IsOptional() @IsString() @MaxLength(120) actor_email?: string;
+}
+
+class EducationCreateStatusDto {
+  @IsIn(['educacion', 'educacion_ca', 'educacion_ep']) area!: string;
+  @IsString() @MaxLength(50) slug!: string;
+  @IsString() @MaxLength(120) label!: string;
+  @IsOptional() @IsInt() sort_order?: number;
+  @IsOptional() @IsBoolean() is_default?: boolean;
+  @IsOptional() @IsBoolean() is_terminal?: boolean;
+}
+
+class EducationUpdateStatusDto {
+  @IsIn(['educacion', 'educacion_ca', 'educacion_ep']) area!: string;
+  @IsOptional() @IsString() @MaxLength(120) label?: string;
+  @IsOptional() @IsInt() sort_order?: number;
+  @IsOptional() @IsBoolean() is_default?: boolean;
+  @IsOptional() @IsBoolean() is_terminal?: boolean;
+  @IsOptional() @IsBoolean() active?: boolean;
 }
 
 @Controller('crm')
@@ -160,8 +180,8 @@ export class CrmController {
 
   /** Open opportunities (ciclo = lead), independent of entries list. */
   @Get('education/cycles')
-  async educationCycles(@Query() query: CrmEducationLeadsQueryDto) {
-    const data = await this.educationWorkflow.listOpenCycles(query);
+  async educationCycles(@Query() query: CrmEducationCyclesQueryDto) {
+    const data = await this.educationWorkflow.listCycles(query);
     return { ok: true, data };
   }
 
@@ -202,6 +222,30 @@ export class CrmController {
   @Get('education/management-catalogs')
   async educationManagementCatalogs() {
     return { ok: true, data: await this.educationWorkflow.catalogs() };
+  }
+
+  @Get('education/statuses')
+  async educationStatuses() {
+    const areas = ['educacion', 'educacion_ca', 'educacion_ep'];
+    const statuses = await Promise.all(
+      areas.map((area) => this.leads.listStatuses(area, { includeInactive: true })),
+    );
+    return { ok: true, data: statuses.flat() };
+  }
+
+  @Post('education/statuses')
+  async educationCreateStatus(@Body() body: EducationCreateStatusDto) {
+    const { area, ...status } = body;
+    return { ok: true, data: await this.leads.createStatus(area, status) };
+  }
+
+  @Patch('education/statuses/:id')
+  async educationUpdateStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: EducationUpdateStatusDto,
+  ) {
+    const { area, ...status } = body;
+    return { ok: true, data: await this.leads.updateStatus(area, id, status) };
   }
 
   @Patch('education/contacts/:id/management')

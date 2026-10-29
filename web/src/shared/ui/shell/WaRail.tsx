@@ -124,7 +124,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     key: 'leads',
     to: '/leads',
-    label: 'Leads',
+    label: 'Captación',
     mobileSecondary: true,
     icon: (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">

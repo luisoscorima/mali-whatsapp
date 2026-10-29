@@ -907,11 +907,11 @@ export class LeadsService implements OnModuleInit {
     return { origin_id: row.id, contact_id: row.contact_id, created: true };
   }
 
-  async listStatuses(area: string) {
+  async listStatuses(area: string, opts?: { includeInactive?: boolean }) {
     const areaNorm = normalizeArea(area);
     await this.ensureDefaultStatuses(areaNorm);
     return this.prisma.lead_status_definitions.findMany({
-      where: { area: areaNorm, active: true },
+      where: { area: areaNorm, ...(opts?.includeInactive ? {} : { active: true }) },
       orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
     });
   }
@@ -935,21 +935,23 @@ export class LeadsService implements OnModuleInit {
     if (!slug || !label) {
       throw new BadRequestException('slug y label requeridos');
     }
-    if (body.is_default) {
-      await this.prisma.lead_status_definitions.updateMany({
-        where: { area: areaNorm, is_default: true },
-        data: { is_default: false, updated_at: new Date() },
+    return this.prisma.$transaction(async (tx) => {
+      if (body.is_default) {
+        await tx.lead_status_definitions.updateMany({
+          where: { area: areaNorm, is_default: true },
+          data: { is_default: false, updated_at: new Date() },
+        });
+      }
+      return tx.lead_status_definitions.create({
+        data: {
+          area: areaNorm,
+          slug,
+          label,
+          sort_order: body.sort_order ?? 100,
+          is_default: Boolean(body.is_default),
+          is_terminal: Boolean(body.is_terminal),
+        },
       });
-    }
-    return this.prisma.lead_status_definitions.create({
-      data: {
-        area: areaNorm,
-        slug,
-        label,
-        sort_order: body.sort_order ?? 100,
-        is_default: Boolean(body.is_default),
-        is_terminal: Boolean(body.is_terminal),
-      },
     });
   }
 
@@ -970,23 +972,46 @@ export class LeadsService implements OnModuleInit {
     });
     if (!existing) throw new NotFoundException('Estado no encontrado');
 
-    if (body.is_default === true) {
-      await this.prisma.lead_status_definitions.updateMany({
-        where: { area: areaNorm, is_default: true, NOT: { id } },
-        data: { is_default: false, updated_at: new Date() },
-      });
+    const label = body.label !== undefined ? String(body.label).trim() : undefined;
+    if (label !== undefined && !label) {
+      throw new BadRequestException('La etiqueta es requerida');
+    }
+    if (existing.is_default && body.is_default === false) {
+      throw new BadRequestException(
+        'Define otro estado inicial antes de quitar el actual',
+      );
+    }
+    if (existing.is_default && body.active === false) {
+      throw new BadRequestException(
+        'Define otro estado inicial antes de desactivar el actual',
+      );
+    }
+    if (
+      body.is_default === true &&
+      (body.active === false || (body.active === undefined && !existing.active))
+    ) {
+      throw new BadRequestException('El estado inicial debe estar activo');
     }
 
-    return this.prisma.lead_status_definitions.update({
-      where: { id },
-      data: {
-        label: body.label !== undefined ? String(body.label).trim() : undefined,
-        sort_order: body.sort_order,
-        is_default: body.is_default,
-        is_terminal: body.is_terminal,
-        active: body.active,
-        updated_at: new Date(),
-      },
+    return this.prisma.$transaction(async (tx) => {
+      if (body.is_default === true) {
+        await tx.lead_status_definitions.updateMany({
+          where: { area: areaNorm, is_default: true, NOT: { id } },
+          data: { is_default: false, updated_at: new Date() },
+        });
+      }
+
+      return tx.lead_status_definitions.update({
+        where: { id },
+        data: {
+          label,
+          sort_order: body.sort_order,
+          is_default: body.is_default,
+          is_terminal: body.is_terminal,
+          active: body.active,
+          updated_at: new Date(),
+        },
+      });
     });
   }
 

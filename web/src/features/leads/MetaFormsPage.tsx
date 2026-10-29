@@ -265,7 +265,7 @@ export function MetaFormsPage() {
     <div className="space-y-6 p-4 md:p-6">
       <div>
         <Link to="/leads" className="text-sm text-accent hover:underline">
-          ← Leads
+          ← Captación
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">Instant Forms</h1>
         <p className="text-sm text-muted">

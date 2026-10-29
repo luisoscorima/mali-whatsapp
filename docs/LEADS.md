@@ -258,7 +258,7 @@ El form crea el lead en el CRM. Si el anuncio ofrece “chatear en WhatsApp” a
 
 ## Qué falta para apagar el Sheet
 
-El CRM Educación de MALI ONE ya muestra Contactos y Leads de los tres números. Pagos y Campañas siguen como «Próximamente». Este MVP no sustituye todavía el flujo diario del Sheet.
+El CRM Educación de MALI ONE ya muestra Contactos y Oportunidades de los tres números. Oportunidades separa ciclos abiertos, cerrados, pendientes de revisión y sin asignar; los conflictos comerciales se resuelven dentro de Requieren revisión. Pagos y Campañas siguen como «Próximamente». Este MVP no sustituye todavía el flujo diario del Sheet.
 
 | Capacidad | Estado | Notas |
 |-----------|--------|--------|

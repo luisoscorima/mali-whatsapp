@@ -193,6 +193,24 @@ describe('Education lead cycle creation', () => {
     })).rejects.toThrow('Para reasignar, selecciona otro asesor');
   });
 
+  it('does not create a cycle when an explicit opportunity does not belong to the contact', async () => {
+    const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      education_lead_cycles: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn(),
+      },
+    };
+    const prisma = {
+      contacts: { findFirst: jest.fn().mockResolvedValue({ id: 10, person_id: 55 }) },
+      $transaction: (fn: (client: typeof tx) => Promise<unknown>) => fn(tx),
+    };
+    await expect(new EducationLeadWorkflowService(prisma as never).updateManagement(
+      10, 'educacion_ep', { lead_id: 999 },
+    )).rejects.toThrow('Oportunidad no encontrada');
+    expect(tx.education_lead_cycles.create).not.toHaveBeenCalled();
+  });
+
   it('keeps the previous advisor when a conflict is reviewed as a new cycle', async () => {
     const tx = {
       $executeRaw: jest.fn().mockResolvedValue(1),
@@ -224,5 +242,47 @@ describe('Education lead cycle creation', () => {
       person_id: 55, assigned_user_id: 22, requires_review: true,
     }) });
     expect(tx.conversations.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('lists closed opportunities with operational counts and the latest capture context', async () => {
+    const count = jest.fn()
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(4)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(3);
+    const item = {
+      id: 31, area: 'educacion_ep', contact_id: 10, person_id: 55,
+      started_at: now, last_interaction_at: now, closed_at: now,
+      assigned_user_id: 22,
+      assigned_user: { id: 22, first_name: 'Ana', last_name: 'Soto', email: 'ana@example.org' },
+      lead_status_id: 9, lead_status: { id: 9, label: 'Venta exitosa', slug: 'venta_exitosa' },
+      lead_score: 10, requires_review: false,
+      program: { slug: 'ep', label: 'Extensión profesional' },
+      contact: { id: 10, person_id: 55, name: 'Luz', last_name: 'Ramos',
+        phone: '999111222', email: 'luz@example.org', whatsapp_user_id: 'bsuid-1',
+        conversations: [{ wa_username: 'luz.ramos' }] },
+      conversation_links: [{ conversation_id: 70 }],
+      entries: [{ channel: 'meta_lead_form', source_label: 'Formulario EP',
+        assignment_rule: 'same_advisor', classification: 'duplicate', occurred_at: now,
+        origin: { payload: { curso: 'Fotografía' } } }],
+    };
+    const prisma = {
+      education_lead_cycles: { count, findMany: jest.fn().mockResolvedValue([item]) },
+      $transaction: (queries: Array<Promise<unknown>>) => Promise.all(queries),
+    };
+    const result = await new EducationLeadWorkflowService(prisma as never).listCycles({
+      area: 'educacion_ep', view: 'closed', page: 1, limit: 50,
+    });
+
+    expect(prisma.education_lead_cycles.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { AND: [expect.any(Object), { closed_at: { not: null } }] },
+    }));
+    expect(result.counts).toEqual({ open: 4, closed: 2, review: 1, unassigned: 3 });
+    expect(result.items[0]).toEqual(expect.objectContaining({
+      id: 31, curso_interes: 'Fotografía', assignment_rule: 'same_advisor',
+      conversation_id: 70, assigned_user_label: 'Ana Soto',
+      contacts: expect.objectContaining({ wa_username: 'luz.ramos' }),
+    }));
   });
 });

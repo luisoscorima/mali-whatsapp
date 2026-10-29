@@ -180,10 +180,10 @@ export class LeadsController {
   ): Promise<ApiResponse<unknown>> {
     assertCanManageLeads(user);
     const categories = parseCategorySlugs(category) ?? [];
-    const data = await this.educationWorkflow.listOpenCycles({
+    const data = await this.educationWorkflow.listCycles({
       area: categories[0] ?? user.area,
       q,
-      unassigned: unassigned === '1' || unassigned === 'true',
+      view: unassigned === '1' || unassigned === 'true' ? 'unassigned' : 'open',
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
     });

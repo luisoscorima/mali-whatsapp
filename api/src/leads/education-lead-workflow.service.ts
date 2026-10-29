@@ -27,6 +27,7 @@ import { educationProgramOf } from '../config/education-scope';
 import { userWorksArea } from '../users/area-membership.where';
 import { ProspectiaAdvisorService } from './prospectia-advisor.service';
 import { endLeadConversationLinks, projectLeadAssignee, withLeadCreateSavepoint } from './education-lead-lifecycle.util';
+import { cursoFromOriginPayload } from './lead-curso.util';
 
 function isUniqueViolation(error: unknown): boolean {
   return (
@@ -805,6 +806,9 @@ export class EducationLeadWorkflowService {
           orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
         });
       }
+      if (!cycle && changes.lead_id) {
+        throw new NotFoundException('Oportunidad no encontrada');
+      }
       if (!cycle) {
         cycle = await tx.education_lead_cycles.create({ data: {
           contact_id: contactId,
@@ -1509,18 +1513,20 @@ export class EducationLeadWorkflowService {
     });
   }
 
-  async listOpenCycles(params: {
-    area?: string; channel?: string; q?: string; unassigned?: boolean;
+  async listCycles(params: {
+    area?: string; channel?: string; q?: string;
+    view?: 'open' | 'closed' | 'review' | 'unassigned';
     page?: number; limit?: number;
   }) {
     const scope = this.leadScope(params.area);
     const page = params.page ?? 1;
     const limit = params.limit ?? 50;
+    const view = params.view ?? 'open';
     const q = String(params.q ?? '').trim();
-    const and: Prisma.education_lead_cyclesWhereInput[] = [{ closed_at: null }];
-    if (scope.onlyGeneral) and.push({ program_id: null, area: 'educacion' });
+    const scoped: Prisma.education_lead_cyclesWhereInput[] = [];
+    if (scope.onlyGeneral) scoped.push({ program_id: null, area: 'educacion' });
     else if (scope.program && scope.areas.length > 1) {
-      and.push({
+      scoped.push({
         OR: [
           { program: { is: { slug: scope.program } } },
           ...(scope.program === 'ca' ? [{ program_id: null, area: 'educacion_ca' as const }] : []),
@@ -1528,21 +1534,35 @@ export class EducationLeadWorkflowService {
         ],
       });
     } else {
-      and.push({ area: { in: scope.areas } });
+      scoped.push({ area: { in: scope.areas } });
     }
-    if (params.unassigned) and.push({ assigned_user_id: null });
+    if (params.channel) scoped.push({ entries: { some: { channel: params.channel } } });
     if (q) {
-      and.push({
+      scoped.push({
         OR: [
           { contact: { is: { name: { contains: q, mode: 'insensitive' } } } },
           { contact: { is: { last_name: { contains: q, mode: 'insensitive' } } } },
           { contact: { is: { phone: { contains: q } } } },
+          { contact: { is: { whatsapp_user_id: { contains: q, mode: 'insensitive' } } } },
+          { contact: { is: { conversations: { some: {
+            wa_username: { contains: q.replace(/^@/, ''), mode: 'insensitive' },
+          } } } } },
           { contact: { is: { email: { contains: q, mode: 'insensitive' } } } },
+          { entries: { some: { source_label: { contains: q, mode: 'insensitive' } } } },
         ],
       });
     }
-    const where: Prisma.education_lead_cyclesWhereInput = { AND: and };
-    const [total, items] = await this.prisma.$transaction([
+    const stateWhere: Record<typeof view, Prisma.education_lead_cyclesWhereInput> = {
+      open: { closed_at: null },
+      closed: { closed_at: { not: null } },
+      review: { closed_at: null, requires_review: true },
+      unassigned: { closed_at: null, assigned_user_id: null },
+    };
+    const baseWhere: Prisma.education_lead_cyclesWhereInput = scoped.length ? { AND: scoped } : {};
+    const where: Prisma.education_lead_cyclesWhereInput = {
+      AND: [baseWhere, stateWhere[view]],
+    };
+    const [total, items, open, closed, review, unassigned] = await this.prisma.$transaction([
       this.prisma.education_lead_cycles.count({ where }),
       this.prisma.education_lead_cycles.findMany({
         where,
@@ -1550,7 +1570,7 @@ export class EducationLeadWorkflowService {
         skip: (page - 1) * limit,
         take: limit,
         include: {
-          program: { select: { slug: true } },
+          program: { select: { slug: true, label: true } },
           lead_status: { select: { id: true, label: true, slug: true } },
           assigned_user: {
             select: { id: true, first_name: true, last_name: true, email: true },
@@ -1559,6 +1579,11 @@ export class EducationLeadWorkflowService {
             select: {
               id: true, person_id: true, name: true, last_name: true,
               phone: true, email: true, whatsapp_user_id: true,
+              conversations: {
+                where: { wa_username: { not: null } },
+                orderBy: { updated_at: 'desc' }, take: 1,
+                select: { wa_username: true },
+              },
             },
           },
           conversation_links: {
@@ -1570,32 +1595,58 @@ export class EducationLeadWorkflowService {
           entries: {
             orderBy: [{ occurred_at: 'desc' }, { id: 'desc' }],
             take: 1,
-            select: { channel: true, source_label: true },
+            select: {
+              channel: true, source_label: true, assignment_rule: true,
+              classification: true, occurred_at: true,
+              origin: { select: { payload: true } },
+            },
           },
         },
       }),
+      this.prisma.education_lead_cycles.count({ where: { AND: [baseWhere, stateWhere.open] } }),
+      this.prisma.education_lead_cycles.count({ where: { AND: [baseWhere, stateWhere.closed] } }),
+      this.prisma.education_lead_cycles.count({ where: { AND: [baseWhere, stateWhere.review] } }),
+      this.prisma.education_lead_cycles.count({ where: { AND: [baseWhere, stateWhere.unassigned] } }),
     ]);
     return {
-      items: items.map((item) => ({
-        id: item.id,
-        area: item.area,
-        contact_id: item.contact_id,
-        person_id: item.person_id,
-        categoria: item.program?.slug ?? educationProgramOf(item.area),
-        channel: item.entries[0]?.channel ?? null,
-        source_label: item.entries[0]?.source_label ?? null,
-        started_at: item.started_at,
-        last_interaction_at: item.last_interaction_at,
-        closed_at: item.closed_at,
-        assigned_user_id: item.assigned_user_id,
-        assigned_user_label: item.assigned_user ? advisorLabel(item.assigned_user) : null,
-        lead_status_id: item.lead_status_id,
-        lead_status: item.lead_status,
-        lead_score: item.lead_score,
-        requires_review: item.requires_review,
-        conversation_id: item.conversation_links[0]?.conversation_id ?? null,
-        contacts: item.contact,
-      })),
+      items: items.map((item) => {
+        const latestEntry = item.entries[0];
+        return {
+          id: item.id,
+          area: item.area,
+          contact_id: item.contact_id,
+          person_id: item.person_id,
+          categoria: item.program?.slug ?? educationProgramOf(item.area),
+          categoria_label: item.program?.label ?? null,
+          curso_interes: cursoFromOriginPayload(latestEntry?.origin?.payload),
+          channel: latestEntry?.channel ?? null,
+          source_label: latestEntry?.source_label ?? null,
+          assignment_rule: latestEntry?.assignment_rule ?? null,
+          classification: latestEntry?.classification ?? null,
+          latest_capture_at: latestEntry?.occurred_at ?? null,
+          started_at: item.started_at,
+          last_interaction_at: item.last_interaction_at,
+          closed_at: item.closed_at,
+          assigned_user_id: item.assigned_user_id,
+          assigned_user_label: item.assigned_user ? advisorLabel(item.assigned_user) : null,
+          lead_status_id: item.lead_status_id,
+          lead_status: item.lead_status,
+          lead_score: item.lead_score,
+          requires_review: item.requires_review,
+          conversation_id: item.conversation_links[0]?.conversation_id ?? null,
+          contacts: {
+            id: item.contact.id,
+            person_id: item.contact.person_id,
+            name: item.contact.name,
+            last_name: item.contact.last_name,
+            phone: item.contact.phone,
+            email: item.contact.email,
+            whatsapp_user_id: item.contact.whatsapp_user_id,
+            wa_username: item.contact.conversations[0]?.wa_username ?? null,
+          },
+        };
+      }),
+      counts: { open, closed, review, unassigned },
       total,
       page,
       limit,

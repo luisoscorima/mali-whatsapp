@@ -100,9 +100,9 @@ export function LeadsHubPage() {
   return (
     <div className="space-y-6 p-4 md:p-6">
       <div>
-        <h1 className="text-2xl font-semibold">Leads</h1>
+        <h1 className="text-2xl font-semibold">Captación de leads</h1>
         <p className="mt-1 text-sm text-muted">
-          Prospectos por canal de captación. Lista unificada abajo; detalle por canal en cada tarjeta.
+          Orígenes por canal. La atención (ciclos abiertos/cerrados) se gestiona en MALI ONE · CRM Educación.
         </p>
       </div>
 
@@ -142,167 +142,8 @@ export function LeadsHubPage() {
         </div>
       )}
 
-      <OpenCyclesList />
       <LeadsUnifiedList />
-      <LeadStatusesAdmin />
     </div>
-  )
-}
-
-type CycleRow = {
-  id: number
-  contact_id: number
-  person_id: number
-  categoria: string | null
-  channel: string | null
-  source_label: string | null
-  started_at: string
-  last_interaction_at: string
-  assigned_user_label: string | null
-  lead_status: { id: number; label: string; slug: string } | null
-  conversation_id: number | null
-  contacts: {
-    id: number
-    name: string
-    last_name: string
-    phone: string | null
-    email: string | null
-  }
-}
-
-function OpenCyclesList() {
-  const scope = useCategoryScope()
-  const PAGE_SIZE = 25
-  const [items, setItems] = useState<CycleRow[]>([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
-  const [qInput, setQInput] = useState('')
-  const [qApplied, setQApplied] = useState('')
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const pageSafe = Math.min(page, totalPages)
-
-  useEffect(() => {
-    setPage(1)
-  }, [scope.query])
-
-  useEffect(() => {
-    const qs = new URLSearchParams({
-      limit: String(PAGE_SIZE),
-      page: String(pageSafe),
-    })
-    if (qApplied.trim()) qs.set('q', qApplied.trim())
-    if (scope.query) {
-      for (const part of scope.query.split('&')) {
-        const [key, value] = part.split('=')
-        if (key && value) qs.append(key, decodeURIComponent(value))
-      }
-    }
-    void apiClient
-      .get<{ items: CycleRow[]; total: number }>(`/api/leads/cycles?${qs}`)
-      .then((r) => {
-        if (r.ok) {
-          setItems(r.data.items)
-          setTotal(r.data.total)
-        }
-      })
-  }, [pageSafe, qApplied, scope.query, scope.revision])
-
-  return (
-    <section className="rounded-xl border border-line bg-surface-strong p-4">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="font-medium">Oportunidades abiertas</h2>
-          <p className="text-sm text-muted">
-            Una fila por lead activo (con o sin chat). Los orígenes siguen abajo.
-          </p>
-        </div>
-      </div>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          setQApplied(qInput)
-          setPage(1)
-        }}
-        className="mb-3 flex flex-wrap items-end gap-2"
-      >
-        <label className="text-sm">
-          <span className="text-muted">Buscar</span>
-          <input
-            className="mt-1 block w-64 max-w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm"
-            value={qInput}
-            onChange={(e) => setQInput(e.target.value)}
-            placeholder="Nombre, tel, email…"
-          />
-        </label>
-        <button type="submit" className="rounded-lg border border-line bg-bg px-3 py-2 text-sm">
-          Buscar
-        </button>
-        <p className="pb-2 text-xs text-muted">
-          {total} lead(s) · página {pageSafe} / {totalPages}
-        </p>
-      </form>
-      {items.length === 0 ? (
-        <p className="text-sm text-muted">No hay oportunidades abiertas.</p>
-      ) : (
-        <>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-line text-muted">
-                <tr>
-                  {mixesCategories(scope) ? <th className="px-2 py-2">Categoría</th> : null}
-                  <th className="px-2 py-2">Contacto</th>
-                  <th className="px-2 py-2">Canal</th>
-                  <th className="px-2 py-2">Asesor</th>
-                  <th className="px-2 py-2">Estado</th>
-                  <th className="px-2 py-2">Chat</th>
-                  <th className="px-2 py-2">Inicio</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((row) => (
-                  <tr key={row.id} className="border-b border-line last:border-0">
-                    {mixesCategories(scope) ? (
-                      <td className="px-2 py-2">{categoryLabel(row.categoria)}</td>
-                    ) : null}
-                    <td className="px-2 py-2">
-                      <Link
-                        to={`/contacts/${row.contacts.id}`}
-                        className="text-accent hover:underline"
-                      >
-                        {[row.contacts.name, row.contacts.last_name].filter(Boolean).join(' ')}
-                        {row.contacts.phone ? ` · ${row.contacts.phone}` : ''}
-                      </Link>
-                    </td>
-                    <td className="px-2 py-2">
-                      {row.channel ? channelLabel(row.channel) : '—'}
-                      {row.source_label ? (
-                        <div className="text-xs text-muted">{row.source_label}</div>
-                      ) : null}
-                    </td>
-                    <td className="px-2 py-2">{row.assigned_user_label || 'Sin asignar'}</td>
-                    <td className="px-2 py-2">{row.lead_status?.label || '—'}</td>
-                    <td className="px-2 py-2">
-                      <LeadOpenChatButton
-                        contactId={row.contacts.id}
-                        conversationId={row.conversation_id}
-                        cameWithInbound={Boolean(row.conversation_id)}
-                      />
-                    </td>
-                    <td className="px-2 py-2">{formatDateTime(row.started_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <InboxListPager
-            page={pageSafe}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            ariaLabel="Paginación de oportunidades"
-          />
-        </>
-      )}
-    </section>
   )
 }
 
@@ -436,8 +277,8 @@ function LeadsUnifiedList() {
         <div>
           <h2 className="font-medium">
             {channel
-              ? `Recientes · ${channelFilterLabel}`
-              : 'Recientes (todos los canales)'}
+              ? `Captaciones · ${channelFilterLabel}`
+              : 'Captaciones (todos los canales)'}
           </h2>
           {dateRangeLabel ? (
             <p className="mt-1 text-sm text-muted">{dateRangeLabel}</p>
@@ -633,95 +474,10 @@ function LeadsUnifiedList() {
             page={pageSafe}
             totalPages={totalPages}
             onPageChange={setPage}
-            ariaLabel="Paginación de leads"
+            ariaLabel="Paginación de captaciones"
           />
         </>
       )}
-    </section>
-  )
-}
-
-type StatusRow = {
-  id: number
-  slug: string
-  label: string
-  sort_order: number
-  is_default: boolean
-  is_terminal: boolean
-  active: boolean
-}
-
-function LeadStatusesAdmin() {
-  const [statuses, setStatuses] = useState<StatusRow[]>([])
-  const [label, setLabel] = useState('')
-  const [slug, setSlug] = useState('')
-
-  async function reload() {
-    const r = await apiClient.get<StatusRow[]>('/api/leads/statuses')
-    if (r.ok) setStatuses(r.data)
-  }
-
-  useEffect(() => {
-    void reload()
-  }, [])
-
-  async function onCreate(e: FormEvent) {
-    e.preventDefault()
-    const r = await apiClient.post<StatusRow>('/api/leads/statuses', {
-      slug,
-      label,
-    })
-    if (!r.ok) {
-      notify.error(r.error)
-      return
-    }
-    setLabel('')
-    setSlug('')
-    notify.success('Estado creado')
-    void reload()
-  }
-
-  return (
-    <section className="rounded-xl border border-line bg-surface-strong p-4">
-      <h2 className="mb-3 font-medium">Estados de lead</h2>
-      <ul className="mb-4 space-y-1 text-sm">
-        {statuses.map((s) => (
-          <li key={s.id}>
-            {s.label}{' '}
-            <span className="text-muted">
-              ({s.slug}
-              {s.is_default ? ' · default' : ''}
-              {!s.active ? ' · inactivo' : ''})
-            </span>
-          </li>
-        ))}
-      </ul>
-      <form onSubmit={onCreate} className="flex flex-wrap items-end gap-2">
-        <label className="text-sm">
-          <span className="text-muted">Slug</span>
-          <input
-            className="mt-1 block rounded-lg border border-line bg-bg px-3 py-2"
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            required
-          />
-        </label>
-        <label className="text-sm">
-          <span className="text-muted">Etiqueta</span>
-          <input
-            className="mt-1 block rounded-lg border border-line bg-bg px-3 py-2"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            required
-          />
-        </label>
-        <button
-          type="submit"
-          className="rounded-lg bg-accent px-4 py-2 text-sm text-white"
-        >
-          Añadir
-        </button>
-      </form>
     </section>
   )
 }

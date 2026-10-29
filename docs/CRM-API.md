@@ -146,10 +146,16 @@ Para `organic_wa`, el webhook registra una captación solo si no hay otro origen
 
 La ventana de **60 días exactos** compara cada nueva entrada con la última interacción entrante/captación previa del contacto en esa área; un mensaje saliente no amplía la ventana. Sin historial: número nuevo, elegible para reparto automático. Hasta 60 días: mismo asesor/ciclo, salvo conflicto. Más de 60 días: abre ciclo nuevo con el **asesor anterior conservado y pendiente de confirmación o cambio directo**; el estado del lead se reinicia. Nunca se borra una asignación existente como paso intermedio. `convertido`/`venta_exitosa`, o `no_interesado` dentro de 60 días, son las reglas iniciales de conflicto. El estado y la calificación de ciclos anteriores permanecen en el historial.
 
+### `GET /api/crm/education/cycles`
+
+Listado operativo de oportunidades para MALI ONE, con una fila por `education_lead_cycles.id`. Admite `area`, `channel`, `q`, `view`, `page` y `limit` (máximo 200). Las vistas son `open` (por defecto), `closed`, `review` y `unassigned`; `review` contiene ciclos abiertos cuyo asesor retenido requiere confirmación. Los conflictos de reingreso sin decisión siguen siendo entradas y se consultan con `GET /api/crm/education/leads?view=conflict`.
+
+Respuesta: `{ ok: true, data: { items, counts, total, page, limit, pages } }`. `counts` devuelve `open`, `closed`, `review` y `unassigned` bajo los mismos filtros de área, canal y búsqueda. Cada ciclo incluye contacto, asesor, estado, fechas, origen/canal de la captación más reciente, regla de asignación, curso o interés extraído del payload y conversación activa si existe.
+
 ### Gestión de leads Educación
 
 - `GET /api/crm/education/management-catalogs`: usuarios habilitados por área y estados activos por área.
-- `PATCH /api/crm/education/contacts/:id/management?area=educacion[_ca|_ep]`: `{ assigned_user_id?: number, lead_status_id?: number|null, actor_email?: string }`. Actualiza el ciclo actual y refleja la asignación en el chat, si existe. Enviar el mismo `assigned_user_id` confirma el asesor retenido tras un reingreso; otro ID lo reasigna directamente. `assigned_user_id: null` se rechaza.
+- `PATCH /api/crm/education/contacts/:id/management?area=educacion[_ca|_ep]`: `{ assigned_user_id?: number, lead_status_id?: number|null, lead_id?: number, actor_email?: string }`. Actualiza el ciclo indicado (o el actual si no se envía `lead_id`) y refleja la asignación en el chat, si existe. Enviar el mismo `assigned_user_id` confirma el asesor retenido tras un reingreso; otro ID lo reasigna directamente. `assigned_user_id: null` se rechaza.
 - `POST /api/crm/education/distribute`: `{ area: "all"|..., channel?, q?, actor_email? }`. Reparte **solo números sin historial previo** con ciclo actual sin asesor ni conflicto entre usuarios provisionados de rol `asesor_comercial` habilitados en cada área, según carga reciente de ciclos abiertos. Los regresos tras 60 días se asignan manualmente. Es idempotente respecto a ciclos ya asignados y devuelve total y distribución por área.
 - `PATCH /api/crm/education/entries/:id/review?area=...`: `{ action: "open_new"|"keep_existing"|"dismiss", actor_email? }`. Resuelve manualmente un conflicto.
 
