@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
@@ -2548,14 +2547,7 @@ export class ConversationsService {
           )
         : null;
     // Claim depends on the open lead, not only on conversation ownership.
-    if (
-      currentLeadCycle?.assigned_user_id &&
-      currentLeadCycle.assigned_user_id !== user.id
-    ) {
-      throw new ConflictException(
-        'Lead ya asignado a otro asesor; no se envió el mensaje',
-      );
-    }
+    // Cubrir está permitido: otro asesor puede responder sin robar el lead.
     if (wasUnassigned && currentLeadCycle?.assigned_user_id === user.id) {
       const inherited = await this.prisma.conversations.updateMany({
         where: { id: conversationId, assigned_user_id: null },
@@ -2592,12 +2584,16 @@ export class ConversationsService {
         conversationId,
         actorEmail: user.email,
       });
-      if (!reservation.claimed) {
-        throw new ConflictException(
-          'Lead ya asignado a otro asesor; no se envió el mensaje',
+      if (reservation.claimed) {
+        reservedLeadId = reservation.leadId;
+      } else {
+        // Carrera: otro asesor reclamó primero → enviar igual, sin robar el lead.
+        await this.educationLeads.linkConversation(
+          currentLeadCycle.id,
+          conversationId,
         );
+        reservedLeadId = currentLeadCycle.id;
       }
-      reservedLeadId = reservation.leadId;
     } else if (
       attentionV1 &&
       currentLeadCycle &&
@@ -2608,6 +2604,18 @@ export class ConversationsService {
         currentLeadCycle.id,
         conversationId,
       );
+    } else if (
+      attentionV1 &&
+      currentLeadCycle &&
+      currentLeadCycle.assigned_user_id &&
+      currentLeadCycle.assigned_user_id !== user.id
+    ) {
+      // Cubrir: responder sin cambiar el dueño del lead.
+      await this.educationLeads.linkConversation(
+        currentLeadCycle.id,
+        conversationId,
+      );
+      reservedLeadId = currentLeadCycle.id;
     } else if (wasUnassigned && (!attentionV1 || !currentLeadCycle)) {
       // Non-education / no open lead: keep conversation auto-claim before send.
       const claimed = await this.prisma.conversations.updateMany({
