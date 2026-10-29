@@ -48,6 +48,7 @@ import {
   UpdateConversationModeDto,
   LeadScoreDto,
   AssignConversationDto,
+  BulkAssignConversationsDto,
   ArchiveConversationDto,
   MessageReactionDto,
 } from './dto/conversations.dto';
@@ -114,6 +115,23 @@ export class ConversationsController {
   ): Promise<ApiResponse<ConversationAssigneesResult>> {
     assertCanManageConversations(user);
     const data = await this.conversationsService.listAssignees(user);
+    return { ok: true, data };
+  }
+
+  @Post('bulk-assign')
+  async bulkAssign(
+    @CurrentUser() user: AuthUser,
+    @Body() body: BulkAssignConversationsDto,
+  ): Promise<ApiResponse<{ updated: number }>> {
+    assertCanManageConversations(user);
+    const raw = body.assigned_user_id;
+    const assignedUserId =
+      raw === null || raw === undefined ? null : Number(raw);
+    const data = await this.conversationsService.bulkAssignConversations(
+      user,
+      body.contact_ids,
+      assignedUserId,
+    );
     return { ok: true, data };
   }
 

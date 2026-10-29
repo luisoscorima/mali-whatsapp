@@ -1,4 +1,15 @@
-import { IsBoolean, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+  ValidateIf,
+} from 'class-validator';
 import { MAX_SESSION_TEXT_LEN } from '../../settings/business-hours.util';
 
 export class ReplyConversationDto {
@@ -35,6 +46,20 @@ export class LeadScoreDto {
 
 export class AssignConversationDto {
   @IsOptional()
+  assigned_user_id?: number | null;
+}
+
+export class BulkAssignConversationsDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  contact_ids!: number[];
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsInt()
+  @Min(1)
   assigned_user_id?: number | null;
 }
 

@@ -1923,7 +1923,7 @@ export function ConversationsInboxPage() {
     contactId ? userCanUpdateContacts(user) : userCanCreateContacts(user)
 
   useEffect(() => {
-    if (!assignContext || !canAssign) return
+    if ((!assignContext && !bulkActionsOpen) || !canAssign) return
     setAssigneesLoading(true)
     void apiClient
       .get<{ assignees: ConversationAssignee[] }>('/api/conversations/assignees')
@@ -1935,7 +1935,7 @@ export function ConversationsInboxPage() {
         }
         setAssignees(result.data.assignees)
       })
-  }, [assignContext, canAssign])
+  }, [assignContext, bulkActionsOpen, canAssign])
 
   async function onAssign(assignedUserId: number | null) {
     const convId = assignContext?.conversationId
@@ -1961,7 +1961,10 @@ export function ConversationsInboxPage() {
   const segments = list?.segments ?? []
   const assignableSegments = list?.assignable_segments ?? []
   const canBulkSelect =
-    assignableSegments.length > 0 || bulkAttrDefs.length > 0
+    canAssign || assignableSegments.length > 0 || bulkAttrDefs.length > 0
+  const allowBulkUnassign = !['educacion', 'educacion_ca', 'educacion_ep'].includes(
+    user?.area ?? '',
+  )
   const bulkSegmentOptions = useMemo(
     () =>
       assignableSegments.map((seg) => ({
@@ -2039,6 +2042,34 @@ export function ConversationsInboxPage() {
       return false
     }
     notify.success(`Atributo aplicado a ${res.data.updated} contacto(s)`)
+    void loadList({ silent: true })
+    return true
+  }
+
+  async function applyBulkAssign(
+    assignedUserId: number | null,
+  ): Promise<boolean> {
+    if (!canAssign || selectedContactIds.size === 0) return false
+    if (assignedUserId == null && !allowBulkUnassign) return false
+    setBulkBusy(true)
+    const res = await apiClient.post<{ updated: number }>(
+      '/api/conversations/bulk-assign',
+      {
+        contact_ids: [...selectedContactIds],
+        assigned_user_id: assignedUserId,
+      },
+    )
+    setBulkBusy(false)
+    if (!res.ok) {
+      notify.error(res.error)
+      return false
+    }
+    notify.success(
+      assignedUserId == null
+        ? `${res.data.updated} chat(s) sin asignar`
+        : `${res.data.updated} chat(s) asignado(s)`,
+    )
+    if (selectedId) void loadDetail(selectedId)
     void loadList({ silent: true })
     return true
   }
@@ -3088,6 +3119,10 @@ export function ConversationsInboxPage() {
         busy={bulkBusy}
         onApplySegment={applyBulkSegment}
         onApplyAttribute={applyBulkAttribute}
+        assignees={canAssign ? assignees : undefined}
+        assigneesLoading={canAssign ? assigneesLoading : false}
+        allowUnassign={allowBulkUnassign}
+        onApplyAssign={canAssign ? applyBulkAssign : undefined}
       />
       {confirmDialog}
       {linePickerDialog}

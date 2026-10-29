@@ -23,6 +23,12 @@ export type BulkSegmentOption = {
   group?: string
 }
 
+export type BulkAssigneeOption = {
+  id: number
+  label: string
+  email: string
+}
+
 type BulkContactActionsDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -32,10 +38,16 @@ type BulkContactActionsDialogProps = {
   busy?: boolean
   onApplySegment: (segmentSlug: string) => Promise<boolean>
   onApplyAttribute: (attrKey: string, attrValue: string) => Promise<boolean>
+  assignees?: BulkAssigneeOption[]
+  assigneesLoading?: boolean
+  allowUnassign?: boolean
+  onApplyAssign?: (assignedUserId: number | null) => Promise<boolean>
 }
 
 const FIELD =
   'w-full rounded border border-line bg-bg px-2 py-1.5 text-sm'
+
+const UNASSIGN_VALUE = '__none__'
 
 export function BulkContactActionsDialog({
   open,
@@ -46,11 +58,17 @@ export function BulkContactActionsDialog({
   busy = false,
   onApplySegment,
   onApplyAttribute,
+  assignees = [],
+  assigneesLoading = false,
+  allowUnassign = true,
+  onApplyAssign,
 }: BulkContactActionsDialogProps) {
   const [segmentSlug, setSegmentSlug] = useState('')
   const [attrKey, setAttrKey] = useState('')
   const [attrValue, setAttrValue] = useState('')
+  const [assigneeValue, setAssigneeValue] = useState('')
 
+  const showAssign = typeof onApplyAssign === 'function'
   const showAttrCategory = useMemo(() => {
     const cats = new Set(
       attributeDefinitions.map((d) => d.category || 'general'),
@@ -81,11 +99,24 @@ export function BulkContactActionsDialog({
     [attributeDefinitions, showAttrCategory],
   )
 
+  const assigneeOptions = useMemo(() => {
+    const options = assignees.map((a) => ({
+      value: String(a.id),
+      label: a.label,
+      keywords: a.email,
+    }))
+    if (allowUnassign) {
+      return [{ value: UNASSIGN_VALUE, label: 'Sin asignar' }, ...options]
+    }
+    return options
+  }, [assignees, allowUnassign])
+
   useEffect(() => {
     if (!open) {
       setSegmentSlug('')
       setAttrKey('')
       setAttrValue('')
+      setAssigneeValue('')
     }
   }, [open])
 
@@ -109,6 +140,16 @@ export function BulkContactActionsDialog({
     }
   }
 
+  async function submitAssign(e: FormEvent) {
+    e.preventDefault()
+    if (!onApplyAssign || !assigneeValue || selectedCount === 0 || busy) return
+    const assignedUserId =
+      assigneeValue === UNASSIGN_VALUE ? null : Number(assigneeValue)
+    if (assignedUserId != null && !Number.isInteger(assignedUserId)) return
+    const ok = await onApplyAssign(assignedUserId)
+    if (ok) setAssigneeValue('')
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[min(96vw,420px)]">
@@ -120,6 +161,32 @@ export function BulkContactActionsDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="flex flex-col gap-4">
+          {showAssign ? (
+            <form onSubmit={(e) => void submitAssign(e)} className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-ink">Asesor</label>
+              {assigneesLoading ? (
+                <p className="text-sm text-muted">Cargando asesores…</p>
+              ) : (
+                <SearchableSelect
+                  value={assigneeValue}
+                  onChange={setAssigneeValue}
+                  placeholder="Elegir asesor"
+                  searchPlaceholder="Buscar asesor…"
+                  clearOption={{ label: 'Elegir asesor' }}
+                  aria-label="Elegir asesor"
+                  options={assigneeOptions}
+                />
+              )}
+              <button
+                type="submit"
+                disabled={busy || assigneesLoading || !assigneeValue}
+                className="small-btn primary self-start"
+              >
+                {busy ? '…' : 'Asignar'}
+              </button>
+            </form>
+          ) : null}
+
           {segments.length > 0 ? (
             <form onSubmit={(e) => void submitSegment(e)} className="flex flex-col gap-2">
               <label className="text-sm font-medium text-ink">Segmento</label>

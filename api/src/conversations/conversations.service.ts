@@ -119,6 +119,11 @@ import {
 } from './inbox-query.util';
 import { formatAdvisorLabel } from '../users/advisor-label.util';
 import {
+  exactOpenCycleWhere,
+  isEducationAttentionArea,
+} from '../leads/education-lead-context.util';
+import { projectLeadAssignee } from '../leads/education-lead-lifecycle.util';
+import {
   formatLeadScoreLabel,
   isValidLeadScore,
 } from '../leads/lead-score.util';
@@ -1785,6 +1790,89 @@ export class ConversationsService {
     };
   }
 
+  private async resolveAssigneeLabel(
+    area: string,
+    assignedUserId: number | null,
+  ): Promise<string | null> {
+    if (isEducationAttentionArea(area) && assignedUserId === null) {
+      throw new BadRequestException('Para reasignar, selecciona otro asesor');
+    }
+    if (assignedUserId == null) return null;
+    if (!Number.isInteger(assignedUserId) || assignedUserId <= 0) {
+      throw new BadRequestException('Asesor invalido');
+    }
+    const assignee = await this.prisma.users.findFirst({
+      where: {
+        id: assignedUserId,
+        is_provisioned: true,
+        OR: [
+          { area },
+          { is_master: true },
+          { user_areas: { some: { area } } },
+        ],
+      },
+      select: { id: true, email: true, first_name: true, last_name: true },
+    });
+    if (!assignee) {
+      throw new BadRequestException('Asesor no disponible en el area');
+    }
+    return formatAdvisorLabel(assignee);
+  }
+
+  private async applyConversationAssignment(
+    tx: Prisma.TransactionClient,
+    conversation: {
+      id: number;
+      area: string;
+      contact_id: number | null;
+      contacts: { person_id: number } | null;
+      whatsapp_line: { program_id: number | null } | null;
+    },
+    assignedUserId: number | null,
+  ): Promise<void> {
+    const now = new Date();
+    await tx.conversations.update({
+      where: { id: conversation.id },
+      data: {
+        assigned_user_id: assignedUserId,
+        assigned_at: assignedUserId ? now : null,
+        updated_at: now,
+      },
+    });
+    if (
+      !conversation.contact_id ||
+      !conversation.contacts ||
+      !isEducationAttentionArea(conversation.area)
+    ) {
+      return;
+    }
+    const cycle = await tx.education_lead_cycles.findFirst({
+      where: exactOpenCycleWhere({
+        personId: conversation.contacts.person_id,
+        area: conversation.area,
+        programId: conversation.whatsapp_line?.program_id ?? null,
+      }),
+      orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+      select: { id: true, first_assigned_at: true },
+    });
+    if (!cycle) return;
+    await tx.education_lead_cycles.update({
+      where: { id: cycle.id },
+      data: {
+        assigned_user_id: assignedUserId,
+        requires_review: assignedUserId === null,
+        first_assigned_at:
+          assignedUserId != null
+            ? (cycle.first_assigned_at ?? now)
+            : cycle.first_assigned_at,
+        updated_at: now,
+      },
+    });
+    if (assignedUserId != null) {
+      await projectLeadAssignee(tx, cycle.id, assignedUserId, now);
+    }
+  }
+
   async assignConversation(
     user: AuthUser,
     conversationId: number,
@@ -1799,69 +1887,27 @@ export class ConversationsService {
     const area = user.area;
     const conversation = await this.prisma.conversations.findFirst({
       where: this.conversationLookup(area, conversationId),
-      select: { id: true, assigned_user_id: true, contact_id: true },
+      select: {
+        id: true,
+        area: true,
+        assigned_user_id: true,
+        contact_id: true,
+        contacts: { select: { person_id: true } },
+        whatsapp_line: { select: { program_id: true } },
+      },
     });
     if (!conversation) {
       throw new NotFoundException('Conversacion no encontrada');
     }
 
-    let assigneeLabel: string | null = null;
-    if (
-      ['educacion', 'educacion_ca', 'educacion_ep'].includes(area) &&
-      assignedUserId === null
-    ) {
-      throw new BadRequestException('Para reasignar, selecciona otro asesor');
-    }
-    if (assignedUserId != null) {
-      if (!Number.isInteger(assignedUserId) || assignedUserId <= 0) {
-        throw new BadRequestException('Asesor invalido');
-      }
-      const assignee = await this.prisma.users.findFirst({
-        where: {
-          id: assignedUserId,
-          is_provisioned: true,
-          OR: [
-            { area },
-            { is_master: true },
-            { user_areas: { some: { area } } },
-          ],
-        },
-        select: { id: true, email: true, first_name: true, last_name: true },
-      });
-      if (!assignee) {
-        throw new BadRequestException('Asesor no disponible en el area');
-      }
-      assigneeLabel = formatAdvisorLabel(assignee);
-    }
+    const assigneeLabel = await this.resolveAssigneeLabel(area, assignedUserId);
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.conversations.update({
-        where: { id: conversationId },
-        data: {
-          assigned_user_id: assignedUserId,
-          assigned_at: assignedUserId ? new Date() : null,
-          updated_at: new Date(),
-        },
-      });
-      if (
-        conversation.contact_id &&
-        ['educacion', 'educacion_ca', 'educacion_ep'].includes(area)
-      ) {
-        const cycle = await tx.education_lead_cycles.findFirst({
-          where: { contact_id: conversation.contact_id, area },
-          orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
-          select: { id: true },
-        });
-        if (cycle)
-          await tx.education_lead_cycles.update({
-            where: { id: cycle.id },
-            data: {
-              assigned_user_id: assignedUserId,
-              requires_review: assignedUserId === null,
-              updated_at: new Date(),
-            },
-          });
-      }
+      await this.applyConversationAssignment(
+        tx,
+        conversation,
+        assignedUserId,
+      );
     });
 
     await this.auditLog.write({
@@ -1883,6 +1929,77 @@ export class ConversationsService {
       assigned_user_id: assignedUserId,
       assigned_user_label: assigneeLabel,
     };
+  }
+
+  async bulkAssignConversations(
+    user: AuthUser,
+    contactIds: number[],
+    assignedUserId: number | null,
+  ): Promise<{ updated: number }> {
+    if (!this.canAssignConversations(user)) {
+      throw new ForbiddenException('No puedes asignar conversaciones');
+    }
+    const ids = [
+      ...new Set(
+        contactIds.filter((id) => Number.isInteger(id) && id > 0),
+      ),
+    ];
+    if (ids.length === 0) {
+      throw new BadRequestException('Sin contactos');
+    }
+    const area = user.area;
+    const scope = businessReadScope(area);
+    const access = restrictedAccess();
+    const assigneeLabel = await this.resolveAssigneeLabel(area, assignedUserId);
+    const conversations = await this.prisma.conversations.findMany({
+      where: {
+        area: { in: scope.areas },
+        contact_id: { in: ids },
+        ...(access
+          ? { whatsapp_line_id: { in: access.lineIds.length ? access.lineIds : [-1] } }
+          : {}),
+      },
+      select: {
+        id: true,
+        area: true,
+        assigned_user_id: true,
+        contact_id: true,
+        contacts: { select: { person_id: true } },
+        whatsapp_line: { select: { program_id: true } },
+      },
+    });
+    if (conversations.length === 0) {
+      return { updated: 0 };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const conversation of conversations) {
+        await this.applyConversationAssignment(
+          tx,
+          conversation,
+          assignedUserId,
+        );
+      }
+    });
+
+    await this.auditLog.write({
+      event_type: AuditEvent.CONVERSATION_ASSIGN,
+      message:
+        assignedUserId == null
+          ? `${conversations.length} conversación(es) sin asignar (masivo)`
+          : `${conversations.length} conversación(es) asignada(s) a ${assigneeLabel} (masivo)`,
+      actor: auditActor(user),
+      meta: {
+        contact_ids: ids,
+        conversation_ids: conversations.map((c) => c.id),
+        to_user_id: assignedUserId,
+        to_user_label: assigneeLabel,
+        source: 'bulk',
+        updated: conversations.length,
+      },
+    });
+
+    return { updated: conversations.length };
   }
 
   async listOpenChatLines(
