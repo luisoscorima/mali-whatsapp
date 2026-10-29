@@ -56,6 +56,8 @@ export type InboxListItem = {
 export type InboxListResult = {
   items: InboxListItem[];
   total_count: number;
+  /** false cuando el total es estimado (p. ej. búsqueda sin COUNT). */
+  total_exact: boolean;
   page: number;
   pages: number;
   unread_count: number;
@@ -67,6 +69,8 @@ export type InboxListResult = {
   categories: Array<{ slug: string; label: string }>;
   filters: {
     q: string;
+    /** Si true, también busca en cuerpo de mensajes (más lento). */
+    qm: boolean;
     chat: InboxChatFilter;
     window_max: InboxWindowMaxFilter;
     from: string | null;

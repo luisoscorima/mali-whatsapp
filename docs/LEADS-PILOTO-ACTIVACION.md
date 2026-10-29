@@ -39,17 +39,18 @@ En la copia:
 
 ## Estado prod (2026-10-29)
 
-- Migración aplicada; binario `d5fe33d`.
+- Migración aplicada; binario en prod `a719065` (lifecycle + `education_lead_open_conflicts`).
 - 188 conflictos resueltos con lote documentado (`docs/LEADS-BASES-20261029.md`); índices únicos **instalados**.
-- Flag `leads.attention_v1` **sigue ausente** (apagado).
-- Históricos 60d: abiertos a propósito.
+- Smoke readonly pre-activación: OK (conflictos 0, índices presentes, health OK, flag ausente).
+- **Flag activado** con autorización explícita: `educacion` / `leads.attention_v1` = `1` a las **2026-10-29 15:06:43 UTC**.
+- Smoke readonly post-activación: flag `1`, health OK, conflictos 0, alertas 0, `auto_expire_due` 0, ~3.564 históricos 60d sin deadline (sin tocar).
+- Históricos 60d: siguen abiertos a propósito.
 
-## Orden restante para encender el piloto
+## Pendiente tras el encendido
 
-1. Smoke de negocio con flag aún apagado.
-2. Activar `leads.attention_v1=1` solo con autorización.
-3. Smoke piloto; CRM `GET /crm/education/cycles`.
-4. Lote histórico de vencimiento: opcional / manual; no urgente.
+1. Smoke de negocio en piloto (claim de lead, alerta en lead nuevo, CTA “Iniciar atención”, CRM `GET /crm/education/cycles`).
+2. Lote histórico de vencimiento: opcional / manual; no urgente.
+3. Prospectia: sin cambio hasta decisión explícita.
 
 ## Scripts
 

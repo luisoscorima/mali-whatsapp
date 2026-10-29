@@ -2,15 +2,16 @@
 
 ## Objetivo
 
-Dejar el modelo Lead vs Contacto **enforceable** en producción para la siguiente fase (MALI ONE), sin activar aún el comportamiento de piloto (`leads.attention_v1`).
+Dejar el modelo Lead vs Contacto **enforceable** en producción para la siguiente fase (MALI ONE). El candado de datos se cerró con el flag apagado; el piloto de atención se activó el mismo día con autorización.
 
 ## Qué se hizo en producción
 
-1. Deploy `d5fe33d` + migración `20261028120000_leads_additive_lifecycle` (ya aplicada).
+1. Deploy lifecycle (`d5fe33d` → luego `a719065`) + migración `20261028120000_leads_additive_lifecycle` (ya aplicada).
 2. Dry-run de resolución de 188 grupos competidores (`leads-conflicts-propose.cjs`).
 3. **Apply** del lote con reglas de producto (ver abajo).
 4. Creación de índices únicos diferidos (`deferred_open_unique.sql`).
-5. Flag `leads.attention_v1` **sigue ausente / apagado**.
+5. Smoke readonly OK con flag ausente.
+6. **Activación autorizada** de `leads.attention_v1=1` (2026-10-29 15:06:43 UTC); smoke post-activación OK. Detalle en `docs/LEADS-PILOTO-ACTIVACION.md`.
 
 Artefactos en el servidor: `~/mali-whatsapp/backups/leads-conflicts-propose-20261029/` y `~/mali-whatsapp/backups/leads-conflicts-apply-*`.
 
@@ -31,13 +32,13 @@ Tras `deferred_open_unique.sql`:
 
 Sin ese candado, MALI ONE podría crear/asumir duplicados abiertos. Con él, la BD rechaza un segundo abierto.
 
-## Qué es el flag (aún no)
+## Qué es el flag (activado 2026-10-29)
 
 `app_settings`: `area=educacion`, `key=leads.attention_v1`, `value=1`.
 
 Enciende: alertas de nuevo lead, claim de lead antes de enviar, CTA “iniciar atención”, expire automático de ciclos **con** `inactivity_deadline_at`.
 
-**No activar** hasta smoke de negocio / fase piloto. El modelo ya está sentado con flag apagado.
+Estado actual: **activo** tras autorización. Reversión: `value=0` (conservar columnas aditivas).
 
 ## Scripts
 

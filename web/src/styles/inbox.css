@@ -344,6 +344,16 @@ html[data-theme='dark'] .inbox-layout-wa {
 }
 .inbox-filter-chip:hover { border-color: var(--accent); }
 .inbox-filter-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.inbox-filter-chip--static {
+  cursor: default;
+  opacity: 0.9;
+}
+.inbox-filter-chip--static:hover { border-color: var(--line); }
+
+.inbox-chat-list.is-searching {
+  opacity: 0.55;
+  pointer-events: none;
+}
 
 .inbox-layout-wa .inbox-chat-item-btn {
   flex: 1;

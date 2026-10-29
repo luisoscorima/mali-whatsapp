@@ -115,6 +115,7 @@ import {
   parseInboxDateParam,
   parseInboxWindowMaxFilter,
   parseSegmentQueryParam,
+  inboxSearchMayScanMessages,
   resolveInboxDateFilter,
 } from './inbox-query.util';
 import { formatAdvisorLabel } from '../users/advisor-label.util';
@@ -408,83 +409,71 @@ export class ConversationsService {
     return Prisma.sql`NULLIF(TRIM(CONCAT(COALESCE(${Prisma.raw(alias)}.name, ''), ' ', COALESCE(${Prisma.raw(alias)}.last_name, ''))), '')`;
   }
 
-  /** Contacto enlazado, o el de misma área/teléfono si la conversación aún no tiene contact_id. */
-  private inboxResolvedContactJoinSql(area: string): Prisma.Sql {
-    return Prisma.sql`LEFT JOIN contacts ct ON ct.id = COALESCE(
-      c.contact_id,
-      (
-        SELECT ct_phone.id
-        FROM contacts ct_phone
-        WHERE ${contactAreaPredicate('ct_phone', area)}
-          AND ((c.whatsapp_user_id IS NOT NULL AND ct_phone.whatsapp_user_id = c.whatsapp_user_id)
-            OR (c.phone IS NOT NULL AND ct_phone.phone = c.phone))
-        ORDER BY CASE WHEN ct_phone.whatsapp_user_id = c.whatsapp_user_id THEN 0 ELSE 1 END,
-          ct_phone.updated_at DESC NULLS LAST
-        LIMIT 1
-      )
-    )`;
+  /**
+   * Join directo por contact_id. Evita el subquery correlacionado que volvía
+   * la búsqueda en O(convs × contacts). Completar huérfanos con el backfill
+   * `api/scripts/backfill-conversation-contact-id.sql`.
+   */
+  private inboxResolvedContactJoinSql(_area?: string): Prisma.Sql {
+    return Prisma.sql`LEFT JOIN contacts ct ON ct.id = c.contact_id`;
   }
 
-  private buildInboxSegmentSearchSql(searchPat: string): Prisma.Sql {
-    return Prisma.sql` OR EXISTS (
-      SELECT 1 FROM contact_segments cs
-      JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
-      WHERE cs.contact_id = ct.id
-      AND (sd.label ILIKE ${searchPat} ESCAPE '!' OR sd.slug ILIKE ${searchPat} ESCAPE '!')
-    )`;
-  }
-
-  private buildInboxAttributeSearchSql(searchPat: string): Prisma.Sql {
-    return Prisma.sql` OR EXISTS (
-      SELECT 1 FROM contact_attributes ca
-      WHERE ca.contact_id = ct.id
-      AND (
-        ca.attr_key ILIKE ${searchPat} ESCAPE '!'
-        OR ca.attr_value ILIKE ${searchPat} ESCAPE '!'
-      )
-    )`;
-  }
-
-  private buildInboxSearchSql(searchQ: string): Prisma.Sql {
+  /** Búsqueda rápida: identidad. Mensajes solo con flag + umbral de longitud. */
+  private buildInboxSearchSql(
+    searchQ: string,
+    opts?: { includeMessages?: boolean },
+  ): Prisma.Sql {
     const searchPat = `%${escapeForLikePattern(searchQ)}%`;
     const usernameSearchPat = `%${escapeForLikePattern(searchQ.replace(/^@/, ''))}%`;
-    const segmentSql = this.buildInboxSegmentSearchSql(searchPat);
-    const attributeSql = this.buildInboxAttributeSearchSql(searchPat);
     const digitsOnly = searchQ.replace(/\D/g, '');
-    if (digitsOnly) {
-      const digitsPat = `%${digitsOnly}%`;
-      return Prisma.sql` AND (
-        EXISTS (
+    const includeMessages = inboxSearchMayScanMessages(
+      searchQ,
+      Boolean(opts?.includeMessages),
+    );
+    const messageSql = includeMessages
+      ? Prisma.sql` OR EXISTS (
           SELECT 1 FROM chat_messages m
           WHERE m.conversation_id = c.id
           AND m.body_text ILIKE ${searchPat} ESCAPE '!'
-        )
-        OR COALESCE(ct.name, '') ILIKE ${searchPat} ESCAPE '!'
+        )`
+      : Prisma.empty;
+    const identitySql = digitsOnly
+      ? Prisma.sql`
+        COALESCE(ct.name, '') ILIKE ${searchPat} ESCAPE '!'
         OR COALESCE(ct.last_name, '') ILIKE ${searchPat} ESCAPE '!'
         OR COALESCE(ct.phone, '') ILIKE ${searchPat} ESCAPE '!'
         OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
         OR COALESCE(c.wa_profile_name, '') ILIKE ${searchPat} ESCAPE '!'
         OR COALESCE(c.wa_username, '') ILIKE ${usernameSearchPat} ESCAPE '!'
-        OR regexp_replace(COALESCE(ct.phone, ''), '\\D', '', 'g') LIKE ${digitsPat}
-        OR regexp_replace(COALESCE(c.phone, ''), '\\D', '', 'g') LIKE ${digitsPat}
-        ${segmentSql}
-        ${attributeSql}
+        OR regexp_replace(COALESCE(ct.phone, ''), '\\D', '', 'g') LIKE ${`%${digitsOnly}%`}
+        OR regexp_replace(COALESCE(c.phone, ''), '\\D', '', 'g') LIKE ${`%${digitsOnly}%`}
+      `
+      : Prisma.sql`
+        COALESCE(ct.name, '') ILIKE ${searchPat} ESCAPE '!'
+        OR COALESCE(ct.last_name, '') ILIKE ${searchPat} ESCAPE '!'
+        OR COALESCE(ct.phone, '') ILIKE ${searchPat} ESCAPE '!'
+        OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
+        OR COALESCE(c.wa_profile_name, '') ILIKE ${searchPat} ESCAPE '!'
+        OR COALESCE(c.wa_username, '') ILIKE ${usernameSearchPat} ESCAPE '!'
+      `;
+    return Prisma.sql` AND (${identitySql}${messageSql})`;
+  }
+
+  private buildVirtualContactSearchSql(searchQ: string): Prisma.Sql {
+    const contactPat = `%${escapeForLikePattern(searchQ)}%`;
+    const digitsOnly = searchQ.replace(/\D/g, '');
+    if (digitsOnly) {
+      return Prisma.sql` AND (
+        COALESCE(ct.name, '') ILIKE ${contactPat} ESCAPE '!'
+        OR COALESCE(ct.last_name, '') ILIKE ${contactPat} ESCAPE '!'
+        OR COALESCE(ct.phone, '') ILIKE ${contactPat} ESCAPE '!'
+        OR regexp_replace(COALESCE(ct.phone, ''), '\\D', '', 'g') LIKE ${`%${digitsOnly}%`}
       )`;
     }
     return Prisma.sql` AND (
-      EXISTS (
-        SELECT 1 FROM chat_messages m
-        WHERE m.conversation_id = c.id
-        AND m.body_text ILIKE ${searchPat} ESCAPE '!'
-      )
-      OR COALESCE(ct.name, '') ILIKE ${searchPat} ESCAPE '!'
-      OR COALESCE(ct.last_name, '') ILIKE ${searchPat} ESCAPE '!'
-      OR COALESCE(ct.phone, '') ILIKE ${searchPat} ESCAPE '!'
-      OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
-      OR COALESCE(c.wa_profile_name, '') ILIKE ${searchPat} ESCAPE '!'
-      OR COALESCE(c.wa_username, '') ILIKE ${usernameSearchPat} ESCAPE '!'
-      ${segmentSql}
-      ${attributeSql}
+      COALESCE(ct.name, '') ILIKE ${contactPat} ESCAPE '!'
+      OR COALESCE(ct.last_name, '') ILIKE ${contactPat} ESCAPE '!'
+      OR COALESCE(ct.phone, '') ILIKE ${contactPat} ESCAPE '!'
     )`;
   }
 
@@ -549,10 +538,14 @@ export class ConversationsService {
     page: number,
     limit: number,
     categories: string[] | null = null,
+    searchMessages = false,
+    /** Filas extra para detectar “hay más” sin COUNT (p. ej. 1). */
+    probeExtra = 0,
   ): Promise<InboxRow[]> {
     const segmentSql = buildConversationSegmentSql(segmentFilter);
+    const includeMessages = inboxSearchMayScanMessages(searchQ, searchMessages);
     const searchSql = searchQ
-      ? this.buildInboxSearchSql(searchQ)
+      ? this.buildInboxSearchSql(searchQ, { includeMessages })
       : Prisma.empty;
     const chatSql = this.buildChatFilterSql(chatFilter, userId, {
       searchAll: Boolean(searchQ) && chatFilter === 'all',
@@ -565,7 +558,11 @@ export class ConversationsService {
     );
     const hasDateFilter = Boolean(dateFrom || dateTo);
     const offset = (page - 1) * limit;
-    const searchPat = searchQ ? `%${escapeForLikePattern(searchQ)}%` : null;
+    const fetchLimit = limit + Math.max(0, probeExtra);
+    const searchPat =
+      includeMessages && searchQ
+        ? `%${escapeForLikePattern(searchQ)}%`
+        : null;
     const matchedMessageSql = searchPat
       ? Prisma.sql`(
           SELECT m.id FROM chat_messages m
@@ -642,7 +639,7 @@ export class ConversationsService {
       ${windowSql}
       ${dateSql}
       ORDER BY c.inbox_unread DESC, c.last_message_at DESC
-      LIMIT ${limit} OFFSET ${offset}
+      LIMIT ${fetchLimit} OFFSET ${offset}
     `);
 
     if (
@@ -650,33 +647,14 @@ export class ConversationsService {
       chatFilter !== 'all' ||
       windowMax != null ||
       hasDateFilter ||
-      page !== 1
+      page !== 1 ||
+      probeExtra > 0
     ) {
       return rows;
     }
 
     const contactSegmentSql = buildContactSegmentSql(segmentFilter);
-    const contactPat = `%${escapeForLikePattern(searchQ)}%`;
-    const contactSegmentSearchSql = this.buildInboxSegmentSearchSql(contactPat);
-    const contactAttributeSearchSql =
-      this.buildInboxAttributeSearchSql(contactPat);
-    const contactDigits = searchQ.replace(/\D/g, '');
-    const contactSearchSql = contactDigits
-      ? Prisma.sql` AND (
-          COALESCE(ct.name, '') ILIKE ${contactPat} ESCAPE '!'
-          OR COALESCE(ct.last_name, '') ILIKE ${contactPat} ESCAPE '!'
-          OR COALESCE(ct.phone, '') ILIKE ${contactPat} ESCAPE '!'
-          OR regexp_replace(COALESCE(ct.phone, ''), '\\D', '', 'g') LIKE ${`%${contactDigits}%`}
-          ${contactSegmentSearchSql}
-          ${contactAttributeSearchSql}
-        )`
-      : Prisma.sql` AND (
-          COALESCE(ct.name, '') ILIKE ${contactPat} ESCAPE '!'
-          OR COALESCE(ct.last_name, '') ILIKE ${contactPat} ESCAPE '!'
-          OR COALESCE(ct.phone, '') ILIKE ${contactPat} ESCAPE '!'
-          ${contactSegmentSearchSql}
-          ${contactAttributeSearchSql}
-        )`;
+    const contactSearchSql = this.buildVirtualContactSearchSql(searchQ);
 
     const virtualRows = await this.prisma.$queryRaw<InboxRow[]>(Prisma.sql`
       SELECT
@@ -739,10 +717,12 @@ export class ConversationsService {
     includeUnreadOutside: boolean,
     userId: number,
     categories: string[] | null = null,
+    searchMessages = false,
   ): Promise<number> {
     const segmentSql = buildConversationSegmentSql(segmentFilter);
+    const includeMessages = inboxSearchMayScanMessages(searchQ, searchMessages);
     const searchSql = searchQ
-      ? this.buildInboxSearchSql(searchQ)
+      ? this.buildInboxSearchSql(searchQ, { includeMessages })
       : Prisma.empty;
     const chatSql = this.buildChatFilterSql(chatFilter, userId, {
       searchAll: Boolean(searchQ) && chatFilter === 'all',
@@ -778,27 +758,7 @@ export class ConversationsService {
     }
 
     const contactSegmentSql = buildContactSegmentSql(segmentFilter);
-    const contactPat = `%${escapeForLikePattern(searchQ)}%`;
-    const contactSegmentSearchSql = this.buildInboxSegmentSearchSql(contactPat);
-    const contactAttributeSearchSql =
-      this.buildInboxAttributeSearchSql(contactPat);
-    const contactDigits = searchQ.replace(/\D/g, '');
-    const contactSearchSql = contactDigits
-      ? Prisma.sql` AND (
-          COALESCE(ct.name, '') ILIKE ${contactPat} ESCAPE '!'
-          OR COALESCE(ct.last_name, '') ILIKE ${contactPat} ESCAPE '!'
-          OR COALESCE(ct.phone, '') ILIKE ${contactPat} ESCAPE '!'
-          OR regexp_replace(COALESCE(ct.phone, ''), '\\D', '', 'g') LIKE ${`%${contactDigits}%`}
-          ${contactSegmentSearchSql}
-          ${contactAttributeSearchSql}
-        )`
-      : Prisma.sql` AND (
-          COALESCE(ct.name, '') ILIKE ${contactPat} ESCAPE '!'
-          OR COALESCE(ct.last_name, '') ILIKE ${contactPat} ESCAPE '!'
-          OR COALESCE(ct.phone, '') ILIKE ${contactPat} ESCAPE '!'
-          ${contactSegmentSearchSql}
-          ${contactAttributeSearchSql}
-        )`;
+    const contactSearchSql = this.buildVirtualContactSearchSql(searchQ);
 
     const virtualRows = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
       SELECT COUNT(*)::int AS n
@@ -883,6 +843,16 @@ export class ConversationsService {
   ): Promise<InboxListResult> {
     const area = user.area;
     const searchQ = String(query.q ?? '').trim();
+    const searchMessagesRaw = Array.isArray(query.qm)
+      ? query.qm[0]
+      : query.qm;
+    const searchMessages =
+      searchQ.length > 0 &&
+      ['1', 'true', 'yes'].includes(
+        String(searchMessagesRaw ?? '')
+          .trim()
+          .toLowerCase(),
+      );
     const chat = parseInboxChatFilter(
       Array.isArray(query.chat) ? query.chat[0] : query.chat,
     );
@@ -913,37 +883,47 @@ export class ConversationsService {
     const pageRaw = Array.isArray(query.page) ? query.page[0] : query.page;
     const page = Math.max(1, Number(pageRaw) || 1);
     const limit = INBOX_LIST_PAGE_SIZE;
+    // Con búsqueda: sin COUNT exacto; pedimos limit+1 para saber si hay más.
+    const skipExactCount = Boolean(searchQ);
 
     const [
       segments,
       assignableSegments,
-      totalCount,
+      totalCountExact,
       aiAreaEnabled,
       unreadCount,
       archivedCount,
     ] = await Promise.all([
       Promise.resolve(segmentOptions),
       this.loadAssignableSegmentOptions(area),
-      this.countInboxConversations(
-        area,
-        segmentFilter,
-        searchQ,
-        chat,
-        windowMax,
-        dateFilter.appliedFrom,
-        dateFilter.appliedTo,
-        dateFilter.includeUnreadOutside,
-        user.id,
-        categories,
-      ),
+      skipExactCount
+        ? Promise.resolve(-1)
+        : this.countInboxConversations(
+            area,
+            segmentFilter,
+            searchQ,
+            chat,
+            windowMax,
+            dateFilter.appliedFrom,
+            dateFilter.appliedTo,
+            dateFilter.includeUnreadOutside,
+            user.id,
+            categories,
+            searchMessages,
+          ),
       this.loadAiAreaEnabled(area),
       this.countInboxUnread(area, segmentFilter, categories),
       this.countInboxArchived(area, segmentFilter, categories),
     ]);
 
-    const pages = totalCount > 0 ? Math.ceil(totalCount / limit) : 0;
-    const pageClamped = pages > 0 ? Math.min(page, pages) : 1;
-    const listRows = await this.fetchInboxConversations(
+    let pageClamped = page;
+    if (!skipExactCount) {
+      const pagesExact =
+        totalCountExact > 0 ? Math.ceil(totalCountExact / limit) : 0;
+      pageClamped = pagesExact > 0 ? Math.min(page, pagesExact) : 1;
+    }
+
+    const listRowsRaw = await this.fetchInboxConversations(
       area,
       segmentFilter,
       searchQ,
@@ -956,11 +936,32 @@ export class ConversationsService {
       pageClamped,
       limit,
       categories,
+      searchMessages,
+      skipExactCount ? 1 : 0,
     );
+
+    let totalCount: number;
+    let pages: number;
+    let totalExact: boolean;
+    let listRows = listRowsRaw;
+
+    if (skipExactCount) {
+      const hasMore = listRowsRaw.length > limit;
+      listRows = hasMore ? listRowsRaw.slice(0, limit) : listRowsRaw;
+      const shown = (pageClamped - 1) * limit + listRows.length;
+      totalCount = hasMore ? shown + 1 : shown;
+      pages = hasMore ? pageClamped + 1 : pageClamped;
+      totalExact = false;
+    } else {
+      totalCount = totalCountExact;
+      pages = totalCount > 0 ? Math.ceil(totalCount / limit) : 0;
+      totalExact = true;
+    }
 
     return {
       items: listRows.map((row) => this.mapListRow(row)),
       total_count: totalCount,
+      total_exact: totalExact,
       page: pageClamped,
       pages,
       unread_count: unreadCount,
@@ -972,6 +973,7 @@ export class ConversationsService {
       categories: categoryOptions,
       filters: {
         q: searchQ,
+        qm: searchMessages,
         chat,
         window_max: windowMax,
         from: dateFrom,

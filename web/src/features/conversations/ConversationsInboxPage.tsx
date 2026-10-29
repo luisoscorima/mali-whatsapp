@@ -419,6 +419,7 @@ type InboxListItem = {
 type InboxListResult = {
   items: InboxListItem[]
   total_count: number
+  total_exact?: boolean
   page: number
   pages: number
   unread_count: number
@@ -430,6 +431,7 @@ type InboxListResult = {
   categories: Array<{ slug: string; label: string }>
   filters: {
     q: string
+    qm: boolean
     chat: 'all' | 'unread' | 'bot' | 'human' | 'mine' | 'unassigned' | 'unanswered' | 'archived' | 'archived_auto' | 'archived_manual'
     window_max: WindowMaxFilter
     from: string | null
@@ -571,10 +573,27 @@ function isYmdDateParam(raw: string | null): raw is string {
   return Boolean(raw && /^\d{4}-\d{2}-\d{2}$/.test(raw.trim()))
 }
 
+function inboxSearchMessagesParam(searchParams: URLSearchParams): boolean {
+  const raw = (searchParams.get('qm') ?? '').trim().toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes'
+}
+
+/** Alineado con API: 4 chars texto / 3 dígitos teléfono. */
+function inboxSearchMayScanMessages(q: string, qm: boolean): boolean {
+  if (!qm) return false
+  const trimmed = q.trim()
+  if (!trimmed) return false
+  const digitsOnly = trimmed.replace(/\D/g, '')
+  const compact = trimmed.replace(/[\s\-()+]/g, '')
+  if (digitsOnly.length > 0 && compact === digitsOnly) return digitsOnly.length >= 3
+  return trimmed.length >= 4
+}
+
 function inboxApiQuery(searchParams: URLSearchParams, extra?: { msg?: number }): string {
   const qs = new URLSearchParams()
   const q = searchParams.get('q')
   if (q) qs.set('q', q)
+  if (q && inboxSearchMessagesParam(searchParams)) qs.set('qm', '1')
   const chat = normalizeInboxChatParam(searchParams.get('chat'))
   if (chat !== 'all') qs.set('chat', chat)
   const windowMax = parseWindowMaxFilter(searchParams.get('window_max'))
@@ -617,17 +636,19 @@ function inboxDateKeyFromResult(filters: InboxListResult['filters']): string {
 
 function inboxFilterKeyFromParams(searchParams: URLSearchParams): string {
   const q = (searchParams.get('q') ?? '').trim()
+  const qm = q && inboxSearchMessagesParam(searchParams) ? '1' : ''
   const chat = normalizeInboxChatParam(searchParams.get('chat'))
   const windowMax = parseWindowMaxFilter(searchParams.get('window_max')) ?? ''
   const segments = searchParams.getAll('segment').sort().join('\0')
-  return `${q}\n${chat}\n${windowMax}\n${inboxDateKeyFromParams(searchParams)}\n${segments}`
+  return `${q}\n${qm}\n${chat}\n${windowMax}\n${inboxDateKeyFromParams(searchParams)}\n${segments}`
 }
 
 function inboxFilterKeyFromResult(filters: InboxListResult['filters']): string {
   const segments = [...filters.segment_slugs]
   if (filters.include_none) segments.push('__none__')
   const windowMax = filters.window_max ?? ''
-  return `${filters.q}\n${filters.chat}\n${windowMax}\n${inboxDateKeyFromResult(filters)}\n${segments.sort().join('\0')}`
+  const qm = filters.q && filters.qm ? '1' : ''
+  return `${filters.q}\n${qm}\n${filters.chat}\n${windowMax}\n${inboxDateKeyFromResult(filters)}\n${segments.sort().join('\0')}`
 }
 
 function inboxInitials(contactName: string, phone: string | null): string {
@@ -990,23 +1011,26 @@ export function ConversationsInboxPage() {
       })
   }, [user?.area, bulkActionsOpen])
 
-  const listCount = useMemo(() => {
-    if (!list) return null
-    if (inboxFilterKeyFromResult(list.filters) !== activeFilterKey) return null
-    return list.total_count ?? list.items.length
-  }, [list, activeFilterKey])
-
-  const listPages = useMemo(() => {
-    if (!list) return 0
-    if (inboxFilterKeyFromResult(list.filters) !== activeFilterKey) return 0
-    return list.pages
-  }, [list, activeFilterKey])
-
-  const listPage =
-    list && inboxFilterKeyFromResult(list.filters) === activeFilterKey ? list.page : page
-
   const listMatchesFilters =
     list != null && inboxFilterKeyFromResult(list.filters) === activeFilterKey
+
+  const listCount = useMemo(() => {
+    if (!list || !listMatchesFilters) return null
+    const n = list.total_count ?? list.items.length
+    if (list.total_exact === false) return `${n}${list.pages > list.page ? '+' : ''}`
+    return n
+  }, [list, listMatchesFilters])
+
+  const listPages = useMemo(() => {
+    if (!list || !listMatchesFilters) return 0
+    return list.pages
+  }, [list, listMatchesFilters])
+
+  const listPage =
+    list && listMatchesFilters ? list.page : page
+
+  const listBusy = list != null && !listMatchesFilters
+  const showStaleList = listBusy && (list?.items.length ?? 0) > 0
 
   const showingDefaultRange = !rangeAll && !explicitFrom && !explicitTo && !searchQuery
   const dateFromFilter =
@@ -1027,7 +1051,7 @@ export function ConversationsInboxPage() {
 
   function clearListFilters() {
     const next = new URLSearchParams(searchParams)
-    for (const key of ['q', 'chat', 'window_max', 'from', 'to', 'range', 'segment', 'page', 'msg']) next.delete(key)
+    for (const key of ['q', 'qm', 'chat', 'window_max', 'from', 'to', 'range', 'segment', 'page', 'msg']) next.delete(key)
     setSearchInput('')
     setSearchParams(next)
   }
@@ -2072,7 +2096,9 @@ export function ConversationsInboxPage() {
     return canonicalArea(user?.area ?? '') === 'educacion' && category ? category + ' · ' + segment.label : segment.label
   }
   const activeFilterCount = (chatFilter !== 'all' ? 1 : 0) + selectedSegments.length +
-    (windowMaxFilter != null ? 1 : 0) + (dateFromFilter || dateToFilter ? 1 : 0)
+    (windowMaxFilter != null ? 1 : 0) + (dateFromFilter || dateToFilter ? 1 : 0) +
+    (searchQuery && inboxSearchMessagesParam(searchParams) ? 1 : 0) +
+    (searchQuery && rangeAll && !explicitFrom && !explicitTo ? 1 : 0)
   const filterPills = (
     <>
       <div className="inbox-chat-filter-pills inbox-chat-filter-pills--row inbox-chat-filter-pills--compact" aria-label="Vistas de chats">
@@ -2086,7 +2112,7 @@ export function ConversationsInboxPage() {
       <div className="inbox-filters space-y-2">
         <div className="inbox-search-row">
           <input type="search" value={searchInput} onChange={e => setSearchInput(e.target.value)}
-            onKeyDown={onSearchKeyDown} placeholder="Buscar…" className="inbox-search-input" aria-label="Buscar en chats" />
+            onKeyDown={onSearchKeyDown} placeholder="Buscar nombre o teléfono…" className="inbox-search-input" aria-label="Buscar en chats" />
           <Popover>
             <PopoverTrigger asChild>
               <Button type="button" size="sm" variant={activeFilterCount ? 'secondary' : 'outline'}>
@@ -2098,6 +2124,47 @@ export function ConversationsInboxPage() {
                 <button type="button" className="text-xs text-muted underline" onClick={clearListFilters}>Restablecer</button>
               </div>
               <p className="text-xs text-muted">Elige una vista y afínala con segmentos, fechas y ventana.</p>
+              <fieldset className="inbox-filter-group space-y-2">
+                <legend className="text-sm font-medium">Búsqueda</legend>
+                <label className="flex items-center gap-2 text-sm" title="Busca también en el texto de los mensajes (mín. 4 caracteres, o 3 dígitos de teléfono)">
+                  <input
+                    type="checkbox"
+                    checked={inboxSearchMessagesParam(searchParams)}
+                    disabled={!searchQuery}
+                    onChange={(e) => {
+                      const next = new URLSearchParams(searchParams)
+                      next.delete('page')
+                      if (e.target.checked) next.set('qm', '1')
+                      else next.delete('qm')
+                      setSearchParams(next)
+                    }}
+                  />
+                  Incluir mensajes
+                </label>
+                {searchQuery && inboxSearchMessagesParam(searchParams) && !inboxSearchMayScanMessages(searchQuery, true) ? (
+                  <p className="text-xs text-muted">Escribe al menos 4 caracteres (o 3 dígitos) para buscar en mensajes.</p>
+                ) : null}
+                <label className="flex items-center gap-2 text-sm" title="Sin límite de fechas. Por defecto la búsqueda mira los últimos 30 días.">
+                  <input
+                    type="checkbox"
+                    checked={rangeAll && !explicitFrom && !explicitTo}
+                    disabled={!searchQuery}
+                    onChange={(e) => {
+                      const next = new URLSearchParams(searchParams)
+                      next.delete('page')
+                      next.delete('from')
+                      next.delete('to')
+                      if (e.target.checked) next.set('range', 'all')
+                      else next.delete('range')
+                      setSearchParams(next)
+                    }}
+                  />
+                  Buscar en todo el historial
+                </label>
+                {searchQuery && !rangeAll && !explicitFrom && !explicitTo ? (
+                  <p className="text-xs text-muted">Ventana actual: últimos 30 días.</p>
+                ) : null}
+              </fieldset>
               <fieldset className="inbox-filter-group space-y-2"><legend className="text-sm font-medium">Atención</legend>
                 {(['all','mine','unassigned','unread','unanswered', ...(list?.ai_area_enabled ? ['bot'] : [])] as const).map(key => (
                   <label key={key} className="flex items-center gap-2 text-sm">
@@ -2183,6 +2250,41 @@ export function ConversationsInboxPage() {
           {selectedSegments.map(slug => <button key={slug} type="button" className="inbox-filter-chip" onClick={() => toggleSegment(slug)} aria-label={'Quitar segmento ' + selectedSegmentLabel(slug)}>{selectedSegmentLabel(slug)} <span aria-hidden>×</span></button>)}
           {windowMaxFilter != null ? <button type="button" className="inbox-filter-chip" onClick={() => setWindowMaxFilter(null)} aria-label="Quitar filtro de ventana">Ventana ≤{windowMaxFilter}h <span aria-hidden>×</span></button> : null}
           {dateFromFilter || dateToFilter ? <button type="button" className="inbox-filter-chip" onClick={clearDateRangeFilter} aria-label="Quitar filtro de fechas">{showingDefaultRange ? 'Últimos 15 días' : [dateFromFilter ? 'Desde ' + dateFromFilter : '', dateToFilter ? 'Hasta ' + dateToFilter : ''].filter(Boolean).join(' · ')} <span aria-hidden>×</span></button> : null}
+          {searchQuery && inboxSearchMessagesParam(searchParams) ? (
+            <button
+              type="button"
+              className="inbox-filter-chip"
+              onClick={() => {
+                const next = new URLSearchParams(searchParams)
+                next.delete('qm')
+                next.delete('page')
+                setSearchParams(next)
+              }}
+              aria-label="Quitar búsqueda en mensajes"
+            >
+              Mensajes{inboxSearchMayScanMessages(searchQuery, true) ? '' : ' (corto)'} <span aria-hidden>×</span>
+            </button>
+          ) : null}
+          {searchQuery && rangeAll && !explicitFrom && !explicitTo ? (
+            <button
+              type="button"
+              className="inbox-filter-chip"
+              onClick={() => {
+                const next = new URLSearchParams(searchParams)
+                next.delete('range')
+                next.delete('page')
+                setSearchParams(next)
+              }}
+              aria-label="Quitar búsqueda en todo el historial"
+            >
+              Todo el historial <span aria-hidden>×</span>
+            </button>
+          ) : null}
+          {searchQuery && !rangeAll && !explicitFrom && !explicitTo ? (
+            <span className="inbox-filter-chip inbox-filter-chip--static" title="La búsqueda usa los últimos 30 días salvo que actives todo el historial">
+              Búsqueda · 30 días
+            </span>
+          ) : null}
         </div>
       </div>
       {canBulkSelect && selectedContactIds.size > 0 ? (
@@ -2218,7 +2320,13 @@ export function ConversationsInboxPage() {
   return (
     <WaPageContents>
       <WaSidebar
-        title={listCount != null ? `Chats (${listCount})` : 'Chats'}
+        title={
+          listBusy
+            ? 'Chats (buscando…)'
+            : listCount != null
+              ? `Chats (${listCount})`
+              : 'Chats'
+        }
         className="relative conversations-inbox-sidebar"
         actions={
           <>
@@ -2368,10 +2476,12 @@ export function ConversationsInboxPage() {
             </button>
           </div>
         ) : null}
-        <ul className="inbox-chat-list">
-          {!listMatchesFilters ? (
+        <ul className={`inbox-chat-list${showStaleList ? ' is-searching' : ''}`}>
+          {!list ? (
             <li className="inbox-empty-list">Cargando…</li>
-          ) : list!.items.length === 0 ? (
+          ) : listBusy && !showStaleList ? (
+            <li className="inbox-empty-list">Buscando…</li>
+          ) : listMatchesFilters && list.items.length === 0 ? (
             <li className="inbox-empty-list">
               <span>No hay conversaciones.</span>
               {hasActiveListFilters ? (
@@ -2385,7 +2495,7 @@ export function ConversationsInboxPage() {
               ) : null}
             </li>
           ) : (
-            list!.items.map((item) => {
+            (listMatchesFilters || showStaleList ? list.items : []).map((item) => {
               const active = selectedId === item.id
               const crmName = String(item.contact_name ?? '').trim()
               const waAlias = String(item.wa_profile_name ?? '').trim()

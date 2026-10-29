@@ -90,15 +90,44 @@ export function parseInboxDateParam(raw?: string): string | null {
 /** Días inclusivos de actividad reciente cuando la bandeja no trae fechas. */
 export const INBOX_DEFAULT_ACTIVITY_DAYS = 15;
 
+/** Ventana por defecto al buscar (sin `range=all` ni from/to). */
+export const INBOX_SEARCH_ACTIVITY_DAYS = 30;
+
+/** Mín. caracteres para buscar en cuerpo de mensajes (texto). */
+export const INBOX_SEARCH_MESSAGES_MIN_CHARS = 4;
+
+/** Mín. dígitos para buscar en cuerpo cuando el término es solo teléfono. */
+export const INBOX_SEARCH_MESSAGES_MIN_DIGITS = 3;
+
 export type InboxDateRangeMode = 'default' | 'all' | 'custom';
 
 export function defaultInboxActivityFromYmd(): string {
   return addDaysYmd(todayYmdInDisplayTz(), -(INBOX_DEFAULT_ACTIVITY_DAYS - 1));
 }
 
+export function defaultInboxSearchFromYmd(): string {
+  return addDaysYmd(todayYmdInDisplayTz(), -(INBOX_SEARCH_ACTIVITY_DAYS - 1));
+}
+
+/** ¿El término alcanza para pegarle a chat_messages? */
+export function inboxSearchMayScanMessages(
+  searchQ: string,
+  includeMessagesFlag: boolean,
+): boolean {
+  if (!includeMessagesFlag) return false;
+  const trimmed = String(searchQ ?? '').trim();
+  if (!trimmed) return false;
+  const digitsOnly = trimmed.replace(/\D/g, '');
+  const compact = trimmed.replace(/[\s\-()+]/g, '');
+  const isPhoneQuery = digitsOnly.length > 0 && compact === digitsOnly;
+  if (isPhoneQuery) return digitsOnly.length >= INBOX_SEARCH_MESSAGES_MIN_DIGITS;
+  return trimmed.length >= INBOX_SEARCH_MESSAGES_MIN_CHARS;
+}
+
 /**
- * Sin fechas ni `range=all` ni búsqueda: últimos 15 días, más no leídos antiguos.
- * Con búsqueda y sin fechas, no recorta. `range=all` pide el historial completo.
+ * Sin fechas ni `range=all`: últimos 15 días (+ no leídos antiguos).
+ * Con búsqueda y sin fechas/`range=all`: últimos 30 días.
+ * `range=all` pide el historial completo (también con búsqueda).
  */
 export function resolveInboxDateFilter(input: {
   searchQ: string;
@@ -119,10 +148,18 @@ export function resolveInboxDateFilter(input: {
       includeUnreadOutside: false,
     };
   }
-  if (input.rangeAll || input.searchQ) {
+  if (input.rangeAll) {
     return {
-      range: input.rangeAll ? 'all' : 'default',
+      range: 'all',
       appliedFrom: null,
+      appliedTo: null,
+      includeUnreadOutside: false,
+    };
+  }
+  if (input.searchQ) {
+    return {
+      range: 'default',
+      appliedFrom: defaultInboxSearchFromYmd(),
       appliedTo: null,
       includeUnreadOutside: false,
     };

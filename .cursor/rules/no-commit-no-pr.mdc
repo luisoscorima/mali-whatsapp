@@ -1,0 +1,27 @@
+---
+description: No crear commits, PRs, push ni deploy sin pedirlo explícitamente
+alwaysApply: true
+---
+
+# Git y despliegue: solo bajo pedido
+
+No hagas **commit**, **push**, **pull request** ni **deploy a producción** a menos que el usuario lo pida de forma explícita en el mensaje.
+
+## Qué sí
+
+- Implementar el cambio en el working tree.
+- Dejar listo el diff / resumen de lo cambiado.
+- Si hace falta publicar: preguntar antes (commit, push, PR o deploy).
+
+## Qué no
+
+- `git commit` / `git push` / `gh pr create` por iniciativa propia.
+- Interpretar “corrígelo”, “arréglalo” o “hazlo” como autorización para commit, PR o deploy.
+- Desplegar en el servidor (pull + build + up) sin pedirlo.
+
+## Ejemplo
+
+```
+// ❌ Tras un fix: commit + push + deploy “para que quede listo”
+// ✅ Tras un fix: aplicar el código y avisar; esperar instrucción de commit/deploy
+```
