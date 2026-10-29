@@ -327,8 +327,13 @@ function LeadsUnifiedList() {
   const scope = useCategoryScope()
   const [searchParams, setSearchParams] = useSearchParams()
   const channel = (searchParams.get('channel') || '').trim()
+  const dateFrom = (searchParams.get('from') || '').trim()
+  const dateTo = (searchParams.get('to') || '').trim()
   const channelFilterLabel =
     CHANNEL_FILTER_OPTIONS.find((o) => o.value === channel)?.label || channel
+  const dateRangeLabel = [dateFrom ? `Desde ${dateFrom}` : '', dateTo ? `Hasta ${dateTo}` : '']
+    .filter(Boolean)
+    .join(' · ')
 
   const PAGE_SIZE = 25
   const [items, setItems] = useState<OriginRow[]>([])
@@ -343,7 +348,7 @@ function LeadsUnifiedList() {
 
   useEffect(() => {
     setPage(1)
-  }, [channel, scope.query])
+  }, [channel, dateFrom, dateTo, scope.query])
 
   useEffect(() => {
     const qs = new URLSearchParams({
@@ -351,6 +356,8 @@ function LeadsUnifiedList() {
       offset: String((pageSafe - 1) * PAGE_SIZE),
     })
     if (channel) qs.set('channel', channel)
+    if (dateFrom) qs.set('from', dateFrom)
+    if (dateTo) qs.set('to', dateTo)
     if (qApplied.trim()) qs.set('q', qApplied.trim())
     if (scope.query) {
       for (const part of scope.query.split('&')) {
@@ -366,13 +373,33 @@ function LeadsUnifiedList() {
           setTotal(r.data.total)
         }
       })
-  }, [channel, pageSafe, qApplied, scope.query, scope.revision])
+  }, [channel, dateFrom, dateTo, pageSafe, qApplied, scope.query, scope.revision])
+
+  function patchSearchParams(mutate: (next: URLSearchParams) => void) {
+    const next = new URLSearchParams(searchParams)
+    mutate(next)
+    setSearchParams(next, { replace: true })
+  }
 
   function onChannelChange(value: string) {
-    const next = new URLSearchParams(searchParams)
-    if (value) next.set('channel', value)
-    else next.delete('channel')
-    setSearchParams(next, { replace: true })
+    patchSearchParams((next) => {
+      if (value) next.set('channel', value)
+      else next.delete('channel')
+    })
+  }
+
+  function onDateRangeChange(which: 'from' | 'to', value: string) {
+    patchSearchParams((next) => {
+      if (value) next.set(which, value)
+      else next.delete(which)
+    })
+  }
+
+  function clearDateRange() {
+    patchSearchParams((next) => {
+      next.delete('from')
+      next.delete('to')
+    })
   }
 
   function onSearch(e: FormEvent) {
@@ -385,6 +412,8 @@ function LeadsUnifiedList() {
     setExportBusy(true)
     const qs = new URLSearchParams()
     if (channel) qs.set('channel', channel)
+    if (dateFrom) qs.set('from', dateFrom)
+    if (dateTo) qs.set('to', dateTo)
     if (qApplied.trim()) qs.set('q', qApplied.trim())
     if (scope.query) {
       for (const part of scope.query.split('&')) {
@@ -404,11 +433,16 @@ function LeadsUnifiedList() {
   return (
     <section className="rounded-xl border border-line bg-surface-strong p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-medium">
-          {channel
-            ? `Recientes · ${channelFilterLabel}`
-            : 'Recientes (todos los canales)'}
-        </h2>
+        <div>
+          <h2 className="font-medium">
+            {channel
+              ? `Recientes · ${channelFilterLabel}`
+              : 'Recientes (todos los canales)'}
+          </h2>
+          {dateRangeLabel ? (
+            <p className="mt-1 text-sm text-muted">{dateRangeLabel}</p>
+          ) : null}
+        </div>
         <button
           type="button"
           disabled={exportBusy || total === 0}
@@ -437,6 +471,35 @@ function LeadsUnifiedList() {
           </select>
         </label>
         <label className="text-sm">
+          <span className="text-muted">Desde</span>
+          <input
+            type="date"
+            className="mt-1 block rounded-lg border border-line bg-bg px-2 py-2 text-sm"
+            value={dateFrom}
+            max={dateTo || undefined}
+            onChange={(e) => onDateRangeChange('from', e.target.value)}
+          />
+        </label>
+        <label className="text-sm">
+          <span className="text-muted">Hasta</span>
+          <input
+            type="date"
+            className="mt-1 block rounded-lg border border-line bg-bg px-2 py-2 text-sm"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={(e) => onDateRangeChange('to', e.target.value)}
+          />
+        </label>
+        {dateFrom || dateTo ? (
+          <button
+            type="button"
+            className="rounded-lg border border-line bg-bg px-3 py-2 text-sm"
+            onClick={clearDateRange}
+          >
+            Quitar fechas
+          </button>
+        ) : null}
+        <label className="text-sm">
           <span className="text-muted">Buscar</span>
           <input
             className="mt-1 block w-64 max-w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm"
@@ -457,7 +520,7 @@ function LeadsUnifiedList() {
       </form>
       {items.length === 0 ? (
         <p className="text-sm text-muted">
-          {channel || qApplied || scope.query
+          {channel || dateFrom || dateTo || qApplied || scope.query
             ? 'No hay orígenes para este filtro.'
             : 'Aún no hay orígenes registrados.'}
         </p>

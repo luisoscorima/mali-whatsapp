@@ -277,6 +277,8 @@ export class LeadsController {
     @CurrentUser() user: AuthUser,
     @Query('channel') channel?: string,
     @Query('q') q?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
     @Query('category') category?: string | string[],
@@ -286,6 +288,8 @@ export class LeadsController {
       area: user.area,
       channel,
       q,
+      from,
+      to,
       categories: parseCategorySlugs(category),
       limit: limit ? Number(limit) : undefined,
       offset: offset ? Number(offset) : undefined,
@@ -299,6 +303,8 @@ export class LeadsController {
     @Res() res: Response,
     @Query('channel') channel?: string,
     @Query('q') q?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
     @Query('category') category?: string | string[],
   ): Promise<void> {
     assertCanManageLeads(user);
@@ -306,6 +312,8 @@ export class LeadsController {
       area: user.area,
       channel,
       q,
+      from,
+      to,
       categories: parseCategorySlugs(category),
     });
     res.setHeader(

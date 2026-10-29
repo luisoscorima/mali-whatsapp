@@ -53,11 +53,50 @@ import {
 } from './leads-export.util';
 import { syncEducationLeadStatuses, isEducationLeadArea } from './education-lead-statuses';
 import {
+  addDaysYmd,
+  getReportDisplayTimeZone,
+  isYmdDate,
+} from '../reports/report-date-range.util';
+import {
   DEFAULT_LEAD_STATUSES,
   type ContactIdentityInput,
   type LeadChannel,
   type UpsertOriginInput,
 } from './leads.types';
+
+/** Midnight of `ymd` in the report display TZ, as a UTC instant. */
+function displayYmdMidnightUtc(ymd: string): Date {
+  const timeZone = getReportDisplayTimeZone();
+  const approx = new Date(`${ymd}T00:00:00.000Z`);
+  const tzName =
+    new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      timeZoneName: 'longOffset',
+    })
+      .formatToParts(approx)
+      .find((p) => p.type === 'timeZoneName')?.value ?? 'GMT';
+  const m = /GMT([+-]\d{2}):?(\d{2})?/.exec(tzName);
+  if (!m) return approx;
+  const sign = m[1].startsWith('-') ? -1 : 1;
+  const hours = Math.abs(Number.parseInt(m[1], 10));
+  const mins = m[2] ? Number.parseInt(m[2], 10) : 0;
+  const offsetMin = sign * (hours * 60 + mins);
+  return new Date(approx.getTime() - offsetMin * 60_000);
+}
+
+/** Inclusive YMD window on `last_seen_at` (display calendar days). */
+function originsLastSeenFilter(
+  fromRaw?: string,
+  toRaw?: string,
+): Prisma.DateTimeFilter | undefined {
+  const from = isYmdDate(fromRaw) ? String(fromRaw).trim() : null;
+  const to = isYmdDate(toRaw) ? String(toRaw).trim() : null;
+  if (!from && !to) return undefined;
+  const filter: Prisma.DateTimeFilter = {};
+  if (from) filter.gte = displayYmdMidnightUtc(from);
+  if (to) filter.lt = displayYmdMidnightUtc(addDaysYmd(to, 1));
+  return filter;
+}
 
 function leadCategoryOf(item: {
   program?: { slug: string } | null;
@@ -1129,6 +1168,8 @@ export class LeadsService implements OnModuleInit {
     area: string;
     channel?: string;
     q?: string;
+    from?: string;
+    to?: string;
     limit?: number;
     offset?: number;
     categories?: string[] | null;
@@ -1144,6 +1185,8 @@ export class LeadsService implements OnModuleInit {
     const categoryWhere = programScopeWhere(params.categories ?? null);
     if (Object.keys(categoryWhere).length) filters.push(categoryWhere);
     if (params.channel) filters.push({ channel: params.channel });
+    const lastSeen = originsLastSeenFilter(params.from, params.to);
+    if (lastSeen) filters.push({ last_seen_at: lastSeen });
     const where: Prisma.contact_originsWhereInput = {
       AND: [
         ...filters,
@@ -1241,6 +1284,8 @@ export class LeadsService implements OnModuleInit {
     area: string;
     channel?: string;
     q?: string;
+    from?: string;
+    to?: string;
     categories?: string[] | null;
   }): Promise<{ buffer: Buffer; filename: string }> {
     const areaNorm = normalizeArea(params.area);
@@ -1248,6 +1293,8 @@ export class LeadsService implements OnModuleInit {
       area: areaNorm,
       channel: params.channel,
       q: params.q,
+      from: params.from,
+      to: params.to,
       categories: params.categories,
       limit: 5000,
       offset: 0,
