@@ -477,6 +477,18 @@ model education_lead_cycles {
   @@index([area, assigned_user_id], map: "education_lead_cycles_area_assignee_idx")
 }
 
+/// Staging table for competing open cycles (person + area + category). Not an operational queue UI.
+model education_lead_open_conflicts {
+  id               Int       @id @default(autoincrement())
+  person_id        Int
+  business_area_id Int
+  program_id       Int?
+  cycle_ids        Int[]
+  cycle_count      Int
+  detected_at      DateTime  @default(now()) @db.Timestamptz(6)
+  resolved_at      DateTime? @db.Timestamptz(6)
+}
+
 /// Historical link between an opportunity and a conversation (messages stay on conversation).
 model education_lead_conversation_links {
   id              Int                   @id @default(autoincrement())

@@ -37,14 +37,19 @@ En la copia:
 8. Validar comportamiento con flag aún en `0`: orgánico post-cierre, claim clásico, sin alertas nuevas.
 9. Solo entonces: flag `1` en piloto y smoke (claim, alertas, CTA, CRM cycles).
 
-## Orden en producción (después del ensayo)
+## Estado prod (2026-10-29)
 
-1. Inventario `docs/LEADS-CORTE0-INVENTARIO.md`
-2. Desplegar binario validado; flag ausente/`0`
-3. `migrate deploy` → resolver conflictos → índices diferidos
-4. Lote histórico de vencimiento (opcional, revisado)
-5. Activar `leads.attention_v1=1`
-6. Smoke piloto; CRM `GET /crm/education/cycles`
+- Migración aplicada; binario `d5fe33d`.
+- 188 conflictos resueltos con lote documentado (`docs/LEADS-BASES-20261029.md`); índices únicos **instalados**.
+- Flag `leads.attention_v1` **sigue ausente** (apagado).
+- Históricos 60d: abiertos a propósito.
+
+## Orden restante para encender el piloto
+
+1. Smoke de negocio con flag aún apagado.
+2. Activar `leads.attention_v1=1` solo con autorización.
+3. Smoke piloto; CRM `GET /crm/education/cycles`.
+4. Lote histórico de vencimiento: opcional / manual; no urgente.
 
 ## Scripts
 
