@@ -1172,10 +1172,13 @@ export class LeadsService implements OnModuleInit {
     to?: string;
     limit?: number;
     offset?: number;
+    /** UI stays at 200; export may raise (hard cap 10_000). */
+    maxLimit?: number;
     categories?: string[] | null;
   }) {
     const areaNorm = normalizeArea(params.area);
-    const take = Math.min(Math.max(params.limit ?? 50, 1), 200);
+    const maxLimit = Math.min(Math.max(params.maxLimit ?? 200, 1), 10_000);
+    const take = Math.min(Math.max(params.limit ?? 50, 1), maxLimit);
     const skip = Math.max(params.offset ?? 0, 0);
     const q = String(params.q ?? '').trim();
     const usernameQ = q.replace(/^@/, '');
@@ -1296,7 +1299,8 @@ export class LeadsService implements OnModuleInit {
       from: params.from,
       to: params.to,
       categories: params.categories,
-      limit: 5000,
+      limit: 10_000,
+      maxLimit: 10_000,
       offset: 0,
     });
 
