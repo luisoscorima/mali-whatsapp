@@ -880,6 +880,14 @@ export class WebhookService {
         );
       }
       const existing = conversationMatch.match;
+      // Reacciones: no abren “cliente esperando”, no marcan unread ni mueven
+      // last_user_message_at / last_message_at (Meta tampoco abre ventana 24h con ellas).
+      if (messageType === 'reaction') {
+        if (existing?.id) {
+          await this.applyInboundReaction(area, existing.id, record);
+        }
+        continue;
+      }
       const canAttachPhone =
         phone &&
         (!existing?.phone || existing.phone === phone) &&
@@ -966,11 +974,6 @@ export class WebhookService {
             last_message_at = GREATEST(last_message_at, ${messageAt}::timestamptz)
         WHERE id = ${conversation.id}
       `;
-
-      if (messageType === 'reaction') {
-        await this.applyInboundReaction(area, conversation.id, record);
-        continue;
-      }
 
       try {
         await processInboundReferral(this.prisma, {
