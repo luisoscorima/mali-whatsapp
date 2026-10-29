@@ -47,6 +47,7 @@ import {
   type ConversationHint,
   resolveLeadChatEnrichment,
 } from './lead-origin.util';
+import { formatExportDate } from '../campaigns/campaign-format.util';
 import {
   buildLeadsOriginsExportBuffer,
   leadsOriginsExportFilename,
@@ -1372,9 +1373,7 @@ export class LeadsService implements OnModuleInit {
         sede: String(payload.sede ?? '').trim(),
         first_lead_chat: firstChats.get(o.id) ?? '',
         external_id: o.external_id,
-        last_seen_at: o.last_seen_at
-          ? new Date(o.last_seen_at).toISOString()
-          : '',
+        last_seen_at: formatExportDate(o.last_seen_at),
       };
     });
 
