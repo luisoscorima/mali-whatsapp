@@ -537,7 +537,7 @@ function LeadsUnifiedList() {
                   <th className="px-2 py-2">Fuente</th>
                   <th className="px-2 py-2">Estado</th>
                   <th className="px-2 py-2">Chat</th>
-                  <th className="px-2 py-2">Último</th>
+                  <th className="px-2 py-2">Fecha de captura</th>
                 </tr>
               </thead>
               <tbody>
@@ -621,7 +621,7 @@ function LeadsUnifiedList() {
                         />
                       </td>
                       <td className="px-2 py-2">
-                        {formatDateTime(o.last_seen_at)}
+                        {formatDateTime(o.first_seen_at)}
                       </td>
                     </tr>
                   )

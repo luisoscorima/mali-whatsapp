@@ -85,8 +85,8 @@ function displayYmdMidnightUtc(ymd: string): Date {
   return new Date(approx.getTime() - offsetMin * 60_000);
 }
 
-/** Inclusive YMD window on `last_seen_at` (display calendar days). */
-function originsLastSeenFilter(
+/** Inclusive YMD window on capture time `first_seen_at` (display calendar days). */
+function originsFirstSeenFilter(
   fromRaw?: string,
   toRaw?: string,
 ): Prisma.DateTimeFilter | undefined {
@@ -1189,8 +1189,8 @@ export class LeadsService implements OnModuleInit {
     const categoryWhere = programScopeWhere(params.categories ?? null);
     if (Object.keys(categoryWhere).length) filters.push(categoryWhere);
     if (params.channel) filters.push({ channel: params.channel });
-    const lastSeen = originsLastSeenFilter(params.from, params.to);
-    if (lastSeen) filters.push({ last_seen_at: lastSeen });
+    const firstSeen = originsFirstSeenFilter(params.from, params.to);
+    if (firstSeen) filters.push({ first_seen_at: firstSeen });
     const where: Prisma.contact_originsWhereInput = {
       AND: [
         ...filters,
@@ -1235,7 +1235,7 @@ export class LeadsService implements OnModuleInit {
       this.prisma.contact_origins.count({ where }),
       this.prisma.contact_origins.findMany({
         where,
-        orderBy: { last_seen_at: 'desc' },
+        orderBy: [{ first_seen_at: 'desc' }, { id: 'desc' }],
         take,
         skip,
         include: {
@@ -1373,7 +1373,7 @@ export class LeadsService implements OnModuleInit {
         sede: String(payload.sede ?? '').trim(),
         first_lead_chat: firstChats.get(o.id) ?? '',
         external_id: o.external_id,
-        last_seen_at: formatExportDate(o.last_seen_at),
+        first_seen_at: formatExportDate(o.first_seen_at),
       };
     });
 

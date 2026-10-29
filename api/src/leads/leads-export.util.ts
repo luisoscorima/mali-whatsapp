@@ -21,7 +21,7 @@ export function buildLeadsOriginsExportBuffer(
     sede: string;
     first_lead_chat: string;
     external_id: string;
-    last_seen_at: string;
+    first_seen_at: string;
   }>,
 ): Buffer {
   const headers = [
@@ -42,7 +42,7 @@ export function buildLeadsOriginsExportBuffer(
     'Sede',
     'Primer mensaje',
     'External ID',
-    'Último',
+    'Fecha de captura',
   ];
   const aoa = [
     headers,
@@ -64,7 +64,7 @@ export function buildLeadsOriginsExportBuffer(
       r.sede,
       r.first_lead_chat,
       r.external_id,
-      r.last_seen_at,
+      r.first_seen_at,
     ]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
