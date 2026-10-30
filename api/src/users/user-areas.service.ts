@@ -45,7 +45,11 @@ export function explicitEducationCategories(membership: EducationMembership | nu
     const granted = membership.programs
       .filter((grant) => grant.program.active)
       .map((grant) => grant.program.slug);
-    if (membership.include_general || granted.length === 0) granted.unshift('general');
+    // Legacy abierto (sin grants ni include_general): todas las categorías.
+    if (!membership.include_general && granted.length === 0) {
+      return [...EDUCATION_CATEGORIES];
+    }
+    if (membership.include_general) granted.unshift('general');
     return granted.length ? [...new Set(granted)] : [...EDUCATION_CATEGORIES];
   }
   const categories = membership.programs
@@ -115,9 +119,10 @@ export class UserAreasService {
         marked?.area ?? '',
         ...(marked?.user_areas ?? []).map((item) => item.area),
       ]);
-      const allowed = new Set(
-        explicitEducationCategories(membership) ?? inherited,
-      );
+      const explicit = explicitEducationCategories(membership);
+      const allowed = new Set(explicit ?? inherited);
+      // Membresía explícita vacía = sin categorías (no abrir todas).
+      if (explicit && !allowed.size) return [];
       if (!allowed.size || all.every((item) => allowed.has(item.slug))) return all;
       return all.filter((item) => allowed.has(item.slug));
     }

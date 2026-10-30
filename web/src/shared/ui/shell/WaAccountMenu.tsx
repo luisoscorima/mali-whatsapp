@@ -4,6 +4,7 @@ import { apiClient, type AuthUser } from '@/shared/api'
 import { areaLabel } from '@/features/admin/areaLabels'
 import { PalettePicker } from '@/shared/theme/PalettePicker'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/shadcn/popover'
+import { canonicalArea } from '@/shared/area/category-selection'
 import { canSwitchArea, WaAreaSwitchPanel } from './WaAreaSwitchPanel'
 
 type WaAccountMenuProps = {
@@ -15,7 +16,10 @@ export function WaAccountMenu({ user, onUserUpdate }: WaAccountMenuProps) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const railInitial = user.email ? user.email.charAt(0).toUpperCase() : '?'
-  const showAreaSwitch = canSwitchArea(user)
+  // Tras unificar CA/EP en categorías, un solo allowedArea "educacion" ya no
+  // basta: hay que mostrar el panel para conmutar General/CA/EP.
+  const showAreaSwitch =
+    canSwitchArea(user) || canonicalArea(user.area) === 'educacion'
 
   async function onLogout() {
     setOpen(false)

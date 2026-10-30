@@ -43,7 +43,7 @@ export const OPERATIONAL_ROLE_USERS: {
     email: 'joropeza@mali.pe',
     role: 'coordinador',
     areas: ['educacion'],
-    categories: ['general', 'ca', 'ep'],
+    categories: [],
   },
   {
     email: 'kbaumann@mali.pe',
