@@ -43,7 +43,7 @@ export type TemplateUsage = {
   linked_flows: TemplateUsageLinkedFlow[];
 };
 
-export type TemplateDetail = TemplateListItem & {
+export type TemplateDetail = Omit<TemplateListItem, 'search_text'> & {
   meta_id: string | null;
   display: TemplateDisplayContent;
   can_edit: boolean;
