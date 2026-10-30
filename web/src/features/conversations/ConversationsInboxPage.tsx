@@ -250,20 +250,16 @@ function ContactSheetIcon({ mode }: { mode: 'edit' | 'create' }) {
   )
 }
 
-function InboxHeaderLineIcon() {
+function InboxWhatsAppIcon({ size = 13 }: { size?: number }) {
   return (
     <svg
-      width="20"
-      height="20"
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      fill="currentColor"
       aria-hidden
     >
-      <path d="M21 15a4 4 0 0 1-4 4H8l-5 3 1.7-5.1A8 8 0 1 1 21 15Z" />
+      <path d="M20.5 3.5A11.8 11.8 0 0 0 2 17.7L.4 23.6l6-1.6A11.8 11.8 0 0 0 20.5 3.5ZM12 21.4a9.7 9.7 0 0 1-5-1.4l-.4-.2-3.6.9 1-3.5-.3-.4A9.8 9.8 0 1 1 12 21.4Zm5.4-7.3c-.3-.2-1.7-.8-2-.9-.2-.1-.4-.2-.6.1l-.9 1.1c-.2.2-.3.2-.6.1a8 8 0 0 1-3.9-3.4c-.3-.5.3-.4.9-1.6.1-.2 0-.4 0-.6l-.9-2.1c-.2-.5-.5-.4-.7-.4H7.9c-.2 0-.5.1-.7.3-.3.3-1 1-1 2.4s1 2.7 1.2 2.9c.1.2 2 3.1 4.9 4.4 1.8.8 2.5.9 3.4.8.5-.1 1.7-.7 1.9-1.4.2-.7.2-1.3.1-1.4l-.3-.3Z" />
     </svg>
   )
 }
@@ -356,41 +352,73 @@ function ProfileBlock({
   const assigneeName = detail.conversation.assigned_user_label?.trim() || 'Sin asignar'
   const teamLabel = inboxTeamLabel(detail.conversation.line_program)
   return (
-    <>
-      <span className="inbox-chat-avatar inbox-chat-avatar--header" aria-hidden>
-        {inboxInitials(heading, detail.conversation.phone)}
-      </span>
-      <div className="inbox-chat-header-identity">
-        <div className="inbox-chat-header-customer-row">
-          <div className="inbox-chat-header-customer">
-            <div className="inbox-chat-heading-row">
-              <h1 className={`inbox-chat-heading${isWaAlias ? ' muted' : ''}`}>
-                {heading}
-              </h1>
-              {canOpenContact ? (
-                <button
-                  type="button"
-                  className="inbox-chat-contact-icon-btn"
-                  title={contactActionLabel}
-                  aria-label={contactActionLabel}
-                  onClick={onOpenContact}
-                >
-                  <ContactSheetIcon mode={contactMode} />
-                </button>
-              ) : null}
+    <div className="inbox-chat-header-summary">
+      <section className="inbox-chat-header-customer-panel" aria-label="Cliente">
+        <span className="inbox-chat-avatar inbox-chat-avatar--header" aria-hidden>
+          {inboxInitials(heading, detail.conversation.phone)}
+        </span>
+        <div className="inbox-chat-header-identity">
+          <div className="inbox-chat-header-customer-row">
+            <div className="inbox-chat-header-customer">
+              <div className="inbox-chat-heading-row">
+                <h1 className={`inbox-chat-heading${isWaAlias ? ' muted' : ''}`}>
+                  {heading}
+                </h1>
+                {canOpenContact ? (
+                  <button
+                    type="button"
+                    className="inbox-chat-contact-icon-btn"
+                    title={contactActionLabel}
+                    aria-label={contactActionLabel}
+                    onClick={onOpenContact}
+                  >
+                    <ContactSheetIcon mode={contactMode} />
+                  </button>
+                ) : null}
+              </div>
+              <p className="inbox-chat-person-phone">
+                {chatSecondaryLabel(detail.conversation.phone)}
+              </p>
             </div>
-            <p className="inbox-chat-person-phone">
-              {chatSecondaryLabel(detail.conversation.phone)}
-            </p>
+            <span
+              className={`inbox-chat-window-pill ${detail.user_service_window_open ? 'is-open' : 'is-closed'}`}
+            >
+              {detail.user_service_window_open ? <WindowClockIcon /> : <InboxHeaderLockIcon />}
+              Ventana {detail.user_service_window_open ? 'abierta' : 'cerrada'}
+            </span>
           </div>
-          <span
-            className={`inbox-chat-window-pill ${detail.user_service_window_open ? 'is-open' : 'is-closed'}`}
-          >
-            {detail.user_service_window_open ? <WindowClockIcon /> : <InboxHeaderLockIcon />}
-            Ventana {detail.user_service_window_open ? 'abierta' : 'cerrada'}
-          </span>
         </div>
+      </section>
 
+      <section className="inbox-chat-header-context" aria-label="Línea de atención">
+        <span className="inbox-chat-header-context-icon">
+          <InboxWhatsAppIcon size={20} />
+        </span>
+        <span className="inbox-chat-header-context-copy">
+          <span className="inbox-chat-header-context-label">Línea de atención</span>
+          <span className="inbox-chat-header-context-value">{lineName || 'Sin línea'}</span>
+          {detail.conversation.line_display_phone ? (
+            <span className="inbox-chat-header-context-detail">
+              {displayPhoneNumber(detail.conversation.line_display_phone)}
+            </span>
+          ) : null}
+        </span>
+      </section>
+
+      <section className="inbox-chat-header-context" aria-label="Asesor asignado">
+        <span className="inbox-chat-header-context-icon">
+          <InboxHeaderAssigneeIcon />
+        </span>
+        <span className="inbox-chat-header-context-copy">
+          <span className="inbox-chat-header-context-label">Asesor asignado</span>
+          <span className="inbox-chat-header-context-value">{assigneeName}</span>
+          {teamLabel ? (
+            <span className="inbox-chat-header-context-detail">{teamLabel}</span>
+          ) : null}
+        </span>
+      </section>
+
+      <div className="inbox-chat-header-meta">
         <ConversationBadges
           status={detail.conversation.status}
           assignedUserLabel={detail.conversation.assigned_user_label}
@@ -398,38 +426,6 @@ function ProfileBlock({
           archived={Boolean(detail.conversation.archived)}
           unanswered={!detail.conversation.last_user_message_at}
         />
-
-        <div className="inbox-chat-header-context-grid">
-          {lineName ? (
-            <div className="inbox-chat-header-context" aria-label="Línea de atención">
-              <span className="inbox-chat-header-context-icon">
-                <InboxHeaderLineIcon />
-              </span>
-              <span className="inbox-chat-header-context-copy">
-                <span className="inbox-chat-header-context-label">Línea de atención</span>
-                <span className="inbox-chat-header-context-value">{lineName}</span>
-                {detail.conversation.line_display_phone ? (
-                  <span className="inbox-chat-header-context-detail">
-                    {displayPhoneNumber(detail.conversation.line_display_phone)}
-                  </span>
-                ) : null}
-              </span>
-            </div>
-          ) : null}
-          <div className="inbox-chat-header-context" aria-label="Asesor asignado">
-            <span className="inbox-chat-header-context-icon">
-              <InboxHeaderAssigneeIcon />
-            </span>
-            <span className="inbox-chat-header-context-copy">
-              <span className="inbox-chat-header-context-label">Asesor asignado</span>
-              <span className="inbox-chat-header-context-value">{assigneeName}</span>
-              {teamLabel ? (
-                <span className="inbox-chat-header-context-detail">{teamLabel}</span>
-              ) : null}
-            </span>
-          </div>
-        </div>
-
         {leadScore || leadStatusLabel ? (
           <p className="inbox-chat-lead-meta">
             {leadScore ? (
@@ -470,7 +466,7 @@ function ProfileBlock({
           </span>
         ) : null}
       </div>
-    </>
+    </div>
   )
 }
 
@@ -850,7 +846,7 @@ function messageReplyPreview(message: InboxMessage): string {
 
 /** Páginas visibles del paginador: 1, 2, 3, …, N (con vecinos del actual). */
 function chatListPageItems(current: number, total: number): Array<number | 'ellipsis'> {
-  if (total <= 7) {
+  if (total <= 5) {
     return Array.from({ length: total }, (_, i) => i + 1)
   }
   const show = new Set<number>([1, total])
@@ -2626,6 +2622,7 @@ export function ConversationsInboxPage() {
                 item.last_outbound_message_at,
                 { windowOpen: item.user_service_window_open },
               )
+              const previewText = listPreviewText(item.preview)
               const modeStatus = String(item.conversation_status ?? '').toLowerCase()
               return (
                 <ContextMenu key={item.id}>
@@ -2655,6 +2652,68 @@ export function ConversationsInboxPage() {
                         className="inbox-chat-item-btn"
                       >
                         <span className="inbox-chat-item-core">
+                          <span className="inbox-chat-item-meta">
+                            {item.line_label || item.line_program || item.line_display_phone ? (
+                              <span className="inbox-chat-line" title={item.line_display_phone || undefined}>
+                                <InboxWhatsAppIcon />
+                                <span className="inbox-chat-line-identity">
+                                  <span>{item.line_label || item.line_program?.toUpperCase() || 'Línea de WhatsApp'}</span>
+                                  {item.line_display_phone ? (
+                                    <span className="inbox-chat-line-phone">
+                                      {displayPhoneNumber(item.line_display_phone)}
+                                    </span>
+                                  ) : null}
+                                </span>
+                              </span>
+                            ) : <span />}
+                            <span className="inbox-chat-side">
+                              {item.assigned_user_label ? (
+                                <span
+                                  className="inbox-chat-assignee"
+                                  title={`Asignado a ${item.assigned_user_label}`}
+                                >
+                                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><circle cx="12" cy="7" r="3" /><path d="M5 21v-3a7 7 0 0 1 14 0v3Z" /></svg>
+                                  <span>{item.assigned_user_label}</span>
+                                </span>
+                              ) : null}
+                              <span className="inbox-chat-time-wrap">
+                                {item.inbox_unread ? (
+                                  <span
+                                    className={`inbox-unread-dot ${(item.unread_message_count ?? 0) > 0 ? 'inbox-unread-dot--count' : ''}`}
+                                    title={item.unread_message_count ? `${item.unread_message_count} mensajes sin leer` : 'No leído'}
+                                    aria-label={item.unread_message_count ? `${item.unread_message_count} mensajes sin leer` : 'No leído'}
+                                  >
+                                    {(item.unread_message_count ?? 0) > 0 ? ((item.unread_message_count ?? 0) > 99 ? '99+' : item.unread_message_count) : null}
+                                  </span>
+                                ) : null}
+                                <span
+                                  className="inbox-chat-msg-times inbox-chat-msg-times--compact"
+                                  title={[
+                                    `Actividad: ${formatChatListTime(item.last_message_at)}`,
+                                    `Entrante: ${formatChatListTime(item.last_user_message_at)}`,
+                                    `Saliente: ${formatChatListTime(item.last_outbound_message_at)}`,
+                                    replyStatus?.title,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                >
+                                  <span className="inbox-chat-msg-time">
+                                    {formatChatListTime(item.last_message_at)}
+                                  </span>
+                                  {replyStatus ? (
+                                    <span
+                                      className={`inbox-chat-msg-time inbox-chat-msg-time--lag${
+                                        replyStatus.symbol === '⏳' ? ' is-waiting' : ''
+                                      }`}
+                                    >
+                                      <span aria-hidden>{replyStatus.symbol}</span>
+                                      {replyStatus.label}
+                                    </span>
+                                  ) : null}
+                                </span>
+                              </span>
+                            </span>
+                          </span>
                           <span className="inbox-chat-item-primary">
                             <span
                               className={`inbox-chat-avatar ${
@@ -2688,21 +2747,6 @@ export function ConversationsInboxPage() {
                               ) : null}
                             </span>
                             <span className="inbox-chat-link-main">
-                              {item.line_label || item.line_program || item.line_display_phone ? (
-                                <span className="inbox-chat-line" title={item.line_display_phone || undefined}>
-                                  <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
-                                    <path d="M20.5 3.5A11.8 11.8 0 0 0 2 17.7L.4 23.6l6-1.6A11.8 11.8 0 0 0 20.5 3.5ZM12 21.4a9.7 9.7 0 0 1-5-1.4l-.4-.2-3.6.9 1-3.5-.3-.4A9.8 9.8 0 1 1 12 21.4Zm5.4-7.3c-.3-.2-1.7-.8-2-.9-.2-.1-.4-.2-.6.1l-.9 1.1c-.2.2-.3.2-.6.1a8 8 0 0 1-3.9-3.4c-.3-.5.3-.4.9-1.6.1-.2 0-.4 0-.6l-.9-2.1c-.2-.5-.5-.4-.7-.4H7.9c-.2 0-.5.1-.7.3-.3.3-1 1-1 2.4s1 2.7 1.2 2.9c.1.2 2 3.1 4.9 4.4 1.8.8 2.5.9 3.4.8.5-.1 1.7-.7 1.9-1.4.2-.7.2-1.3.1-1.4l-.3-.3Z" />
-                                  </svg>
-                                  <span className="inbox-chat-line-identity">
-                                    <span>{item.line_label || item.line_program?.toUpperCase() || 'Línea de WhatsApp'}</span>
-                                    {item.line_display_phone ? (
-                                      <span className="inbox-chat-line-phone">
-                                        {displayPhoneNumber(item.line_display_phone)}
-                                      </span>
-                                    ) : null}
-                                  </span>
-                                </span>
-                              ) : null}
                               <span className="inbox-chat-row-top">
                                 <span className="inbox-chat-title-line">
                                   <span
@@ -2738,72 +2782,27 @@ export function ConversationsInboxPage() {
                                   unanswered={!item.last_user_message_at}
                                 />
                               )}
-                              <span className="inbox-chat-row-mid">
-                                <span className="inbox-chat-preview">
-                                  {listPreviewText(item.preview)}
-                                </span>
-                              </span>
                             </span>
                           </span>
-
+                          <span className="inbox-chat-row-mid">
+                            <span className="inbox-chat-preview" title={previewText}>
+                              {previewText}
+                            </span>
+                          </span>
                         </span>
                       </button>
-                      <div className="inbox-chat-side">
-                        {item.assigned_user_label ? (
-                          <span className="inbox-chat-assignee" title={`Asignado a ${item.assigned_user_label}`}>
-                            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><circle cx="12" cy="7" r="3" /><path d="M5 21v-3a7 7 0 0 1 14 0v3Z" /></svg>
-                            <span>{item.assigned_user_label}</span>
-                          </span>
-                        ) : null}
-                        <span className="inbox-chat-time-wrap">
-                          {item.inbox_unread ? (
-                            <span
-                              className={`inbox-unread-dot ${(item.unread_message_count ?? 0) > 0 ? 'inbox-unread-dot--count' : ''}`}
-                              title={item.unread_message_count ? `${item.unread_message_count} mensajes sin leer` : 'No leído'}
-                              aria-label={item.unread_message_count ? `${item.unread_message_count} mensajes sin leer` : 'No leído'}
-                            >
-                              {(item.unread_message_count ?? 0) > 0 ? ((item.unread_message_count ?? 0) > 99 ? '99+' : item.unread_message_count) : null}
-                            </span>
-                          ) : null}
-                          <span
-                            className="inbox-chat-msg-times inbox-chat-msg-times--compact"
-                            title={[
-                              `Actividad: ${formatChatListTime(item.last_message_at)}`,
-                              `Entrante: ${formatChatListTime(item.last_user_message_at)}`,
-                              `Saliente: ${formatChatListTime(item.last_outbound_message_at)}`,
-                              replyStatus?.title,
-                            ]
-                              .filter(Boolean)
-                              .join(' · ')}
-                          >
-                            <span className="inbox-chat-msg-time">
-                              {formatChatListTime(item.last_message_at)}
-                            </span>
-                            {replyStatus ? (
-                              <span
-                                className={`inbox-chat-msg-time inbox-chat-msg-time--lag${
-                                  replyStatus.symbol === '⏳' ? ' is-waiting' : ''
-                                }`}
-                              >
-                                <span aria-hidden>{replyStatus.symbol}</span>
-                                {replyStatus.label}
-                              </span>
-                            ) : null}
-                          </span>
-                        </span>
-                        <button
-                          type="button"
-                          className="inbox-chat-item-more"
-                          aria-label="Opciones del chat"
-                          title="Opciones del chat"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            openChatActions(actionsCtx)
-                          }}
-                        >
-                          <span aria-hidden>⋮</span>
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        className="inbox-chat-item-more"
+                        aria-label="Opciones del chat"
+                        title="Opciones del chat"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          openChatActions(actionsCtx)
+                        }}
+                      >
+                        <span aria-hidden>⋮</span>
+                      </button>
                       {item.contact_segment_slugs.length > 0 ? <InboxSegmentSummary items={item.contact_segment_slugs.map(slug => ({ slug, label: segmentLabel(slug, segments), color: segmentColorKey(slug, segments) }))} /> : null}
                     </li>
                   </ContextMenuTrigger>

@@ -2,7 +2,7 @@
 
 :root {
   --wa-rail-width: 72px;
-  --wa-sidebar-width: 380px;
+  --wa-sidebar-width: clamp(400px, 28vw, 520px);
 }
 
 .wa-layout {
