@@ -64,10 +64,11 @@ import { leadScoreLabel, leadScoreTone } from './leadScore'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 
 function InboxSegmentSummary({ items }: { items: Array<{ slug: string; label: string; color: string }> }) {
+  const visible = 3
   return <div className="inbox-row-segments contact-segment-chips" aria-label="Segmentos">
-    {items.slice(0, 2).map(item => <SegmentBadge key={item.slug} colorKey={item.color} className="inbox-chat-segment">{item.label}</SegmentBadge>)}
-    {items.length > 2 ? <Popover><PopoverTrigger asChild>
-      <button type="button" className="inbox-filter-chip" aria-label={'Ver los ' + items.length + ' segmentos'}>+{items.length - 2}</button>
+    {items.slice(0, visible).map(item => <SegmentBadge key={item.slug} colorKey={item.color} className="inbox-chat-segment">{item.label}</SegmentBadge>)}
+    {items.length > visible ? <Popover><PopoverTrigger asChild>
+      <button type="button" className="inbox-filter-chip" aria-label={'Ver los ' + items.length + ' segmentos'}>+{items.length - visible}</button>
     </PopoverTrigger><PopoverContent align="start" className="w-64 max-h-64 overflow-y-auto">
       <p className="mb-2 text-sm font-medium">Todos los segmentos</p>
       <div className="contact-segment-chips">{items.map(item => <SegmentBadge key={item.slug} colorKey={item.color}>{item.label}</SegmentBadge>)}</div>
@@ -358,34 +359,32 @@ function ProfileBlock({
           {inboxInitials(heading, detail.conversation.phone)}
         </span>
         <div className="inbox-chat-header-identity">
-          <div className="inbox-chat-header-customer-row">
-            <div className="inbox-chat-header-customer">
-              <div className="inbox-chat-heading-row">
-                <h1 className={`inbox-chat-heading${isWaAlias ? ' muted' : ''}`}>
-                  {heading}
-                </h1>
-                {canOpenContact ? (
-                  <button
-                    type="button"
-                    className="inbox-chat-contact-icon-btn"
-                    title={contactActionLabel}
-                    aria-label={contactActionLabel}
-                    onClick={onOpenContact}
-                  >
-                    <ContactSheetIcon mode={contactMode} />
-                  </button>
-                ) : null}
-              </div>
-              <p className="inbox-chat-person-phone">
-                {chatSecondaryLabel(detail.conversation.phone)}
-              </p>
+          <span
+            className={`inbox-chat-window-pill ${detail.user_service_window_open ? 'is-open' : 'is-closed'}`}
+          >
+            {detail.user_service_window_open ? <WindowClockIcon /> : <InboxHeaderLockIcon />}
+            Ventana {detail.user_service_window_open ? 'abierta' : 'cerrada'}
+          </span>
+          <div className="inbox-chat-header-customer">
+            <div className="inbox-chat-heading-row">
+              <h1 className={`inbox-chat-heading${isWaAlias ? ' muted' : ''}`}>
+                {heading}
+              </h1>
+              {canOpenContact ? (
+                <button
+                  type="button"
+                  className="inbox-chat-contact-icon-btn"
+                  title={contactActionLabel}
+                  aria-label={contactActionLabel}
+                  onClick={onOpenContact}
+                >
+                  <ContactSheetIcon mode={contactMode} />
+                </button>
+              ) : null}
             </div>
-            <span
-              className={`inbox-chat-window-pill ${detail.user_service_window_open ? 'is-open' : 'is-closed'}`}
-            >
-              {detail.user_service_window_open ? <WindowClockIcon /> : <InboxHeaderLockIcon />}
-              Ventana {detail.user_service_window_open ? 'abierta' : 'cerrada'}
-            </span>
+            <p className="inbox-chat-person-phone">
+              {chatSecondaryLabel(detail.conversation.phone)}
+            </p>
           </div>
         </div>
       </section>
