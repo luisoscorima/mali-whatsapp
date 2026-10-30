@@ -103,7 +103,17 @@ async function main() {
            WHERE area IN ('educacion_ca', 'educacion_ep')`,
         );
 
-        // 2) Orígenes
+        // 2) Orígenes: borrar alias que ya existen en educacion (mismo channel+external_id)
+        await sql(
+          tx,
+          `DELETE FROM contact_origins alias_o
+           USING contact_origins keep
+           WHERE alias_o.area IN ('educacion_ca', 'educacion_ep')
+             AND keep.area = 'educacion'
+             AND keep.channel = alias_o.channel
+             AND keep.external_id = alias_o.external_id`,
+        );
+
         await sql(
           tx,
           `UPDATE contact_origins
