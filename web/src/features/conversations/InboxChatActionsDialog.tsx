@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
 import { Button } from '@/shared/ui/shadcn/button'
@@ -40,13 +40,15 @@ type InboxChatActionsDialogProps = {
   category?: string | null
   currentSegmentSlugs: string[]
   onLeadScore: (score: number | null) => void
-  onLeadStatus: (statusId: number) => void | boolean | Promise<void | boolean>
   onMarkUnread: () => void
   onSetArchived?: (archived: boolean) => void
   archived?: boolean
   lastUserMessageAt?: string | null
   onModeChange: (status: 'bot' | 'human') => void
   onExport: () => void
+  canAssign?: boolean
+  onAssign?: () => void
+  onOpenLeadStatus?: () => void
   onOpenContact: () => void
   canOpenContact?: boolean
   onSegmentAdded?: () => void
@@ -68,39 +70,26 @@ export function InboxChatActionsDialog({
   category = null,
   currentSegmentSlugs,
   onLeadScore,
-  onLeadStatus,
   onMarkUnread,
   onSetArchived,
   archived = false,
   lastUserMessageAt = null,
   onModeChange,
   onExport,
+  canAssign = false,
+  onAssign,
+  onOpenLeadStatus,
   onOpenContact,
   canOpenContact = true,
   onSegmentAdded,
 }: InboxChatActionsDialogProps) {
   const [segmentBusy, setSegmentBusy] = useState('')
-  const [statusOptions, setStatusOptions] = useState<
-    Array<{ id: number; slug: string; label: string; active: boolean }>
-  >([])
-  const [statusBusy, setStatusBusy] = useState(false)
   const current = leadScore ?? 0
   const hasConversation = conversationId != null && conversationId > 0
   const status = String(conversationStatus ?? '').toLowerCase()
   const hasInbound = lastUserMessageAt != null
   const canUnarchive = archived && hasInbound
   const canArchive = hasConversation && hasInbound && !archived
-
-  useEffect(() => {
-    if (!open || !contactId) return
-    void apiClient
-      .get<Array<{ id: number; slug: string; label: string; active: boolean }>>(
-        '/api/leads/statuses',
-      )
-      .then((r) => {
-        if (r.ok) setStatusOptions(r.data)
-      })
-  }, [open, contactId])
 
   async function toggleAssignableSegment(slug: string) {
     if (!contactId) return
@@ -141,7 +130,6 @@ export function InboxChatActionsDialog({
                 category={category}
                 currentSegmentSlugs={currentSegmentSlugs}
                 busySlug={segmentBusy}
-                accordion
                 onToggle={(slug) => void toggleAssignableSegment(slug)}
               />
             </div>
@@ -149,33 +137,6 @@ export function InboxChatActionsDialog({
 
           {hasConversation && contactId ? (
             <div className="inbox-lead-score-form">
-              <label className="block text-sm">
-                <span className="text-muted">Estado del lead</span>
-                <select
-                  className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
-                  value={leadStatusId ?? ''}
-                  disabled={statusBusy || statusOptions.length === 0}
-                  onChange={(e) => {
-                    const id = Number(e.target.value)
-                    if (id <= 0) return
-                    setStatusBusy(true)
-                    void Promise.resolve(onLeadStatus(id)).finally(() =>
-                      setStatusBusy(false),
-                    )
-                  }}
-                >
-                  <option value="" disabled>
-                    {leadStatusLabel || 'Elegir estado'}
-                  </option>
-                  {statusOptions
-                    .filter((s) => s.active || s.id === leadStatusId)
-                    .map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.label}
-                      </option>
-                    ))}
-                </select>
-              </label>
               <div className="inbox-lead-score-row">
                 <span className="inbox-lead-score-label" id="inbox-actions-lead-label">
                   Calificación del lead
@@ -234,6 +195,37 @@ export function InboxChatActionsDialog({
           ) : null}
 
           <div className="flex flex-col gap-2">
+            {hasConversation && canAssign && onAssign ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full justify-start"
+                onClick={() => {
+                  onAssign()
+                  onOpenChange(false)
+                }}
+              >
+                Asignar chat
+              </Button>
+            ) : null}
+            {hasConversation && contactId && onOpenLeadStatus ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full justify-start"
+                onClick={() => {
+                  onOpenLeadStatus()
+                  onOpenChange(false)
+                }}
+              >
+                Estado del lead
+                {leadStatusLabel ? (
+                  <span className="muted ml-auto text-xs font-normal">
+                    {leadStatusLabel}
+                  </span>
+                ) : null}
+              </Button>
+            ) : null}
             {canOpenContact ? (
               <Button
                 type="button"

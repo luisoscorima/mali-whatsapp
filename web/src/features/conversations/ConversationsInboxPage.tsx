@@ -34,8 +34,10 @@ import { buildChatTimeline } from './buildChatTimeline'
 import { ConversationBadges } from './ConversationBadges'
 import { InboxAssigneePicker, type ConversationAssignee } from './InboxAssigneePicker'
 import { InboxAssignableSegmentsPicker } from './InboxAssignableSegmentsPicker'
+import { InboxAssignSheet } from './InboxAssignSheet'
 import { InboxChatActionsDialog } from './InboxChatActionsDialog'
 import { InboxLeadStatusPicker } from './InboxLeadStatusPicker'
+import { InboxLeadStatusSheet } from './InboxLeadStatusSheet'
 import { groupAssignableSegments } from './assignableSegmentsUi'
 import { InboxContactSheet } from './InboxContactSheet'
 import { InboxSendTemplateDialog } from './InboxSendTemplateDialog'
@@ -183,6 +185,23 @@ function InboxNotifyBellOffIcon() {
       <line x1="2" y1="2" x2="22" y2="22" />
     </svg>
   )
+}
+
+type AssignContext = {
+  conversationId: number
+  heading: string
+  phone: string
+  assignedUserId: number | null
+}
+
+type LeadStatusContext = {
+  contactId: number
+  conversationId: number | null
+  heading: string
+  phone: string
+  leadStatusId: number | null
+  leadStatusLabel: string | null
+  category?: string | null
 }
 
 const INBOX_POLL_MS = 8000
@@ -1229,6 +1248,10 @@ export function ConversationsInboxPage() {
   const [replyToMessage, setReplyToMessage] = useState<ReplyToMessage | null>(null)
   const [contactAttributes, setContactAttributes] = useState<Record<string, string>>({})
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false)
+  const [assignContext, setAssignContext] = useState<AssignContext | null>(null)
+  const [leadStatusContext, setLeadStatusContext] = useState<LeadStatusContext | null>(
+    null,
+  )
   const [assignees, setAssignees] = useState<ConversationAssignee[]>([])
   const [assigneesLoading, setAssigneesLoading] = useState(false)
   const [assignSaving, setAssignSaving] = useState(false)
@@ -1898,6 +1921,37 @@ export function ConversationsInboxPage() {
     window.setTimeout(action, 0)
   }
 
+  function openAssignSheet(source: AssignContext) {
+    setAssignContext(source)
+  }
+
+  function openAssignFromActions(ctx: ChatActionsContext) {
+    if (!ctx.conversationId || ctx.conversationId <= 0) return
+    openAssignSheet({
+      conversationId: ctx.conversationId,
+      heading: ctx.heading,
+      phone: ctx.phone,
+      assignedUserId: ctx.assignedUserId,
+    })
+  }
+
+  function openLeadStatusSheet(source: LeadStatusContext) {
+    setLeadStatusContext(source)
+  }
+
+  function openLeadStatusFromActions(ctx: ChatActionsContext) {
+    if (!ctx.contactId) return
+    openLeadStatusSheet({
+      contactId: ctx.contactId,
+      conversationId: ctx.conversationId,
+      heading: ctx.heading,
+      phone: ctx.phone,
+      leadStatusId: ctx.leadStatusId,
+      leadStatusLabel: ctx.leadStatusLabel,
+      category: detail?.conversation.line_program || 'general',
+    })
+  }
+
   function openContactSheet(opts: {
     mode: 'edit' | 'create'
     contactId?: number | null
@@ -2173,22 +2227,28 @@ export function ConversationsInboxPage() {
 
   async function onLeadStatus(statusId: number): Promise<boolean> {
     const contactId =
+      leadStatusContext?.contactId ??
       actionsContext?.contactId ??
       detail?.conversation.contact_id ??
       null
     if (!contactId) return false
     const conversationId =
+      leadStatusContext?.conversationId ??
       actionsContext?.conversationId ??
       detail?.conversation.id ??
       selectedId ??
       null
+    const category =
+      leadStatusContext?.category ||
+      detail?.conversation.line_program ||
+      'general'
     setLeadStatusBusy(true)
     const result = await apiClient.patch<{
       lead_status_id: number | null
       lead_status: { id: number; slug: string; label: string } | null
     }>(`/api/leads/contacts/${contactId}/status`, {
       status_id: statusId,
-      category: detail?.conversation.line_program || 'general',
+      category,
       conversation_id: conversationId && conversationId > 0 ? conversationId : undefined,
     })
     setLeadStatusBusy(false)
@@ -2196,6 +2256,7 @@ export function ConversationsInboxPage() {
       notify.error(result.error)
       return false
     }
+    setLeadStatusContext(null)
     notify.success(
       result.data.lead_status?.label
         ? `Estado: ${result.data.lead_status.label}`
@@ -2211,6 +2272,7 @@ export function ConversationsInboxPage() {
         : prev,
     )
     if (selectedId) void loadDetail(selectedId)
+    void loadList()
     return true
   }
 
@@ -2348,7 +2410,7 @@ export function ConversationsInboxPage() {
     contactId ? userCanUpdateContacts(user) : userCanCreateContacts(user)
 
   useEffect(() => {
-    if ((!assigneePickerOpen && !bulkActionsOpen) || !canAssign) return
+    if ((!assigneePickerOpen && !assignContext && !bulkActionsOpen) || !canAssign) return
     setAssigneesLoading(true)
     void apiClient
       .get<{ assignees: ConversationAssignee[] }>('/api/conversations/assignees')
@@ -2360,10 +2422,17 @@ export function ConversationsInboxPage() {
         }
         setAssignees(result.data.assignees)
       })
-  }, [assigneePickerOpen, bulkActionsOpen, canAssign])
+  }, [assigneePickerOpen, assignContext, bulkActionsOpen, canAssign])
 
-  async function onAssign(assignedUserId: number | null): Promise<boolean> {
-    const convId = detail?.conversation.id ?? selectedId
+  async function onAssign(
+    assignedUserId: number | null,
+    conversationId?: number | null,
+  ): Promise<boolean> {
+    const convId =
+      conversationId ??
+      assignContext?.conversationId ??
+      detail?.conversation.id ??
+      selectedId
     if (!convId || convId <= 0) return false
     setAssignSaving(true)
     const result = await apiClient.patch<{
@@ -2375,6 +2444,7 @@ export function ConversationsInboxPage() {
       notify.error(result.error)
       return false
     }
+    setAssignContext(null)
     notify.success(
       assignedUserId == null ? 'Chat sin asignar' : 'Chat asignado',
     )
@@ -3223,6 +3293,41 @@ export function ConversationsInboxPage() {
                           {item.contact_id ? 'Editar contacto' : 'Guardar contacto'}
                         </ContextMenuItem>
                       ) : null}
+                      {hasConversation && canAssign ? (
+                        <ContextMenuItem
+                          onSelect={() =>
+                            openAfterContextMenu(() =>
+                              openAssignSheet({
+                                conversationId: item.id,
+                                heading: name,
+                                phone: item.phone || '',
+                                assignedUserId: item.assigned_user_id,
+                              }),
+                            )
+                          }
+                        >
+                          Asignar chat
+                        </ContextMenuItem>
+                      ) : null}
+                      {item.contact_id ? (
+                        <ContextMenuItem
+                          onSelect={() =>
+                            openAfterContextMenu(() =>
+                              openLeadStatusSheet({
+                                contactId: item.contact_id!,
+                                conversationId: hasConversation ? item.id : null,
+                                heading: name,
+                                phone: item.phone || '',
+                                leadStatusId: null,
+                                leadStatusLabel: null,
+                                category: item.line_program || 'general',
+                              }),
+                            )
+                          }
+                        >
+                          Estado del lead
+                        </ContextMenuItem>
+                      ) : null}
                     </ContextMenuGroup>
                     {hasConversation ? (
                       <>
@@ -3511,7 +3616,6 @@ export function ConversationsInboxPage() {
             []
           }
           onLeadScore={onLeadScore}
-          onLeadStatus={onLeadStatus}
           onMarkUnread={() => void onMarkUnread(actionsContext.conversationId)}
           onSetArchived={(archived) =>
             void onSetArchived(archived, actionsContext.conversationId)
@@ -3519,6 +3623,9 @@ export function ConversationsInboxPage() {
           archived={actionsContext.archived}
           lastUserMessageAt={actionsContext.lastUserMessageAt}
           onModeChange={onModeChange}
+          canAssign={canAssign}
+          onAssign={() => openAssignFromActions(actionsContext)}
+          onOpenLeadStatus={() => openLeadStatusFromActions(actionsContext)}
           canOpenContact={canOpenListContact(actionsContext.contactId, actionsContext.phone)}
           onOpenContact={() =>
             openContactSheet({
@@ -3569,6 +3676,40 @@ export function ConversationsInboxPage() {
             void loadDetail(selectedId)
             void loadList()
           }}
+        />
+      ) : null}
+
+      {assignContext ? (
+        <InboxAssignSheet
+          open={Boolean(assignContext)}
+          onOpenChange={(open) => {
+            if (!open) setAssignContext(null)
+          }}
+          heading={assignContext.heading}
+          phone={assignContext.phone}
+          currentAssigneeId={assignContext.assignedUserId}
+          allowUnassign={allowBulkUnassign}
+          assignees={assignees}
+          loading={assigneesLoading}
+          busy={assignSaving}
+          onSelect={(assignedUserId) =>
+            onAssign(assignedUserId, assignContext.conversationId)
+          }
+        />
+      ) : null}
+
+      {leadStatusContext ? (
+        <InboxLeadStatusSheet
+          open={Boolean(leadStatusContext)}
+          onOpenChange={(open) => {
+            if (!open) setLeadStatusContext(null)
+          }}
+          heading={leadStatusContext.heading}
+          phone={leadStatusContext.phone}
+          currentStatusId={leadStatusContext.leadStatusId}
+          currentStatusLabel={leadStatusContext.leadStatusLabel}
+          busy={leadStatusBusy}
+          onSelect={onLeadStatus}
         />
       ) : null}
 
