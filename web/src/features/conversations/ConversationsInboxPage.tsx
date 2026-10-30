@@ -2631,108 +2631,129 @@ export function ConversationsInboxPage() {
                       className={`inbox-chat-item ${item.inbox_unread ? 'inbox-chat-item--unread' : ''} ${active ? 'is-active' : ''}`}
                     >
                       <div className="inbox-chat-item-shell">
+                        {item.line_label ||
+                        item.line_program ||
+                        item.line_display_phone ||
+                        item.assigned_user_label ? (
+                          <div className="inbox-chat-item-meta">
+                            {item.line_label || item.line_program || item.line_display_phone ? (
+                              <span className="inbox-chat-line" title={item.line_display_phone || undefined}>
+                                <InboxWhatsAppIcon />
+                                <span className="inbox-chat-line-identity">
+                                  <span>
+                                    {item.line_label ||
+                                      item.line_program?.toUpperCase() ||
+                                      'Línea de WhatsApp'}
+                                  </span>
+                                  {item.line_display_phone ? (
+                                    <>
+                                      <span className="inbox-chat-line-sep" aria-hidden>
+                                        ·
+                                      </span>
+                                      <span className="inbox-chat-line-phone">
+                                        {displayPhoneNumber(item.line_display_phone)}
+                                      </span>
+                                    </>
+                                  ) : null}
+                                </span>
+                              </span>
+                            ) : (
+                              <span />
+                            )}
+                            {item.assigned_user_label ? (
+                              <span
+                                className="inbox-chat-assignee"
+                                title={`Asignado a ${item.assigned_user_label}`}
+                              >
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  width="12"
+                                  height="12"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="1.7"
+                                  aria-hidden="true"
+                                >
+                                  <circle cx="12" cy="7" r="3" />
+                                  <path d="M5 21v-3a7 7 0 0 1 14 0v3Z" />
+                                </svg>
+                                <span>{item.assigned_user_label}</span>
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => void onSelectItem(item)}
                           className="inbox-chat-item-btn"
                         >
-                          <span className="inbox-chat-item-core">
-                            {item.line_label || item.line_program || item.line_display_phone ? (
-                              <span className="inbox-chat-item-meta">
-                                <span className="inbox-chat-line" title={item.line_display_phone || undefined}>
-                                  <InboxWhatsAppIcon />
-                                  <span className="inbox-chat-line-identity">
-                                    <span>{item.line_label || item.line_program?.toUpperCase() || 'Línea de WhatsApp'}</span>
-                                    {item.line_display_phone ? (
-                                      <>
-                                        <span className="inbox-chat-line-sep" aria-hidden>
-                                          ·
-                                        </span>
-                                        <span className="inbox-chat-line-phone">
-                                          {displayPhoneNumber(item.line_display_phone)}
-                                        </span>
-                                      </>
-                                    ) : null}
-                                  </span>
-                                </span>
-                              </span>
-                            ) : null}
-                            <span className="inbox-chat-item-primary">
-                              <span className="inbox-chat-avatar-wrap">
-                                {canBulkSelect && contactIdForBulk(item) != null ? (
-                                  <label
-                                    className={`inbox-chat-item-check ${selectedContactIds.has(contactIdForBulk(item)!) ? 'is-selected' : ''}`}
-                                    onClick={(event) => event.stopPropagation()}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedContactIds.has(contactIdForBulk(item)!)}
-                                      onChange={() => toggleContactSelection(contactIdForBulk(item)!)}
-                                      onClick={(event) => event.stopPropagation()}
-                                      aria-label={`Seleccionar ${name}`}
-                                    />
-                                  </label>
-                                ) : null}
-                                <span
-                                  className={`inbox-chat-avatar ${
-                                    !item.is_virtual
-                                      ? item.user_service_window_open
-                                        ? 'inbox-chat-avatar--window-open'
-                                        : 'inbox-chat-avatar--window-closed'
-                                      : ''
-                                  }`}
-                                  aria-hidden
-                                  title={
-                                    !item.is_virtual
-                                      ? item.user_service_window_open
-                                        ? windowHours
-                                          ? `Ventana 24h abierta (${windowHours})`
-                                          : 'Ventana 24h abierta'
-                                        : 'Ventana 24h cerrada'
-                                      : undefined
-                                  }
+                          <span className="inbox-chat-item-primary">
+                            <span className="inbox-chat-avatar-wrap">
+                              {canBulkSelect && contactIdForBulk(item) != null ? (
+                                <label
+                                  className={`inbox-chat-item-check ${selectedContactIds.has(contactIdForBulk(item)!) ? 'is-selected' : ''}`}
+                                  onClick={(event) => event.stopPropagation()}
                                 >
-                                  {inboxInitials(name, item.phone)}
-                                  {!item.is_virtual && !item.user_service_window_open ? (
-                                    <span className="inbox-chat-avatar-lock" aria-hidden>
-                                      🔒
-                                    </span>
-                                  ) : null}
-                                  {windowHours ? (
-                                    <span className="inbox-chat-avatar-hours" aria-hidden>
-                                      {windowHours}
-                                    </span>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedContactIds.has(contactIdForBulk(item)!)}
+                                    onChange={() => toggleContactSelection(contactIdForBulk(item)!)}
+                                    onClick={(event) => event.stopPropagation()}
+                                    aria-label={`Seleccionar ${name}`}
+                                  />
+                                </label>
+                              ) : null}
+                              <span
+                                className={`inbox-chat-avatar ${
+                                  !item.is_virtual
+                                    ? item.user_service_window_open
+                                      ? 'inbox-chat-avatar--window-open'
+                                      : 'inbox-chat-avatar--window-closed'
+                                    : ''
+                                }`}
+                                aria-hidden
+                                title={
+                                  !item.is_virtual
+                                    ? item.user_service_window_open
+                                      ? windowHours
+                                        ? `Ventana 24h abierta (${windowHours})`
+                                        : 'Ventana 24h abierta'
+                                      : 'Ventana 24h cerrada'
+                                    : undefined
+                                }
+                              >
+                                {inboxInitials(name, item.phone)}
+                                {!item.is_virtual && !item.user_service_window_open ? (
+                                  <span className="inbox-chat-avatar-lock" aria-hidden>
+                                    🔒
+                                  </span>
+                                ) : null}
+                                {windowHours ? (
+                                  <span className="inbox-chat-avatar-hours" aria-hidden>
+                                    {windowHours}
+                                  </span>
+                                ) : null}
+                              </span>
+                            </span>
+                            <span className="inbox-chat-link-main">
+                              <span className="inbox-chat-row-top">
+                                <span className="inbox-chat-title-line">
+                                  <span
+                                    className={`inbox-chat-title${hasWaAlias ? ' muted' : ''}`}
+                                  >
+                                    {name}
+                                  </span>
+                                  {!showPhoneRow && leadScore ? (
+                                    <LeadScoreBadge score={leadScore} />
                                   ) : null}
                                 </span>
                               </span>
-                              <span className="inbox-chat-link-main">
-                                <span className="inbox-chat-row-top">
-                                  <span className="inbox-chat-title-line">
-                                    <span
-                                      className={`inbox-chat-title${hasWaAlias ? ' muted' : ''}`}
-                                    >
-                                      {name}
-                                    </span>
-                                    {!showPhoneRow && leadScore ? (
-                                      <LeadScoreBadge score={leadScore} />
-                                    ) : null}
+                              {showPhoneRow ? (
+                                <span className="inbox-chat-phone-row">
+                                  <span className="inbox-chat-phone">
+                                    {chatSecondaryLabel(item.phone)}
                                   </span>
-                                </span>
-                                {showPhoneRow ? (
-                                  <span className="inbox-chat-phone-row">
-                                    <span className="inbox-chat-phone">
-                                      {chatSecondaryLabel(item.phone)}
-                                    </span>
-                                    {leadScore ? <LeadScoreBadge score={leadScore} /> : null}
-                                    <ConversationBadges
-                                      status={item.conversation_status}
-                                      assignedUserLabel={item.assigned_user_label}
-                                      hideAssignee
-                                      archived={item.archived}
-                                      unanswered={!item.last_user_message_at}
-                                    />
-                                  </span>
-                                ) : (
+                                  {leadScore ? <LeadScoreBadge score={leadScore} /> : null}
                                   <ConversationBadges
                                     status={item.conversation_status}
                                     assignedUserLabel={item.assigned_user_label}
@@ -2740,33 +2761,44 @@ export function ConversationsInboxPage() {
                                     archived={item.archived}
                                     unanswered={!item.last_user_message_at}
                                   />
-                                )}
-                                <span className="inbox-chat-row-mid">
-                                  <span className="inbox-chat-preview" title={previewText}>
-                                    {previewText}
-                                  </span>
+                                </span>
+                              ) : (
+                                <ConversationBadges
+                                  status={item.conversation_status}
+                                  assignedUserLabel={item.assigned_user_label}
+                                  hideAssignee
+                                  archived={item.archived}
+                                  unanswered={!item.last_user_message_at}
+                                />
+                              )}
+                              <span className="inbox-chat-row-mid">
+                                <span className="inbox-chat-preview" title={previewText}>
+                                  {previewText}
                                 </span>
                               </span>
                             </span>
                           </span>
                         </button>
                         <div className="inbox-chat-side">
-                          {item.assigned_user_label ? (
-                            <span
-                              className="inbox-chat-assignee"
-                              title={`Asignado a ${item.assigned_user_label}`}
-                            >
-                              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><circle cx="12" cy="7" r="3" /><path d="M5 21v-3a7 7 0 0 1 14 0v3Z" /></svg>
-                              <span>{item.assigned_user_label}</span>
-                            </span>
-                          ) : null}
                           {item.inbox_unread ? (
                             <span
                               className={`inbox-unread-dot ${(item.unread_message_count ?? 0) > 0 ? 'inbox-unread-dot--count' : ''}`}
-                              title={item.unread_message_count ? `${item.unread_message_count} mensajes sin leer` : 'No leído'}
-                              aria-label={item.unread_message_count ? `${item.unread_message_count} mensajes sin leer` : 'No leído'}
+                              title={
+                                item.unread_message_count
+                                  ? `${item.unread_message_count} mensajes sin leer`
+                                  : 'No leído'
+                              }
+                              aria-label={
+                                item.unread_message_count
+                                  ? `${item.unread_message_count} mensajes sin leer`
+                                  : 'No leído'
+                              }
                             >
-                              {(item.unread_message_count ?? 0) > 0 ? ((item.unread_message_count ?? 0) > 99 ? '99+' : item.unread_message_count) : null}
+                              {(item.unread_message_count ?? 0) > 0
+                                ? (item.unread_message_count ?? 0) > 99
+                                  ? '99+'
+                                  : item.unread_message_count
+                                : null}
                             </span>
                           ) : null}
                           <span
