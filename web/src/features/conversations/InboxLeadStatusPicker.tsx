@@ -12,7 +12,7 @@ export type LeadStatusOption = {
 type InboxLeadStatusPickerProps = {
   currentStatusId: number | null
   busy?: boolean
-  onSelect: (statusId: number) => void | Promise<void>
+  onSelect: (statusId: number) => void | boolean | Promise<void | boolean>
 }
 
 export function InboxLeadStatusPicker({

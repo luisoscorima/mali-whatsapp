@@ -40,7 +40,7 @@ type InboxChatActionsDialogProps = {
   category?: string | null
   currentSegmentSlugs: string[]
   onLeadScore: (score: number | null) => void
-  onLeadStatus: (statusId: number) => void | Promise<void>
+  onLeadStatus: (statusId: number) => void | boolean | Promise<void | boolean>
   onMarkUnread: () => void
   onSetArchived?: (archived: boolean) => void
   archived?: boolean
