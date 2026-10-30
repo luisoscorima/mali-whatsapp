@@ -3603,7 +3603,6 @@ export function ConversationsInboxPage() {
           phone={actionsContext.phone}
           contactId={actionsContext.contactId}
           leadScore={actionsContext.leadScore}
-          leadStatusId={actionsContext.leadStatusId}
           leadStatusLabel={actionsContext.leadStatusLabel}
           aiAreaEnabled={actionsContext.aiAreaEnabled}
           conversationStatus={actionsContext.conversationStatus}

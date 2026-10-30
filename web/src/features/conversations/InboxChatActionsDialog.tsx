@@ -32,7 +32,6 @@ type InboxChatActionsDialogProps = {
   phone: string
   contactId: number | null
   leadScore: number | null
-  leadStatusId: number | null
   leadStatusLabel: string | null
   aiAreaEnabled: boolean
   conversationStatus: string | null
@@ -62,7 +61,6 @@ export function InboxChatActionsDialog({
   phone,
   contactId,
   leadScore,
-  leadStatusId,
   leadStatusLabel,
   aiAreaEnabled,
   conversationStatus,
