@@ -132,9 +132,9 @@ html[data-theme='dark'] .inbox-layout-wa {
 }
 
 .inbox-filters {
-  padding: 8px 14px 12px;
-  border-bottom: 1px solid var(--line);
-  background: var(--wa-list-bg);
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .inbox-search-row {
@@ -143,16 +143,43 @@ html[data-theme='dark'] .inbox-layout-wa {
   align-items: center;
 }
 
+/* Estándar único para cuadros de búsqueda (sidebar, páginas, popovers). */
 .inbox-search-input {
-  flex: 1;
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
   min-width: 0;
-  font-family: inherit;
-  font-size: 0.9rem;
-  padding: 8px 10px;
-  border-radius: 8px;
+  min-height: 2.25rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
   border: 1px solid var(--line);
+  border-radius: 0.5rem;
   background: var(--input-bg);
   color: var(--ink);
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.25;
+}
+
+.inbox-search-row .inbox-search-input {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+/* Permite anchos fijos (p. ej. w-64) sin pelear con width: 100%. */
+.inbox-search-input.w-56,
+.inbox-search-input.w-64,
+.inbox-search-input.w-72 {
+  width: auto;
+}
+
+.inbox-search-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.inbox-search-input::placeholder {
+  color: var(--muted);
 }
 
 .inbox-archived-row {
@@ -288,6 +315,38 @@ html[data-theme='dark'] .inbox-layout-wa {
   display: block;
   max-width: 100%;
   overflow: hidden;
+}
+
+/* Segmentos/atributos: handle de drag en columna fija a la izquierda. */
+.inbox-layout-wa .inbox-chat-item.inbox-chat-item--sortable {
+  display: flex;
+  align-items: stretch;
+}
+
+.inbox-chat-item-drag {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  width: 1.5rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: grab;
+}
+
+.inbox-chat-item-drag:active {
+  cursor: grabbing;
+}
+
+.inbox-layout-wa .inbox-chat-item--sortable .inbox-chat-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-left: 4px;
 }
 
 .inbox-row-segments {
@@ -1182,8 +1241,8 @@ html[data-theme='dark'] .inbox-lead-score-badge--mid {
 
 .inbox-chat-header-summary {
   display: grid;
-  grid-template-columns: minmax(280px, 1.5fr) repeat(2, minmax(150px, 0.9fr));
-  align-items: stretch;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(2, minmax(140px, 0.9fr)) auto;
+  align-items: center;
   gap: 16px;
   width: 100%;
   min-width: 0;
@@ -1196,10 +1255,16 @@ html[data-theme='dark'] .inbox-lead-score-badge--mid {
   min-width: 0;
 }
 
-.inbox-chat-header-customer-panel .inbox-chat-header-toolbar {
-  flex-shrink: 0;
-  margin-left: auto;
+.inbox-chat-header-toolbar {
+  grid-column: 4;
+  grid-row: 1;
+  justify-self: end;
   align-self: center;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
 }
 
 .inbox-chat-header-context {
@@ -1381,18 +1446,32 @@ html[data-theme='dark'] .inbox-lead-score-badge--mid {
 
 @container (max-width: 680px) {
   .inbox-chat-header-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px 10px;
   }
 
   .inbox-chat-header-customer-panel {
-    grid-column: 1 / -1;
+    grid-column: 1;
+    grid-row: 1;
     gap: 8px;
     padding-bottom: 2px;
   }
 
-  .inbox-chat-header-customer-panel .inbox-chat-header-toolbar {
+  .inbox-chat-header-toolbar {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
     gap: 4px;
+  }
+
+  .inbox-chat-header-context--line {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .inbox-chat-header-context--assignee {
+    grid-column: 2;
+    grid-row: 2;
   }
 
   .inbox-chat-header-assign {
@@ -1443,6 +1522,7 @@ html[data-theme='dark'] .inbox-lead-score-badge--mid {
 
   .inbox-chat-header-meta {
     grid-column: 1 / -1;
+    grid-row: 3;
     padding-top: 2px;
   }
 
@@ -1470,10 +1550,9 @@ html[data-theme='dark'] .inbox-lead-score-badge--mid {
 
 @container (max-width: 480px) {
   .inbox-chat-header-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .inbox-chat-header-customer-panel,
   .inbox-chat-header-meta {
     grid-column: 1 / -1;
   }
@@ -1506,14 +1585,6 @@ html[data-theme='dark'] .inbox-lead-score-badge--mid {
 .badge.neutral {
   background: color-mix(in srgb, var(--muted) 20%, transparent);
   color: var(--muted);
-}
-
-.inbox-chat-header-toolbar {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
 }
 
 .inbox-header-more {

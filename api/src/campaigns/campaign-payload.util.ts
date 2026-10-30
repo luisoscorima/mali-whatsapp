@@ -13,14 +13,26 @@ export function parseCampaignPayload(payload: unknown): Record<string, unknown> 
   return typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
 }
 
+export function campaignSegmentSlugs(campaign: {
+  segment?: string | null;
+  campaign_payload?: unknown;
+}): string[] {
+  const payload = parseCampaignPayload(campaign.campaign_payload);
+  const segments = payload?.segments;
+  if (Array.isArray(segments) && segments.length) {
+    return [
+      ...new Set(
+        segments.map((s) => String(s).trim()).filter(Boolean),
+      ),
+    ];
+  }
+  const single = String(campaign.segment || '').trim();
+  return single ? [single] : [];
+}
+
 export function formatCampaignSegmentDisplay(campaign: {
   segment?: string | null;
   campaign_payload?: unknown;
 }): string {
-  const payload = parseCampaignPayload(campaign.campaign_payload);
-  const segments = payload?.segments;
-  if (Array.isArray(segments) && segments.length) {
-    return segments.map((s) => String(s)).join(', ');
-  }
-  return String(campaign.segment || '');
+  return campaignSegmentSlugs(campaign).join(', ');
 }

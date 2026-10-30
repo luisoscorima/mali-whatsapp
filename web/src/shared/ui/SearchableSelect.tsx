@@ -100,7 +100,7 @@ export function SearchableSelect({
             disabled={disabled}
             aria-label={ariaLabel}
             title={triggerText}
-            className={`flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-bg px-2.5 py-2 text-left text-sm disabled:opacity-60 ${
+            className={`flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-line bg-input px-3 text-left text-sm disabled:opacity-60 ${
               value && value !== clearValue ? 'border-accent/40' : ''
             }`}
           >
@@ -118,7 +118,7 @@ export function SearchableSelect({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={searchPlaceholder}
-            className="mb-2 w-full rounded-lg border border-line bg-bg px-2 py-1.5 text-sm"
+            className="inbox-search-input mb-2"
             autoFocus
           />
           <ul className="max-h-56 overflow-y-auto text-sm" role="listbox">

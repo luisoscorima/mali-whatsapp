@@ -36,6 +36,7 @@ type TemplateListItem = {
   submitted_at: string | null
   synced_at: string
   active: boolean
+  search_text?: string
 }
 
 type TemplatesListSidebarProps = {
@@ -100,7 +101,8 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
         t.name.toLowerCase().includes(q) ||
         t.language.toLowerCase().includes(q) ||
         (t.category ?? '').toLowerCase().includes(q) ||
-        t.status.toLowerCase().includes(q)
+        t.status.toLowerCase().includes(q) ||
+        (t.search_text ?? '').toLowerCase().includes(q)
       )
     })
   }, [templates, searchQuery, categoryFilter, visibilityFilter])
@@ -165,9 +167,9 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar plantilla…"
+              placeholder="Buscar nombre o texto…"
               className="inbox-search-input"
-              aria-label="Buscar plantillas"
+              aria-label="Buscar plantillas por nombre o texto"
             />
           </div>
           <div

@@ -551,7 +551,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
         </>
       }
       filters={
-        <div className="inbox-sidebar-filters space-y-2 px-3 pb-2">
+        <div className="space-y-2">
           <div className="inbox-search-row">
             <input
               type="search"
@@ -613,7 +613,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
                   })
                 }
                 placeholder="Valor…"
-                className="min-w-0 flex-1 rounded border border-line bg-bg px-1 py-0.5"
+                className="inbox-search-input min-w-0 flex-1"
               />
             ) : null}
           </div>

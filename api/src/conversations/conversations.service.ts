@@ -3562,6 +3562,7 @@ export class ConversationsService {
       category: string | null;
       category_label: string | null;
       label: string;
+      phone: string | null;
       replyCount: number;
       freeAllowance: number;
       billableCount: number;
@@ -3592,6 +3593,7 @@ export class ConversationsService {
             category: null,
             category_label: null,
             label: '',
+            phone: null,
             ...estimateServiceReplyOverage(row?.n ?? 0, start),
           },
         ],
@@ -3681,12 +3683,12 @@ export class ConversationsService {
         const option = categoryOptions.find((item) => item.slug === line.category);
         const categoryLabel =
           option?.label || (line.category === 'general' ? 'General' : line.category.toUpperCase());
-        const detail = [line.lineLabel, line.phone].filter(Boolean).join(' · ');
         return {
           id: line.id,
           category: line.category,
           category_label: categoryLabel,
-          label: detail,
+          label: (line.lineLabel || '').trim(),
+          phone: line.phone,
           ...estimateServiceReplyOverage(line.n, start),
         };
       }),

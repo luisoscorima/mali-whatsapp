@@ -321,7 +321,7 @@ export function MetaFormsPage() {
               <label className="text-sm">
                 <span className="text-muted">Buscar Form ID o nombre</span>
                 <input
-                  className="mt-1 block w-72 max-w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm"
+                  className="inbox-search-input mt-1 w-72 max-w-full"
                   value={routeQuery}
                   onChange={(e) => {
                     setRouteQuery(e.target.value)
@@ -506,7 +506,7 @@ export function MetaFormsPage() {
           <label className="text-sm">
             <span className="text-muted">Buscar</span>
             <input
-              className="mt-1 block w-56 max-w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm"
+              className="inbox-search-input mt-1 w-56 max-w-full"
               value={leadQuery}
               onChange={(e) => setLeadQuery(e.target.value)}
               placeholder="Nombre, tel, email, form ID"
@@ -515,7 +515,7 @@ export function MetaFormsPage() {
           <label className="text-sm">
             <span className="text-muted">Nombre de form</span>
             <input
-              className="mt-1 block w-64 max-w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm"
+              className="inbox-search-input mt-1 w-64 max-w-full"
               list="meta-form-name-options"
               value={leadFormName}
               onChange={(e) => setLeadFormName(e.target.value)}

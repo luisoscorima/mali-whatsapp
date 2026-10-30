@@ -364,7 +364,7 @@ export function InboxAdvisorNotesPopover({
                     value={varQuery}
                     onChange={(e) => setVarQuery(e.target.value)}
                     placeholder="Buscar variable…"
-                    className="w-full rounded-lg border border-line bg-bg px-2 py-1.5 text-sm"
+                    className="inbox-search-input"
                     onClick={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
                   />

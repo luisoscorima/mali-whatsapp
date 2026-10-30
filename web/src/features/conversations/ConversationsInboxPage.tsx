@@ -400,12 +400,12 @@ function ProfileBlock({
             </p>
           </div>
         </div>
-        {actions ? (
-          <div className="inbox-chat-header-toolbar">{actions}</div>
-        ) : null}
       </section>
 
-      <section className="inbox-chat-header-context" aria-label="Línea de atención">
+      <section
+        className="inbox-chat-header-context inbox-chat-header-context--line"
+        aria-label="Línea de atención"
+      >
         <span className="inbox-chat-header-context-icon">
           <InboxWhatsAppIcon size={20} />
         </span>
@@ -420,7 +420,10 @@ function ProfileBlock({
         </span>
       </section>
 
-      <section className="inbox-chat-header-context" aria-label="Asesor asignado">
+      <section
+        className="inbox-chat-header-context inbox-chat-header-context--assignee"
+        aria-label="Asesor asignado"
+      >
         <span className="inbox-chat-header-context-icon">
           <InboxHeaderAssigneeIcon />
         </span>
@@ -432,6 +435,10 @@ function ProfileBlock({
           ) : null}
         </span>
       </section>
+
+      {actions ? (
+        <div className="inbox-chat-header-toolbar">{actions}</div>
+      ) : null}
 
       <div className="inbox-chat-header-meta">
         <ConversationBadges
@@ -919,6 +926,7 @@ type ServiceReplyLine = {
   category?: string | null
   category_label?: string | null
   label: string
+  phone?: string | null
   replyCount: number
   freeAllowance: number
   billableCount: number
@@ -981,9 +989,12 @@ function ServiceReplyLineRow({
 }) {
   return (
     <li
-      className={`flex items-baseline justify-between gap-3 px-3 py-2${bordered ? ' border-t border-line' : ''}`}
+      className={`flex items-start justify-between gap-3 px-3 py-2${bordered ? ' border-t border-line' : ''}`}
     >
-      <span className="min-w-0 text-sm">{line.label || fallbackLabel}</span>
+      <span className="min-w-0">
+        <span className="block text-sm">{line.label || fallbackLabel}</span>
+        {line.phone ? <span className="mt-0.5 block text-xs text-muted">{line.phone}</span> : null}
+      </span>
       <span className="shrink-0 text-right">
         <span className="block text-sm tabular-nums">{line.replyCount.toLocaleString('es-PE')}</span>
         <span className="block text-xs text-muted">{serviceReplyNote(line)}</span>

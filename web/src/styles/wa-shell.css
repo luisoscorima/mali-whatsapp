@@ -596,9 +596,13 @@
 .inbox-sidebar-filters {
   display: flex;
   flex-direction: column;
+  gap: 0.5rem;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+  padding: 0.5rem 0.75rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--wa-list-bg);
 }
 
 .inbox-sidebar-filters .inbox-chat-filter-pills--row {

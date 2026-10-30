@@ -479,7 +479,7 @@ export function SettingsReporteriaPage() {
                 <span className="text-muted">Valor</span>
                 <input
                   type="search"
-                  className="mt-1 block rounded-lg border border-line bg-surface px-2 py-1.5"
+                  className="inbox-search-input mt-1"
                   value={attrValueDraft}
                   placeholder="Valor…"
                   onChange={(e) => setAttrValueDraft(e.target.value)}

@@ -67,7 +67,7 @@ export function MetaAdsListSidebar({ selectedId }: MetaAdsListSidebarProps) {
     <WaSidebar
       title="Anuncios"
       filters={
-        <div className="space-y-2 px-3 pb-2">
+        <div className="space-y-2">
           <p className="text-xs text-muted">
             Leads desde Click-to-WhatsApp en Facebook o Instagram.
           </p>

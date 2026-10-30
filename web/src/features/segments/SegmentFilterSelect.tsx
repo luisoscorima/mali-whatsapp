@@ -97,7 +97,7 @@ export function SegmentFilterSelect({
           <button
             type="button"
             disabled={disabled}
-            className={`flex items-center justify-between gap-2 rounded-lg border border-line bg-bg px-2.5 py-2 text-left text-sm disabled:opacity-60 ${
+            className={`flex h-9 items-center justify-between gap-2 rounded-lg border border-line bg-input px-3 text-left text-sm disabled:opacity-60 ${
               compact ? 'w-auto max-w-[7.5rem] shrink-0' : 'w-full'
             } ${hasSelection ? 'border-accent/40' : ''}`}
             aria-label={
@@ -123,7 +123,7 @@ export function SegmentFilterSelect({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar segmento…"
-            className="mb-2 w-full rounded-lg border border-line bg-bg px-2 py-1.5 text-sm"
+            className="inbox-search-input mb-2"
             autoFocus
           />
           <div className="mb-1 flex gap-1">

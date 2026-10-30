@@ -255,9 +255,11 @@ function renderSegmentRow(
 ) {
   const active = selectedId === seg.id
   return (
-    <div className={`inbox-chat-item flex items-stretch ${active ? 'is-active' : ''}`}>
+    <div
+      className={`inbox-chat-item${dragHandle ? ' inbox-chat-item--sortable' : ''}${active ? ' is-active' : ''}`}
+    >
       {dragHandle}
-      <Link to={`/segments/${seg.id}${listQuery}`} className="inbox-chat-link flex-1">
+      <Link to={`/segments/${seg.id}${listQuery}`} className="inbox-chat-link">
         <span className="inbox-chat-link-main">
           {showCategory ? (
             <span className="inbox-chat-line">

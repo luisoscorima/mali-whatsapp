@@ -8,6 +8,7 @@ import type { CampaignParamSummaryItem } from './campaign-param-summary.util';
 export type CampaignListItem = {
   id: number;
   segment: string;
+  segments: string[];
   segment_display: string;
   template_name: string;
   message_text: string;

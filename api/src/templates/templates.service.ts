@@ -25,7 +25,10 @@ import {
   TEMPLATE_NAME_REGEX,
 } from './template-builder.util';
 import { downloadTemplateMediaFromUrl } from './template-media.util';
-import { extractTemplateDisplayContent } from './template-display.util';
+import {
+  extractTemplateDisplayContent,
+  extractTemplateSearchText,
+} from './template-display.util';
 import { templateStatusAllowsEdit } from './template-status.util';
 import { buildTemplateDefinition } from './template-definition.util';
 import type {
@@ -90,13 +93,18 @@ export class TemplatesService {
         submitted_at: true,
         synced_at: true,
         active: true,
+        components_json: true,
       },
     });
-    return rows.map((row) => ({
-      ...row,
-      submitted_at: toIso(row.submitted_at),
-      synced_at: row.synced_at.toISOString(),
-    }));
+    return rows.map((row) => {
+      const { components_json, ...rest } = row;
+      return {
+        ...rest,
+        search_text: extractTemplateSearchText(components_json),
+        submitted_at: toIso(row.submitted_at),
+        synced_at: row.synced_at.toISOString(),
+      };
+    });
   }
 
   async listSendable(

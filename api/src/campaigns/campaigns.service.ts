@@ -84,6 +84,7 @@ import type {
   SendCampaignOutcome,
 } from './campaigns.types';
 import {
+  campaignSegmentSlugs,
   formatCampaignSegmentDisplay,
   parseCampaignPayload,
 } from './campaign-payload.util';
@@ -504,9 +505,11 @@ export class CampaignsService {
         row.total_recipients > 0 ? row.total_recipients : row.log_count;
       const sentPercent =
         denom > 0 ? Math.round((row.salida_ok * 100) / denom) : null;
+      const segments = campaignSegmentSlugs(row);
       return {
         id: row.id,
         segment: row.segment,
+        segments,
         segment_display: formatCampaignSegmentDisplay(row),
         template_name: row.template_name,
         message_text: row.message_text,

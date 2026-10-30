@@ -11,6 +11,8 @@ export type TemplateListItem = {
   submitted_at: string | null;
   synced_at: string;
   active: boolean;
+  /** Texto buscable: encabezado, cuerpo, pie y botones. */
+  search_text: string;
 };
 
 export type SendableTemplateListItem = Pick<

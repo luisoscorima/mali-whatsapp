@@ -30,7 +30,7 @@ function DragHandle(props: {
   return (
     <button
       type="button"
-      className="cursor-grab px-1 text-xs text-muted active:cursor-grabbing"
+      className="inbox-chat-item-drag"
       aria-label="Reordenar"
       {...props.listeners}
     >

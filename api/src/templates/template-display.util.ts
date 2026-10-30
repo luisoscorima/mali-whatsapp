@@ -64,3 +64,17 @@ export function extractTemplateDisplayContent(
     bodyExamples,
   };
 }
+
+/** Texto plano para búsqueda en listados (encabezado, cuerpo, pie, botones). */
+export function extractTemplateSearchText(components: unknown): string {
+  const display = extractTemplateDisplayContent(components);
+  return [
+    display.headerText,
+    display.bodyText,
+    display.footerText,
+    ...display.buttons.map((button) => button.text),
+  ]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join('\n');
+}

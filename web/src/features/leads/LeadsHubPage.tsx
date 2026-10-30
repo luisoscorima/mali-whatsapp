@@ -343,7 +343,7 @@ function LeadsUnifiedList() {
         <label className="text-sm">
           <span className="text-muted">Buscar</span>
           <input
-            className="mt-1 block w-64 max-w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm"
+            className="inbox-search-input mt-1 w-64 max-w-full"
             value={qInput}
             onChange={(e) => setQInput(e.target.value)}
             placeholder="Nombre, @username, tel, email, fuente…"

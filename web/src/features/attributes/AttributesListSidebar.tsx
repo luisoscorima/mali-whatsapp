@@ -272,9 +272,11 @@ function renderAttributeRow(
 ) {
   const active = selectedId === def.id
   return (
-    <div className={`inbox-chat-item flex items-stretch ${active ? 'is-active' : ''}`}>
+    <div
+      className={`inbox-chat-item${dragHandle ? ' inbox-chat-item--sortable' : ''}${active ? ' is-active' : ''}`}
+    >
       {dragHandle}
-      <Link to={`/attributes/${def.id}${listQuery}`} className="inbox-chat-link flex-1">
+      <Link to={`/attributes/${def.id}${listQuery}`} className="inbox-chat-link">
         <span className="inbox-chat-link-main">
           {showCategory ? (
             <span className="inbox-chat-line">
