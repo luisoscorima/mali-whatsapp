@@ -16,8 +16,8 @@ export const CANONICAL_AREA_OPTIONS = [
 
 export const EDUCATION_CATEGORY_OPTIONS = [
   { slug: 'general', label: 'General' },
-  { slug: 'ca', label: 'CA' },
-  { slug: 'ep', label: 'EP' },
+  { slug: 'ca', label: 'Cursos de Arte' },
+  { slug: 'ep', label: 'Extensión Profesional' },
 ] as const
 
 export function areaLabel(slug: string): string {

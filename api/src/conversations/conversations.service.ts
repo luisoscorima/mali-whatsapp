@@ -3559,6 +3559,8 @@ export class ConversationsService {
     monthLabel: string;
     lines: Array<{
       id: number;
+      category: string | null;
+      category_label: string | null;
       label: string;
       replyCount: number;
       freeAllowance: number;
@@ -3584,7 +3586,15 @@ export class ConversationsService {
       `);
       return {
         monthLabel: label,
-        lines: [{ id: 0, label: '', ...estimateServiceReplyOverage(row?.n ?? 0, start) }],
+        lines: [
+          {
+            id: 0,
+            category: null,
+            category_label: null,
+            label: '',
+            ...estimateServiceReplyOverage(row?.n ?? 0, start),
+          },
+        ],
       };
     }
 
@@ -3665,18 +3675,18 @@ export class ConversationsService {
       if (left.isDefault !== right.isDefault) return left.isDefault ? -1 : 1;
       return (left.lineLabel ?? '').localeCompare(right.lineLabel ?? '', 'es');
     });
-    const siblings = new Map<string, number>();
-    for (const line of visible) siblings.set(line.category, (siblings.get(line.category) ?? 0) + 1);
     return {
       monthLabel: label,
       lines: visible.map((line) => {
         const option = categoryOptions.find((item) => item.slug === line.category);
-        const name = option?.label || (line.category === 'general' ? 'General' : line.category.toUpperCase());
-        const extra = (line.phone || line.lineLabel || '').trim();
-        const several = (siblings.get(line.category) ?? 1) > 1;
+        const categoryLabel =
+          option?.label || (line.category === 'general' ? 'General' : line.category.toUpperCase());
+        const detail = [line.lineLabel, line.phone].filter(Boolean).join(' · ');
         return {
           id: line.id,
-          label: several && extra ? `${name} · ${extra}` : name,
+          category: line.category,
+          category_label: categoryLabel,
+          label: detail,
           ...estimateServiceReplyOverage(line.n, start),
         };
       }),

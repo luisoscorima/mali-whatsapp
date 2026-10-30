@@ -20,8 +20,8 @@ function identityReason(reason: string): string {
 }
 
 function fichaArea(area: string): string {
-  if (area === 'educacion_ca') return 'CA';
-  if (area === 'educacion_ep') return 'EP';
+  if (area === 'educacion_ca') return 'Cursos de Arte';
+  if (area === 'educacion_ep') return 'Extensión Profesional';
   if (area === 'educacion') return 'General';
   return area;
 }

@@ -916,6 +916,8 @@ function chatListPageItems(current: number, total: number): Array<number | 'elli
 
 type ServiceReplyLine = {
   id: number
+  category?: string | null
+  category_label?: string | null
   label: string
   replyCount: number
   freeAllowance: number
@@ -926,6 +928,12 @@ type ServiceReplyLine = {
 
 type ServiceReplyQuota = {
   monthLabel: string
+  lines: ServiceReplyLine[]
+}
+
+type ServiceReplyGroup = {
+  key: string
+  title: string
   lines: ServiceReplyLine[]
 }
 
@@ -942,6 +950,82 @@ function serviceReplyNote(line: ServiceReplyLine): string {
     maximumFractionDigits: 2,
   })
   return `${extra} de más · S/ ${soles}`
+}
+
+function groupServiceReplyLines(lines: ServiceReplyLine[]): ServiceReplyGroup[] | null {
+  if (!lines.some((line) => line.category_label)) return null
+  const order: string[] = []
+  const map = new Map<string, ServiceReplyGroup>()
+  for (const line of lines) {
+    const key = line.category || line.category_label || ''
+    const title = line.category_label || 'General'
+    let group = map.get(key)
+    if (!group) {
+      group = { key, title, lines: [] }
+      map.set(key, group)
+      order.push(key)
+    }
+    group.lines.push(line)
+  }
+  return order.map((key) => map.get(key)!)
+}
+
+function ServiceReplyLineRow({
+  line,
+  bordered,
+  fallbackLabel,
+}: {
+  line: ServiceReplyLine
+  bordered?: boolean
+  fallbackLabel: string
+}) {
+  return (
+    <li
+      className={`flex items-baseline justify-between gap-3 px-3 py-2${bordered ? ' border-t border-line' : ''}`}
+    >
+      <span className="min-w-0 text-sm">{line.label || fallbackLabel}</span>
+      <span className="shrink-0 text-right">
+        <span className="block text-sm tabular-nums">{line.replyCount.toLocaleString('es-PE')}</span>
+        <span className="block text-xs text-muted">{serviceReplyNote(line)}</span>
+      </span>
+    </li>
+  )
+}
+
+function ServiceReplyQuotaList({ lines }: { lines: ServiceReplyLine[] }) {
+  const groups = groupServiceReplyLines(lines)
+  if (!groups) {
+    return (
+      <ul>
+        {lines.map((line, index) => (
+          <ServiceReplyLineRow
+            key={`${line.id}-${line.label}`}
+            line={line}
+            bordered={index > 0}
+            fallbackLabel="Respuestas"
+          />
+        ))}
+      </ul>
+    )
+  }
+  return (
+    <ul>
+      {groups.map((group, groupIndex) => (
+        <li key={group.key} className={groupIndex > 0 ? 'border-t border-line' : undefined}>
+          <p className="px-3 pt-2.5 pb-1 text-xs font-medium text-muted">{group.title}</p>
+          <ul>
+            {group.lines.map((line) => (
+              <ServiceReplyLineRow
+                key={`${line.id}-${line.label}`}
+                line={line}
+                fallbackLabel="Línea"
+              />
+            ))}
+          </ul>
+        </li>
+      ))}
+    </ul>
+  )
 }
 
 export function ConversationsInboxPage() {
@@ -2586,20 +2670,7 @@ export function ConversationsInboxPage() {
             {serviceReplies.lines.length === 0 ? (
               <p className="px-3 py-2.5 text-xs text-muted">No hay números en esta selección.</p>
             ) : (
-              <ul>
-                {serviceReplies.lines.map((line, index) => (
-                  <li
-                    key={`${line.id}-${line.label}`}
-                    className={`flex items-baseline justify-between gap-3 px-3 py-2${index > 0 ? ' border-t border-line' : ''}`}
-                  >
-                    <span className="min-w-0 text-sm">{line.label || 'Respuestas'}</span>
-                    <span className="shrink-0 text-right">
-                      <span className="block text-sm tabular-nums">{line.replyCount.toLocaleString('es-PE')}</span>
-                      <span className="block text-xs text-muted">{serviceReplyNote(line)}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <ServiceReplyQuotaList lines={serviceReplies.lines} />
             )}
           </PopoverContent></Popover> : null}
           {browserNotifySupported ? (

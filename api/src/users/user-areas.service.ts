@@ -90,9 +90,11 @@ export class UserAreasService {
       ...programs.map((program) => ({
         slug: program.slug,
         label:
-          program.slug === 'ca' || program.slug === 'ep'
-            ? program.slug.toUpperCase()
-            : program.label,
+          program.slug === 'ca'
+            ? 'Cursos de Arte'
+            : program.slug === 'ep'
+              ? 'Extensión Profesional'
+              : program.label,
       })),
     ];
     if (user.isMaster) return all;

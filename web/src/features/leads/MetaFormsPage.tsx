@@ -52,8 +52,8 @@ const ROUTE_AREA_OPTIONS = AREA_OPTIONS.filter((o) =>
 )
 const ROUTE_CATEGORY_OPTIONS = [
   { slug: 'general', label: 'General' },
-  { slug: 'ca', label: 'CA' },
-  { slug: 'ep', label: 'EP' },
+  { slug: 'ca', label: 'Cursos de Arte' },
+  { slug: 'ep', label: 'Extensión Profesional' },
 ]
 
 const LEADS_PAGE_SIZE = 25
@@ -269,7 +269,7 @@ export function MetaFormsPage() {
         <h1 className="mt-2 text-2xl font-semibold">Instant Forms</h1>
         <p className="text-sm text-muted">
           Leads de formularios Meta (Lead Ads). El área es TI, PAM, Patronato o
-          Educación. En Educación, la categoría es General, CA o EP.
+          Educación. En Educación, la categoría es General, Cursos de Arte o Extensión Profesional.
         </p>
       </div>
 

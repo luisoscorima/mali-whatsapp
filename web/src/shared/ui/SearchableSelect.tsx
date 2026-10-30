@@ -23,7 +23,7 @@ type SearchableSelectProps = {
   'aria-label'?: string
 }
 
-const GROUP_ORDER = ['General', 'CA', 'EP', 'MARKETING', 'UTILITY', 'AUTHENTICATION', 'SERVICE']
+const GROUP_ORDER = ['General', 'Cursos de Arte', 'Extensión Profesional', 'MARKETING', 'UTILITY', 'AUTHENTICATION', 'SERVICE']
 
 function groupRank(group?: string): number {
   if (!group) return GROUP_ORDER.length + 1

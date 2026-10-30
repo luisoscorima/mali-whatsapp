@@ -9,6 +9,8 @@ function categoryCell(area: BusinessArea, slug: string | null | undefined): stri
   const value = String(slug ?? '').trim().toLowerCase();
   if (!value) return 'Sin categoría';
   if (value === 'general') return 'General';
+  if (value === 'ca') return 'Cursos de Arte';
+  if (value === 'ep') return 'Extensión Profesional';
   return value.toUpperCase();
 }
 

@@ -9,6 +9,8 @@ import {
 
 export function categoryLabel(slug: string | null | undefined): string {
   if (!slug || slug === 'general') return 'General'
+  if (slug === 'ca') return 'Cursos de Arte'
+  if (slug === 'ep') return 'Extensión Profesional'
   return slug.toUpperCase()
 }
 

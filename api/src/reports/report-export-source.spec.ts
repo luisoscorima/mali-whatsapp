@@ -33,9 +33,9 @@ describe('report export source', () => {
     const workbook = XLSX.read(buffer, { type: 'buffer' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     expect(sheet.E1.v).toBe('Número');
-    expect(sheet.A2.v).toBe('CA');
+    expect(sheet.A2.v).toBe('Cursos de Arte');
     expect(sheet.B2.v).toBe('Sin línea');
-    expect(sheet.A3.v).toBe('EP');
+    expect(sheet.A3.v).toBe('Extensión Profesional');
     expect(sheet.E2).toMatchObject({ t: 's', v: '001234567' });
     expect(sheet.F2.v).toBe('Ana');
     expect(sheet.F3.v).toBe('Luis');

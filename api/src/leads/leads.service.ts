@@ -1409,7 +1409,14 @@ export class LeadsService implements OnModuleInit {
       const captura = o.came_with_inbound ? 'Con mensaje' : 'Solo contacto';
       return {
         channel: channelLabels[o.channel] || o.channel,
-        categoria: category.categoria === 'general' ? 'General' : category.categoria.toUpperCase(),
+        categoria:
+          category.categoria === 'general'
+            ? 'General'
+            : category.categoria === 'ca'
+              ? 'Cursos de Arte'
+              : category.categoria === 'ep'
+                ? 'Extensión Profesional'
+                : category.categoria.toUpperCase(),
         linea: category.linea,
         contact_name: contactName,
         username: o.conversations?.wa_username

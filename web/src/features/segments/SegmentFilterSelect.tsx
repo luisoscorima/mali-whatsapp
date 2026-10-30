@@ -72,7 +72,7 @@ export function SegmentFilterSelect({
     )
   }, [segments, query])
 
-  const groupOrder = ['General', 'CA', 'EP']
+  const groupOrder = ['General', 'Cursos de Arte', 'Extensión Profesional']
   const ordered = [...filtered].sort((a, b) => {
     const rank = (group?: string) => groupOrder.includes(group ?? '') ? groupOrder.indexOf(group!) : groupOrder.length
     return rank(a.group) - rank(b.group) || (a.group ?? '').localeCompare(b.group ?? '')
