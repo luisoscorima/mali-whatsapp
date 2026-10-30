@@ -81,6 +81,7 @@ export function WaAreaSwitchPanel({
   }
 
   const chosen = selected ?? categories.map((item) => item.slug)
+  const showCategories = categories.length > 1
 
   return (
     <div className={className}>
@@ -104,36 +105,33 @@ export function WaAreaSwitchPanel({
                 <span className="block font-medium">{areaLabel(area)}</span>
                 {isBusy ? <span className="mt-0.5 block text-xs text-muted">Cambiando…</span> : null}
               </button>
+              {isCurrent && showCategories ? (
+                <ul className="mt-0.5 ml-3 flex flex-col gap-0.5 border-l border-line pl-2">
+                  {categories.map((category) => {
+                    const on = chosen.includes(category.slug)
+                    return (
+                      <li key={category.slug}>
+                        <button
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() => onToggleCategory(category.slug)}
+                          className={
+                            on
+                              ? 'w-full rounded-md bg-accent-soft px-2 py-1.5 text-left text-sm'
+                              : 'w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent-soft'
+                          }
+                        >
+                          <span className="block font-medium">{category.label}</span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              ) : null}
             </li>
           )
         })}
       </ul>
-      {categories.length > 1 ? (
-        <div className="mt-3">
-          <p className="mb-1.5 text-xs font-medium text-muted">Categoría</p>
-          <ul className="flex flex-col gap-0.5">
-            {categories.map((category) => {
-              const on = chosen.includes(category.slug)
-              return (
-                <li key={category.slug}>
-                  <button
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => onToggleCategory(category.slug)}
-                    className={
-                      on
-                        ? 'w-full rounded-md bg-accent-soft px-2 py-1.5 text-left text-sm'
-                        : 'w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent-soft'
-                    }
-                  >
-                    <span className="block font-medium">{category.label}</span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        </div>
-      ) : null}
     </div>
   )
 }

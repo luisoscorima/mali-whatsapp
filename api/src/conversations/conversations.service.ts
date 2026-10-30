@@ -109,9 +109,11 @@ import {
   type InboxSegmentFilter,
   buildConversationSegmentSql,
   buildLastMessageDateRangeSql,
+  buildLineFilterSql,
   buildWindowMaxFilterSql,
   parseInboxChatFilter,
   parseInboxDateParam,
+  parseInboxLineFilter,
   parseInboxWindowMaxFilter,
   parseSegmentQueryParam,
   inboxSearchMayScanMessages,
@@ -548,6 +550,7 @@ export class ConversationsService {
     searchMessages = false,
     /** Filas extra para detectar “hay más” sin COUNT (p. ej. 1). */
     probeExtra = 0,
+    lineId: number | null = null,
   ): Promise<InboxRow[]> {
     const segmentSql = buildConversationSegmentSql(segmentFilter);
     const includeMessages = inboxSearchMayScanMessages(searchQ, searchMessages);
@@ -558,6 +561,7 @@ export class ConversationsService {
       searchAll: Boolean(searchQ) && chatFilter === 'all',
     });
     const windowSql = buildWindowMaxFilterSql(windowMax);
+    const lineSql = buildLineFilterSql(lineId);
     const dateSql = buildLastMessageDateRangeSql(
       dateFrom,
       dateTo,
@@ -644,6 +648,7 @@ export class ConversationsService {
       ${searchSql}
       ${chatSql}
       ${windowSql}
+      ${lineSql}
       ${dateSql}
       ORDER BY c.inbox_unread DESC, c.last_message_at DESC
       LIMIT ${fetchLimit} OFFSET ${offset}
@@ -653,6 +658,7 @@ export class ConversationsService {
       !searchQ ||
       chatFilter !== 'all' ||
       windowMax != null ||
+      lineId != null ||
       hasDateFilter ||
       page !== 1 ||
       probeExtra > 0
@@ -725,6 +731,7 @@ export class ConversationsService {
     userId: number,
     categories: string[] | null = null,
     searchMessages = false,
+    lineId: number | null = null,
   ): Promise<number> {
     const segmentSql = buildConversationSegmentSql(segmentFilter);
     const includeMessages = inboxSearchMayScanMessages(searchQ, searchMessages);
@@ -735,6 +742,7 @@ export class ConversationsService {
       searchAll: Boolean(searchQ) && chatFilter === 'all',
     });
     const windowSql = buildWindowMaxFilterSql(windowMax);
+    const lineSql = buildLineFilterSql(lineId);
     const dateSql = buildLastMessageDateRangeSql(
       dateFrom,
       dateTo,
@@ -751,6 +759,7 @@ export class ConversationsService {
       ${searchSql}
       ${chatSql}
       ${windowSql}
+      ${lineSql}
       ${dateSql}
     `);
     let total = rows[0]?.n ?? 0;
@@ -759,6 +768,7 @@ export class ConversationsService {
       !searchQ ||
       chatFilter !== 'all' ||
       windowMax != null ||
+      lineId != null ||
       hasDateFilter
     ) {
       return total;
@@ -887,6 +897,16 @@ export class ConversationsService {
     const segmentRaw = parseSegmentQueryParam(query.segment);
     const segmentOptions = await this.loadSegmentOptions(area, categories);
     const segmentFilter = parseInboxSegmentFilter(segmentRaw, segmentOptions, categories);
+    const requestedLineId = parseInboxLineFilter(
+      Array.isArray(query.line) ? query.line[0] : query.line,
+    );
+    const openLines = requestedLineId
+      ? await this.listOpenChatLines(user, categories)
+      : [];
+    const lineId =
+      requestedLineId && openLines.some((line) => line.id === requestedLineId)
+        ? requestedLineId
+        : null;
     const pageRaw = Array.isArray(query.page) ? query.page[0] : query.page;
     const page = Math.max(1, Number(pageRaw) || 1);
     const limit = INBOX_LIST_PAGE_SIZE;
@@ -917,6 +937,7 @@ export class ConversationsService {
             user.id,
             categories,
             searchMessages,
+            lineId,
           ),
       this.loadAiAreaEnabled(area),
       this.countInboxUnread(area, segmentFilter, categories),
@@ -945,6 +966,7 @@ export class ConversationsService {
       categories,
       searchMessages,
       skipExactCount ? 1 : 0,
+      lineId,
     );
 
     let totalCount: number;
@@ -991,6 +1013,7 @@ export class ConversationsService {
         segment_slugs: [...segmentFilter.slugs, ...(segmentFilter.ids ?? []).map(id => `id:${id}`)],
         include_none: segmentFilter.includeNone,
         categories: categories ?? [],
+        line_id: lineId,
       },
     };
   }

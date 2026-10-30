@@ -60,6 +60,13 @@ export function parseInboxWindowMaxFilter(raw?: string): InboxWindowMaxFilter {
   return null;
 }
 
+/** Id de línea WhatsApp. null = sin filtro. */
+export function parseInboxLineFilter(raw?: string): number | null {
+  const n = Number(String(raw ?? '').trim());
+  if (!Number.isInteger(n) || n <= 0) return null;
+  return n;
+}
+
 /**
  * Chats con ventana abierta y horas restantes (ceil) ≤ maxHours.
  * remainingMs = sessionWindow - (now - last_user) ∈ (0, maxHours·1h].
@@ -74,6 +81,11 @@ export function buildWindowMaxFilterSql(
   return Prisma.sql` AND c.last_user_message_at IS NOT NULL
     AND c.last_user_message_at > NOW() - (${sessionWindowMs}::bigint * INTERVAL '1 millisecond')
     AND c.last_user_message_at <= NOW() - (${minAgeMs}::bigint * INTERVAL '1 millisecond')`;
+}
+
+export function buildLineFilterSql(lineId: number | null): Prisma.Sql {
+  if (lineId == null) return Prisma.empty;
+  return Prisma.sql` AND c.whatsapp_line_id = ${lineId}`;
 }
 
 /** YYYY-MM-DD válido o null. */

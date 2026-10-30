@@ -81,6 +81,7 @@ export type InboxListResult = {
     segment_slugs: string[];
     include_none: boolean;
     categories: string[];
+    line_id: number | null;
   };
 };
 

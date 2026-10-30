@@ -25,7 +25,7 @@ import { formatContactName } from '../contacts/contactName'
 import { type AttributeFieldDefinition } from '../contacts/contactFormUtils'
 import { BulkContactActionsDialog } from '../contacts/BulkContactActionsDialog'
 import { useOpenContactChat } from '../contacts/openContactChat'
-import { useCategoryScope } from '@/shared/area/useCategoryScope'
+import { useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import { SegmentBadge } from '../segments/SegmentBadge'
 import { ChatMessageBubble } from './ChatMessageBubble'
@@ -552,7 +552,16 @@ type InboxListResult = {
     segment_slugs: string[]
     include_none: boolean
     categories: string[]
+    line_id: number | null
   }
+}
+
+type InboxLineOption = {
+  id: number
+  label: string
+  phone: string | null
+  category: string
+  category_label: string
 }
 
 const BULK_NATIVE_ATTR_SLUGS = new Set(['dni', 'email', 'correo'])
@@ -717,11 +726,25 @@ function inboxApiQuery(searchParams: URLSearchParams, extra?: { msg?: number }):
   if (!hasFrom && !hasTo && searchParams.get('range') === 'all') qs.set('range', 'all')
   searchParams.getAll('segment').forEach((slug) => qs.append('segment', slug))
   searchParams.getAll('category').forEach((slug) => qs.append('category', slug))
+  const line = Number(searchParams.get('line') ?? '')
+  if (Number.isInteger(line) && line > 0) qs.set('line', String(line))
   const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1)
   if (page > 1) qs.set('page', String(page))
   if (extra?.msg) qs.set('msg', String(extra.msg))
   const value = qs.toString()
   return value ? `?${value}` : ''
+}
+
+function parseInboxLineParam(raw: string | null): number | null {
+  const n = Number(raw ?? '')
+  if (!Number.isInteger(n) || n <= 0) return null
+  return n
+}
+
+function inboxLineLabel(line: InboxLineOption): string {
+  const parts = [line.label]
+  if (line.phone) parts.push(line.phone)
+  return parts.filter(Boolean).join(' · ') || 'Línea'
 }
 
 function inboxDateKeyFromParams(searchParams: URLSearchParams): string {
@@ -749,16 +772,18 @@ function inboxFilterKeyFromParams(searchParams: URLSearchParams): string {
   const qm = q && inboxSearchMessagesParam(searchParams) ? '1' : ''
   const chat = normalizeInboxChatParam(searchParams.get('chat'))
   const windowMax = parseWindowMaxFilter(searchParams.get('window_max')) ?? ''
+  const line = parseInboxLineParam(searchParams.get('line')) ?? ''
   const segments = searchParams.getAll('segment').sort().join('\0')
-  return `${q}\n${qm}\n${chat}\n${windowMax}\n${inboxDateKeyFromParams(searchParams)}\n${segments}`
+  return `${q}\n${qm}\n${chat}\n${windowMax}\n${line}\n${inboxDateKeyFromParams(searchParams)}\n${segments}`
 }
 
 function inboxFilterKeyFromResult(filters: InboxListResult['filters']): string {
   const segments = [...filters.segment_slugs]
   if (filters.include_none) segments.push('__none__')
   const windowMax = filters.window_max ?? ''
+  const line = filters.line_id ?? ''
   const qm = filters.q && filters.qm ? '1' : ''
-  return `${filters.q}\n${qm}\n${filters.chat}\n${windowMax}\n${inboxDateKeyFromResult(filters)}\n${segments.sort().join('\0')}`
+  return `${filters.q}\n${qm}\n${filters.chat}\n${windowMax}\n${line}\n${inboxDateKeyFromResult(filters)}\n${segments.sort().join('\0')}`
 }
 
 function inboxInitials(contactName: string, phone: string | null): string {
@@ -933,6 +958,7 @@ export function ConversationsInboxPage() {
   const openContactChatRef = useRef(openContactChat)
   openContactChatRef.current = openContactChat
   const [list, setList] = useState<InboxListResult | null>(null)
+  const [inboxLines, setInboxLines] = useState<InboxLineOption[]>([])
   const [serviceReplies, setServiceReplies] = useState<ServiceReplyQuota | null>(null)
   const [detail, setDetail] = useState<InboxDetail | null>(null)
   const [error, setError] = useState('')
@@ -992,6 +1018,7 @@ export function ConversationsInboxPage() {
   const highlightMsgId = Number(searchParams.get('msg') || '') || null
   const chatFilter = normalizeInboxChatParam(searchParams.get('chat'))
   const windowMaxFilter = parseWindowMaxFilter(searchParams.get('window_max'))
+  const lineFilter = parseInboxLineParam(searchParams.get('line'))
   const explicitFrom = isYmdDateParam(searchParams.get('from'))
     ? searchParams.get('from')!.trim()
     : ''
@@ -1080,6 +1107,38 @@ export function ConversationsInboxPage() {
   }, [loadServiceReplies, user?.area])
 
   useEffect(() => {
+    let cancelled = false
+    void apiClient
+      .get<InboxLineOption[]>(
+        withCategoryQuery('/api/conversations/open-lines', categoryScope.query),
+      )
+      .then((result) => {
+        if (cancelled) return
+        if (!result.ok) {
+          setInboxLines([])
+          return
+        }
+        setInboxLines(result.data)
+      })
+      .catch(() => {
+        if (!cancelled) setInboxLines([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [categoryScope.query, user?.area])
+
+  useEffect(() => {
+    if (lineFilter == null) return
+    if (!inboxLines.length) return
+    if (inboxLines.some((line) => line.id === lineFilter)) return
+    const next = new URLSearchParams(searchParamsRef.current)
+    next.delete('line')
+    next.delete('page')
+    setSearchParams(next, { replace: true })
+  }, [inboxLines, lineFilter, setSearchParams])
+
+  useEffect(() => {
     const area = user?.area ?? null
     if (!area) return
     if (listAreaRef.current === null) {
@@ -1153,6 +1212,7 @@ export function ConversationsInboxPage() {
   const hasActiveListFilters =
     chatFilter !== 'all' ||
     windowMaxFilter != null ||
+    lineFilter != null ||
     selectedSegments.length > 0 ||
     Boolean(searchQuery) ||
     Boolean(explicitFrom) ||
@@ -1161,7 +1221,7 @@ export function ConversationsInboxPage() {
 
   function clearListFilters() {
     const next = new URLSearchParams(searchParams)
-    for (const key of ['q', 'qm', 'chat', 'window_max', 'from', 'to', 'range', 'segment', 'page', 'msg']) next.delete(key)
+    for (const key of ['q', 'qm', 'chat', 'window_max', 'line', 'from', 'to', 'range', 'segment', 'page', 'msg']) next.delete(key)
     setSearchInput('')
     setSearchParams(next)
   }
@@ -1659,6 +1719,14 @@ export function ConversationsInboxPage() {
     next.delete('page')
     if (windowMax == null) next.delete('window_max')
     else next.set('window_max', String(windowMax))
+    setSearchParams(next)
+  }
+
+  function setLineFilter(lineId: number | null) {
+    const next = new URLSearchParams(searchParams)
+    next.delete('page')
+    if (lineId == null) next.delete('line')
+    else next.set('line', String(lineId))
     setSearchParams(next)
   }
 
@@ -2231,8 +2299,14 @@ export function ConversationsInboxPage() {
     const category = segment.category === 'general' ? 'General' : segment.category?.toUpperCase()
     return canonicalArea(user?.area ?? '') === 'educacion' && category ? category + ' · ' + segment.label : segment.label
   }
+  const showLineFilter = inboxLines.length > 1
+  const lineFilterMixesCategories = new Set(inboxLines.map((line) => line.category)).size > 1
+  const selectedLine = lineFilter != null
+    ? inboxLines.find((line) => line.id === lineFilter) ?? null
+    : null
   const activeFilterCount = (chatFilter !== 'all' ? 1 : 0) + selectedSegments.length +
-    (windowMaxFilter != null ? 1 : 0) + (dateFromFilter || dateToFilter ? 1 : 0) +
+    (windowMaxFilter != null ? 1 : 0) + (lineFilter != null ? 1 : 0) +
+    (dateFromFilter || dateToFilter ? 1 : 0) +
     (searchQuery && inboxSearchMessagesParam(searchParams) ? 1 : 0) +
     (searchQuery && rangeAll && !explicitFrom && !explicitTo ? 1 : 0)
   const filterPills = (
@@ -2259,7 +2333,7 @@ export function ConversationsInboxPage() {
               <div className="flex items-center justify-between"><strong>Filtros de chats</strong>
                 <button type="button" className="text-xs text-muted underline" onClick={clearListFilters}>Restablecer</button>
               </div>
-              <p className="text-xs text-muted">Elige una vista y afínala con segmentos, fechas y ventana.</p>
+              <p className="text-xs text-muted">Elige una vista y afínala con línea, segmentos, fechas y ventana.</p>
               <fieldset className="inbox-filter-group space-y-2">
                 <legend className="text-sm font-medium">Búsqueda</legend>
                 <label className="flex items-center gap-2 text-sm" title="Busca también en el texto de los mensajes (mín. 4 caracteres, o 3 dígitos de teléfono)">
@@ -2309,6 +2383,28 @@ export function ConversationsInboxPage() {
                   </label>
                 ))}
               </fieldset>
+              {showLineFilter ? (
+                <fieldset className="inbox-filter-group space-y-2">
+                  <legend className="text-sm font-medium">Línea</legend>
+                  <select
+                    className="w-full rounded border border-line bg-surface px-2 py-1.5 text-sm"
+                    aria-label="Filtrar por línea de WhatsApp"
+                    value={lineFilter ?? ''}
+                    onChange={(e) =>
+                      setLineFilter(e.target.value ? Number(e.target.value) : null)
+                    }
+                  >
+                    <option value="">Todas</option>
+                    {inboxLines.map((line) => (
+                      <option key={line.id} value={line.id}>
+                        {lineFilterMixesCategories
+                          ? `${line.category_label} · ${inboxLineLabel(line)}`
+                          : inboxLineLabel(line)}
+                      </option>
+                    ))}
+                  </select>
+                </fieldset>
+              ) : null}
               <fieldset className="inbox-filter-group space-y-2"><legend className="text-sm font-medium">Clasificación · Segmentos</legend>
           <SegmentFilterSelect
             segments={segments.map(segment => ({ ...segment, slug: segment.id ? 'id:' + segment.id : segment.slug, group: canonicalArea(user?.area ?? '') === 'educacion' ? segment.category === 'general' ? 'General' : segment.category?.toUpperCase() : undefined }))}
@@ -2384,6 +2480,20 @@ export function ConversationsInboxPage() {
         <div className="inbox-active-filters" aria-label="Filtros activos">
           {chatFilter !== 'all' ? <button type="button" className="inbox-filter-chip" onClick={() => setChatFilter('all')} aria-label={'Quitar filtro ' + chatFilterLabels[chatFilter]}>{chatFilterLabels[chatFilter]} <span aria-hidden>×</span></button> : null}
           {selectedSegments.map(slug => <button key={slug} type="button" className="inbox-filter-chip" onClick={() => toggleSegment(slug)} aria-label={'Quitar segmento ' + selectedSegmentLabel(slug)}>{selectedSegmentLabel(slug)} <span aria-hidden>×</span></button>)}
+          {lineFilter != null ? (
+            <button
+              type="button"
+              className="inbox-filter-chip"
+              onClick={() => setLineFilter(null)}
+              aria-label="Quitar filtro de línea"
+            >
+              {selectedLine
+                ? (lineFilterMixesCategories
+                  ? `${selectedLine.category_label} · ${inboxLineLabel(selectedLine)}`
+                  : inboxLineLabel(selectedLine))
+                : 'Línea'} <span aria-hidden>×</span>
+            </button>
+          ) : null}
           {windowMaxFilter != null ? <button type="button" className="inbox-filter-chip" onClick={() => setWindowMaxFilter(null)} aria-label="Quitar filtro de ventana">Ventana ≤{windowMaxFilter}h <span aria-hidden>×</span></button> : null}
           {dateFromFilter || dateToFilter ? <button type="button" className="inbox-filter-chip" onClick={clearDateRangeFilter} aria-label="Quitar filtro de fechas">{showingDefaultRange ? 'Últimos 15 días' : [dateFromFilter ? 'Desde ' + dateFromFilter : '', dateToFilter ? 'Hasta ' + dateToFilter : ''].filter(Boolean).join(' · ')} <span aria-hidden>×</span></button> : null}
           {searchQuery && inboxSearchMessagesParam(searchParams) ? (
