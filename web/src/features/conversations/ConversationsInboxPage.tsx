@@ -19,7 +19,6 @@ import {
   WaMainFooter,
 } from '@/shared/ui/shell/WaMainPane'
 import { WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
-import { Badge } from '@/shared/ui/shadcn/badge'
 import { Button } from '@/shared/ui/shadcn/button'
 import { formatContactName } from '../contacts/contactName'
 import { type AttributeFieldDefinition } from '../contacts/contactFormUtils'
@@ -251,6 +250,75 @@ function ContactSheetIcon({ mode }: { mode: 'edit' | 'create' }) {
   )
 }
 
+function InboxHeaderLineIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M21 15a4 4 0 0 1-4 4H8l-5 3 1.7-5.1A8 8 0 1 1 21 15Z" />
+    </svg>
+  )
+}
+
+function InboxHeaderAssigneeIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="12" cy="7" r="4" />
+      <path d="M5.5 21a6.5 6.5 0 0 1 13 0" />
+    </svg>
+  )
+}
+
+function InboxHeaderLockIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="4" y="10" width="16" height="11" rx="2" />
+      <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+      <circle cx="12" cy="15.5" r="1" />
+    </svg>
+  )
+}
+
+function inboxTeamLabel(lineProgram: string | null | undefined): string | null {
+  const value = String(lineProgram ?? '').trim()
+  if (!value) return null
+  const canonical = canonicalArea(value.toLowerCase())
+  const label = canonical
+    .split(/[_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+  return label ? `Equipo ${label}` : null
+}
+
 function ProfileBlock({
   detail,
   segments,
@@ -285,47 +353,83 @@ function ProfileBlock({
   const lineName = detail.conversation.line_label
     || detail.conversation.line_program?.toUpperCase()
     || (detail.conversation.line_display_phone ? 'Línea de WhatsApp' : null)
+  const assigneeName = detail.conversation.assigned_user_label?.trim() || 'Sin asignar'
+  const teamLabel = inboxTeamLabel(detail.conversation.line_program)
   return (
     <>
       <span className="inbox-chat-avatar inbox-chat-avatar--header" aria-hidden>
         {inboxInitials(heading, detail.conversation.phone)}
       </span>
       <div className="inbox-chat-header-identity">
-        <div className="inbox-chat-heading-row">
-          <h1 className={`inbox-chat-heading${isWaAlias ? ' muted' : ''}`}>
-            {heading}
-          </h1>
-          {canOpenContact ? (
-            <button
-              type="button"
-              className="inbox-chat-contact-icon-btn"
-              title={contactActionLabel}
-              aria-label={contactActionLabel}
-              onClick={onOpenContact}
-            >
-              <ContactSheetIcon mode={contactMode} />
-            </button>
-          ) : null}
+        <div className="inbox-chat-header-customer-row">
+          <div className="inbox-chat-header-customer">
+            <div className="inbox-chat-heading-row">
+              <h1 className={`inbox-chat-heading${isWaAlias ? ' muted' : ''}`}>
+                {heading}
+              </h1>
+              {canOpenContact ? (
+                <button
+                  type="button"
+                  className="inbox-chat-contact-icon-btn"
+                  title={contactActionLabel}
+                  aria-label={contactActionLabel}
+                  onClick={onOpenContact}
+                >
+                  <ContactSheetIcon mode={contactMode} />
+                </button>
+              ) : null}
+            </div>
+            <p className="inbox-chat-person-phone">
+              {chatSecondaryLabel(detail.conversation.phone)}
+            </p>
+          </div>
+          <span
+            className={`inbox-chat-window-pill ${detail.user_service_window_open ? 'is-open' : 'is-closed'}`}
+          >
+            {detail.user_service_window_open ? <WindowClockIcon /> : <InboxHeaderLockIcon />}
+            Ventana {detail.user_service_window_open ? 'abierta' : 'cerrada'}
+          </span>
         </div>
-        <p className="inbox-chat-person-phone">
-          {chatSecondaryLabel(detail.conversation.phone)}
-        </p>
+
         <ConversationBadges
           status={detail.conversation.status}
           assignedUserLabel={detail.conversation.assigned_user_label}
+          hideAssignee
           archived={Boolean(detail.conversation.archived)}
           unanswered={!detail.conversation.last_user_message_at}
         />
-        {lineName ? (
-          <div className="inbox-chat-header-line" aria-label="Línea de WhatsApp">
-            <span className="inbox-chat-header-line-name">{lineName}</span>
-            {detail.conversation.line_display_phone ? (
-              <span className="inbox-chat-header-line-phone">
-                {displayPhoneNumber(detail.conversation.line_display_phone)}
+
+        <div className="inbox-chat-header-context-grid">
+          {lineName ? (
+            <div className="inbox-chat-header-context" aria-label="Línea de atención">
+              <span className="inbox-chat-header-context-icon">
+                <InboxHeaderLineIcon />
               </span>
-            ) : null}
+              <span className="inbox-chat-header-context-copy">
+                <span className="inbox-chat-header-context-label">Línea de atención</span>
+                <span className="inbox-chat-header-context-value">{lineName}</span>
+                {detail.conversation.line_display_phone ? (
+                  <span className="inbox-chat-header-context-detail">
+                    {displayPhoneNumber(detail.conversation.line_display_phone)}
+                  </span>
+                ) : null}
+              </span>
+            </div>
+          ) : null}
+          <div className="inbox-chat-header-context" aria-label="Asesor asignado">
+            <span className="inbox-chat-header-context-icon">
+              <InboxHeaderAssigneeIcon />
+            </span>
+            <span className="inbox-chat-header-context-copy">
+              <span className="inbox-chat-header-context-label">Asesor asignado</span>
+              <span className="inbox-chat-header-context-value">{assigneeName}</span>
+              {teamLabel ? (
+                <span className="inbox-chat-header-context-detail">{teamLabel}</span>
+              ) : null}
+            </span>
           </div>
-        ) : null}
+        </div>
+
         {leadScore || leadStatusLabel ? (
           <p className="inbox-chat-lead-meta">
             {leadScore ? (
@@ -365,14 +469,6 @@ function ProfileBlock({
             ))}
           </span>
         ) : null}
-        <p className="inbox-window-meta">
-          Ventana 24 h:{' '}
-          {detail.user_service_window_open ? (
-            <Badge variant="success">Abierta</Badge>
-          ) : (
-            <Badge variant="secondary">Cerrada</Badge>
-          )}
-        </p>
       </div>
     </>
   )
