@@ -2,30 +2,32 @@ import { BadRequestException } from '@nestjs/common';
 import { businessReadScope, requireBusinessArea, type BusinessArea } from '../config/areas';
 
 /**
- * Infere área Mali desde el nombre del Instant Form (Meta Lead Ads).
- * - «Cursos de Arte…» / «[FORM CA]» / prefijo «CA …» → educacion_ca
- * - «[FORM EP]» / «FORM EP» → educacion_ep
- * - resto → educacion
+ * Infere categoría de Educación desde el nombre del Instant Form.
+ * El área persistida es siempre `educacion`; CA/EP van en `program_key`.
  */
-export function inferAreaFromFormName(
+export function inferProgramKeyFromFormName(
   formName: string | null | undefined,
-): BusinessArea {
+): string | null {
   const name = String(formName ?? '')
     .trim()
     .toLowerCase();
-  if (!name) return 'educacion';
-
-  if (name.includes('[form ep]') || /\bform\s*ep\b/.test(name)) {
-    return 'educacion_ep';
-  }
+  if (!name) return null;
+  if (name.includes('[form ep]') || /\bform\s*ep\b/.test(name)) return 'ep';
   if (
     name.includes('[form ca]') ||
     /\bform\s*ca\b/.test(name) ||
     name.includes('cursos de arte') ||
     /^ca[\s-]/.test(name)
   ) {
-    return 'educacion_ca';
+    return 'ca';
   }
+  return null;
+}
+
+/** @deprecated Usar writeFormRoute(educacion, inferProgramKeyFromFormName(...)). */
+export function inferAreaFromFormName(
+  formName: string | null | undefined,
+): BusinessArea {
   return 'educacion';
 }
 

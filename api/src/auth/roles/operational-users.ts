@@ -6,66 +6,80 @@ export const OPERATIONAL_ROLE_USERS: {
   email: string;
   role: RoleSlug;
   areas: BusinessArea[];
+  /** Categorías de Educación (general / ca / ep). */
+  categories?: string[];
 }[] = [
   {
     email: 'achumpitasi@mali.pe',
     role: 'supervisor',
-    areas: ['educacion', 'educacion_ep'],
+    areas: ['educacion'],
+    categories: ['general', 'ep'],
   },
   {
     email: 'asesordeadmision3@mali.pe',
     role: 'asesor_comercial',
-    areas: ['educacion', 'educacion_ca'],
+    areas: ['educacion'],
+    categories: ['general', 'ca'],
   },
   {
     email: 'darias@mali.pe',
     role: 'asesor_comercial',
-    areas: ['educacion', 'educacion_ep'],
+    areas: ['educacion'],
+    categories: ['general', 'ep'],
   },
   {
     email: 'ezurita@mali.pe',
     role: 'asesor_comercial',
-    areas: ['educacion', 'educacion_ca'],
+    areas: ['educacion'],
+    categories: ['general', 'ca'],
   },
   {
     email: 'gzabalbeascoa@mali.pe',
     role: 'asesor_comercial',
-    areas: ['educacion', 'educacion_ep'],
+    areas: ['educacion'],
+    categories: ['general', 'ep'],
   },
   {
     email: 'joropeza@mali.pe',
     role: 'coordinador',
-    areas: ['educacion', 'educacion_ca', 'educacion_ep'],
+    areas: ['educacion'],
+    categories: ['general', 'ca', 'ep'],
   },
   {
     email: 'kbaumann@mali.pe',
     role: 'asesor_comercial',
-    areas: ['educacion', 'educacion_ca', 'educacion_ep'],
+    areas: ['educacion'],
+    categories: ['general', 'ca', 'ep'],
   },
   {
     email: 'khuerta@mali.pe',
     role: 'asesor_comercial',
-    areas: ['educacion', 'educacion_ca'],
+    areas: ['educacion'],
+    categories: ['general', 'ca'],
   },
   {
     email: 'kvillegas@mali.pe',
     role: 'asesor_comercial',
-    areas: ['educacion', 'educacion_ca'],
+    areas: ['educacion'],
+    categories: ['general', 'ca'],
   },
   {
     email: 'lramirez@mali.pe',
     role: 'supervisor',
-    areas: ['educacion', 'educacion_ca', 'educacion_ep'],
+    areas: ['educacion'],
+    categories: ['general', 'ca', 'ep'],
   },
   {
     email: 'ngonzales@mali.pe',
     role: 'gestor',
-    areas: ['educacion', 'educacion_ca', 'educacion_ep'],
+    areas: ['educacion'],
+    categories: ['general', 'ca', 'ep'],
   },
   {
     email: 'ocaceres@mali.pe',
     role: 'analista',
-    areas: ['educacion', 'educacion_ca', 'educacion_ep'],
+    areas: ['educacion'],
+    categories: ['general', 'ca', 'ep'],
   },
   { email: 'maguinaga@mali.pe', role: 'coordinador', areas: ['pam'] },
   { email: 'mperez@mali.pe', role: 'coordinador', areas: ['patronato'] },

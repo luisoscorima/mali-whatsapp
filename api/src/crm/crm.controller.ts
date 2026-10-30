@@ -69,7 +69,7 @@ class EducationDistributeDto {
 }
 
 class EducationCreateStatusDto {
-  @IsIn(['educacion', 'educacion_ca', 'educacion_ep']) area!: string;
+  @IsIn(['educacion']) area!: string;
   @IsString() @MaxLength(50) slug!: string;
   @IsString() @MaxLength(120) label!: string;
   @IsOptional() @IsInt() sort_order?: number;
@@ -78,7 +78,7 @@ class EducationCreateStatusDto {
 }
 
 class EducationUpdateStatusDto {
-  @IsIn(['educacion', 'educacion_ca', 'educacion_ep']) area!: string;
+  @IsIn(['educacion']) area!: string;
   @IsOptional() @IsString() @MaxLength(120) label?: string;
   @IsOptional() @IsInt() sort_order?: number;
   @IsOptional() @IsBoolean() is_default?: boolean;
@@ -123,10 +123,10 @@ export class CrmController {
     }
     const requested = String(body.area || 'ti').trim().toLowerCase();
     const program = educationProgramOf(body.categoria) || educationProgramOf(requested);
-    let area = requested;
-    if (program === 'ca') area = 'educacion_ca';
-    else if (program === 'ep') area = 'educacion_ep';
-    else if (program || requested === 'educacion' || isEducationAreaSlug(requested)) area = 'educacion';
+    const area =
+      program || requested === 'educacion' || isEducationAreaSlug(requested)
+        ? 'educacion'
+        : requested;
     const data = await this.leads.upsertOrigin({
       area,
       program_slug: program,
@@ -226,11 +226,10 @@ export class CrmController {
 
   @Get('education/statuses')
   async educationStatuses() {
-    const areas = ['educacion', 'educacion_ca', 'educacion_ep'];
-    const statuses = await Promise.all(
-      areas.map((area) => this.leads.listStatuses(area, { includeInactive: true })),
-    );
-    return { ok: true, data: statuses.flat() };
+    const statuses = await this.leads.listStatuses('educacion', {
+      includeInactive: true,
+    });
+    return { ok: true, data: statuses };
   }
 
   @Post('education/statuses')

@@ -9,7 +9,11 @@ import { Prisma } from '@prisma/client';
 import type { Request } from 'express';
 import { businessReadScope, normalizeArea } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
-import { inferAreaFromFormName, presentFormRoute, writeFormRoute } from './lead-form-area.util';
+import {
+  inferProgramKeyFromFormName,
+  presentFormRoute,
+  writeFormRoute,
+} from './lead-form-area.util';
 import { pickCursoFromAnswers } from './lead-curso.util';
 import { LeadsService } from './leads.service';
 
@@ -315,8 +319,8 @@ export class TikTokLeadgenService {
       if (route?.area_locked) return normalizeArea(route.area);
     }
 
-    if (params.formName) return inferAreaFromFormName(params.formName);
-    if (route) return normalizeArea(route.area);
+    if (params.formName) return 'educacion';
+    if (route) return normalizeArea(route.area) || 'educacion';
     return 'educacion';
   }
 
@@ -382,7 +386,10 @@ export class TikTokLeadgenService {
     formName: string | null;
     advertiserId: string;
   }): Promise<'created' | 'updated'> {
-    const placed = writeFormRoute(inferAreaFromFormName(params.formName));
+    const placed = writeFormRoute(
+      'educacion',
+      inferProgramKeyFromFormName(params.formName),
+    );
     const existing = await this.prisma.tiktok_lead_form_routes.findUnique({
       where: { form_id: params.formId },
     });

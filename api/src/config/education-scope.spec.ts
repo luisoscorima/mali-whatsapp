@@ -3,6 +3,7 @@ import {
   educationManagementArea,
   educationProgramOf,
   educationReadScope,
+  educationWriteArea,
   isEducationAreaSlug,
 } from './education-scope';
 
@@ -33,10 +34,18 @@ describe('education scope', () => {
   });
 
   it('deriva el alcance de gestión desde el programa del ciclo', () => {
-    expect(educationManagementArea({ area: 'educacion', programSlug: 'ca' })).toBe('educacion_ca');
-    expect(educationManagementArea({ area: 'educacion', programSlug: 'ep' })).toBe('educacion_ep');
-    expect(educationManagementArea({ area: 'educacion_ep' })).toBe('educacion_ep');
+    expect(educationManagementArea({ area: 'educacion', programSlug: 'ca' })).toBe('educacion');
+    expect(educationManagementArea({ area: 'educacion', programSlug: 'ep' })).toBe('educacion');
+    expect(educationManagementArea({ area: 'educacion_ep' })).toBe('educacion');
     expect(educationManagementArea({ area: 'educacion' })).toBe('educacion');
+  });
+
+  it('persiste Educación siempre como área canónica', () => {
+    expect(educationWriteArea('educacion_ca')).toBe('educacion');
+    expect(educationWriteArea('educacion_ep')).toBe('educacion');
+    expect(educationWriteArea('ca')).toBe('educacion');
+    expect(educationWriteArea('educacion')).toBe('educacion');
+    expect(educationWriteArea('pam')).toBe('pam');
   });
 
   it('el predicado de una línea CA exige el programa', () => {

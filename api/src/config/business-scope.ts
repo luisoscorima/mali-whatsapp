@@ -127,14 +127,21 @@ export function contactAreaPredicate(alias: string, area: string): Prisma.Sql {
   return Prisma.sql`(${col(alias,'area')} IN (${Prisma.join(scope.areas)}) AND ${program} AND ${contactAccessPredicate(alias)})`;
 }
 
+/** Read family for Educación includes historical CA/EP slugs until residual rows are gone. */
+function readAreasFor(area: string): string[] {
+  const scope = businessReadScope(area);
+  if (scope.canonicalArea !== 'educacion') return scope.areas;
+  return [...new Set([...scope.areas, 'educacion', 'educacion_ca', 'educacion_ep'])];
+}
+
 /** Prisma `where` for rows whose `area` is in the read family (educacion + ca/ep). */
 export function areaFamilyWhere(area: string): { area: { in: string[] } } {
-  return { area: { in: businessReadScope(area).areas } };
+  return { area: { in: readAreasFor(area) } };
 }
 
 /** SQL `alias.area IN (...)` for the same family. */
 export function areaFamilySql(alias: string, area: string): Prisma.Sql {
-  return Prisma.sql`${col(alias, 'area')} IN (${Prisma.join(businessReadScope(area).areas)})`;
+  return Prisma.sql`${col(alias, 'area')} IN (${Prisma.join(readAreasFor(area))})`;
 }
 export function visibleConversationWhere(area: string, id: number): Prisma.conversationsWhereInput {
   const scope = businessReadScope(area);

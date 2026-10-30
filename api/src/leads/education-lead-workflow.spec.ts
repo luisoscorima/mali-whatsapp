@@ -400,13 +400,13 @@ describe('Education lead cycle creation', () => {
       where: expect.objectContaining({
         id: 33,
         OR: expect.arrayContaining([
-          { area: 'educacion_ca' },
-          { user_areas: { some: { area: 'educacion_ca' } } },
+          { area: 'educacion' },
+          { user_areas: { some: { area: 'educacion' } } },
         ]),
       }),
     }));
     expect(tx.audit_logs.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ area: 'educacion_ca' }),
+      data: expect.objectContaining({ area: 'educacion' }),
     });
   });
 });

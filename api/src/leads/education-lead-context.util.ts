@@ -28,8 +28,7 @@ export function isCommercialLeadChannel(channel?: string | null): boolean {
 }
 
 /** Area slug used to store General (program_id null) cycles. */
-export function generalCycleArea(area: string): string {
-  if (area === 'educacion_ca' || area === 'educacion_ep') return area;
+export function generalCycleArea(_area?: string): string {
   return 'educacion';
 }
 

@@ -82,6 +82,15 @@ La transacción se revierte si, al terminar:
 
 `--apply` se ejecutó el 26 de octubre de 2026 sobre la base de producción, después del ensayo y con el código que lee `educacion` más categoría ya desplegado. Resultado de esa corrida: 5.735 grupos, 5.268 fusionados, 467 en revisión, conversaciones 23.579 y mensajes 129.039, iguales antes y después. Los alias no se apagaron. No se agregan líneas nuevas desde el script. No volver a ejecutar `--apply`.
 
+## Cierre de alias (octubre 2026)
+
+Tras congelar escrituras (`educationWriteArea` / CRM / formularios solo persisten `educacion` + programa):
+
+1. `node api/scripts/relabel-education-aliases.cjs` (dry-run) y luego `--apply` para reetiquetar el remanente.
+2. Contactos bloqueados por índice único quedan en Admin → Conflictos.
+3. Migración `20261030180000_deprecate_education_area_aliases` desactiva `business_area_aliases` `educacion_ca` / `educacion_ep`.
+4. CA y EP viven solo como categorías (`general` / `ca` / `ep`).
+
 ## Revisión en Administración → Conflictos
 
 Hay dos listas. Ninguna abre una segunda persona. Cada una tiene dos decisiones.

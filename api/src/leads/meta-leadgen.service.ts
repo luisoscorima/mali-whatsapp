@@ -16,7 +16,11 @@ import {
   normalizeSecretValue,
 } from '../meta-settings/meta-settings.store';
 import { PrismaService } from '../prisma/prisma.service';
-import { inferAreaFromFormName, presentFormRoute, writeFormRoute } from './lead-form-area.util';
+import {
+  inferProgramKeyFromFormName,
+  presentFormRoute,
+  writeFormRoute,
+} from './lead-form-area.util';
 import { pickCursoFromAnswers } from './lead-curso.util';
 import {
   buildMetaFormLeadsExportBuffer,
@@ -294,10 +298,9 @@ export class MetaLeadgenService {
       formName = await this.fetchFormNameFromGraph(formIdNorm, token);
     }
 
-    const area = formName
-      ? inferAreaFromFormName(formName)
-      : normalizeArea(await this.resolveAreaForPage(pageId));
-    const placed = writeFormRoute(area);
+    const placed = formName
+      ? writeFormRoute('educacion', inferProgramKeyFromFormName(formName))
+      : writeFormRoute(normalizeArea(await this.resolveAreaForPage(pageId)));
 
     await this.prisma.meta_lead_form_routes.upsert({
       where: { form_id: formIdNorm },
@@ -319,7 +322,7 @@ export class MetaLeadgenService {
       },
     });
 
-    return area;
+    return placed.area;
   }
 
   async listFormRoutes(area?: string, operationalOnly = true) {
@@ -430,7 +433,10 @@ export class MetaLeadgenService {
           continue;
         }
         const formName = String(form.name ?? '').trim() || null;
-        const placed = writeFormRoute(inferAreaFromFormName(formName));
+        const placed = writeFormRoute(
+          'educacion',
+          inferProgramKeyFromFormName(formName),
+        );
         const existing = await this.prisma.meta_lead_form_routes.findUnique({
           where: { form_id: formId },
         });

@@ -20,6 +20,7 @@ import { programIdForCategory, programScopeWhere } from '../config/category-scop
 import {
   educationProgramOf,
   educationReadScope,
+  educationWriteArea,
 } from '../config/education-scope';
 import {
   exactOpenCycleWhere,
@@ -332,14 +333,17 @@ export class LeadsService implements OnModuleInit {
     seenAt: Date;
     messageId?: number;
   }): Promise<void> {
-    if (!this.educationAreas().includes(input.area)) return;
+    const area = educationWriteArea(input.area);
+    if (!this.educationAreas().includes(input.area) && !this.educationAreas().includes(area)) {
+      return;
+    }
     const conversation = await this.prisma.conversations.findFirst({
       where: { id: input.conversationId },
       select: { whatsapp_line: { select: { program: { select: { slug: true } } } } },
     });
     const attribution = await this.prisma.contact_origins.findFirst({
       where: {
-        area: input.area,
+        area: { in: this.educationAreas() },
         channel: { not: 'organic_wa' },
         OR: [
           { conversation_id: input.conversationId },
@@ -356,12 +360,14 @@ export class LeadsService implements OnModuleInit {
       select: { created_at: true },
     });
     const result = attribution ? null : await this.upsertOrigin({
-      area: input.area,
+      area,
       channel: 'organic_wa',
       external_id: `conversation:${input.conversationId}`,
       source_label: 'WhatsApp orgánico',
       conversation_id: input.conversationId,
-      program_slug: conversation?.whatsapp_line?.program?.slug ?? null,
+      program_slug:
+        conversation?.whatsapp_line?.program?.slug ??
+        educationProgramOf(input.area),
       first_seen_at: firstInbound?.created_at ?? input.seenAt,
       last_seen_at: input.seenAt,
       phone: input.phone,
@@ -380,7 +386,7 @@ export class LeadsService implements OnModuleInit {
       input.seenAt.getTime() - attribution.last_seen_at.getTime() < 24 * 60 * 60 * 1000
       ? attribution : null;
     if (message) await this.educationWorkflow.recordInbound({
-      area: input.area, contactId: result?.contact_id ?? input.contactId ?? attribution?.contact_id ?? null,
+      area, contactId: result?.contact_id ?? input.contactId ?? attribution?.contact_id ?? null,
       conversationId: input.conversationId, messageId: message.id,
       originId: result?.origin_id ?? recentAttribution?.id,
       channel: recentAttribution?.channel ?? 'organic_wa',
@@ -796,7 +802,11 @@ export class LeadsService implements OnModuleInit {
     contact_id: number | null;
     created: boolean;
   }> {
-    const area = normalizeArea(input.area);
+    const area = educationWriteArea(normalizeArea(input.area) || input.area);
+    const programSlug =
+      input.program_slug ||
+      educationProgramOf(input.program_slug) ||
+      educationProgramOf(input.area);
     const external_id = String(input.external_id ?? '').trim();
     if (!external_id) {
       throw new BadRequestException('external_id requerido');
@@ -826,7 +836,7 @@ export class LeadsService implements OnModuleInit {
       contact_id = resolved.contact_id;
       programId = await this.attachEducationProgram(
         contact_id,
-        input.program_slug || area,
+        programSlug || area,
       );
     } catch (err) {
       if (!(err instanceof BadRequestException)) throw err;

@@ -23,7 +23,11 @@ import {
   isEducationAttentionArea,
 } from './education-lead-context.util';
 import { syncEducationLeadStatuses } from './education-lead-statuses';
-import { educationManagementArea, educationProgramOf } from '../config/education-scope';
+import {
+  educationManagementArea,
+  educationProgramOf,
+  educationWriteArea,
+} from '../config/education-scope';
 import { userWorksArea } from '../users/area-membership.where';
 import { ProspectiaAdvisorService } from './prospectia-advisor.service';
 import { endLeadConversationLinks, projectLeadAssignee, withLeadCreateSavepoint } from './education-lead-lifecycle.util';
@@ -52,17 +56,21 @@ function educationAreasOf(user: {
 }): string[] {
   const fromMembership = user.memberships.flatMap((membership) => {
     if (membership.business_area.slug !== 'educacion') return [];
-    const granted = membership.programs
-      .filter((grant) => grant.program.active)
-      .map((grant) => grant.program.slug === 'ca'
-        ? 'educacion_ca'
-        : grant.program.slug === 'ep' ? 'educacion_ep' : grant.program.slug);
-    if (membership.include_general) granted.unshift('educacion');
-    if (membership.access_mode === 'all' && granted.length === 0) return [...EDUCATION_AREAS];
+    if (membership.access_mode === 'all' && membership.programs.length === 0) {
+      return [...EDUCATION_AREAS];
+    }
+    const granted: string[] = [];
+    if (membership.include_general) granted.push('educacion');
+    if (membership.programs.some((grant) => grant.program.active)) {
+      granted.push('educacion');
+    }
     return granted;
   });
-  return [...new Set([user.area, ...user.user_areas.map((item) => item.area), ...fromMembership])]
-    .filter((area) => EDUCATION_AREAS.includes(area) || /^[a-z][a-z0-9_]{0,9}$/.test(area));
+  return [...new Set([
+    educationWriteArea(user.area),
+    ...user.user_areas.map((item) => educationWriteArea(item.area)),
+    ...fromMembership,
+  ])].filter((area) => EDUCATION_AREAS.includes(area) || area === 'educacion');
 }
 
 @Injectable()
@@ -164,7 +172,9 @@ export class EducationLeadWorkflowService {
     originId?: number | null; occurredAt: Date;
     channel?: string; sourceKey?: string | null; sourceLabel?: string | null;
   }): Promise<void> {
-    if (!input.contactId || !EDUCATION_AREAS.includes(input.area)) return;
+    const writeArea = educationWriteArea(input.area);
+    if (!input.contactId) return;
+    if (!EDUCATION_AREAS.includes(input.area) && writeArea !== 'educacion') return;
     const conversation = await this.prisma.conversations.findUnique({
       where: { id: input.conversationId },
       select: { whatsapp_line: { select: { program_id: true } } },
@@ -178,12 +188,12 @@ export class EducationLeadWorkflowService {
     const channel = input.channel ?? 'organic_wa';
     const openWhere = exactOpenCycleWhere({
       personId: contact.person_id,
-      area: input.area,
+      area: writeArea,
       programId,
     });
     const historyWhere = exactCategoryCycleWhere({
       personId: contact.person_id,
-      area: input.area,
+      area: writeArea,
       programId,
     });
     const latestEntry = await this.prisma.education_lead_entries.findFirst({
@@ -268,7 +278,7 @@ export class EducationLeadWorkflowService {
       return;
     }
     await this.recordEntry({
-      area: input.area, contactId: input.contactId, originId: input.originId ?? null,
+      area: writeArea, contactId: input.contactId, originId: input.originId ?? null,
       channel,
       sourceKey: input.sourceKey ?? null,
       sourceLabel: input.sourceLabel ?? 'WhatsApp orgánico',
@@ -284,6 +294,7 @@ export class EducationLeadWorkflowService {
     eventKey: string; occurredAt: Date; programId?: number | null;
     conversationId?: number | null;
   }): Promise<void> {
+    const area = educationWriteArea(input.area);
     await this.prisma.$transaction(async (tx) => {
       const contact = await tx.contacts.findUnique({
         where: { id: input.contactId },
@@ -296,14 +307,14 @@ export class EducationLeadWorkflowService {
       const programKey = input.programId ?? 0;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${contact.person_id}::integer, ${programKey}::integer)`;
       const existing = await tx.education_lead_entries.findUnique({
-        where: { area_event_key: { area: input.area, event_key: input.eventKey } },
+        where: { area_event_key: { area, event_key: input.eventKey } },
       });
       if (existing) return null;
       const previous = await tx.education_lead_cycles.findFirst({
         where: {
           ...exactCategoryCycleWhere({
             personId: contact.person_id,
-            area: input.area,
+            area,
             programId: input.programId ?? null,
           }),
           started_at: { lte: input.occurredAt },
@@ -348,18 +359,18 @@ export class EducationLeadWorkflowService {
           await endLeadConversationLinks(tx, previous.id, input.occurredAt);
         }
         const status = await tx.lead_status_definitions.findFirst({
-          where: { area: input.area, is_default: true, active: true },
+          where: { area: educationManagementArea(), is_default: true, active: true },
           select: { id: true },
         });
         const existingConversation = !previous ? await tx.conversations.findFirst({
-          where: { area: input.area, contact_id: input.contactId },
+          where: { area: { in: EDUCATION_AREAS }, contact_id: input.contactId },
           orderBy: { id: 'desc' }, select: { assigned_user_id: true },
         }) : null;
         let cycle: { id: number } | null = null;
         try {
           cycle = await withLeadCreateSavepoint(tx, () => tx.education_lead_cycles.create({
             data: {
-              area: input.area,
+              area,
               contact_id: input.contactId,
               person_id: contact.person_id,
               business_area_id: contact.business_area_id,
@@ -384,7 +395,7 @@ export class EducationLeadWorkflowService {
           const winner = await tx.education_lead_cycles.findFirst({
             where: exactOpenCycleWhere({
               personId: contact.person_id,
-              area: input.area,
+              area,
               programId: input.programId ?? null,
             }),
             orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
@@ -415,7 +426,7 @@ export class EducationLeadWorkflowService {
                 cycle_id: cycle.id,
                 business_area_id: contact.business_area_id,
                 program_id: input.programId ?? null,
-                area: input.area,
+                area,
                 event_type: 'new_lead',
               },
             }).catch(() => undefined);
@@ -451,7 +462,7 @@ export class EducationLeadWorkflowService {
       }
       await tx.education_lead_entries.create({
         data: {
-          area: input.area, contact_id: input.contactId, program_id: input.programId ?? null,
+          area, contact_id: input.contactId, program_id: input.programId ?? null,
           origin_id: input.originId, cycle_id: cycleId,
           channel: input.channel, source_key: input.sourceKey, source_label: input.sourceLabel,
           event_key: input.eventKey, occurred_at: input.occurredAt,

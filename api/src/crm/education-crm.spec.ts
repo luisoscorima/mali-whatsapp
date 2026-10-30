@@ -127,8 +127,12 @@ describe('CRM Educación', () => {
     expect(upsert).not.toHaveBeenCalled();
     await service.recordEducationOrganicOrigin(input);
     expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
-      area: 'educacion_ep', channel: 'organic_wa', external_id: 'conversation:20',
-      first_seen_at: firstSeen, last_seen_at: seenAt,
+      area: 'educacion',
+      program_slug: 'ep',
+      channel: 'organic_wa',
+      external_id: 'conversation:20',
+      first_seen_at: firstSeen,
+      last_seen_at: seenAt,
     }));
     await service.recordEducationOrganicOrigin({ ...input, area: 'pam' });
     expect(upsert).toHaveBeenCalledTimes(1);

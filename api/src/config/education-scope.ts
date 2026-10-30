@@ -48,19 +48,28 @@ export function educationReadScope(area: unknown): {
 }
 
 /**
- * Alcance de catálogos/mutaciones para un ciclo.
- * Canónico CA/EP (area=educacion + program) se gestiona como educacion_ca/ep.
+ * Persistencia de Educación: siempre área canónica.
+ * CA/EP viven solo como categoría (`program_id` / `program_key`).
  */
-export function educationManagementArea(input: {
+export function educationWriteArea(area: unknown): string {
+  const value = String(area ?? '')
+    .trim()
+    .toLowerCase();
+  if (!value) return 'educacion';
+  if (isEducationAreaSlug(value) || educationProgramOf(value) != null) {
+    return 'educacion';
+  }
+  return value;
+}
+
+/**
+ * Catálogos/mutaciones de ciclo: siempre `educacion`.
+ * La categoría va en program_id del ciclo, no en el slug de área.
+ */
+export function educationManagementArea(_input?: {
   area: string;
   programSlug?: string | null;
 }): string {
-  const program = String(input.programSlug ?? '').trim().toLowerCase()
-    || educationProgramOf(input.area);
-  if (program === 'ca') return 'educacion_ca';
-  if (program === 'ep') return 'educacion_ep';
-  const area = String(input.area ?? '').trim().toLowerCase();
-  if (area === 'educacion_ca' || area === 'educacion_ep') return area;
   return 'educacion';
 }
 
