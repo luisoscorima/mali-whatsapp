@@ -1,5 +1,5 @@
 import { type DragEvent, type FormEvent, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { WaBackLink } from '@/shared/ui/shell/WaBackLink'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
@@ -116,9 +116,7 @@ export function ContactImportPage() {
   return (
     <div className="space-y-4">
       <div>
-        <Link to="/contacts" className="text-sm text-accent hover:underline">
-          ← Contactos
-        </Link>
+        <WaBackLink to="/contacts" label="Volver a contactos" />
         <h1 className="mt-2 text-2xl font-semibold">Importar contactos</h1>
         <p className="text-sm text-muted">
           CSV o Excel (.xlsx) masivo. Sin columna categoría se usa la del riel

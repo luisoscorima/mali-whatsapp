@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { WaBackLink } from '@/shared/ui/shell/WaBackLink'
 import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
 import { notify } from '@/shared/notify'
@@ -207,9 +207,7 @@ export function TikTokFormsPage() {
   return (
     <div className="space-y-6 p-4 md:p-6">
       <div>
-        <Link to="/leads" className="text-sm text-accent hover:underline">
-          ← Captación
-        </Link>
+        <WaBackLink to="/leads" label="Volver a captación" />
         <h1 className="mt-2 text-2xl font-semibold">TikTok Instant Forms</h1>
         <p className="text-sm text-muted">
           Leads de formularios TikTok Ads. El área es TI, PAM, Patronato o

@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
+import { WaBackLink } from '@/shared/ui/shell/WaBackLink'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { formatDateTime } from '../../shared/format'
@@ -191,9 +192,7 @@ export function SegmentDetailPage() {
     <div className="space-y-6">
       {confirmDialog}
       <div>
-        <Link to="/segments" className="text-sm text-accent hover:underline">
-          ← Segmentos
-        </Link>
+        <WaBackLink to="/segments" label="Volver a segmentos" />
         {mixesCategories(scope) ? (
           <p className="mt-2 text-sm text-muted">{categoryLabel(payload.segment.category)}</p>
         ) : null}

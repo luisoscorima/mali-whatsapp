@@ -1,4 +1,4 @@
-import { Navigate, Outlet, useLocation, Link } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { apiClient, type AuthUser } from '@/shared/api'
@@ -6,6 +6,7 @@ import { hasInboxDetailRoute } from '@/shared/layout/inboxDetailRoute'
 import { WaPageContents } from '@/shared/ui/shell/WaLayout'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import { WaMainPane, WaMainHeader, WaMainBody } from '@/shared/ui/shell/WaMainPane'
+import { WaBackLink } from '@/shared/ui/shell/WaBackLink'
 
 export function RequireMaster() {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -66,9 +67,7 @@ export function AdminShell() {
       <WaMainPane>
         <WaMainHeader>
           {showMobileBack ? (
-            <Link to="/admin" className="inbox-back-mobile">
-              ← Administración
-            </Link>
+            <WaBackLink to="/admin" label="Volver a Administración" mobileOnly />
           ) : null}
           <h1 className="inbox-chat-heading">Administración</h1>
           <p className="inbox-chat-sub">Solo usuario master</p>

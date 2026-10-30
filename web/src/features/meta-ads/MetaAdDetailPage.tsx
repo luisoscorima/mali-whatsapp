@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { WaBackLink } from '@/shared/ui/shell/WaBackLink'
 import { notify } from '@/shared/notify'
 import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
@@ -91,12 +92,7 @@ export function MetaAdDetailPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Link to="/leads/meta-ctwa" className="inbox-back-mobile">
-          ← CTWA
-        </Link>
-        <Link to="/leads/meta-ctwa" className="text-sm text-accent hover:underline max-md:hidden">
-          ← CTWA
-        </Link>
+        <WaBackLink to="/leads/meta-ctwa" label="Volver a CTWA" />
         <h1 className="mt-2 text-2xl font-semibold">{ad.display_label}</h1>
         <p className="font-mono text-sm text-muted">
           ID Meta: {ad.meta_source_id} · {ad.platform_label}

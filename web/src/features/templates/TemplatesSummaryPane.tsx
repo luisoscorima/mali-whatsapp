@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { useAppUser } from '@/app/appOutletContext'
 import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
@@ -11,16 +10,9 @@ type TemplateSummary = {
   kpis: MetricCard[]
 }
 
-const KPI_FILTER_MAP: Record<string, { status?: string; visibility?: string }> = {
-  Aprobadas: { status: 'APPROVED' },
-  Pendientes: { status: 'PENDING' },
-  Rechazadas: { status: 'REJECTED' },
-}
-
 export function TemplatesSummaryPane() {
   const user = useAppUser()
   const area = user?.area
-  const [, setSearchParams] = useSearchParams()
   const [summary, setSummary] = useState<TemplateSummary | null>(null)
   const [error, setError] = useState('')
   const [reloadToken, setReloadToken] = useState(0)
@@ -44,27 +36,6 @@ export function TemplatesSummaryPane() {
       cancelled = true
     }
   }, [area, reloadToken])
-
-  const metrics = useMemo(
-    () =>
-      (summary?.kpis ?? []).map((metric) => ({
-        ...metric,
-        interactive: Boolean(KPI_FILTER_MAP[metric.label]),
-      })),
-    [summary],
-  )
-
-  function applyKpiFilter(metric: MetricCard) {
-    const mapping = KPI_FILTER_MAP[metric.label]
-    if (!mapping) return
-    setSearchParams((sp) => {
-      const next = new URLSearchParams(sp)
-      if (mapping.status) next.set('status', mapping.status)
-      else next.delete('status')
-      if (mapping.visibility) next.set('visibility', mapping.visibility)
-      return next
-    })
-  }
 
   if (error) {
     return (
@@ -93,10 +64,10 @@ export function TemplatesSummaryPane() {
         <div>
           <h2 className="text-lg font-semibold">Plantillas</h2>
           <p className="text-sm text-muted">
-            Selecciona una plantilla de la lista o usa un KPI para filtrar.
+            Selecciona una plantilla de la lista.
           </p>
         </div>
-        <MetricsGrid title="Inventario" metrics={metrics} onMetricClick={applyKpiFilter} />
+        <MetricsGrid title="Inventario" metrics={summary.kpis} />
         <p className="text-sm text-muted">
           Selecciona una plantilla de la lista o sincroniza desde Meta.
         </p>

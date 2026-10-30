@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { WaBackLink } from '@/shared/ui/shell/WaBackLink'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { formatDateTime } from '../../shared/format'
@@ -180,9 +181,7 @@ export function AttributeDetailPage() {
     <div className="space-y-4">
       {confirmDialog}
       <div>
-        <Link to="/attributes" className="text-sm text-accent hover:underline">
-          ← Atributos
-        </Link>
+        <WaBackLink to="/attributes" label="Volver a atributos" />
         {mixesCategories(categories) ? (
           <p className="mt-2 text-sm text-muted">{categoryLabel(def.category)}</p>
         ) : null}

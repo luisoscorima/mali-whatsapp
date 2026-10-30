@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { WaBackLink } from '@/shared/ui/shell/WaBackLink'
 import { apiClient } from '../../shared/api'
 import { formatDateTime } from '../../shared/format'
 import { notify } from '@/shared/notify'
@@ -107,9 +108,7 @@ export function TemplateDetailPage() {
   if (loadFailed && !template) {
     return (
       <div className="space-y-3">
-        <Link to="/templates" className="text-sm text-accent">
-          ← Plantillas
-        </Link>
+        <WaBackLink to="/templates" label="Volver a plantillas" />
         <p className="text-muted">No se pudo cargar la plantilla.</p>
       </div>
     )
@@ -123,9 +122,7 @@ export function TemplateDetailPage() {
 
   return (
     <div className="space-y-4">
-      <Link to="/templates" className="text-sm text-accent">
-        ← Plantillas
-      </Link>
+      <WaBackLink to="/templates" label="Volver a plantillas" />
 
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="font-mono text-2xl font-semibold">{template.name}</h1>

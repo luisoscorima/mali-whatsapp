@@ -1,4 +1,4 @@
-import { lazy, Suspense, type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, type FormEvent, type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import { useAppUser } from '@/app/appOutletContext'
 import { canonicalArea, onCategorySelection, readCategorySelection } from '@/shared/area/category-selection'
@@ -19,6 +19,7 @@ import {
   WaMainFooter,
 } from '@/shared/ui/shell/WaMainPane'
 import { WaEmptyPane } from '@/shared/ui/shell/WaEmptyPane'
+import { WaBackButton } from '@/shared/ui/shell/WaBackLink'
 import { Button } from '@/shared/ui/shadcn/button'
 import { formatContactName } from '../contacts/contactName'
 import { type AttributeFieldDefinition } from '../contacts/contactFormUtils'
@@ -320,10 +321,14 @@ function ProfileBlock({
   detail,
   segments,
   onOpenContact,
+  onBack,
+  actions,
 }: {
   detail: InboxDetail
   segments: SegmentOption[]
   onOpenContact: () => void
+  onBack?: () => void
+  actions?: ReactNode
 }) {
   const user = useAppUser()
   const canManageLeads = Boolean(user?.canManageLeads)
@@ -355,15 +360,23 @@ function ProfileBlock({
   return (
     <div className="inbox-chat-header-summary">
       <section className="inbox-chat-header-customer-panel" aria-label="Cliente">
+        {onBack ? (
+          <WaBackButton onClick={onBack} label="Volver a chats" mobileOnly />
+        ) : null}
         <span className="inbox-chat-avatar inbox-chat-avatar--header" aria-hidden>
           {inboxInitials(heading, detail.conversation.phone)}
         </span>
         <div className="inbox-chat-header-identity">
           <span
             className={`inbox-chat-window-pill ${detail.user_service_window_open ? 'is-open' : 'is-closed'}`}
+            title={
+              detail.user_service_window_open
+                ? 'Ventana de servicio abierta'
+                : 'Ventana de servicio cerrada'
+            }
           >
             {detail.user_service_window_open ? <WindowClockIcon /> : <InboxHeaderLockIcon />}
-            Ventana {detail.user_service_window_open ? 'abierta' : 'cerrada'}
+            {detail.user_service_window_open ? 'Abierta' : 'Cerrada'}
           </span>
           <div className="inbox-chat-header-customer">
             <div className="inbox-chat-heading-row">
@@ -387,6 +400,9 @@ function ProfileBlock({
             </p>
           </div>
         </div>
+        {actions ? (
+          <div className="inbox-chat-header-toolbar">{actions}</div>
+        ) : null}
       </section>
 
       <section className="inbox-chat-header-context" aria-label="Línea de atención">
@@ -2988,17 +3004,11 @@ export function ConversationsInboxPage() {
         ) : detail ? (
           <>
             <WaMainHeader>
-              <button
-                type="button"
-                className="inbox-back-mobile"
-                onClick={() => navigate(`/conversations${filterQuerySuffix}`)}
-              >
-                ← Chats
-              </button>
               <div className="inbox-chat-header-profile">
                 <ProfileBlock
                   detail={detail}
                   segments={segments}
+                  onBack={() => navigate(`/conversations${filterQuerySuffix}`)}
                   onOpenContact={() =>
                     openContactSheet({
                       mode: detail.conversation.contact_id ? 'edit' : 'create',
@@ -3008,42 +3018,49 @@ export function ConversationsInboxPage() {
                       prefillName: detail.conversation.wa_profile_name ?? '',
                     })
                   }
-                />
-              </div>
-              <div className="inbox-chat-header-toolbar">
-                {canAssign ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() =>
-                      openAssignDialog({
-                        conversationId: detail.conversation.id,
-                        heading: detailHeading,
-                        phone: detail.conversation.phone || '',
-                        assignedUserId: detail.conversation.assigned_user_id,
-                      })
-                    }
-                  >
-                    Asignar
-                  </Button>
-                ) : null}
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="icon-sm"
-                  title="Opciones del chat"
-                  aria-label="Opciones del chat"
-                  onClick={() =>
-                    openChatActions(
-                      chatActionsFromDetail(detail, detailHeading, detail.ai_area_enabled),
-                    )
+                  actions={
+                    <>
+                      {canAssign ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="inbox-chat-header-assign"
+                          onClick={() =>
+                            openAssignDialog({
+                              conversationId: detail.conversation.id,
+                              heading: detailHeading,
+                              phone: detail.conversation.phone || '',
+                              assignedUserId: detail.conversation.assigned_user_id,
+                            })
+                          }
+                        >
+                          Asignar
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="icon-sm"
+                        title="Opciones del chat"
+                        aria-label="Opciones del chat"
+                        onClick={() =>
+                          openChatActions(
+                            chatActionsFromDetail(
+                              detail,
+                              detailHeading,
+                              detail.ai_area_enabled,
+                            ),
+                          )
+                        }
+                      >
+                        <span className="inbox-header-more-icon" aria-hidden>
+                          ⋮
+                        </span>
+                      </Button>
+                    </>
                   }
-                >
-                  <span className="inbox-header-more-icon" aria-hidden>
-                    ⋮
-                  </span>
-                </Button>
+                />
               </div>
             </WaMainHeader>
 

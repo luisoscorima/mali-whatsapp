@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import { WaBackLink } from '@/shared/ui/shell/WaBackLink'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { FlowCanvasEditor } from './FlowCanvasEditor'
@@ -93,15 +94,7 @@ export function FlowNewPage() {
   return (
     <div className="flex flex-col gap-2">
       <div className="px-3 pt-3 md:px-4 md:pt-4">
-        <Link to="/flows" className="inbox-back-mobile">
-          ← Flujos
-        </Link>
-        <Link
-          to="/flows"
-          className="text-sm text-accent hover:underline max-md:hidden"
-        >
-          ← Flujos
-        </Link>
+        <WaBackLink to="/flows" label="Volver a flujos" />
         <h1 className="mt-2 text-2xl font-semibold">Nuevo flujo</h1>
         {draftCategorySlug(scope) === 'general' && categoryToSave(scope) === undefined ? (
           <p className="text-sm text-muted">Con varias categorías marcadas se guarda en General.</p>

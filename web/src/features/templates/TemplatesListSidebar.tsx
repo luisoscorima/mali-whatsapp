@@ -17,14 +17,6 @@ const CATEGORY_FILTERS = [
   { key: 'AUTHENTICATION', label: 'Auth' },
 ] as const
 
-const STATUS_FILTERS = [
-  { key: '', label: 'Todos' },
-  { key: 'APPROVED', label: 'Aprobadas' },
-  { key: 'PENDING', label: 'Pendientes' },
-  { key: 'REJECTED', label: 'Rechazadas' },
-  { key: 'DISABLED', label: 'Deshabilitadas' },
-] as const
-
 const VISIBILITY_FILTERS = [
   { key: '', label: 'Todas' },
   { key: 'active', label: 'Activas' },
@@ -32,7 +24,6 @@ const VISIBILITY_FILTERS = [
 ] as const
 
 type CategoryFilterKey = (typeof CATEGORY_FILTERS)[number]['key']
-type StatusFilterKey = (typeof STATUS_FILTERS)[number]['key']
 type VisibilityFilterKey = (typeof VISIBILITY_FILTERS)[number]['key']
 
 type TemplateListItem = {
@@ -55,10 +46,6 @@ function isCategoryFilterKey(value: string): value is CategoryFilterKey {
   return CATEGORY_FILTERS.some((opt) => opt.key === value)
 }
 
-function isStatusFilterKey(value: string): value is StatusFilterKey {
-  return STATUS_FILTERS.some((opt) => opt.key === value)
-}
-
 function isVisibilityFilterKey(value: string): value is VisibilityFilterKey {
   return VISIBILITY_FILTERS.some((opt) => opt.key === value)
 }
@@ -71,12 +58,10 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
   const [syncing, setSyncing] = useState(false)
 
   const categoryRaw = searchParams.get('category') ?? ''
-  const statusRaw = searchParams.get('status') ?? ''
   const visibilityRaw = searchParams.get('visibility') ?? ''
   const categoryFilter: CategoryFilterKey = isCategoryFilterKey(categoryRaw)
     ? categoryRaw
     : ''
-  const statusFilter: StatusFilterKey = isStatusFilterKey(statusRaw) ? statusRaw : ''
   const visibilityFilter: VisibilityFilterKey = isVisibilityFilterKey(visibilityRaw)
     ? visibilityRaw
     : ''
@@ -108,9 +93,6 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
       if (categoryFilter && (t.category ?? '').toUpperCase() !== categoryFilter) {
         return false
       }
-      if (statusFilter && t.status.toUpperCase() !== statusFilter) {
-        return false
-      }
       if (visibilityFilter === 'active' && !t.active) return false
       if (visibilityFilter === 'inactive' && t.active) return false
       if (!q) return true
@@ -121,22 +103,13 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
         t.status.toLowerCase().includes(q)
       )
     })
-  }, [templates, searchQuery, categoryFilter, statusFilter, visibilityFilter])
+  }, [templates, searchQuery, categoryFilter, visibilityFilter])
 
   function setCategoryFilter(key: CategoryFilterKey) {
     setSearchParams((sp) => {
       const next = new URLSearchParams(sp)
       if (key) next.set('category', key)
       else next.delete('category')
-      return next
-    })
-  }
-
-  function setStatusFilter(key: StatusFilterKey) {
-    setSearchParams((sp) => {
-      const next = new URLSearchParams(sp)
-      if (key) next.set('status', key)
-      else next.delete('status')
       return next
     })
   }
@@ -209,23 +182,6 @@ export function TemplatesListSidebar({ selectedId }: TemplatesListSidebarProps) 
                   categoryFilter === opt.key ? 'is-active' : ''
                 }`}
                 onClick={() => setCategoryFilter(opt.key)}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          <div
-            className="inbox-chat-filter-pills inbox-chat-filter-pills--row contact-filter-pills segment-filter-chips"
-            aria-label="Filtrar por estado Meta"
-          >
-            {STATUS_FILTERS.map((opt) => (
-              <button
-                key={opt.key || 'all-status'}
-                type="button"
-                className={`inbox-chat-pill contact-filter-pill text-[11px] ${
-                  statusFilter === opt.key ? 'is-active' : ''
-                }`}
-                onClick={() => setStatusFilter(opt.key)}
               >
                 {opt.label}
               </button>

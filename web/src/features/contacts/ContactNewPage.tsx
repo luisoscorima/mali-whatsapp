@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { WaBackLink } from '@/shared/ui/shell/WaBackLink'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { ContactForm } from './ContactForm'
@@ -124,12 +125,10 @@ export function ContactNewPage() {
   return (
     <div className="space-y-4">
       <div>
-        <Link
+        <WaBackLink
           to={returnTo ?? '/contacts'}
-          className="text-sm text-accent hover:underline"
-        >
-          {returnTo ? '← Volver al chat' : '← Contactos'}
-        </Link>
+          label={returnTo ? 'Volver al chat' : 'Volver a contactos'}
+        />
         <h1 className="mt-2 text-2xl font-semibold">Añadir contacto</h1>
       </div>
 

@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import { WaBackLink } from '@/shared/ui/shell/WaBackLink'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { categoryLabel, categoryToSave, draftCategorySlug, useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
@@ -95,9 +96,7 @@ export function AttributeNewPage() {
   return (
     <div className="space-y-4">
       <div>
-        <Link to="/attributes" className="text-sm text-accent hover:underline">
-          ← Atributos
-        </Link>
+        <WaBackLink to="/attributes" label="Volver a atributos" />
         <h1 className="mt-2 text-2xl font-semibold">Nuevo atributo</h1>
         {draftCategorySlug(categories) === 'general' && categoryToSave(categories) === undefined ? (
           <p className="text-sm text-muted">Con varias categorías marcadas se guarda en General.</p>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { WaBackLink } from '@/shared/ui/shell/WaBackLink'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { ContactForm } from './ContactForm'
@@ -252,9 +253,7 @@ export function ContactDetailPage() {
     <div className="space-y-4">
       {confirmDialog}
       <div className="contact-detail-heading">
-        <Link to={listHref} className="contact-detail-back" aria-label="Volver a contactos">
-          ‹
-        </Link>
+        <WaBackLink to={listHref} label="Volver a contactos" />
         <div className="min-w-0">
           <h1 className="contact-detail-title">
             {formatContactName(contact.name, contact.last_name, contact.wa_username ? `@${contact.wa_username.replace(/^@/, '')}` : 'Usuario de WhatsApp')}

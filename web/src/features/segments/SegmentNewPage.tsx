@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import { WaBackLink } from '@/shared/ui/shell/WaBackLink'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { SegmentColorPicker } from './SegmentColorPicker'
@@ -34,9 +35,7 @@ export function SegmentNewPage() {
   return (
     <div className="space-y-4">
       <div>
-        <Link to="/segments" className="text-sm text-accent hover:underline">
-          ← Segmentos
-        </Link>
+        <WaBackLink to="/segments" label="Volver a segmentos" />
         <h1 className="mt-2 text-2xl font-semibold">Añadir segmento</h1>
         {draftCategorySlug(scope) === 'general' && categoryToSave(scope) === undefined ? (
           <p className="text-sm text-muted">Con varias categorías marcadas se guarda en General.</p>

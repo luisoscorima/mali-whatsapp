@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
+import { WaBackLink } from '@/shared/ui/shell/WaBackLink'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { FlowCanvasEditor } from './FlowCanvasEditor'
@@ -221,15 +222,7 @@ export function FlowDetailPage() {
   if (loadFailed) {
     return (
       <div className="space-y-3 p-4">
-        <Link to="/flows" className="inbox-back-mobile">
-          ← Flujos
-        </Link>
-        <Link
-          to="/flows"
-          className="text-sm text-accent hover:underline max-md:hidden"
-        >
-          ← Flujos
-        </Link>
+        <WaBackLink to="/flows" label="Volver a flujos" />
         <p className="muted">No se pudo cargar el flujo.</p>
       </div>
     )
@@ -244,15 +237,7 @@ export function FlowDetailPage() {
     <div className="flex flex-col gap-4">
       {confirmDialog}
       <div className="px-3 pt-3 md:px-4 md:pt-4">
-        <Link to="/flows" className="inbox-back-mobile">
-          ← Flujos
-        </Link>
-        <Link
-          to="/flows"
-          className="text-sm text-accent hover:underline max-md:hidden"
-        >
-          ← Flujos
-        </Link>
+        <WaBackLink to="/flows" label="Volver a flujos" />
         {mixesCategories(categories) ? (
           <p className="mt-2 text-sm text-muted">{categoryLabel(flowCategory)}</p>
         ) : null}

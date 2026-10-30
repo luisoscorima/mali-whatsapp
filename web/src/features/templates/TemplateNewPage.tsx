@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { WaBackLink } from '@/shared/ui/shell/WaBackLink'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { TemplateForm } from './TemplateForm'
@@ -39,9 +40,7 @@ export function TemplateNewPage() {
   if (loadFailed) {
     return (
       <div className="space-y-3">
-        <Link to="/templates" className="text-sm text-accent">
-          ← Plantillas
-        </Link>
+        <WaBackLink to="/templates" label="Volver a plantillas" />
         <p className="text-muted">No se pudo cargar la plantilla origen.</p>
       </div>
     )
@@ -53,9 +52,7 @@ export function TemplateNewPage() {
 
   return (
     <div className="space-y-4">
-      <Link to="/templates" className="text-sm text-accent">
-        ← Plantillas
-      </Link>
+      <WaBackLink to="/templates" label="Volver a plantillas" />
       <div>
         <h1 className="text-2xl font-semibold">
           {source ? 'Nueva versión de plantilla' : 'Nueva plantilla'}
