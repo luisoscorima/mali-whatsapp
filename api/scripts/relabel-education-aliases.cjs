@@ -201,7 +201,39 @@ async function main() {
           );
         }
 
-        // 5) Meta / TikTok / routes
+        // 5) Meta / TikTok / routes (borrar alias que chocan con educacion)
+        if (await tableExists(tx, 'meta_ctwa_ads')) {
+          await sql(
+            tx,
+            `DELETE FROM meta_ctwa_ads alias_a
+             USING meta_ctwa_ads keep
+             WHERE alias_a.area IN ('educacion_ca', 'educacion_ep')
+               AND keep.area = 'educacion'
+               AND keep.meta_source_id = alias_a.meta_source_id`,
+          );
+        }
+        if (await tableExists(tx, 'meta_ctwa_ad_leads')) {
+          await sql(
+            tx,
+            `DELETE FROM meta_ctwa_ad_leads alias_l
+             USING meta_ctwa_ad_leads keep
+             WHERE alias_l.area IN ('educacion_ca', 'educacion_ep')
+               AND keep.area = 'educacion'
+               AND keep.meta_ctwa_ad_id = alias_l.meta_ctwa_ad_id
+               AND keep.conversation_id = alias_l.conversation_id`,
+          );
+        }
+        if (await tableExists(tx, 'meta_lead_forms')) {
+          await sql(
+            tx,
+            `DELETE FROM meta_lead_forms alias_f
+             USING meta_lead_forms keep
+             WHERE alias_f.area IN ('educacion_ca', 'educacion_ep')
+               AND keep.area = 'educacion'
+               AND keep.form_id = alias_f.form_id`,
+          );
+        }
+
         for (const table of [
           'meta_ctwa_ads',
           'meta_ctwa_ad_leads',
