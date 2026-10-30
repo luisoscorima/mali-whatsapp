@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { Request } from 'express';
-import { normalizeArea } from '../config/areas';
+import { businessReadScope, normalizeArea } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
 import { inferAreaFromFormName, presentFormRoute, writeFormRoute } from './lead-form-area.util';
 import { pickCursoFromAnswers } from './lead-curso.util';
@@ -1037,7 +1037,7 @@ export class TikTokLeadgenService {
       offset?: number;
     } = {},
   ) {
-    const areaNorm = normalizeArea(area);
+    const scope = businessReadScope(area);
     const take = Math.min(Math.max(opts.limit ?? 25, 1), 200);
     const skip = Math.max(opts.offset ?? 0, 0);
     const formId = String(opts.formId ?? '').trim();
@@ -1059,7 +1059,7 @@ export class TikTokLeadgenService {
     }
 
     const where: Prisma.tiktok_leadsWhereInput = {
-      area: areaNorm,
+      area: { in: scope.areas },
     };
     if (formId && formIdsFromName) {
       where.form_id = formIdsFromName.includes(formId)

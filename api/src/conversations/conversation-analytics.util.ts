@@ -1,7 +1,10 @@
 import { Prisma } from '@prisma/client';
 import type { MetricCard } from '../campaigns/campaign-analytics.util';
 import { readSessionWindowMs } from '../campaigns/campaign-conversation-window.util';
-import { conversationCategoryPredicate } from '../config/business-scope';
+import {
+  conversationAreaPredicate,
+  conversationCategoryPredicate,
+} from '../config/business-scope';
 import { advisorLabelSql } from '../users/advisor-label.util';
 export { isWithinUserServiceWindow } from '../campaigns/campaign-conversation-window.util';
 
@@ -90,7 +93,7 @@ export async function fetchConversationSummary(
         )::int AS human_mode,
         COUNT(*) FILTER (WHERE c.inbox_unread = true)::int AS unread
       FROM conversations c
-      WHERE c.area = ${area}
+      WHERE ${conversationAreaPredicate('c', area)}
         AND c.last_message_at >= ${since}
         ${advisorFilter}
         ${categoryFilter}
@@ -98,7 +101,7 @@ export async function fetchConversationSummary(
     prisma.$queryRaw<{ day: Date; count: number }[]>(Prisma.sql`
       SELECT date_trunc('day', c.last_message_at)::date AS day, COUNT(*)::int AS count
       FROM conversations c
-      WHERE c.area = ${area}
+      WHERE ${conversationAreaPredicate('c', area)}
         AND c.last_message_at >= ${since}
         ${advisorFilter}
         ${categoryFilter}
@@ -115,7 +118,7 @@ export async function fetchConversationSummary(
       JOIN chat_messages m ON m.conversation_id = c.id
         AND m.direction = 'outbound'
         AND m.created_at >= ${since}
-      WHERE c.area = ${area}
+      WHERE ${conversationAreaPredicate('c', area)}
         AND c.last_message_at >= ${since}
         AND c.assigned_user_id IS NOT NULL
         ${advisorFilter}
@@ -130,7 +133,7 @@ export async function fetchConversationSummary(
       JOIN chat_messages m ON m.conversation_id = c.id
         AND m.direction = 'outbound'
         AND m.created_at >= ${since}
-      WHERE c.area = ${area}
+      WHERE ${conversationAreaPredicate('c', area)}
         AND c.last_message_at >= ${since}
         AND c.assigned_user_id IS NOT NULL
         ${advisorFilter}

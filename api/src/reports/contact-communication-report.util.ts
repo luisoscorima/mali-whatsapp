@@ -7,7 +7,12 @@ import {
   readMessageSenderLabel,
 } from '../conversations/chat-sender.util';
 import { getReportDisplayTimeZone } from './report-date-range.util';
-import { conversationCategoryPredicate } from '../config/business-scope';
+import {
+  areaFamilySql,
+  contactAreaPredicate,
+  conversationAreaPredicate,
+  conversationCategoryPredicate,
+} from '../config/business-scope';
 import { advisorLabelSql } from '../users/advisor-label.util';
 
 const PREVIEW_TRUNCATE = 120;
@@ -230,7 +235,8 @@ function buildContactFilterSql(
   filters: CommunicationReportFilters,
 ): Prisma.Sql {
   const conditions: Prisma.Sql[] = [
-    Prisma.sql`c.area = ${area}`,
+    contactAreaPredicate('c', area),
+    conversationAreaPredicate('conv', area),
     Prisma.sql`EXISTS (SELECT 1 FROM chat_messages cm WHERE cm.conversation_id = conv.id)`,
     Prisma.sql`conv.last_user_message_at IS NOT NULL`,
   ];
@@ -316,9 +322,10 @@ async function fetchContactIdsForReport(
   const countRows = await prisma.$queryRaw<{ c: number }[]>(Prisma.sql`
     SELECT COUNT(*)::int AS c
     FROM contacts c
-    INNER JOIN conversations conv ON conv.area = c.area
-      AND (conv.contact_id = c.id OR (c.phone IS NOT NULL AND conv.phone = c.phone)
-        OR (c.whatsapp_user_id IS NOT NULL AND conv.whatsapp_user_id = c.whatsapp_user_id))
+    INNER JOIN conversations conv ON (
+        conv.contact_id = c.id OR (c.phone IS NOT NULL AND conv.phone = c.phone)
+        OR (c.whatsapp_user_id IS NOT NULL AND conv.whatsapp_user_id = c.whatsapp_user_id)
+      )
     WHERE ${where}
   `);
   const total = Number(countRows[0]?.c || 0);
@@ -367,7 +374,7 @@ async function fetchContactIdsForReport(
         SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
         FROM contact_segments cs
         JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
-        WHERE cs.contact_id = c.id AND cs.area = c.area
+        WHERE cs.contact_id = c.id AND ${areaFamilySql('cs', area)}
       ), '') AS segments,
       COALESCE((
         SELECT string_agg(
@@ -375,7 +382,7 @@ async function fetchContactIdsForReport(
           ', '
         )
         FROM contact_origins co
-        WHERE co.contact_id = c.id AND co.area = c.area
+        WHERE co.contact_id = c.id AND ${areaFamilySql('co', area)}
       ), '') AS origins,
       COALESCE(ls.label, '') AS lead_status,
       CASE c.lead_score
@@ -386,13 +393,14 @@ async function fetchContactIdsForReport(
       END AS lead_score,
       COALESCE(${advisorLabelSql('assignee')}, '') AS assigned_advisor
     FROM contacts c
-    INNER JOIN conversations conv ON conv.area = c.area
-      AND (conv.contact_id = c.id OR (c.phone IS NOT NULL AND conv.phone = c.phone)
-        OR (c.whatsapp_user_id IS NOT NULL AND conv.whatsapp_user_id = c.whatsapp_user_id))
+    INNER JOIN conversations conv ON (
+        conv.contact_id = c.id OR (c.phone IS NOT NULL AND conv.phone = c.phone)
+        OR (c.whatsapp_user_id IS NOT NULL AND conv.whatsapp_user_id = c.whatsapp_user_id)
+      )
     LEFT JOIN LATERAL (
       SELECT elc.assigned_user_id
       FROM education_lead_cycles elc
-      WHERE elc.contact_id = c.id AND elc.area = c.area
+      WHERE elc.contact_id = c.id AND ${areaFamilySql('elc', area)}
       ORDER BY elc.started_at DESC, elc.id DESC
       LIMIT 1
     ) lead_cycle ON true

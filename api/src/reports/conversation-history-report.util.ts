@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import type { BusinessArea } from '../config/areas';
 import { REPORT_SOURCE_HEADERS, reportExportSourceCells, reportConversationSourceSql, type ReportSource } from './report-export-source.util';
 import { Prisma } from '@prisma/client';
+import { areaFamilySql } from '../config/business-scope';
 import {
   auditConversationCategorySql,
   parseCategorySlugs,
@@ -168,7 +169,7 @@ export async function fetchConversationHistoryReport(
           SELECT string_agg(sd.label, ', ' ORDER BY sd.sort_order NULLS LAST, sd.label)
           FROM contact_segments cs
           JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
-          WHERE cs.contact_id = c.id AND cs.area = c.area
+          WHERE cs.contact_id = c.id AND ${areaFamilySql('cs', area)}
         ), '') AS segments,
         COALESCE((
           SELECT string_agg(
@@ -176,11 +177,11 @@ export async function fetchConversationHistoryReport(
             ', '
           )
           FROM contact_origins co
-          WHERE co.contact_id = c.id AND co.area = c.area
+          WHERE co.contact_id = c.id AND ${areaFamilySql('co', area)}
         ), '') AS origins
       FROM conversations conv
       LEFT JOIN contacts c ON c.id = conv.contact_id
-        OR (c.area = conv.area AND
+        OR (${areaFamilySql('c', area)} AND
           ((c.phone IS NOT NULL AND c.phone = conv.phone)
            OR (c.whatsapp_user_id IS NOT NULL AND c.whatsapp_user_id = conv.whatsapp_user_id)))
       WHERE conv.id = ANY(${ids}::int[])

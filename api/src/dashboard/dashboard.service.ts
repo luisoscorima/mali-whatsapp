@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { businessReadScope } from '../config/areas';
+import { areaFamilyWhere } from '../config/business-scope';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/auth.types';
 
@@ -7,12 +9,13 @@ export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getDashboard(user: AuthUser) {
-    const area = user.area;
+    const scope = businessReadScope(user.area);
+    const catalogArea = scope.canonicalArea;
 
     const [contacts, campaigns, segmentStats, campaignTotals] =
       await Promise.all([
         this.prisma.contacts.findMany({
-          where: { area },
+          where: areaFamilyWhere(user.area),
           orderBy: { id: 'desc' },
           take: 25,
           select: {
@@ -26,7 +29,7 @@ export class DashboardService {
           },
         }),
         this.prisma.campaigns.findMany({
-          where: { area },
+          where: { area: catalogArea },
           orderBy: { id: 'desc' },
           take: 25,
           select: {
@@ -40,13 +43,13 @@ export class DashboardService {
         }),
         this.prisma.contact_segments.findMany({
           where: {
-            area,
+            area: catalogArea,
             contacts: { active: true },
           },
           select: { segment_slug: true, contact_id: true },
         }),
         this.prisma.campaign_logs.aggregate({
-          where: { campaigns: { area } },
+          where: { campaigns: { area: catalogArea } },
           _count: { id: true },
         }),
       ]);

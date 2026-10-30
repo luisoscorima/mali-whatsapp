@@ -117,6 +117,12 @@ class SetContactStatusDto {
   @IsString()
   @MaxLength(32)
   category?: string;
+
+  /** Inbox: include in conversation timeline. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  conversation_id?: number;
 }
 
 class StartAttentionDto {
@@ -368,6 +374,7 @@ export class LeadsController {
       {
         leadId: body.lead_id ?? null,
         category: body.category ?? null,
+        conversationId: body.conversation_id ?? null,
         user,
       },
     );

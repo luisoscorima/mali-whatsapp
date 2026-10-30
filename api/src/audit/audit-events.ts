@@ -18,6 +18,7 @@ export const AuditEvent = {
   CONTACT_UPDATED: 'contact.updated',
   CONTACT_SEGMENT_CHANGE: 'contact.segment_change',
   CONTACT_LEAD_SCORE: 'contact.lead_score',
+  CONTACT_LEAD_STATUS: 'contact.lead_status',
   CONTACT_DELETED: 'contact.deleted',
   CAMPAIGN_CREATED: 'campaign.created',
   CAMPAIGN_RESCHEDULED: 'campaign.rescheduled',

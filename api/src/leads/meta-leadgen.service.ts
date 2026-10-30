@@ -743,14 +743,14 @@ export class MetaLeadgenService {
   }
 
   async listForms(area: string) {
-    const areaNorm = normalizeArea(area);
+    const scope = businessReadScope(area);
     const operationalRoutes = await this.prisma.meta_lead_form_routes.findMany({
-      where: { area: areaNorm, is_operational: true },
+      where: { area: { in: scope.areas }, is_operational: true },
       select: { form_id: true },
     });
     return this.prisma.meta_lead_forms.findMany({
       where: {
-        area: areaNorm,
+        area: { in: scope.areas },
         form_id: { in: operationalRoutes.map((route) => route.form_id) },
       },
       orderBy: { updated_at: 'desc' },
@@ -767,7 +767,7 @@ export class MetaLeadgenService {
       offset?: number;
     } = {},
   ) {
-    const areaNorm = normalizeArea(area);
+    const scope = businessReadScope(area);
     const take = Math.min(Math.max(opts.limit ?? 25, 1), 200);
     const skip = Math.max(opts.offset ?? 0, 0);
     const formId = String(opts.formId ?? '').trim();
@@ -785,7 +785,7 @@ export class MetaLeadgenService {
         }),
         this.prisma.meta_lead_forms.findMany({
           where: {
-            area: areaNorm,
+            area: { in: scope.areas },
             name: { contains: formNameQ, mode: 'insensitive' },
           },
           select: { form_id: true },
@@ -815,7 +815,7 @@ export class MetaLeadgenService {
     }
 
     const where: Prisma.meta_leadgen_leadsWhereInput = {
-      area: areaNorm,
+      area: { in: scope.areas },
       ...(formIdFilter ? { form_id: formIdFilter } : {}),
       ...(q
         ? {
@@ -881,7 +881,7 @@ export class MetaLeadgenService {
           select: { form_id: true, form_name: true },
         }),
         this.prisma.meta_lead_forms.findMany({
-          where: { area: areaNorm, form_id: { in: formIds } },
+          where: { area: { in: scope.areas }, form_id: { in: formIds } },
           select: { form_id: true, name: true },
         }),
       ]);
@@ -894,7 +894,7 @@ export class MetaLeadgenService {
     }
 
     const enriched = await this.leads.enrichLeadRowsWithChat(
-      areaNorm,
+      scope.canonicalArea,
       items.map((row) => ({
         ...row,
         form_name: nameByFormId.get(row.form_id) ?? null,
@@ -910,8 +910,8 @@ export class MetaLeadgenService {
     area: string,
     opts: { formId?: string; formName?: string; q?: string } = {},
   ): Promise<{ buffer: Buffer; filename: string }> {
-    const areaNorm = normalizeArea(area);
-    const listed = await this.listFormLeads(areaNorm, {
+    const scope = businessReadScope(area);
+    const listed = await this.listFormLeads(area, {
       ...opts,
       limit: 5000,
       offset: 0,
@@ -936,13 +936,14 @@ export class MetaLeadgenService {
     });
     return {
       buffer: buildMetaFormLeadsExportBuffer(rows),
-      filename: metaFormLeadsExportFilename(areaNorm),
+      filename: metaFormLeadsExportFilename(scope.canonicalArea),
     };
   }
 
   async getLead(area: string, id: number) {
+    const scope = businessReadScope(area);
     const row = await this.prisma.meta_leadgen_leads.findFirst({
-      where: { id, area: normalizeArea(area) },
+      where: { id, area: { in: scope.areas } },
       include: {
         contacts: { include: { lead_status: true } },
         contact_origins: true,

@@ -32,8 +32,11 @@ import { ChatMessageBubble } from './ChatMessageBubble'
 import { ChatTimelineDateMarker, ChatTimelineEventMarker } from './ChatTimelineMarker'
 import { buildChatTimeline } from './buildChatTimeline'
 import { ConversationBadges } from './ConversationBadges'
-import { InboxAssignDialog, type ConversationAssignee } from './InboxAssignDialog'
+import { InboxAssigneePicker, type ConversationAssignee } from './InboxAssigneePicker'
+import { InboxAssignableSegmentsPicker } from './InboxAssignableSegmentsPicker'
 import { InboxChatActionsDialog } from './InboxChatActionsDialog'
+import { InboxLeadStatusPicker } from './InboxLeadStatusPicker'
+import { groupAssignableSegments } from './assignableSegmentsUi'
 import { InboxContactSheet } from './InboxContactSheet'
 import { InboxSendTemplateDialog } from './InboxSendTemplateDialog'
 import {
@@ -182,12 +185,6 @@ function InboxNotifyBellOffIcon() {
   )
 }
 
-type AssignContext = {
-  conversationId: number
-  heading: string
-  phone: string
-  assignedUserId: number | null
-}
 const INBOX_POLL_MS = 8000
 const SEARCH_DEBOUNCE_MS = 300
 
@@ -320,12 +317,34 @@ function inboxTeamLabel(lineProgram: string | null | undefined): string | null {
 function ProfileBlock({
   detail,
   segments,
+  assignableSegments,
+  canAssign,
+  allowUnassign,
+  assignees,
+  assigneesLoading,
+  assignSaving,
+  leadStatusBusy,
+  onAssigneeOpenChange,
+  onAssign,
+  onLeadStatus,
+  onSegmentsChanged,
   onOpenContact,
   onBack,
   actions,
 }: {
   detail: InboxDetail
   segments: SegmentOption[]
+  assignableSegments: SegmentOption[]
+  canAssign: boolean
+  allowUnassign: boolean
+  assignees: ConversationAssignee[]
+  assigneesLoading: boolean
+  assignSaving: boolean
+  leadStatusBusy: boolean
+  onAssigneeOpenChange: (open: boolean) => void
+  onAssign: (assignedUserId: number | null) => boolean | Promise<boolean>
+  onLeadStatus: (statusId: number) => boolean | Promise<boolean>
+  onSegmentsChanged: () => void
   onOpenContact: () => void
   onBack?: () => void
   actions?: ReactNode
@@ -352,11 +371,68 @@ function ProfileBlock({
   })
   const leadScore = detail.contact?.lead_score
   const leadStatusLabel = detail.contact?.lead_status?.label
+  const leadStatusId = detail.contact?.lead_status?.id ?? null
+  const category = detail.conversation.line_program || 'general'
   const lineName = detail.conversation.line_label
     || detail.conversation.line_program?.toUpperCase()
     || (detail.conversation.line_display_phone ? 'Línea de WhatsApp' : null)
   const assigneeName = detail.conversation.assigned_user_label?.trim() || 'Sin asignar'
   const teamLabel = inboxTeamLabel(detail.conversation.line_program)
+  const currentSlugs = detail.contact?.segment_slugs ?? []
+  const assignableSlugSet = useMemo(
+    () => new Set(assignableSegments.map((s) => s.slug)),
+    [assignableSegments],
+  )
+  const categoryAssignable = useMemo(
+    () =>
+      groupAssignableSegments(assignableSegments, category).flatMap(([, segs]) => segs),
+    [assignableSegments, category],
+  )
+  const activeAssignable = currentSlugs.filter((slug) => assignableSlugSet.has(slug))
+  const readonlySlugs = currentSlugs.filter((slug) => !assignableSlugSet.has(slug))
+  const showAssignableControl = Boolean(contactId) && categoryAssignable.length > 0
+  const [assigneeOpen, setAssigneeOpen] = useState(false)
+  const [statusOpen, setStatusOpen] = useState(false)
+  const [segmentsOpen, setSegmentsOpen] = useState(false)
+
+  const assigneeBlock = (
+    <>
+      <span className="inbox-chat-header-context-icon">
+        <InboxHeaderAssigneeIcon />
+      </span>
+      <span className="inbox-chat-header-context-copy">
+        <span className="inbox-chat-header-context-label">Asesor asignado</span>
+        <span className="inbox-chat-header-context-value">{assigneeName}</span>
+        {teamLabel ? (
+          <span className="inbox-chat-header-context-detail">{teamLabel}</span>
+        ) : null}
+      </span>
+    </>
+  )
+
+  const statusBlock = (
+    <>
+      <span className="inbox-chat-header-context-icon" aria-hidden>
+        ●
+      </span>
+      <span className="inbox-chat-header-context-copy">
+        <span className="inbox-chat-header-context-label">Estado del lead</span>
+        <span className="inbox-chat-header-context-value">
+          {leadStatusLabel || 'Sin estado'}
+        </span>
+      </span>
+    </>
+  )
+
+  const segmentsSummary =
+    activeAssignable.length > 0
+      ? activeAssignable
+          .slice(0, 2)
+          .map((slug) => segmentLabel(slug, segments))
+          .join(', ') +
+        (activeAssignable.length > 2 ? ` +${activeAssignable.length - 2}` : '')
+      : 'Sin segmentos asignables'
+
   return (
     <div className="inbox-chat-header-summary">
       <section className="inbox-chat-header-customer-panel" aria-label="Cliente">
@@ -420,21 +496,100 @@ function ProfileBlock({
         </span>
       </section>
 
-      <section
-        className="inbox-chat-header-context inbox-chat-header-context--assignee"
-        aria-label="Asesor asignado"
-      >
-        <span className="inbox-chat-header-context-icon">
-          <InboxHeaderAssigneeIcon />
-        </span>
-        <span className="inbox-chat-header-context-copy">
-          <span className="inbox-chat-header-context-label">Asesor asignado</span>
-          <span className="inbox-chat-header-context-value">{assigneeName}</span>
-          {teamLabel ? (
-            <span className="inbox-chat-header-context-detail">{teamLabel}</span>
-          ) : null}
-        </span>
-      </section>
+      {canAssign ? (
+        <Popover
+          open={assigneeOpen}
+          onOpenChange={(open) => {
+            setAssigneeOpen(open)
+            onAssigneeOpenChange(open)
+          }}
+        >
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="inbox-chat-header-context inbox-chat-header-context--assignee is-interactive"
+              aria-label="Cambiar asesor asignado"
+            >
+              {assigneeBlock}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-72 p-0 max-h-[70vh] overflow-hidden">
+            <InboxAssigneePicker
+              assignees={assignees}
+              currentAssigneeId={detail.conversation.assigned_user_id}
+              allowUnassign={allowUnassign}
+              loading={assigneesLoading}
+              busy={assignSaving}
+              onSelect={(id) => {
+                void Promise.resolve(onAssign(id)).then((ok) => {
+                  if (ok) setAssigneeOpen(false)
+                })
+              }}
+            />
+          </PopoverContent>
+        </Popover>
+      ) : (
+        <section
+          className="inbox-chat-header-context inbox-chat-header-context--assignee"
+          aria-label="Asesor asignado"
+        >
+          {assigneeBlock}
+        </section>
+      )}
+
+      {contactId ? (
+        <Popover open={statusOpen} onOpenChange={setStatusOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="inbox-chat-header-context inbox-chat-header-context--lead-status is-interactive"
+              aria-label="Cambiar estado del lead"
+            >
+              {statusBlock}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-64 p-0 max-h-[70vh] overflow-hidden">
+            <InboxLeadStatusPicker
+              currentStatusId={leadStatusId}
+              busy={leadStatusBusy}
+              onSelect={(id) => {
+                void Promise.resolve(onLeadStatus(id)).then((ok) => {
+                  if (ok) setStatusOpen(false)
+                })
+              }}
+            />
+          </PopoverContent>
+        </Popover>
+      ) : null}
+
+      {showAssignableControl && contactId ? (
+        <Popover open={segmentsOpen} onOpenChange={setSegmentsOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="inbox-chat-header-context inbox-chat-header-context--segments is-interactive"
+              aria-label="Cambiar segmentos asignables"
+            >
+              <span className="inbox-chat-header-context-icon" aria-hidden>
+                ▦
+              </span>
+              <span className="inbox-chat-header-context-copy">
+                <span className="inbox-chat-header-context-label">Segmentos</span>
+                <span className="inbox-chat-header-context-value">{segmentsSummary}</span>
+              </span>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-80 p-2 max-h-[70vh] overflow-y-auto">
+            <InboxAssignableSegmentsPicker
+              contactId={contactId}
+              category={category}
+              assignableSegments={assignableSegments}
+              currentSegmentSlugs={currentSlugs}
+              onChanged={onSegmentsChanged}
+            />
+          </PopoverContent>
+        </Popover>
+      ) : null}
 
       {actions ? (
         <div className="inbox-chat-header-toolbar">{actions}</div>
@@ -448,14 +603,9 @@ function ProfileBlock({
           archived={Boolean(detail.conversation.archived)}
           unanswered={!detail.conversation.last_user_message_at}
         />
-        {leadScore || leadStatusLabel ? (
+        {leadScore ? (
           <p className="inbox-chat-lead-meta">
-            {leadScore ? (
-              <LeadScoreBadge score={leadScore} />
-            ) : null}
-            {leadStatusLabel ? (
-              <span>{leadStatusLabel}</span>
-            ) : null}
+            <LeadScoreBadge score={leadScore} />
           </p>
         ) : null}
         {detail.meta_ad ? (
@@ -470,13 +620,13 @@ function ProfileBlock({
             )}
           </p>
         ) : null}
-        {detail.contact?.segment_slugs && detail.contact.segment_slugs.length > 0 ? (
+        {readonlySlugs.length > 0 ? (
           <span
             className="contact-segment-chips contact-segment-chips--header"
             role="group"
             aria-label="Segmentos"
           >
-            {detail.contact.segment_slugs.map((slug) => (
+            {readonlySlugs.map((slug) => (
               <SegmentBadge
                 key={slug}
                 colorKey={segmentColorKey(slug, segments)}
@@ -1078,10 +1228,11 @@ export function ConversationsInboxPage() {
   const [contactSheetPrefillName, setContactSheetPrefillName] = useState('')
   const [replyToMessage, setReplyToMessage] = useState<ReplyToMessage | null>(null)
   const [contactAttributes, setContactAttributes] = useState<Record<string, string>>({})
-  const [assignContext, setAssignContext] = useState<AssignContext | null>(null)
+  const [assigneePickerOpen, setAssigneePickerOpen] = useState(false)
   const [assignees, setAssignees] = useState<ConversationAssignee[]>([])
   const [assigneesLoading, setAssigneesLoading] = useState(false)
   const [assignSaving, setAssignSaving] = useState(false)
+  const [leadStatusBusy, setLeadStatusBusy] = useState(false)
   const lastMessageIdRef = useRef(0)
   const lastAuditIdRef = useRef<bigint>(BigInt(0))
   const listRequestIdRef = useRef(0)
@@ -1747,20 +1898,6 @@ export function ConversationsInboxPage() {
     window.setTimeout(action, 0)
   }
 
-  function openAssignDialog(source: AssignContext) {
-    setAssignContext(source)
-  }
-
-  function openAssignFromActions(ctx: ChatActionsContext) {
-    if (!ctx.conversationId || ctx.conversationId <= 0) return
-    openAssignDialog({
-      conversationId: ctx.conversationId,
-      heading: ctx.heading,
-      phone: ctx.phone,
-      assignedUserId: ctx.assignedUserId,
-    })
-  }
-
   function openContactSheet(opts: {
     mode: 'edit' | 'create'
     contactId?: number | null
@@ -2034,23 +2171,36 @@ export function ConversationsInboxPage() {
     void loadList()
   }
 
-  async function onLeadStatus(statusId: number) {
+  async function onLeadStatus(statusId: number): Promise<boolean> {
     const contactId =
       actionsContext?.contactId ??
       detail?.conversation.contact_id ??
       null
-    if (!contactId) return
+    if (!contactId) return false
+    const conversationId =
+      actionsContext?.conversationId ??
+      detail?.conversation.id ??
+      selectedId ??
+      null
+    setLeadStatusBusy(true)
     const result = await apiClient.patch<{
       lead_status_id: number | null
       lead_status: { id: number; slug: string; label: string } | null
     }>(`/api/leads/contacts/${contactId}/status`, {
       status_id: statusId,
       category: detail?.conversation.line_program || 'general',
+      conversation_id: conversationId && conversationId > 0 ? conversationId : undefined,
     })
+    setLeadStatusBusy(false)
     if (!result.ok) {
       notify.error(result.error)
-      return
+      return false
     }
+    notify.success(
+      result.data.lead_status?.label
+        ? `Estado: ${result.data.lead_status.label}`
+        : 'Estado actualizado',
+    )
     setActionsContext((prev) =>
       prev
         ? {
@@ -2061,6 +2211,7 @@ export function ConversationsInboxPage() {
         : prev,
     )
     if (selectedId) void loadDetail(selectedId)
+    return true
   }
 
   function onMessageCopy(message: InboxMessage) {
@@ -2197,7 +2348,7 @@ export function ConversationsInboxPage() {
     contactId ? userCanUpdateContacts(user) : userCanCreateContacts(user)
 
   useEffect(() => {
-    if ((!assignContext && !bulkActionsOpen) || !canAssign) return
+    if ((!assigneePickerOpen && !bulkActionsOpen) || !canAssign) return
     setAssigneesLoading(true)
     void apiClient
       .get<{ assignees: ConversationAssignee[] }>('/api/conversations/assignees')
@@ -2209,11 +2360,11 @@ export function ConversationsInboxPage() {
         }
         setAssignees(result.data.assignees)
       })
-  }, [assignContext, bulkActionsOpen, canAssign])
+  }, [assigneePickerOpen, bulkActionsOpen, canAssign])
 
-  async function onAssign(assignedUserId: number | null) {
-    const convId = assignContext?.conversationId
-    if (!convId || convId <= 0) return
+  async function onAssign(assignedUserId: number | null): Promise<boolean> {
+    const convId = detail?.conversation.id ?? selectedId
+    if (!convId || convId <= 0) return false
     setAssignSaving(true)
     const result = await apiClient.patch<{
       assigned_user_id: number | null
@@ -2222,14 +2373,14 @@ export function ConversationsInboxPage() {
     setAssignSaving(false)
     if (!result.ok) {
       notify.error(result.error)
-      return
+      return false
     }
-    setAssignContext(null)
     notify.success(
       assignedUserId == null ? 'Chat sin asignar' : 'Chat asignado',
     )
     if (selectedId === convId) void loadDetail(convId)
     void loadList()
+    return true
   }
 
   const segments = list?.segments ?? []
@@ -3072,22 +3223,6 @@ export function ConversationsInboxPage() {
                           {item.contact_id ? 'Editar contacto' : 'Guardar contacto'}
                         </ContextMenuItem>
                       ) : null}
-                      {hasConversation && canAssign ? (
-                        <ContextMenuItem
-                          onSelect={() =>
-                            openAfterContextMenu(() =>
-                              openAssignDialog({
-                                conversationId: item.id,
-                                heading: name,
-                                phone: item.phone || '',
-                                assignedUserId: item.assigned_user_id,
-                              }),
-                            )
-                          }
-                        >
-                          Asignar chat
-                        </ContextMenuItem>
-                      ) : null}
                     </ContextMenuGroup>
                     {hasConversation ? (
                       <>
@@ -3200,6 +3335,20 @@ export function ConversationsInboxPage() {
                 <ProfileBlock
                   detail={detail}
                   segments={segments}
+                  assignableSegments={assignableSegments}
+                  canAssign={canAssign}
+                  allowUnassign={allowBulkUnassign}
+                  assignees={assignees}
+                  assigneesLoading={assigneesLoading}
+                  assignSaving={assignSaving}
+                  leadStatusBusy={leadStatusBusy}
+                  onAssigneeOpenChange={setAssigneePickerOpen}
+                  onAssign={onAssign}
+                  onLeadStatus={onLeadStatus}
+                  onSegmentsChanged={() => {
+                    void loadList()
+                    if (selectedId) void loadDetail(selectedId)
+                  }}
                   onBack={() => navigate(`/conversations${filterQuerySuffix}`)}
                   onOpenContact={() =>
                     openContactSheet({
@@ -3211,46 +3360,26 @@ export function ConversationsInboxPage() {
                     })
                   }
                   actions={
-                    <>
-                      {canAssign ? (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          className="inbox-chat-header-assign"
-                          onClick={() =>
-                            openAssignDialog({
-                              conversationId: detail.conversation.id,
-                              heading: detailHeading,
-                              phone: detail.conversation.phone || '',
-                              assignedUserId: detail.conversation.assigned_user_id,
-                            })
-                          }
-                        >
-                          Asignar
-                        </Button>
-                      ) : null}
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="icon-sm"
-                        title="Opciones del chat"
-                        aria-label="Opciones del chat"
-                        onClick={() =>
-                          openChatActions(
-                            chatActionsFromDetail(
-                              detail,
-                              detailHeading,
-                              detail.ai_area_enabled,
-                            ),
-                          )
-                        }
-                      >
-                        <span className="inbox-header-more-icon" aria-hidden>
-                          ⋮
-                        </span>
-                      </Button>
-                    </>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon-sm"
+                      title="Opciones del chat"
+                      aria-label="Opciones del chat"
+                      onClick={() =>
+                        openChatActions(
+                          chatActionsFromDetail(
+                            detail,
+                            detailHeading,
+                            detail.ai_area_enabled,
+                          ),
+                        )
+                      }
+                    >
+                      <span className="inbox-header-more-icon" aria-hidden>
+                        ⋮
+                      </span>
+                    </Button>
                   }
                 />
               </div>
@@ -3373,7 +3502,6 @@ export function ConversationsInboxPage() {
           leadStatusLabel={actionsContext.leadStatusLabel}
           aiAreaEnabled={actionsContext.aiAreaEnabled}
           conversationStatus={actionsContext.conversationStatus}
-          canAssign={canAssign}
           assignableSegments={list?.assignable_segments ?? []}
           category={detail?.conversation.line_program || 'general'}
           currentSegmentSlugs={
@@ -3391,7 +3519,6 @@ export function ConversationsInboxPage() {
           archived={actionsContext.archived}
           lastUserMessageAt={actionsContext.lastUserMessageAt}
           onModeChange={onModeChange}
-          onAssign={() => openAssignFromActions(actionsContext)}
           canOpenContact={canOpenListContact(actionsContext.contactId, actionsContext.phone)}
           onOpenContact={() =>
             openContactSheet({
@@ -3445,22 +3572,6 @@ export function ConversationsInboxPage() {
         />
       ) : null}
 
-      {assignContext ? (
-        <InboxAssignDialog
-          open={Boolean(assignContext)}
-          onOpenChange={(open) => {
-            if (!open) setAssignContext(null)
-          }}
-          heading={assignContext.heading}
-          phone={assignContext.phone}
-          currentAssigneeId={assignContext.assignedUserId}
-          allowUnassign={!['educacion', 'educacion_ca', 'educacion_ep'].includes(user?.area ?? '')}
-          assignees={assignees}
-          loading={assigneesLoading}
-          saving={assignSaving}
-          onSave={(assignedUserId) => void onAssign(assignedUserId)}
-        />
-      ) : null}
       <BulkContactActionsDialog
         open={bulkActionsOpen}
         onOpenChange={onBulkActionsOpenChange}

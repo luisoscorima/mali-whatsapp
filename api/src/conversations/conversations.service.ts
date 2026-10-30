@@ -2373,6 +2373,7 @@ export class ConversationsService {
   ): Promise<InboxTimelineEvent[]> {
     const contactEventTypes = [
       AuditEvent.CONTACT_LEAD_SCORE,
+      AuditEvent.CONTACT_LEAD_STATUS,
       AuditEvent.CONTACT_UPDATED,
     ];
     const rangeSql = Prisma.sql`

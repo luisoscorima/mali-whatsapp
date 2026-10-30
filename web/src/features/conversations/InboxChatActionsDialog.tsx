@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
-import { useTheme } from '@/shared/theme/useTheme'
 import { Button } from '@/shared/ui/shadcn/button'
 import {
   Dialog,
@@ -13,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/ui/shadcn/dialog'
-import { segmentFilterPillStyle } from '../segments/segmentColors'
+import { AssignableSegmentsAccordion } from './assignableSegmentsUi'
 import { chatSecondaryLabel } from './whatsappIdentity'
 import { LEAD_SCORE_OPTIONS } from './leadScore'
 
@@ -37,7 +36,6 @@ type InboxChatActionsDialogProps = {
   leadStatusLabel: string | null
   aiAreaEnabled: boolean
   conversationStatus: string | null
-  canAssign: boolean
   assignableSegments: SegmentOption[]
   category?: string | null
   currentSegmentSlugs: string[]
@@ -49,7 +47,6 @@ type InboxChatActionsDialogProps = {
   lastUserMessageAt?: string | null
   onModeChange: (status: 'bot' | 'human') => void
   onExport: () => void
-  onAssign: () => void
   onOpenContact: () => void
   canOpenContact?: boolean
   onSegmentAdded?: () => void
@@ -67,7 +64,6 @@ export function InboxChatActionsDialog({
   leadStatusLabel,
   aiAreaEnabled,
   conversationStatus,
-  canAssign,
   assignableSegments,
   category = null,
   currentSegmentSlugs,
@@ -79,12 +75,10 @@ export function InboxChatActionsDialog({
   lastUserMessageAt = null,
   onModeChange,
   onExport,
-  onAssign,
   onOpenContact,
   canOpenContact = true,
   onSegmentAdded,
 }: InboxChatActionsDialogProps) {
-  const { theme } = useTheme()
   const [segmentBusy, setSegmentBusy] = useState('')
   const [statusOptions, setStatusOptions] = useState<
     Array<{ id: number; slug: string; label: string; active: boolean }>
@@ -96,10 +90,6 @@ export function InboxChatActionsDialog({
   const hasInbound = lastUserMessageAt != null
   const canUnarchive = archived && hasInbound
   const canArchive = hasConversation && hasInbound && !archived
-  const assignableSlugs = new Set(assignableSegments.map((seg) => seg.slug))
-  const activeAssignableSlugs = new Set(
-    currentSegmentSlugs.filter((slug) => assignableSlugs.has(slug)),
-  )
 
   useEffect(() => {
     if (!open || !contactId) return
@@ -111,20 +101,6 @@ export function InboxChatActionsDialog({
         if (r.ok) setStatusOptions(r.data)
       })
   }, [open, contactId])
-
-  const groupedAssignable = useMemo(() => {
-    const groups = new Map<string, SegmentOption[]>()
-    const visible = assignableSegments.filter(
-      (seg) => (seg.category || 'general') === (category || 'general'),
-    )
-    for (const seg of visible) {
-      const key = (seg.assignment_group ?? '').trim() || 'sin_grupo'
-      const list = groups.get(key) ?? []
-      list.push(seg)
-      groups.set(key, list)
-    }
-    return [...groups.entries()]
-  }, [assignableSegments, category])
 
   async function toggleAssignableSegment(slug: string) {
     if (!contactId) return
@@ -158,40 +134,16 @@ export function InboxChatActionsDialog({
           ) : null}
 
           {hasConversation && contactId && assignableSegments.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-2">
               <p className="text-sm font-medium">Asignar a:</p>
-              {groupedAssignable.map(([group, segs]) => (
-                <div key={group} className="space-y-1">
-                  <p className="text-xs text-muted">{group}:</p>
-                  <div
-                    className="flex flex-wrap gap-1"
-                    role="group"
-                    aria-label={`Asignar a ${group}`}
-                  >
-                    {segs.map((seg) => {
-                      const active = activeAssignableSlugs.has(seg.slug)
-                      return (
-                        <button
-                          key={seg.slug}
-                          type="button"
-                          role="checkbox"
-                          aria-checked={active}
-                          disabled={segmentBusy === seg.slug}
-                          onClick={() => void toggleAssignableSegment(seg.slug)}
-                          className={`inbox-chat-pill contact-filter-pill ${active ? 'is-active' : ''}`}
-                          style={segmentFilterPillStyle(
-                            seg.color_key ?? 'slate',
-                            theme,
-                            active,
-                          )}
-                        >
-                          {seg.label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              ))}
+              <AssignableSegmentsAccordion
+                assignableSegments={assignableSegments}
+                category={category}
+                currentSegmentSlugs={currentSegmentSlugs}
+                busySlug={segmentBusy}
+                accordion
+                onToggle={(slug) => void toggleAssignableSegment(slug)}
+              />
             </div>
           ) : null}
 
@@ -282,19 +234,6 @@ export function InboxChatActionsDialog({
           ) : null}
 
           <div className="flex flex-col gap-2">
-            {hasConversation && canAssign ? (
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full justify-start"
-                onClick={() => {
-                  onAssign()
-                  onOpenChange(false)
-                }}
-              >
-                Asignar chat
-              </Button>
-            ) : null}
             {canOpenContact ? (
               <Button
                 type="button"

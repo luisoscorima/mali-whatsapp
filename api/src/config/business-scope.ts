@@ -126,6 +126,16 @@ export function contactAreaPredicate(alias: string, area: string): Prisma.Sql {
   ))` : Prisma.sql`TRUE`;
   return Prisma.sql`(${col(alias,'area')} IN (${Prisma.join(scope.areas)}) AND ${program} AND ${contactAccessPredicate(alias)})`;
 }
+
+/** Prisma `where` for rows whose `area` is in the read family (educacion + ca/ep). */
+export function areaFamilyWhere(area: string): { area: { in: string[] } } {
+  return { area: { in: businessReadScope(area).areas } };
+}
+
+/** SQL `alias.area IN (...)` for the same family. */
+export function areaFamilySql(alias: string, area: string): Prisma.Sql {
+  return Prisma.sql`${col(alias, 'area')} IN (${Prisma.join(businessReadScope(area).areas)})`;
+}
 export function visibleConversationWhere(area: string, id: number): Prisma.conversationsWhereInput {
   const scope = businessReadScope(area);
   const access = restrictedAccess();

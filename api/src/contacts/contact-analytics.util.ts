@@ -1,5 +1,9 @@
 import { Prisma } from '@prisma/client';
 import type { MetricCard } from '../campaigns/campaign-analytics.util';
+import {
+  areaFamilySql,
+  contactAreaPredicate,
+} from '../config/business-scope';
 
 export type ContactDailyPoint = {
   date: string;
@@ -39,32 +43,32 @@ export async function fetchContactSummary(
       WITH contact_base AS (
         SELECT c.id, c.phone, c.whatsapp_user_id, c.created_at
         FROM contacts c
-        WHERE c.area = ${area}
+        WHERE ${contactAreaPredicate('c', area)}
           AND c.active = true
       ),
       conv_by_contact AS (
         SELECT conv.contact_id, MAX(conv.last_message_at) AS last_msg
         FROM conversations conv
-        WHERE conv.area = ${area}
+        WHERE ${areaFamilySql('conv', area)}
           AND conv.contact_id IS NOT NULL
         GROUP BY conv.contact_id
       ),
       conv_by_phone AS (
         SELECT conv.phone, MAX(conv.last_message_at) AS last_msg
         FROM conversations conv
-        WHERE conv.area = ${area}
+        WHERE ${areaFamilySql('conv', area)}
         GROUP BY conv.phone
       ),
       conv_by_user_id AS (
         SELECT conv.whatsapp_user_id, MAX(conv.last_message_at) AS last_msg
         FROM conversations conv
-        WHERE conv.area = ${area} AND conv.whatsapp_user_id IS NOT NULL
+        WHERE ${areaFamilySql('conv', area)} AND conv.whatsapp_user_id IS NOT NULL
         GROUP BY conv.whatsapp_user_id
       ),
       labeled AS (
         SELECT DISTINCT cs.contact_id
         FROM contact_segments cs
-        WHERE cs.area = ${area}
+        WHERE ${areaFamilySql('cs', area)}
       )
       SELECT
         COUNT(*)::int AS total_active,
@@ -89,7 +93,7 @@ export async function fetchContactSummary(
     prisma.$queryRaw<{ day: Date; count: number }[]>(Prisma.sql`
       SELECT date_trunc('day', c.created_at)::date AS day, COUNT(*)::int AS count
       FROM contacts c
-      WHERE c.area = ${area}
+      WHERE ${contactAreaPredicate('c', area)}
         AND c.active = true
         AND c.created_at >= ${since}
       GROUP BY 1

@@ -8,7 +8,9 @@ import {
   programScopeWhere,
 } from '../config/category-scope';
 import {
-  contactAccessPredicate,
+  areaFamilySql,
+  areaFamilyWhere,
+  contactAreaPredicate,
 } from '../config/business-scope';
 import { payloadWithStandardCurso } from '../leads/lead-curso.util';
 import { PrismaService } from '../prisma/prisma.service';
@@ -169,9 +171,10 @@ export class ContactsService {
     area: string,
     programId?: number | null,
   ): Promise<Set<string>> {
+    const catalogArea = businessReadScope(area).canonicalArea;
     const rows = await this.prisma.segment_definitions.findMany({
       where: {
-        area,
+        area: catalogArea,
         ...(programId !== undefined ? { program_id: programId } : {}),
       },
       select: { slug: true },
@@ -356,10 +359,7 @@ export class ContactsService {
     slugSet: Set<string>,
   ): Promise<Prisma.Sql> {
     const segmentFilter = parseSegmentListFilter(params.segment, slugSet);
-    const conditions: Prisma.Sql[] = [
-      Prisma.sql`c.area = ${area}`,
-      contactAccessPredicate('c'),
-    ];
+    const conditions: Prisma.Sql[] = [contactAreaPredicate('c', area)];
 
     const categoryFilter = await this.resolveCategoryFilter(
       area,
@@ -399,7 +399,7 @@ export class ContactsService {
           OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
           OR COALESCE(c.email, '') ILIKE ${searchPat} ESCAPE '!'
           OR COALESCE(c.dni, '') ILIKE ${searchPat} ESCAPE '!'
-          OR EXISTS (SELECT 1 FROM conversations conv WHERE conv.area = c.area AND conv.contact_id = c.id AND COALESCE(conv.wa_username, '') ILIKE ${usernameSearchPat} ESCAPE '!')
+          OR EXISTS (SELECT 1 FROM conversations conv WHERE ${areaFamilySql('conv', area)} AND conv.contact_id = c.id AND COALESCE(conv.wa_username, '') ILIKE ${usernameSearchPat} ESCAPE '!')
           OR regexp_replace(COALESCE(c.phone, ''), '\\D', '', 'g') LIKE ${digitsPat}
         )`);
       } else {
@@ -409,7 +409,7 @@ export class ContactsService {
           OR COALESCE(c.phone, '') ILIKE ${searchPat} ESCAPE '!'
           OR COALESCE(c.email, '') ILIKE ${searchPat} ESCAPE '!'
           OR COALESCE(c.dni, '') ILIKE ${searchPat} ESCAPE '!'
-          OR EXISTS (SELECT 1 FROM conversations conv WHERE conv.area = c.area AND conv.contact_id = c.id AND COALESCE(conv.wa_username, '') ILIKE ${usernameSearchPat} ESCAPE '!')
+          OR EXISTS (SELECT 1 FROM conversations conv WHERE ${areaFamilySql('conv', area)} AND conv.contact_id = c.id AND COALESCE(conv.wa_username, '') ILIKE ${usernameSearchPat} ESCAPE '!')
         )`);
       }
     }
@@ -744,8 +744,9 @@ export class ContactsService {
     params: ListContactsParams,
     includeAttributes = true,
   ): Promise<{ buffer: Buffer; filename: string }> {
+    const catalogArea = businessReadScope(area).canonicalArea;
     const segments = await this.prisma.segment_definitions.findMany({
-      where: { area },
+      where: { area: catalogArea },
       select: { slug: true },
     });
     const slugSet = new Set(segments.map((row) => row.slug));
@@ -776,7 +777,7 @@ export class ContactsService {
         c.last_name,
         c.phone,
         (SELECT conv.wa_username FROM conversations conv
-         WHERE conv.area = c.area AND conv.contact_id = c.id AND conv.wa_username IS NOT NULL
+         WHERE ${areaFamilySql('conv', area)} AND conv.contact_id = c.id AND conv.wa_username IS NOT NULL
          ORDER BY conv.updated_at DESC LIMIT 1) AS wa_username,
         c.email,
         c.dni
@@ -795,7 +796,7 @@ export class ContactsService {
     const contactIds = baseRows.map((r) => r.id);
     const segWhere: Prisma.contact_segmentsWhereInput = {
       contact_id: { in: contactIds },
-      area,
+      area: catalogArea,
       ...(categoryFilter
         ? {
             OR: [
@@ -1105,7 +1106,7 @@ export class ContactsService {
     const allDefs = await this.loadAttributeDefinitions(area, programId);
     const attributes = await this.loadContactAttributes(row.id, programId ?? null);
     const originRows = await this.prisma.contact_origins.findMany({
-      where: { contact_id: row.id, area },
+      where: { contact_id: row.id, ...areaFamilyWhere(area) },
       orderBy: { last_seen_at: 'desc' },
       take: 20,
       select: {
@@ -1120,7 +1121,11 @@ export class ContactsService {
       },
     });
     const linkedConversation = await this.prisma.conversations.findFirst({
-      where: { area, contact_id: row.id, wa_username: { not: null } },
+      where: {
+        ...areaFamilyWhere(area),
+        contact_id: row.id,
+        wa_username: { not: null },
+      },
       select: { wa_username: true },
       orderBy: { updated_at: 'desc' },
     });
@@ -1164,7 +1169,7 @@ export class ContactsService {
     category?: string | null,
   ): Promise<ContactDetail> {
     const row = await this.prisma.contacts.findFirst({
-      where: { id, area },
+      where: { id, ...areaFamilyWhere(area) },
       include: {
         lead_status: { select: { id: true, slug: true, label: true } },
       },
@@ -1364,7 +1369,9 @@ export class ContactsService {
     dto: UpsertContactDto,
   ): Promise<ContactDetail> {
     const area = user.area;
-    const current = await this.prisma.contacts.findFirst({ where: { id, area } });
+    const current = await this.prisma.contacts.findFirst({
+      where: { id, ...areaFamilyWhere(area) },
+    });
     if (!current) {
       throw new NotFoundException('Contacto no encontrado');
     }
@@ -1509,7 +1516,9 @@ export class ContactsService {
 
   async remove(user: AuthUser, id: number): Promise<void> {
     const area = user.area;
-    const result = await this.prisma.contacts.deleteMany({ where: { id, area } });
+    const result = await this.prisma.contacts.deleteMany({
+      where: { id, ...areaFamilyWhere(area) },
+    });
     if (result.count === 0) {
       throw new NotFoundException('Contacto no encontrado');
     }
@@ -1522,7 +1531,9 @@ export class ContactsService {
   }
 
   async reactivate(area: AuthUser['area'], id: number): Promise<ContactDetail> {
-    const current = await this.prisma.contacts.findFirst({ where: { id, area } });
+    const current = await this.prisma.contacts.findFirst({
+      where: { id, ...areaFamilyWhere(area) },
+    });
     if (!current) {
       throw new NotFoundException('Contacto no encontrado');
     }
@@ -1786,8 +1797,9 @@ export class ContactsService {
     const limit = Math.min(100, Math.max(1, Number(params.limit ?? 50) || 50));
     const offset = (page - 1) * limit;
 
+    const catalogArea = businessReadScope(area).canonicalArea;
     const segments = await this.prisma.segment_definitions.findMany({
-      where: { area },
+      where: { area: catalogArea },
       select: { slug: true },
     });
     const slugSet = new Set(segments.map((row) => row.slug));
@@ -1801,7 +1813,7 @@ export class ContactsService {
         c.phone,
         c.whatsapp_user_id,
         (SELECT conv.wa_username FROM conversations conv
-         WHERE conv.area = c.area AND conv.contact_id = c.id AND conv.wa_username IS NOT NULL
+         WHERE ${areaFamilySql('conv', area)} AND conv.contact_id = c.id AND conv.wa_username IS NOT NULL
          ORDER BY conv.updated_at DESC LIMIT 1) AS wa_username,
         c.email,
         c.dni,

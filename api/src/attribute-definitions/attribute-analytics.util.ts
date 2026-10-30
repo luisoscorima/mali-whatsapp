@@ -1,5 +1,7 @@
 import { Prisma } from '@prisma/client';
 import type { MetricCard } from '../campaigns/campaign-analytics.util';
+import { businessReadScope } from '../config/areas';
+import { contactAreaPredicate } from '../config/business-scope';
 import { segmentDefinitionCategorySql } from '../config/category-scope';
 
 export type AttributeSummary = {
@@ -16,6 +18,7 @@ export async function fetchAttributeSummary(
   categories: string[] | null = null,
 ): Promise<AttributeSummary> {
   const categorySql = segmentDefinitionCategorySql(categories, 'd');
+  const catalogArea = businessReadScope(area).canonicalArea;
   const counts = await prisma.$queryRaw<
     {
       defs_active: number;
@@ -25,15 +28,15 @@ export async function fetchAttributeSummary(
   >(Prisma.sql`
     SELECT
       (SELECT COUNT(*)::int FROM contact_attribute_definitions d
-       WHERE d.area = ${area} AND d.active = true AND ${categorySql}) AS defs_active,
+       WHERE d.area = ${catalogArea} AND d.active = true AND ${categorySql}) AS defs_active,
       (SELECT COUNT(*)::int FROM contact_attribute_definitions d
-       WHERE d.area = ${area} AND d.active = true AND d.required = true AND ${categorySql}) AS defs_required,
+       WHERE d.area = ${catalogArea} AND d.active = true AND d.required = true AND ${categorySql}) AS defs_required,
       (SELECT COUNT(DISTINCT ca.contact_id)::int
        FROM contact_attributes ca
        JOIN contacts c ON c.id = ca.contact_id
-       JOIN contact_attribute_definitions d ON d.area = c.area AND d.slug = ca.attr_key
+       JOIN contact_attribute_definitions d ON d.area = ${catalogArea} AND d.slug = ca.attr_key
          AND d.program_id IS NOT DISTINCT FROM ca.program_id
-       WHERE c.area = ${area}
+       WHERE ${contactAreaPredicate('c', area)}
          AND c.active = true
          AND TRIM(COALESCE(ca.attr_value, '')) <> ''
          AND ${categorySql}) AS contacts_with_attr

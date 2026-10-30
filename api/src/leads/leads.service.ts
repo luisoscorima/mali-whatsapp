@@ -11,6 +11,7 @@ import { Prisma } from '@prisma/client';
 import type { AuthUser } from '../auth/auth.types';
 import {
   BUSINESS_AREAS,
+  businessReadScope,
   normalizeArea,
   normalizeEmail,
   type BusinessArea,
@@ -28,6 +29,9 @@ import {
   E164_NO_PLUS_REGEX,
   normalizePhone,
 } from '../contacts/contacts-validation.utils';
+import { AuditEvent } from '../audit/audit-events';
+import { auditActor } from '../audit/audit-actor.util';
+import { AuditLogService } from '../audit/audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { isWhatsAppBsuid } from '../conversations/whatsapp-recipient.util';
 import { chooseWhatsAppIdentityMatch } from '../conversations/whatsapp-identity.util';
@@ -129,6 +133,7 @@ export class LeadsService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly educationWorkflow: EducationLeadWorkflowService,
+    private readonly auditLog: AuditLogService,
     @Optional() private readonly maliOneLinks?: MaliOneLinksCatalogService,
     @Optional() private readonly people?: PersonResolverService,
   ) {}
@@ -1022,14 +1027,17 @@ export class LeadsService implements OnModuleInit {
     opts?: {
       leadId?: number | null;
       category?: string | null;
+      conversationId?: number | null;
       user?: AuthUser;
     },
   ) {
     const areaNorm = normalizeArea(area);
     const contact = await this.prisma.contacts.findFirst({
       where: { id: contactId, area: areaNorm },
+      include: { lead_status: { select: { id: true, label: true } } },
     });
     if (!contact) throw new NotFoundException('Contacto no encontrado');
+    const previousStatus = contact.lead_status;
     const status = await this.prisma.lead_status_definitions.findFirst({
       where: { id: statusId, area: areaNorm, active: true },
     });
@@ -1049,9 +1057,9 @@ export class LeadsService implements OnModuleInit {
             opts.category,
           )
         : undefined;
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${contact.person_id}::integer, ${programId ?? opts?.leadId ?? 0}::integer)`;
-      const updated = await tx.contacts.update({
+      const row = await tx.contacts.update({
         where: { id: contactId },
         data: {
           lead_status_id: statusId,
@@ -1150,12 +1158,30 @@ export class LeadsService implements OnModuleInit {
           if (status.is_terminal) await endLeadConversationLinks(tx, cycle.id, now);
         }
       }
-      return updated;
+      return row;
     });
+
+    if (opts?.user && previousStatus?.id !== statusId) {
+      await this.auditLog.write({
+        event_type: AuditEvent.CONTACT_LEAD_STATUS,
+        message: `Estado del lead → ${status.label} (contacto ${contactId})`,
+        actor: auditActor(opts.user),
+        meta: {
+          contact_id: contactId,
+          conversation_id: opts.conversationId ?? null,
+          from_status_id: previousStatus?.id ?? null,
+          from_status_label: previousStatus?.label ?? null,
+          to_status_id: status.id,
+          to_status_label: status.label,
+        },
+      });
+    }
+
+    return updated;
   }
 
   async channelSummary(area: string, categories: string[] | null = null) {
-    const areaNorm = normalizeArea(area);
+    const scope = businessReadScope(area);
     const programs = (categories ?? []).filter((slug) => slug !== 'general');
     const programIds = programs.length
       ? (
@@ -1179,7 +1205,7 @@ export class LeadsService implements OnModuleInit {
         : { id: -1 };
     const rows = await this.prisma.contact_origins.groupBy({
       by: ['channel'],
-      where: { area: areaNorm, ...categoryWhere },
+      where: { area: { in: scope.areas }, ...categoryWhere },
       _count: { _all: true },
       _max: { last_seen_at: true },
     });
@@ -1202,14 +1228,14 @@ export class LeadsService implements OnModuleInit {
     maxLimit?: number;
     categories?: string[] | null;
   }) {
-    const areaNorm = normalizeArea(params.area);
+    const scope = businessReadScope(params.area);
     const maxLimit = Math.min(Math.max(params.maxLimit ?? 200, 1), 10_000);
     const take = Math.min(Math.max(params.limit ?? 50, 1), maxLimit);
     const skip = Math.max(params.offset ?? 0, 0);
     const q = String(params.q ?? '').trim();
     const usernameQ = q.replace(/^@/, '');
     const filters: Prisma.contact_originsWhereInput[] = [
-      { area: areaNorm },
+      { area: { in: scope.areas } },
     ];
     const categoryWhere = programScopeWhere(params.categories ?? null);
     if (Object.keys(categoryWhere).length) filters.push(categoryWhere);
@@ -1295,7 +1321,7 @@ export class LeadsService implements OnModuleInit {
       }),
     ]);
 
-    const enriched = await this.enrichLeadRowsWithChat(areaNorm, items);
+    const enriched = await this.enrichLeadRowsWithChat(scope.canonicalArea, items);
 
     return {
       total,
@@ -1317,9 +1343,9 @@ export class LeadsService implements OnModuleInit {
     to?: string;
     categories?: string[] | null;
   }): Promise<{ buffer: Buffer; filename: string }> {
-    const areaNorm = normalizeArea(params.area);
+    const scope = businessReadScope(params.area);
     const listed = await this.listOrigins({
-      area: areaNorm,
+      area: params.area,
       channel: params.channel,
       q: params.q,
       from: params.from,
@@ -1442,7 +1468,7 @@ export class LeadsService implements OnModuleInit {
 
     return {
       buffer: buildLeadsOriginsExportBuffer(rows),
-      filename: leadsOriginsExportFilename(areaNorm),
+      filename: leadsOriginsExportFilename(scope.canonicalArea),
     };
   }
 
@@ -1497,8 +1523,9 @@ export class LeadsService implements OnModuleInit {
     };
     if (or.length === 0) return empty;
 
+    const scope = businessReadScope(area);
     const convs = await this.prisma.conversations.findMany({
-      where: { area, OR: or },
+      where: { area: { in: scope.areas }, OR: or },
       select: {
         id: true,
         contact_id: true,

@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { AuthUser } from '../auth/auth.types';
+import { areaFamilyWhere } from '../config/business-scope';
 import { META_SETTING_KEYS } from '../meta-settings/meta-settings.keys';
 import {
   getStoredMetaRows,
@@ -133,7 +134,7 @@ export class MetaAdsService {
 
   async list(area: AuthUser['area']): Promise<MetaCtwaAdListItem[]> {
     const rows = await this.prisma.meta_ctwa_ads.findMany({
-      where: { area },
+      where: areaFamilyWhere(area),
       orderBy: [{ last_seen_at: 'desc' }, { id: 'desc' }],
       select: {
         id: true,
@@ -162,7 +163,7 @@ export class MetaAdsService {
     adId: number,
   ): Promise<{ ad: MetaCtwaAdDetail; leads: MetaCtwaAdLead[] }> {
     const row = await this.prisma.meta_ctwa_ads.findFirst({
-      where: { id: adId, area },
+      where: { id: adId, ...areaFamilyWhere(area) },
     });
 
     if (!row) {
@@ -170,7 +171,7 @@ export class MetaAdsService {
     }
 
     const leads = await this.prisma.meta_ctwa_ad_leads.findMany({
-      where: { meta_ctwa_ad_id: adId, area },
+      where: { meta_ctwa_ad_id: adId, ...areaFamilyWhere(area) },
       orderBy: { first_message_at: 'desc' },
       select: {
         phone: true,

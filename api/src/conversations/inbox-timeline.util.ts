@@ -11,6 +11,7 @@ export const INBOX_TIMELINE_EVENT_TYPES = [
   AuditEvent.CONVERSATION_OPEN,
   AuditEvent.CONVERSATION_MARK_UNREAD,
   AuditEvent.CONTACT_LEAD_SCORE,
+  AuditEvent.CONTACT_LEAD_STATUS,
   AuditEvent.CONTACT_UPDATED,
 ] as const;
 
@@ -136,6 +137,18 @@ export function formatInboxTimelineEventLabel(
       return `${actor} calificó el lead (${label})`;
     }
     return `${actor} actualizó la calificación del lead`;
+  }
+
+  if (eventType === AuditEvent.CONTACT_LEAD_STATUS) {
+    const toLabel = String(meta.to_status_label ?? '').trim();
+    const fromLabel = String(meta.from_status_label ?? '').trim();
+    if (toLabel && fromLabel) {
+      return `${actor} cambió el estado del lead de ${fromLabel} a ${toLabel}`;
+    }
+    if (toLabel) {
+      return `${actor} cambió el estado del lead a ${toLabel}`;
+    }
+    return `${actor} actualizó el estado del lead`;
   }
 
   if (eventType === AuditEvent.CONTACT_UPDATED) {

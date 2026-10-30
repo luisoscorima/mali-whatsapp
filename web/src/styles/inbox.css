@@ -871,6 +871,111 @@ html[data-theme='dark'] .inbox-layout-wa {
   font-size: 0.82rem;
 }
 
+.inbox-oneclick-picker {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-height: inherit;
+}
+
+.inbox-oneclick-picker__search {
+  margin: 0.5rem 0.5rem 0;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.875rem;
+}
+
+.inbox-oneclick-picker__list {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  max-height: min(50vh, 320px);
+  padding: 0.35rem;
+}
+
+.inbox-oneclick-picker__option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inbox-oneclick-picker__option:hover,
+.inbox-oneclick-picker__option:focus-visible {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  outline: none;
+}
+
+.inbox-oneclick-picker__option.is-active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  font-weight: 600;
+}
+
+.inbox-oneclick-picker__option:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.inbox-oneclick-picker__option-meta {
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.inbox-assignable-group__header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.35rem 0.15rem;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inbox-assignable-group__header:hover {
+  color: var(--accent);
+}
+
+.inbox-assignable-group__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inbox-assignable-group__count {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.inbox-assignable-group__chevron {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.inbox-assignable-group__label {
+  margin: 0;
+}
+
 .inbox-chat-title-line {
   display: flex;
   align-items: center;
@@ -1253,18 +1358,46 @@ html[data-theme='dark'] .inbox-lead-score-badge--mid {
   align-items: center;
   gap: 12px;
   min-width: 0;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: start;
 }
 
 .inbox-chat-header-toolbar {
   grid-column: 4;
-  grid-row: 1;
+  grid-row: 1 / span 2;
   justify-self: end;
-  align-self: center;
+  align-self: start;
   flex-shrink: 0;
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: 6px;
+}
+
+.inbox-chat-header-context--line {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.inbox-chat-header-context--assignee {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.inbox-chat-header-context--lead-status {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.inbox-chat-header-context--segments {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.inbox-chat-header-meta {
+  grid-column: 1 / -1;
+  grid-row: 3;
 }
 
 .inbox-chat-header-context {
@@ -1274,6 +1407,27 @@ html[data-theme='dark'] .inbox-lead-score-badge--mid {
   gap: 9px;
   min-width: 0;
   padding-left: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+button.inbox-chat-header-context.is-interactive {
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background-color 0.12s ease;
+}
+
+button.inbox-chat-header-context.is-interactive:hover,
+button.inbox-chat-header-context.is-interactive:focus-visible {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  outline: none;
+}
+
+button.inbox-chat-header-context.is-interactive:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 .inbox-chat-header-context-icon {
@@ -1455,12 +1609,14 @@ html[data-theme='dark'] .inbox-lead-score-badge--mid {
     grid-row: 1;
     gap: 8px;
     padding-bottom: 2px;
+    align-self: center;
   }
 
   .inbox-chat-header-toolbar {
     grid-column: 2;
     grid-row: 1;
     justify-self: end;
+    align-self: center;
     gap: 4px;
   }
 
@@ -1472,6 +1628,16 @@ html[data-theme='dark'] .inbox-lead-score-badge--mid {
   .inbox-chat-header-context--assignee {
     grid-column: 2;
     grid-row: 2;
+  }
+
+  .inbox-chat-header-context--lead-status {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .inbox-chat-header-context--segments {
+    grid-column: 2;
+    grid-row: 3;
   }
 
   .inbox-chat-header-assign {
@@ -1522,7 +1688,7 @@ html[data-theme='dark'] .inbox-lead-score-badge--mid {
 
   .inbox-chat-header-meta {
     grid-column: 1 / -1;
-    grid-row: 3;
+    grid-row: 4;
     padding-top: 2px;
   }
 
