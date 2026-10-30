@@ -8,6 +8,7 @@ import {
 } from '../conversations/chat-sender.util';
 import { getReportDisplayTimeZone } from './report-date-range.util';
 import { conversationCategoryPredicate } from '../config/business-scope';
+import { advisorLabelSql } from '../users/advisor-label.util';
 
 const PREVIEW_TRUNCATE = 120;
 const SEGMENT_NONE = '__none__';
@@ -383,11 +384,7 @@ async function fetchContactIdsForReport(
         WHEN 3 THEN 'Alto'
         ELSE ''
       END AS lead_score,
-      COALESCE(
-        NULLIF(TRIM(CONCAT(COALESCE(assignee.first_name, ''), ' ', COALESCE(assignee.last_name, ''))), ''),
-        NULLIF(split_part(assignee.email, '@', 1), ''),
-        ''
-      ) AS assigned_advisor
+      COALESCE(${advisorLabelSql('assignee')}, '') AS assigned_advisor
     FROM contacts c
     INNER JOIN conversations conv ON conv.area = c.area
       AND (conv.contact_id = c.id OR (c.phone IS NOT NULL AND conv.phone = c.phone)

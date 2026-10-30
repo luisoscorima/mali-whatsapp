@@ -11,6 +11,7 @@ import {
 } from '../meta-settings/meta-settings.store';
 import { getWhatsAppCredentialsForArea } from '../templates/whatsapp-meta.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { formatAdvisorLabel } from '../users/advisor-label.util';
 import {
   adDisplayLabel,
   formatAdPlatformLabel,
@@ -255,12 +256,7 @@ export class MetaAdsService {
           ? {
               id: lead.conversations.assigned_user.id,
               email: lead.conversations.assigned_user.email,
-              name: [
-                lead.conversations.assigned_user.first_name,
-                lead.conversations.assigned_user.last_name,
-              ]
-                .filter(Boolean)
-                .join(' '),
+              name: formatAdvisorLabel(lead.conversations.assigned_user),
             }
           : null,
       })),

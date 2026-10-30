@@ -60,7 +60,7 @@ import {
   type ChatActionsContext,
 } from './inboxChatActions'
 import { useAssignedInboxBrowserNotify } from './useAssignedInboxBrowserNotify'
-import { chatDisplayName, chatSecondaryLabel, isContactPhone } from './whatsappIdentity'
+import { chatDisplayName, chatSecondaryLabel, displayPhoneNumber, isContactPhone } from './whatsappIdentity'
 import { leadScoreLabel, leadScoreTone } from './leadScore'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 
@@ -282,6 +282,9 @@ function ProfileBlock({
   })
   const leadScore = detail.contact?.lead_score
   const leadStatusLabel = detail.contact?.lead_status?.label
+  const lineName = detail.conversation.line_label
+    || detail.conversation.line_program?.toUpperCase()
+    || (detail.conversation.line_display_phone ? 'Línea de WhatsApp' : null)
   return (
     <>
       <span className="inbox-chat-avatar inbox-chat-avatar--header" aria-hidden>
@@ -304,34 +307,35 @@ function ProfileBlock({
             </button>
           ) : null}
         </div>
+        <p className="inbox-chat-person-phone">
+          {chatSecondaryLabel(detail.conversation.phone)}
+        </p>
         <ConversationBadges
           status={detail.conversation.status}
           assignedUserLabel={detail.conversation.assigned_user_label}
           archived={Boolean(detail.conversation.archived)}
           unanswered={!detail.conversation.last_user_message_at}
         />
-        <p className="inbox-chat-sub">
-          {detail.conversation.line_label || detail.conversation.line_program || detail.conversation.line_display_phone
-            ? `${detail.conversation.line_label || detail.conversation.line_program?.toUpperCase() || 'Línea'}${
-                detail.conversation.line_display_phone
-                  ? ` · ${detail.conversation.line_display_phone}`
-                  : ''
-              } · `
-            : ''}
-          {chatSecondaryLabel(detail.conversation.phone)}
-          {leadScore ? (
-            <>
-              {' '}
+        {lineName ? (
+          <div className="inbox-chat-header-line" aria-label="Línea de WhatsApp">
+            <span className="inbox-chat-header-line-name">{lineName}</span>
+            {detail.conversation.line_display_phone ? (
+              <span className="inbox-chat-header-line-phone">
+                {displayPhoneNumber(detail.conversation.line_display_phone)}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+        {leadScore || leadStatusLabel ? (
+          <p className="inbox-chat-lead-meta">
+            {leadScore ? (
               <LeadScoreBadge score={leadScore} />
-            </>
-          ) : null}
-          {leadStatusLabel ? (
-            <>
-              {' '}
-              · {leadStatusLabel}
-            </>
-          ) : null}
-        </p>
+            ) : null}
+            {leadStatusLabel ? (
+              <span>{leadStatusLabel}</span>
+            ) : null}
+          </p>
+        ) : null}
         {detail.meta_ad ? (
           <p className="inbox-chat-sub muted">
             Anuncio:{' '}
@@ -2588,12 +2592,19 @@ export function ConversationsInboxPage() {
                               ) : null}
                             </span>
                             <span className="inbox-chat-link-main">
-                              {item.line_label || item.line_program ? (
+                              {item.line_label || item.line_program || item.line_display_phone ? (
                                 <span className="inbox-chat-line" title={item.line_display_phone || undefined}>
                                   <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
                                     <path d="M20.5 3.5A11.8 11.8 0 0 0 2 17.7L.4 23.6l6-1.6A11.8 11.8 0 0 0 20.5 3.5ZM12 21.4a9.7 9.7 0 0 1-5-1.4l-.4-.2-3.6.9 1-3.5-.3-.4A9.8 9.8 0 1 1 12 21.4Zm5.4-7.3c-.3-.2-1.7-.8-2-.9-.2-.1-.4-.2-.6.1l-.9 1.1c-.2.2-.3.2-.6.1a8 8 0 0 1-3.9-3.4c-.3-.5.3-.4.9-1.6.1-.2 0-.4 0-.6l-.9-2.1c-.2-.5-.5-.4-.7-.4H7.9c-.2 0-.5.1-.7.3-.3.3-1 1-1 2.4s1 2.7 1.2 2.9c.1.2 2 3.1 4.9 4.4 1.8.8 2.5.9 3.4.8.5-.1 1.7-.7 1.9-1.4.2-.7.2-1.3.1-1.4l-.3-.3Z" />
                                   </svg>
-                                  <span>{item.line_label || item.line_program?.toUpperCase()}</span>
+                                  <span className="inbox-chat-line-identity">
+                                    <span>{item.line_label || item.line_program?.toUpperCase() || 'Línea de WhatsApp'}</span>
+                                    {item.line_display_phone ? (
+                                      <span className="inbox-chat-line-phone">
+                                        {displayPhoneNumber(item.line_display_phone)}
+                                      </span>
+                                    ) : null}
+                                  </span>
                                 </span>
                               ) : null}
                               <span className="inbox-chat-row-top">

@@ -1,5 +1,6 @@
 import {
   conversationAreaPredicate,
+  educationManagementArea,
   educationProgramOf,
   educationReadScope,
   isEducationAreaSlug,
@@ -29,6 +30,13 @@ describe('education scope', () => {
       areas: ['educacion', 'educacion_ca', 'educacion_ep'],
       program: 'norte',
     });
+  });
+
+  it('deriva el alcance de gestión desde el programa del ciclo', () => {
+    expect(educationManagementArea({ area: 'educacion', programSlug: 'ca' })).toBe('educacion_ca');
+    expect(educationManagementArea({ area: 'educacion', programSlug: 'ep' })).toBe('educacion_ep');
+    expect(educationManagementArea({ area: 'educacion_ep' })).toBe('educacion_ep');
+    expect(educationManagementArea({ area: 'educacion' })).toBe('educacion');
   });
 
   it('el predicado de una línea CA exige el programa', () => {

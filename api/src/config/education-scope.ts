@@ -47,3 +47,20 @@ export function educationReadScope(area: unknown): {
   return { areas: [...EDUCATION_AREA_SLUGS], program };
 }
 
+/**
+ * Alcance de catálogos/mutaciones para un ciclo.
+ * Canónico CA/EP (area=educacion + program) se gestiona como educacion_ca/ep.
+ */
+export function educationManagementArea(input: {
+  area: string;
+  programSlug?: string | null;
+}): string {
+  const program = String(input.programSlug ?? '').trim().toLowerCase()
+    || educationProgramOf(input.area);
+  if (program === 'ca') return 'educacion_ca';
+  if (program === 'ep') return 'educacion_ep';
+  const area = String(input.area ?? '').trim().toLowerCase();
+  if (area === 'educacion_ca' || area === 'educacion_ep') return area;
+  return 'educacion';
+}
+

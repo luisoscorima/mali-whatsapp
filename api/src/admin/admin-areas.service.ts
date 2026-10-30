@@ -5,6 +5,7 @@ import {
   canonicalBusinessAreas,
 } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
+import { advisorLabelSql } from '../users/advisor-label.util';
 
 const AREA_ORDER = ['ti', 'pam', 'patronato', 'educacion'];
 
@@ -441,7 +442,7 @@ export class AdminAreasService {
           c.area,
           c.whatsapp_user_id,
           ls.label AS status_label,
-          NULLIF(BTRIM(CONCAT(u.first_name, ' ', u.last_name)), '') AS advisor,
+          ${advisorLabelSql('u')} AS advisor,
           EXISTS (
             SELECT 1 FROM contacts other
             WHERE other.whatsapp_user_id = c.whatsapp_user_id

@@ -33,7 +33,12 @@ describe('CRM Educación', () => {
       { id: 9, area: 'educacion_ca', name: 'Ana', last_name: '', phone: '51911',
         whatsapp_user_id: 'PE.123', conversations: [{ wa_username: 'ana_mali' }],
         email: null, dni: null, opt_in: true, opt_in_email: false, active: true,
-        contact_attributes: [], contact_segments: [], education_lead_cycles: [],
+        contact_attributes: [], contact_segments: [],
+        education_lead_cycles: [{
+          id: 44, area: 'educacion', assigned_user_id: 22, requires_review: false,
+          lead_status_id: null, assigned_user: null, lead_status: null,
+          program: { slug: 'ca' },
+        }],
         education_lead_entries: [{
           prospectia_match: 'exists', prospectia_advisor_email: 'ana@mali.pe',
           prospectia_checked_at: new Date('2026-09-27T12:00:00Z'),
@@ -67,11 +72,35 @@ describe('CRM Educación', () => {
     ]);
     expect(result.items[0]).toMatchObject({
       whatsapp_user_id: 'PE.123', wa_username: 'ana_mali',
+      lead_id: 44, categoria: 'ca', assigned_user_id: 22,
       prospectia_match: 'exists', prospectia_advisor_email: 'ana@mali.pe',
       prospectia_checked_at: '2026-09-27T12:00:00.000Z',
     });
     expect(result.items[1].prospectia_match).toBeNull();
+    expect(result.items[1].lead_id).toBeNull();
     await expect(service.listEducationContacts({ area: 'pam' })).rejects.toThrow('Área de educación inválida');
+  });
+
+  it('filtra el ciclo proyectado por categoría CA/EP al listar contactos', async () => {
+    const prisma = {
+      contacts: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
+      $transaction: (queries: Promise<unknown>[]) => Promise.all(queries),
+    };
+    await new CrmService(prisma as never, {} as never)
+      .listEducationContacts({ area: 'educacion_ep' });
+    expect(prisma.contacts.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      include: expect.objectContaining({
+        education_lead_cycles: expect.objectContaining({
+          where: {
+            OR: expect.arrayContaining([
+              { program: { is: { slug: 'ep' } } },
+              { program_id: null, area: 'educacion_ep' },
+            ]),
+          },
+          take: 1,
+        }),
+      }),
+    }));
   });
 
   it('solo registra un chat orgánico si no hay otro origen atribuible', async () => {

@@ -1,5 +1,6 @@
 import type { PrismaService } from '../prisma/prisma.service';
 import type { ParamMapping } from '../templates/template-definition.util';
+import { firstNamePart } from '../users/advisor-label.util';
 
 const ATTR_PREFIX = 'attr.';
 export const USER_NAME_PARAM_SOURCE = 'user.name';
@@ -61,10 +62,6 @@ type TemplateSenderProfile = {
   first_name?: string | null;
   last_name?: string | null;
 };
-
-function firstNamePart(value: string | null | undefined): string {
-  return String(value || '').trim().split(/\s+/)[0] || '';
-}
 
 /** Primer nombre + primer apellido del usuario que crea el envío. */
 export function formatTemplateSenderName(

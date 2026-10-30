@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import type { MetricCard } from '../campaigns/campaign-analytics.util';
 import { readSessionWindowMs } from '../campaigns/campaign-conversation-window.util';
 import { conversationCategoryPredicate } from '../config/business-scope';
+import { advisorLabelSql } from '../users/advisor-label.util';
 export { isWithinUserServiceWindow } from '../campaigns/campaign-conversation-window.util';
 
 export type ConversationDailyPoint = {
@@ -107,10 +108,7 @@ export async function fetchConversationSummary(
     prisma.$queryRaw<{ user_id: number; label: string; count: number }[]>(Prisma.sql`
       SELECT
         u.id AS user_id,
-        COALESCE(
-          NULLIF(SPLIT_PART(COALESCE(u.email, ''), '@', 1), ''),
-          u.email
-        ) AS label,
+        ${advisorLabelSql('u')} AS label,
         COUNT(DISTINCT c.id)::int AS count
       FROM conversations c
       JOIN users u ON u.id = c.assigned_user_id
@@ -122,7 +120,7 @@ export async function fetchConversationSummary(
         AND c.assigned_user_id IS NOT NULL
         ${advisorFilter}
         ${categoryFilter}
-      GROUP BY u.id, label
+      GROUP BY u.id, u.first_name, u.last_name, u.email
       ORDER BY count DESC, label ASC
       LIMIT 5
     `),

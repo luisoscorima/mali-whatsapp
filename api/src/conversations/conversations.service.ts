@@ -117,7 +117,10 @@ import {
   inboxSearchMayScanMessages,
   resolveInboxDateFilter,
 } from './inbox-query.util';
-import { formatAdvisorLabel } from '../users/advisor-label.util';
+import {
+  advisorLabelSql,
+  formatAdvisorLabel,
+} from '../users/advisor-label.util';
 import {
   exactOpenCycleWhere,
   isEducationAttentionArea,
@@ -406,7 +409,7 @@ export class ConversationsService {
   }
 
   private inboxAssignedUserLabelSql(): Prisma.Sql {
-    return Prisma.sql`COALESCE(NULLIF(TRIM(CONCAT_WS(' ', NULLIF(SPLIT_PART(TRIM(au.first_name), ' ', 1), ''), NULLIF(SPLIT_PART(TRIM(au.last_name), ' ', 1), ''))), ''), NULLIF(SPLIT_PART(COALESCE(au.email, ''), '@', 1), ''))`;
+    return advisorLabelSql('au');
   }
 
   private inboxContactNameSql(alias: string): Prisma.Sql {

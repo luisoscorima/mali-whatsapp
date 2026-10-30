@@ -36,6 +36,7 @@ import {
   getWhatsAppLineForArea,
   sendTemplateWithComponents,
 } from '../templates/whatsapp-meta.util';
+import { formatAdvisorLabel } from '../users/advisor-label.util';
 import { CrmAudienceQueryDto } from './dto/crm-audience-query.dto';
 import type {
   CrmCreateAttributeDefinitionDto,
@@ -85,6 +86,8 @@ export type CrmContactRow = {
   attributes: Record<string, string>;
   created_at: string;
   updated_at: string;
+  lead_id?: number | null;
+  categoria?: string | null;
   assigned_user_id?: number | null;
   assigned_user_label?: string | null;
   requires_review?: boolean;
@@ -870,9 +873,25 @@ export class CrmService {
             select: { wa_username: true },
           },
           education_lead_cycles: {
+            ...(program
+              ? {
+                  where: {
+                    OR: [
+                      { program: { is: { slug: program } } },
+                      ...(program === 'ca'
+                        ? [{ program_id: null, area: 'educacion_ca' as const }]
+                        : []),
+                      ...(program === 'ep'
+                        ? [{ program_id: null, area: 'educacion_ep' as const }]
+                        : []),
+                    ],
+                  },
+                }
+              : {}),
             orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
             take: 1,
             include: {
+              program: { select: { slug: true } },
               assigned_user: {
                 select: { first_name: true, last_name: true, email: true },
               },
@@ -919,15 +938,16 @@ export class CrmService {
       segment_slugs: row.contact_segments.map((s) => s.segment_slug),
       created_at: row.created_at.toISOString(),
       updated_at: row.updated_at.toISOString(),
+      lead_id: row.education_lead_cycles[0]?.id ?? null,
+      categoria: row.education_lead_cycles[0]
+        ? (row.education_lead_cycles[0].program?.slug
+          ?? educationProgramOf(row.education_lead_cycles[0].area)
+          ?? null)
+        : null,
       assigned_user_id: row.education_lead_cycles[0]?.assigned_user_id ?? null,
       requires_review: row.education_lead_cycles[0]?.requires_review ?? false,
       assigned_user_label: row.education_lead_cycles[0]?.assigned_user
-        ? [
-            row.education_lead_cycles[0].assigned_user.first_name,
-            row.education_lead_cycles[0].assigned_user.last_name,
-          ]
-            .filter(Boolean)
-            .join(' ') || row.education_lead_cycles[0].assigned_user.email
+        ? formatAdvisorLabel(row.education_lead_cycles[0].assigned_user)
         : null,
       lead_status_id:
         row.education_lead_cycles[0]?.lead_status_id ?? row.lead_status_id,

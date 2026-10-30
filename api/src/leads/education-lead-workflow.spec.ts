@@ -176,12 +176,22 @@ describe('Education lead cycle creation', () => {
       users: { findMany: jest.fn().mockResolvedValue([{ id: 22 }]) },
       education_lead_entries: { findMany: jest.fn().mockResolvedValue([]) },
     };
-    const prisma = { $transaction: (fn: (client: typeof tx) => Promise<unknown>) => fn(tx) };
+    const prisma = {
+      business_programs: { findFirst: jest.fn().mockResolvedValue({ id: 5 }) },
+      $transaction: (fn: (client: typeof tx) => Promise<unknown>) => fn(tx),
+    };
     const service = new EducationLeadWorkflowService(prisma as never);
     await service.distribute({ area: 'educacion_ep' });
     expect(tx.education_lead_entries.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ assignment_rule: 'new_number',
-        cycle: { is: { assigned_user_id: null } } }),
+      where: expect.objectContaining({
+        assignment_rule: 'new_number',
+        area: { in: ['educacion', 'educacion_ca', 'educacion_ep'] },
+        cycle: { is: { assigned_user_id: null } },
+        OR: expect.arrayContaining([
+          { program_id: 5 },
+          { program_id: null, area: 'educacion_ep' },
+        ]),
+      }),
     }));
   });
 
@@ -203,6 +213,7 @@ describe('Education lead cycle creation', () => {
     };
     const prisma = {
       contacts: { findFirst: jest.fn().mockResolvedValue({ id: 10, person_id: 55 }) },
+      education_lead_cycles: { findFirst: jest.fn().mockResolvedValue(null) },
       $transaction: (fn: (client: typeof tx) => Promise<unknown>) => fn(tx),
     };
     await expect(new EducationLeadWorkflowService(prisma as never).updateManagement(
@@ -276,7 +287,15 @@ describe('Education lead cycle creation', () => {
     });
 
     expect(prisma.education_lead_cycles.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { AND: [expect.any(Object), { closed_at: { not: null } }] },
+      where: { AND: [
+        { AND: [expect.objectContaining({
+          OR: expect.arrayContaining([
+            { program: { is: { slug: 'ep' } } },
+            { program_id: null, area: 'educacion_ep' },
+          ]),
+        })] },
+        { closed_at: { not: null } },
+      ] },
     }));
     expect(result.counts).toEqual({ open: 4, closed: 2, review: 1, unassigned: 3 });
     expect(result.items[0]).toEqual(expect.objectContaining({
@@ -284,5 +303,110 @@ describe('Education lead cycle creation', () => {
       conversation_id: 70, assigned_user_label: 'Ana Soto',
       contacts: expect.objectContaining({ wa_username: 'luz.ramos' }),
     }));
+  });
+
+  it('keeps the last non-empty course when a later organic entry has no payload', async () => {
+    const count = jest.fn().mockResolvedValue(0);
+    const item = {
+      id: 40, area: 'educacion', contact_id: 10, person_id: 55,
+      started_at: now, last_interaction_at: now, closed_at: null,
+      assigned_user_id: 22, assigned_user: null, lead_status_id: null, lead_status: null,
+      lead_score: null, requires_review: false,
+      program: { slug: 'ep', label: 'Extensión profesional' },
+      contact: { id: 10, person_id: 55, name: 'Luz', last_name: 'Ramos',
+        phone: '999111222', email: null, whatsapp_user_id: null, conversations: [] },
+      conversation_links: [],
+      entries: [
+        { channel: 'organic_wa', source_label: 'WhatsApp', assignment_rule: 'same_advisor',
+          classification: 'duplicate', occurred_at: now, origin: { payload: {} } },
+        { channel: 'meta_lead_form', source_label: 'Formulario EP', assignment_rule: 'new_number',
+          classification: 'new', occurred_at: new Date(now.getTime() - 86400000),
+          origin: { payload: { curso: 'Cerámica' } } },
+      ],
+    };
+    const prisma = {
+      education_lead_cycles: { count, findMany: jest.fn().mockResolvedValue([item]) },
+      $transaction: (queries: Array<Promise<unknown>>) => Promise.all(queries),
+    };
+    const result = await new EducationLeadWorkflowService(prisma as never).listCycles({
+      area: 'educacion_ep', view: 'open',
+    });
+    expect(result.items[0]).toEqual(expect.objectContaining({
+      curso_interes: 'Cerámica',
+      source_label: 'WhatsApp',
+      channel: 'organic_wa',
+    }));
+  });
+
+  it('lists pending conflicts without the 60-day cutoff', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const count = jest.fn().mockResolvedValue(0);
+    const prisma = {
+      education_lead_entries: { count, findMany },
+      education_lead_cycles: { findMany: jest.fn().mockResolvedValue([]) },
+      $transaction: (queries: Array<Promise<unknown>>) => Promise.all(queries),
+    };
+    await new EducationLeadWorkflowService(prisma as never).listEntries({
+      area: 'educacion_ep', view: 'conflict',
+    });
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        classification: 'conflict',
+        reviewed_at: null,
+        area: { in: ['educacion', 'educacion_ca', 'educacion_ep'] },
+      }),
+    }));
+    const conflictWhere = findMany.mock.calls[0][0].where as Record<string, unknown>;
+    expect(conflictWhere.occurred_at).toBeUndefined();
+  });
+
+  it('resolves an explicit opportunity by id and validates against the cycle management scope', async () => {
+    const cycle = {
+      id: 31, contact_id: 10, area: 'educacion', closed_at: null,
+      assigned_user_id: 22, first_assigned_at: now, lead_status_id: null,
+      program: { slug: 'ca' },
+    };
+    const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      education_lead_cycles: {
+        findFirst: jest.fn().mockResolvedValue(cycle),
+        update: jest.fn().mockImplementation(async ({ data }) => ({
+          ...cycle, assigned_user_id: data.assigned_user_id,
+        })),
+      },
+      audit_logs: { create: jest.fn() },
+      contacts: { update: jest.fn() },
+    };
+    const prisma = {
+      contacts: { findFirst: jest.fn().mockResolvedValue({ id: 10, person_id: 55 }) },
+      education_lead_cycles: {
+        findFirst: jest.fn().mockResolvedValue(cycle),
+      },
+      users: { findFirst: jest.fn().mockResolvedValue({ id: 33 }) },
+      $transaction: (fn: (client: typeof tx) => Promise<unknown>) => fn(tx),
+    };
+    await new EducationLeadWorkflowService(prisma as never).updateManagement(
+      10, 'educacion_ep', { assigned_user_id: 33, lead_id: 31 },
+    );
+    expect(prisma.education_lead_cycles.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 31,
+        contact_id: 10,
+        area: { in: ['educacion', 'educacion_ca', 'educacion_ep'] },
+      },
+      include: { program: { select: { slug: true } } },
+    });
+    expect(prisma.users.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        id: 33,
+        OR: expect.arrayContaining([
+          { area: 'educacion_ca' },
+          { user_areas: { some: { area: 'educacion_ca' } } },
+        ]),
+      }),
+    }));
+    expect(tx.audit_logs.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ area: 'educacion_ca' }),
+    });
   });
 });
