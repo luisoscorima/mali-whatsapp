@@ -66,22 +66,25 @@ Si no existe, se crea con los datos del lead. En WhatsApp el nombre es el perfil
 
 `import` queda reservado para los históricos del Sheet (`POST /crm/origins` lo acepta; aún no hay pantalla). `other` es respaldo si llega un canal que la UI no nombra. `manual` ya no se acepta en altas nuevas.
 
-### CTWA vs Instant Forms
+### CTWA vs Instant Forms (ambos = Meta)
+
+En el Hub se muestran como **una card Meta** (`?channel=meta`). En BD siguen siendo dos canales de ingesta.
 
 | | CTWA | Instant Forms (Lead Ads) |
 |--|------|---------------------------|
 | Acción | Abre WhatsApp y escribe | Llena un formulario en FB/IG |
 | Ingestión | Webhook WA `referral` | Webhook Page `leadgen` + Graph `GET /{leadgen_id}` |
 | Canal | `meta_ctwa` | `meta_lead_form` |
-| Área | Por `phone_number_id` de la línea | Por `form_id` → `meta_lead_form_routes` |
+| Categoría | Por la **línea** (`program_id`: General / CA / EP) | Por `form_id` → route (`program_key`) |
+| Área de ficha | Siempre `educacion` (canónica) | Siempre `educacion` |
 
-La misma Página Facebook (**MALI Educación**, `1684299678482303`) cubre CA y EP: el Page ID **no** separa áreas.
+La misma Página Facebook (**MALI Educación**, `1684299678482303`) cubre General, CA y EP: el Page ID **no** separa categorías. Ver [MODELO-WABA-AREAS.md](./MODELO-WABA-AREAS.md).
 
 ---
 
 ## Flujo de captación
 
-Solo entran a este CRM las áreas `educacion`, `educacion_ca` y `educacion_ep`. Un origen de otra área (el widget sin área cae en `ti`) queda en contactos y orígenes: no se consulta en Prospectia ni se clasifica aquí.
+Solo entra a este CRM el área canónica **`educacion`** (los aliases `educacion_ca` / `educacion_ep` no se usan para identidad ni captación nuevas). Un origen de otra área (el widget sin área cae en `ti`) queda en contactos y orígenes: no se consulta en Prospectia ni se clasifica aquí.
 
 ```text
 Conector o inbound de WhatsApp
@@ -99,14 +102,14 @@ La clasificación de 60 días ocurre al crear la entrada, no en un paso posterio
 
 ### Orígenes
 
-| Canal | Cuándo se registra | Área |
-|-------|--------------------|------|
-| `meta_lead_form` | Webhook Lead Ads o backfill | Nombre del formulario: `Cursos de Arte` / `[FORM CA]` → CA; `[FORM EP]` → EP; resto → Educación. Override manual con `area_locked` |
-| `tiktok` | Webhook o backfill de Instant Form | La misma regla de nombre que Meta |
-| `meta_ctwa` | Inbound de WhatsApp con `referral` | Línea (`phone_number_id`), como el resto del chat |
-| `widget` | MALI ONE hace `POST /crm/origins` | La que envíe el body. Si no viene, `ti` (no entra a este CRM) |
-| `mali_one_link` | Primer mensaje sin anuncio CTWA, si el texto encaja con el catálogo de links de MALI ONE | La línea de WhatsApp |
-| `organic_wa` | Inbound en una de las tres áreas, solo si ese contacto o esa conversación no tienen ya otro origen | La línea de WhatsApp |
+| Canal | Cuándo se registra | Área / categoría |
+|-------|--------------------|------------------|
+| `meta_lead_form` | Webhook Lead Ads o backfill | Ficha en `educacion`. Categoría por nombre del form → `program_key` (CA / EP / General). Override con `area_locked` |
+| `tiktok` | Webhook o backfill de Instant Form | Igual que Meta Instant Form |
+| `meta_ctwa` | Inbound de WhatsApp con `referral` | Ficha en `educacion`. Categoría por línea (`program_id`) |
+| `widget` | MALI ONE hace `POST /crm/origins` | La que envíe el body (Educación → `educacion`). Si no viene, `ti` |
+| `mali_one_link` | Primer mensaje sin anuncio CTWA, si el texto encaja con el catálogo de links de MALI ONE | Ficha `educacion`; categoría por línea |
+| `organic_wa` | Inbound WA solo si esa ficha/conversación **no** tienen ya otro origen comercial | Ficha `educacion`; categoría por línea |
 | `import` / `other` | `POST /crm/origins` | La que envíe el body |
 
 El widget de MALI ONE persiste la captura en `EducacionLead` (reintenta si WhatsApp cae) y sincroniza persona + origen `widget`, sin atributos `source` / `fuente` / `curso`. El sync PAM sigue usando atributos de pago y persona (`plan`, `payment_id`, …).
@@ -119,17 +122,17 @@ Históricos orgánicos: `POST /api/leads/mali-one-links/backfill` cuenta coincid
 
 ### Conversación o solo contacto
 
-`came_with_inbound` marca cómo se captó el origen. No bifurca el CRM.
+`came_with_inbound` marca solo contacto vs contacto + chat (modelo Widget). No bifurca el CRM.
 
 | Canal | Cuenta como conversación |
 |-------|--------------------------|
 | `meta_ctwa`, `organic_wa`, `mali_one_link` | Si el origen tiene `conversation_id` |
-| `widget` | Si el chat resuelto ya tiene un mensaje inbound del lead |
-| `meta_lead_form`, `tiktok`, `import`, `other` | Nunca. Un chat posterior no cambia la marca |
+| `widget`, `meta_lead_form`, `tiktok` | Si el chat resuelto ya tiene un mensaje inbound del lead |
+| `import`, `other` | Nunca |
 
 ### Orgánico y la sesión de 24 horas
 
-El orgánico no es “cualquier lead sin payload”. Si el contacto o la conversación ya tienen un Instant Form, un CTWA, un widget o un link MALI ONE:
+El orgánico no es “cualquier lead sin payload”. Si la ficha canónica (`educacion`) o la conversación ya tienen Instant Form, CTWA, widget, TikTok o link MALI ONE (por `contact_id`, teléfono o BSUID):
 
 - no se crea un origen `organic_wa`;
 - si esa atribución se vio en las últimas 24 horas, el inbound se registra con el canal de esa atribución;
@@ -178,26 +181,26 @@ El CRM Educación de MALI ONE gestiona un asesor por ciclo y lo refleja en el ch
 
 ### Hub
 
-- `/leads` — resumen por canal y listado unificado de orígenes (curso, fuente, programa, chat).
-- `/leads/meta-forms` — Instant Forms: rutas form→área, sync Graph, backfill, leads recientes y abrir chat.
-- `/leads/meta-ctwa` — anuncios CTWA; nombre manual o sync Graph; detalle y leads.
-- `/leads/tiktok-forms` — Instant Forms de TikTok.
+- `/leads` — cards por canal (Meta unifica Instant Form + CTWA) y listado unificado (`?channel=meta` = ambos).
+- `/leads/meta-forms` — herramienta operativa Instant Forms (rutas, sync Graph, backfill).
+- `/leads/meta-ctwa` — herramienta operativa anuncios CTWA.
+- `/leads/tiktok-forms` — Instant Forms de TikTok (sync); el listado principal también está en `/leads?channel=tiktok`.
 - Ficha de contacto: orígenes de captación y opt-in de marketing.
 - La ruta `/anuncios` ya no existe.
 
-### Instant Forms → área (CA / EP / Educación)
+### Instant Forms → categoría (General / CA / EP)
 
-Tabla `meta_lead_form_routes` (`form_id` → `area`). Util: `api/src/leads/lead-form-area.util.ts`. API: `GET/PATCH .../meta-forms/routes`, `POST .../meta-forms/sync-forms`. Migración: `api/prisma/migrations/20260827030000_meta_lead_form_routes/`.
+Tabla `meta_lead_form_routes` (`form_id` → área canónica + `program_key`). Util: `api/src/leads/lead-form-area.util.ts`. API: `GET/PATCH .../meta-forms/routes`, `POST .../meta-forms/sync-forms`.
 
-| Nombre del form | Área |
-|-----------------|------|
-| Empieza con `Cursos de Arte` | `educacion_ca` |
-| Contiene `[FORM EP]` / `FORM EP` | `educacion_ep` |
-| Resto | `educacion` |
+| Nombre del form | Categoría |
+|-----------------|-----------|
+| Empieza con `Cursos de Arte` | CA |
+| Contiene `[FORM EP]` / `FORM EP` | EP |
+| Resto | General (`educacion`, sin programa) |
 
 - Override manual en UI → `area_locked` (el sync no lo pisa).
 - Seeds Sheets: `1678089499945954` → CA; `1577538393930907` → EP.
-- **CTWA → área:** por `phone_number_id` (902… CA, 922… EP), no por form.
+- **CTWA → categoría:** por la línea (`whatsapp_lines.program_id`), no por form.
 
 No existen `META_PAGE_*_CA` / `_EP`. CA y EP se separan por `form_id` (Instant Forms) o `phone_number_id` (CTWA), no por otro Page token.
 

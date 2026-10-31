@@ -284,7 +284,11 @@ export class LeadsService implements OnModuleInit {
     }
     const where: Prisma.contact_originsWhereInput = {
       area: { in: areas },
-      ...(params.channel ? { channel: params.channel } : {}),
+      ...(params.channel === 'meta'
+        ? { channel: { in: ['meta_lead_form', 'meta_ctwa'] } }
+        : params.channel
+          ? { channel: params.channel }
+          : {}),
       ...(and.length ? { AND: and } : {}),
     };
     const [total, items] = await this.prisma.$transaction([
@@ -341,13 +345,33 @@ export class LeadsService implements OnModuleInit {
       where: { id: input.conversationId },
       select: { whatsapp_line: { select: { program: { select: { slug: true } } } } },
     });
+    const phone = input.phone ? normalizePhone(input.phone) || null : null;
+    const userId = String(input.whatsappUserId ?? '').trim() || null;
+    // Ficha canónica: si el webhook no trajo contactId, resolver en educacion.
+    let contactId = input.contactId;
+    if (contactId == null && (phone || userId)) {
+      const ficha = await this.prisma.contacts.findFirst({
+        where: {
+          area,
+          OR: [
+            ...(userId ? [{ whatsapp_user_id: userId }] : []),
+            ...(phone ? [{ phone }] : []),
+          ],
+        },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+      });
+      contactId = ficha?.id ?? null;
+    }
     const attribution = await this.prisma.contact_origins.findFirst({
       where: {
-        area: { in: this.educationAreas() },
+        area,
         channel: { not: 'organic_wa' },
         OR: [
           { conversation_id: input.conversationId },
-          ...(input.contactId ? [{ contact_id: input.contactId }] : []),
+          ...(contactId ? [{ contact_id: contactId }] : []),
+          ...(phone ? [{ phone }] : []),
+          ...(userId ? [{ whatsapp_user_id: userId }] : []),
         ],
       },
       orderBy: { last_seen_at: 'desc' },
@@ -370,11 +394,11 @@ export class LeadsService implements OnModuleInit {
         educationProgramOf(input.area),
       first_seen_at: firstInbound?.created_at ?? input.seenAt,
       last_seen_at: input.seenAt,
-      phone: input.phone,
-      whatsapp_user_id: input.whatsappUserId,
+      phone,
+      whatsapp_user_id: userId,
       contact: {
-        phone: input.phone,
-        whatsapp_user_id: input.whatsappUserId,
+        phone,
+        whatsapp_user_id: userId,
         name: input.name,
       },
     });
@@ -386,7 +410,8 @@ export class LeadsService implements OnModuleInit {
       input.seenAt.getTime() - attribution.last_seen_at.getTime() < 24 * 60 * 60 * 1000
       ? attribution : null;
     if (message) await this.educationWorkflow.recordInbound({
-      area, contactId: result?.contact_id ?? input.contactId ?? attribution?.contact_id ?? null,
+      area,
+      contactId: result?.contact_id ?? contactId ?? attribution?.contact_id ?? null,
       conversationId: input.conversationId, messageId: message.id,
       originId: result?.origin_id ?? recentAttribution?.id,
       channel: recentAttribution?.channel ?? 'organic_wa',
@@ -1249,7 +1274,11 @@ export class LeadsService implements OnModuleInit {
     ];
     const categoryWhere = programScopeWhere(params.categories ?? null);
     if (Object.keys(categoryWhere).length) filters.push(categoryWhere);
-    if (params.channel) filters.push({ channel: params.channel });
+    if (params.channel === 'meta') {
+      filters.push({ channel: { in: ['meta_lead_form', 'meta_ctwa'] } });
+    } else if (params.channel) {
+      filters.push({ channel: params.channel });
+    }
     const firstSeen = originsFirstSeenFilter(params.from, params.to);
     if (firstSeen) filters.push({ first_seen_at: firstSeen });
     const where: Prisma.contact_originsWhereInput = {

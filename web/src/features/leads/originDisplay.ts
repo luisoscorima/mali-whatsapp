@@ -71,6 +71,7 @@ export function originSecondaryFields(origin: OriginLike) {
 export function channelLabel(channel: string): string {
   const map: Record<string, string> = {
     widget: 'Widget web',
+    meta: 'Meta',
     meta_lead_form: 'Instant Forms',
     meta_ctwa: 'Click-to-WhatsApp',
     organic_wa: 'WhatsApp orgánico',

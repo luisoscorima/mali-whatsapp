@@ -114,6 +114,7 @@ describe('CRM Educación', () => {
     const recordInbound = jest.fn();
     const service = new LeadsService({
       conversations: { findFirst: jest.fn().mockResolvedValue(null) },
+      contacts: { findFirst: jest.fn() },
       contact_origins: { findFirst },
       chat_messages: { findFirst: firstInbound },
     } as never, { recordInbound } as never);
@@ -121,7 +122,7 @@ describe('CRM Educación', () => {
       origin_id: 5, contact_id: 10, created: true,
     });
     const input = { area: 'educacion_ep', conversationId: 20, contactId: 10,
-      phone: '51911', whatsappUserId: null, seenAt };
+      phone: '51999999999', whatsappUserId: null, seenAt };
 
     await service.recordEducationOrganicOrigin(input);
     expect(upsert).not.toHaveBeenCalled();
@@ -139,6 +140,44 @@ describe('CRM Educación', () => {
     expect(recordInbound).toHaveBeenCalledTimes(2);
   });
 
+  it('no crea orgánico si hay TikTok en educacion aunque contactId llegue vacío', async () => {
+    const seenAt = new Date('2026-10-30T08:50:36Z');
+    const originsFindFirst = jest.fn().mockResolvedValue({
+      id: 20819, contact_id: 37918, channel: 'tiktok',
+      source_key: 'form', source_label: 'Form TikTok', last_seen_at: seenAt,
+    });
+    const recordInbound = jest.fn();
+    const service = new LeadsService({
+      conversations: { findFirst: jest.fn().mockResolvedValue(null) },
+      contacts: { findFirst: jest.fn().mockResolvedValue({ id: 37918 }) },
+      contact_origins: { findFirst: originsFindFirst },
+      chat_messages: {
+        findFirst: jest.fn().mockResolvedValue({ created_at: seenAt, id: 1 }),
+      },
+    } as never, { recordInbound } as never);
+    const upsert = jest.spyOn(service, 'upsertOrigin').mockResolvedValue({
+      origin_id: 99, contact_id: 37918, created: true,
+    });
+
+    await service.recordEducationOrganicOrigin({
+      area: 'educacion_ca', conversationId: 81509, contactId: null,
+      phone: '51984344366', whatsappUserId: null, seenAt, messageId: 1,
+    });
+
+    expect(upsert).not.toHaveBeenCalled();
+    expect(originsFindFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        area: 'educacion',
+        channel: { not: 'organic_wa' },
+      }),
+    }));
+    expect(recordInbound).toHaveBeenCalledWith(expect.objectContaining({
+      channel: 'tiktok',
+      contactId: 37918,
+      originId: 20819,
+    }));
+  });
+
   it('registra como lead orgánico una identidad BSUID sin teléfono', async () => {
     const seenAt = new Date('2026-09-24T10:00:00Z');
     const service = new LeadsService({
@@ -147,6 +186,7 @@ describe('CRM Educación', () => {
           whatsapp_line: { program: { slug: 'ca' } },
         }),
       },
+      contacts: { findFirst: jest.fn().mockResolvedValue(null) },
       contact_origins: { findFirst: jest.fn().mockResolvedValue(null) },
       chat_messages: { findFirst: jest.fn().mockResolvedValue({ created_at: seenAt }) },
     } as never, { recordInbound: jest.fn() } as never);

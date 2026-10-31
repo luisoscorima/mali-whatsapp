@@ -19,54 +19,64 @@ type ChannelSummary = {
   last_seen_at: string | null
 }
 
-const CHANNEL_META: Record<
-  string,
-  { title: string; blurb: string; to: string; enabled: boolean }
-> = {
-  meta_lead_form: {
-    title: 'Instant Forms',
-    blurb: 'Formularios Lead Ads de Facebook / Instagram',
-    to: '/leads/meta-forms',
-    enabled: true,
+type HubCard = {
+  key: string
+  title: string
+  blurb: string
+  to: string
+  /** Canales BD que suman el contador de la card */
+  channels: string[]
+  listLink?: boolean
+}
+
+const HUB_CARDS: HubCard[] = [
+  {
+    key: 'meta',
+    title: 'Meta',
+    blurb: 'Instant Forms y Click-to-WhatsApp (FB / IG)',
+    to: '/leads?channel=meta',
+    channels: ['meta_lead_form', 'meta_ctwa'],
+    listLink: true,
   },
-  meta_ctwa: {
-    title: 'Click-to-WhatsApp',
-    blurb: 'Anuncios que abren un chat de WhatsApp',
-    to: '/leads/meta-ctwa',
-    enabled: true,
-  },
-  widget: {
+  {
+    key: 'widget',
     title: 'Widget web',
     blurb: 'Formularios embebidos (MALI ONE)',
     to: '/leads?channel=widget',
-    enabled: true,
+    channels: ['widget'],
+    listLink: true,
   },
-  mali_one_link: {
+  {
+    key: 'mali_one_link',
     title: 'Links / QR MALI ONE',
     blurb: 'Acortador, QR y WhatsApp prellenado',
     to: '/leads?channel=mali_one_link',
-    enabled: true,
+    channels: ['mali_one_link'],
+    listLink: true,
   },
-  tiktok: {
+  {
+    key: 'tiktok',
     title: 'TikTok',
-    blurb: 'Instant Forms de TikTok Ads (webhook)',
-    to: '/leads/tiktok-forms',
-    enabled: true,
+    blurb: 'Instant Forms de TikTok Ads (solo contacto o con chat)',
+    to: '/leads?channel=tiktok',
+    channels: ['tiktok'],
+    listLink: true,
   },
-  organic_wa: {
+  {
+    key: 'organic_wa',
     title: 'WhatsApp orgánico',
     blurb: 'Personas que iniciaron una conversación sin otra atribución',
     to: '/leads?channel=organic_wa',
-    enabled: true,
+    channels: ['organic_wa'],
+    listLink: true,
   },
-}
+]
 
 const CHANNEL_FILTER_OPTIONS = [
   { value: '', label: 'Todos' },
+  { value: 'meta', label: 'Meta' },
   { value: 'widget', label: 'Widget web' },
   { value: 'mali_one_link', label: 'Links / QR MALI ONE' },
-  { value: 'meta_lead_form', label: 'Instant Forms' },
-  { value: 'meta_ctwa', label: 'Click-to-WhatsApp' },
   { value: 'tiktok', label: 'TikTok' },
   { value: 'organic_wa', label: 'WhatsApp orgánico' },
   { value: 'import', label: 'Importar' },
@@ -92,9 +102,16 @@ export function LeadsHubPage() {
 
   const byChannel = Object.fromEntries(rows.map((r) => [r.channel, r]))
 
-  const cards = Object.entries(CHANNEL_META).map(([channel, meta]) => {
-    const stats = byChannel[channel]
-    return { channel, meta, stats }
+  const cards = HUB_CARDS.map((card) => {
+    const parts = card.channels.map((ch) => byChannel[ch]).filter(Boolean)
+    const count = parts.reduce((sum, s) => sum + (s?.count ?? 0), 0)
+    const last_seen_at = parts.reduce<string | null>((max, s) => {
+      const t = s?.last_seen_at
+      if (!t) return max
+      if (!max) return t
+      return t > max ? t : max
+    }, null)
+    return { card, count, last_seen_at }
   })
 
   return (
@@ -110,33 +127,47 @@ export function LeadsHubPage() {
         <p className="text-muted">Cargando…</p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {cards.map(({ channel, meta, stats }) => (
+          {cards.map(({ card, count, last_seen_at }) => (
             <div
-              key={channel}
+              key={card.key}
               className="rounded-xl border border-line bg-surface-strong p-4"
             >
-              <h2 className="font-medium">{meta.title}</h2>
-              <p className="mt-1 text-sm text-muted">{meta.blurb}</p>
+              <h2 className="font-medium">{card.title}</h2>
+              <p className="mt-1 text-sm text-muted">{card.blurb}</p>
               <p className="mt-3 text-sm">
                 <span className="text-muted">Eventos:</span>{' '}
-                {stats?.count ?? 0}
-                {stats?.last_seen_at ? (
+                {count}
+                {last_seen_at ? (
                   <>
                     {' '}
-                    · último {formatDateTime(stats.last_seen_at)}
+                    · último {formatDateTime(last_seen_at)}
                   </>
                 ) : null}
               </p>
-              {meta.enabled ? (
-                <Link
-                  to={meta.to}
-                  className="mt-3 inline-block text-sm text-accent hover:underline"
-                >
-                  {channel === 'widget' ? 'Ver listado →' : 'Abrir →'}
-                </Link>
-              ) : (
-                <p className="mt-3 text-sm text-muted">No disponible aún</p>
-              )}
+              <Link
+                to={card.to}
+                className="mt-3 inline-block text-sm text-accent hover:underline"
+              >
+                {card.listLink ? 'Ver listado →' : 'Abrir →'}
+              </Link>
+              {card.key === 'meta' ? (
+                <p className="mt-2 text-xs text-muted">
+                  <Link to="/leads/meta-forms" className="text-accent hover:underline">
+                    Forms
+                  </Link>
+                  {' · '}
+                  <Link to="/leads/meta-ctwa" className="text-accent hover:underline">
+                    CTWA
+                  </Link>
+                </p>
+              ) : null}
+              {card.key === 'tiktok' ? (
+                <p className="mt-2 text-xs text-muted">
+                  <Link to="/leads/tiktok-forms" className="text-accent hover:underline">
+                    Forms / sync
+                  </Link>
+                </p>
+              ) : null}
             </div>
           ))}
         </div>

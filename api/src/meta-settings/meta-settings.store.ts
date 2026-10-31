@@ -283,22 +283,22 @@ function resolveCatalogToken(row: WhatsAppLineCatalogRow): string {
   return '';
 }
 
+/**
+ * Área de identidad/persistencia para la línea.
+ * Educación siempre es canónica (`educacion`); CA/EP/General van en
+ * programId/programKey. Los aliases educacion_ca/ep no se usan para captar.
+ */
 function effectiveCatalogArea(
   row: WhatsAppLineCatalogRow,
 ): BusinessArea | null {
-  if (row.legacyArea && isValidBusinessArea(row.legacyArea)) {
-    return normalizeArea(row.legacyArea);
-  }
-  // Líneas sincronizadas suelen tener solo program_key (ca/ep); el inbox usa los alias.
-  const programKey = String(row.programKey || '')
-    .trim()
-    .toLowerCase();
-  if (programKey && row.canonicalArea === 'educacion') {
-    const alias = `educacion_${programKey}`;
-    if (isValidBusinessArea(alias)) return normalizeArea(alias);
-  }
   if (isValidBusinessArea(row.canonicalArea)) {
     return normalizeArea(row.canonicalArea);
+  }
+  if (row.legacyArea && isValidBusinessArea(row.legacyArea)) {
+    const legacy = normalizeArea(row.legacyArea);
+    // Alias histórico → canónica si el catálogo aún no trajo canonicalArea.
+    if (legacy.startsWith('educacion_')) return normalizeArea('educacion');
+    return legacy;
   }
   return null;
 }

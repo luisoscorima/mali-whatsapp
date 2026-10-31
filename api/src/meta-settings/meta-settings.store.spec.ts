@@ -94,13 +94,15 @@ describe('WhatsApp line catalog compatibility store', () => {
       token: 'token-t1',
     });
     expect(getWhatsAppCredentialsForArea('educacion_ca')).toMatchObject({
-      area: 'educacion_ca',
+      area: 'educacion',
       phoneNumberId: 'pid-ca',
       token: 'token-t2',
     });
     expect(getWhatsAppLineByPhoneNumberId('pid-ca')).toMatchObject({
       id: 11,
-      area: 'educacion_ca',
+      area: 'educacion',
+      canonicalArea: 'educacion',
+      programKey: 'ca',
       token: 'token-t2',
     });
     expect(getWhatsAppLineForArea('educacion_ca')).toMatchObject({ id: 11 });
@@ -170,7 +172,7 @@ describe('WhatsApp line catalog compatibility store', () => {
     ).toBeNull();
   });
 
-  it('routes synced Education lines by program_key when legacy_area is empty', () => {
+  it('routes synced Education lines to canonical area; category stays on program_key', () => {
     setWhatsAppLineCatalog([
       {
         id: 28,
@@ -189,7 +191,8 @@ describe('WhatsApp line catalog compatibility store', () => {
     ]);
     process.env.WHATSAPP_TOKEN_EDUCACION_EP = 'token-ep5';
     expect(getWhatsAppLineByPhoneNumberId('pid-edu-5')).toMatchObject({
-      area: 'educacion_ep',
+      area: 'educacion',
+      programKey: 'ep',
       token: 'token-ep5',
     });
     expect(
@@ -197,7 +200,7 @@ describe('WhatsApp line catalog compatibility store', () => {
         { metadata: { phone_number_id: 'pid-edu-5' } },
         'shared-waba',
       ).area,
-    ).toBe('educacion_ep');
+    ).toBe('educacion');
   });
 
   it('loads a newly activated line from a replacement snapshot without changing env', () => {
@@ -227,12 +230,13 @@ describe('WhatsApp line catalog compatibility store', () => {
     ).toBe('pid-new');
   });
 
-  it('does not guess an area from a WABA shared by legacy areas', () => {
+  it('resolves a shared Education WABA to the canonical area', () => {
     setWhatsAppLineCatalog(catalogRows());
-    expect(resolveWhatsAppAreaFromCatalogWaba('shared-waba')).toBeNull();
+    // General + CA lines share WABA; both map to educacion → área única.
+    expect(resolveWhatsAppAreaFromCatalogWaba('shared-waba')).toBe('educacion');
     expect(resolveInboundArea({}, 'shared-waba')).toEqual({
-      area: null,
-      source: null,
+      area: 'educacion',
+      source: 'waba_entry_id',
     });
   });
 
@@ -243,7 +247,7 @@ describe('WhatsApp line catalog compatibility store', () => {
         { metadata: { phone_number_id: 'pid-ca' } },
         'shared-waba',
       ),
-    ).toEqual({ area: 'educacion_ca', source: 'phone_number_id' });
+    ).toEqual({ area: 'educacion', source: 'phone_number_id' });
   });
 
   it('keeps the legacy environment fallback when the feature flag is off', () => {

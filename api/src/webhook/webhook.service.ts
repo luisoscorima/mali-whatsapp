@@ -2,6 +2,7 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type { Request, Response } from 'express';
 import type { BusinessArea } from '../config/areas';
+import { educationWriteArea } from '../config/education-scope';
 import { sanitizeApiResponse } from '../conversations/api-sanitize.util';
 import { setMessageSender } from '../conversations/chat-sender.util';
 import {
@@ -562,7 +563,14 @@ export class WebhookService {
       return;
     }
 
-    if (source !== 'phone_number_id') {
+    // Identidad/captación: solo área canónica. CA/EP/General = categoría de la línea.
+    const routedArea = area;
+    area = educationWriteArea(area) as BusinessArea;
+    if (area !== routedArea) {
+      this.logger.log(
+        `Webhook inbound: area canónica=${area} (ruta=${routedArea}) via ${source}`,
+      );
+    } else if (source !== 'phone_number_id') {
       this.logger.log(`Webhook inbound: area=${area} via ${source}`);
     }
 

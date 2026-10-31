@@ -1,9 +1,7 @@
 import type { LeadChannel } from './leads.types';
 
-/** Canales que nunca captan con conversación WA al registrar el origen (formulario Meta, import, etc.). */
+/** Canales que nunca cuentan como conversación aunque exista chat (import, etc.). */
 export const CONTACT_ONLY_LEAD_CHANNELS = new Set<LeadChannel>([
-  'meta_lead_form',
-  'tiktok',
   'import',
   'other',
 ]);
@@ -14,10 +12,10 @@ export type ConversationHint = {
 };
 
 /**
- * true si el origen vino con conversación / inbound al captar (no solo contacto).
- * - CTWA / orgánico: conversation_id en el origen.
- * - Widget: conversación con al menos un mensaje inbound del lead.
- * - Form / import / otros: siempre false (aunque luego exista chat).
+ * true si el origen cuenta como contacto + chat (no solo contacto).
+ * - CTWA / orgánico / links: conversation_id en el origen.
+ * - Widget / Instant Form Meta / TikTok: conversación resuelta con inbound del lead.
+ * - import / other: siempre false.
  */
 export function originCameWithInbound(
   channel: string,
@@ -28,7 +26,7 @@ export function originCameWithInbound(
   if (ch === 'meta_ctwa' || ch === 'organic_wa' || ch === 'mali_one_link') {
     return originConversationId != null;
   }
-  if (ch === 'widget') {
+  if (ch === 'widget' || ch === 'meta_lead_form' || ch === 'tiktok') {
     return Boolean(resolvedHasInbound);
   }
   if (CONTACT_ONLY_LEAD_CHANNELS.has(ch)) return false;

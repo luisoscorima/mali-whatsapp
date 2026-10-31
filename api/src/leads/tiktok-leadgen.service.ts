@@ -1115,18 +1115,22 @@ export class TikTokLeadgenService {
       routes.map((r) => [r.form_id, r.form_name] as const),
     );
 
-    const items = rows.map((row) => ({
-      id: row.id,
-      lead_id: row.lead_id,
-      form_id: row.form_id,
-      form_name: nameByForm.get(row.form_id) || null,
-      created_time: row.created_time,
-      chat_conversation_id: null as number | null,
-      came_with_inbound: false,
-      contacts: row.contacts,
-    }));
+    const enriched = await this.leads.enrichLeadRowsWithChat(
+      scope.canonicalArea,
+      rows.map((row) => ({
+        id: row.id,
+        lead_id: row.lead_id,
+        form_id: row.form_id,
+        form_name: nameByForm.get(row.form_id) || null,
+        created_time: row.created_time,
+        channel: 'tiktok' as const,
+        conversation_id: null as number | null,
+        contact_id: row.contact_id,
+        contacts: row.contacts,
+      })),
+    );
 
-    return { items, total };
+    return { items: enriched, total };
   }
 
   async processWebhook(body: unknown): Promise<number> {
