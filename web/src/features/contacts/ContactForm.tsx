@@ -94,6 +94,16 @@ export function ContactForm({
   )
   const [segmentsError, setSegmentsError] = useState('')
   const [phoneError, setPhoneError] = useState('')
+  const [attrsOpen, setAttrsOpen] = useState(() => {
+    if (mode === 'create') return true
+    const defs = getApplicableAttributeDefinitions(
+      attributeDefinitions,
+      initial.segments,
+    ).filter((d) => !NATIVE_ATTR_SLUGS.has(d.slug))
+    return defs.some(
+      (d) => d.required && !(initial.attributes[d.slug] ?? '').trim(),
+    )
+  })
 
   const applicableDefs = useMemo(
     () =>
@@ -330,12 +340,8 @@ export function ContactForm({
 
       <details
         className="text-sm"
-        defaultOpen={
-          mode === 'create' ||
-          applicableDefs.some(
-            (d) => d.required && !(initial.attributes[d.slug] ?? '').trim(),
-          )
-        }
+        open={attrsOpen}
+        onToggle={(e) => setAttrsOpen(e.currentTarget.open)}
       >
         <summary className="cursor-pointer font-medium">
           Atributos{' '}

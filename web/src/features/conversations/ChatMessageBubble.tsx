@@ -198,7 +198,7 @@ export function ChatMessageBubble({
     : message.body_text || ''
   const authorLabel = messageAuthorLabel(message)
   const copyText = displayBody.trim() || message.body_text?.trim() || ''
-  const showMenu = canInteract && (onReply || onCopy || onReact)
+  const showMenu = Boolean(canInteract && (onReply || onCopy || onReact))
 
   const bubble = (
     <div
