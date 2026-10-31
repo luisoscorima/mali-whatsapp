@@ -65,15 +65,8 @@ export function AssignableSegmentsAccordion({
 
   useEffect(() => {
     if (!accordion || groupsTouched) return
-    const initial = new Set<string>()
-    for (const [group, segs] of grouped) {
-      if (segs.some((s) => activeAssignableSlugs.has(s.slug))) {
-        initial.add(group)
-      }
-    }
-    if (initial.size === 0 && grouped[0]) initial.add(grouped[0][0])
-    setOpenGroups(initial)
-  }, [accordion, grouped, activeAssignableSlugs, groupsTouched])
+    setOpenGroups(new Set())
+  }, [accordion, grouped, groupsTouched])
 
   function toggleGroup(group: string) {
     setGroupsTouched(true)

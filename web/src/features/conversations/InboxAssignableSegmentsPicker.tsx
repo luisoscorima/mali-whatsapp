@@ -20,7 +20,7 @@ export function InboxAssignableSegmentsPicker({
   category = null,
   assignableSegments,
   currentSegmentSlugs,
-  accordion = true,
+  accordion = false,
   onChanged,
 }: InboxAssignableSegmentsPickerProps) {
   const [busySlug, setBusySlug] = useState('')

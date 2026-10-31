@@ -33,24 +33,24 @@ export function ChatMessageBubbleMenu({
   const [menuOpen, setMenuOpen] = useState(false)
   const [reactOpen, setReactOpen] = useState(false)
 
-  if (!canInteract) {
-    return <>{children}</>
-  }
-
   function openFromContext(event: MouseEvent) {
     event.preventDefault()
+    if (!canInteract) return
     setMenuOpen(true)
+  }
+
+  const wrapClassName = cn(
+    'chat-bubble-wrap',
+    outbound ? 'chat-bubble-wrap--out' : 'chat-bubble-wrap--in',
+  )
+
+  if (!canInteract) {
+    return <div className={wrapClassName}>{children}</div>
   }
 
   return (
     <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-      <div
-        className={cn(
-          'chat-bubble-wrap',
-          outbound ? 'chat-bubble-wrap--out' : 'chat-bubble-wrap--in',
-        )}
-        onContextMenu={openFromContext}
-      >
+      <div className={wrapClassName} onContextMenu={openFromContext}>
         {children}
         <div className="chat-bubble__actions">
           <DropdownMenuTrigger

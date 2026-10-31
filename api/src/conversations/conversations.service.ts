@@ -1585,6 +1585,7 @@ export class ConversationsService {
         assigned_user_label: assignedUserLabel,
         automation_touched_at:
           activeConversation.automation_touched_at?.toISOString() ?? null,
+        whatsapp_line_id: activeConversation.whatsapp_line_id ?? null,
         line_label:
           String(activeConversation.whatsapp_line?.label ?? '').trim() || null,
         line_display_phone:

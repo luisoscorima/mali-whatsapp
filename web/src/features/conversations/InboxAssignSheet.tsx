@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/ui/shadcn/dialog'
+import { WaBackButton, WaBackHeading } from '@/shared/ui/shell/WaBackLink'
 import { chatSecondaryLabel } from './whatsappIdentity'
 import {
   InboxAssigneePicker,
@@ -25,6 +26,7 @@ type InboxAssignSheetProps = {
   loading: boolean
   busy: boolean
   onSelect: (assignedUserId: number | null) => void | Promise<boolean>
+  onBack?: () => void
 }
 
 /** Overlay one-click para asignar desde lista / ⋮ (mejor que popover anclado en móvil). */
@@ -39,15 +41,30 @@ export function InboxAssignSheet({
   loading,
   busy,
   onSelect,
+  onBack,
 }: InboxAssignSheetProps) {
+  const titleBlock = (
+    <>
+      <DialogTitle>Asignar asesor</DialogTitle>
+      <DialogDescription>
+        {heading} · {chatSecondaryLabel(phone)}
+      </DialogDescription>
+    </>
+  )
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[min(96vw,380px)]">
         <DialogHeader>
-          <DialogTitle>Asignar chat</DialogTitle>
-          <DialogDescription>
-            {heading} · {chatSecondaryLabel(phone)}
-          </DialogDescription>
+          {onBack ? (
+            <WaBackHeading
+              back={<WaBackButton onClick={onBack} label="Atrás" />}
+            >
+              {titleBlock}
+            </WaBackHeading>
+          ) : (
+            titleBlock
+          )}
         </DialogHeader>
         <DialogBody className="p-0">
           <InboxAssigneePicker

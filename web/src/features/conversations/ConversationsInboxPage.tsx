@@ -192,6 +192,7 @@ type AssignContext = {
   heading: string
   phone: string
   assignedUserId: number | null
+  returnToActions?: boolean
 }
 
 type LeadStatusContext = {
@@ -202,6 +203,7 @@ type LeadStatusContext = {
   leadStatusId: number | null
   leadStatusLabel: string | null
   category?: string | null
+  returnToActions?: boolean
 }
 
 const INBOX_POLL_MS = 8000
@@ -343,6 +345,9 @@ function ProfileBlock({
   assigneesLoading,
   assignSaving,
   leadStatusBusy,
+  canSwitchLine,
+  lineSwitchBusy,
+  onSwitchLine,
   onAssigneeOpenChange,
   onAssign,
   onLeadStatus,
@@ -360,6 +365,9 @@ function ProfileBlock({
   assigneesLoading: boolean
   assignSaving: boolean
   leadStatusBusy: boolean
+  canSwitchLine: boolean
+  lineSwitchBusy: boolean
+  onSwitchLine: () => void
   onAssigneeOpenChange: (open: boolean) => void
   onAssign: (assignedUserId: number | null) => boolean | Promise<boolean>
   onLeadStatus: (statusId: number) => boolean | Promise<boolean>
@@ -473,47 +481,85 @@ function ProfileBlock({
             {detail.user_service_window_open ? <WindowClockIcon /> : <InboxHeaderLockIcon />}
             {detail.user_service_window_open ? 'Abierta' : 'Cerrada'}
           </span>
-          <div className="inbox-chat-header-customer">
-            <div className="inbox-chat-heading-row">
-              <h1 className={`inbox-chat-heading${isWaAlias ? ' muted' : ''}`}>
-                {heading}
-              </h1>
-              {canOpenContact ? (
-                <button
-                  type="button"
-                  className="inbox-chat-contact-icon-btn"
-                  title={contactActionLabel}
-                  aria-label={contactActionLabel}
-                  onClick={onOpenContact}
+          {canOpenContact ? (
+            <button
+              type="button"
+              className="inbox-chat-header-customer is-interactive"
+              title={contactActionLabel}
+              aria-label={contactActionLabel}
+              onClick={onOpenContact}
+            >
+              <span className="inbox-chat-heading-row">
+                <span
+                  role="heading"
+                  aria-level={1}
+                  className={`inbox-chat-heading${isWaAlias ? ' muted' : ''}`}
                 >
+                  {heading}
+                </span>
+                <span className="inbox-chat-contact-icon-btn" aria-hidden>
                   <ContactSheetIcon mode={contactMode} />
-                </button>
-              ) : null}
+                </span>
+              </span>
+              <span className="inbox-chat-person-phone">
+                {chatSecondaryLabel(detail.conversation.phone)}
+              </span>
+            </button>
+          ) : (
+            <div className="inbox-chat-header-customer">
+              <div className="inbox-chat-heading-row">
+                <h1 className={`inbox-chat-heading${isWaAlias ? ' muted' : ''}`}>
+                  {heading}
+                </h1>
+              </div>
+              <p className="inbox-chat-person-phone">
+                {chatSecondaryLabel(detail.conversation.phone)}
+              </p>
             </div>
-            <p className="inbox-chat-person-phone">
-              {chatSecondaryLabel(detail.conversation.phone)}
-            </p>
-          </div>
+          )}
         </div>
       </section>
 
-      <section
-        className="inbox-chat-header-context inbox-chat-header-context--line"
-        aria-label="Línea de atención"
-      >
-        <span className="inbox-chat-header-context-icon">
-          <InboxWhatsAppIcon size={20} />
-        </span>
-        <span className="inbox-chat-header-context-copy">
-          <span className="inbox-chat-header-context-label">Línea de atención</span>
-          <span className="inbox-chat-header-context-value">{lineName || 'Sin línea'}</span>
-          {detail.conversation.line_display_phone ? (
-            <span className="inbox-chat-header-context-detail">
-              {displayPhoneNumber(detail.conversation.line_display_phone)}
-            </span>
-          ) : null}
-        </span>
-      </section>
+      {canSwitchLine ? (
+        <button
+          type="button"
+          className="inbox-chat-header-context inbox-chat-header-context--line is-interactive"
+          aria-label="Cambiar de línea de atención"
+          disabled={lineSwitchBusy}
+          onClick={onSwitchLine}
+        >
+          <span className="inbox-chat-header-context-icon">
+            <InboxWhatsAppIcon size={20} />
+          </span>
+          <span className="inbox-chat-header-context-copy">
+            <span className="inbox-chat-header-context-label">Línea de atención</span>
+            <span className="inbox-chat-header-context-value">{lineName || 'Sin línea'}</span>
+            {detail.conversation.line_display_phone ? (
+              <span className="inbox-chat-header-context-detail">
+                {displayPhoneNumber(detail.conversation.line_display_phone)}
+              </span>
+            ) : null}
+          </span>
+        </button>
+      ) : (
+        <section
+          className="inbox-chat-header-context inbox-chat-header-context--line"
+          aria-label="Línea de atención"
+        >
+          <span className="inbox-chat-header-context-icon">
+            <InboxWhatsAppIcon size={20} />
+          </span>
+          <span className="inbox-chat-header-context-copy">
+            <span className="inbox-chat-header-context-label">Línea de atención</span>
+            <span className="inbox-chat-header-context-value">{lineName || 'Sin línea'}</span>
+            {detail.conversation.line_display_phone ? (
+              <span className="inbox-chat-header-context-detail">
+                {displayPhoneNumber(detail.conversation.line_display_phone)}
+              </span>
+            ) : null}
+          </span>
+        </section>
+      )}
 
       {canAssign ? (
         <Popover
@@ -604,6 +650,7 @@ function ProfileBlock({
               category={category}
               assignableSegments={assignableSegments}
               currentSegmentSlugs={currentSlugs}
+              accordion={false}
               onChanged={onSegmentsChanged}
             />
           </PopoverContent>
@@ -795,6 +842,7 @@ type InboxDetail = {
     assigned_user_id: number | null
     assigned_user_label: string | null
     automation_touched_at: string | null
+    whatsapp_line_id?: number | null
     line_label?: string | null
     line_display_phone?: string | null
     line_program?: string | null
@@ -1216,13 +1264,14 @@ export function ConversationsInboxPage() {
   const canSendTemplate = userHasPermission(user, PERMISSION.TEMPLATES_SEND_FROM_CHAT)
   const { confirm, confirmDialog } = useConfirmDialog()
   const categoryScope = useCategoryScope()
-  const { openContactChat, linePickerDialog } = useOpenContactChat({
+  const { openContactChat, linePickerDialog, busy: openChatBusy } = useOpenContactChat({
     categoryQuery: categoryScope.query,
   })
   const openContactChatRef = useRef(openContactChat)
   openContactChatRef.current = openContactChat
   const [list, setList] = useState<InboxListResult | null>(null)
   const [inboxLines, setInboxLines] = useState<InboxLineOption[]>([])
+  const [authorizedOpenLines, setAuthorizedOpenLines] = useState<InboxLineOption[]>([])
   const [serviceReplies, setServiceReplies] = useState<ServiceReplyQuota | null>(null)
   const [detail, setDetail] = useState<InboxDetail | null>(null)
   const [error, setError] = useState('')
@@ -1261,6 +1310,7 @@ export function ConversationsInboxPage() {
   const listRequestIdRef = useRef(0)
   const detailRequestIdRef = useRef(0)
   const listInFlightRef = useRef(false)
+  const reopeningActionsRef = useRef(false)
   const listAbortRef = useRef<AbortController | null>(null)
   const quotaRequestIdRef = useRef(0)
   const listAreaRef = useRef<string | null>(null)
@@ -1396,6 +1446,26 @@ export function ConversationsInboxPage() {
       cancelled = true
     }
   }, [categoryScope.query, user?.area])
+
+  useEffect(() => {
+    let cancelled = false
+    void apiClient
+      .get<InboxLineOption[]>('/api/conversations/open-lines')
+      .then((result) => {
+        if (cancelled) return
+        if (!result.ok) {
+          setAuthorizedOpenLines([])
+          return
+        }
+        setAuthorizedOpenLines(result.data)
+      })
+      .catch(() => {
+        if (!cancelled) setAuthorizedOpenLines([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [user?.area])
 
   useEffect(() => {
     if (lineFilter == null) return
@@ -1927,11 +1997,13 @@ export function ConversationsInboxPage() {
 
   function openAssignFromActions(ctx: ChatActionsContext) {
     if (!ctx.conversationId || ctx.conversationId <= 0) return
+    setActionsOpen(false)
     openAssignSheet({
       conversationId: ctx.conversationId,
       heading: ctx.heading,
       phone: ctx.phone,
       assignedUserId: ctx.assignedUserId,
+      returnToActions: true,
     })
   }
 
@@ -1941,6 +2013,7 @@ export function ConversationsInboxPage() {
 
   function openLeadStatusFromActions(ctx: ChatActionsContext) {
     if (!ctx.contactId) return
+    setActionsOpen(false)
     openLeadStatusSheet({
       contactId: ctx.contactId,
       conversationId: ctx.conversationId,
@@ -1949,7 +2022,15 @@ export function ConversationsInboxPage() {
       leadStatusId: ctx.leadStatusId,
       leadStatusLabel: ctx.leadStatusLabel,
       category: detail?.conversation.line_program || 'general',
+      returnToActions: true,
     })
+  }
+
+  function backToChatActions() {
+    reopeningActionsRef.current = true
+    setAssignContext(null)
+    setLeadStatusContext(null)
+    setActionsOpen(true)
   }
 
   function openContactSheet(opts: {
@@ -2256,21 +2337,26 @@ export function ConversationsInboxPage() {
       notify.error(result.error)
       return false
     }
+    const fromActions = leadStatusContext?.returnToActions
     setLeadStatusContext(null)
     notify.success(
       result.data.lead_status?.label
         ? `Estado: ${result.data.lead_status.label}`
         : 'Estado actualizado',
     )
-    setActionsContext((prev) =>
-      prev
-        ? {
-            ...prev,
-            leadStatusId: result.data.lead_status_id,
-            leadStatusLabel: result.data.lead_status?.label ?? null,
-          }
-        : prev,
-    )
+    if (fromActions) {
+      setActionsContext(null)
+    } else {
+      setActionsContext((prev) =>
+        prev
+          ? {
+              ...prev,
+              leadStatusId: result.data.lead_status_id,
+              leadStatusLabel: result.data.lead_status?.label ?? null,
+            }
+          : prev,
+      )
+    }
     if (selectedId) void loadDetail(selectedId)
     void loadList()
     return true
@@ -2406,6 +2492,31 @@ export function ConversationsInboxPage() {
   const canAssign =
     detail?.can_assign_conversations ?? list?.can_assign_conversations ?? false
 
+  const canSwitchLine =
+    Boolean(detail?.conversation.contact_id) &&
+    userHasPermission(user, PERMISSION.CONVERSATIONS_MANAGE) &&
+    authorizedOpenLines.length > 1
+
+  async function onSwitchLine() {
+    if (!detail || !canSwitchLine || openChatBusy) return
+    const contactId = detail.conversation.contact_id
+    if (!contactId) return
+    const currentId = detail.conversation.id
+    const result = await openContactChat(contactId, {
+      categoryQuery: '',
+      currentLineId: detail.conversation.whatsapp_line_id ?? null,
+      title: 'Abrir en otra línea',
+      description: 'Elige la línea de atención a la que quieres ir.',
+      navigateTo: (id) => {
+        if (id === currentId) return
+        navigate(conversationPath(id))
+      },
+    })
+    if (result === 'same') {
+      notify.info('Ya estás en esta línea')
+    }
+  }
+
   const canOpenListContact = (contactId: number | null | undefined, _phone: string | null) =>
     contactId ? userCanUpdateContacts(user) : userCanCreateContacts(user)
 
@@ -2444,7 +2555,9 @@ export function ConversationsInboxPage() {
       notify.error(result.error)
       return false
     }
+    const fromActions = assignContext?.returnToActions
     setAssignContext(null)
+    if (fromActions) setActionsContext(null)
     notify.success(
       assignedUserId == null ? 'Chat sin asignar' : 'Chat asignado',
     )
@@ -3306,7 +3419,7 @@ export function ConversationsInboxPage() {
                             )
                           }
                         >
-                          Asignar chat
+                          Asignar asesor
                         </ContextMenuItem>
                       ) : null}
                       {item.contact_id ? (
@@ -3447,6 +3560,9 @@ export function ConversationsInboxPage() {
                   assigneesLoading={assigneesLoading}
                   assignSaving={assignSaving}
                   leadStatusBusy={leadStatusBusy}
+                  canSwitchLine={canSwitchLine}
+                  lineSwitchBusy={openChatBusy}
+                  onSwitchLine={() => void onSwitchLine()}
                   onAssigneeOpenChange={setAssigneePickerOpen}
                   onAssign={onAssign}
                   onLeadStatus={onLeadStatus}
@@ -3596,7 +3712,9 @@ export function ConversationsInboxPage() {
           open={actionsOpen}
           onOpenChange={(open) => {
             setActionsOpen(open)
-            if (!open) setActionsContext(null)
+            if (!open && !assignContext?.returnToActions && !leadStatusContext?.returnToActions) {
+              setActionsContext(null)
+            }
           }}
           conversationId={actionsContext.conversationId}
           heading={actionsContext.heading}
@@ -3682,7 +3800,15 @@ export function ConversationsInboxPage() {
         <InboxAssignSheet
           open={Boolean(assignContext)}
           onOpenChange={(open) => {
-            if (!open) setAssignContext(null)
+            if (!open) {
+              const fromActions = assignContext.returnToActions
+              setAssignContext(null)
+              if (reopeningActionsRef.current) {
+                reopeningActionsRef.current = false
+                return
+              }
+              if (fromActions) setActionsContext(null)
+            }
           }}
           heading={assignContext.heading}
           phone={assignContext.phone}
@@ -3694,6 +3820,9 @@ export function ConversationsInboxPage() {
           onSelect={(assignedUserId) =>
             onAssign(assignedUserId, assignContext.conversationId)
           }
+          onBack={
+            assignContext.returnToActions ? () => backToChatActions() : undefined
+          }
         />
       ) : null}
 
@@ -3701,7 +3830,15 @@ export function ConversationsInboxPage() {
         <InboxLeadStatusSheet
           open={Boolean(leadStatusContext)}
           onOpenChange={(open) => {
-            if (!open) setLeadStatusContext(null)
+            if (!open) {
+              const fromActions = leadStatusContext.returnToActions
+              setLeadStatusContext(null)
+              if (reopeningActionsRef.current) {
+                reopeningActionsRef.current = false
+                return
+              }
+              if (fromActions) setActionsContext(null)
+            }
           }}
           heading={leadStatusContext.heading}
           phone={leadStatusContext.phone}
@@ -3709,6 +3846,11 @@ export function ConversationsInboxPage() {
           currentStatusLabel={leadStatusContext.leadStatusLabel}
           busy={leadStatusBusy}
           onSelect={onLeadStatus}
+          onBack={
+            leadStatusContext.returnToActions
+              ? () => backToChatActions()
+              : undefined
+          }
         />
       ) : null}
 

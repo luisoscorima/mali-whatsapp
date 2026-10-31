@@ -618,8 +618,10 @@ html[data-theme='dark'] .inbox-layout-wa {
   align-self: flex-end;
 }
 
-.chat-bubble-wrap .chat-bubble {
-  max-width: 100%;
+/* El tope de ancho vive en el wrap; el globo no debe reaplicar 85%. */
+.inbox-layout-wa .chat-bubble-wrap .chat-bubble {
+  max-width: none;
+  width: 100%;
 }
 
 .chat-bubble__actions {
@@ -1300,6 +1302,40 @@ html[data-theme='dark'] .inbox-lead-score-badge--mid {
   min-width: 0;
 }
 
+button.inbox-chat-header-customer.is-interactive {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.inbox-chat-header-customer.is-interactive:hover,
+button.inbox-chat-header-customer.is-interactive:focus-visible {
+  background: color-mix(in srgb, var(--surface-strong) 55%, transparent);
+}
+
+button.inbox-chat-header-customer.is-interactive:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button.inbox-chat-header-customer.is-interactive:hover .inbox-chat-contact-icon-btn,
+button.inbox-chat-header-customer.is-interactive:focus-visible .inbox-chat-contact-icon-btn {
+  color: var(--ink);
+}
+
+button.inbox-chat-header-customer .inbox-chat-person-phone {
+  display: block;
+}
+
 .inbox-chat-window-pill {
   display: inline-flex;
   flex: 0 0 auto;
@@ -1568,13 +1604,7 @@ button.inbox-chat-header-context.is-interactive:focus-visible {
   border-radius: 0.375rem;
   background: transparent;
   color: var(--muted);
-  cursor: pointer;
-}
-
-.inbox-chat-contact-icon-btn:hover,
-.inbox-chat-contact-icon-btn:focus-visible {
-  color: var(--ink);
-  background: var(--surface);
+  pointer-events: none;
 }
 
 .inbox-chat-header-identity {

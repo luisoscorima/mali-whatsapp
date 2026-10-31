@@ -328,66 +328,84 @@ export function ContactForm({
         </label>
       ) : null}
 
-      <div className="space-y-3">
-        <p className="text-sm font-medium">
+      <details
+        className="text-sm"
+        defaultOpen={
+          mode === 'create' ||
+          applicableDefs.some(
+            (d) => d.required && !(initial.attributes[d.slug] ?? '').trim(),
+          )
+        }
+      >
+        <summary className="cursor-pointer font-medium">
           Atributos{' '}
-          <span className="font-normal text-muted">(opcional)</span>
-        </p>
-        {applicableDefs.length === 0 ? (
-          <p className="text-sm text-muted">
-            {selectedSegments.length === 0 && mode === 'create'
-              ? 'Selecciona segmentos para ver atributos específicos.'
-              : 'No hay campos definidos.'}
-          </p>
-        ) : (
-          attributeGroups.map((group) => (
-            <div key={group.key} className="space-y-3">
-              {showCategory ? <p className="text-sm font-medium">{group.label}</p> : null}
-              {group.items.map((def) => (
-            <label key={`${def.category || 'general'}:${def.slug}:${def.segment_slug ?? ''}`} className="block text-sm">
-              <span className="text-muted">
-                {def.label}
-                {def.segment_slug ? ` · ${def.segment_slug}` : ''}
-                {def.required ? ' *' : ''}
-              </span>
-              {def.field_type === 'select' ? (
-                <select
-                  required={def.required && !disabled}
-                  disabled={disabled}
-                  value={attributes[def.slug] ?? ''}
-                  onChange={(e) => setAttribute(def.slug, e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
-                >
-                  <option value="">{def.required ? '—' : ''}</option>
-                  {(def.options ?? []).map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                  {attributes[def.slug] &&
-                  !(def.options ?? []).includes(attributes[def.slug]) ? (
-                    <option value={attributes[def.slug]}>
-                      {attributes[def.slug]}
-                    </option>
-                  ) : null}
-                </select>
-              ) : (
-                <input
-                  type={inputTypeForField(def.field_type)}
-                  maxLength={500}
-                  required={def.required && !disabled}
-                  disabled={disabled}
-                  value={attributes[def.slug] ?? ''}
-                  onChange={(e) => setAttribute(def.slug, e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
-                />
-              )}
-            </label>
-              ))}
-            </div>
-          ))
-        )}
-      </div>
+          <span className="font-normal text-muted">
+            (opcional
+            {applicableDefs.length > 0 ? ` · ${applicableDefs.length}` : ''})
+          </span>
+        </summary>
+        <div className="mt-3 space-y-3">
+          {applicableDefs.length === 0 ? (
+            <p className="text-muted">
+              {selectedSegments.length === 0 && mode === 'create'
+                ? 'Selecciona segmentos para ver atributos específicos.'
+                : 'No hay campos definidos.'}
+            </p>
+          ) : (
+            attributeGroups.map((group) => (
+              <div key={group.key} className="space-y-3">
+                {showCategory ? (
+                  <p className="font-medium">{categoryLabel(group.key)}</p>
+                ) : null}
+                {group.items.map((def) => (
+                  <label
+                    key={`${def.category || 'general'}:${def.slug}:${def.segment_slug ?? ''}`}
+                    className="block"
+                  >
+                    <span className="text-muted">
+                      {def.label}
+                      {def.segment_slug ? ` · ${def.segment_slug}` : ''}
+                      {def.required ? ' *' : ''}
+                    </span>
+                    {def.field_type === 'select' ? (
+                      <select
+                        required={def.required && !disabled}
+                        disabled={disabled}
+                        value={attributes[def.slug] ?? ''}
+                        onChange={(e) => setAttribute(def.slug, e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
+                      >
+                        <option value="">{def.required ? '—' : ''}</option>
+                        {(def.options ?? []).map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                        {attributes[def.slug] &&
+                        !(def.options ?? []).includes(attributes[def.slug]) ? (
+                          <option value={attributes[def.slug]}>
+                            {attributes[def.slug]}
+                          </option>
+                        ) : null}
+                      </select>
+                    ) : (
+                      <input
+                        type={inputTypeForField(def.field_type)}
+                        maxLength={500}
+                        required={def.required && !disabled}
+                        disabled={disabled}
+                        value={attributes[def.slug] ?? ''}
+                        onChange={(e) => setAttribute(def.slug, e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
+                      />
+                    )}
+                  </label>
+                ))}
+              </div>
+            ))
+          )}
+        </div>
+      </details>
 
       <div className="flex flex-wrap items-center gap-2">
         <button

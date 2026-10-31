@@ -128,6 +128,7 @@ export function InboxChatActionsDialog({
                 category={category}
                 currentSegmentSlugs={currentSegmentSlugs}
                 busySlug={segmentBusy}
+                accordion
                 onToggle={(slug) => void toggleAssignableSegment(slug)}
               />
             </div>
@@ -198,12 +199,9 @@ export function InboxChatActionsDialog({
                 type="button"
                 variant="secondary"
                 className="w-full justify-start"
-                onClick={() => {
-                  onAssign()
-                  onOpenChange(false)
-                }}
+                onClick={() => onAssign()}
               >
-                Asignar chat
+                Asignar asesor
               </Button>
             ) : null}
             {hasConversation && contactId && onOpenLeadStatus ? (
@@ -211,10 +209,7 @@ export function InboxChatActionsDialog({
                 type="button"
                 variant="secondary"
                 className="w-full justify-start"
-                onClick={() => {
-                  onOpenLeadStatus()
-                  onOpenChange(false)
-                }}
+                onClick={() => onOpenLeadStatus()}
               >
                 Estado del lead
                 {leadStatusLabel ? (

@@ -38,10 +38,17 @@ type UseOpenContactChatOptions = {
 type OpenContactChatOptions = {
   navigateTo?: OpenChatNavigate
   onCancel?: () => void
+  /** Sobrescribe el filtro de categorías del hook ('' = todas las autorizadas). */
+  categoryQuery?: string
+  /** Línea del chat actual; se marca en el picker y evita reabrir la misma. */
+  currentLineId?: number | null
+  title?: string
+  description?: string
 }
 
 /**
  * Abre o crea el chat de un contacto eligiendo línea cuando hay varias.
+ * Las líneas vienen de `/open-lines` (solo activas y autorizadas al usuario).
  */
 export function useOpenContactChat(options: UseOpenContactChatOptions = {}) {
   const navigate = useNavigate()
@@ -49,6 +56,9 @@ export function useOpenContactChat(options: UseOpenContactChatOptions = {}) {
   const [picker, setPicker] = useState<{
     contactId: number
     lines: OpenChatLine[]
+    currentLineId: number | null
+    title: string
+    description: string
   } | null>(null)
   const pendingNav = useRef<OpenChatNavigate | null>(null)
   const pendingCancel = useRef<(() => void) | null>(null)
@@ -81,21 +91,29 @@ export function useOpenContactChat(options: UseOpenContactChatOptions = {}) {
   }
 
   /**
-   * @returns `'opened'` | `'picking'` | `'failed'`
+   * @returns `'opened'` | `'picking'` | `'failed'` | `'same'`
    */
   async function openContactChat(
     contactId: number,
     openOpts?: OpenContactChatOptions | OpenChatNavigate,
-  ): Promise<'opened' | 'picking' | 'failed'> {
+  ): Promise<'opened' | 'picking' | 'failed' | 'same'> {
     if (!contactId || busy) return 'failed'
     const opts: OpenContactChatOptions =
       typeof openOpts === 'function' ? { navigateTo: openOpts } : openOpts ?? {}
     pendingNav.current = opts.navigateTo ?? null
     pendingCancel.current = opts.onCancel ?? null
+    const currentLineId = opts.currentLineId ?? null
+    const title = opts.title ?? 'Elegir línea'
+    const description =
+      opts.description ?? 'Desde qué número de WhatsApp quieres escribirle.'
     setBusy(true)
+    const categoryQuery =
+      opts.categoryQuery !== undefined
+        ? opts.categoryQuery
+        : options.categoryQuery || ''
     const linesUrl = withCategoryQuery(
       '/api/conversations/open-lines',
-      options.categoryQuery || '',
+      categoryQuery,
     )
     const linesRes = await apiClient.get<OpenChatLine[]>(linesUrl)
     if (!linesRes.ok) {
@@ -112,6 +130,11 @@ export function useOpenContactChat(options: UseOpenContactChatOptions = {}) {
       return 'failed'
     }
     if (lines.length === 1) {
+      if (currentLineId != null && lines[0].id === currentLineId) {
+        setBusy(false)
+        clearPending()
+        return 'same'
+      }
       const id = await ensureConversation(contactId, lines[0].id)
       setBusy(false)
       if (id == null) {
@@ -122,12 +145,18 @@ export function useOpenContactChat(options: UseOpenContactChatOptions = {}) {
       return 'opened'
     }
     setBusy(false)
-    setPicker({ contactId, lines })
+    setPicker({ contactId, lines, currentLineId, title, description })
     return 'picking'
   }
 
   async function chooseLine(lineId: number) {
     if (!picker || busy) return
+    if (picker.currentLineId != null && lineId === picker.currentLineId) {
+      pendingCancel.current = null
+      setPicker(null)
+      clearPending()
+      return
+    }
     setBusy(true)
     const { contactId } = picker
     const id = await ensureConversation(contactId, lineId)
@@ -153,25 +182,38 @@ export function useOpenContactChat(options: UseOpenContactChatOptions = {}) {
     >
       <DialogContent className="w-[min(96vw,420px)]">
         <DialogHeader>
-          <DialogTitle>Elegir línea</DialogTitle>
+          <DialogTitle>{picker?.title ?? 'Elegir línea'}</DialogTitle>
           <DialogDescription>
-            Desde qué número de WhatsApp quieres escribirle.
+            {picker?.description ??
+              'Desde qué número de WhatsApp quieres escribirle.'}
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
           <ul className="space-y-1.5">
-            {picker?.lines.map((line) => (
-              <li key={line.id}>
-                <button
-                  type="button"
-                  disabled={busy}
-                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-left text-sm hover:bg-accent-soft disabled:opacity-60"
-                  onClick={() => void chooseLine(line.id)}
-                >
-                  {lineCaption(line)}
-                </button>
-              </li>
-            ))}
+            {picker?.lines.map((line) => {
+              const isCurrent =
+                picker.currentLineId != null && line.id === picker.currentLineId
+              return (
+                <li key={line.id}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    aria-current={isCurrent ? 'true' : undefined}
+                    className={`w-full rounded-lg border border-line bg-surface px-3 py-2 text-left text-sm hover:bg-accent-soft disabled:opacity-60${
+                      isCurrent ? ' is-active border-accent' : ''
+                    }`}
+                    onClick={() => void chooseLine(line.id)}
+                  >
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span>{lineCaption(line)}</span>
+                      {isCurrent ? (
+                        <span className="muted shrink-0 text-xs">Actual</span>
+                      ) : null}
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
           </ul>
         </DialogBody>
         <DialogFooter>

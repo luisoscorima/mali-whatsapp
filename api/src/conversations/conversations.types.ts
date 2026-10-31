@@ -170,6 +170,7 @@ export type InboxConversation = {
   assigned_user_id: number | null;
   assigned_user_label: string | null;
   automation_touched_at: string | null;
+  whatsapp_line_id: number | null;
   line_label: string | null;
   line_display_phone: string | null;
   line_program: string | null;

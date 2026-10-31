@@ -417,12 +417,10 @@ export function ChatMessageBubble({
     </div>
   )
 
-  if (!showMenu) return bubble
-
   return (
     <ChatMessageBubbleMenu
       outbound={outbound}
-      canInteract
+      canInteract={showMenu}
       hasCopyText={Boolean(copyText)}
       onReply={() => onReply?.(message)}
       onCopy={() => onCopy?.(message)}
