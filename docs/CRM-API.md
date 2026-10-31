@@ -1,5 +1,7 @@
 # CRM API — contrato interno (MALI ONE ↔ WhatsApp)
 
+Contrato HTTP (no es un concepto de UI). Dominios: [CONTACTOS.md](./CONTACTOS.md), [LEADS.md](./LEADS.md), [AREAS.md](./AREAS.md), [CATEGORIAS.md](./CATEGORIAS.md), [LINEAS.md](./LINEAS.md). Índice: [README.md](./README.md).
+
 Fuente de verdad de la **persona** (`people`) y de su **ficha por área** (`contacts`). La captación de Educación es un lead: `contact_origins` más `education_lead_entries`, asociado a la persona y a una categoría (`ca` o `ep`).
 
 MALI ONE es el puesto de trabajo de fichas, leads y líneas. Es dueño del **producto** (membresías, pagos) y del **mailing** (SES). No mantiene una BD paralela de personas ni de leads. El chat sigue en mali-whatsapp.
@@ -142,9 +144,9 @@ Entradas de captación de las mismas tres áreas, con una fila por `education_le
 
 Respuesta: `{ ok: true, data: { items, counts, total, page, limit, pages } }`. Cada entrada incluye clasificación (`new`, `duplicate`, `conflict` o `dismissed`), regla de asignación (`new_number`, `same_advisor`, `reassignable` o `conflict`), `phone` nullable, `whatsapp_user_id`, `wa_username`, snapshot del asesor/estado/último contacto previos, asesor y estado del ciclo actual, `is_current_cycle`, contacto, fuente y fechas. Los ciclos históricos son de solo lectura. `counts` incluye `recent`, `new_number`, `duplicate`, `reassignable`, `conflict`, `in_progress`, `unassigned` y `eligible` (solo números sin historial, sin asesor y con ciclo actual).
 
-Para `organic_wa`, el webhook registra una captación solo si no hay otro origen atribuible al contacto o conversación. El identificador `conversation:{id}` evita duplicados y `first_seen_at` toma la fecha del primer mensaje entrante. La migración `20260923200000_education_organic_origins` incorpora chats históricos de las tres áreas con el mismo criterio; se aplica al desplegar las migraciones, no al consultar el endpoint.
+Para `organic_wa`, el webhook registra una captación solo si la ficha canónica (`educacion`) no tiene otro origen comercial (por `contact_id`, teléfono o BSUID). El identificador `conversation:{id}` evita duplicados y `first_seen_at` toma la fecha del primer mensaje entrante. Detalle de canales, Hub Meta y “Solo contacto” vs chat: [LEADS.md](./LEADS.md).
 
-La ventana de **60 días exactos** compara cada nueva entrada con la última interacción entrante/captación previa del contacto en esa área; un mensaje saliente no amplía la ventana. Sin historial: número nuevo, elegible para reparto automático. Hasta 60 días: mismo asesor/ciclo, salvo conflicto. Más de 60 días: abre ciclo nuevo con el **asesor anterior conservado y pendiente de confirmación o cambio directo**; el estado del lead se reinicia. Nunca se borra una asignación existente como paso intermedio. `convertido`/`venta_exitosa`, o `no_interesado` dentro de 60 días, son las reglas iniciales de conflicto. El estado y la calificación de ciclos anteriores permanecen en el historial.
+La ventana de **60 días exactos** compara cada nueva entrada con la última interacción entrante/captación previa del contacto en Educación; un mensaje saliente no amplía la ventana. Sin historial: número nuevo, elegible para reparto automático. Hasta 60 días: mismo asesor/ciclo, salvo conflicto. Más de 60 días: abre ciclo nuevo con el **asesor anterior conservado y pendiente de confirmación o cambio directo**; el estado del lead se reinicia. Nunca se borra una asignación existente como paso intermedio. `convertido`/`venta_exitosa`, o `no_interesado` dentro de 60 días, son las reglas iniciales de conflicto. El estado y la calificación de ciclos anteriores permanecen en el historial.
 
 ### `GET /api/crm/education/cycles`
 

@@ -1,10 +1,43 @@
-# Configuración Meta (Developers + Business Manager) — WhatsApp Cloud API
+# Meta / WABA
 
-Guía centrada en **integración con Meta**: [developers.facebook.com](https://developers.facebook.com), [business.facebook.com](https://business.facebook.com), tokens, webhooks, estados de solicitudes, y comandos **`curl`** imprescindibles cuando la interfaz de Meta falla o no muestra la opción.
+Cuenta WhatsApp Business, credenciales, webhooks y precios. Setup operativo unificado (antes `CONFIGURACION_META.md`).
 
-La **arquitectura de la app, Docker, Nginx, variables generales y uso del panel** están en **[DESPLIEGUE_PRODUCCION_APP.md](./DESPLIEGUE_PRODUCCION_APP.md)**.
+Histórico: [META-WABA-CHANGELOG.md](./META-WABA-CHANGELOG.md). Relacionado: [LINEAS.md](./LINEAS.md), [LEADS.md](./LEADS.md), [PLANTILLAS.md](./PLANTILLAS.md).
+
+## Modelo rápido
+
+| Pieza | Rol |
+|-------|-----|
+| **WABA** | Cuenta Meta: plantillas, `subscribed_apps`, token compartido. No es el tenant |
+| **Línea** | Phone Number ID bajo un WABA; pertenece a un área (+ categoría) |
+| **Token** | System user o de línea; bóveda Admin o `.env` |
+| **Page token** | Solo Lead Ads Instant Forms (tipo Page, no System User) |
+
+Outbound necesita token + PID. Inbound necesita la app **suscrita** a cada WABA (`subscribed_apps`). Lead Ads usa webhook Page `leadgen` (distinto del webhook WA). Producto Hub: [LEADS.md](./LEADS.md).
+
+## Precios vigentes (Perú, desde 1 oct 2026)
+
+Mercado **Perú** (+51). Tarifas de lista; no se convierten PEN↔USD.
+
+| Categoría | Hasta 30 sep 2026 | Desde 1 oct 2026 |
+| --- | --- | --- |
+| Marketing | USD 0.0703 / PEN 0.2339 | Igual |
+| Utilidad | USD 0.0200 / PEN 0.0665 | USD 0.0300 / PEN 0.0998 |
+| Autenticación | USD 0.0200 / PEN 0.0665 | USD 0.0300 / PEN 0.0998 |
+| Servicio (sin plantilla) | Gratis | USD 0.0300 / PEN 0.0998 después de 1.000/mes por número |
+
+- Cada respuesta de chat/flujo = mensaje de **servicio**; 1.000 gratis por número/mes. Educación: cupo por número (categoría).
+- Plantilla de utilidad se cobra siempre (también en ventana 24 h) y **no** descuenta las 1.000.
+- Ventana 72 h CTWA / botón FB sigue gratis (el contador del inbox no la separa).
+- En app: campañas usan tarifa según fecha del envío (Lima); inbox ⓘ cuenta respuestas del mes entregadas/leídas.
+
+Fuentes Meta: [pricing](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing/?locale=es_LA), [non-template](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing/non-template-messages/?locale=es_LA).
 
 ---
+
+## Setup Meta (Developers + Business Manager)
+
+Arquitectura app / Docker / Nginx: [DESPLIEGUE.md](../DESPLIEGUE.md).
 
 ## Índice
 
@@ -220,7 +253,7 @@ En logs del servidor deberías ver, al contestar en la línea correcta, `entryId
 
 ## 9. Credenciales y mapa Meta → entorno
 
-Resumen alineado con `.env` y panel **`/admin/meta`** (prioridad BD sobre env; ver [DESPLIEGUE_PRODUCCION_APP.md](./DESPLIEGUE_PRODUCCION_APP.md)).
+Resumen alineado con `.env` y panel **`/admin/meta`** (prioridad BD sobre env; ver [DESPLIEGUE.md](../DESPLIEGUE.md)).
 
 | Variable `.env` | Origen en Meta |
 |-----------------|----------------|
@@ -296,7 +329,7 @@ Desde el ecosistema Meta / Business: **WhatsApp Manager** — crear plantillas, 
 | No llegan **mensajes entrantes** pero sí envíos | `subscribed_apps` vacío para esa WABA | [Sección 7](#7-suscribir-la-app-al-waba-subscribed_apps--crítico-para-webhooks) |
 | **210** `A page access token is required` (Lead Ads) | Se usó system user / user token en `/{page-id}/subscribed_apps` | [§16](#16-lead-ads--instant-forms-leadgen): obtener **Page** token y usarlo ahí y en `/admin/meta` |
 | No llegan estados | Webhook, red o suscripción | URL HTTPS, campos `messages`, firma |
-| **132000** / **132001** | Plantilla | [DESPLIEGUE_PRODUCCION_APP.md](./DESPLIEGUE_PRODUCCION_APP.md) |
+| **132000** / **132001** | Plantilla | [DESPLIEGUE.md](../DESPLIEGUE.md) |
 
 ---
 
@@ -333,7 +366,7 @@ Desde el ecosistema Meta / Business: **WhatsApp Manager** — crear plantillas, 
 
 ## 16. Lead Ads / Instant Forms (`leadgen`)
 
-Esto es **distinto** de CTWA (Click-to-WhatsApp). Los Instant Forms no llegan por el webhook de mensajes WA; usan el objeto **Page** y el campo **`leadgen`**. Producto y operación: [docs/LEADS.md](docs/LEADS.md).
+Esto es **distinto** de CTWA (Click-to-WhatsApp). Los Instant Forms no llegan por el webhook de mensajes WA; usan el objeto **Page** y el campo **`leadgen`**. En el Hub ambos viven bajo la card **Meta**; Instant Form suele ser solo contacto y CTWA contacto + chat (si ella escribe después del form, el canal sigue siendo Instant Form). Producto y operación: [LEADS.md](./LEADS.md) § “Cómo leer el Hub”.
 
 ### Caso de uso en Developers
 
@@ -393,7 +426,7 @@ Si `data` está vacío o no aparece la Página: en Business Manager asigna el ac
 - Pega el **Page** token del paso A (no el system user, no el WhatsApp token).
 - Es **una** Página → **un** token y **un** Page ID. Repite los mismos valores en **`educacion`**, **`educacion_ca`** y **`educacion_ep`**.
 - Respaldo opcional en `.env`: `META_PAGE_ACCESS_TOKEN` / `META_PAGE_ID` (prioridad: Admin/BD sobre env).
-- Detalle: [docs/LEADS.md](./docs/LEADS.md) § “Dónde poner el Page token”.
+- Detalle: [LEADS.md](./LEADS.md) § “Dónde poner el Page token”.
 
 #### Paso C — Suscribir la Página a la app (`leadgen`)
 

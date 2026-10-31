@@ -1,14 +1,12 @@
-# Arranque v2 — MALI WhatsApp
+# Arranque local — MALI WhatsApp
 
-Plataforma **v2** (NestJS + React + Prisma). El panel legacy Express/EJS fue retirado del repositorio.
-
-Ver [`MIGRACION_REACT.md`](MIGRACION_REACT.md).
+Stack: NestJS + React + Prisma + PostgreSQL + Redis. Producto: [README.md](./README.md). Dominios: [docs/README.md](./docs/README.md). Producción: [DESPLIEGUE.md](./DESPLIEGUE.md).
 
 ## Requisitos
 
 - Node.js 20+
 - Docker y Docker Compose
-- `.env` en la raíz (copiar desde `.env.example`)
+- `.env` en la raíz (desde `.env.example`)
 
 ## Docker Compose (recomendado)
 
@@ -42,7 +40,7 @@ npm run dev:api   # terminal 1
 npm run dev:web   # terminal 2
 ```
 
-## Auth JWT
+## Auth
 
 - `POST /api/auth/login` → `{ ok, data: { accessToken, user } }`
 - `GET /api/me` → `Authorization: Bearer <token>`
@@ -53,90 +51,42 @@ JWT_SECRET=...       # obligatorio con REQUIRE_AUTH=true
 JWT_EXPIRES_IN=7d
 ```
 
-## Cliente API (web)
+Cliente web: `web/src/shared/api/` (`apiClient`, `{ ok, data?, error? }`, proxy `/api` y `/health`).
 
-[`web/src/shared/api/`](web/src/shared/api/) — `apiClient`, convención `{ ok, data?, error? }`, proxy `/api` y `/health`.
-
-## Producción v2
-
-`docker-compose.yml` levanta **api + web + postgres + redis** (sin contenedor legacy).
-
-Cutover en **`https://whatsapp.mali.pe`** con la misma BD: ver [`DESPLIEGUE_V2.md`](DESPLIEGUE_V2.md).
-
-Nginx Proxy Manager apunta al servicio **`web`** (`mali-whatsapp-web:80`); nginx interno reenvía `/api`, `/health` y `/webhook` a la API.
-
-## Redis y colas (BullMQ)
-
-La API v2 requiere **Redis** para trabajos en segundo plano:
+## Redis (obligatorio)
 
 | Cola | Trabajos |
 |------|----------|
-| `campaigns` | Envío de campañas, reintentos (auto y encolados) |
-| `maintenance` | Promover programadas, reintentos automáticos, purge bitácora, reanudar cola al arrancar |
+| `campaigns` | Envío y reintentos |
+| `maintenance` | Programadas, purge bitácora, reanudar cola |
 
 ```env
-REDIS_URL=redis://localhost:6379   # host npm local
-REDIS_URL=redis://redis:6379       # Docker Compose
+REDIS_URL=redis://localhost:6379   # host
+REDIS_URL=redis://redis:6379       # Compose
 ```
 
-Con `docker compose -f docker-compose.dev.yml up`, Redis arranca junto a Postgres. Sin Redis la API no procesará campañas ni tareas de mantenimiento.
+Sin Redis la API no procesa campañas ni mantenimiento.
 
 ## Prisma
 
-Esquema en [`api/prisma/schema.prisma`](api/prisma/schema.prisma). En v2 la fuente de verdad es **Prisma Migrate** (no `app/src/db/migrations.js`).
-
-### BD nueva (v2)
-
-Al arrancar la API (`npm run dev:api` o contenedor producción) se ejecutan automáticamente:
-
-1. `prisma migrate deploy` — aplica `api/prisma/migrations/`
-2. `prisma db seed` — crea usuario master si `MASTER_INITIAL_PASSWORD` está en `.env`
-
-Manual:
+Esquema: `api/prisma/schema.prisma`. Al arrancar la API: `prisma migrate deploy` y seed si aplica.
 
 ```bash
 export DATABASE_URL="postgresql://mali_user:CLAVE@localhost:5435/mali_whatsapp"
 npm run prisma:migrate
 npm run prisma:seed
 npm run prisma:generate
+# desarrollo de esquema:
+npm run prisma:migrate:dev
 ```
 
-### BD existente (creada por el panel legacy)
-
-Si la base ya tiene tablas por `migrations.js`, marca la migración inicial como aplicada sin ejecutarla:
+Si la BD ya existía antes de Prisma Migrate y `deploy` falla con «relation already exists»:
 
 ```bash
 cd api
 DATABASE_URL="postgresql://..." npx prisma migrate resolve --applied 20260702120000_init
 ```
 
-Luego usa `prisma migrate deploy` para migraciones futuras.
+## Plantillas (smoke)
 
-### Cambios de esquema (desarrollo)
-
-```bash
-npm run prisma:migrate:dev   # crea migración + aplica en local
-```
-
-```bash
-DATABASE_URL="postgresql://..." npm run prisma:pull   # re-introspect (solo si hace falta)
-npm run prisma:generate
-```
-
-## Siguiente etapa
-
-Etapa 5 — campañas (`CampaignsModule`). Ver [`MIGRACION_REACT.md`](MIGRACION_REACT.md).
-
-## Plantillas WhatsApp (staging)
-
-Requiere credenciales Meta en `.env` (`WHATSAPP_TOKEN_*`, `PHONE_NUMBER_ID_*`, opcional `WABA_ID_*`, `META_APP_ID` para cabeceras media).
-
-1. Inicia sesión en la web v2 y abre **Plantillas**.
-2. **Sincronizar todo** — trae plantillas existentes desde Meta.
-3. **Nueva plantilla** — completa el builder, revisa la vista previa y confirma el envío a Meta.
-4. Tras crear o editar, el estado queda `PENDING` hasta que Meta apruebe o rechace.
-5. Vuelve a sincronizar para actualizar estados y motivos de rechazo.
-
-Validación previa al envío: el formulario valida en cliente y llama `POST /api/templates/validate` antes de crear en Meta.
-
-Definición para campañas (futuro): `GET /api/templates/:id/definition`.
+Credenciales Meta en `.env` o Admin → Meta. En el panel: Plantillas → sincronizar → crear (queda `PENDING` hasta Meta).

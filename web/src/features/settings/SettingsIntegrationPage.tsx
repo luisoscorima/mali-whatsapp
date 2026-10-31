@@ -57,9 +57,9 @@ export function SettingsIntegrationPage() {
           Documentación
         </summary>
         <p className="mt-2">
-          En el repo: <code>CONFIGURACION_META.md</code> (Meta, webhooks),{' '}
-          <code>DESPLIEGUE_PRODUCCION_APP.md</code> y{' '}
-          <code>ARRANQUE_V2.md</code> para el stack v2. La URL pública viene de{' '}
+          En el repo: <code>docs/META-WABA.md</code> (Meta, webhooks),{' '}
+          <code>DESPLIEGUE.md</code> y{' '}
+          <code>ARRANQUE.md</code>. La URL pública viene de{' '}
           <code>APP_BASE_URL</code> en <code>.env</code>.
         </p>
       </details>

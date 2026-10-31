@@ -6,7 +6,7 @@
  *   node scripts/consolidate-education.cjs --apply
  *
  * Sin --apply calcula el mapa dentro de una transacción y la revierte.
- * Las reglas están en docs/REGLAS-CONSOLIDACION-EDUCACION.md.
+ * Las reglas están en docs/CONTACTOS-CHANGELOG.md.
  */
 const { PrismaClient } = require('@prisma/client');
 

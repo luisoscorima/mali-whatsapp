@@ -320,7 +320,7 @@ export function AdminUserFormSheet({
                     ))}
                   </select>
                   <span className="text-xs text-muted">
-                    Detalle de permisos: docs/ROLES-PERMISOS.md
+                    Detalle de permisos: docs/ROLES.md
                   </span>
                 </label>
 

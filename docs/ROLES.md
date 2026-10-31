@@ -1,4 +1,6 @@
-# Roles y permisos (v1)
+# Roles y permisos
+
+Histórico: [ROLES-CHANGELOG.md](./ROLES-CHANGELOG.md). Relacionado: [AREAS.md](./AREAS.md), [CATEGORIAS.md](./CATEGORIAS.md).
 
 Ownership: auth / admin usuarios. Área activa = una a la vez (sin inbox multiárea).
 
@@ -38,30 +40,6 @@ Ver `PermissionCode` en `api/src/auth/roles/permission-codes.ts`.
 | `supervisor` | Supervisor |
 | `coordinador` | Coordinador |
 | `master` | Master (TI) — suele ir con `is_master` |
-
-## Usuarios operativos (seed de migración)
-
-| Email | Rol | Áreas |
-|-------|-----|--------|
-| achumpitasi@mali.pe | supervisor | educacion, educacion_ep |
-| asesordeadmision3@mali.pe | asesor_comercial | educacion, educacion_ca |
-| darias@mali.pe | asesor_comercial | educacion, educacion_ep |
-| ezurita@mali.pe | asesor_comercial | educacion, educacion_ca |
-| gzabalbeascoa@mali.pe | asesor_comercial | educacion, educacion_ep |
-| joropeza@mali.pe | coordinador | educacion, educacion_ca, educacion_ep |
-| kbaumann@mali.pe | asesor_comercial | educacion, educacion_ca, educacion_ep |
-| khuerta@mali.pe | asesor_comercial | educacion, educacion_ca |
-| kvillegas@mali.pe | asesor_comercial | educacion, educacion_ca |
-| lramirez@mali.pe | supervisor | educacion, educacion_ca, educacion_ep |
-| ngonzales@mali.pe | gestor | educacion, educacion_ca, educacion_ep |
-| ocaceres@mali.pe | analista | educacion, educacion_ca, educacion_ep |
-| maguinaga@mali.pe | coordinador | pam |
-| mperez@mali.pe | coordinador | patronato |
-| lgutierrez@mali.pe | coordinador | patronato |
-| czegarra@mali.pe | coordinador | patronato |
-| evelazco@mali.pe | coordinador | patronato |
-
-Primaria = primera área de la lista (o la ya existente si sigue permitida).
 
 ## Fuera de alcance v1
 

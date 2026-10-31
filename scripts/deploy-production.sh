@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Despliegue en producción v2: backup → git pull → rebuild api+web → up → /health.
+# Despliegue en producción: backup → git pull → rebuild api+web → up → /health.
 # Uso en el servidor (~/mali-whatsapp):
 #   ./scripts/deploy-production.sh
 #   ./scripts/deploy-production.sh --no-cache
 #   ./scripts/deploy-production.sh --skip-backup
-#   BRANCH=migrate/v2 ./scripts/deploy-production.sh
+#   BRANCH=main ./scripts/deploy-production.sh
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

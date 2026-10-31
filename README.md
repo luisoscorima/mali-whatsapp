@@ -14,7 +14,7 @@ En producción: **[https://whatsapp.mali.pe](https://whatsapp.mali.pe)**.
 - **Segmentación y atributos:** contactos con segmentos; definiciones de atributos por área; importación CSV/Excel; campañas con exclusiones y variables por contacto.
 - **Seguridad y gobernanza:** Google OAuth `@mali.pe` + JWT, permisos por módulo, bitácora de auditoría con retención configurable, usuarios y áreas desde Admin.
 - **IA asistida (Groq):** respuestas en ventana de 24 h en modo **Bot**; el master activa o desactiva el bot por área desde Ajustes.
-- **Leads multicanal:** Instant Forms (Lead Ads), CTWA, widgets (vía MALI ONE). CRM en `/leads` con orígenes y estados editables. Ver [docs/LEADS.md](docs/LEADS.md).
+- **Leads multicanal:** Meta (Instant Forms + CTWA), TikTok, Widget y links (MALI ONE). Hub `/leads` con card Meta unificada y marca solo-contacto vs chat si ella inicia el hilo. Ver [docs/LEADS.md](docs/LEADS.md).
 
 ## Funcionalidades
 
@@ -54,13 +54,12 @@ En producción: **[https://whatsapp.mali.pe](https://whatsapp.mali.pe)**.
 mali-whatsapp/
   api/                 # NestJS + Prisma + BullMQ
   web/                 # React + Vite + Tailwind
+  docs/                # Dominios de producto (vivo + changelog)
   docker-compose.yml   # Producción: api + web + postgres + redis
   scripts/             # deploy-production.sh, backup-postgres.sh
-  ARRANQUE_V2.md
-  DESPLIEGUE_V2.md
 ```
 
-Arranque local: [ARRANQUE_V2.md](ARRANQUE_V2.md). Producción: [DESPLIEGUE_V2.md](DESPLIEGUE_V2.md).
+Arranque local: [ARRANQUE.md](ARRANQUE.md). Producción: [DESPLIEGUE.md](DESPLIEGUE.md). Producto: [docs/README.md](docs/README.md).
 
 ## Primer arranque
 
@@ -138,31 +137,34 @@ En Meta Developers, suscribe el webhook a **`message_template_status_update`** a
 
 ## Leads Meta (Instant Forms + CTWA)
 
-1. **Instant Forms:** caso de uso Lead Ads + webhook Page `leadgen` ([CONFIGURACION_META.md § 16](CONFIGURACION_META.md)).
+1. **Instant Forms:** caso de uso Lead Ads + webhook Page `leadgen` ([docs/META-WABA.md](docs/META-WABA.md) § Lead Ads).
 2. **CTWA:** pauta Click-to-WhatsApp; al llegar `referral` se registra el anuncio y se vincula la conversación.
-3. Operación en **Leads** (`/leads`): ownership, rutas form→área, backfill y pendientes en [docs/LEADS.md](docs/LEADS.md).
+3. Operación en **Leads** (`/leads`): ownership, Meta unificada, rutas form→categoría, backfill y pendientes en [docs/LEADS.md](docs/LEADS.md).
 
 La **inversión de la pauta** (spend Ads) no se muestra aquí; el costo en detalle de campaña WA es el del **envío masivo de plantillas** (WABA).
 
-## Guía de producción y operación
+## Documentación de producto
 
-- **[DESPLIEGUE_PRODUCCION_APP.md](DESPLIEGUE_PRODUCCION_APP.md)** — arquitectura, Docker, Nginx, `.env`, roles, go-live
-- **[CONFIGURACION_META.md](CONFIGURACION_META.md)** — Developers, Business Manager, webhooks, `subscribed_apps`
-- **[Mejoras.md](Mejoras.md)** — observaciones de usuarios y estado de implementación
-- **[ARRANQUE_V2.md](ARRANQUE_V2.md)** / **[DESPLIEGUE_V2.md](DESPLIEGUE_V2.md)** — arranque local y despliegue v2
+Índice por dominio (vivo + changelog): **[docs/README.md](docs/README.md)**.
+
+## Guía de operación
+
+- **[ARRANQUE.md](ARRANQUE.md)** — local (Compose / npm)
+- **[DESPLIEGUE.md](DESPLIEGUE.md)** — producción (Docker, NPM, `.env`, health)
+- **[docs/META-WABA.md](docs/META-WABA.md)** — WABA, webhooks, Lead Ads, precios
+- **[docs/README.md](docs/README.md)** — resto de dominios de producto
 
 ### Publicación (resumen)
 
-- **URL:** `https://whatsapp.mali.pe` (raíz del subdominio; sin subruta)
-- **Proxy:** host → contenedor app en puerto `3000`
+- **URL:** `https://whatsapp.mali.pe` (sin subruta)
+- **Proxy:** NPM → `mali-whatsapp-web:80` (nginx interno → api `:4000`)
 - **`.env`:** `BASE_PATH=` (vacío), `APP_BASE_URL=https://whatsapp.mali.pe`
 - **Webhook Meta:** `https://whatsapp.mali.pe/webhook`
 
 ## Notas operativas
 
-- La **IA** requiere `GROQ_API_KEY` y bot habilitado en el área; la conversación debe estar en modo `bot`.
-- Los envíos masivos usan plantillas **aprobadas**; el idioma debe coincidir con una traducción existente en WhatsApp Manager.
-- En cuentas de prueba de Meta solo se puede enviar a números permitidos.
-- Estados `sent` / `delivered` / `read` / `failed` llegan por `/webhook`.
-- Campañas grandes se procesan con **Redis/BullMQ** (cola de envío y reintentos).
-- **SIGE** (matrícula / conversión por campaña) y spend de pauta Ads siguen en backlog; ver [Mejoras.md](Mejoras.md).
+- La **IA** requiere `GROQ_API_KEY` y bot habilitado en el área; la conversación en modo `bot`.
+- Envíos masivos: plantillas **aprobadas**; idioma alineado con WhatsApp Manager.
+- Estados `sent` / `delivered` / `read` / `failed` por `/webhook`.
+- Campañas: **Redis/BullMQ**.
+- Backlog conocido: SIGE (matrícula/conversión por campaña), spend de pauta Ads.

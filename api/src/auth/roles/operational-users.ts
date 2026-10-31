@@ -1,7 +1,7 @@
 import type { BusinessArea } from '../../config/areas';
 import type { RoleSlug } from './role-permissions';
 
-/** Usuarios operativos a migrar (docs/ROLES-PERMISOS.md). */
+/** Usuarios operativos a migrar (docs/ROLES.md). */
 export const OPERATIONAL_ROLE_USERS: {
   email: string;
   role: RoleSlug;
