@@ -47,6 +47,14 @@ const HUB_CARDS: HubCard[] = [
     listLink: true,
   },
   {
+    key: 'web_button',
+    title: 'Botones web',
+    blurb: 'WhatsApp desde el sitio (wa.me / WordPress)',
+    to: '/leads?channel=web_button',
+    channels: ['web_button'],
+    listLink: true,
+  },
+  {
     key: 'mali_one_link',
     title: 'Links / QR MALI ONE',
     blurb: 'Acortador, QR y WhatsApp prellenado',
@@ -76,6 +84,7 @@ const CHANNEL_FILTER_OPTIONS = [
   { value: '', label: 'Todos' },
   { value: 'meta', label: 'Meta' },
   { value: 'widget', label: 'Widget web' },
+  { value: 'web_button', label: 'Botones web' },
   { value: 'mali_one_link', label: 'Links / QR MALI ONE' },
   { value: 'tiktok', label: 'TikTok' },
   { value: 'organic_wa', label: 'WhatsApp orgánico' },

@@ -2,6 +2,12 @@
 
 Vigente: [LEADS.md](./LEADS.md).
 
+## 2026-10-30 — Canal Botones web (`web_button`)
+
+- Card Hub y filtro aparte de Widget / Links / Orgánico.
+- Match: `ref:web_*` o prefijo «Hola MALI Educación! Vengo desde la web».
+- Backfill `POST /api/leads/web-buttons/backfill` y script `leads-backfill-web-buttons.cjs`.
+
 ## 2026-10-30 — Hub Meta y «Solo contacto»
 
 - Card **Meta** unifica Instant Forms + CTWA; canal de fila sigue separado.

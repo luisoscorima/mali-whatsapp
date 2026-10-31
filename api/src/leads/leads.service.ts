@@ -47,6 +47,7 @@ import {
   payloadWithStandardCurso,
 } from './lead-curso.util';
 import { matchMaliOneWhatsappLink } from './mali-one-link-match.util';
+import { matchWebButtonWhatsapp } from './web-button-match.util';
 import {
   type LeadChatEnrichInput,
   type ConversationHint,
@@ -565,6 +566,155 @@ export class LeadsService implements OnModuleInit {
       scanned: origins.length,
       matched,
       ambiguous,
+      updated: apply ? updated : 0,
+      entries_updated: apply ? entriesUpdated : 0,
+      sample,
+    };
+  }
+
+  /**
+   * Pasa a web_button los orgánicos cuyo primer inbound es botón WP
+   * (`ref:web_*` o prefijo «Vengo desde la web»). Sin ciclos/Prospectia.
+   */
+  async backfillOrganicWebButtons(opts?: { apply?: boolean }): Promise<{
+    scanned: number;
+    matched: number;
+    updated: number;
+    entries_updated: number;
+    sample: Array<{
+      area: string;
+      conversation_id: number;
+      slug: string;
+      match: string;
+      source_label: string;
+    }>;
+  }> {
+    const apply = Boolean(opts?.apply);
+    const origins = await this.prisma.contact_origins.findMany({
+      where: {
+        channel: 'organic_wa',
+        conversation_id: { not: null },
+        area: { in: this.educationAreas() },
+      },
+      select: { id: true, area: true, conversation_id: true },
+    });
+    const byConversation = new Map<
+      number,
+      { id: number; body_text: string | null }
+    >();
+    const conversationIds = origins
+      .map((row) => row.conversation_id)
+      .filter((id): id is number => id != null);
+    for (let i = 0; i < conversationIds.length; i += 400) {
+      const chunk = conversationIds.slice(i, i + 400);
+      const rows = await this.prisma.$queryRaw<
+        Array<{ conversation_id: number; id: number; body_text: string | null }>
+      >(Prisma.sql`
+        SELECT DISTINCT ON (conversation_id) conversation_id, id, body_text
+        FROM chat_messages
+        WHERE direction = 'inbound'
+          AND conversation_id IN (${Prisma.join(chunk)})
+        ORDER BY conversation_id, created_at ASC, id ASC
+      `);
+      for (const row of rows) byConversation.set(row.conversation_id, row);
+    }
+
+    let matched = 0;
+    let updated = 0;
+    let entriesUpdated = 0;
+    const sample: Array<{
+      area: string;
+      conversation_id: number;
+      slug: string;
+      match: string;
+      source_label: string;
+    }> = [];
+
+    for (const origin of origins) {
+      const conversationId = origin.conversation_id;
+      if (conversationId == null) continue;
+      const first = byConversation.get(conversationId);
+      const hit = matchWebButtonWhatsapp(first?.body_text ?? '');
+      if (!hit) continue;
+      matched += 1;
+      const sourceLabel = hit.source_label.slice(0, 200);
+      if (sample.length < 30) {
+        sample.push({
+          area: origin.area,
+          conversation_id: conversationId,
+          slug: hit.slug,
+          match: hit.match,
+          source_label: sourceLabel,
+        });
+      }
+      if (!apply) continue;
+
+      const externalId = `${hit.slug}:${conversationId}`.slice(0, 128);
+      const payload = {
+        slug: hit.slug,
+        match: hit.match,
+        backfill: true,
+        ...(hit.curso ? { curso: hit.curso } : {}),
+      };
+      const entryData = {
+        channel: 'web_button' as const,
+        source_key: hit.slug,
+        source_label: sourceLabel,
+      };
+      const moved = await this.prisma.$transaction(async (tx) => {
+        const clash = await tx.contact_origins.findUnique({
+          where: {
+            area_channel_external_id: {
+              area: origin.area,
+              channel: 'web_button',
+              external_id: externalId,
+            },
+          },
+          select: { id: true },
+        });
+        const originId = clash?.id ?? origin.id;
+        if (!clash) {
+          await tx.contact_origins.update({
+            where: { id: origin.id },
+            data: {
+              channel: 'web_button',
+              external_id: externalId,
+              source_key: hit.slug,
+              source_label: sourceLabel,
+              payload: payload as Prisma.InputJsonValue,
+              updated_at: new Date(),
+            },
+          });
+        }
+        const entries = await tx.education_lead_entries.updateMany({
+          where: { origin_id: origin.id, channel: 'organic_wa' },
+          data: { ...entryData, ...(clash ? { origin_id: originId } : {}) },
+        });
+        let entryCount = entries.count;
+        if (first?.id) {
+          const loose = await tx.education_lead_entries.updateMany({
+            where: {
+              area: origin.area,
+              channel: 'organic_wa',
+              origin_id: null,
+              event_key: `inbound:${first.id}`,
+            },
+            data: { ...entryData, origin_id: originId },
+          });
+          entryCount += loose.count;
+        }
+        if (clash && clash.id !== origin.id) {
+          await tx.contact_origins.delete({ where: { id: origin.id } });
+        }
+        return entryCount;
+      });
+      updated += 1;
+      entriesUpdated += moved;
+    }
+
+    return {
+      scanned: origins.length,
+      matched,
       updated: apply ? updated : 0,
       entries_updated: apply ? entriesUpdated : 0,
       sample,
@@ -1452,6 +1602,7 @@ export class LeadsService implements OnModuleInit {
       meta_ctwa: 'Click-to-WhatsApp',
       organic_wa: 'WhatsApp orgánico',
       mali_one_link: 'Links / QR MALI ONE',
+      web_button: 'Botones web',
       import: 'Importar',
       tiktok: 'TikTok',
       other: 'Otros',

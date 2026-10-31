@@ -161,6 +161,18 @@ export class LeadsController {
     return { ok: true, data };
   }
 
+  @Post('web-buttons/backfill')
+  async backfillWebButtons(
+    @CurrentUser() user: AuthUser,
+    @Query('apply') apply?: string,
+  ): Promise<ApiResponse<unknown>> {
+    assertCanManageLeads(user);
+    const data = await this.leadsService.backfillOrganicWebButtons({
+      apply: apply === '1' || apply === 'true',
+    });
+    return { ok: true, data };
+  }
+
   @Get('summary')
   async summary(
     @CurrentUser() user: AuthUser,

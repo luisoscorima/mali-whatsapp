@@ -42,7 +42,12 @@ export function originCameWithInbound(
   },
 ): boolean {
   const ch = channel as LeadChannel;
-  if (ch === 'meta_ctwa' || ch === 'organic_wa' || ch === 'mali_one_link') {
+  if (
+    ch === 'meta_ctwa' ||
+    ch === 'organic_wa' ||
+    ch === 'mali_one_link' ||
+    ch === 'web_button'
+  ) {
     return originConversationId != null;
   }
   if (FORM_LIKE_LEAD_CHANNELS.has(ch)) {

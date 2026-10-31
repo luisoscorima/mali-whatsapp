@@ -6,6 +6,7 @@ export const LEAD_CHANNELS = [
   'import',
   'organic_wa',
   'mali_one_link',
+  'web_button',
   'other',
 ] as const;
 

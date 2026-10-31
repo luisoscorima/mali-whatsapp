@@ -14,7 +14,7 @@ En producción: **[https://whatsapp.mali.pe](https://whatsapp.mali.pe)**.
 - **Segmentación y atributos:** contactos con segmentos; definiciones de atributos por área; importación CSV/Excel; campañas con exclusiones y variables por contacto.
 - **Seguridad y gobernanza:** Google OAuth `@mali.pe` + JWT, permisos por módulo, bitácora de auditoría con retención configurable, usuarios y áreas desde Admin.
 - **IA asistida (Groq):** respuestas en ventana de 24 h en modo **Bot**; el master activa o desactiva el bot por área desde Ajustes.
-- **Leads multicanal:** Meta (Instant Forms + CTWA), TikTok, Widget y links (MALI ONE). Hub `/leads` con card Meta unificada y marca solo-contacto vs chat si ella inicia el hilo. Ver [docs/LEADS.md](docs/LEADS.md).
+- **Leads multicanal:** Meta (Instant Forms + CTWA), TikTok, Widget, botones web (`wa.me`) y links (MALI ONE). Hub `/leads` con card Meta unificada y marca solo-contacto vs chat si ella inicia el hilo. Ver [docs/LEADS.md](docs/LEADS.md).
 
 ## Funcionalidades
 

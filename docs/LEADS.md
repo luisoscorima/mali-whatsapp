@@ -69,7 +69,7 @@ En WhatsApp el nombre es el perfil (`wa_profile_name`). Vacío si no hay, para q
 
 ### Canales (`contact_origins.channel`)
 
-`meta_lead_form` · `meta_ctwa` · `widget` · `mali_one_link` · `tiktok` · `organic_wa` · `import` · `other`
+`meta_lead_form` · `meta_ctwa` · `widget` · `web_button` · `mali_one_link` · `tiktok` · `organic_wa` · `import` · `other`
 
 `import` = históricos del Sheet. `other` = respaldo. `manual` ya no se acepta en altas nuevas.
 
@@ -83,6 +83,7 @@ Las cards cuentan **eventos de origen**, no personas únicas.
 |------|------------|------------|
 | **Meta** | `meta_lead_form` + `meta_ctwa` | Todo FB/IG Ads (form + click-to-WA) |
 | **Widget web** | `widget` | Formularios MALI ONE |
+| **Botones web** | `web_button` | `wa.me` / WordPress (no widget) |
 | **Links / QR** | `mali_one_link` | WA prellenado del catálogo MALI ONE |
 | **TikTok** | `tiktok` | Instant Forms TikTok Ads |
 | **WhatsApp orgánico** | `organic_wa` | Chat sin otra atribución comercial en la ficha |
@@ -156,21 +157,34 @@ La clasificación de 60 días ocurre al crear la entrada.
 | `tiktok` | Webhook o backfill Instant Form | Igual que Meta Instant Form |
 | `meta_ctwa` | Inbound WA con `referral` | Ficha `educacion`. Categoría por línea |
 | `widget` | `POST /crm/origins` (MALI ONE) | Body → `educacion` si es Educación; si no viene área → `ti` |
-| `mali_one_link` | Primer mensaje sin CTWA que matchea catálogo | Ficha `educacion`; categoría por línea |
+| `web_button` | Primer inbound: `ref:web_*` o prefijo «Hola MALI Educación! Vengo desde la web» | Ficha `educacion`; categoría por línea |
+| `mali_one_link` | Primer mensaje sin CTWA ni web_button que matchea catálogo | Ficha `educacion`; categoría por línea |
 | `organic_wa` | Inbound solo si la ficha/conversación **no** tienen otro origen comercial | Ficha `educacion`; categoría por línea |
 | `import` / `other` | `POST /crm/origins` | La del body |
 
 El widget persiste en `EducacionLead` (reintento) y sincroniza origen `widget`, sin atributos `source` / `fuente` / `curso` en esa sync. PAM sigue con atributos de pago.
 
+### Botones web (WordPress / wa.me)
+
+Distinto del **widget** y de CTWA Ads. Meta no manda `referral`; la señal va en el texto del primer mensaje:
+
+1. **Fuerte:** `ref:web` / `ref:web_ca` / `ref:web_ep` / … en el prefill del botón.
+2. **Puente:** cuerpo con ancla `¡Hola MALI Educación! Vengo desde la web` (copy histórico del sitio).
+
+Orden de atribución inbound: CTWA → **web_button** → mali_one_link → orgánico.
+
+Backfill: `POST /api/leads/web-buttons/backfill` (dry-run) / `?apply=1`, o  
+`node api/scripts/leads-backfill-web-buttons.cjs` / `--apply`.
+
 ### Links y QR de MALI ONE
 
-`mali_one_link` se atribuye al **enviar** el WA prellenado, no al clic del acortador. Cuerpo con `ref:{slug}` al inicio (`ref:{slug} · mensaje`); históricos pueden traerlo al final. Sin `ref:`, texto normalizado (≥12 caracteres) vs catálogo. Varios links con el mismo texto → el más exacto + marca ambiguo. Con `referral` de anuncio no se evalúa como link.
+`mali_one_link` se atribuye al **enviar** el WA prellenado, no al clic del acortador. Cuerpo con `ref:{slug}` al inicio (`ref:{slug} · mensaje`); históricos pueden traerlo al final. Sin `ref:`, texto normalizado (≥12 caracteres) vs catálogo. Varios links con el mismo texto → el más exacto + marca ambiguo. Con `referral` de anuncio no se evalúa como link. Los `ref:web_*` van a **web_button**, no aquí.
 
 Backfill: `POST /api/leads/mali-one-links/backfill` (dry-run); `?apply=1` reclasifica orgánicos coincidentes sin abrir ciclo ni Prospectia.
 
 ### Orgánico y la sesión de 24 horas
 
-Si la ficha canónica ya tiene Instant Form, CTWA, widget, TikTok o link (por `contact_id`, teléfono o BSUID en `educacion`):
+Si la ficha canónica ya tiene Instant Form, CTWA, widget, botón web, TikTok o link (por `contact_id`, teléfono o BSUID en `educacion`):
 
 - **no** se crea `organic_wa`;
 - si esa atribución es de las últimas 24 h, la entrada CRM lleva ese canal;
@@ -331,7 +345,9 @@ El CRM Educación en MALI ONE ya muestra Contactos y Oportunidades. Pagos y Camp
 | Orígenes, orgánico, enrich chat | `api/src/leads/leads.service.ts` |
 | Solo contacto vs con chat | `api/src/leads/lead-origin.util.ts` |
 | Identidad inbound canónica | `api/src/webhook/webhook.service.ts`, `api/src/meta-settings/meta-settings.store.ts` |
+| Botones web | `api/src/leads/web-button-match.util.ts` |
 | Links MALI ONE | `api/src/leads/mali-one-link-match.util.ts` |
+| Backfill web | `api/scripts/leads-backfill-web-buttons.cjs` |
 | CTWA sync nombres | `api/src/meta-ads/meta-ads.service.ts` |
 | TikTok ingest | `api/src/leads/tiktok-leadgen.service.ts` |
 | Limpieza orgánicos falsos | `api/scripts/leads-cleanup-false-organic.cjs` |

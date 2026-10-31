@@ -94,16 +94,6 @@ export function ContactForm({
   )
   const [segmentsError, setSegmentsError] = useState('')
   const [phoneError, setPhoneError] = useState('')
-  const [attrsOpen, setAttrsOpen] = useState(() => {
-    if (mode === 'create') return true
-    const defs = getApplicableAttributeDefinitions(
-      attributeDefinitions,
-      initial.segments,
-    ).filter((d) => !NATIVE_ATTR_SLUGS.has(d.slug))
-    return defs.some(
-      (d) => d.required && !(initial.attributes[d.slug] ?? '').trim(),
-    )
-  })
 
   const applicableDefs = useMemo(
     () =>
@@ -338,80 +328,90 @@ export function ContactForm({
         </label>
       ) : null}
 
-      <details
-        className="text-sm"
-        open={attrsOpen}
-        onToggle={(e) => setAttrsOpen(e.currentTarget.open)}
-      >
-        <summary className="cursor-pointer font-medium">
+      <div className="space-y-3 text-sm">
+        <p className="font-medium">
           Atributos{' '}
           <span className="font-normal text-muted">
             (opcional
             {applicableDefs.length > 0 ? ` · ${applicableDefs.length}` : ''})
           </span>
-        </summary>
-        <div className="mt-3 space-y-3">
-          {applicableDefs.length === 0 ? (
-            <p className="text-muted">
-              {selectedSegments.length === 0 && mode === 'create'
-                ? 'Selecciona segmentos para ver atributos específicos.'
-                : 'No hay campos definidos.'}
-            </p>
-          ) : (
-            attributeGroups.map((group) => (
-              <div key={group.key} className="space-y-3">
-                {showCategory ? (
-                  <p className="font-medium">{categoryLabel(group.key)}</p>
-                ) : null}
-                {group.items.map((def) => (
-                  <label
-                    key={`${def.category || 'general'}:${def.slug}:${def.segment_slug ?? ''}`}
-                    className="block"
+        </p>
+        {applicableDefs.length === 0 ? (
+          <p className="text-muted">
+            {selectedSegments.length === 0 && mode === 'create'
+              ? 'Selecciona segmentos para ver atributos específicos.'
+              : 'No hay campos definidos.'}
+          </p>
+        ) : (
+          attributeGroups.map((group) => {
+            const fields = group.items.map((def) => (
+              <label
+                key={`${def.category || 'general'}:${def.slug}:${def.segment_slug ?? ''}`}
+                className="block"
+              >
+                <span className="text-muted">
+                  {def.label}
+                  {def.segment_slug ? ` · ${def.segment_slug}` : ''}
+                  {def.required ? ' *' : ''}
+                </span>
+                {def.field_type === 'select' ? (
+                  <select
+                    required={def.required && !disabled}
+                    disabled={disabled}
+                    value={attributes[def.slug] ?? ''}
+                    onChange={(e) => setAttribute(def.slug, e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
                   >
-                    <span className="text-muted">
-                      {def.label}
-                      {def.segment_slug ? ` · ${def.segment_slug}` : ''}
-                      {def.required ? ' *' : ''}
-                    </span>
-                    {def.field_type === 'select' ? (
-                      <select
-                        required={def.required && !disabled}
-                        disabled={disabled}
-                        value={attributes[def.slug] ?? ''}
-                        onChange={(e) => setAttribute(def.slug, e.target.value)}
-                        className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
-                      >
-                        <option value="">{def.required ? '—' : ''}</option>
-                        {(def.options ?? []).map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                        {attributes[def.slug] &&
-                        !(def.options ?? []).includes(attributes[def.slug]) ? (
-                          <option value={attributes[def.slug]}>
-                            {attributes[def.slug]}
-                          </option>
-                        ) : null}
-                      </select>
-                    ) : (
-                      <input
-                        type={inputTypeForField(def.field_type)}
-                        maxLength={500}
-                        required={def.required && !disabled}
-                        disabled={disabled}
-                        value={attributes[def.slug] ?? ''}
-                        onChange={(e) => setAttribute(def.slug, e.target.value)}
-                        className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
-                      />
-                    )}
-                  </label>
-                ))}
-              </div>
+                    <option value="">{def.required ? '—' : ''}</option>
+                    {(def.options ?? []).map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                    {attributes[def.slug] &&
+                    !(def.options ?? []).includes(attributes[def.slug]) ? (
+                      <option value={attributes[def.slug]}>
+                        {attributes[def.slug]}
+                      </option>
+                    ) : null}
+                  </select>
+                ) : (
+                  <input
+                    type={inputTypeForField(def.field_type)}
+                    maxLength={500}
+                    required={def.required && !disabled}
+                    disabled={disabled}
+                    value={attributes[def.slug] ?? ''}
+                    onChange={(e) => setAttribute(def.slug, e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2"
+                  />
+                )}
+              </label>
             ))
-          )}
-        </div>
-      </details>
+
+            if (!showCategory) {
+              return (
+                <div key={group.key} className="space-y-3">
+                  {fields}
+                </div>
+              )
+            }
+
+            return (
+              <details key={group.key} className="space-y-3">
+                <summary className="cursor-pointer font-medium">
+                  {categoryLabel(group.key)}
+                  <span className="font-normal text-muted">
+                    {' '}
+                    · {group.items.length}
+                  </span>
+                </summary>
+                <div className="mt-3 space-y-3">{fields}</div>
+              </details>
+            )
+          })
+        )}
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <button

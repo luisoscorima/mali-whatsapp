@@ -18,6 +18,7 @@ import { MetaLeadgenService } from '../leads/meta-leadgen.service';
 import { LeadsService } from '../leads/leads.service';
 import { MaliOneLinksCatalogService } from '../leads/mali-one-links-catalog.service';
 import { matchMaliOneWhatsappLink } from '../leads/mali-one-link-match.util';
+import { matchWebButtonWhatsapp } from '../leads/web-button-match.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { isWhatsAppBsuid } from '../conversations/whatsapp-recipient.util';
 import { chooseWhatsAppIdentityMatch } from '../conversations/whatsapp-identity.util';
@@ -1022,7 +1023,7 @@ export class WebhookService {
             });
           }
         } else if (!sourceId && bodyText.trim()) {
-          await this.maybeAttributeMaliOneLinkOrigin({
+          const attributedWeb = await this.maybeAttributeWebButtonOrigin({
             area,
             conversationId: conversation.id,
             phone,
@@ -1030,6 +1031,16 @@ export class WebhookService {
             bodyText,
             waProfileName,
           });
+          if (!attributedWeb) {
+            await this.maybeAttributeMaliOneLinkOrigin({
+              area,
+              conversationId: conversation.id,
+              phone,
+              whatsappUserId: userId,
+              bodyText,
+              waProfileName,
+            });
+          }
         }
       } catch (error) {
         this.logger.warn(
@@ -1139,6 +1150,48 @@ export class WebhookService {
       this.logger.warn(
         `Webhook inbound: ningun mensaje insertado (area=${area}, count=${messages.length})`,
       );
+    }
+  }
+
+  /** @returns true si atribuyó origen web_button */
+  private async maybeAttributeWebButtonOrigin(input: {
+    area: string;
+    conversationId: number;
+    phone: string | null;
+    whatsappUserId: string | null;
+    bodyText: string;
+    waProfileName: string | null;
+  }): Promise<boolean> {
+    try {
+      const matched = matchWebButtonWhatsapp(input.bodyText);
+      if (!matched) return false;
+
+      await this.leadsService.upsertOrigin({
+        area: input.area,
+        channel: 'web_button',
+        external_id: `${matched.slug}:${input.conversationId}`,
+        source_key: matched.slug,
+        source_label: matched.source_label,
+        conversation_id: input.conversationId,
+        phone: input.phone,
+        whatsapp_user_id: input.whatsappUserId,
+        payload: {
+          slug: matched.slug,
+          match: matched.match,
+          ...(matched.curso ? { curso: matched.curso } : {}),
+        },
+        contact: {
+          phone: input.phone,
+          whatsapp_user_id: input.whatsappUserId,
+          name: input.waProfileName ?? undefined,
+        },
+      });
+      return true;
+    } catch (error) {
+      this.logger.warn(
+        `Atribución web_button falló: ${error instanceof Error ? error.message : error}`,
+      );
+      return false;
     }
   }
 

@@ -1,6 +1,6 @@
 /**
  * Borra TODOS los organic_wa falsos del historial: misma ficha ya tenía un
- * origen comercial (tiktok / meta_lead_form / meta_ctwa / widget / mali_one_link)
+ * origen comercial (tiktok / meta_lead_form / meta_ctwa / widget / mali_one_link / web_button)
  * con first_seen_at <= el orgánico.
  *
  * Por defecto no hay tope de horas (todo el historial).
@@ -31,6 +31,7 @@ const COMMERCIAL = [
   'meta_ctwa',
   'widget',
   'mali_one_link',
+  'web_button',
 ];
 
 async function main() {

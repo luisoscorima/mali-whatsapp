@@ -14,6 +14,7 @@ export const EDUCATION_COMMERCIAL_CHANNELS = new Set([
   'widget',
   'tiktok',
   'mali_one_link',
+  'web_button',
   'import',
 ]);
 

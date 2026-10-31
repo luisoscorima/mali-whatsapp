@@ -36,6 +36,7 @@ describe('originCameWithInbound', () => {
   it('keeps CTWA / organic / links on conversation_id', () => {
     expect(originCameWithInbound('meta_ctwa', 9, false)).toBe(true);
     expect(originCameWithInbound('organic_wa', 9, false)).toBe(true);
+    expect(originCameWithInbound('web_button', 9, false)).toBe(true);
     expect(originCameWithInbound('mali_one_link', null, true)).toBe(false);
   });
 
