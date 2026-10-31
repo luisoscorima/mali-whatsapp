@@ -122,12 +122,12 @@ Históricos orgánicos: `POST /api/leads/mali-one-links/backfill` cuenta coincid
 
 ### Conversación o solo contacto
 
-`came_with_inbound` marca solo contacto vs contacto + chat (modelo Widget). No bifurca el CRM.
+`came_with_inbound` marca solo contacto vs contacto + chat. No bifurca el CRM.
 
 | Canal | Cuenta como conversación |
 |-------|--------------------------|
 | `meta_ctwa`, `organic_wa`, `mali_one_link` | Si el origen tiene `conversation_id` |
-| `widget`, `meta_lead_form`, `tiktok` | Si el chat resuelto ya tiene un mensaje inbound del lead |
+| `widget`, `meta_lead_form`, `tiktok` | Solo si **ella abrió el hilo** (primer mensaje inbound) en o después de la captura. Responder a una campaña outbound nuestra **no** cuenta |
 | `import`, `other` | Nunca |
 
 ### Orgánico y la sesión de 24 horas

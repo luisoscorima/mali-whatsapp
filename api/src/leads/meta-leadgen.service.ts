@@ -872,6 +872,7 @@ export class MetaLeadgenService {
             select: {
               channel: true,
               conversation_id: true,
+              first_seen_at: true,
             },
           },
         },
@@ -906,6 +907,8 @@ export class MetaLeadgenService {
         form_name: nameByFormId.get(row.form_id) ?? null,
         channel: row.contact_origins?.channel ?? 'meta_lead_form',
         conversation_id: row.contact_origins?.conversation_id ?? null,
+        first_seen_at:
+          row.contact_origins?.first_seen_at ?? row.created_time ?? null,
       })),
     );
 

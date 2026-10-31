@@ -1523,14 +1523,14 @@ export class LeadsService implements OnModuleInit {
     }));
   }
 
-  /** Resuelve conversación WhatsApp vinculada al contacto/origen. */
+  /** Resuelve conversaciones del contacto/origen y si ella abrió el hilo. */
   private async loadConversationMaps(
     area: string,
     rows: LeadChatEnrichInput[],
   ): Promise<{
     byId: Map<number, ConversationHint>;
-    byContact: Map<number, ConversationHint>;
-    byPhone: Map<string, ConversationHint>;
+    byContact: Map<number, ConversationHint[]>;
+    byPhone: Map<string, ConversationHint[]>;
   }> {
     const convIds = new Set<number>();
     const contactIds = new Set<number>();
@@ -1557,8 +1557,8 @@ export class LeadsService implements OnModuleInit {
 
     const empty = {
       byId: new Map<number, ConversationHint>(),
-      byContact: new Map<number, ConversationHint>(),
-      byPhone: new Map<string, ConversationHint>(),
+      byContact: new Map<number, ConversationHint[]>(),
+      byPhone: new Map<string, ConversationHint[]>(),
     };
     if (or.length === 0) return empty;
 
@@ -1574,21 +1574,51 @@ export class LeadsService implements OnModuleInit {
       orderBy: { id: 'asc' },
     });
 
+    const firstByConv = new Map<
+      number,
+      { direction: string; created_at: Date }
+    >();
+    if (convs.length) {
+      const ids = convs.map((c) => c.id);
+      const firstRows = await this.prisma.$queryRaw<
+        Array<{ conversation_id: number; direction: string; created_at: Date }>
+      >(Prisma.sql`
+        SELECT DISTINCT ON (conversation_id)
+          conversation_id, direction, created_at
+        FROM chat_messages
+        WHERE conversation_id IN (${Prisma.join(ids)})
+        ORDER BY conversation_id, created_at ASC, id ASC
+      `);
+      for (const row of firstRows) {
+        firstByConv.set(row.conversation_id, {
+          direction: row.direction,
+          created_at: row.created_at,
+        });
+      }
+    }
+
     const byId = new Map<number, ConversationHint>();
-    const byContact = new Map<number, ConversationHint>();
-    const byPhone = new Map<string, ConversationHint>();
+    const byContact = new Map<number, ConversationHint[]>();
+    const byPhone = new Map<string, ConversationHint[]>();
 
     for (const conv of convs) {
+      const first = firstByConv.get(conv.id);
       const entry: ConversationHint = {
         id: conv.id,
         has_inbound: conv.last_user_message_at != null,
+        user_initiated: first?.direction === 'inbound',
+        first_message_at: first?.created_at ?? null,
       };
       byId.set(conv.id, entry);
-      if (conv.contact_id && !byContact.has(conv.contact_id)) {
-        byContact.set(conv.contact_id, entry);
+      if (conv.contact_id) {
+        const list = byContact.get(conv.contact_id) ?? [];
+        list.push(entry);
+        byContact.set(conv.contact_id, list);
       }
-      if (conv.phone && !byPhone.has(conv.phone)) {
-        byPhone.set(conv.phone, entry);
+      if (conv.phone) {
+        const list = byPhone.get(conv.phone) ?? [];
+        list.push(entry);
+        byPhone.set(conv.phone, list);
       }
     }
 

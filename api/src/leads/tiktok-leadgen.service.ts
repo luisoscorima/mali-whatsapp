@@ -1123,6 +1123,7 @@ export class TikTokLeadgenService {
         form_id: row.form_id,
         form_name: nameByForm.get(row.form_id) || null,
         created_time: row.created_time,
+        first_seen_at: row.created_time,
         channel: 'tiktok' as const,
         conversation_id: null as number | null,
         contact_id: row.contact_id,
