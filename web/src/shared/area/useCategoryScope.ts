@@ -7,6 +7,8 @@ import {
   readCategorySelection,
 } from './category-selection'
 
+export type CategoryOption = { slug: string; label: string }
+
 export function categoryLabel(slug: string | null | undefined): string {
   if (!slug || slug === 'general') return 'General'
   if (slug === 'ca') return 'Cursos de Arte'
@@ -40,12 +42,23 @@ export function categorySettingsArea(
   return `${areaCanonical}_${slug}`
 }
 
+function createPrefill(
+  options: CategoryOption[],
+  stored: string[] | null,
+): string {
+  if (options.length === 1) return options[0].slug
+  if (stored?.length === 1 && options.some((item) => item.slug === stored[0])) {
+    return stored[0]
+  }
+  return ''
+}
+
 /** Selección del riel. `query` va vacío cuando van todas, para no recortar de más. */
 export function useCategoryScope() {
   const user = useAppUser()
   const areaCanonical = user ? canonicalArea(user.area) : ''
   const education = areaCanonical === 'educacion'
-  const [allowed, setAllowed] = useState<string[]>([])
+  const [options, setOptions] = useState<CategoryOption[]>([])
   const [revision, setRevision] = useState(0)
 
   useEffect(() => onCategorySelection(() => setRevision((n) => n + 1)), [])
@@ -53,11 +66,12 @@ export function useCategoryScope() {
   useEffect(() => {
     if (!user) return
     void apiClient.getEducationCategories().then((result) => {
-      if (result.ok) setAllowed(result.data.map((item) => item.slug))
-      else setAllowed([])
+      if (result.ok) setOptions(result.data)
+      else setOptions([])
     })
   }, [areaCanonical, user?.id])
 
+  const allowed = options.map((item) => item.slug)
   const enabled = allowed.length > 0
   const stored =
     enabled && user && revision >= 0
@@ -73,10 +87,60 @@ export function useCategoryScope() {
     enabled,
     education,
     areaCanonical,
+    options,
     slugs,
     stored,
     query,
     revision,
+  }
+}
+
+/**
+ * Campo de categoría para altas. Selector solo si hay más de una permitida;
+ * con varias en el riel no asume General: hay que elegir.
+ */
+export function useCreateCategoryField() {
+  const scope = useCategoryScope()
+  const [category, setCategory] = useState('')
+  const [touched, setTouched] = useState(false)
+
+  useEffect(() => {
+    setCategory((current) => {
+      if (current && scope.options.some((item) => item.slug === current)) {
+        return current
+      }
+      return createPrefill(scope.options, scope.stored)
+    })
+  }, [scope.options, scope.stored])
+
+  const needsPicker = scope.options.length > 1
+  const categoryForApi =
+    !scope.options.length
+      ? undefined
+      : category || (needsPicker ? undefined : scope.options[0]?.slug)
+  const missingCategory = needsPicker && !category
+
+  function onCategoryChange(next: string) {
+    setTouched(true)
+    setCategory(next)
+  }
+
+  function requireCategory(): boolean {
+    if (!missingCategory) return true
+    setTouched(true)
+    return false
+  }
+
+  return {
+    scope,
+    needsPicker,
+    options: scope.options,
+    category,
+    setCategory: onCategoryChange,
+    categoryForApi,
+    missingCategory,
+    showMissing: missingCategory && touched,
+    requireCategory,
   }
 }
 

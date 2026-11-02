@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { WaBackLink } from '@/shared/ui/shell/WaBackLink'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
+import { CategoryCreateSelect } from '@/shared/area/CategoryCreateSelect'
+import { useCreateCategoryField } from '@/shared/area/useCategoryScope'
 import { FlowCanvasEditor } from './FlowCanvasEditor'
 import {
   emptyNode,
@@ -11,11 +13,17 @@ import {
   type FlowEditorNode,
 } from './flowEditorUtils'
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard'
-import { categoryToSave, draftCategorySlug, useCategoryScope } from '@/shared/area/useCategoryScope'
 
 export function FlowNewPage() {
   const navigate = useNavigate()
-  const scope = useCategoryScope()
+  const {
+    options,
+    category,
+    setCategory,
+    categoryForApi,
+    showMissing,
+    requireCategory,
+  } = useCreateCategoryField()
   const first = emptyNode('message_buttons')
   const [name, setName] = useState('')
   const [triggerPayload, setTriggerPayload] = useState('INICIAR_FLUJO')
@@ -46,13 +54,17 @@ export function FlowNewPage() {
     edges: FlowEditorEdge[]
     entry: string
   }) {
+    if (!requireCategory()) {
+      notify.error('Elige una categoría')
+      return
+    }
     setSaving(true)
     setNodes(graph.nodes)
     setEdges(graph.edges)
     setEntryClientKey(graph.entry)
     const result = await apiClient.post<FlowDetail>('/api/flows', {
       name: name.trim(),
-      category: categoryToSave(scope),
+      category: categoryForApi,
       trigger_payload: triggerPayload.trim(),
       status,
       entry_client_key: graph.entry,
@@ -96,9 +108,14 @@ export function FlowNewPage() {
       <div className="px-3 pt-3 md:px-4 md:pt-4">
         <WaBackLink to="/flows" label="Volver a flujos" />
         <h1 className="mt-2 text-2xl font-semibold">Nuevo flujo</h1>
-        {draftCategorySlug(scope) === 'general' && categoryToSave(scope) === undefined ? (
-          <p className="text-sm text-muted">Con varias categorías marcadas se guarda en General.</p>
-        ) : null}
+        <div className="mt-3 max-w-sm">
+          <CategoryCreateSelect
+            options={options}
+            value={category}
+            onChange={setCategory}
+            showMissing={showMissing}
+          />
+        </div>
       </div>
       <FlowCanvasEditor
         name={name}

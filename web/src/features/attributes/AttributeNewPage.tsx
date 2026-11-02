@@ -3,7 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { WaBackLink } from '@/shared/ui/shell/WaBackLink'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
-import { categoryLabel, categoryToSave, draftCategorySlug, useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
+import { CategoryCreateSelect } from '@/shared/area/CategoryCreateSelect'
+import {
+  categoryLabel,
+  useCreateCategoryField,
+  withCategoryQuery,
+} from '@/shared/area/useCategoryScope'
 import { SearchableSelect } from '@/shared/ui/SearchableSelect'
 
 type SegmentOption = {
@@ -14,7 +19,15 @@ type SegmentOption = {
 
 export function AttributeNewPage() {
   const navigate = useNavigate()
-  const categories = useCategoryScope()
+  const {
+    scope: categories,
+    options,
+    category,
+    setCategory,
+    categoryForApi,
+    showMissing,
+    requireCategory,
+  } = useCreateCategoryField()
   const [segments, setSegments] = useState<SegmentOption[]>([])
   const [scope, setScope] = useState<'area' | 'segment'>('area')
   const [segmentSlug, setSegmentSlug] = useState('')
@@ -63,12 +76,16 @@ export function AttributeNewPage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
+    if (!requireCategory()) {
+      notify.error('Elige una categoría')
+      return
+    }
     if (scope === 'segment' && !segmentSlug.trim()) {
       notify.error('Selecciona un segmento')
       return
     }
     setSaving(true)
-    const options =
+    const fieldOptions =
       fieldType === 'select'
         ? optionsText
             .split('\n')
@@ -81,9 +98,9 @@ export function AttributeNewPage() {
       slug,
       label,
       field_type: fieldType,
-      options,
+      options: fieldOptions,
       required,
-      category: categoryToSave(categories),
+      category: categoryForApi,
     })
     setSaving(false)
     if (!result.ok) {
@@ -98,15 +115,19 @@ export function AttributeNewPage() {
       <div>
         <WaBackLink to="/attributes" label="Volver a atributos" />
         <h1 className="mt-2 text-2xl font-semibold">Nuevo atributo</h1>
-        {draftCategorySlug(categories) === 'general' && categoryToSave(categories) === undefined ? (
-          <p className="text-sm text-muted">Con varias categorías marcadas se guarda en General.</p>
-        ) : null}
       </div>
 
       <form
         onSubmit={onSubmit}
         className="max-w-lg space-y-4 rounded-xl border border-line bg-surface-strong p-4"
       >
+        <CategoryCreateSelect
+          options={options}
+          value={category}
+          onChange={setCategory}
+          showMissing={showMissing}
+        />
+
         <fieldset className="space-y-2 text-sm">
           <legend className="font-medium">Ámbito</legend>
           <label className="flex items-center gap-2">

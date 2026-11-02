@@ -3,12 +3,21 @@ import { useNavigate } from 'react-router-dom'
 import { WaBackLink } from '@/shared/ui/shell/WaBackLink'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
+import { CategoryCreateSelect } from '@/shared/area/CategoryCreateSelect'
+import { useCreateCategoryField } from '@/shared/area/useCategoryScope'
 import { SegmentColorPicker } from './SegmentColorPicker'
 import { notifySegmentsListRefresh } from './segmentsListEvents'
-import { categoryToSave, draftCategorySlug, useCategoryScope } from '@/shared/area/useCategoryScope'
+
 export function SegmentNewPage() {
   const navigate = useNavigate()
-  const scope = useCategoryScope()
+  const {
+    options,
+    category,
+    setCategory,
+    categoryForApi,
+    showMissing,
+    requireCategory,
+  } = useCreateCategoryField()
   const [slug, setSlug] = useState('')
   const [label, setLabel] = useState('')
   const [colorKey, setColorKey] = useState('teal')
@@ -16,12 +25,16 @@ export function SegmentNewPage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
+    if (!requireCategory()) {
+      notify.error('Elige una categoría')
+      return
+    }
     setSaving(true)
     const result = await apiClient.post<{ id: number }>('/api/segments', {
       slug,
       label,
       color_key: colorKey,
-      category: categoryToSave(scope),
+      category: categoryForApi,
     })
     setSaving(false)
     if (!result.ok) {
@@ -37,15 +50,19 @@ export function SegmentNewPage() {
       <div>
         <WaBackLink to="/segments" label="Volver a segmentos" />
         <h1 className="mt-2 text-2xl font-semibold">Añadir segmento</h1>
-        {draftCategorySlug(scope) === 'general' && categoryToSave(scope) === undefined ? (
-          <p className="text-sm text-muted">Con varias categorías marcadas se guarda en General.</p>
-        ) : null}
       </div>
 
       <form
         onSubmit={onSubmit}
         className="max-w-lg space-y-4 rounded-xl border border-line bg-surface-strong p-4"
       >
+        <CategoryCreateSelect
+          options={options}
+          value={category}
+          onChange={setCategory}
+          showMissing={showMissing}
+        />
+
         <label className="block text-sm">
           <span className="text-muted">Slug</span>
           <input
