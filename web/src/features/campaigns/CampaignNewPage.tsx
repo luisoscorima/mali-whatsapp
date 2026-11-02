@@ -48,6 +48,14 @@ type ExcludedContact = {
   phone: string
 }
 
+type CampaignLine = {
+  id: number
+  label: string
+  phone: string | null
+  category: string
+  category_label: string
+}
+
 function fieldLabel(text: string, step?: string) {
   return (
     <div className="flex items-center gap-2">
@@ -59,6 +67,10 @@ function fieldLabel(text: string, step?: string) {
       <span className="font-medium">{text}</span>
     </div>
   )
+}
+
+function itemCategory(slug: string | null | undefined): string {
+  return slug || 'general'
 }
 
 function buildSendPayload(input: {
@@ -121,6 +133,7 @@ export function CampaignNewPage() {
   const [templates, setTemplates] = useState<TemplateListItem[]>([])
   const [attrDefs, setAttrDefs] = useState<AttributeOption[]>([])
   const [loadFailed, setLoadFailed] = useState(false)
+  const [bootstrapped, setBootstrapped] = useState(false)
   const [busy, setBusy] = useState('')
 
   const [includeSegments, setIncludeSegments] = useState<Set<string>>(new Set())
@@ -139,7 +152,7 @@ export function CampaignNewPage() {
   const [recipientsStatus, setRecipientsStatus] = useState('')
 
   const [templateId, setTemplateId] = useState('')
-  const [lines, setLines] = useState<{ id: number; label: string; phone: string | null; category_label: string }[]>([])
+  const [lines, setLines] = useState<CampaignLine[]>([])
   const [whatsappLineId, setWhatsappLineId] = useState('')
   const [templateForm, setTemplateForm] = useState<CampaignTemplateFormState>(
     emptyTemplateFormState(),
@@ -150,6 +163,34 @@ export function CampaignNewPage() {
   const [scheduledAt, setScheduledAt] = useState('')
   const [batchSize, setBatchSize] = useState(40)
   const [batchDelayMs, setBatchDelayMs] = useState(1500)
+
+  const selectedLine = useMemo(
+    () => lines.find((line) => String(line.id) === whatsappLineId) ?? null,
+    [lines, whatsappLineId],
+  )
+  const lineCategory = selectedLine?.category || ''
+  const audienceQuery =
+    categoryScope.enabled && lineCategory
+      ? `category=${encodeURIComponent(lineCategory)}`
+      : categoryScope.query
+  const audienceQueryRef = useRef(audienceQuery)
+  audienceQueryRef.current = audienceQuery
+
+  const visibleSegments = useMemo(() => {
+    if (!whatsappLineId) return []
+    if (!categoryScope.enabled || !lineCategory) return segments
+    return segments.filter(
+      (segment) => itemCategory(segment.category) === lineCategory,
+    )
+  }, [segments, whatsappLineId, categoryScope.enabled, lineCategory])
+
+  const visibleAttrDefs = useMemo(() => {
+    if (!whatsappLineId) return []
+    if (!categoryScope.enabled || !lineCategory) return attrDefs
+    return attrDefs.filter(
+      (attr) => itemCategory(attr.category) === lineCategory,
+    )
+  }, [attrDefs, whatsappLineId, categoryScope.enabled, lineCategory])
 
   const dirty = useMemo(() => {
     if (includeSegments.size > 0) return true
@@ -196,18 +237,20 @@ export function CampaignNewPage() {
       apiClient.get<SegmentDefinition[]>(withCategoryQuery('/api/segments/active', categoryScope.query)),
       apiClient.get<TemplateListItem[]>(templatesUrl),
       apiClient.get<AttributeOption[]>(withCategoryQuery('/api/attribute-definitions', categoryScope.query)),
-      apiClient.get<{ id: number; label: string; phone: string | null; category_label: string }[]>(
+      apiClient.get<CampaignLine[]>(
         withCategoryQuery('/api/campaigns/lines', categoryScope.query),
       ),
     ])
     if (!segResult.ok) {
       notify.error(segResult.error)
       setLoadFailed(true)
+      setBootstrapped(true)
       return
     }
     if (!tplResult.ok) {
       notify.error(tplResult.error)
       setLoadFailed(true)
+      setBootstrapped(true)
       return
     }
     if (currentQuery.current !== categoryScope.query) return
@@ -252,6 +295,7 @@ export function CampaignNewPage() {
         })),
       )
     }
+    setBootstrapped(true)
   }
 
   useEffect(() => {
@@ -259,6 +303,7 @@ export function CampaignNewPage() {
     setIncludeSegments(new Set())
     setExcludeSegments(new Set())
     setSegments([])
+    setBootstrapped(false)
     void loadWizardData()
   }, [categoryScope.query])
 
@@ -280,11 +325,40 @@ export function CampaignNewPage() {
       })
   }, [whatsappLineId])
 
+  useEffect(() => {
+    invalidateRecipients()
+  }, [lineCategory])
+
+  useEffect(() => {
+    if (!categoryScope.enabled || !lineCategory) return
+    const allowed = new Set(
+      segments
+        .filter((segment) => itemCategory(segment.category) === lineCategory)
+        .map((segment) => segment.slug),
+    )
+    setIncludeSegments((prev) => {
+      const next = new Set([...prev].filter((slug) => allowed.has(slug)))
+      return next.size === prev.size ? prev : next
+    })
+    setExcludeSegments((prev) => {
+      const next = new Set([...prev].filter((slug) => allowed.has(slug)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [lineCategory, categoryScope.enabled, segments])
+
   function invalidateRecipients() {
     setRecipientsLoaded(false)
     setRecipients([])
     setSelectedIds(new Set())
     setRecipientsStatus('')
+  }
+
+  function onLineChange(nextId: string) {
+    setWhatsappLineId(nextId)
+    setTemplateId('')
+    setTemplateReady(false)
+    setTemplateForm(emptyTemplateFormState())
+    invalidateRecipients()
   }
 
   function toggleSegment(
@@ -329,20 +403,25 @@ export function CampaignNewPage() {
       notify.error('Marca al menos un segmento.')
       return
     }
+    if (!whatsappLineId) {
+      notify.error('Elige la línea que envía.')
+      return
+    }
 
+    const queryAtStart = audienceQuery
     setBusy('recipients')
     setRecipientsStatus('Cargando…')
     const result = await apiClient.post<{
       contacts: RecipientPreview[]
       total: number
-    }>(withCategoryQuery('/api/campaigns/recipients-preview', categoryScope.query), {
+    }>(withCategoryQuery('/api/campaigns/recipients-preview', queryAtStart), {
       segments: segmentList,
       excludeSegmentSlugs: [...excludeSegments],
       excludeContactIds: [...excludeContactIds].sort((a, b) => a - b),
       excludeOpenServiceWindow: excludeServiceWindow,
     })
     setBusy('')
-    if (currentQuery.current !== categoryScope.query) return
+    if (audienceQueryRef.current !== queryAtStart) return
 
     if (!result.ok) {
       setRecipientsStatus('')
@@ -374,11 +453,11 @@ export function CampaignNewPage() {
   }
 
   const canSend =
+    Boolean(whatsappLineId) &&
     includeSegments.size > 0 &&
     recipientsLoaded &&
     selectedIds.size > 0 &&
     templateId &&
-    whatsappLineId &&
     templateReady &&
     (scheduleMode === 'now' || Boolean(scheduledAt.trim()))
 
@@ -405,7 +484,7 @@ export function CampaignNewPage() {
       confirmLabel:
         scheduleMode === 'scheduled' ? 'Programar' : 'Enviar',
     })
-    if (!ok || currentQuery.current !== categoryScope.query) return
+    if (!ok || audienceQueryRef.current !== audienceQuery) return
 
     type SendOutcome =
       | {
@@ -438,9 +517,10 @@ export function CampaignNewPage() {
       form: templateForm,
     })
 
+    const queryAtStart = audienceQuery
     setBusy('send')
     let result = await apiClient.post<SendOutcome>(
-      withCategoryQuery('/api/campaigns/send', categoryScope.query),
+      withCategoryQuery('/api/campaigns/send', queryAtStart),
       basePayload,
     )
 
@@ -480,10 +560,10 @@ export function CampaignNewPage() {
             : 'Entendido',
         tone: report.ready > 0 ? 'default' : 'danger',
       })
-      if (!proceed || report.ready <= 0 || currentQuery.current !== categoryScope.query) return
+      if (!proceed || report.ready <= 0 || audienceQueryRef.current !== queryAtStart) return
 
       setBusy('send')
-      result = await apiClient.post<SendOutcome>(withCategoryQuery('/api/campaigns/send', categoryScope.query), {
+      result = await apiClient.post<SendOutcome>(withCategoryQuery('/api/campaigns/send', queryAtStart), {
         ...basePayload,
         excludeMissingParams: true,
       })
@@ -510,7 +590,7 @@ export function CampaignNewPage() {
     return <p className="text-muted">No se pudo cargar</p>
   }
 
-  if (!segments.length && !templates.length) {
+  if (!bootstrapped) {
     return <p className="text-muted">Cargando wizard…</p>
   }
 
@@ -520,29 +600,58 @@ export function CampaignNewPage() {
       <div>
         <h1 className="text-2xl font-semibold">Nueva campaña</h1>
         <p className="text-sm text-muted">
-          Elige audiencia, plantilla y parámetros. Puedes enviar ahora o programar.
+          Elige la línea, la audiencia y la plantilla. Puedes enviar ahora o programar.
         </p>
       </div>
 
+      <section className="space-y-3 rounded-xl border border-line bg-surface-strong p-4">
+        {fieldLabel('Línea que envía', '1')}
+        <label className="block text-sm">
+          <span className="text-muted">Número</span>
+          <select
+            className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2"
+            value={whatsappLineId}
+            onChange={(event) => onLineChange(event.target.value)}
+          >
+            <option value="">Elige el número</option>
+            {lines.map((line) => (
+              <option key={line.id} value={line.id}>
+                {line.category_label} · {line.label}
+                {line.phone ? ` · ${line.phone}` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+      </section>
+
       <section className="space-y-4 rounded-xl border border-line bg-surface-strong p-4">
-        {fieldLabel('Quién recibe', '1')}
-        {segments.length === 0 ? (
+        {fieldLabel('Destinatarios', '2')}
+        {!whatsappLineId ? (
+          <p className="text-sm text-muted">Elige la línea que envía.</p>
+        ) : visibleSegments.length === 0 ? (
           <p className="text-sm text-muted">
             Añade segmentos en{' '}
             <Link to="/segments" className="text-accent">
               Segmentos
             </Link>
+            {categoryScope.enabled && lineCategory
+              ? ` para ${categoryLabel(lineCategory)}`
+              : ''}
             .
           </p>
         ) : (
           <>
             <p className="text-xs text-muted">
               Incluye contactos que pertenezcan a <strong>cualquiera</strong> de
-              los segmentos marcados (unión).
+              los segmentos marcados (unión)
+              {categoryScope.enabled && lineCategory
+                ? ` · ${categoryLabel(lineCategory)}`
+                : ''}
+              .
             </p>
             <SegmentFilterSelect
               variant="form"
-              segments={segments}
+              segments={visibleSegments}
               selectedSlugs={[...includeSegments]}
               onToggle={(slug) => toggleSegment(slug, setIncludeSegments)}
               onClearAll={() => {
@@ -555,7 +664,7 @@ export function CampaignNewPage() {
               <p className="text-sm font-medium">Excluir segmentos (opcional)</p>
               <SegmentFilterSelect
                 variant="form"
-                segments={segments}
+                segments={visibleSegments}
                 selectedSlugs={[...excludeSegments]}
                 onToggle={(slug) => toggleSegment(slug, setExcludeSegments)}
                 onClearAll={() => {
@@ -585,7 +694,6 @@ export function CampaignNewPage() {
             </label>
 
             <div className="space-y-3 border-t border-line pt-4">
-              {fieldLabel('Destinatarios', '2')}
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   type="button"
@@ -676,27 +784,6 @@ export function CampaignNewPage() {
       </section>
 
       <section className="space-y-3 rounded-xl border border-line bg-surface-strong p-4">
-        <label className="block text-sm">
-          <span className="text-muted">Línea que envía</span>
-          <select
-            className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2"
-            value={whatsappLineId}
-            onChange={(event) => {
-              setWhatsappLineId(event.target.value)
-              setTemplateId('')
-              setTemplateReady(false)
-              setTemplateForm(emptyTemplateFormState())
-            }}
-          >
-            <option value="">Elige el número</option>
-            {lines.map((line) => (
-              <option key={line.id} value={line.id}>
-                {line.category_label} · {line.label}
-                {line.phone ? ` · ${line.phone}` : ''}
-              </option>
-            ))}
-          </select>
-        </label>
         {fieldLabel('Plantilla (Meta)', '3')}
         <div className="flex flex-wrap items-end gap-3">
           <label className="min-w-[240px] flex-1 text-sm">
@@ -709,7 +796,7 @@ export function CampaignNewPage() {
                 setTemplateReady(false)
                 setTemplateForm(emptyTemplateFormState())
               }}
-              disabled={approvedTemplates.length === 0}
+              disabled={!whatsappLineId || approvedTemplates.length === 0}
               placeholder="— Elige una plantilla —"
               searchPlaceholder="Buscar plantilla…"
               clearOption={{ label: '— Elige una plantilla —' }}
@@ -725,7 +812,7 @@ export function CampaignNewPage() {
           <button
             type="button"
             className="rounded-lg border border-line px-3 py-2 text-sm hover:bg-surface"
-            disabled={busy === 'sync'}
+            disabled={busy === 'sync' || !whatsappLineId}
             onClick={() => handleSyncTemplates()}
           >
             {busy === 'sync' ? 'Sincronizando…' : '↻ Sincronizar'}
@@ -734,7 +821,7 @@ export function CampaignNewPage() {
 
         <CampaignTemplateFields
           templateId={templateId}
-          attrDefs={attrDefs}
+          attrDefs={visibleAttrDefs}
           form={templateForm}
           onFormChange={setTemplateForm}
           onReadyChange={setTemplateReady}
@@ -742,7 +829,7 @@ export function CampaignNewPage() {
       </section>
 
       <section className="space-y-3 rounded-xl border border-line bg-surface-strong p-4">
-        {fieldLabel('Programación y envío', '4')}
+        {fieldLabel('Envío y programación', '4')}
         <div className="flex flex-wrap gap-4 text-sm">
           <label className="flex items-center gap-2">
             <input
@@ -802,7 +889,11 @@ export function CampaignNewPage() {
       </section>
 
       <p className="text-sm text-muted">
-        Resumen: {includeSegments.size} segmento(s) ·{' '}
+        Resumen:{' '}
+        {whatsappLineId
+          ? `${selectedLine?.category_label || 'línea'} · `
+          : 'sin línea · '}
+        {includeSegments.size} segmento(s) ·{' '}
         {excludedContacts.length > 0
           ? `${excludedContacts.length} excluido(s) · `
           : ''}
