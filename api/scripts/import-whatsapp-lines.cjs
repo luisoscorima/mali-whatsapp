@@ -288,17 +288,20 @@ async function applyPlan(plan) {
             updated_at: new Date(),
           },
         });
+        // educacion_ca/ep quedan deprecados como alias de tenant (active=false).
+        const aliasActive = !['educacion_ca', 'educacion_ep'].includes(line.legacy);
         await tx.business_area_aliases.upsert({
           where: { alias: line.legacy },
           create: {
             alias: line.legacy,
             business_area_id: area.id,
             program_key: line.program,
+            active: aliasActive,
           },
           update: {
             business_area_id: area.id,
             program_key: line.program,
-            active: true,
+            active: aliasActive,
             updated_at: new Date(),
           },
         });

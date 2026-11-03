@@ -424,7 +424,7 @@ Si `data` está vacío o no aparece la Página: en Business Manager asigna el ac
 
 - **Dónde:** panel **`/admin/meta`** → *Page access token (Lead Ads)* y *Page ID (Lead Ads)*.
 - Pega el **Page** token del paso A (no el system user, no el WhatsApp token).
-- Es **una** Página → **un** token y **un** Page ID. Repite los mismos valores en **`educacion`**, **`educacion_ca`** y **`educacion_ep`**.
+- Es **una** Página → **un** token y **un** Page ID, guardados en el área canónica **`educacion`** (no hace falta repetir en aliases ca/ep).
 - Respaldo opcional en `.env`: `META_PAGE_ACCESS_TOKEN` / `META_PAGE_ID` (prioridad: Admin/BD sobre env).
 - Detalle: [LEADS.md](./LEADS.md) § “Dónde poner el Page token”.
 
@@ -453,17 +453,17 @@ curl -G "https://graph.facebook.com/v23.0/1684299678482303/subscribed_apps" \
 2. Objeto **Page** → suscribir campo **`leadgen`**.
 3. Mali procesa el aviso, lee `leadgen_id` y hace `GET /{leadgen_id}` con el Page token para obtener `field_data`.
 
-### Enrutado a área (CA / EP / Educación)
+### Enrutado a categoría (CA / EP / general)
 
-La Página de Facebook es **una** (MALI Educación). El área Mali se decide por **`form_id`**, no por el Page ID:
+La Página de Facebook es **una** (MALI Educación). El área canónica es siempre **`educacion`**; la **categoría** se decide por **`form_id`** (`program_key`), no por el Page ID:
 
-| Nombre del Instant Form | Área |
-|-------------------------|------|
-| Empieza con `Cursos de Arte` | `educacion_ca` |
-| Contiene `[FORM EP]` o `FORM EP` | `educacion_ep` |
-| Resto | `educacion` |
+| Nombre del Instant Form | Área | Categoría (`program_key`) |
+|-------------------------|------|---------------------------|
+| Empieza con `Cursos de Arte` | `educacion` | `ca` |
+| Contiene `[FORM EP]` o `FORM EP` | `educacion` | `ep` |
+| Resto | `educacion` | `general` (o sin program) |
 
-Tabla **`meta_lead_form_routes`**: `form_id` → `area` (+ nombre). Lookup local en cada lead.
+Tabla **`meta_lead_form_routes`**: `form_id` → `area=educacion` + `program_key`. Lookup local en cada lead.
 
 - **Sincronizar forms** en `/leads/meta-forms`: Graph `GET /{page-id}/leadgen_forms` actualiza nombres y reaplica reglas (no pisa rutas marcadas como **manual**).
 - Si llega un `form_id` nuevo y hay token: se pide el nombre a Graph una vez y se guarda la ruta.

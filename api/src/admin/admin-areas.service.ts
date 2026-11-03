@@ -771,6 +771,328 @@ export class AdminAreasService {
     return donors;
   }
 
+  /** Fichas residuales en educacion_ca / educacion_ep tras el cutover a educacion + categorías. */
+  async previewEducationAliasContacts(): Promise<EducationAliasContactsPreview> {
+    const rows = await this.loadEducationAliasContacts();
+    const classified = await this.classifyEducationAliasContacts(rows);
+    return {
+      total: rows.length,
+      active: rows.filter((r) => r.active).length,
+      inactive: rows.filter((r) => !r.active).length,
+      by_area: {
+        educacion_ca: rows.filter((r) => r.area === 'educacion_ca').length,
+        educacion_ep: rows.filter((r) => r.area === 'educacion_ep').length,
+      },
+      mergeable: classified.mergeable.length,
+      create_keep: classified.createKeep.length,
+      delete_orphan: classified.deleteOrphan.length,
+      ambiguous: classified.ambiguous.length,
+      samples: classified.mergeable.slice(0, 15).map((c) => ({
+        donor_id: c.donor.id,
+        donor_area: c.donor.area,
+        keep_id: c.keepId!,
+        action: c.action,
+        match: c.match,
+      })),
+      create_keep_samples: classified.createKeep.slice(0, 15).map((c) => ({
+        donor_id: c.donor.id,
+        donor_area: c.donor.area,
+        name: c.donor.name,
+        whatsapp_user_id: c.donor.whatsapp_user_id,
+        action: c.action,
+      })),
+      ambiguous_samples: classified.ambiguous.slice(0, 15).map((c) => ({
+        donor_id: c.donor.id,
+        donor_area: c.donor.area,
+        message: c.message || 'ambiguous',
+        keep_by_phone: c.keepByPhone,
+        keep_by_wuid: c.keepByWuid,
+      })),
+    };
+  }
+
+  async applyEducationAliasContacts(input?: {
+    limit?: number;
+  }): Promise<EducationAliasContactsApplyResult> {
+    const limit = Math.min(200, Math.max(1, Number(input?.limit ?? 100) || 100));
+    const rows = await this.loadEducationAliasContacts();
+    const classified = await this.classifyEducationAliasContacts(rows);
+    const batch = [
+      ...classified.mergeable,
+      ...classified.createKeep,
+      ...classified.deleteOrphan,
+    ].slice(0, limit);
+
+    let merged = 0;
+    let createdKeeps = 0;
+    let deleted = 0;
+    const errors: Array<{ donor_id: number; message: string }> = [];
+    const mergedSamples: EducationAliasContactsApplyResult['merged_samples'] = [];
+
+    const programIds = await this.educationProgramIds();
+
+    for (const item of batch) {
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`ALTER TABLE contacts DISABLE TRIGGER USER`;
+          await tx.$executeRaw`ALTER TABLE people DISABLE TRIGGER USER`;
+          try {
+            let keepId = item.keepId;
+            if (item.action === 'create_keep') {
+              keepId = await this.createEducationKeepFromAlias(tx, item.donor, programIds);
+              createdKeeps += 1;
+            }
+            if (item.action === 'delete_orphan') {
+              await deleteDonorContact(tx, item.donor.id);
+              deleted += 1;
+              return;
+            }
+            if (!keepId) throw new Error('Falta keep_id');
+            const programId =
+              item.donor.area === 'educacion_ca'
+                ? programIds.ca
+                : item.donor.area === 'educacion_ep'
+                  ? programIds.ep
+                  : null;
+            if (programId) {
+              await tx.$executeRaw`
+                INSERT INTO contact_programs (contact_id, program_id, source, first_seen_at, last_seen_at)
+                VALUES (${keepId}, ${programId}, 'alias_absorb', NOW(), NOW())
+                ON CONFLICT (contact_id, program_id) DO UPDATE
+                SET last_seen_at = NOW()
+              `;
+            }
+            if (item.donor.whatsapp_user_id) {
+              const keep = await tx.contacts.findUnique({
+                where: { id: keepId },
+                select: { whatsapp_user_id: true },
+              });
+              if (!keep?.whatsapp_user_id) {
+                await tx.$executeRaw`
+                  UPDATE contacts
+                  SET whatsapp_user_id = ${item.donor.whatsapp_user_id}, updated_at = NOW()
+                  WHERE id = ${keepId} AND whatsapp_user_id IS NULL
+                `;
+              }
+            }
+            await moveDonorOntoKeep(tx, item.donor.id, keepId);
+            await deleteDonorContact(tx, item.donor.id);
+            merged += 1;
+            deleted += 1;
+            if (mergedSamples.length < 20) {
+              mergedSamples.push({
+                donor_id: item.donor.id,
+                keep_id: keepId,
+                action: item.action,
+                match: item.match,
+              });
+            }
+          } finally {
+            await tx.$executeRaw`ALTER TABLE contacts ENABLE TRIGGER USER`;
+            await tx.$executeRaw`ALTER TABLE people ENABLE TRIGGER USER`;
+          }
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        errors.push({ donor_id: item.donor.id, message: message.slice(0, 300) });
+      }
+    }
+
+    // Basura: educacion inactive sin teléfono
+    let junkDeleted = 0;
+    const junk = await this.prisma.contacts.findMany({
+      where: {
+        area: 'educacion',
+        active: false,
+        OR: [{ phone: null }, { phone: '' }],
+      },
+      select: { id: true },
+      take: 50,
+    });
+    for (const row of junk) {
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`ALTER TABLE contacts DISABLE TRIGGER USER`;
+          await tx.$executeRaw`ALTER TABLE people DISABLE TRIGGER USER`;
+          try {
+            await deleteDonorContact(tx, row.id);
+            junkDeleted += 1;
+          } finally {
+            await tx.$executeRaw`ALTER TABLE contacts ENABLE TRIGGER USER`;
+            await tx.$executeRaw`ALTER TABLE people ENABLE TRIGGER USER`;
+          }
+        });
+      } catch {
+        /* ignore if still referenced */
+      }
+    }
+
+    const after = await this.previewEducationAliasContacts();
+    return {
+      batch_limit: limit,
+      attempted: batch.length,
+      merged,
+      created_keeps: createdKeeps,
+      deleted,
+      junk_educacion_inactive_deleted: junkDeleted,
+      skipped_ambiguous: classified.ambiguous.length,
+      errors,
+      merged_samples: mergedSamples,
+      remaining: after.total,
+    };
+  }
+
+  private async loadEducationAliasContacts(): Promise<EducationAliasContactRow[]> {
+    return this.prisma.$queryRaw<EducationAliasContactRow[]>`
+      SELECT
+        c.id,
+        c.area,
+        c.person_id,
+        c.name,
+        c.last_name,
+        c.phone,
+        c.whatsapp_user_id,
+        c.email,
+        c.dni,
+        c.active
+      FROM contacts c
+      WHERE c.area IN ('educacion_ca', 'educacion_ep')
+      ORDER BY c.id
+    `;
+  }
+
+  private async classifyEducationAliasContacts(
+    rows: EducationAliasContactRow[],
+  ): Promise<{
+    mergeable: EducationAliasClassified[];
+    createKeep: EducationAliasClassified[];
+    deleteOrphan: EducationAliasClassified[];
+    ambiguous: EducationAliasClassified[];
+  }> {
+    const mergeable: EducationAliasClassified[] = [];
+    const createKeep: EducationAliasClassified[] = [];
+    const deleteOrphan: EducationAliasClassified[] = [];
+    const ambiguous: EducationAliasClassified[] = [];
+
+    for (const donor of rows) {
+      const phone = donor.phone?.trim() || null;
+      const wuid = donor.whatsapp_user_id?.trim() || null;
+
+      const byPhone = phone
+        ? await this.prisma.contacts.findFirst({
+            where: { area: 'educacion', phone },
+            select: { id: true },
+          })
+        : null;
+      const byWuid = wuid
+        ? await this.prisma.contacts.findFirst({
+            where: { area: 'educacion', whatsapp_user_id: wuid },
+            select: { id: true },
+          })
+        : null;
+
+      if (byPhone && byWuid && byPhone.id !== byWuid.id) {
+        ambiguous.push({
+          donor,
+          action: 'ambiguous',
+          keepId: null,
+          match: null,
+          keepByPhone: byPhone.id,
+          keepByWuid: byWuid.id,
+          message: 'phone y BSUID apuntan a fichas educacion distintas',
+        });
+        continue;
+      }
+
+      if (byPhone || byWuid) {
+        mergeable.push({
+          donor,
+          action: 'merge',
+          keepId: (byPhone ?? byWuid)!.id,
+          match: byPhone ? 'phone' : 'wuid',
+        });
+        continue;
+      }
+
+      if (wuid || phone) {
+        createKeep.push({
+          donor,
+          action: 'create_keep',
+          keepId: null,
+          match: wuid ? 'wuid' : 'phone',
+        });
+        continue;
+      }
+
+      deleteOrphan.push({
+        donor,
+        action: 'delete_orphan',
+        keepId: null,
+        match: null,
+      });
+    }
+
+    return { mergeable, createKeep, deleteOrphan, ambiguous };
+  }
+
+  private async educationProgramIds(): Promise<{ ca: number | null; ep: number | null }> {
+    const rows = await this.prisma.business_programs.findMany({
+      where: {
+        slug: { in: ['ca', 'ep'] },
+        business_area: { slug: 'educacion' },
+      },
+      select: { id: true, slug: true },
+    });
+    return {
+      ca: rows.find((r) => r.slug === 'ca')?.id ?? null,
+      ep: rows.find((r) => r.slug === 'ep')?.id ?? null,
+    };
+  }
+
+  private async createEducationKeepFromAlias(
+    tx: Parameters<typeof moveDonorOntoKeep>[0],
+    donor: EducationAliasContactRow,
+    programIds: { ca: number | null; ep: number | null },
+  ): Promise<number> {
+    const areaRow = await tx.business_areas.findFirst({
+      where: { slug: 'educacion' },
+      select: { id: true },
+    });
+    if (!areaRow) throw new Error('Falta business_area educacion');
+
+    const created = await tx.contacts.create({
+      data: {
+        person_id: donor.person_id,
+        business_area_id: areaRow.id,
+        area: 'educacion',
+        name: donor.name || '',
+        last_name: donor.last_name || '',
+        phone: donor.phone?.trim() || null,
+        whatsapp_user_id: donor.whatsapp_user_id?.trim() || null,
+        email: donor.email,
+        dni: donor.dni,
+        opt_in: true,
+        active: true,
+      },
+      select: { id: true },
+    });
+
+    const programId =
+      donor.area === 'educacion_ca'
+        ? programIds.ca
+        : donor.area === 'educacion_ep'
+          ? programIds.ep
+          : null;
+    if (programId) {
+      await tx.$executeRaw`
+        INSERT INTO contact_programs (contact_id, program_id, source, first_seen_at, last_seen_at)
+        VALUES (${created.id}, ${programId}, 'alias_absorb', NOW(), NOW())
+        ON CONFLICT (contact_id, program_id) DO NOTHING
+      `;
+    }
+    return created.id;
+  }
+
   private async requireArea(slug: string) {
     const area = await this.prisma.business_areas.findFirst({
       where: { slug, active: true },
@@ -828,4 +1150,77 @@ export type NullPhoneClonesApplyResult = {
   }>;
   remaining_mergeable: number;
   remaining_donors: number;
+};
+
+type EducationAliasContactRow = {
+  id: number;
+  area: string;
+  person_id: number;
+  name: string;
+  last_name: string;
+  phone: string | null;
+  whatsapp_user_id: string | null;
+  email: string | null;
+  dni: string | null;
+  active: boolean;
+};
+
+type EducationAliasClassified = {
+  donor: EducationAliasContactRow;
+  action: 'merge' | 'create_keep' | 'delete_orphan' | 'ambiguous';
+  keepId: number | null;
+  match: 'phone' | 'wuid' | 'new' | null;
+  keepByPhone?: number;
+  keepByWuid?: number;
+  message?: string;
+};
+
+export type EducationAliasContactsPreview = {
+  total: number;
+  active: number;
+  inactive: number;
+  by_area: { educacion_ca: number; educacion_ep: number };
+  mergeable: number;
+  create_keep: number;
+  delete_orphan: number;
+  ambiguous: number;
+  samples: Array<{
+    donor_id: number;
+    donor_area: string;
+    keep_id: number;
+    action: string;
+    match: string | null;
+  }>;
+  create_keep_samples: Array<{
+    donor_id: number;
+    donor_area: string;
+    name: string;
+    whatsapp_user_id: string | null;
+    action: string;
+  }>;
+  ambiguous_samples: Array<{
+    donor_id: number;
+    donor_area: string;
+    message: string;
+    keep_by_phone?: number;
+    keep_by_wuid?: number;
+  }>;
+};
+
+export type EducationAliasContactsApplyResult = {
+  batch_limit: number;
+  attempted: number;
+  merged: number;
+  created_keeps: number;
+  deleted: number;
+  junk_educacion_inactive_deleted: number;
+  skipped_ambiguous: number;
+  errors: Array<{ donor_id: number; message: string }>;
+  merged_samples: Array<{
+    donor_id: number;
+    keep_id: number;
+    action: string;
+    match: string | null;
+  }>;
+  remaining: number;
 };

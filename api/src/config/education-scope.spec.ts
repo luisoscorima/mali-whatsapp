@@ -19,16 +19,19 @@ describe('education scope', () => {
     expect(isEducationAreaSlug('pam')).toBe(false);
   });
 
-  it('al leer educacion incluye las tres áreas y un alias filtra el programa', () => {
+  it('al leer educacion usa solo el área canónica; el alias filtra el programa', () => {
     expect(educationReadScope('educacion')).toEqual({
-      areas: ['educacion', 'educacion_ca', 'educacion_ep'],
+      areas: ['educacion'],
       program: null,
     });
-    expect(educationReadScope('educacion_ep').program).toBe('ep');
+    expect(educationReadScope('educacion_ep')).toEqual({
+      areas: ['educacion'],
+      program: 'ep',
+    });
     expect(educationReadScope('all').program).toBeNull();
     expect(educationReadScope('pam').areas).toEqual(['pam']);
     expect(educationReadScope('norte')).toEqual({
-      areas: ['educacion', 'educacion_ca', 'educacion_ep'],
+      areas: ['educacion'],
       program: 'norte',
     });
   });

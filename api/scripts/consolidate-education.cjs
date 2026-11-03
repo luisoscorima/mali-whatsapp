@@ -1,13 +1,20 @@
 #!/usr/bin/env node
 /**
+ * HISTÓRICO — no re-ejecutar en prod.
  * Consolidación de Educación hacia un área, con CA y EP como programas.
  *
- *   node scripts/consolidate-education.cjs
- *   node scripts/consolidate-education.cjs --apply
+ * Dejó donantes con el mismo person_id y phone NULL (incidente P2002 2026-11-03).
+ * Para residuales ca/ep usar GET/POST /api/admin/conflicts/education-alias-contacts.
  *
- * Sin --apply calcula el mapa dentro de una transacción y la revierte.
- * Las reglas están en docs/CONTACTOS-CHANGELOG.md.
+ * Override explícito: ALLOW_LEGACY_EDU_SCRIPT=1
  */
+if (process.env.ALLOW_LEGACY_EDU_SCRIPT !== '1') {
+  console.error(
+    'Bloqueado: consolidate-education.cjs es histórico. Usa education-alias-contacts o ALLOW_LEGACY_EDU_SCRIPT=1',
+  );
+  process.exit(1);
+}
+
 const { PrismaClient } = require('@prisma/client');
 
 const APPLY = process.argv.includes('--apply');

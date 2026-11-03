@@ -15,9 +15,10 @@ Hay **cuatro** áreas canónicas. No se crea una quinta desde la pantalla. PAM, 
 
 ## Educación y aliases
 
-- Identidad y captación nuevas: solo **`educacion`**.
-- `educacion_ca` / `educacion_ep` son **aliases históricos** (y, en producto, categorías CA/EP). **No** son áreas de ficha ni de captación nueva.
-- Escritura canónica: `educationWriteArea` / store Meta → `educacion`; la categoría sale de la línea (`program_id`) o del form route (`program_key`).
+- Identidad, ficha y captación: solo **`educacion`** (filas en BD con ese `area`).
+- `educacion_ca` / `educacion_ep` como **input** se traducen a categoría CA/EP (`educationProgramOf`); en catálogo viven en `business_area_aliases` con `active=false`.
+- **No** hay fichas residuales en ca/ep tras `education-alias-contacts`. Lectura (`educationReadScope` / `areaFamily`) = `['educacion']`.
+- Escritura: `educationWriteArea` → siempre `educacion`; categoría desde línea (`program_id`) o form route (`program_key`).
 
 ## Aislamiento
 
@@ -34,3 +35,7 @@ Hay **cuatro** áreas canónicas. No se crea una quinta desde la pantalla. PAM, 
 ## Límite con MALI ONE
 
 mali-whatsapp es fuente de verdad de personas, fichas, líneas y leads. MALI ONE opera por API (`CRM_SERVICE_TOKEN`) sin otra base de personas. El chat no se mueve a ONE.
+
+## Qué nota el usuario
+
+Para el día a día (asesores) el área sigue siendo **Educación** con categorías general/CA/EP. Lo que desapareció es el legado de tres tenants Educación y las fichas duplicadas que provocaban errores al importar o al recibir WhatsApp. Detalle de impacto: [CONTACTOS.md](./CONTACTOS.md) § “Impacto para el usuario”.

@@ -48,7 +48,7 @@ Alineado con [AREAS.md](./AREAS.md) / [CATEGORIAS.md](./CATEGORIAS.md) / [LINEAS
 | **Entrada** (`education_lead_entries`) | Intento gestionable, ventana 60 días, hacia una categoría |
 | **Ciclo** (`education_lead_cycles`) | Atención de una categoría: asesor, estado y calificación |
 
-**Objetivo duro:** `educacion_ca` / `educacion_ep` **no** se usan como área en identidad ni captación. Son aliases históricos / categoría. La ficha y los orígenes nuevos van a `educacion`; la categoría sale de la **línea** (`program_id`) o del **form route** (`program_key`).
+**Objetivo duro:** no hay fichas ni captación en `educacion_ca` / `educacion_ep` como área. Solo **`educacion`** + categoría (`program_id` / `program_key` ca|ep|general). Los aliases en API se traducen a categoría; la lectura DB es solo `educacion`.
 
 | Producto Meta / TikTok | Qué es |
 |------------------------|--------|

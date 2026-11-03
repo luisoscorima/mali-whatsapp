@@ -771,12 +771,8 @@ export class CrmService {
     const andFilters: Prisma.contactsWhereInput[] = [];
 
     if (program) {
-      const legacy = program === 'ca' ? 'educacion_ca' : program === 'ep' ? 'educacion_ep' : null;
       andFilters.push({
-        OR: [
-          ...(legacy ? [{ area: legacy }] : []),
-          { contact_programs: { some: { program: { slug: program } } } },
-        ],
+        contact_programs: { some: { program: { slug: program } } },
       });
     }
 
@@ -875,17 +871,7 @@ export class CrmService {
           education_lead_cycles: {
             ...(program
               ? {
-                  where: {
-                    OR: [
-                      { program: { is: { slug: program } } },
-                      ...(program === 'ca'
-                        ? [{ program_id: null, area: 'educacion_ca' as const }]
-                        : []),
-                      ...(program === 'ep'
-                        ? [{ program_id: null, area: 'educacion_ep' as const }]
-                        : []),
-                    ],
-                  },
+                  where: { program: { is: { slug: program } } },
                 }
               : {}),
             orderBy: [{ started_at: 'desc' }, { id: 'desc' }],

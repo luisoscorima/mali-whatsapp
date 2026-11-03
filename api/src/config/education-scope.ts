@@ -1,11 +1,15 @@
 // Education workflows remain domain-specific; tenant filtering is shared.
 export { conversationAreaPredicate, contactAreaPredicate, inboxConversationPredicate, lineCategoryPredicate, visibleConversationWhere } from './business-scope';
 
+/** Áreas históricas (input/compat). La lectura DB ya es solo `educacion`. */
 export const EDUCATION_AREA_SLUGS = [
   'educacion',
   'educacion_ca',
   'educacion_ep',
 ] as const;
+
+/** Familia de lectura en tablas con columna `area` tras absorber residuales ca/ep. */
+export const EDUCATION_READ_AREA_SLUGS = ['educacion'] as const;
 
 const OTHER_AREAS = ['ti', 'pam', 'patronato'];
 
@@ -30,7 +34,10 @@ export function educationProgramOf(area: unknown): string | null {
   return null;
 }
 
-/** Lectura de Educación: las áreas históricas, y la categoría si el alias o el identificador la traen. */
+/**
+ * Lectura de Educación: filas canónicas en `educacion`.
+ * Los alias ca/ep solo aportan filtro de categoría (`program`), no filas de área.
+ */
 export function educationReadScope(area: unknown): {
   areas: string[];
   program: string | null;
@@ -44,7 +51,7 @@ export function educationReadScope(area: unknown): {
     || isEducationAreaSlug(selected)
     || program != null;
   if (!family) return { areas: [selected], program: null };
-  return { areas: [...EDUCATION_AREA_SLUGS], program };
+  return { areas: [...EDUCATION_READ_AREA_SLUGS], program };
 }
 
 /**

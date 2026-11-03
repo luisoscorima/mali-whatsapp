@@ -17,7 +17,7 @@ describe('education-lead-context.util', () => {
     expect(exactOpenCycleWhere({ personId: 3, area: 'educacion', programId: 9 })).toEqual({
       person_id: 3,
       closed_at: null,
-      OR: [{ program_id: 9 }],
+      program_id: 9,
     });
     expect(exactOpenCycleWhere({ personId: 3, area: 'educacion', programId: null })).toEqual({
       person_id: 3,
@@ -27,11 +27,11 @@ describe('education-lead-context.util', () => {
     });
   });
 
-  it('keeps legacy CA/EP null-program rows only for those area slugs', () => {
+  it('alias CA/EP also match by program_id only (sin filas de área legacy)', () => {
     expect(exactOpenCycleWhere({ personId: 3, area: 'educacion_ca', programId: 9 })).toEqual({
       person_id: 3,
       closed_at: null,
-      OR: [{ program_id: 9 }, { program_id: null, area: 'educacion_ca' }],
+      program_id: 9,
     });
   });
 

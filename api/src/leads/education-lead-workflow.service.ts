@@ -40,7 +40,7 @@ function isUniqueViolation(error: unknown): boolean {
   );
 }
 
-const EDUCATION_AREAS = ['educacion', 'educacion_ca', 'educacion_ep'];
+const EDUCATION_AREAS = ['educacion'];
 const SIXTY_DAYS_MS = EDUCATION_LEAD_WINDOW_MS;
 const INBOUND_SESSION_MS = 24 * 60 * 60 * 1000;
 
@@ -94,23 +94,11 @@ export class EducationLeadWorkflowService {
   }
 
   private programOrLegacyFilter(program: string): Prisma.education_lead_entriesWhereInput {
-    return {
-      OR: [
-        { program: { is: { slug: program } } },
-        ...(program === 'ca' ? [{ program_id: null, area: 'educacion_ca' }] : []),
-        ...(program === 'ep' ? [{ program_id: null, area: 'educacion_ep' }] : []),
-      ],
-    };
+    return { program: { is: { slug: program } } };
   }
 
   private programOrLegacyCycleFilter(program: string): Prisma.education_lead_cyclesWhereInput {
-    return {
-      OR: [
-        { program: { is: { slug: program } } },
-        ...(program === 'ca' ? [{ program_id: null, area: 'educacion_ca' as const }] : []),
-        ...(program === 'ep' ? [{ program_id: null, area: 'educacion_ep' as const }] : []),
-      ],
-    };
+    return { program: { is: { slug: program } } };
   }
 
   async isAttentionV1Enabled(): Promise<boolean> {
@@ -199,16 +187,7 @@ export class EducationLeadWorkflowService {
     const latestEntry = await this.prisma.education_lead_entries.findFirst({
       where: {
         contact_id: input.contactId,
-        ...(programId != null
-          ? {
-              OR: [
-                { program_id: programId },
-                ...(input.area === 'educacion_ca' || input.area === 'educacion_ep'
-                  ? [{ program_id: null, area: input.area }]
-                  : []),
-              ],
-            }
-          : { program_id: null }),
+        ...(programId != null ? { program_id: programId } : { program_id: null }),
       },
       orderBy: [{ occurred_at: 'desc' }, { id: 'desc' }],
       select: { occurred_at: true, classification: true },
@@ -960,21 +939,19 @@ export class EducationLeadWorkflowService {
     if (!programRow) throw new BadRequestException('Categoría no válida');
     const cutoff = new Date(Date.now() - SIXTY_DAYS_MS);
     const q = String(params.q ?? '').trim();
-    const legacy = program === 'ca' ? 'educacion_ca' : program === 'ep' ? 'educacion_ep' : null;
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(20260924::bigint)`;
       const advisors = await tx.users.findMany({
         where: {
           is_provisioned: true,
           role_slug: 'asesor_comercial',
-          OR: [
-            { memberships: { some: {
+          memberships: {
+            some: {
               active: true,
               business_area: { slug: 'educacion' },
               programs: { some: { program: { slug: program, active: true } } },
-            } } },
-            ...(legacy ? [{ area: legacy }, { user_areas: { some: { area: legacy } } }] : []),
-          ],
+            },
+          },
         },
         select: { id: true },
         orderBy: { id: 'asc' },

@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, ConflictException, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { businessReadScope } from '../config/areas';
+import { educationWriteArea } from '../config/education-scope';
 import {
   applyCategoryGrant,
   categoryOfProgram,
@@ -1211,7 +1212,7 @@ export class ContactsService {
   }
 
   async create(user: AuthUser, dto: UpsertContactDto): Promise<ContactDetail> {
-    const area = user.area;
+    const area = educationWriteArea(user.area);
     const segmentSet = await this.getSegmentSlugSet(area);
     const validation = validateContactIdentityInput(dto, segmentSet);
     if (!validation.ok) {
@@ -1644,7 +1645,7 @@ export class ContactsService {
     filename: string,
     categories: string[] | null = null,
   ): Promise<ContactsImportResult> {
-    const area = user.area;
+    const area = educationWriteArea(user.area);
     const segmentSet = await this.getSegmentSlugSet(area);
     const lower = String(filename ?? '').toLowerCase();
     const parsed = lower.endsWith('.xlsx')

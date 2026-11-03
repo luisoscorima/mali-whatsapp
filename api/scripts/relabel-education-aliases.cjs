@@ -1,12 +1,17 @@
 #!/usr/bin/env node
 /**
- * Reetiqueta remanente educacion_ca / educacion_ep → educacion + program.
+ * HISTÓRICO — preferir /api/admin/conflicts/education-alias-contacts (merge+DELETE).
+ * Este script solo reetiqueta y deja bloqueados por colisión de identidad.
  *
- *   node scripts/relabel-education-aliases.cjs
- *   node scripts/relabel-education-aliases.cjs --apply
- *
- * No re-ejecuta consolidate-education. Dry-run por defecto (revierte).
+ * Override explícito: ALLOW_LEGACY_EDU_SCRIPT=1
  */
+if (process.env.ALLOW_LEGACY_EDU_SCRIPT !== '1') {
+  console.error(
+    'Bloqueado: relabel-education-aliases.cjs es histórico. Usa education-alias-contacts o ALLOW_LEGACY_EDU_SCRIPT=1',
+  );
+  process.exit(1);
+}
+
 const { PrismaClient } = require('@prisma/client');
 
 const APPLY = process.argv.includes('--apply');

@@ -128,6 +128,24 @@ export class AdminController {
     };
   }
 
+  @Get('conflicts/education-alias-contacts')
+  async previewEducationAliasContacts() {
+    return {
+      ok: true,
+      data: await this.adminAreasService.previewEducationAliasContacts(),
+    };
+  }
+
+  @Post('conflicts/education-alias-contacts/apply')
+  async applyEducationAliasContacts(@Body() body: { limit?: number }) {
+    return {
+      ok: true,
+      data: await this.adminAreasService.applyEducationAliasContacts({
+        limit: body?.limit,
+      }),
+    };
+  }
+
   @Get('areas/:slug/categories')
   async listCategories(@Param('slug') slug: string) {
     return { ok: true, data: await this.adminAreasService.listCategories(slug) };

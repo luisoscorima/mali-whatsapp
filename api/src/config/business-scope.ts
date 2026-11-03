@@ -127,11 +127,11 @@ export function contactAreaPredicate(alias: string, area: string): Prisma.Sql {
   return Prisma.sql`(${col(alias,'area')} IN (${Prisma.join(scope.areas)}) AND ${program} AND ${contactAccessPredicate(alias)})`;
 }
 
-/** Read family for Educación includes historical CA/EP slugs until residual rows are gone. */
+/** Read family for Educación: solo área canónica (residuales ca/ep absorbidos). */
 function readAreasFor(area: string): string[] {
   const scope = businessReadScope(area);
   if (scope.canonicalArea !== 'educacion') return scope.areas;
-  return [...new Set([...scope.areas, 'educacion', 'educacion_ca', 'educacion_ep'])];
+  return [...new Set([...scope.areas, 'educacion'])];
 }
 
 /** Prisma `where` for rows whose `area` is in the read family (educacion + ca/ep). */

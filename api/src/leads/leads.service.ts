@@ -21,6 +21,7 @@ import {
   educationProgramOf,
   educationReadScope,
   educationWriteArea,
+  isEducationAreaSlug,
 } from '../config/education-scope';
 import {
   exactOpenCycleWhere,
@@ -187,12 +188,17 @@ export class LeadsService implements OnModuleInit {
   }
 
   private educationAreas(area?: string): string[] {
-    const allowed = ['educacion', 'educacion_ca', 'educacion_ep'];
-    const selected = String(area ?? 'all').trim().toLowerCase() || 'all';
-    if (selected !== 'all' && !allowed.includes(selected)) {
+    const scope = educationReadScope(area ?? 'all');
+    if (
+      area
+      && area !== 'all'
+      && !scope.areas.includes('educacion')
+      && educationProgramOf(area) == null
+      && !isEducationAreaSlug(area)
+    ) {
       throw new BadRequestException(`Área de educación inválida: ${area}`);
     }
-    return selected === 'all' ? allowed : [selected];
+    return scope.areas.includes('educacion') ? scope.areas : ['educacion'];
   }
 
   private async educationProgramId(area: string): Promise<number | null> {
@@ -253,10 +259,8 @@ export class LeadsService implements OnModuleInit {
     const usernameQ = q.replace(/^@/, '');
     const and: Prisma.contact_originsWhereInput[] = [];
     if (program) {
-      const legacy = program === 'ca' ? 'educacion_ca' : program === 'ep' ? 'educacion_ep' : null;
       and.push({
         OR: [
-          ...(legacy ? [{ area: legacy }] : []),
           { program: { slug: program } },
           {
             contacts: {

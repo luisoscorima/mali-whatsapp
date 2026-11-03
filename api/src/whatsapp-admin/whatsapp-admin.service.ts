@@ -104,17 +104,22 @@ export class WhatsAppAdminService {
     throw new Error('La credencial no tiene una fuente compatible');
   }
 
-  /** Alias de inbox (educacion / educacion_ca / educacion_ep) según categoría. */
+  /**
+   * Huella de área canónica en la línea. CA/EP viven en program_id / program_key;
+   * ya no se escribe educacion_ca / educacion_ep en líneas nuevas.
+   */
   private legacyAreaForProgram(
     programKey: string | null | undefined,
     areaSlug?: string | null,
   ): string | null {
+    const slug = String(areaSlug || '')
+      .trim()
+      .toLowerCase();
+    if (slug === 'educacion' || slug.startsWith('educacion')) return 'educacion';
     const key = String(programKey || '')
       .trim()
       .toLowerCase();
-    if (key === 'ca') return 'educacion_ca';
-    if (key === 'ep') return 'educacion_ep';
-    if (!key && areaSlug === 'educacion') return 'educacion';
+    if (key === 'ca' || key === 'ep' || key === 'general') return 'educacion';
     return null;
   }
 

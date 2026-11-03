@@ -41,18 +41,9 @@ export function exactCategoryCycleWhere(input: {
 }) {
   const programId = input.programId ?? null;
   if (programId != null) {
-    const legacyArea =
-      input.area === 'educacion_ca' || input.area === 'educacion_ep'
-        ? input.area
-        : null;
     return {
       person_id: input.personId,
-      OR: [
-        { program_id: programId },
-        ...(legacyArea
-          ? [{ program_id: null as number | null, area: legacyArea }]
-          : []),
-      ],
+      program_id: programId,
     };
   }
   return {
@@ -64,8 +55,7 @@ export function exactCategoryCycleWhere(input: {
 
 /**
  * Exact open-cycle match by person + category.
- * Specific program: only that program_id (plus legacy null+educacion_ca/ep).
- * General: program_id IS NULL and explicit General area (never CA/EP).
+ * Specific program: that program_id. General: program_id IS NULL + área educacion.
  */
 export function exactOpenCycleWhere(input: {
   personId: number;

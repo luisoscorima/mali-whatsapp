@@ -2570,7 +2570,7 @@ export function ConversationsInboxPage() {
   const assignableSegments = list?.assignable_segments ?? []
   const canBulkSelect =
     canAssign || assignableSegments.length > 0 || bulkAttrDefs.length > 0
-  const allowBulkUnassign = !['educacion', 'educacion_ca', 'educacion_ep'].includes(
+  const allowBulkUnassign = !['educacion'].includes(
     user?.area ?? '',
   )
   const bulkSegmentOptions = useMemo(
