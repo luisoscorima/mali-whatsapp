@@ -2,6 +2,12 @@
 
 Vigente: [CONTACTOS.md](./CONTACTOS.md).
 
+## 2026-11-03 — Conciencia cross-área (inbox)
+
+- Persona unificada; ficha por área (sin unificar `contacts`).
+- Inbox: no mostrar segmentos/lead de otra área; aviso `other_area_fichas` (“También tiene ficha en …”).
+- Webhook + detalle de chat aseguran ficha del área del hilo (`PersonResolver`); campaña vincula `contact_id` del área si el log venía solo con teléfono.
+
 ## 2026-11-03 — Cierre residuales educacion_ca / educacion_ep
 
 - Job master `GET/POST /api/admin/conflicts/education-alias-contacts`: fusiona por phone/BSUID (o crea ficha `educacion`) y **DELETE** del residual.

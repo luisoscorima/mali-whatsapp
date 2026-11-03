@@ -40,6 +40,7 @@ import { InboxLeadStatusPicker } from './InboxLeadStatusPicker'
 import { InboxLeadStatusSheet } from './InboxLeadStatusSheet'
 import { groupAssignableSegments } from './assignableSegmentsUi'
 import { InboxContactSheet } from './InboxContactSheet'
+import { areaLabel } from '../admin/areaLabels'
 import { InboxSendTemplateDialog } from './InboxSendTemplateDialog'
 import {
   ContextMenu,
@@ -686,6 +687,15 @@ function ProfileBlock({
             )}
           </p>
         ) : null}
+        {detail.contact?.other_area_fichas &&
+        detail.contact.other_area_fichas.length > 0 ? (
+          <p className="inbox-chat-sub muted">
+            También tiene ficha en:{' '}
+            {detail.contact.other_area_fichas
+              .map((ficha) => areaLabel(ficha.area))
+              .join(', ')}
+          </p>
+        ) : null}
         {readonlySlugs.length > 0 ? (
           <span
             className="contact-segment-chips contact-segment-chips--header"
@@ -856,6 +866,7 @@ type InboxDetail = {
     lead_score: number | null
     lead_status: { id: number; slug: string; label: string } | null
     segment_slugs: string[]
+    other_area_fichas?: { area: string; contact_id: number }[]
   } | null
   meta_ad: {
     id: number

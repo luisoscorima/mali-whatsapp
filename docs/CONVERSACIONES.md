@@ -10,6 +10,8 @@ Histórico: [CONVERSACIONES-CHANGELOG.md](./CONVERSACIONES-CHANGELOG.md). Relaci
 |-------|--------|
 | Clave | Conversación por línea (`whatsapp_line_id`); no se fusionan entre sí |
 | Persona | Vinculada a la ficha/persona; varias líneas ⇒ varios hilos |
+| Ficha del área | `contact_id` debe ser ficha del **mismo área** que el chat. Inbound y apertura de detalle aseguran/crean esa ficha vía `PersonResolver` |
+| Segmentos en cabecera | Solo de la ficha del área del chat. Si la persona tiene fichas en otras áreas, nota: “También tiene ficha en: …” (sin chips ajenos) |
 | Asesor | Asignación en el hilo; el **ownership de lead** vive en el ciclo ([LEADS.md](./LEADS.md)) |
 | Modo | `bot` (IA si el área tiene bot) / `human` |
 

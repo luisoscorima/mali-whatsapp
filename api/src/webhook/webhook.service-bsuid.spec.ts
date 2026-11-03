@@ -67,6 +67,7 @@ describe('WebhookService BSUID inbound', () => {
         {} as never,
         leads as never,
         { getCatalog: jest.fn().mockResolvedValue([]) } as never,
+        { resolve: jest.fn().mockResolvedValue({ contact_id: 99, person_id: 99, created: true, conflict: false }) } as never,
       );
       const value: MetaWebhookChangeValue = {
         metadata: { phone_number_id: 'line-1' },
@@ -90,7 +91,7 @@ describe('WebhookService BSUID inbound', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             phone: null,
-            contact_id: null,
+            contact_id: 99,
             whatsapp_user_id: userId,
             wa_username: 'ana_mali',
           }),
@@ -227,6 +228,7 @@ describe('WebhookService BSUID inbound', () => {
       {} as never,
       leads as never,
       { getCatalog: jest.fn().mockResolvedValue([]) } as never,
+      { resolve: jest.fn().mockResolvedValue({ contact_id: 99, person_id: 99, created: true, conflict: false }) } as never,
     );
 
     await service['persistInboundMessages'](
@@ -276,6 +278,7 @@ describe('WebhookService BSUID inbound', () => {
       {} as never,
       {} as never,
       {} as never,
+      { resolve: jest.fn().mockResolvedValue({ contact_id: 99, person_id: 99, created: true, conflict: false }) } as never,
     );
     await service['persistInboundMessages'](
       {
@@ -336,6 +339,7 @@ describe('WebhookService BSUID inbound', () => {
       {} as never,
       leads as never,
       catalog as never,
+      { resolve: jest.fn() } as never,
     );
 
     await service['maybeAttributeMaliOneLinkOrigin']({
@@ -417,6 +421,7 @@ describe('WebhookService BSUID inbound', () => {
       {} as never,
       leads as never,
       {} as never,
+      { resolve: jest.fn().mockResolvedValue({ contact_id: 99, person_id: 99, created: true, conflict: false }) } as never,
     );
 
     await service['persistInboundMessages'](

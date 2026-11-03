@@ -20,6 +20,7 @@ import { MaliOneLinksCatalogService } from '../leads/mali-one-links-catalog.serv
 import { matchMaliOneWhatsappLink } from '../leads/mali-one-link-match.util';
 import { matchWebButtonWhatsapp } from '../leads/web-button-match.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { PersonResolverService } from '../people/person-resolver.service';
 import { isWhatsAppBsuid } from '../conversations/whatsapp-recipient.util';
 import { chooseWhatsAppIdentityMatch } from '../conversations/whatsapp-identity.util';
 import {
@@ -70,6 +71,7 @@ export class WebhookService {
     private readonly metaLeadgen: MetaLeadgenService,
     private readonly leadsService: LeadsService,
     private readonly maliOneLinksCatalog: MaliOneLinksCatalogService,
+    private readonly people: PersonResolverService,
   ) {}
 
   handleVerification(
@@ -705,8 +707,39 @@ export class WebhookService {
           `Webhook inbound: identidades de contacto en conflicto duro para area=${area}; se conserva BSUID`,
         );
       }
-      const contactInArea = contactMatch.match;
-      const contactId = contactInArea?.id ?? null;
+      let contactInArea = contactMatch.match;
+      let contactId = contactInArea?.id ?? null;
+      if (!contactId && (phone || userId)) {
+        try {
+          const profileName = extractInboundProfileName(
+            value.contacts,
+            userId ?? from,
+          );
+          const resolved = await this.people.resolve(this.prisma, {
+            area,
+            phone,
+            whatsapp_user_id: userId,
+            name: profileName || undefined,
+          });
+          contactId = resolved.contact_id;
+          contactInArea = {
+            id: resolved.contact_id,
+            phone,
+            whatsapp_user_id: userId,
+            email: null,
+            dni: null,
+            last_name: '',
+            lead_status_id: null,
+            lead_score: null,
+          };
+        } catch (error) {
+          this.logger.warn(
+            `Webhook inbound: no se pudo asegurar ficha ${area}: ${
+              error instanceof Error ? error.message : error
+            }`,
+          );
+        }
+      }
       if (contactInArea && userId && !contactInArea.whatsapp_user_id) {
         await this.prisma.contacts.update({
           where: { id: contactInArea.id },

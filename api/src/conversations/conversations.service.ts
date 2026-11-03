@@ -151,6 +151,8 @@ import type {
   ArchiveConversationResult,
   MessageReactionResult,
   InboxTimelineEvent,
+  InboxOtherAreaFicha,
+  InboxContact,
 } from './conversations.types';
 import {
   buildMessageReplyPreview,
@@ -173,6 +175,8 @@ import {
 } from './inbox-timeline.util';
 import { fetchConversationSummary } from './conversation-analytics.util';
 import { EducationLeadWorkflowService } from '../leads/education-lead-workflow.service';
+import { PersonResolverService } from '../people/person-resolver.service';
+import { canonicalBusinessArea } from '../config/areas';
 
 const INBOX_LIST_PAGE_SIZE = 50;
 const INBOX_DETAIL_MESSAGE_PAGE_SIZE = 50;
@@ -215,10 +219,173 @@ export class ConversationsService {
     private readonly flowsService: FlowsService,
     private readonly userAreas: UserAreasService,
     private readonly educationLeads: EducationLeadWorkflowService,
+    private readonly people: PersonResolverService,
   ) {}
 
   private conversationLookup(area: string, id: number) {
     return visibleConversationWhere(area, id);
+  }
+
+  private async loadOtherAreaFichas(input: {
+    area: string;
+    contactId: number | null;
+    phone: string | null;
+    whatsappUserId: string | null;
+  }): Promise<InboxOtherAreaFicha[]> {
+    const canonical = canonicalBusinessArea(input.area);
+    let personId: number | null = null;
+    if (input.contactId) {
+      const row = await this.prisma.contacts.findFirst({
+        where: { id: input.contactId },
+        select: { person_id: true },
+      });
+      personId = row?.person_id ?? null;
+    }
+    if (!personId && (input.phone || input.whatsappUserId)) {
+      const sibling = await this.prisma.contacts.findFirst({
+        where: {
+          active: true,
+          OR: [
+            ...(input.phone ? [{ phone: input.phone }] : []),
+            ...(input.whatsappUserId
+              ? [{ whatsapp_user_id: input.whatsappUserId }]
+              : []),
+          ],
+        },
+        orderBy: { updated_at: 'desc' },
+        select: { person_id: true },
+      });
+      personId = sibling?.person_id ?? null;
+    }
+    if (!personId) return [];
+    const rows = await this.prisma.contacts.findMany({
+      where: {
+        person_id: personId,
+        active: true,
+        NOT: { area: canonical },
+      },
+      select: { id: true, area: true },
+      orderBy: { area: 'asc' },
+    });
+    const seen = new Set<string>();
+    const out: InboxOtherAreaFicha[] = [];
+    for (const row of rows) {
+      const area = canonicalBusinessArea(row.area);
+      if (!area || area === canonical || seen.has(area)) continue;
+      seen.add(area);
+      out.push({ area, contact_id: row.id });
+    }
+    return out;
+  }
+
+  private async loadInboxContactForArea(input: {
+    contactId: number;
+    area: string;
+    conversationId: number;
+    includeAreaData: boolean;
+    otherAreaFichas: InboxOtherAreaFicha[];
+  }): Promise<InboxContact | null> {
+    const canonical = canonicalBusinessArea(input.area);
+    const rows = await this.prisma.$queryRaw<
+      {
+        name: string | null;
+        last_name: string | null;
+        phone: string;
+        email: string | null;
+        dni: string | null;
+        area: string;
+        lead_score: number | null;
+        lead_status_id: number | null;
+        lead_status_slug: string | null;
+        lead_status_label: string | null;
+        segment_slugs: string[];
+      }[]
+    >(Prisma.sql`
+      SELECT
+        c.name,
+        c.last_name,
+        c.phone,
+        c.email,
+        c.dni,
+        c.area,
+        c.lead_score,
+        c.lead_status_id,
+        ls.slug AS lead_status_slug,
+        ls.label AS lead_status_label,
+        COALESCE((
+          SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
+          FROM contact_segments cs
+          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
+          WHERE cs.contact_id = c.id
+            AND cs.area = ${canonical}
+            AND ${segmentMatchesConversationSql(input.conversationId)}
+        ), ARRAY[]::varchar[]) AS segment_slugs
+      FROM contacts c
+      LEFT JOIN lead_status_definitions ls ON ls.id = c.lead_status_id
+      WHERE c.id = ${input.contactId}
+    `);
+    const row = rows[0];
+    if (!row) return null;
+    const local = canonicalBusinessArea(row.area) === canonical;
+    const include = input.includeAreaData && local;
+    return {
+      name: row.name,
+      last_name: row.last_name,
+      phone: row.phone,
+      email: row.email,
+      dni: row.dni,
+      lead_score: include ? row.lead_score : null,
+      lead_status:
+        include && row.lead_status_id != null && row.lead_status_label
+          ? {
+              id: Number(row.lead_status_id),
+              slug: String(row.lead_status_slug ?? ''),
+              label: String(row.lead_status_label),
+            }
+          : null,
+      segment_slugs: include ? row.segment_slugs ?? [] : [],
+      other_area_fichas: input.otherAreaFichas,
+    };
+  }
+
+  private async loadCrossAreaIdentityFallback(input: {
+    phone: string | null;
+    whatsappUserId: string | null;
+  }): Promise<{
+    name: string | null;
+    last_name: string | null;
+    phone: string;
+    email: string | null;
+    dni: string | null;
+  } | null> {
+    if (!input.phone && !input.whatsappUserId) return null;
+    const row = await this.prisma.contacts.findFirst({
+      where: {
+        active: true,
+        OR: [
+          ...(input.phone ? [{ phone: input.phone }] : []),
+          ...(input.whatsappUserId
+            ? [{ whatsapp_user_id: input.whatsappUserId }]
+            : []),
+        ],
+      },
+      orderBy: { updated_at: 'desc' },
+      select: {
+        name: true,
+        last_name: true,
+        phone: true,
+        email: true,
+        dni: true,
+      },
+    });
+    if (!row) return null;
+    return {
+      name: row.name,
+      last_name: row.last_name,
+      phone: row.phone ?? input.phone ?? '',
+      email: row.email,
+      dni: row.dni,
+    };
   }
 
   private canAssignConversations(user: AuthUser): boolean {
@@ -622,6 +789,7 @@ export class ConversationsService {
           FROM contact_segments cs
           JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
           WHERE cs.contact_id = ct.id
+            AND cs.area = ct.area
             AND ${segmentMatchesOuterLineSql()}
         ), ARRAY[]::varchar[]) AS contact_segment_slugs,
         (SELECT LEFT(m.body_text, 160) FROM chat_messages m
@@ -693,6 +861,7 @@ export class ConversationsService {
           FROM contact_segments cs
           JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
           WHERE cs.contact_id = ct.id
+            AND cs.area = ct.area
         ), ARRAY[]::varchar[]) AS contact_segment_slugs,
         ''::text AS preview,
         ARRAY[]::varchar[] AS conversation_tags,
@@ -1381,6 +1550,17 @@ export class ConversationsService {
       ? Number(activeConversation.contact_id)
       : null;
 
+    if (resolvedContactId) {
+      const linked = await this.prisma.contacts.findFirst({
+        where: { id: resolvedContactId },
+        select: { id: true, area: true },
+      });
+      const linkedArea = linked ? canonicalBusinessArea(linked.area) : '';
+      if (!linked || linkedArea !== canonicalBusinessArea(area)) {
+        resolvedContactId = null;
+      }
+    }
+
     if (
       !resolvedContactId &&
       (activeConversation.phone || activeConversation.whatsapp_user_id)
@@ -1414,121 +1594,75 @@ export class ConversationsService {
       }
     }
 
+    if (
+      !resolvedContactId &&
+      (activeConversation.phone || activeConversation.whatsapp_user_id)
+    ) {
+      try {
+        const resolved = await this.people.resolve(this.prisma, {
+          area,
+          phone: activeConversation.phone,
+          whatsapp_user_id: activeConversation.whatsapp_user_id,
+          name:
+            String(activeConversation.wa_profile_name ?? '').trim() ||
+            undefined,
+        });
+        resolvedContactId = resolved.contact_id;
+        await this.prisma.conversations.update({
+          where: { id: conversationId },
+          data: { contact_id: resolved.contact_id, updated_at: new Date() },
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Inbox detail: no se pudo asegurar ficha ${area} para conversación ${conversationId}: ${
+            error instanceof Error ? error.message : error
+          }`,
+        );
+      }
+    }
+
+    const otherAreaFichas = await this.loadOtherAreaFichas({
+      area,
+      contactId: resolvedContactId,
+      phone: activeConversation.phone,
+      whatsappUserId: activeConversation.whatsapp_user_id,
+    });
+
     let contact: InboxDetail['contact'] = null;
     if (resolvedContactId) {
-      const rows = await this.prisma.$queryRaw<
-        {
-          name: string | null;
-          last_name: string | null;
-          phone: string;
-          email: string | null;
-          dni: string | null;
-          lead_score: number | null;
-          lead_status_id: number | null;
-          lead_status_slug: string | null;
-          lead_status_label: string | null;
-          segment_slugs: string[];
-        }[]
-      >(Prisma.sql`
-        SELECT
-          c.name,
-          c.last_name,
-          c.phone,
-          c.email,
-          c.dni,
-          c.lead_score,
-          c.lead_status_id,
-          ls.slug AS lead_status_slug,
-          ls.label AS lead_status_label,
-          COALESCE((
-            SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
-            FROM contact_segments cs
-            JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
-            WHERE cs.contact_id = c.id
-              AND ${segmentMatchesConversationSql(conversationId)}
-          ), ARRAY[]::varchar[]) AS segment_slugs
-        FROM contacts c
-        LEFT JOIN lead_status_definitions ls ON ls.id = c.lead_status_id
-        WHERE c.id = ${resolvedContactId}
-      `);
-      const row = rows[0];
-      contact = row
-        ? {
-            name: row.name,
-            last_name: row.last_name,
-            phone: row.phone,
-            email: row.email,
-            dni: row.dni,
-            lead_score: row.lead_score,
-            lead_status:
-              row.lead_status_id != null && row.lead_status_label
-                ? {
-                    id: Number(row.lead_status_id),
-                    slug: String(row.lead_status_slug ?? ''),
-                    label: String(row.lead_status_label),
-                  }
-                : null,
-            segment_slugs: row.segment_slugs,
-          }
-        : null;
-    } else if (activeConversation.phone) {
-      const rows = await this.prisma.$queryRaw<
-        {
-          name: string | null;
-          last_name: string | null;
-          phone: string;
-          email: string | null;
-          dni: string | null;
-          lead_score: number | null;
-          lead_status_id: number | null;
-          lead_status_slug: string | null;
-          lead_status_label: string | null;
-          segment_slugs: string[];
-        }[]
-      >(Prisma.sql`
-        SELECT
-          c.name,
-          c.last_name,
-          c.phone,
-          c.email,
-          c.dni,
-          c.lead_score,
-          c.lead_status_id,
-          ls.slug AS lead_status_slug,
-          ls.label AS lead_status_label,
-          COALESCE((
-            SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
-            FROM contact_segments cs
-            JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
-            WHERE cs.contact_id = c.id
-              AND ${segmentMatchesConversationSql(conversationId)}
-          ), ARRAY[]::varchar[]) AS segment_slugs
-        FROM contacts c
-        LEFT JOIN lead_status_definitions ls ON ls.id = c.lead_status_id
-        WHERE c.phone = ${activeConversation.phone}
-        ORDER BY CASE WHEN c.area = ${area} THEN 0 ELSE 1 END, c.updated_at DESC NULLS LAST
-        LIMIT 1
-      `);
-      const row = rows[0];
-      contact = row
-        ? {
-            name: row.name,
-            last_name: row.last_name,
-            phone: row.phone,
-            email: row.email,
-            dni: row.dni,
-            lead_score: row.lead_score,
-            lead_status:
-              row.lead_status_id != null && row.lead_status_label
-                ? {
-                    id: Number(row.lead_status_id),
-                    slug: String(row.lead_status_slug ?? ''),
-                    label: String(row.lead_status_label),
-                  }
-                : null,
-            segment_slugs: row.segment_slugs,
-          }
-        : null;
+      contact = await this.loadInboxContactForArea({
+        contactId: resolvedContactId,
+        area,
+        conversationId,
+        includeAreaData: true,
+        otherAreaFichas,
+      });
+    } else if (activeConversation.phone || activeConversation.whatsapp_user_id) {
+      const identity = await this.loadCrossAreaIdentityFallback({
+        phone: activeConversation.phone,
+        whatsappUserId: activeConversation.whatsapp_user_id,
+      });
+      if (identity) {
+        contact = {
+          ...identity,
+          lead_score: null,
+          lead_status: null,
+          segment_slugs: [],
+          other_area_fichas: otherAreaFichas,
+        };
+      } else if (otherAreaFichas.length) {
+        contact = {
+          name: null,
+          last_name: null,
+          phone: activeConversation.phone ?? '',
+          email: null,
+          dni: null,
+          lead_score: null,
+          lead_status: null,
+          segment_slugs: [],
+          other_area_fichas: otherAreaFichas,
+        };
+      }
     }
 
     const page = await this.loadInboxMessagePage(conversationId, {

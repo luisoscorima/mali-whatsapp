@@ -3,6 +3,7 @@ import { persistCampaignChatMessage } from './campaign-chat-message.util';
 describe('Campaign conversation identity', () => {
   it('persists a BSUID recipient without storing it as a phone', async () => {
     const prisma = {
+      contacts: { findFirst: jest.fn().mockResolvedValue(null) },
       conversations: {
         findUnique: jest.fn().mockResolvedValue(null),
         findFirst: jest.fn().mockResolvedValue(null),

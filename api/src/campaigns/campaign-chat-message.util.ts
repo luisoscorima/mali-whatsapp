@@ -29,6 +29,27 @@ export async function persistCampaignChatMessage(
   const phone = userId ? null : normalizePhone(input.phone);
   if (!phone && !userId) return;
 
+  let contactId =
+    Number.isInteger(input.contactId) && Number(input.contactId) > 0
+      ? Number(input.contactId)
+      : null;
+  if (!contactId) {
+    const byIdentity = userId
+      ? await prisma.contacts.findFirst({
+          where: { area, whatsapp_user_id: userId, active: true },
+          select: { id: true },
+          orderBy: { updated_at: 'desc' },
+        })
+      : phone
+        ? await prisma.contacts.findFirst({
+            where: { area, phone, active: true },
+            select: { id: true },
+            orderBy: { updated_at: 'desc' },
+          })
+        : null;
+    contactId = byIdentity?.id ?? null;
+  }
+
   const at = input.sentAt ?? new Date();
   const isHistorical = Boolean(input.sentAt);
   const whatsappLineId =
@@ -96,13 +117,13 @@ export async function persistCampaignChatMessage(
         });
   const existing =
     exact ??
-    (input.contactId
+    (contactId
       ? await prisma.conversations.findFirst({
           where: {
             ...(whatsappLineId
               ? { whatsapp_line_id: whatsappLineId }
               : { area }),
-            contact_id: input.contactId,
+            contact_id: contactId,
             ...(userId ? { whatsapp_user_id: null } : { phone: null }),
           },
           select: {
@@ -119,14 +140,14 @@ export async function persistCampaignChatMessage(
     whatsapp_phone_number_id: whatsappPhoneNumberId,
     phone,
     whatsapp_user_id: userId,
-    contact_id: input.contactId,
+    contact_id: contactId,
     last_message_at: at,
     status: 'bot',
   };
   const updateData = isHistorical
     ? {
-          ...(input.contactId && !existing?.contact_id
-            ? { contact_id: input.contactId }
+          ...(contactId && !existing?.contact_id
+            ? { contact_id: contactId }
             : {}),
           ...(userId && !existing?.whatsapp_user_id
             ? { whatsapp_user_id: userId }
@@ -138,8 +159,8 @@ export async function persistCampaignChatMessage(
             : {}),
       }
     : {
-          ...(input.contactId && !existing?.contact_id
-            ? { contact_id: input.contactId }
+          ...(contactId && !existing?.contact_id
+            ? { contact_id: contactId }
             : {}),
           ...(userId && !existing?.whatsapp_user_id
             ? { whatsapp_user_id: userId }

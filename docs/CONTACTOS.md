@@ -13,6 +13,8 @@ Histórico: [CONTACTOS-CHANGELOG.md](./CONTACTOS-CHANGELOG.md). Relacionado: [AR
 | Datos de área | `contact_attributes` (`program_id` null) | Perfil que cambia por área |
 | Datos de categoría | `contact_attributes.program_id` | Perfil por categoría (curso, modalidad, …) |
 
+La persona ya es la entidad unificada. **No** se unifican fichas entre áreas: segmentos, atributos, opt-in y leads cuelgan de la ficha del área. Si la misma persona escribe en otra línea (p. ej. PAM teniendo ficha en Educación), se crea/vincula la ficha de ese área; el inbox puede avisar “También tiene ficha en …” sin pintar segmentos ajenos como locales ([CONVERSACIONES.md](./CONVERSACIONES.md)).
+
 ## Match de identidad
 
 Orden global: **identidad WhatsApp (BSUID) → teléfono → DNI → email**.

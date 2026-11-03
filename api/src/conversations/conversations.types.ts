@@ -132,6 +132,11 @@ export type InboxMessage = {
   interactive_buttons?: { id: string; title: string }[];
 };
 
+export type InboxOtherAreaFicha = {
+  area: string;
+  contact_id: number;
+};
+
 export type InboxContact = {
   name: string | null;
   last_name: string | null;
@@ -141,6 +146,8 @@ export type InboxContact = {
   lead_score: number | null;
   lead_status: { id: number; slug: string; label: string } | null;
   segment_slugs: string[];
+  /** Fichas activas de la misma persona en otras áreas (aviso operador). */
+  other_area_fichas: InboxOtherAreaFicha[];
 };
 
 export type InboxMetaAd = {
