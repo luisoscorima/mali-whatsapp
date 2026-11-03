@@ -1665,10 +1665,27 @@ export class ContactsService {
       );
     }
 
+    const runtimeErrors = [...parsed.errors];
     let imported = 0;
+    let rowIndex = 0;
     for (const row of parsed.rows) {
-      await this.importSingleRow(user, area, row);
-      imported += 1;
+      rowIndex += 1;
+      try {
+        await this.importSingleRow(user, area, row);
+        imported += 1;
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        ) {
+          runtimeErrors.push({
+            line: rowIndex,
+            message: `Conflicto de identidad/teléfono (${row.phone}): ya existe otra ficha en esta área`,
+          });
+          continue;
+        }
+        throw error;
+      }
     }
 
     await this.auditLog.write({
@@ -1677,7 +1694,7 @@ export class ContactsService {
       actor: auditActor(user),
       meta: {
         rows_saved: imported,
-        row_errors_in_file: parsed.errors.length,
+        row_errors_in_file: runtimeErrors.length,
         duplicate_phones_in_file: parsed.duplicate_phones_in_file,
         duplicate_rows_in_file: parsed.duplicate_rows_in_file,
         duplicate_phone_examples: parsed.duplicate_phone_examples,
@@ -1687,8 +1704,8 @@ export class ContactsService {
 
     return {
       imported,
-      errors: parsed.errors.length,
-      error_samples: parsed.errors.slice(0, 10),
+      errors: runtimeErrors.length,
+      error_samples: runtimeErrors.slice(0, 10),
       duplicate_phones_in_file: parsed.duplicate_phones_in_file,
       duplicate_rows_in_file: parsed.duplicate_rows_in_file,
       duplicate_phone_examples: parsed.duplicate_phone_examples,

@@ -1,9 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
 import {
   AREA_LABELS,
   canonicalBusinessAreas,
 } from '../config/areas';
+import {
+  deleteDonorContact,
+  moveDonorOntoKeep,
+} from '../contacts/move-donor-contact.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { advisorLabelSql } from '../users/advisor-label.util';
 
@@ -43,68 +46,6 @@ type ConsolidationRow = {
 
 function filled(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
-}
-
-async function moveDonorOntoKeep(tx: Prisma.TransactionClient, donorId: number, keepId: number) {
-  await tx.$executeRaw`UPDATE conversations SET contact_id = ${keepId}, updated_at = NOW() WHERE contact_id = ${donorId}`;
-  await tx.$executeRaw`UPDATE campaign_logs SET contact_id = ${keepId} WHERE contact_id = ${donorId}`;
-  await tx.$executeRaw`UPDATE contact_origins SET contact_id = ${keepId}, updated_at = NOW() WHERE contact_id = ${donorId}`;
-  await tx.$executeRaw`UPDATE meta_leadgen_leads SET contact_id = ${keepId}, updated_at = NOW() WHERE contact_id = ${donorId}`;
-  await tx.$executeRaw`UPDATE tiktok_leads SET contact_id = ${keepId}, updated_at = NOW() WHERE contact_id = ${donorId}`;
-  await tx.$executeRaw`UPDATE meta_ctwa_ad_leads SET contact_id = ${keepId} WHERE contact_id = ${donorId}`;
-  await tx.$executeRaw`
-    UPDATE education_lead_entries entry
-    SET cycle_id = winner.id
-    FROM education_lead_cycles loser
-    JOIN education_lead_cycles winner
-      ON winner.contact_id = ${keepId} AND winner.started_at = loser.started_at
-    WHERE loser.contact_id = ${donorId} AND entry.cycle_id = loser.id
-  `;
-  await tx.$executeRaw`
-    DELETE FROM education_lead_cycles loser
-    USING education_lead_cycles winner
-    WHERE loser.contact_id = ${donorId}
-      AND winner.contact_id = ${keepId}
-      AND winner.started_at = loser.started_at
-  `;
-  await tx.$executeRaw`
-    UPDATE education_lead_cycles SET contact_id = ${keepId}, updated_at = NOW() WHERE contact_id = ${donorId}
-  `;
-  await tx.$executeRaw`UPDATE education_lead_entries SET contact_id = ${keepId} WHERE contact_id = ${donorId}`;
-  await tx.$executeRaw`
-    INSERT INTO contact_attributes (contact_id, attr_key, attr_value, program_id, updated_at)
-    SELECT ${keepId}, src.attr_key, src.attr_value, src.program_id, src.updated_at
-    FROM contact_attributes src
-    WHERE src.contact_id = ${donorId}
-      AND NOT EXISTS (
-        SELECT 1 FROM contact_attributes existing
-        WHERE existing.contact_id = ${keepId}
-          AND existing.attr_key = src.attr_key
-          AND existing.program_id IS NOT DISTINCT FROM src.program_id
-      )
-  `;
-  await tx.$executeRaw`DELETE FROM contact_attributes WHERE contact_id = ${donorId}`;
-  await tx.$executeRaw`
-    INSERT INTO contact_segments (contact_id, area, segment_slug, program_id, created_at)
-    SELECT ${keepId}, src.area, src.segment_slug, src.program_id, src.created_at
-    FROM contact_segments src
-    WHERE src.contact_id = ${donorId}
-      AND NOT EXISTS (
-        SELECT 1 FROM contact_segments existing
-        WHERE existing.contact_id = ${keepId}
-          AND existing.segment_slug = src.segment_slug
-          AND existing.program_id IS NOT DISTINCT FROM src.program_id
-      )
-  `;
-  await tx.$executeRaw`DELETE FROM contact_segments WHERE contact_id = ${donorId}`;
-  await tx.$executeRaw`
-    INSERT INTO contact_programs (contact_id, program_id, source, first_seen_at, last_seen_at)
-    SELECT ${keepId}, src.program_id, src.source, src.first_seen_at, NOW()
-    FROM contact_programs src
-    WHERE src.contact_id = ${donorId}
-    ON CONFLICT (contact_id, program_id) DO NOTHING
-  `;
-  await tx.$executeRaw`DELETE FROM contact_programs WHERE contact_id = ${donorId}`;
 }
 
 function groupPhones(rows: ConsolidationRow[]) {
@@ -536,12 +477,8 @@ export class AdminAreasService {
         await tx.$executeRaw`ALTER TABLE people DISABLE TRIGGER USER`;
         try {
           for (const donorId of donorIds) {
-            await tx.$executeRaw`
-              UPDATE contacts
-              SET phone = NULL, email = NULL, dni = NULL, whatsapp_user_id = NULL,
-                  active = FALSE, updated_at = NOW()
-              WHERE id = ${donorId}
-            `;
+            await moveDonorOntoKeep(tx, donorId, canonicalId);
+            await deleteDonorContact(tx, donorId);
           }
           await tx.$executeRaw`
             UPDATE contacts
@@ -554,24 +491,11 @@ export class AdminAreasService {
                 last_name = contact.last_name,
                 email = contact.email,
                 dni = contact.dni,
+                phone = contact.phone,
+                whatsapp_user_id = contact.whatsapp_user_id,
                 updated_at = NOW()
             FROM contacts contact
             WHERE contact.id = ${canonicalId} AND person.id = contact.person_id
-          `;
-          for (const donorId of donorIds) await moveDonorOntoKeep(tx, donorId, canonicalId);
-          for (const donorId of donorIds) {
-            await tx.$executeRaw`
-              UPDATE contacts donor
-              SET person_id = keep.person_id
-              FROM contacts keep
-              WHERE donor.id = ${donorId}
-                AND keep.id = ${canonicalId}
-                AND donor.person_id IS DISTINCT FROM keep.person_id
-            `;
-          }
-          await tx.$executeRaw`
-            DELETE FROM people person
-            WHERE NOT EXISTS (SELECT 1 FROM contacts contact WHERE contact.person_id = person.id)
           `;
           await tx.$executeRaw`
             UPDATE education_consolidation_map
@@ -670,6 +594,183 @@ export class AdminAreasService {
     return { id, resolved: true };
   }
 
+  /**
+   * Clones en la misma área con el mismo person_id: uno (o más) con teléfono y
+   * hermanos con phone NULL. Esos clones hacen fallar sync_person_contacts (P2002).
+   */
+  async previewNullPhoneClones(area = 'educacion'): Promise<NullPhoneClonesPreview> {
+    const areaSlug = String(area || 'educacion').trim() || 'educacion';
+    const rows = await this.prisma.$queryRaw<NullPhoneCloneGroupRow[]>`
+      WITH members AS (
+        SELECT
+          c.person_id,
+          c.id,
+          c.phone,
+          c.name,
+          c.active,
+          NULLIF(BTRIM(c.phone), '') AS phone_norm
+        FROM contacts c
+        WHERE c.area = ${areaSlug}
+      ),
+      grouped AS (
+        SELECT
+          person_id,
+          COUNT(*)::int AS n,
+          COUNT(*) FILTER (WHERE phone_norm IS NOT NULL)::int AS with_phone,
+          COUNT(DISTINCT phone_norm) FILTER (WHERE phone_norm IS NOT NULL)::int AS distinct_phones,
+          COUNT(*) FILTER (WHERE phone_norm IS NULL)::int AS null_phones,
+          array_agg(id ORDER BY id) AS contact_ids,
+          array_agg(phone ORDER BY id) AS phones,
+          array_agg(name ORDER BY id) AS names
+        FROM members
+        GROUP BY person_id
+        HAVING COUNT(*) > 1
+          AND COUNT(*) FILTER (WHERE phone_norm IS NULL) > 0
+          AND COUNT(*) FILTER (WHERE phone_norm IS NOT NULL) > 0
+      )
+      SELECT *
+      FROM grouped
+      ORDER BY person_id
+    `;
+
+    const mergeable = rows.filter((row) => row.distinct_phones === 1);
+    const ambiguous = rows.filter((row) => row.distinct_phones !== 1);
+    const donorsMergeable = mergeable.reduce((acc, row) => acc + row.null_phones, 0);
+
+    return {
+      area: areaSlug,
+      groups_total: rows.length,
+      groups_mergeable: mergeable.length,
+      groups_ambiguous: ambiguous.length,
+      donors_mergeable: donorsMergeable,
+      samples: mergeable.slice(0, 20).map((row) => ({
+        person_id: row.person_id,
+        keep_id: this.pickKeepId(row),
+        donor_ids: this.pickDonorIds(row),
+        phones: row.phones,
+        names: row.names,
+      })),
+      ambiguous_samples: ambiguous.slice(0, 10).map((row) => ({
+        person_id: row.person_id,
+        contact_ids: row.contact_ids,
+        phones: row.phones,
+        names: row.names,
+        distinct_phones: row.distinct_phones,
+      })),
+    };
+  }
+
+  async applyNullPhoneClones(input?: {
+    area?: string;
+    limit?: number;
+  }): Promise<NullPhoneClonesApplyResult> {
+    const areaSlug = String(input?.area || 'educacion').trim() || 'educacion';
+    const limit = Math.min(500, Math.max(1, Number(input?.limit ?? 100) || 100));
+    const preview = await this.previewNullPhoneClones(areaSlug);
+
+    const rows = await this.prisma.$queryRaw<NullPhoneCloneGroupRow[]>`
+      WITH members AS (
+        SELECT
+          c.person_id,
+          c.id,
+          c.phone,
+          c.name,
+          NULLIF(BTRIM(c.phone), '') AS phone_norm
+        FROM contacts c
+        WHERE c.area = ${areaSlug}
+      ),
+      grouped AS (
+        SELECT
+          person_id,
+          COUNT(*)::int AS n,
+          COUNT(*) FILTER (WHERE phone_norm IS NOT NULL)::int AS with_phone,
+          COUNT(DISTINCT phone_norm) FILTER (WHERE phone_norm IS NOT NULL)::int AS distinct_phones,
+          COUNT(*) FILTER (WHERE phone_norm IS NULL)::int AS null_phones,
+          array_agg(id ORDER BY id) AS contact_ids,
+          array_agg(phone ORDER BY id) AS phones,
+          array_agg(name ORDER BY id) AS names
+        FROM members
+        GROUP BY person_id
+        HAVING COUNT(*) > 1
+          AND COUNT(*) FILTER (WHERE phone_norm IS NULL) > 0
+          AND COUNT(*) FILTER (WHERE phone_norm IS NOT NULL) > 0
+          AND COUNT(DISTINCT phone_norm) FILTER (WHERE phone_norm IS NOT NULL) = 1
+      )
+      SELECT * FROM grouped
+      ORDER BY person_id
+      LIMIT ${limit}
+    `;
+
+    let donorsDeleted = 0;
+    const mergedSamples: NullPhoneClonesApplyResult['merged_samples'] = [];
+    const errors: Array<{ person_id: number; message: string }> = [];
+
+    for (const row of rows) {
+      const keepId = this.pickKeepId(row);
+      const donorIds = this.pickDonorIds(row);
+      if (!keepId || !donorIds.length) continue;
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`ALTER TABLE contacts DISABLE TRIGGER USER`;
+          await tx.$executeRaw`ALTER TABLE people DISABLE TRIGGER USER`;
+          try {
+            for (const donorId of donorIds) {
+              await moveDonorOntoKeep(tx, donorId, keepId);
+              await deleteDonorContact(tx, donorId);
+            }
+          } finally {
+            await tx.$executeRaw`ALTER TABLE contacts ENABLE TRIGGER USER`;
+            await tx.$executeRaw`ALTER TABLE people ENABLE TRIGGER USER`;
+          }
+        });
+        donorsDeleted += donorIds.length;
+        if (mergedSamples.length < 20) {
+          mergedSamples.push({
+            person_id: row.person_id,
+            keep_id: keepId,
+            donor_ids: donorIds,
+          });
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        errors.push({ person_id: row.person_id, message: message.slice(0, 300) });
+      }
+    }
+
+    const after = await this.previewNullPhoneClones(areaSlug);
+    return {
+      area: areaSlug,
+      batch_limit: limit,
+      groups_attempted: rows.length,
+      donors_deleted: donorsDeleted,
+      skipped_ambiguous: preview.groups_ambiguous,
+      errors,
+      merged_samples: mergedSamples,
+      remaining_mergeable: after.groups_mergeable,
+      remaining_donors: after.donors_mergeable,
+    };
+  }
+
+  private pickKeepId(row: NullPhoneCloneGroupRow): number {
+    for (let i = 0; i < row.contact_ids.length; i += 1) {
+      const phone = row.phones[i];
+      if (phone != null && String(phone).trim() !== '') return row.contact_ids[i];
+    }
+    return row.contact_ids[0];
+  }
+
+  private pickDonorIds(row: NullPhoneCloneGroupRow): number[] {
+    const keepId = this.pickKeepId(row);
+    const donors: number[] = [];
+    for (let i = 0; i < row.contact_ids.length; i += 1) {
+      const id = row.contact_ids[i];
+      if (id === keepId) continue;
+      const phone = row.phones[i];
+      if (phone == null || String(phone).trim() === '') donors.push(id);
+    }
+    return donors;
+  }
+
   private async requireArea(slug: string) {
     const area = await this.prisma.business_areas.findFirst({
       where: { slug, active: true },
@@ -679,3 +780,52 @@ export class AdminAreasService {
     return area;
   }
 }
+
+type NullPhoneCloneGroupRow = {
+  person_id: number;
+  n: number;
+  with_phone: number;
+  distinct_phones: number;
+  null_phones: number;
+  contact_ids: number[];
+  phones: Array<string | null>;
+  names: string[];
+};
+
+export type NullPhoneClonesPreview = {
+  area: string;
+  groups_total: number;
+  groups_mergeable: number;
+  groups_ambiguous: number;
+  donors_mergeable: number;
+  samples: Array<{
+    person_id: number;
+    keep_id: number;
+    donor_ids: number[];
+    phones: Array<string | null>;
+    names: string[];
+  }>;
+  ambiguous_samples: Array<{
+    person_id: number;
+    contact_ids: number[];
+    phones: Array<string | null>;
+    names: string[];
+    distinct_phones: number;
+  }>;
+};
+
+export type NullPhoneClonesApplyResult = {
+  area: string;
+  batch_limit: number;
+  groups_attempted: number;
+  donors_deleted: number;
+  skipped_ambiguous: number;
+  errors: Array<{ person_id: number; message: string }>;
+  merged_samples: Array<{
+    person_id: number;
+    keep_id: number;
+    donor_ids: number[];
+  }>;
+  remaining_mergeable: number;
+  remaining_donors: number;
+};

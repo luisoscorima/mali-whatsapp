@@ -107,6 +107,27 @@ export class AdminController {
     return { ok: true, data: await this.adminAreasService.resolveIdentityReview(id) };
   }
 
+  @Get('conflicts/null-phone-clones')
+  async previewNullPhoneClones(@Query('area') area?: string) {
+    return {
+      ok: true,
+      data: await this.adminAreasService.previewNullPhoneClones(area || 'educacion'),
+    };
+  }
+
+  @Post('conflicts/null-phone-clones/apply')
+  async applyNullPhoneClones(
+    @Body() body: { area?: string; limit?: number },
+  ) {
+    return {
+      ok: true,
+      data: await this.adminAreasService.applyNullPhoneClones({
+        area: body?.area,
+        limit: body?.limit,
+      }),
+    };
+  }
+
   @Get('areas/:slug/categories')
   async listCategories(@Param('slug') slug: string) {
     return { ok: true, data: await this.adminAreasService.listCategories(slug) };
