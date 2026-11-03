@@ -981,10 +981,7 @@ export class EducationLeadWorkflowService {
           assignment_rule: 'new_number',
           occurred_at: { gte: cutoff },
           cycle: { is: { assigned_user_id: null } },
-          OR: [
-            { program_id: programRow.id },
-            ...(legacy ? [{ program_id: null, area: legacy }] : []),
-          ],
+          program_id: programRow.id,
           ...(params.channel ? { channel: params.channel } : {}),
           ...(q ? { AND: [{ OR: [
             { contact: { is: { name: { contains: q, mode: 'insensitive' } } } },
