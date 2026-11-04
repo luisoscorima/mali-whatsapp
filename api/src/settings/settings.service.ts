@@ -46,7 +46,11 @@ import {
   serializeEducationSlaConfig,
   validateEducationSlaInput,
 } from '../leads/education-sla-config.util';
-import { loadEducationSlaConfig } from '../leads/education-sla-config.loader';
+import {
+  ensureEducationSlaAlertsSince,
+  loadEducationSlaConfig,
+} from '../leads/education-sla-config.loader';
+import { SLA_ALERT_EVENT_TYPE } from '../leads/education-lead-sla.util';
 
 function readPublicAppUrl(): string {
   return String(process.env.APP_BASE_URL || 'http://localhost:4000')
@@ -369,26 +373,79 @@ export class SettingsService {
       throw new BadRequestException(validated.error);
     }
 
+    const previous = await loadEducationSlaConfig(this.prisma);
+    const next = {
+      ...validated.config,
+      alerts_since: previous.alerts_since ?? validated.config.alerts_since,
+    };
+
     await this.upsertSettingValue(
       EDUCATION_SLA_SETTINGS_AREA,
       EDUCATION_SLA_SETTINGS_KEY,
-      serializeEducationSlaConfig(validated.config),
+      serializeEducationSlaConfig(next),
     );
     await this.auditLog.write({
       event_type: AuditEvent.SETTINGS_EDUCATION_SLA,
-      message: `SLA primera respuesta guardado (meta ${validated.config.target_minutes} min)`,
+      message: `SLA primera respuesta guardado (meta ${next.target_minutes} min)`,
       actor: auditActor(user),
       meta: {
-        target_minutes: validated.config.target_minutes,
-        days_count: Object.keys(validated.config.schedule).length,
+        target_minutes: next.target_minutes,
+        days_count: Object.keys(next.schedule).length,
       },
     });
 
-    const view = educationSlaConfigToView(validated.config);
+    const view = educationSlaConfigToView(next);
     return {
       ...view,
       min_target_minutes: MIN_SLA_TARGET_MINUTES,
       max_target_minutes: MAX_SLA_TARGET_MINUTES,
+    };
+  }
+
+  /** Reinicia monitoreo SLA desde ahora y borra alertas históricas de incumplimiento. */
+  async resetEducationSlaAlertsFromNow(
+    user: AuthUser,
+  ): Promise<EducationSlaSettingsView & { purged: number }> {
+    this.assertModuleAccess(user, 'sla');
+    if (!user.isMaster) {
+      throw new ForbiddenException('Solo master puede reiniciar alertas SLA');
+    }
+
+    const now = new Date();
+    const base = await loadEducationSlaConfig(this.prisma);
+    const next = {
+      ...base,
+      alerts_since: now.toISOString(),
+    };
+    await this.upsertSettingValue(
+      EDUCATION_SLA_SETTINGS_AREA,
+      EDUCATION_SLA_SETTINGS_KEY,
+      serializeEducationSlaConfig(next),
+    );
+
+    const purged = await this.prisma.education_lead_alerts.deleteMany({
+      where: { event_type: SLA_ALERT_EVENT_TYPE },
+    });
+
+    await this.auditLog.write({
+      event_type: AuditEvent.SETTINGS_EDUCATION_SLA,
+      message: `Alertas SLA reiniciadas desde ahora (purgadas ${purged.count})`,
+      actor: auditActor(user),
+      meta: {
+        alerts_since: next.alerts_since,
+        purged: purged.count,
+      },
+    });
+
+    // Ensure loader/job share the same cutoff.
+    await ensureEducationSlaAlertsSince(this.prisma, now);
+
+    const view = educationSlaConfigToView(next);
+    return {
+      ...view,
+      min_target_minutes: MIN_SLA_TARGET_MINUTES,
+      max_target_minutes: MAX_SLA_TARGET_MINUTES,
+      purged: purged.count,
     };
   }
 }

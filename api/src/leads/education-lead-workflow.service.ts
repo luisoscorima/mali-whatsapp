@@ -41,7 +41,7 @@ import {
   isSlaBreached,
   latestStartTimeForBreach,
 } from './education-lead-sla.util';
-import { loadEducationSlaConfig } from './education-sla-config.loader';
+import { ensureEducationSlaAlertsSince } from './education-sla-config.loader';
 import {
   isSaleClosingStatusSlug,
   missingFieldsForVentaExitosa,
@@ -1818,22 +1818,41 @@ export class EducationLeadWorkflowService {
   }
 
   /**
-   * Creates sla_first_reply alerts for open cycles past 10 business minutes
+   * Creates sla_first_reply alerts for open cycles past target business minutes
    * without first_human_reply_at. Unique (cycle_id, event_type) prevents duplicates.
-   * Prefiltro `latestStartTimeForBreach` evita que ciclos aún dentro de SLA (p. ej. overnight)
-   * ocupen el batch y retrasen alertas reales.
+   * Only cycles with started_at >= alerts_since (defaults to "now" on first run).
+   * Purges historical SLA alerts from before that cutoff so the inbox is not flooded.
    */
-  async createSlaFirstReplyAlerts(limit = 200): Promise<{ created: number; scanned: number }> {
-    if (!(await this.isAttentionV1Enabled())) return { created: 0, scanned: 0 };
-    const slaConfig = await loadEducationSlaConfig(this.prisma);
+  async createSlaFirstReplyAlerts(
+    limit = 200,
+  ): Promise<{ created: number; scanned: number; purged: number }> {
+    if (!(await this.isAttentionV1Enabled())) {
+      return { created: 0, scanned: 0, purged: 0 };
+    }
     const now = new Date();
+    const { config: slaConfig, since } = await ensureEducationSlaAlertsSince(
+      this.prisma,
+      now,
+    );
+
+    const purged = await this.prisma.education_lead_alerts.deleteMany({
+      where: {
+        event_type: SLA_ALERT_EVENT_TYPE,
+        cycle: { started_at: { lt: since } },
+      },
+    });
+
     const startedBy = latestStartTimeForBreach(now, slaConfig);
+    if (startedBy.getTime() < since.getTime()) {
+      return { created: 0, scanned: 0, purged: purged.count };
+    }
+
     const candidates = await this.prisma.education_lead_cycles.findMany({
       where: {
         area: { in: EDUCATION_AREAS },
         closed_at: null,
         first_human_reply_at: null,
-        started_at: { lte: startedBy },
+        started_at: { gte: since, lte: startedBy },
         alerts: { none: { event_type: SLA_ALERT_EVENT_TYPE } },
       },
       orderBy: { started_at: 'asc' },
@@ -1865,7 +1884,7 @@ export class EducationLeadWorkflowService {
         throw error;
       }
     }
-    return { created, scanned: candidates.length };
+    return { created, scanned: candidates.length, purged: purged.count };
   }
 
   async markAlertRead(alertId: number, userId: number) {

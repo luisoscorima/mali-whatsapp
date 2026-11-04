@@ -11,8 +11,10 @@ type EducationSlaSettings = {
   target_minutes: number
   timezone: string
   days: SlaDay[]
+  alerts_since: string | null
   min_target_minutes: number
   max_target_minutes: number
+  purged?: number
 }
 
 const DEFAULT_DAYS: SlaDay[] = [
@@ -125,6 +127,29 @@ export function SettingsEducationSlaPage() {
     )
   }
 
+  async function handleStartFromNow() {
+    const ok = window.confirm(
+      '¿Empezar alertas “sin atender” desde ahora?\nSe borrarán las alertas históricas de incumplimiento y solo contarán leads nuevos.',
+    )
+    if (!ok) return
+    setBusy(true)
+    const result = await apiClient.post<EducationSlaSettings>(
+      '/api/settings/education-sla/reset-alerts',
+      {},
+    )
+    setBusy(false)
+    if (!result.ok) {
+      notify.error(result.error)
+      return
+    }
+    setSettings(result.data)
+    notify.success(
+      result.data.purged != null
+        ? `Listo. Se quitaron ${result.data.purged} alertas históricas.`
+        : 'Listo. Alertas desde ahora.',
+    )
+  }
+
   if (loadFailed) {
     return <p className="text-muted">No se pudo cargar el SLA.</p>
   }
@@ -139,9 +164,20 @@ export function SettingsEducationSlaPage() {
         description="Meta y horario hábil para medir la primera respuesta humana en Educación. Independiente de Fuera de horario."
       />
 
-      <div className="rounded-lg border border-line bg-surface px-3 py-2 text-sm">
-        <span className="text-muted">Resumen: </span>
-        <span className="font-medium text-ink">{summary}</span>
+      <div className="rounded-lg border border-line bg-surface px-3 py-2 text-sm space-y-1">
+        <p>
+          <span className="text-muted">Resumen: </span>
+          <span className="font-medium text-ink">{summary}</span>
+        </p>
+        <p className="text-muted">
+          Alertas de “sin atender” solo para leads iniciados desde{' '}
+          <strong className="text-ink">
+            {settings.alerts_since
+              ? new Date(settings.alerts_since).toLocaleString('es-PE')
+              : 'la próxima ejecución del job (se fijará sola)'}
+          </strong>
+          .
+        </p>
       </div>
 
       <label className="block max-w-xs text-sm">
@@ -233,6 +269,14 @@ export function SettingsEducationSlaPage() {
           onClick={() => handleResetDefaults()}
         >
           Restaurar valores por defecto
+        </button>
+        <button
+          type="button"
+          className="small-btn secondary min-h-11"
+          disabled={busy}
+          onClick={() => void handleStartFromNow()}
+        >
+          Empezar alertas desde ahora
         </button>
       </div>
     </section>

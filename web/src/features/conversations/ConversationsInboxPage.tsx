@@ -2999,7 +2999,6 @@ export function ConversationsInboxPage() {
               enable: enableBrowserNotify,
               disable: disableBrowserNotify,
             }}
-            onShowUnreadChats={() => setChatFilter('unread')}
             onOpenConversation={(conversationId) => {
               navigate(conversationPath(conversationId))
             }}

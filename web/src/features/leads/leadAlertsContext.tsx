@@ -11,6 +11,7 @@ type LeadAlertsContextValue = {
   items: LeadAlertItem[]
   refresh: () => Promise<void>
   markRead: (alertId: number) => Promise<void>
+  markAllRead: () => Promise<void>
   enabled: boolean
 }
 
@@ -50,6 +51,7 @@ export function useLeadAlerts(): LeadAlertsContextValue {
       items: [],
       refresh: async () => undefined,
       markRead: async () => undefined,
+      markAllRead: async () => undefined,
       enabled: false,
     }
   }

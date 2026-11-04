@@ -32,6 +32,7 @@ export type EducationSlaSettingsView = {
   target_minutes: number;
   timezone: string;
   days: { day: number; from: string; to: string }[];
+  alerts_since: string | null;
   min_target_minutes: number;
   max_target_minutes: number;
 };

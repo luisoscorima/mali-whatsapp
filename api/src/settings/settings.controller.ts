@@ -158,4 +158,12 @@ export class SettingsController {
     const data = await this.settingsService.updateEducationSla(user, body);
     return { ok: true, data };
   }
+
+  @Post('education-sla/reset-alerts')
+  async resetEducationSlaAlerts(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<EducationSlaSettingsView & { purged: number }>> {
+    const data = await this.settingsService.resetEducationSlaAlertsFromNow(user);
+    return { ok: true, data };
+  }
 }

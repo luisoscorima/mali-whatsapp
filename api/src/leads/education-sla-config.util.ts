@@ -17,6 +17,8 @@ export type EducationSlaConfig = {
   target_minutes: number;
   timezone: string;
   schedule: SlaSchedule;
+  /** Solo alertar ciclos con started_at >= esta fecha (ISO). */
+  alerts_since?: string | null;
 };
 
 export type EducationSlaDayInput = {
@@ -29,6 +31,7 @@ export type EducationSlaConfigView = {
   target_minutes: number;
   timezone: string;
   days: EducationSlaDayInput[];
+  alerts_since: string | null;
 };
 
 /** Default RQ schedule (Lima). */
@@ -87,7 +90,16 @@ export function educationSlaConfigToView(
     target_minutes: config.target_minutes,
     timezone: config.timezone,
     days: scheduleToDays(config.schedule),
+    alerts_since: config.alerts_since ?? null,
   };
+}
+
+export function parseAlertsSince(value: unknown): string | null {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
 }
 
 export function parseEducationSlaConfig(raw: unknown): EducationSlaConfig | null {
@@ -122,6 +134,7 @@ export function parseEducationSlaConfig(raw: unknown): EducationSlaConfig | null
       target_minutes: target,
       timezone: DEFAULT_SLA_TIMEZONE,
       schedule,
+      alerts_since: parseAlertsSince(o.alerts_since),
     };
   } catch {
     return null;
@@ -169,11 +182,13 @@ export function validateEducationSlaInput(
     }
     schedule[day] = { from, to };
   }
+  const alertsSince = parseAlertsSince(src.alerts_since);
   return {
     config: {
       target_minutes: target,
       timezone: DEFAULT_SLA_TIMEZONE,
       schedule,
+      alerts_since: alertsSince,
     },
   };
 }
@@ -183,5 +198,8 @@ export function serializeEducationSlaConfig(config: EducationSlaConfig): string 
     target_minutes: config.target_minutes,
     timezone: config.timezone,
     days: scheduleToDays(config.schedule),
+    ...(config.alerts_since
+      ? { alerts_since: config.alerts_since }
+      : {}),
   });
 }

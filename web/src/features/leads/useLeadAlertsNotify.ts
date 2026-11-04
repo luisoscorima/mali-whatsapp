@@ -30,8 +30,8 @@ function alertCopy(alert: LeadAlertItem): { title: string; body: string } {
   const who = alert.contact_name || alert.phone || 'Sin nombre'
   if (alert.event_type === 'sla_first_reply') {
     return {
-      title: `Lead sin atender (SLA): ${who}`,
-      body: 'Primera respuesta fuera de SLA. Abre el chat.',
+      title: `Lead sin atender: ${who}`,
+      body: 'Pasó el tiempo de primera respuesta. Abre el chat.',
     }
   }
   return {
@@ -128,5 +128,14 @@ export function useLeadAlertsNotify(enabled: boolean) {
     setItems((prev) => prev.filter((item) => item.id !== alertId))
   }, [])
 
-  return { items, refresh, markRead }
+  const markAllRead = useCallback(async () => {
+    const ids = items.map((item) => item.id)
+    if (!ids.length) return
+    await Promise.all(
+      ids.map((id) => apiClient.post(`/api/leads/alerts/${id}/read`, {})),
+    )
+    setItems([])
+  }, [items])
+
+  return { items, refresh, markRead, markAllRead }
 }

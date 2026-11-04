@@ -115,9 +115,9 @@ export class MaintenanceQueueProcessor extends WorkerHost {
 
       case MaintenanceJobName.EDUCATION_SLA_FIRST_REPLY: {
         const result = await this.educationLeads.createSlaFirstReplyAlerts();
-        if (result.created > 0) {
+        if (result.created > 0 || result.purged > 0) {
           this.logger.log(
-            `Leads Educación SLA: ${result.created} alerta(s) de primera respuesta`,
+            `Leads Educación SLA: ${result.created} nueva(s), ${result.purged} histórica(s) purgada(s)`,
           );
         }
         return;
