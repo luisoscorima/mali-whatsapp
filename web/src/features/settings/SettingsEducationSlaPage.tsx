@@ -129,7 +129,7 @@ export function SettingsEducationSlaPage() {
 
   async function handleStartFromNow() {
     const ok = window.confirm(
-      '¿Empezar alertas “sin atender” desde ahora?\nSe borrarán las alertas históricas de incumplimiento y solo contarán leads nuevos.',
+      '¿Empezar alertas desde ahora?\nSe borrarán las alertas históricas (sin atender y nuevo lead). Solo avisarán leads de ahora en adelante.',
     )
     if (!ok) return
     setBusy(true)

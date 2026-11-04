@@ -266,6 +266,21 @@ export class LeadsController {
     return { ok: true, data };
   }
 
+  @Post('alerts/read-all')
+  async markAllAlertsRead(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<unknown>> {
+    const data = await this.educationWorkflow.markAllAlertsReadForUser({
+      id: user.id,
+      area: user.area,
+      is_master: user.isMaster,
+      email: user.email,
+      businessAccess: user.businessAccess,
+      allowedAreas: user.allowedAreas,
+    });
+    return { ok: true, data };
+  }
+
   @Post('alerts/:id/read')
   async markAlertRead(
     @CurrentUser() user: AuthUser,

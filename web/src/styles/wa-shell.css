@@ -620,12 +620,10 @@
 }
 
 .inbox-alerts-center__panel {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 50;
+  position: fixed;
+  z-index: 400;
   width: min(340px, 85vw);
-  max-height: 420px;
+  max-height: min(420px, calc(100vh - 24px));
   overflow: auto;
   padding: 0.65rem;
   border: 1px solid var(--line);

@@ -50,7 +50,10 @@ import {
   ensureEducationSlaAlertsSince,
   loadEducationSlaConfig,
 } from '../leads/education-sla-config.loader';
-import { SLA_ALERT_EVENT_TYPE } from '../leads/education-lead-sla.util';
+import {
+  NEW_LEAD_ALERT_EVENT_TYPE,
+  SLA_ALERT_EVENT_TYPE,
+} from '../leads/education-lead-sla.util';
 
 function readPublicAppUrl(): string {
   return String(process.env.APP_BASE_URL || 'http://localhost:4000')
@@ -402,7 +405,7 @@ export class SettingsService {
     };
   }
 
-  /** Reinicia monitoreo SLA desde ahora y borra alertas históricas de incumplimiento. */
+  /** Reinicia monitoreo SLA desde ahora y borra alertas históricas (sin atender + nuevo lead). */
   async resetEducationSlaAlertsFromNow(
     user: AuthUser,
   ): Promise<EducationSlaSettingsView & { purged: number }> {
@@ -424,12 +427,16 @@ export class SettingsService {
     );
 
     const purged = await this.prisma.education_lead_alerts.deleteMany({
-      where: { event_type: SLA_ALERT_EVENT_TYPE },
+      where: {
+        event_type: {
+          in: [SLA_ALERT_EVENT_TYPE, NEW_LEAD_ALERT_EVENT_TYPE],
+        },
+      },
     });
 
     await this.auditLog.write({
       event_type: AuditEvent.SETTINGS_EDUCATION_SLA,
-      message: `Alertas SLA reiniciadas desde ahora (purgadas ${purged.count})`,
+      message: `Alertas de leads reiniciadas desde ahora (purgadas ${purged.count})`,
       actor: auditActor(user),
       meta: {
         alerts_since: next.alerts_since,

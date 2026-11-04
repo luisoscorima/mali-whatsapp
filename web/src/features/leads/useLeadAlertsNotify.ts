@@ -129,12 +129,12 @@ export function useLeadAlertsNotify(enabled: boolean) {
   }, [])
 
   const markAllRead = useCallback(async () => {
-    const ids = items.map((item) => item.id)
-    if (!ids.length) return
-    await Promise.all(
-      ids.map((id) => apiClient.post(`/api/leads/alerts/${id}/read`, {})),
+    if (!items.length) return
+    const res = await apiClient.post<{ marked: number }>(
+      '/api/leads/alerts/read-all',
+      {},
     )
-    setItems([])
+    if (res.ok) setItems([])
   }, [items])
 
   return { items, refresh, markRead, markAllRead }

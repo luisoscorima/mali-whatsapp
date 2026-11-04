@@ -1896,6 +1896,45 @@ export class EducationLeadWorkflowService {
     return { ok: true };
   }
 
+  /** Marca como leídas todas las alertas visibles para el usuario (no solo la página actual). */
+  async markAllAlertsReadForUser(user: {
+    id: number;
+    area: string;
+    is_master?: boolean;
+    email?: string;
+    businessAccess?: {
+      mode: 'all' | 'restricted';
+      programIds: number[];
+      categorySlugs: string[] | null;
+      canonicalArea?: string;
+    };
+    allowedAreas?: string[];
+  }) {
+    const listed = await this.listAlertsForUser(user, { limit: 100 });
+    // Relist in batches until empty — listAlerts caps at 100.
+    let marked = 0;
+    let batch = listed.items;
+    while (batch.length) {
+      await this.prisma.$transaction(
+        batch.map((alert) =>
+          this.prisma.education_lead_alert_reads.upsert({
+            where: {
+              alert_id_user_id: { alert_id: alert.id, user_id: user.id },
+            },
+            create: { alert_id: alert.id, user_id: user.id },
+            update: { read_at: new Date() },
+          }),
+        ),
+      );
+      marked += batch.length;
+      if (batch.length < 100) break;
+      const next = await this.listAlertsForUser(user, { limit: 100 });
+      batch = next.items;
+      if (marked > 5000) break;
+    }
+    return { ok: true, marked };
+  }
+
   async setLeadAttributes(
     cycleId: number,
     values: Record<string, string>,

@@ -231,7 +231,7 @@ Un contacto puede tener varios ciclos históricos; un asesor vigente por ciclo a
 
 Meta configurable (default **10 minutos hábiles**) desde `education_lead_cycles.started_at` hasta `first_human_reply_at` (primer outbound humano).
 
-Horario hábil configurable (default America/Lima: L–V 08:30–20:00, sáb 08:30–18:00, dom 09:00–18:00). Fuera de franja el reloj no avanza. UI: **Ajustes → SLA primera respuesta** (`/settings/sla`); API `GET/PATCH /api/settings/education-sla` y `POST .../reset-alerts` (master: reinicia desde ahora y purga alertas históricas). Persistido en `app_settings` (`educacion` / `education_sla`), con `alerts_since` para no alertar el backlog.
+Horario hábil configurable (default America/Lima: L–V 08:30–20:00, sáb 08:30–18:00, dom 09:00–18:00). Fuera de franja el reloj no avanza. UI: **Ajustes → SLA primera respuesta** (`/settings/sla`); API `GET/PATCH /api/settings/education-sla` y `POST .../reset-alerts` (master: reinicia desde ahora y purga alertas históricas `sla_first_reply` + `new_lead`). Persistido en `app_settings` (`educacion` / `education_sla`), con `alerts_since` para no alertar el backlog SLA.
 
 - **Cumple** si la 1.ª respuesta humana llega en **≤ meta** min hábiles.
 - **Alerta** (`sla_first_reply`) solo si el ciclo empezó **≥ alerts_since** y ya pasaron **> meta** min hábiles sin respuesta (el job no cuenta ciclos que aún están dentro del margen, p. ej. overnight).
