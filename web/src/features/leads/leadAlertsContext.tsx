@@ -13,6 +13,8 @@ type LeadAlertsContextValue = {
   markRead: (alertId: number) => Promise<void>
   markAllRead: () => Promise<void>
   enabled: boolean
+  toastsEnabled: boolean
+  setToastsEnabled: (on: boolean) => void
 }
 
 const LeadAlertsContext = createContext<LeadAlertsContextValue | null>(null)
@@ -53,6 +55,8 @@ export function useLeadAlerts(): LeadAlertsContextValue {
       markRead: async () => undefined,
       markAllRead: async () => undefined,
       enabled: false,
+      toastsEnabled: false,
+      setToastsEnabled: () => undefined,
     }
   }
   return ctx

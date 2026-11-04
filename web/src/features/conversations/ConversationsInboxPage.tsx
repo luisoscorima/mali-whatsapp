@@ -2991,16 +2991,12 @@ export function ConversationsInboxPage() {
             )}
           </PopoverContent></Popover> : null}
           <InboxAlertsCenter
-            unreadCount={list?.unread_count ?? 0}
             browserNotify={{
               supported: browserNotifySupported,
               permission: browserNotifyPermission,
               active: browserNotifyActive,
               enable: enableBrowserNotify,
               disable: disableBrowserNotify,
-            }}
-            onOpenConversation={(conversationId) => {
-              navigate(conversationPath(conversationId))
             }}
           />
           </>

@@ -9,7 +9,25 @@ import {
 
 const POLL_MS = 15000
 const SEEN_STORAGE_KEY = 'mali.leadAlerts.seen'
+const TOASTS_STORAGE_KEY = 'mali.leadAlerts.toasts'
 const SEEN_CAP = 200
+
+/** Toasts de leads apagados por defecto; el usuario puede activarlos en la campana. */
+function readToastsEnabled(): boolean {
+  try {
+    return localStorage.getItem(TOASTS_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeToastsEnabled(on: boolean) {
+  try {
+    localStorage.setItem(TOASTS_STORAGE_KEY, on ? '1' : '0')
+  } catch {
+    // ignore
+  }
+}
 
 export type LeadAlertEventType = 'new_lead' | 'sla_first_reply' | string
 
@@ -64,13 +82,22 @@ function writeSeenIds(ids: Set<number>) {
 }
 
 /**
- * Polls persistent lead alerts (new + SLA) and shows in-app toast + browser notify.
+ * Polls persistent lead alerts (new + SLA).
+ * Toast/browser notify solo si el usuario activó “Avisos” (off por defecto).
  */
 export function useLeadAlertsNotify(enabled: boolean) {
   const [items, setItems] = useState<LeadAlertItem[]>([])
+  const [toastsEnabled, setToastsEnabledState] = useState(readToastsEnabled)
   const seenRef = useRef<Set<number>>(readSeenIds())
+  const toastsRef = useRef(toastsEnabled)
+  toastsRef.current = toastsEnabled
   const navigate = useNavigate()
   const permission = getBrowserNotifyPermission()
+
+  const setToastsEnabled = useCallback((on: boolean) => {
+    writeToastsEnabled(on)
+    setToastsEnabledState(on)
+  }, [])
 
   const refresh = useCallback(async () => {
     if (!enabled) return
@@ -86,6 +113,8 @@ export function useLeadAlertsNotify(enabled: boolean) {
       if (seenRef.current.has(alert.id)) continue
       seenRef.current.add(alert.id)
       seenChanged = true
+      if (!toastsRef.current) continue
+
       const copy = alertCopy(alert)
       const href = alert.conversation_id
         ? `/conversations/${alert.conversation_id}`
@@ -94,9 +123,9 @@ export function useLeadAlertsNotify(enabled: boolean) {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         toast.message(copy.title, {
           description: copy.body,
-          duration: 8000,
+          duration: 5000,
           action: {
-            label: 'Ir al chat',
+            label: 'Abrir',
             onClick: () => {
               navigate(href)
             },
@@ -137,5 +166,12 @@ export function useLeadAlertsNotify(enabled: boolean) {
     if (res.ok) setItems([])
   }, [items])
 
-  return { items, refresh, markRead, markAllRead }
+  return {
+    items,
+    refresh,
+    markRead,
+    markAllRead,
+    toastsEnabled,
+    setToastsEnabled,
+  }
 }

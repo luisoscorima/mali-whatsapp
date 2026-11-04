@@ -8,18 +8,27 @@ export default function App() {
       <AppRouter />
       {createPortal(
         <Toaster
+          theme="system"
           position="top-right"
           closeButton
-          style={{ zIndex: 200, pointerEvents: 'auto' }}
+          offset={16}
+          gap={10}
+          visibleToasts={4}
+          style={{ zIndex: 500, pointerEvents: 'auto' }}
           toastOptions={{
+            unstyled: true,
             classNames: {
-              toast:
-                'border border-line bg-surface-strong text-ink shadow-md !font-[inherit]',
-              success: '!border-accent/30 !bg-accent-soft !text-accent',
-              error: '!border-bad/30 !bg-bad/10 !text-bad',
-              title: '!text-sm !font-medium',
-              description: '!text-sm',
-              closeButton: '!bg-surface !border-line !text-ink',
+              toast: 'mali-toast',
+              title: 'mali-toast__title',
+              description: 'mali-toast__desc',
+              actionButton: 'mali-toast__action',
+              cancelButton: 'mali-toast__cancel',
+              closeButton: 'mali-toast__close',
+              icon: 'mali-toast__icon',
+              success: 'mali-toast--success',
+              error: 'mali-toast--error',
+              info: 'mali-toast--info',
+              warning: 'mali-toast--warning',
             },
           }}
         />,

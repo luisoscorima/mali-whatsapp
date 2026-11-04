@@ -1,25 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Link } from 'react-router-dom'
-import { apiClient } from '@/shared/api'
+import { useNavigate } from 'react-router-dom'
 import type { BrowserNotifyPermission } from '@/shared/browserNotify'
+import { useCategoryScope } from '@/shared/area/useCategoryScope'
 import { useLeadAlerts } from '@/features/leads/leadAlertsContext'
-import { chatDisplayName } from './whatsappIdentity'
-
-type UnreadChatItem = {
-  id: number
-  phone: string | null
-  contact_name: string
-  wa_profile_name: string | null
-  wa_username: string | null
-  preview: string
-  inbox_unread: boolean
-  is_virtual: boolean
-  archived: boolean
-}
+import type { LeadAlertItem } from '@/features/leads/useLeadAlertsNotify'
+import { useOpenContactChat } from '../contacts/openContactChat'
 
 type InboxAlertsCenterProps = {
-  unreadCount: number
   browserNotify: {
     supported: boolean
     permission: BrowserNotifyPermission
@@ -27,7 +15,6 @@ type InboxAlertsCenterProps = {
     enable: () => Promise<unknown>
     disable: () => void
   }
-  onOpenConversation: (conversationId: number) => void
 }
 
 function BellIcon({ filled }: { filled?: boolean }) {
@@ -54,28 +41,55 @@ function leadLabel(eventType: string | undefined, name: string): string {
   return `Nuevo · ${name}`
 }
 
-export function InboxAlertsCenter({
-  unreadCount,
-  browserNotify,
-  onOpenConversation,
-}: InboxAlertsCenterProps) {
+export function InboxAlertsCenter({ browserNotify }: InboxAlertsCenterProps) {
+  const navigate = useNavigate()
+  const categoryScope = useCategoryScope()
+  const { openContactChat, linePickerDialog, busy: openChatBusy } =
+    useOpenContactChat({ categoryQuery: categoryScope.query })
   const {
     items: leadItems,
     markRead,
     markAllRead,
     enabled: leadsEnabled,
+    toastsEnabled: leadToastsEnabled,
+    setToastsEnabled: setLeadToastsEnabled,
   } = useLeadAlerts()
   const [open, setOpen] = useState(false)
-  const [unreadChats, setUnreadChats] = useState<UnreadChatItem[]>([])
   const [markingAll, setMarkingAll] = useState(false)
+  const [openingAlertId, setOpeningAlertId] = useState<number | null>(null)
   const [panelPos, setPanelPos] = useState<{ top: number; left: number } | null>(
     null,
   )
   const rootRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
-  const leadCount = leadsEnabled ? leadItems.length : 0
-  const badgeCount = unreadCount + leadCount
+  const badgeCount = leadsEnabled ? leadItems.length : 0
+
+  async function goToLeadChat(alert: LeadAlertItem) {
+    if (openingAlertId != null || openChatBusy) return
+    setOpeningAlertId(alert.id)
+    try {
+      if (alert.conversation_id) {
+        void markRead(alert.id)
+        setOpen(false)
+        navigate(`/conversations/${alert.conversation_id}`)
+        return
+      }
+      if (!alert.contact_id) return
+      setOpen(false)
+      const result = await openContactChat(alert.contact_id, {
+        navigateTo: (conversationId) => {
+          void markRead(alert.id)
+          navigate(`/conversations/${conversationId}`)
+        },
+      })
+      if (result === 'opened' || result === 'same') {
+        void markRead(alert.id)
+      }
+    } finally {
+      setOpeningAlertId(null)
+    }
+  }
 
   useLayoutEffect(() => {
     if (!open) {
@@ -114,25 +128,6 @@ export function InboxAlertsCenter({
     return () => document.removeEventListener('click', onDocClick)
   }, [open])
 
-  useEffect(() => {
-    if (!open) return
-    let cancelled = false
-    void (async () => {
-      const res = await apiClient.get<{ items: UnreadChatItem[] }>(
-        '/api/conversations?chat=unread&page=1',
-      )
-      if (cancelled || !res.ok) return
-      setUnreadChats(
-        (res.data.items ?? []).filter(
-          (item) => !item.is_virtual && !item.archived && item.inbox_unread,
-        ),
-      )
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [open, unreadCount])
-
   return (
     <div className="inbox-alerts-center" ref={rootRef}>
       <button
@@ -141,10 +136,12 @@ export function InboxAlertsCenter({
         aria-expanded={open}
         aria-label={
           badgeCount > 0
-            ? `Avisos, ${badgeCount} pendientes`
+            ? `Avisos, ${badgeCount} leads pendientes`
             : 'Avisos'
         }
-        title="Avisos"
+        title={
+          badgeCount > 0 ? `${badgeCount} leads pendientes` : 'Avisos de leads'
+        }
         onClick={() => setOpen((v) => !v)}
       >
         <span className="inbox-alerts-center__icon-wrap">
@@ -170,19 +167,36 @@ export function InboxAlertsCenter({
                 <section className="inbox-alerts-center__section">
                   <header className="inbox-alerts-center__section-head">
                     <h3>Leads</h3>
-                    {leadItems.length > 0 ? (
-                      <button
-                        type="button"
-                        className="small-btn compact"
-                        disabled={markingAll}
-                        onClick={() => {
-                          setMarkingAll(true)
-                          void markAllRead().finally(() => setMarkingAll(false))
-                        }}
+                    <div className="inbox-alerts-center__actions">
+                      <label
+                        className="inbox-alerts-center__toggle inbox-alerts-center__toggle--inline"
+                        title="Toasts al llegar un lead o sin atender"
                       >
-                        {markingAll ? '…' : 'Listo a todos'}
-                      </button>
-                    ) : null}
+                        <span>Avisos</span>
+                        <input
+                          type="checkbox"
+                          checked={leadToastsEnabled}
+                          onChange={(e) =>
+                            setLeadToastsEnabled(e.target.checked)
+                          }
+                        />
+                      </label>
+                      {leadItems.length > 0 ? (
+                        <button
+                          type="button"
+                          className="small-btn compact"
+                          disabled={markingAll}
+                          onClick={() => {
+                            setMarkingAll(true)
+                            void markAllRead().finally(() =>
+                              setMarkingAll(false),
+                            )
+                          }}
+                        >
+                          {markingAll ? '…' : 'Listo a todos'}
+                        </button>
+                      ) : null}
+                    </div>
                   </header>
                   {leadItems.length === 0 ? (
                     <p className="inbox-alerts-center__empty muted">
@@ -193,9 +207,7 @@ export function InboxAlertsCenter({
                       {leadItems.map((alert) => {
                         const who =
                           alert.contact_name || alert.phone || 'Sin nombre'
-                        const href = alert.conversation_id
-                          ? `/conversations/${alert.conversation_id}`
-                          : '/conversations'
+                        const opening = openingAlertId === alert.id
                         return (
                           <li
                             key={alert.id}
@@ -205,16 +217,19 @@ export function InboxAlertsCenter({
                               {leadLabel(alert.event_type, who)}
                             </span>
                             <div className="inbox-alerts-center__actions">
-                              <Link
-                                to={href}
+                              <button
+                                type="button"
                                 className="small-btn compact"
-                                onClick={() => {
-                                  void markRead(alert.id)
-                                  setOpen(false)
-                                }}
+                                disabled={opening || openChatBusy}
+                                title={
+                                  alert.conversation_id
+                                    ? 'Abrir chat'
+                                    : 'Abrir o crear chat (elige línea si hay varias)'
+                                }
+                                onClick={() => void goToLeadChat(alert)}
                               >
-                                Ir al chat
-                              </Link>
+                                {opening ? '…' : 'Ir al chat'}
+                              </button>
                               <button
                                 type="button"
                                 className="small-btn compact"
@@ -229,71 +244,40 @@ export function InboxAlertsCenter({
                     </ul>
                   )}
                 </section>
-              ) : null}
+              ) : (
+                <p className="inbox-alerts-center__empty muted">
+                  Sin alertas de leads en esta área
+                </p>
+              )}
 
-              <section className="inbox-alerts-center__section">
-                <header className="inbox-alerts-center__section-head">
-                  <h3>Chats</h3>
-                  {browserNotify.supported ? (
-                    <label className="inbox-alerts-center__toggle inbox-alerts-center__toggle--inline">
-                      <span>Avisos</span>
-                      <input
-                        type="checkbox"
-                        checked={browserNotify.active}
-                        disabled={browserNotify.permission === 'denied'}
-                        title={
-                          browserNotify.permission === 'denied'
-                            ? 'Bloqueados en el navegador'
-                            : 'Notificaciones del navegador'
-                        }
-                        onChange={() => {
-                          if (browserNotify.active) browserNotify.disable()
-                          else void browserNotify.enable()
-                        }}
-                      />
-                    </label>
-                  ) : null}
-                </header>
-                {unreadChats.length === 0 ? (
-                  <p className="inbox-alerts-center__empty muted">
-                    Sin chats sin leer
-                  </p>
-                ) : (
-                  <ul className="inbox-alerts-center__list">
-                    {unreadChats.slice(0, 5).map((item) => {
-                      const name = chatDisplayName({
-                        phone: item.phone,
-                        contactName: item.contact_name,
-                        profileName: item.wa_profile_name,
-                        username: item.wa_username,
-                      })
-                      return (
-                        <li key={item.id}>
-                          <button
-                            type="button"
-                            className="inbox-alerts-center__row-btn"
-                            onClick={() => {
-                              onOpenConversation(item.id)
-                              setOpen(false)
-                            }}
-                          >
-                            <span className="inbox-alerts-center__title">
-                              {name}
-                            </span>
-                            <span className="inbox-alerts-center__preview muted">
-                              {item.preview || 'Nuevo mensaje'}
-                            </span>
-                          </button>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                )}
-              </section>
+              {browserNotify.supported ? (
+                <div className="inbox-alerts-center__footer">
+                  <label
+                    className="inbox-alerts-center__toggle"
+                    title={
+                      browserNotify.permission === 'denied'
+                        ? 'Bloqueados en el navegador'
+                        : 'Avisos del navegador cuando hay chats sin leer'
+                    }
+                  >
+                    <span>Notificaciones del navegador</span>
+                    <input
+                      type="checkbox"
+                      checked={browserNotify.active}
+                      disabled={browserNotify.permission === 'denied'}
+                      onChange={() => {
+                        if (browserNotify.active) browserNotify.disable()
+                        else void browserNotify.enable()
+                      }}
+                    />
+                  </label>
+                </div>
+              ) : null}
             </div>,
             document.body,
           )
         : null}
+      {linePickerDialog}
     </div>
   )
 }
