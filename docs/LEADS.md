@@ -177,8 +177,15 @@ Distinto del **widget** y de CTWA Ads. Meta no manda `referral`; la señal va en
 
 Orden de atribución inbound: CTWA → **web_button** → mali_one_link → orgánico.
 
-Backfill: `POST /api/leads/web-buttons/backfill` (dry-run) / `?apply=1`, o  
+Al alta (`upsertOrigin` con `conversation_id`), `program_id` se toma de la **línea WA** si no viene `program_slug`. Así `recordOrigin` y el `recordInbound` del mismo mensaje operan la misma categoría (no General + CA).
+
+Backfill canal: `POST /api/leads/web-buttons/backfill` (dry-run) / `?apply=1`, o  
 `node api/scripts/leads-backfill-web-buttons.cjs` / `--apply`.
+
+Backfill dobles (General huérfano + CA/EP del mismo origen):  
+`POST /api/leads/cycles/backfill-duplicate-general` (dry-run) / `?apply=1`, o  
+`node api/scripts/leads-backfill-duplicate-general.cjs` / `--apply`.  
+Cierra el General (`close_reason=superseded_by_category`) y rellena `origin.program_id` si faltaba. No toca pares CA+EP legítimos.
 
 ### Links y QR de MALI ONE
 
@@ -235,7 +242,7 @@ Horario hábil configurable (default America/Lima: L–V 08:30–20:00, sáb 08:
 
 - **Cumple** si la 1.ª respuesta humana llega en **≤ meta** min hábiles.
 - **Alerta** (`sla_first_reply`) solo si el ciclo empezó **≥ alerts_since** y ya pasaron **> meta** min hábiles sin respuesta (el job no cuenta ciclos que aún están dentro del margen, p. ej. overnight).
-- UI: centro de avisos del inbox (campanita: chats no leídos + leads nuevos/SLA) + toast; toggle de notificaciones del navegador dentro del panel. Listado `GET /api/leads/alerts`.
+- UI: campanita del inbox = leads (nuevos/SLA), **1 aviso por ciclo abierto** (no se deduplica por contacto: CA y EP legítimos deben verse). Chats sin leer van en el rail / filtro. Toast de leads off por defecto (toggle Avisos). `GET /api/leads/alerts`.
 - Métricas: vitrina en **MALI ONE → CRM Educación → Oportunidades** (`GET /api/crm/education/sla`); espejo en WhatsApp Reportería solo área Educación (`GET /api/reports/education-sla`).
 
 Código: `api/src/leads/education-lead-sla.util.ts`, `education-sla-config.util.ts`.
