@@ -20,6 +20,7 @@ export function navFromPath(pathname: string): string {
   if (pathname.startsWith('/attributes')) return 'attributes'
   if (pathname.startsWith('/leads')) return 'leads'
   if (pathname.startsWith('/settings')) return 'settings'
+  if (pathname.startsWith('/reports')) return 'reports'
   if (pathname.startsWith('/admin')) return 'admin'
   if (pathname === '/') return 'conversations'
   return ''

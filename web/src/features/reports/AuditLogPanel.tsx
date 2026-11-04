@@ -164,20 +164,29 @@ export function AuditLogPanel({
     return <p className="text-muted">No se pudo cargar</p>
   }
 
+  const scopeBadge = data
+    ? data.area_scoped
+      ? data.area_label
+        ? `Área: ${data.area_label}`
+        : 'Alcance: área'
+      : 'Alcance: global'
+    : null
+
   return (
     <section className="space-y-4 rounded-xl border border-line bg-surface-strong p-4">
-      <h2 className="text-lg font-semibold">{title}</h2>
-      {intro ? <p className="text-sm text-muted">{intro}</p> : null}
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-semibold">{title}</h2>
+          {intro ? <p className="mt-1 text-sm text-muted">{intro}</p> : null}
+        </div>
+        {scopeBadge ? (
+          <span className="area-pill area-pill--menu shrink-0">{scopeBadge}</span>
+        ) : null}
+      </div>
       {data ? (
         <p className="text-sm text-muted">
           Fechas en zona <strong>{data.display_timezone}</strong>. Retención máxima{' '}
           <strong>{data.retention_days}</strong> días.
-          {data.area_scoped && data.area_label ? (
-            <>
-              {' '}
-              Solo eventos del área <strong>{data.area_label}</strong>.
-            </>
-          ) : null}
         </p>
       ) : null}
 

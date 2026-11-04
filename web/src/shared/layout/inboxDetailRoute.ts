@@ -13,5 +13,6 @@ export function hasInboxDetailRoute(pathname: string): boolean {
   if (/^\/flows\/(\d+|new)/.test(pathname)) return true
   if (/^\/admin\/.+/.test(pathname)) return true
   if (/^\/settings\/.+/.test(pathname)) return true
+  if (/^\/reports\/.+/.test(pathname)) return true
   return false
 }

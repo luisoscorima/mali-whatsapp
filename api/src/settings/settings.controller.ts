@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -15,11 +16,13 @@ import {
   EnableAiDto,
   UpdateAiConfigDto,
   UpdateBusinessHoursDto,
+  UpdateEducationSlaDto,
 } from './dto/settings.dto';
 import { SettingsService } from './settings.service';
 import type {
   AiSettingsView,
   BusinessHoursSettingsView,
+  EducationSlaSettingsView,
   IntegrationSettings,
   SettingsModuleItem,
 } from './settings.types';
@@ -32,10 +35,13 @@ export class SettingsController {
   @Get('modules')
   async modules(
     @CurrentUser() user: AuthUser,
+    @Query('group') group?: string,
   ): Promise<
     ApiResponse<{ modules: SettingsModuleItem[]; first_path: string | null }>
   > {
-    const data = this.settingsService.getModules(user);
+    const navGroup =
+      group === 'ajustes' || group === 'reportes' ? group : undefined;
+    const data = this.settingsService.getModules(user, navGroup);
     return { ok: true, data };
   }
 
@@ -134,5 +140,22 @@ export class SettingsController {
   ): Promise<ApiResponse<undefined>> {
     await this.settingsService.updateBusinessHours(user, body, area);
     return { ok: true, data: undefined };
+  }
+
+  @Get('education-sla')
+  async getEducationSla(
+    @CurrentUser() user: AuthUser,
+  ): Promise<ApiResponse<EducationSlaSettingsView>> {
+    const data = await this.settingsService.getEducationSla(user);
+    return { ok: true, data };
+  }
+
+  @Patch('education-sla')
+  async patchEducationSla(
+    @CurrentUser() user: AuthUser,
+    @Body() body: UpdateEducationSlaDto,
+  ): Promise<ApiResponse<EducationSlaSettingsView>> {
+    const data = await this.settingsService.updateEducationSla(user, body);
+    return { ok: true, data };
   }
 }

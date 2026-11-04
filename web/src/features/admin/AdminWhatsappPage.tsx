@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
+import { ModulePageHeader } from '@/shared/ui/ModulePageHeader'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 import {
   Dialog,
@@ -72,6 +73,9 @@ export function AdminWhatsappPage() {
   const [registerLine, setRegisterLine] = useState<WhatsAppOverview['lines'][number] | null>(null)
   const [registerPin, setRegisterPin] = useState('')
   const [registering, setRegistering] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
+  const [showWabas, setShowWabas] = useState(true)
+  const [showLines, setShowLines] = useState(true)
 
   function load() {
     void apiClient.get<WhatsAppOverview>('/api/admin/whatsapp').then((result) => {
@@ -246,146 +250,230 @@ export function AdminWhatsappPage() {
 
   return (
     <div className="space-y-4">
-      <form
-        className="space-y-2 rounded-xl border border-line p-4"
-        onSubmit={(event) => {
-          event.preventDefault()
-          setCreating(true)
-          void apiClient
-            .post('/api/admin/whatsapp/lines', {
-              business_area_id: Number(draft.businessAreaId),
-              waba_id: Number(draft.wabaId),
-              program_id: draft.programId ? Number(draft.programId) : null,
-              label: draft.label,
-              phone_number_id: draft.phoneNumberId,
-            })
-            .then((result) => {
-              setCreating(false)
-              if (!result.ok) {
-                notify.error(result.error)
-                return
-              }
-              setDraft({ businessAreaId: '', programId: '', wabaId: '', label: '', phoneNumberId: '' })
-              notify.success('Línea creada como borrador. Valídala en Meta antes de usarla.')
-              load()
-            })
-        }}
-      >
-        <p className="text-sm text-muted">
-          Alta de línea. Hace falta el identificador de número de Meta y la WABA. El token sale de la WABA. Queda inactiva: primero Valida en Meta y después Activar.
-        </p>
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="text-sm">
-            <span className="text-muted">Nombre</span>
-            <input
-              className="mt-1 block rounded-lg border border-line bg-surface px-3 py-2"
-              value={draft.label}
-              onChange={(event) => setDraft({ ...draft, label: event.target.value })}
-            />
-          </label>
-          <label className="text-sm">
-            <span className="text-muted">Phone number id</span>
-            <input
-              className="mt-1 block rounded-lg border border-line bg-surface px-3 py-2"
-              value={draft.phoneNumberId}
-              onChange={(event) => setDraft({ ...draft, phoneNumberId: event.target.value })}
-            />
-          </label>
-          <label className="text-sm">
-            <span className="text-muted">Área</span>
-            <select
-              className="mt-1 block rounded-lg border border-line bg-surface px-3 py-2"
-              value={draft.businessAreaId}
-              onChange={(event) => setDraft({ ...draft, businessAreaId: event.target.value, programId: '' })}
-            >
-              <option value="">Elegir</option>
-              {data.areas.map((area) => (
-                <option key={area.id} value={area.id}>{area.label}</option>
-              ))}
-            </select>
-          </label>
-          {selectedArea?.slug === 'educacion' ? (
-            <label className="text-sm">
-              <span className="text-muted">Categoría</span>
-              <select
-                className="mt-1 block rounded-lg border border-line bg-surface px-3 py-2"
-                value={draft.programId}
-                onChange={(event) => setDraft({ ...draft, programId: event.target.value })}
-              >
-                <option value="">General</option>
-                {programs.map((program) => (
-                  <option key={program.id} value={program.id}>{program.label}</option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-          <label className="text-sm">
-            <span className="text-muted">WABA</span>
-            <select
-              className="mt-1 block rounded-lg border border-line bg-surface px-3 py-2"
-              value={draft.wabaId}
-              onChange={(event) => setDraft({ ...draft, wabaId: event.target.value })}
-            >
-              <option value="">Elegir</option>
-              {data.wabas.map((waba) => (
-                <option key={waba.id} value={waba.id}>{waba.label}</option>
-              ))}
-            </select>
-          </label>
-          <button type="submit" className="small-btn" disabled={creating}>Crear</button>
-        </div>
-      </form>
-      <p className="muted">
+      <ModulePageHeader
+        title="Líneas"
+        description="Catálogo de números WhatsApp, WABAs y registro en Cloud API."
+      />
+      <p className="text-sm text-muted">
+        Glosario: WABA = cuenta de negocio Meta · Phone number ID = ID del número en Meta ·
+        Registrar = conectar el número a Cloud API con PIN.
+      </p>
+      <p className="text-sm text-muted">
         {data.vault_configured
           ? 'La bóveda de tokens está configurada.'
           : 'La bóveda de tokens no está configurada. Las líneas siguen usando variables de entorno.'}
       </p>
-      <section className="space-y-2 rounded-xl border border-line p-4">
-        <h2 className="text-sm font-medium">WABA</h2>
-        <p className="text-sm text-muted">
-          Sincronizar trae números nuevos como borrador. Suscribir enlaza la app a la WABA (webhooks). En cada línea Pendiente: Registrar en Cloud API (PIN) → Activar.
-        </p>
-        <ul className="space-y-2">
-          {data.wabas.map((waba) => (
-            <li
-              key={waba.id}
-              className="flex flex-wrap items-center justify-between gap-3 border-b border-line py-2 last:border-b-0"
-            >
-              <div className="min-w-0">
-                <p className="text-sm">
-                  {waba.label}
-                  {waba.active ? '' : ' · inactiva'}
-                </p>
-                <p className="text-sm text-muted">
-                  …{waba.meta_waba_id.slice(-6)}
-                  {' · '}
-                  {waba.app_subscription_status || 'suscripción desconocida'}
-                </p>
-              </div>
-              <div className="flex shrink-0 flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="small-btn secondary"
-                  disabled={subscribingWabaId === waba.id || syncingWabaId === waba.id}
-                  onClick={() => void subscribeWaba(waba.id, waba.label)}
+
+      <section className="rounded-xl border border-line bg-surface-strong p-4">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-2 text-left text-sm font-medium"
+          onClick={() => setShowCreate((v) => !v)}
+          aria-expanded={showCreate}
+        >
+          <span>Alta de línea</span>
+          <span className="text-muted" aria-hidden>
+            {showCreate ? '−' : '+'}
+          </span>
+        </button>
+        {showCreate ? (
+          <form
+            className="mt-3 space-y-2"
+            onSubmit={(event) => {
+              event.preventDefault()
+              setCreating(true)
+              void apiClient
+                .post('/api/admin/whatsapp/lines', {
+                  business_area_id: Number(draft.businessAreaId),
+                  waba_id: Number(draft.wabaId),
+                  program_id: draft.programId ? Number(draft.programId) : null,
+                  label: draft.label,
+                  phone_number_id: draft.phoneNumberId,
+                })
+                .then((result) => {
+                  setCreating(false)
+                  if (!result.ok) {
+                    notify.error(result.error)
+                    return
+                  }
+                  setDraft({
+                    businessAreaId: '',
+                    programId: '',
+                    wabaId: '',
+                    label: '',
+                    phoneNumberId: '',
+                  })
+                  notify.success(
+                    'Línea creada como borrador. Valídala en Meta antes de usarla.',
+                  )
+                  load()
+                })
+            }}
+          >
+            <p className="text-sm text-muted">
+              Hace falta el ID del número en Meta y la WABA. Queda inactiva: primero Valida en
+              Meta y después Activar.
+            </p>
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="text-sm">
+                <span className="text-muted">Nombre</span>
+                <input
+                  className="mt-1 block rounded-lg border border-line bg-surface px-3 py-2"
+                  value={draft.label}
+                  onChange={(event) => setDraft({ ...draft, label: event.target.value })}
+                />
+              </label>
+              <label className="text-sm">
+                <span className="text-muted">ID del número (Phone number ID)</span>
+                <input
+                  className="mt-1 block rounded-lg border border-line bg-surface px-3 py-2"
+                  value={draft.phoneNumberId}
+                  onChange={(event) =>
+                    setDraft({ ...draft, phoneNumberId: event.target.value })
+                  }
+                />
+              </label>
+              <label className="text-sm">
+                <span className="text-muted">Área</span>
+                <select
+                  className="mt-1 block rounded-lg border border-line bg-surface px-3 py-2"
+                  value={draft.businessAreaId}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      businessAreaId: event.target.value,
+                      programId: '',
+                    })
+                  }
                 >
-                  {subscribingWabaId === waba.id ? 'Suscribiendo…' : 'Suscribir app'}
-                </button>
-                <button
-                  type="button"
-                  className="small-btn"
-                  disabled={syncingWabaId === waba.id || subscribingWabaId === waba.id}
-                  onClick={() => void syncWabaLines(waba.id, waba.label)}
+                  <option value="">Elegir</option>
+                  {data.areas.map((area) => (
+                    <option key={area.id} value={area.id}>
+                      {area.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {selectedArea?.slug === 'educacion' ? (
+                <label className="text-sm">
+                  <span className="text-muted">Categoría</span>
+                  <select
+                    className="mt-1 block rounded-lg border border-line bg-surface px-3 py-2"
+                    value={draft.programId}
+                    onChange={(event) =>
+                      setDraft({ ...draft, programId: event.target.value })
+                    }
+                  >
+                    <option value="">General</option>
+                    {programs.map((program) => (
+                      <option key={program.id} value={program.id}>
+                        {program.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              <label className="text-sm">
+                <span className="text-muted">WABA</span>
+                <select
+                  className="mt-1 block rounded-lg border border-line bg-surface px-3 py-2"
+                  value={draft.wabaId}
+                  onChange={(event) => setDraft({ ...draft, wabaId: event.target.value })}
                 >
-                  {syncingWabaId === waba.id ? 'Sincronizando…' : 'Sincronizar con Meta'}
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+                  <option value="">Elegir</option>
+                  {data.wabas.map((waba) => (
+                    <option key={waba.id} value={waba.id}>
+                      {waba.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button type="submit" className="small-btn min-h-11" disabled={creating}>
+                Crear
+              </button>
+            </div>
+          </form>
+        ) : null}
       </section>
-      <div className="space-y-4">
-        {grouped.map((area) => (
+
+      <section className="rounded-xl border border-line bg-surface-strong p-4">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-2 text-left text-sm font-medium"
+          onClick={() => setShowWabas((v) => !v)}
+          aria-expanded={showWabas}
+        >
+          <span>WABAs ({data.wabas.length})</span>
+          <span className="text-muted" aria-hidden>
+            {showWabas ? '−' : '+'}
+          </span>
+        </button>
+        {showWabas ? (
+          <div className="mt-3 space-y-2">
+            <p className="text-sm text-muted">
+              Sincronizar trae números nuevos como borrador. Suscribir enlaza la app a la WABA
+              (webhooks).
+            </p>
+            <ul className="space-y-2">
+              {data.wabas.map((waba) => (
+                <li
+                  key={waba.id}
+                  className="flex flex-wrap items-center justify-between gap-3 border-b border-line py-2 last:border-b-0"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm">
+                      {waba.label}
+                      {waba.active ? '' : ' · inactiva'}
+                    </p>
+                    <p className="text-sm text-muted">
+                      …{waba.meta_waba_id.slice(-6)}
+                      {' · '}
+                      {waba.app_subscription_status || 'suscripción desconocida'}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="small-btn secondary min-h-11"
+                      disabled={subscribingWabaId === waba.id || syncingWabaId === waba.id}
+                      onClick={() => void subscribeWaba(waba.id, waba.label)}
+                    >
+                      {subscribingWabaId === waba.id ? 'Suscribiendo…' : 'Suscribir app'}
+                    </button>
+                    <button
+                      type="button"
+                      className="small-btn min-h-11"
+                      disabled={syncingWabaId === waba.id || subscribingWabaId === waba.id}
+                      onClick={() => void syncWabaLines(waba.id, waba.label)}
+                    >
+                      {syncingWabaId === waba.id ? 'Sincronizando…' : 'Sincronizar con Meta'}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="space-y-3">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-2 rounded-xl border border-line bg-surface-strong px-4 py-3 text-left text-sm font-medium"
+          onClick={() => setShowLines((v) => !v)}
+          aria-expanded={showLines}
+        >
+          <span>Líneas por área ({data.lines.length})</span>
+          <span className="text-muted" aria-hidden>
+            {showLines ? '−' : '+'}
+          </span>
+        </button>
+        {showLines ? (
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
+              Flujo típico: Pendiente → Registrar en Cloud API (PIN) → Validar → Activar.
+            </p>
+            {grouped.map((area) => (
           <section key={area.key} className="overflow-hidden rounded-xl border border-line">
             <h2 className="border-b border-line bg-surface-strong px-4 py-2 text-sm font-medium">{area.label}</h2>
             {area.categories.map((category, index) => (
@@ -498,7 +586,9 @@ export function AdminWhatsappPage() {
             ))}
           </section>
         ))}
-      </div>
+          </div>
+        ) : null}
+      </section>
       {confirmDialog}
       <Dialog
         open={registerLine != null}

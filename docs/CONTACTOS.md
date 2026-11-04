@@ -32,7 +32,7 @@ Excepción Instant Form Meta/TikTok: pueden reemplazar nombre (y apellido si vie
 - `/contacts` — listado, filtros (número, nombre, email, atributos), alta, edición.
 - `/contacts/import` — CSV/Excel; ejemplo `/contacts/sample.xlsx`.
 - Alta manual: prefijo con bandera (default 🇵🇪 +51), celular numérico.
-- **Admin → Conflictos** (master): unir fichas del mismo teléfono o resolver dato que no coincide con la persona.
+- **Administración → Conflictos** (master): unir fichas del mismo teléfono o resolver dato que no coincide con la persona.
 
 ## CRM PAM / Educación
 
@@ -66,8 +66,8 @@ Una ficha canónica por persona en `educacion`. **No** volver a ejecutar `consol
 | Quién | Qué espera |
 |-------|------------|
 | Asesor / operador | Inbox, chats, campañas, contactos e import **igual**. CA/EP siguen siendo **categorías**, no áreas aparte. Import/webhook ya no deberían fallar por clones de teléfono. |
-| Admin Meta / forms | Un Page token en **`educacion`**. Forms enrutan a categoría (`program_key` ca/ep/general), no a tres “áreas” Meta. |
-| Master Admin | Herramientas de limpieza en Conflictos (`null-phone-clones`, `education-alias-contacts`). El “Unir” **borra** el donante (antes lo dejaba vacío y rompía sync). |
+| Credenciales Meta / forms | Un Page token en **`educacion`**. Forms enrutan a categoría (`program_key` ca/ep/general), no a tres “áreas” Meta. |
+| Master (Administración) | Herramientas de limpieza en Conflictos (`null-phone-clones`, `education-alias-contacts`). El “Unir” **borra** el donante (antes lo dejaba vacío y rompía sync). |
 | MALI ONE / CRM API | `area=educacion`; alias ca/ep en query = filtro de **categoría**, no segunda base de fichas. |
 
 No se quitan pantallas de categoría ni se unifica PAM/Patronato.

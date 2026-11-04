@@ -51,7 +51,7 @@ Ver `PermissionCode` en `api/src/auth/roles/permission-codes.ts`.
 
 ## Consulta en UI (solo lectura)
 
-Master → **Admin → Roles** (`/admin/roles`): catálogo desde `GET /api/admin/roles` (`buildAdminRolesCatalog`).
+Master → **Administración → Roles** (`/admin/roles`): catálogo desde `GET /api/admin/roles` (`buildAdminRolesCatalog`).
 
 ## Flags legacy (`can_*`)
 

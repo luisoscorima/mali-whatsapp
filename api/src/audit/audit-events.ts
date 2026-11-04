@@ -36,6 +36,7 @@ export const AuditEvent = {
   SETTINGS_AI_CONFIG: 'settings.ai_config',
   SETTINGS_AI_ENABLE: 'settings.ai_enable',
   SETTINGS_BUSINESS_HOURS: 'settings.business_hours',
+  SETTINGS_EDUCATION_SLA: 'settings.education_sla',
 } as const;
 
 export type AuditEventType = (typeof AuditEvent)[keyof typeof AuditEvent];

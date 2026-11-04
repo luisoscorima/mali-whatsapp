@@ -28,7 +28,7 @@ Hay **cuatro** áreas canónicas. No se crea una quinta desde la pantalla. PAM, 
 
 ## Administración
 
-- Catálogo y alta de categorías del área: **Admin → Áreas**.
+- Catálogo y alta de categorías del área: **Administración → Áreas**.
 - Credenciales Meta / líneas: [META-WABA.md](./META-WABA.md), [LINEAS.md](./LINEAS.md).
 - Usuarios: área primaria + `user_areas`; master ve todas.
 

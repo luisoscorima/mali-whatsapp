@@ -19,7 +19,7 @@ Conversación → Línea + Persona
 
 ## Alta operativa
 
-Pantalla master: **Admin → Líneas / WhatsApp** (`/admin/whatsapp`).
+Pantalla master: **Administración → Líneas** (`/admin/lines`).
 
 Orden: **crear (borrador) → Validar en Meta → Activar**.
 
@@ -38,6 +38,6 @@ Cambiar nombre visible no altera la identidad de las conversaciones. Cambiar cat
 
 ## Credenciales
 
-Prioridad: bóveda / Admin Meta (cifrada con `WHATSAPP_CREDENTIALS_MASTER_KEY`) sobre `WHATSAPP_TOKEN_*` / `PHONE_NUMBER_ID_*` del `.env`. Catálogo dinámico: `WHATSAPP_LINE_CATALOG_ENABLED`.
+Prioridad: bóveda / Credenciales Meta (cifrada con `WHATSAPP_CREDENTIALS_MASTER_KEY`) sobre `WHATSAPP_TOKEN_*` / `PHONE_NUMBER_ID_*` del `.env`. Catálogo dinámico: `WHATSAPP_LINE_CATALOG_ENABLED`.
 
 Detalle de Graph, webhook y `subscribed_apps`: [META-WABA.md](./META-WABA.md).

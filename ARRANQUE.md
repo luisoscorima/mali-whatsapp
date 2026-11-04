@@ -89,4 +89,4 @@ DATABASE_URL="postgresql://..." npx prisma migrate resolve --applied 20260702120
 
 ## Plantillas (smoke)
 
-Credenciales Meta en `.env` o Admin → Meta. En el panel: Plantillas → sincronizar → crear (queda `PENDING` hasta Meta).
+Credenciales Meta en `.env` o Administración → Credenciales Meta. En el panel: Plantillas → sincronizar → crear (queda `PENDING` hasta Meta).

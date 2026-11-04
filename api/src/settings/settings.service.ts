@@ -27,10 +27,26 @@ import {
 import type {
   AiSettingsView,
   BusinessHoursSettingsView,
+  EducationSlaSettingsView,
   IntegrationSettings,
   SettingsModuleItem,
 } from './settings.types';
-import type { EnableAiDto, UpdateAiConfigDto, UpdateBusinessHoursDto } from './dto/settings.dto';
+import type {
+  EnableAiDto,
+  UpdateAiConfigDto,
+  UpdateBusinessHoursDto,
+  UpdateEducationSlaDto,
+} from './dto/settings.dto';
+import {
+  EDUCATION_SLA_SETTINGS_AREA,
+  EDUCATION_SLA_SETTINGS_KEY,
+  MAX_SLA_TARGET_MINUTES,
+  MIN_SLA_TARGET_MINUTES,
+  educationSlaConfigToView,
+  serializeEducationSlaConfig,
+  validateEducationSlaInput,
+} from '../leads/education-sla-config.util';
+import { loadEducationSlaConfig } from '../leads/education-sla-config.loader';
 
 function readPublicAppUrl(): string {
   return String(process.env.APP_BASE_URL || 'http://localhost:4000')
@@ -51,19 +67,23 @@ export class SettingsService {
     }
   }
 
-  getModules(user: AuthUser): {
+  getModules(
+    user: AuthUser,
+    navGroup?: 'ajustes' | 'reportes',
+  ): {
     modules: SettingsModuleItem[];
     first_path: string | null;
   } {
-    const modules = visibleSettingsModules(user).map((m) => ({
+    const modules = visibleSettingsModules(user, navGroup).map((m) => ({
       id: m.id,
       path: m.path,
       title: m.title,
       preview: m.preview,
+      navGroup: m.navGroup,
     }));
     return {
       modules,
-      first_path: firstSettingsModulePath(user),
+      first_path: firstSettingsModulePath(user, navGroup),
     };
   }
 
@@ -318,5 +338,57 @@ export class SettingsService {
         days_count: validated.config.days.length,
       },
     });
+  }
+
+  async getEducationSla(user: AuthUser): Promise<EducationSlaSettingsView> {
+    this.assertModuleAccess(user, 'sla');
+    const config = await loadEducationSlaConfig(this.prisma);
+    const view = educationSlaConfigToView(config);
+    return {
+      ...view,
+      min_target_minutes: MIN_SLA_TARGET_MINUTES,
+      max_target_minutes: MAX_SLA_TARGET_MINUTES,
+    };
+  }
+
+  async updateEducationSla(
+    user: AuthUser,
+    dto: UpdateEducationSlaDto,
+  ): Promise<EducationSlaSettingsView> {
+    this.assertModuleAccess(user, 'sla');
+    const isMaster = user.isMaster;
+    const canEdit =
+      user.canEditBusinessHours &&
+      canonicalBusinessArea(user.area) === 'educacion';
+    if (!isMaster && !canEdit) {
+      throw new ForbiddenException('No autorizado');
+    }
+
+    const validated = validateEducationSlaInput(dto);
+    if ('error' in validated) {
+      throw new BadRequestException(validated.error);
+    }
+
+    await this.upsertSettingValue(
+      EDUCATION_SLA_SETTINGS_AREA,
+      EDUCATION_SLA_SETTINGS_KEY,
+      serializeEducationSlaConfig(validated.config),
+    );
+    await this.auditLog.write({
+      event_type: AuditEvent.SETTINGS_EDUCATION_SLA,
+      message: `SLA primera respuesta guardado (meta ${validated.config.target_minutes} min)`,
+      actor: auditActor(user),
+      meta: {
+        target_minutes: validated.config.target_minutes,
+        days_count: Object.keys(validated.config.schedule).length,
+      },
+    });
+
+    const view = educationSlaConfigToView(validated.config);
+    return {
+      ...view,
+      min_target_minutes: MIN_SLA_TARGET_MINUTES,
+      max_target_minutes: MAX_SLA_TARGET_MINUTES,
+    };
   }
 }

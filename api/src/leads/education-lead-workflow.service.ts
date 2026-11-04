@@ -41,6 +41,7 @@ import {
   isSlaBreached,
   latestStartTimeForBreach,
 } from './education-lead-sla.util';
+import { loadEducationSlaConfig } from './education-sla-config.loader';
 import {
   isSaleClosingStatusSlug,
   missingFieldsForVentaExitosa,
@@ -1824,8 +1825,9 @@ export class EducationLeadWorkflowService {
    */
   async createSlaFirstReplyAlerts(limit = 200): Promise<{ created: number; scanned: number }> {
     if (!(await this.isAttentionV1Enabled())) return { created: 0, scanned: 0 };
+    const slaConfig = await loadEducationSlaConfig(this.prisma);
     const now = new Date();
-    const startedBy = latestStartTimeForBreach(now);
+    const startedBy = latestStartTimeForBreach(now, slaConfig);
     const candidates = await this.prisma.education_lead_cycles.findMany({
       where: {
         area: { in: EDUCATION_AREAS },
@@ -1846,7 +1848,7 @@ export class EducationLeadWorkflowService {
     });
     let created = 0;
     for (const cycle of candidates) {
-      if (!isSlaBreached(cycle.started_at, now)) continue;
+      if (!isSlaBreached(cycle.started_at, now, slaConfig)) continue;
       try {
         await this.prisma.education_lead_alerts.create({
           data: {

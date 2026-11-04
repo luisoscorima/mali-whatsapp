@@ -77,20 +77,34 @@ export function WaAccountMenu({ user, onUserUpdate }: WaAccountMenuProps) {
         ) : null}
 
         <div className="flex flex-col gap-1 px-2 py-2">
-          <Link
-            to="/settings"
-            className="rounded-md px-2 py-1.5 text-sm hover:bg-accent-soft"
-            onClick={() => setOpen(false)}
-          >
-            Ajustes
-          </Link>
+          {user.isMaster ||
+          user.canViewIntegration ||
+          user.canEditAiPrompt ||
+          user.canEditBusinessHours ? (
+            <Link
+              to="/settings"
+              className="rounded-md px-2 py-1.5 text-sm hover:bg-accent-soft"
+              onClick={() => setOpen(false)}
+            >
+              Ajustes
+            </Link>
+          ) : null}
+          {user.isMaster || user.canViewAuditLogs || user.canViewReports ? (
+            <Link
+              to="/reports"
+              className="rounded-md px-2 py-1.5 text-sm hover:bg-accent-soft"
+              onClick={() => setOpen(false)}
+            >
+              Reportes
+            </Link>
+          ) : null}
           {user.isMaster ? (
             <Link
               to="/admin"
               className="rounded-md px-2 py-1.5 text-sm hover:bg-accent-soft"
               onClick={() => setOpen(false)}
             >
-              Admin
+              Administración
             </Link>
           ) : null}
         </div>

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
+import { ModulePageHeader } from '@/shared/ui/ModulePageHeader'
 import {
   categoryLabel,
   categorySettingsArea,
@@ -18,6 +19,13 @@ type BusinessHoursSettings = {
   from: string
   to: string
   outside_hours_message: string
+}
+
+function formatDaysSummary(days: Set<number>): string {
+  const sorted = [...days].sort((a, b) => a - b)
+  if (sorted.length === 0) return 'sin días'
+  if (sorted.length === 7) return 'todos los días'
+  return sorted.map((d) => DAY_LABELS[d]).join(', ')
 }
 
 function BusinessHoursForm({
@@ -67,6 +75,11 @@ function BusinessHoursForm({
     })
   }
 
+  const summary = useMemo(() => {
+    if (!enabled) return 'Mensaje fuera de horario desactivado.'
+    return `${formatDaysSummary(days)} · ${from.slice(0, 5)}–${to.slice(0, 5)} · ${timezone}`
+  }, [enabled, days, from, to, timezone])
+
   async function handleSave() {
     if (!settings) return
     const dayList = [...days].sort((a, b) => a - b)
@@ -104,14 +117,26 @@ function BusinessHoursForm({
 
   return (
     <section className="space-y-4 rounded-xl border border-line bg-surface-strong p-4">
-      {heading ? <p className="text-sm text-muted">{heading}</p> : null}
-      <h2 className="text-lg font-semibold">Fuera de horario</h2>
+      <ModulePageHeader
+        title="Fuera de horario"
+        description={
+          heading
+            ? `Editando: ${heading}`
+            : 'Horario de atención y mensaje automático fuera de ese horario.'
+        }
+      />
+
       <p className="text-sm text-muted">
         Fuera de este horario se envía el mensaje predefinido una sola vez por chat
         hasta que un asesor lo abra. No usa IA.
       </p>
 
-      <label className="flex items-center gap-2 text-sm">
+      <div className="rounded-lg border border-line bg-surface px-3 py-2 text-sm">
+        <span className="text-muted">Resumen: </span>
+        <span className="font-medium text-ink">{summary}</span>
+      </div>
+
+      <label className="flex min-h-11 items-center gap-2 text-sm">
         <input
           type="checkbox"
           checked={enabled}
@@ -124,7 +149,7 @@ function BusinessHoursForm({
         <legend className="text-sm font-medium">Días de atención</legend>
         <div className="flex flex-wrap gap-3">
           {DAY_LABELS.map((label, day) => (
-            <label key={day} className="flex items-center gap-1.5 text-sm">
+            <label key={day} className="flex min-h-11 items-center gap-1.5 text-sm">
               <input
                 type="checkbox"
                 checked={days.has(day)}
@@ -157,7 +182,10 @@ function BusinessHoursForm({
         </label>
       </div>
 
-      <p className="text-xs text-muted">Zona horaria: {timezone}</p>
+      <p className="text-xs text-muted">
+        Zona horaria: {timezone} (definida en la configuración del área; no editable
+        aquí).
+      </p>
 
       <label className="block text-sm">
         <span className="font-medium">Mensaje predefinido (fuera de horario)</span>
@@ -174,7 +202,7 @@ function BusinessHoursForm({
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
-          className="rounded-lg bg-accent px-4 py-2 text-sm text-white hover:opacity-90 disabled:opacity-50"
+          className="min-h-11 rounded-lg bg-accent px-4 py-2 text-sm text-white hover:opacity-90 disabled:opacity-50"
           disabled={busy}
           onClick={() => handleSave()}
         >

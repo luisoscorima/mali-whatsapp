@@ -229,16 +229,16 @@ Un contacto puede tener varios ciclos históricos; un asesor vigente por ciclo a
 
 ## SLA de primera respuesta
 
-Meta: **10 minutos hábiles** desde `education_lead_cycles.started_at` hasta `first_human_reply_at` (primer outbound humano).
+Meta configurable (default **10 minutos hábiles**) desde `education_lead_cycles.started_at` hasta `first_human_reply_at` (primer outbound humano).
 
-Horario fijo (America/Lima): L–V 08:30–20:00, sáb 08:30–18:00, dom 09:00–18:00. Fuera de franja el reloj no avanza.
+Horario hábil configurable (default America/Lima: L–V 08:30–20:00, sáb 08:30–18:00, dom 09:00–18:00). Fuera de franja el reloj no avanza. UI: **Ajustes → SLA primera respuesta** (`/settings/sla`); API `GET/PATCH /api/settings/education-sla`. Persistido en `app_settings` (`educacion` / `education_sla`).
 
-- **Cumple** si la 1.ª respuesta humana llega en **≤ 10** min hábiles.
-- **Alerta** (`sla_first_reply`) solo si ya pasaron **> 10** min hábiles sin respuesta (el job no cuenta ciclos que aún están dentro del margen, p. ej. overnight).
+- **Cumple** si la 1.ª respuesta humana llega en **≤ meta** min hábiles.
+- **Alerta** (`sla_first_reply`) solo si ya pasaron **> meta** min hábiles sin respuesta (el job no cuenta ciclos que aún están dentro del margen, p. ej. overnight).
 - UI: centro de avisos del inbox (campanita: chats no leídos + leads nuevos/SLA) + toast; toggle de notificaciones del navegador dentro del panel. Listado `GET /api/leads/alerts`.
 - Métricas: vitrina en **MALI ONE → CRM Educación → Oportunidades** (`GET /api/crm/education/sla`); espejo en WhatsApp Reportería solo área Educación (`GET /api/reports/education-sla`).
 
-Código: `api/src/leads/education-lead-sla.util.ts`.
+Código: `api/src/leads/education-lead-sla.util.ts`, `education-sla-config.util.ts`.
 
 ## Operación
 
@@ -268,9 +268,9 @@ No hay `META_PAGE_*_CA` / `_EP`. Separación por `form_id` o por línea, no por 
 
 ### Dónde poner el Page token
 
-**Admin → Meta** (`/admin/meta`): un Page ID y un Page access token de MALI Educación. El token de WhatsApp y el Phone Number ID son por línea/credencial de línea.
+**Administración → Credenciales Meta** (`/admin/meta`): un Page ID y un Page access token de MALI Educación. El token de WhatsApp y el Phone Number ID son por línea/credencial de línea.
 
-| Qué tienes | Debugger “Tipo” | ¿Lead Ads en Admin? | ¿`subscribed_apps`? |
+| Qué tienes | Debugger “Tipo” | ¿Lead Ads en Credenciales Meta? | ¿`subscribed_apps`? |
 |------------|-----------------|---------------------|---------------------|
 | System user | System User | No | No |
 | Token MALI Educación | Page | Sí | Sí |

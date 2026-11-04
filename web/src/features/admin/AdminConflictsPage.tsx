@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
 import { InboxListPager } from '@/shared/ui/InboxListPager'
+import { ModulePageHeader } from '@/shared/ui/ModulePageHeader'
 
 type Ficha = {
   id: number
@@ -307,19 +308,28 @@ export function AdminConflictsPage() {
 
   const totalPages = Math.max(1, Math.ceil(data.phone_pending / data.page_size))
 
+  const nothingPending = data.phone_pending === 0 && data.identity.length === 0
+
   return (
     <div className="space-y-8">
+      <ModulePageHeader
+        title="Conflictos"
+        description="Resuelve fichas duplicadas por teléfono y datos de identidad que no coinciden."
+      />
+      {nothingPending ? (
+        <p className="rounded-xl border border-line bg-surface-strong p-4 text-sm text-muted">
+          No hay conflictos pendientes. Todo al día.
+        </p>
+      ) : null}
       <section className="space-y-3">
         <h2 className="text-sm font-medium">Mismo teléfono, varias fichas</h2>
         <p className="text-sm text-muted">
-          Quedan {data.phone_pending}. Ya dejaste {data.phone_done} separadas. Uniste {data.phone_joined}.
-          Pasa de página para ver los demás.
+          Pendientes: {data.phone_pending}. Separadas: {data.phone_done}. Unidas:{' '}
+          {data.phone_joined}.
         </p>
         <p className="text-sm text-muted">
-          Pregunta: ¿estas fichas son la misma persona? Cada tarjeta dice qué dato no coincidió.
-          Si lo son, escribe el nombre, el DNI y el correo correctos en la ficha que se queda y pulsa Unir.
-          Unir guarda eso, pasa los chats a esa ficha y apaga las otras.
-          Si son personas distintas, pulsa Dejar separadas: no se modifica nada.
+          ¿Son la misma persona? Si sí, corrige nombre/DNI/correo en la ficha que se queda y
+          pulsa Unir. Si no, Dejar separadas.
         </p>
         {data.phones.map((group) => (
           <PhoneConflictCard
@@ -328,7 +338,11 @@ export function AdminConflictsPage() {
             onDone={() => setReload((current) => current + 1)}
           />
         ))}
-        {data.phones.length === 0 ? <p className="text-sm text-muted">No hay teléfonos pendientes.</p> : null}
+        {data.phones.length === 0 ? (
+          <p className="rounded-lg border border-line bg-surface-strong px-3 py-2 text-sm text-muted">
+            No hay teléfonos pendientes en esta página.
+          </p>
+        ) : null}
         <InboxListPager
           page={data.page}
           totalPages={totalPages}
@@ -337,11 +351,12 @@ export function AdminConflictsPage() {
         />
       </section>
       <section className="space-y-3">
-        <h2 className="text-sm font-medium">Dato que no coincide con la persona ({data.identity.length})</h2>
+        <h2 className="text-sm font-medium">
+          Dato que no coincide con la persona ({data.identity.length})
+        </h2>
         <p className="text-sm text-muted">
-          Pregunta: ¿lo que llegó es de esta persona? La persona ya existe y no se abre otra.
-          Si lo es, corrige teléfono, DNI, correo o WhatsApp y pulsa Guardar en esta persona.
-          Si es de otra persona, pulsa Dejar la persona como está: los datos guardados no cambian.
+          ¿Lo que llegó es de esta persona? Si sí, corrige y pulsa Guardar en esta persona. Si
+          no, Dejar la persona como está.
         </p>
         {data.identity.map((row) => (
           <IdentityConflictCard
@@ -350,7 +365,11 @@ export function AdminConflictsPage() {
             onDone={() => setReload((current) => current + 1)}
           />
         ))}
-        {data.identity.length === 0 ? <p className="text-sm text-muted">No hay datos en conflicto.</p> : null}
+        {data.identity.length === 0 ? (
+          <p className="rounded-lg border border-line bg-surface-strong px-3 py-2 text-sm text-muted">
+            No hay datos en conflicto.
+          </p>
+        ) : null}
       </section>
     </div>
   )

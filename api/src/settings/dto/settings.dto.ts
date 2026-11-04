@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
@@ -6,6 +7,7 @@ import {
   IsString,
   Max,
   Min,
+  ValidateNested,
 } from 'class-validator';
 
 export class UpdateAiConfigDto {
@@ -49,4 +51,29 @@ export class UpdateBusinessHoursDto {
 
   @IsString()
   outside_hours_message!: string;
+}
+
+export class UpdateEducationSlaDayDto {
+  @IsInt()
+  @Min(0)
+  @Max(6)
+  day!: number;
+
+  @IsString()
+  from!: string;
+
+  @IsString()
+  to!: string;
+}
+
+export class UpdateEducationSlaDto {
+  @IsInt()
+  @Min(5)
+  @Max(60)
+  target_minutes!: number;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => UpdateEducationSlaDayDto)
+  days!: UpdateEducationSlaDayDto[];
 }

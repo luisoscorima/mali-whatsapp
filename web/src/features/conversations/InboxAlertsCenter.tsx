@@ -50,7 +50,7 @@ function BellIcon({ filled }: { filled?: boolean }) {
 }
 
 function leadLabel(eventType: string | undefined, name: string): string {
-  if (eventType === 'sla_first_reply') return `+10 min · ${name}`
+  if (eventType === 'sla_first_reply') return `SLA · ${name}`
   return `Nuevo · ${name}`
 }
 

@@ -198,6 +198,11 @@ const SettingsBusinessHoursPage = lazy(() =>
     default: m.SettingsBusinessHoursPage,
   })),
 )
+const SettingsEducationSlaPage = lazy(() =>
+  import('../features/settings/SettingsEducationSlaPage').then((m) => ({
+    default: m.SettingsEducationSlaPage,
+  })),
+)
 const SettingsAuditPage = lazy(() =>
   import('../features/settings/SettingsAuditPage').then((m) => ({
     default: m.SettingsAuditPage,
@@ -206,6 +211,16 @@ const SettingsAuditPage = lazy(() =>
 const SettingsReporteriaPage = lazy(() =>
   import('../features/settings/SettingsReporteriaPage').then((m) => ({
     default: m.SettingsReporteriaPage,
+  })),
+)
+const ReportsShell = lazy(() =>
+  import('../features/reports/ReportsShell').then((m) => ({
+    default: m.ReportsShell,
+  })),
+)
+const ReportsIndexPage = lazy(() =>
+  import('../features/reports/ReportsIndexPage').then((m) => ({
+    default: m.ReportsIndexPage,
   })),
 )
 const ConversationsInboxPage = lazy(() =>
@@ -436,6 +451,18 @@ export function AppRouter() {
                 path="fuera-de-horario"
                 element={<SettingsBusinessHoursPage />}
               />
+              <Route path="sla" element={<SettingsEducationSlaPage />} />
+              <Route
+                path="bitacora"
+                element={<Navigate to="/reports/bitacora" replace />}
+              />
+              <Route
+                path="reporteria"
+                element={<Navigate to="/reports/reporteria" replace />}
+              />
+            </Route>
+            <Route path="reports" element={<ReportsShell />}>
+              <Route index element={<ReportsIndexPage />} />
               <Route path="bitacora" element={<SettingsAuditPage />} />
               <Route path="reporteria" element={<SettingsReporteriaPage />} />
             </Route>

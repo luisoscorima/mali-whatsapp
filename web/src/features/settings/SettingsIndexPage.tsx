@@ -17,7 +17,9 @@ export function SettingsIndexPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-lg font-semibold">Ajustes</h1>
-        <p className="text-sm text-muted">Elige un módulo para configurar.</p>
+        <p className="text-sm text-muted">
+          Configura integración, respuesta automática y horario de atención.
+        </p>
       </div>
       <ul className="grid gap-2 sm:grid-cols-2">
         {modules.map((mod) => (

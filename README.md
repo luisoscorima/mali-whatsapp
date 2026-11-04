@@ -6,13 +6,13 @@ En producción: **[https://whatsapp.mali.pe](https://whatsapp.mali.pe)**.
 
 ## Características
 
-- **Multi-área y multi-número:** TI, PAM, Patronato, Educación, Educación CA y Educación EP operan como **líneas distintas**. Cada área tiene su token y Phone Number ID (`WHATSAPP_TOKEN_*` / `PHONE_NUMBER_ID_*` en `.env`, o credenciales en **Admin → Meta**, con prioridad sobre el entorno). Un mismo webhook de Meta alimenta todas las líneas: el sistema **resuelve el área** según `metadata.phone_number_id`, el WABA (`WABA_ID_*`) o, en casos límite, el teléfono ya vinculado.
+- **Multi-área y multi-número:** TI, PAM, Patronato, Educación, Educación CA y Educación EP operan como **líneas distintas**. Cada área tiene su token y Phone Number ID (`WHATSAPP_TOKEN_*` / `PHONE_NUMBER_ID_*` en `.env`, o credenciales en **Administración → Credenciales Meta**, con prioridad sobre el entorno). Un mismo webhook de Meta alimenta todas las líneas: el sistema **resuelve el área** según `metadata.phone_number_id`, el WABA (`WABA_ID_*`) o, en casos límite, el teléfono ya vinculado.
 - **CRM canónico (PAM):** `contacts` es la fuente de verdad de personas (phone, email, `opt_in` / `opt_in_email`). MALI ONE sincroniza membresías vía `POST /api/crm/sync` y consulta audiencia email en `GET /api/crm/audience`. Contrato: [docs/CRM-API.md](docs/CRM-API.md).
 - **Integración Meta:** envío de plantillas, recepción de mensajes y medios, estados de entrega (`sent` / `delivered` / `read` / `failed`) y estado de plantillas (`message_template_status_update`).
 - **Campañas en cola:** envíos masivos con **BullMQ + Redis** (inmediato o programado), reintentos automáticos y manuales, KPIs (fallidos, respondieron, costo WABA).
 - **Inbox operativo:** filtros por asignado / sin asignar, asignación a asesores, envío de plantillas desde el hilo, bot ↔ humano, fuera de horario y descarga de medios.
 - **Segmentación y atributos:** contactos con segmentos; definiciones de atributos por área; importación CSV/Excel; campañas con exclusiones y variables por contacto.
-- **Seguridad y gobernanza:** Google OAuth `@mali.pe` + JWT, permisos por módulo, bitácora de auditoría con retención configurable, usuarios y áreas desde Admin.
+- **Seguridad y gobernanza:** Google OAuth `@mali.pe` + JWT, permisos por módulo, bitácora de auditoría con retención configurable, usuarios y áreas desde Administración.
 - **IA asistida (Groq):** respuestas en ventana de 24 h en modo **Bot**; el master activa o desactiva el bot por área desde Ajustes.
 - **Leads multicanal:** Meta (Instant Forms + CTWA), TikTok, Widget, botones web (`wa.me`) y links (MALI ONE). Hub `/leads` con card Meta unificada y marca solo-contacto vs chat si ella inicia el hilo. Ver [docs/LEADS.md](docs/LEADS.md).
 
@@ -28,8 +28,9 @@ En producción: **[https://whatsapp.mali.pe](https://whatsapp.mali.pe)**.
 | **Atributos** | Definiciones por área (`/attributes`) para formularios, importación y variables `{{n}}` en campañas. |
 | **Plantillas** | Sync desde Graph; alta vía app (`/templates/new`); estados PENDING/APPROVED/REJECTED; preview en vivo. |
 | **Leads** | Hub `/leads` por canal; Instant Forms + CTWA (`/leads/meta-forms`, `/leads/meta-ctwa`); estados editables. |
-| **Ajustes** | Integración; IA por área; fuera de horario; bitácora; reportería. |
-| **Admin** | Usuarios y permisos; áreas; credenciales Meta; auditoría global (solo master). |
+| **Ajustes** | Integración; respuesta automática (IA) por área; fuera de horario; SLA primera respuesta (Educación). |
+| **Reportes** | Bitácora del área; reportería (comunicaciones, historiales, SLA). |
+| **Administración** | Usuarios y permisos; roles; áreas; líneas; credenciales Meta; conflictos; bitácora global (solo master). |
 | **API / sistema** | `GET /health`, webhook `GET/POST /webhook`, APIs de campañas, contactos, conversaciones y settings. |
 
 ## IA y bots
@@ -88,7 +89,7 @@ cp .env.example .env
 docker compose -f docker-compose.dev.yml up --build
 ```
 
-4. **Usuarios:** login con Google (`@mali.pe`). El bootstrap admin tiene acceso master; el resto se aprovisiona en **Admin → Usuarios** con permisos por módulo.
+4. **Usuarios:** login con Google (`@mali.pe`). El bootstrap admin tiene acceso master; el resto se aprovisiona en **Administración → Usuarios** con permisos por módulo.
 
 5. Panel: `http://localhost:5173` (dev) o `https://whatsapp.mali.pe` (prod).
 
@@ -102,8 +103,9 @@ docker compose -f docker-compose.dev.yml up --build
 - `GET /attributes` · `/attributes/new` · `/attributes/:id`
 - `GET /templates` · `/templates/new` · `/templates/:id`
 - `GET /leads` · `/leads/meta-forms` · `/leads/meta-ctwa` · `/leads/meta-ctwa/:id`
-- `GET /settings` · `/settings/integracion` · `/settings/ia` · `/settings/fuera-de-horario` · `/settings/bitacora` · `/settings/reporteria`
-- `GET /admin` · `/admin/users` · `/admin/areas` · `/admin/meta` · `/admin/audit-logs` (master)
+- `GET /settings` · `/settings/integracion` · `/settings/ia` · `/settings/fuera-de-horario` · `/settings/sla`
+- `GET /reports` · `/reports/bitacora` · `/reports/reporteria` (redirect desde `/settings/bitacora` y `/settings/reporteria`)
+- `GET /admin` · `/admin/users` · `/admin/roles` · `/admin/areas` · `/admin/lines` · `/admin/meta` · `/admin/conflicts` · `/admin/audit-logs` (master)
 
 **Indicadores de campaña:** Total, Salida OK, Error %, Lectura %; en detalle: Respondieron (7d), Envíos fallidos, Costo/inversión (sync WABA) y reintento. El embudo Meta es desglose por estado; no sustituye los informes de la cuenta Meta.
 

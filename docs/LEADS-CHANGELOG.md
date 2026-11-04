@@ -2,10 +2,15 @@
 
 Vigente: [LEADS.md](./LEADS.md).
 
+## 2026-11-04 — SLA editable (horario + meta)
+
+- Config en Ajustes (`/settings/sla` / `GET|PATCH /api/settings/education-sla`); defaults 10 min y horario RQ.
+- Job y reportería leen `app_settings` (`educacion`/`education_sla`).
+
 ## 2026-11-04 — SLA primera respuesta (10 min hábiles)
 
 - Reloj desde `started_at`; responde = `first_human_reply_at`; fuera de horario Lima no corre.
-- Cumple ≤ 10 min; alerta solo si > 10. Job `education-sla-first-reply` prefiltra con `latestStartTimeForBreach` (no atasca el batch con overnight aún válidos).
+- Cumple ≤ meta (default 10); alerta solo si > meta. Job `education-sla-first-reply` prefiltra con `latestStartTimeForBreach` (no atasca el batch con overnight aún válidos).
 - Centro de avisos del inbox: chats + leads (nuevo/SLA) + toggle de notificaciones del navegador; toast al incumplir (SPA, sin recargar).
 - Reportería: promedio / % / por asesor (`/api/reports/education-sla`); pestaña solo si el usuario es Educación.
 

@@ -6,6 +6,7 @@ export type SettingsModuleItem = {
   path: string;
   title: string;
   preview: string;
+  navGroup: 'ajustes' | 'reportes';
 };
 
 export type IntegrationSettings = {
@@ -25,4 +26,12 @@ export type BusinessHoursSettingsView = Omit<
   'fromMinutes' | 'toMinutes'
 > & {
   area: string;
+};
+
+export type EducationSlaSettingsView = {
+  target_minutes: number;
+  timezone: string;
+  days: { day: number; from: string; to: string }[];
+  min_target_minutes: number;
+  max_target_minutes: number;
 };

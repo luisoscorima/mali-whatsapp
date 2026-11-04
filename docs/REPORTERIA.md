@@ -1,12 +1,12 @@
 # Reportería y auditoría
 
-Informes operativos y bitácora de acciones.
+Informes operativos y bitácora de acciones. En el menú de cuenta viven bajo **Reportes** (no bajo Ajustes).
 
 Histórico: [REPORTERIA-CHANGELOG.md](./REPORTERIA-CHANGELOG.md). Relacionado: [ROLES.md](./ROLES.md), [CAMPANAS.md](./CAMPANAS.md), [LEADS.md](./LEADS.md).
 
 ## Reportería
 
-- Panel: `/settings/reporteria`.
+- Panel: `/reports/reporteria` (redirect desde `/settings/reporteria`).
 - KPIs de campañas (salida, lectura, respondieron, costo) en detalle de campaña.
 - Embudo Meta en producto ≠ informes de la cuenta Ads.
 - **SLA 1.ª respuesta (Educación):** pestaña visible solo con área Educación; `GET /api/reports/education-sla` (+ export; 403 si no hay acceso Educación). Promedio de minutos hábiles hasta `first_human_reply_at`, % ≤ 10 min, corte por asesor. Filtro de fechas y categoría (CA/EP/General). Regla y horario en [LEADS.md](./LEADS.md).
@@ -14,9 +14,9 @@ Histórico: [REPORTERIA-CHANGELOG.md](./REPORTERIA-CHANGELOG.md). Relacionado: [
 
 ## Bitácora / auditoría
 
-- `/settings/bitacora` — retención configurable.
-- Master: `/admin/audit-logs` — auditoría global.
-- Permisos por módulo; bitácora puede estar acotada por área según permiso.
+- **Bitácora del área:** `/reports/bitacora` (redirect desde `/settings/bitacora`) — retención configurable; eventos de su área.
+- **Bitácora global:** `/admin/audit-logs` — solo master; todos los eventos del sistema.
+- Permisos por módulo; la bitácora de Reportes queda acotada por área según permiso.
 
 ## Qué no incluye (aún)
 

@@ -3,13 +3,16 @@ import type { PrismaClient } from '@prisma/client';
 import { exportFilenameDateStamp } from '../campaigns/campaign-format.util';
 import { programScopeWhere } from '../config/category-scope';
 import { formatAdvisorLabel } from '../users/advisor-label.util';
+import { loadEducationSlaConfig } from '../leads/education-sla-config.loader';
+import { scheduleToDays } from '../leads/education-sla-config.util';
 import {
-  SLA_FIRST_REPLY_MINUTES,
   firstResponseBusinessMinutes,
   isSlaMet,
   roundMinutes,
 } from '../leads/education-lead-sla.util';
 import { resolveReportDateRange } from './report-date-range.util';
+
+const DAY_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
 export type EducationSlaAdvisorRow = {
   assigned_user_id: number | null;
@@ -71,6 +74,7 @@ export async function fetchEducationSlaReport(
   const gte = limaDayStartUtc(from);
   const lt = limaDayEndExclusiveUtc(to);
   const programFilter = programScopeWhere(opts.categories ?? null);
+  const slaConfig = await loadEducationSlaConfig(prisma);
 
   const cycles = await prisma.education_lead_cycles.findMany({
     where: {
@@ -115,8 +119,13 @@ export async function fetchEducationSlaReport(
     const minutes = firstResponseBusinessMinutes(
       cycle.started_at,
       cycle.first_human_reply_at,
+      slaConfig,
     );
-    const met = isSlaMet(cycle.started_at, cycle.first_human_reply_at);
+    const met = isSlaMet(
+      cycle.started_at,
+      cycle.first_human_reply_at,
+      slaConfig,
+    );
     allMinutes.push(minutes);
     if (met) metTotal += 1;
 
@@ -156,7 +165,7 @@ export async function fetchEducationSlaReport(
       sla_met_pct: pct(metTotal, allMinutes.length),
       avg_first_response_minutes: avg(allMinutes),
       unanswered_open_count: unansweredOpen,
-      sla_minutes: SLA_FIRST_REPLY_MINUTES,
+      sla_minutes: slaConfig.target_minutes,
     },
     by_advisor,
     area_label: 'Educación',
@@ -165,8 +174,12 @@ export async function fetchEducationSlaReport(
       to,
       category: opts.categories ?? null,
     },
-    note:
-      'Promedio y % sobre ciclos con primera respuesta humana. Minutos hábiles Lima (L–V 08:30–20:00, sáb 08:30–18:00, dom 09:00–18:00). Meta 10 min.',
+    note: (() => {
+      const days = scheduleToDays(slaConfig.schedule)
+        .map((d) => `${DAY_SHORT[d.day]} ${d.from}–${d.to}`)
+        .join(', ');
+      return `Promedio y % sobre ciclos con primera respuesta humana. Minutos hábiles ${slaConfig.timezone} (${days}). Meta ${slaConfig.target_minutes} min.`;
+    })(),
   };
 }
 

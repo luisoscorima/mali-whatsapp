@@ -43,7 +43,7 @@ CARPETA=...
 AWS_REGION=us-east-1
 ```
 
-Tokens WhatsApp / WABA / Page: Admin → Meta o `WHATSAPP_TOKEN_*` / `PHONE_NUMBER_ID_*` / `WABA_ID_*` (prioridad BD). Detalle: [docs/META-WABA.md](./docs/META-WABA.md).
+Tokens WhatsApp / WABA / Page: Administración → Credenciales Meta o `WHATSAPP_TOKEN_*` / `PHONE_NUMBER_ID_*` / `WABA_ID_*` (prioridad BD). Detalle: [docs/META-WABA.md](./docs/META-WABA.md).
 
 Quitar `MASTER_INITIAL_PASSWORD` del servidor tras el primer seed.
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
+import { ModulePageHeader } from '@/shared/ui/ModulePageHeader'
 
 type IntegrationData = {
   app_base_url: string
@@ -34,8 +35,17 @@ export function SettingsIntegrationPage() {
 
   return (
     <section className="space-y-4 rounded-xl border border-line bg-surface-strong p-4">
-      <h2 className="text-lg font-semibold">Integración</h2>
+      <ModulePageHeader
+        title="Integración"
+        description="Webhook, salud del servicio y documentación técnica."
+      />
       <div className="space-y-3 text-sm">
+        <div>
+          <p className="text-muted">URL base de la app</p>
+          <code className="mt-1 block break-all rounded-lg bg-surface px-3 py-2 font-mono text-xs">
+            {data.app_base_url}
+          </code>
+        </div>
         <div>
           <p className="text-muted">Webhook</p>
           <code className="mt-1 block break-all rounded-lg bg-surface px-3 py-2 font-mono text-xs">
@@ -58,9 +68,8 @@ export function SettingsIntegrationPage() {
         </summary>
         <p className="mt-2">
           En el repo: <code>docs/META-WABA.md</code> (Meta, webhooks),{' '}
-          <code>DESPLIEGUE.md</code> y{' '}
-          <code>ARRANQUE.md</code>. La URL pública viene de{' '}
-          <code>APP_BASE_URL</code> en <code>.env</code>.
+          <code>DESPLIEGUE.md</code> y <code>ARRANQUE.md</code>. La URL pública
+          viene de <code>APP_BASE_URL</code> en <code>.env</code>.
         </p>
       </details>
     </section>

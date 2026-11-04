@@ -10,7 +10,7 @@ Histórico: [META-WABA-CHANGELOG.md](./META-WABA-CHANGELOG.md). Relacionado: [LI
 |-------|-----|
 | **WABA** | Cuenta Meta: plantillas, `subscribed_apps`, token compartido. No es el tenant |
 | **Línea** | Phone Number ID bajo un WABA; pertenece a un área (+ categoría) |
-| **Token** | System user o de línea; bóveda Admin o `.env` |
+| **Token** | System user o de línea; bóveda / Credenciales Meta o `.env` |
 | **Page token** | Solo Lead Ads Instant Forms (tipo Page, no System User) |
 
 Outbound necesita token + PID. Inbound necesita la app **suscrita** a cada WABA (`subscribed_apps`). Lead Ads usa webhook Page `leadgen` (distinto del webhook WA). Producto Hub: [LEADS.md](./LEADS.md).
@@ -253,7 +253,7 @@ En logs del servidor deberías ver, al contestar en la línea correcta, `entryId
 
 ## 9. Credenciales y mapa Meta → entorno
 
-Resumen alineado con `.env` y panel **`/admin/meta`** (prioridad BD sobre env; ver [DESPLIEGUE.md](../DESPLIEGUE.md)).
+Resumen alineado con `.env` y panel **Administración → Credenciales Meta** (`/admin/meta`; prioridad BD sobre env; ver [DESPLIEGUE.md](../DESPLIEGUE.md)).
 
 | Variable `.env` | Origen en Meta |
 |-----------------|----------------|
@@ -422,7 +422,7 @@ Si `data` está vacío o no aparece la Página: en Business Manager asigna el ac
 
 #### Paso B — Guardar en Mali
 
-- **Dónde:** panel **`/admin/meta`** → *Page access token (Lead Ads)* y *Page ID (Lead Ads)*.
+- **Dónde:** **Administración → Credenciales Meta** (`/admin/meta`) → *Token de página (Lead Ads)* e *ID de página (Lead Ads)*.
 - Pega el **Page** token del paso A (no el system user, no el WhatsApp token).
 - Es **una** Página → **un** token y **un** Page ID, guardados en el área canónica **`educacion`** (no hace falta repetir en aliases ca/ep).
 - Respaldo opcional en `.env`: `META_PAGE_ACCESS_TOKEN` / `META_PAGE_ID` (prioridad: Admin/BD sobre env).

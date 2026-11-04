@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
+import { ModulePageHeader } from '@/shared/ui/ModulePageHeader'
 import {
   categoryLabel,
   categorySettingsArea,
@@ -98,14 +99,27 @@ function AiSettingsForm({
 
   return (
     <section className="space-y-4 rounded-xl border border-line bg-surface-strong p-4">
-      {heading ? <p className="text-sm text-muted">{heading}</p> : null}
-      <h2 className="text-lg font-semibold">Respuesta automática (IA)</h2>
+      <ModulePageHeader
+        title="Respuesta automática (IA)"
+        description={
+          heading
+            ? `Editando: ${heading}`
+            : 'Prompt y transferencia a asesor para esta área.'
+        }
+      />
 
-      <p className="muted campaign-drilldown-dialog__note">
-        Prioridad de automatización: flujos activos (Respuestas automatizadas) →
-        mensaje fuera de horario → IA. Si un contacto está en un flujo, la IA no
-        responde hasta que el flujo termine o derive a asesor.
+      <p className="text-sm text-muted">
+        Prioridad: flujos activos → mensaje fuera de horario → IA. Si un contacto
+        está en un flujo, la IA no responde hasta que el flujo termine o derive a
+        asesor.
       </p>
+
+      <div className="rounded-lg border border-line bg-surface px-3 py-2 text-sm">
+        <span className="text-muted">Estado: </span>
+        <span className="font-medium text-ink">
+          {enabled ? 'IA activa' : 'IA desactivada (modo asesor)'}
+        </span>
+      </div>
 
       {settings.can_toggle_enabled ? (
         <div className="space-y-2">
@@ -113,7 +127,7 @@ function AiSettingsForm({
             Solo administrador master. Al desactivar, todos los chats del área pasan
             a modo asesor. Al activar, vuelven a bot.
           </p>
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex min-h-11 items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={enabled}
@@ -159,7 +173,7 @@ function AiSettingsForm({
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            className="rounded-lg bg-accent px-4 py-2 text-sm text-white hover:opacity-90 disabled:opacity-50"
+            className="min-h-11 rounded-lg bg-accent px-4 py-2 text-sm text-white hover:opacity-90 disabled:opacity-50"
             disabled={busy !== ''}
             onClick={() => handleSave()}
           >

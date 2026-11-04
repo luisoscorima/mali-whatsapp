@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
+import { ModulePageHeader } from '@/shared/ui/ModulePageHeader'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import { defaultReportDateRange } from '../reports/reportDateRange'
 import { ReportScrollableTable } from '@/shared/ui/InboxListPager'
@@ -15,6 +16,25 @@ import {
 } from '@/shared/area/useCategoryScope'
 
 type TabId = 'communications' | 'segments' | 'chat' | 'sla'
+
+const TAB_META: Record<TabId, { label: string; description: string }> = {
+  communications: {
+    label: 'Comunicaciones',
+    description: 'Contactos y mensajes en el rango de fechas.',
+  },
+  segments: {
+    label: 'Hist. segmentos',
+    description: 'Altas y bajas de contactos en segmentos.',
+  },
+  chat: {
+    label: 'Hist. chat',
+    description: 'Eventos de conversación (apertura, asignación, etc.).',
+  },
+  sla: {
+    label: 'SLA 1.ª respuesta',
+    description: 'Tiempo hasta la primera respuesta del asesor.',
+  },
+}
 
 type SlaAdvisorRow = {
   assigned_user_id: number | null
@@ -450,40 +470,40 @@ export function SettingsReporteriaPage() {
     return <p className="text-muted">No se pudo cargar la reportería.</p>
   }
 
+  const tabIds: TabId[] = ['communications', 'segments', 'chat']
+  if (scope.education) tabIds.push('sla')
+
   return (
     <section className="space-y-4 rounded-xl border border-line bg-surface-strong p-4">
-      <h2 className="text-lg font-semibold">Reportería</h2>
+      <ModulePageHeader
+        title="Reportería"
+        description="Comunicaciones, historiales y SLA de tu área."
+      />
       {mixesCategories(scope) ? (
         <p className="text-sm text-muted">{categoryLine(scope.slugs ?? [])}</p>
       ) : null}
 
-      <div className="flex flex-wrap gap-2 text-sm">
-        {(
-          [
-            ['communications', 'Comunicaciones'],
-            ['segments', 'Hist. segmentos'],
-            ['chat', 'Hist. chat'],
-            ...(scope.education
-              ? ([['sla', 'SLA 1.ª respuesta']] as const)
-              : []),
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            className={`rounded-lg px-3 py-1.5 ${
-              tab === id
-                ? 'bg-accent text-white'
-                : 'border border-line hover:bg-surface'
-            }`}
-            onClick={() => setTab(id)}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-2 text-sm">
+          {tabIds.map((id) => (
+            <button
+              key={id}
+              type="button"
+              className={`min-h-11 rounded-lg px-3 py-1.5 ${
+                tab === id
+                  ? 'bg-accent text-white'
+                  : 'border border-line hover:bg-surface'
+              }`}
+              onClick={() => setTab(id)}
+            >
+              {TAB_META[id].label}
+            </button>
+          ))}
+        </div>
+        <p className="text-sm text-muted">{TAB_META[tab].description}</p>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 text-sm">
+      <div className="flex flex-col gap-3 border-t border-line pt-3 text-sm sm:flex-row sm:flex-wrap sm:items-end">
         <label>
           <span className="text-muted">Desde</span>
           <input
