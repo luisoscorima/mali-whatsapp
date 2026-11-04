@@ -154,10 +154,16 @@ Listado operativo de oportunidades para MALI ONE, con una fila por `education_le
 
 Respuesta: `{ ok: true, data: { items, counts, total, page, limit, pages } }`. `counts` devuelve `open`, `closed`, `review` y `unassigned` bajo los mismos filtros de área, canal y búsqueda. Cada ciclo incluye contacto, asesor, estado, fechas, origen/canal de la captación más reciente, regla de asignación, curso o interés extraído del payload y conversación activa si existe.
 
+### `GET /api/crm/education/sla`
+
+KPI de primera respuesta para la vitrina MALI ONE. Query: `area` (`all` / `educacion` / `educacion_ca` / `educacion_ep`), `from`, `to` (YMD Lima; default 15 días). Devuelve promedio de minutos hábiles, `%` ≤ 10 min, conteos y filas por asesor.
+
 ### Gestión de leads Educación
 
 - `GET /api/crm/education/management-catalogs`: usuarios habilitados por área y estados activos por área.
 - `PATCH /api/crm/education/contacts/:id/management?area=educacion[_ca|_ep]`: `{ assigned_user_id?: number, lead_status_id?: number|null, lead_id?: number, actor_email?: string }`. Actualiza el ciclo indicado (o el actual si no se envía `lead_id`) y refleja la asignación en el chat, si existe. Enviar el mismo `assigned_user_id` confirma el asesor retenido tras un reingreso; otro ID lo reasigna directamente. `assigned_user_id: null` se rechaza.
+- **RQ0017 — candado a venta exitosa:** si el nuevo estado es `venta_exitosa` o `convertido`, la ficha debe tener nombre usable, DNI, email, teléfono o identidad WhatsApp, y categoría (program_id del ciclo o área CA/EP). Si falta algo → `400` con cuerpo `{ code: "missing_fields", message, missing_fields: ["dni"|"email"|"nombre"|"telefono"|"categoria", ...] }`. El ciclo **no** cambia de estado. Completar la ficha (`PATCH` contacto) y reintentar.
+- **RQ0015 — alta manual:** `POST /api/crm/education/leads/manual` con `{ source_key: "manual_call"|"manual_historical"|"manual_organic", categoria: "ca"|"ep", name, last_name?, phone?, email?, dni?, curso?, actor_email? }` (al menos un identificador). Persistencia: canal `other` + `source_key`. Si ya hay ficha Educación por teléfono/DNI/email → `409` `{ code: "already_exists", contact_id, cycle_id, assigned_user_label, lead_status_label, ... }` sin crear otro lead. Éxito: `{ contact_id, origin_id, cycle_id, created: true }`. El inbox de WhatsApp no crea leads.
 - `POST /api/crm/education/distribute`: `{ area: "all"|..., channel?, q?, actor_email? }`. Reparte **solo números sin historial previo** con ciclo actual sin asesor ni conflicto entre usuarios provisionados de rol `asesor_comercial` habilitados en cada área, según carga reciente de ciclos abiertos. Los regresos tras 60 días se asignan manualmente. Es idempotente respecto a ciclos ya asignados y devuelve total y distribución por área.
 - `PATCH /api/crm/education/entries/:id/review?area=...`: `{ action: "open_new"|"keep_existing"|"dismiss", actor_email? }`. Resuelve manualmente un conflicto.
 

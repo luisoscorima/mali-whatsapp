@@ -4,9 +4,12 @@ import {
   OnModuleInit,
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import type { AuthUser } from '../auth/auth.types';
 import {
@@ -67,10 +70,14 @@ import {
 } from '../reports/report-date-range.util';
 import {
   DEFAULT_LEAD_STATUSES,
+  MANUAL_LEAD_SOURCE_KEYS,
+  MANUAL_LEAD_SOURCE_LABELS,
   type ContactIdentityInput,
   type LeadChannel,
+  type ManualLeadSourceKey,
   type UpsertOriginInput,
 } from './leads.types';
+import { formatAdvisorLabel } from '../users/advisor-label.util';
 
 /** Midnight of `ymd` in the report display TZ, as a UTC instant. */
 function displayYmdMidnightUtc(ymd: string): Date {
@@ -1099,6 +1106,124 @@ export class LeadsService implements OnModuleInit {
       await this.educationWorkflow.recordOrigin(row.id);
     }
     return { origin_id: row.id, contact_id: row.contact_id, created: true };
+  }
+
+  /**
+   * Alta manual desde MALI ONE (RQ0015): históricos, solo llamada u orgánico.
+   * Si ya hay ficha Educación por teléfono/DNI/email → 409 already_exists (no crea otro).
+   */
+  async createManualEducationLead(input: {
+    source_key: string;
+    categoria: string;
+    name: string;
+    last_name?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    dni?: string | null;
+    curso?: string | null;
+    actor_email?: string | null;
+  }): Promise<{
+    contact_id: number;
+    origin_id: number;
+    cycle_id: number | null;
+    created: true;
+  }> {
+    const sourceKey = String(input.source_key ?? '').trim() as ManualLeadSourceKey;
+    if (!(MANUAL_LEAD_SOURCE_KEYS as readonly string[]).includes(sourceKey)) {
+      throw new BadRequestException(
+        `source_key inválido (use ${MANUAL_LEAD_SOURCE_KEYS.join(' | ')})`,
+      );
+    }
+    const program = educationProgramOf(input.categoria);
+    if (program !== 'ca' && program !== 'ep') {
+      throw new BadRequestException('categoria debe ser ca o ep');
+    }
+    const name = String(input.name ?? '').trim();
+    if (!name) throw new BadRequestException('Nombre requerido');
+
+    const identity: ContactIdentityInput = {
+      name,
+      last_name: String(input.last_name ?? '').trim() || null,
+      phone: input.phone,
+      email: input.email,
+      dni: input.dni,
+    };
+    this.assertHasIdentity(identity);
+
+    const phone = identity.phone ? this.normalizeOptionalPhone(identity.phone) : null;
+    const dni = this.normalizeOptionalDni(identity.dni);
+    const email = identity.email ? this.normalizeOptionalEmail(identity.email) : null;
+
+    const existing =
+      (phone
+        ? await this.prisma.contacts.findFirst({ where: { area: 'educacion', phone } })
+        : null)
+      ?? (dni
+        ? await this.prisma.contacts.findFirst({ where: { area: 'educacion', dni } })
+        : null)
+      ?? (email
+        ? await this.prisma.contacts.findFirst({ where: { area: 'educacion', email } })
+        : null);
+
+    if (existing) {
+      const cycle = await this.prisma.education_lead_cycles.findFirst({
+        where: { contact_id: existing.id, area: 'educacion', closed_at: null },
+        orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+        include: {
+          assigned_user: { select: { first_name: true, last_name: true, email: true } },
+          lead_status: { select: { label: true } },
+        },
+      });
+      throw new HttpException(
+        {
+          code: 'already_exists',
+          message: 'Ya existe un contacto con estos datos',
+          contact_id: existing.id,
+          cycle_id: cycle?.id ?? null,
+          assigned_user_label: cycle?.assigned_user
+            ? formatAdvisorLabel(cycle.assigned_user)
+            : null,
+          lead_status_label: cycle?.lead_status?.label ?? null,
+          name: existing.name,
+          last_name: existing.last_name,
+        },
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    const curso = String(input.curso ?? '').trim() || null;
+    const externalId = `manual:${sourceKey}:${randomUUID()}`;
+    const origin = await this.upsertOrigin({
+      area: 'educacion',
+      program_slug: program,
+      channel: 'other',
+      external_id: externalId,
+      source_key: sourceKey,
+      source_label: MANUAL_LEAD_SOURCE_LABELS[sourceKey],
+      payload: {
+        manual: true,
+        actor_email: input.actor_email ?? null,
+        ...(curso ? { curso } : {}),
+      },
+      contact: identity,
+    });
+
+    if (!origin.contact_id) {
+      throw new BadRequestException('No se pudo crear el contacto');
+    }
+
+    const cycle = await this.prisma.education_lead_cycles.findFirst({
+      where: { contact_id: origin.contact_id, area: 'educacion', closed_at: null },
+      orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+      select: { id: true },
+    });
+
+    return {
+      contact_id: origin.contact_id,
+      origin_id: origin.origin_id,
+      cycle_id: cycle?.id ?? null,
+      created: true,
+    };
   }
 
   async listStatuses(area: string, opts?: { includeInactive?: boolean }) {

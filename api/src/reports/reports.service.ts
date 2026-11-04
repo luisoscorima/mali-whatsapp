@@ -45,10 +45,16 @@ import {
   fetchSegmentHistoryReport,
   segmentHistoryExportFilename,
 } from './segment-history-report.util';
+import {
+  buildEducationSlaXlsxBuffer,
+  educationSlaExportFilename,
+  fetchEducationSlaReport,
+} from './education-sla-report.util';
 import type {
   AuditLogListResult,
   CommunicationReportResult,
   ConversationHistoryReportResult,
+  EducationSlaReportResult,
   SegmentHistoryReportResult,
 } from './reports.types';
 
@@ -425,6 +431,40 @@ export class ReportsService {
     return {
       buffer: buildConversationHistoryXlsxBuffer(rows, area),
       filename: conversationHistoryExportFilename(area),
+    };
+  }
+
+  async listEducationSla(
+    user: AuthUser,
+    query: Record<string, string | string[] | undefined>,
+  ): Promise<EducationSlaReportResult> {
+    this.assertReportsAccess(user);
+    const categories = parseCategorySlugs(
+      query.category as string | string[] | undefined,
+    );
+    return fetchEducationSlaReport(this.prisma, {
+      from: typeof query.from === 'string' ? query.from : undefined,
+      to: typeof query.to === 'string' ? query.to : undefined,
+      categories,
+    });
+  }
+
+  async exportEducationSla(
+    user: AuthUser,
+    query: Record<string, string | string[] | undefined>,
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    this.assertReportsAccess(user);
+    const categories = parseCategorySlugs(
+      query.category as string | string[] | undefined,
+    );
+    const result = await fetchEducationSlaReport(this.prisma, {
+      from: typeof query.from === 'string' ? query.from : undefined,
+      to: typeof query.to === 'string' ? query.to : undefined,
+      categories,
+    });
+    return {
+      buffer: buildEducationSlaXlsxBuffer(result),
+      filename: educationSlaExportFilename(),
     };
   }
 }

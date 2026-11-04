@@ -12,6 +12,21 @@ export const LEAD_CHANNELS = [
 
 export type LeadChannel = (typeof LEAD_CHANNELS)[number];
 
+/** Alta manual desde MALI ONE (RQ0015). Canal persistido: `other`. */
+export const MANUAL_LEAD_SOURCE_KEYS = [
+  'manual_call',
+  'manual_historical',
+  'manual_organic',
+] as const;
+
+export type ManualLeadSourceKey = (typeof MANUAL_LEAD_SOURCE_KEYS)[number];
+
+export const MANUAL_LEAD_SOURCE_LABELS: Record<ManualLeadSourceKey, string> = {
+  manual_call: 'Llamada',
+  manual_historical: 'Histórico',
+  manual_organic: 'Orgánico manual',
+};
+
 export type LeadStatusSeed = {
   slug: string;
   label: string;

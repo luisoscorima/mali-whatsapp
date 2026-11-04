@@ -34,7 +34,9 @@ import { ProspectiaAdvisorService } from '../leads/prospectia-advisor.service';
 import { ProspectiaSyncService } from '../leads/prospectia-sync.service';
 import type { LeadChannel } from '../leads/leads.types';
 import { BadRequestException } from '@nestjs/common';
-import { LEAD_CHANNELS } from '../leads/leads.types';
+import { LEAD_CHANNELS, MANUAL_LEAD_SOURCE_KEYS } from '../leads/leads.types';
+import { PrismaService } from '../prisma/prisma.service';
+import { fetchEducationSlaReport } from '../reports/education-sla-report.util';
 
 class EducationManagementDto {
   @IsOptional() @IsInt() @Min(1) assigned_user_id?: number | null;
@@ -86,6 +88,36 @@ class EducationUpdateStatusDto {
   @IsOptional() @IsBoolean() active?: boolean;
 }
 
+class EducationSlaQueryDto {
+  @IsOptional()
+  @Matches(/^(all|educacion(_[a-z][a-z0-9_]{0,9})?|[a-z][a-z0-9_]{0,9})$/)
+  area?: string;
+  @IsOptional() @IsString() @MaxLength(10) from?: string;
+  @IsOptional() @IsString() @MaxLength(10) to?: string;
+}
+
+class EducationManualLeadDto {
+  @IsIn([...MANUAL_LEAD_SOURCE_KEYS]) source_key!: string;
+  @IsIn(['ca', 'ep', 'educacion_ca', 'educacion_ep']) categoria!: string;
+  @IsString() @MaxLength(150) name!: string;
+  @IsOptional() @IsString() @MaxLength(150) last_name?: string;
+  @IsOptional() @IsString() @MaxLength(32) phone?: string;
+  @IsOptional() @IsString() @MaxLength(255) email?: string;
+  @IsOptional() @IsString() @MaxLength(32) dni?: string;
+  @IsOptional() @IsString() @MaxLength(200) curso?: string;
+  @IsOptional() @IsString() @MaxLength(120) actor_email?: string;
+}
+
+function slaCategoriesFromArea(area?: string): string[] | null {
+  const selected = String(area ?? 'all').trim().toLowerCase() || 'all';
+  if (selected === 'educacion_ca') return ['ca'];
+  if (selected === 'educacion_ep') return ['ep'];
+  if (selected === 'educacion') return ['general'];
+  const program = educationProgramOf(selected);
+  if (program) return [program];
+  return null;
+}
+
 @Controller('crm')
 @UseGuards(CrmServiceTokenGuard)
 export class CrmController {
@@ -95,6 +127,7 @@ export class CrmController {
     private readonly educationWorkflow: EducationLeadWorkflowService,
     private readonly prospectia: ProspectiaAdvisorService,
     private readonly prospectiaSync: ProspectiaSyncService,
+    private readonly prisma: PrismaService,
   ) {}
 
   /** Upsert contact from MALI ONE product (PamRegistration). */
@@ -185,6 +218,17 @@ export class CrmController {
     return { ok: true, data };
   }
 
+  /** SLA primera respuesta (promedio / % / por asesor) para vitrina MALI ONE. */
+  @Get('education/sla')
+  async educationSla(@Query() query: EducationSlaQueryDto) {
+    const data = await fetchEducationSlaReport(this.prisma, {
+      from: query.from,
+      to: query.to,
+      categories: slaCategoriesFromArea(query.area),
+    });
+    return { ok: true, data };
+  }
+
   @Post('education/attention/start')
   async educationStartAttention(
     @Body() body: { contact_id: number; area: string; program_id?: number | null; conversation_id?: number | null; actor_email?: string },
@@ -254,6 +298,12 @@ export class CrmController {
     @Body() body: EducationManagementDto,
   ) {
     return { ok: true, data: await this.educationWorkflow.updateManagement(id, area, body) };
+  }
+
+  /** Alta manual ONE (RQ0015): histórico / llamada / orgánico. 409 si ya existe. */
+  @Post('education/leads/manual')
+  async educationManualLead(@Body() body: EducationManualLeadDto) {
+    return { ok: true, data: await this.leads.createManualEducationLead(body) };
   }
 
   @Post('education/distribute')

@@ -13,7 +13,10 @@ export const MaintenanceJobName = {
   AUDIT_PURGE: 'audit-purge',
   STARTUP_CAMPAIGNS: 'startup-campaigns',
   EXPIRE_EDUCATION_LEADS: 'expire-education-leads',
+  EDUCATION_SLA_FIRST_REPLY: 'education-sla-first-reply',
 } as const;
 
 export const AUDIT_PURGE_MS = 24 * 60 * 60 * 1000;
 export const EDUCATION_LEAD_EXPIRE_MS = 60 * 60 * 1000;
+/** Poll SLA first-reply breaches (business minutes). */
+export const EDUCATION_SLA_FIRST_REPLY_MS = 60 * 1000;

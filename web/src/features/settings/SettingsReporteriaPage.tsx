@@ -14,7 +14,31 @@ import {
   withCategoryQuery,
 } from '@/shared/area/useCategoryScope'
 
-type TabId = 'communications' | 'segments' | 'chat'
+type TabId = 'communications' | 'segments' | 'chat' | 'sla'
+
+type SlaAdvisorRow = {
+  assigned_user_id: number | null
+  advisor_label: string
+  answered_count: number
+  met_count: number
+  sla_met_pct: number
+  avg_first_response_minutes: number
+}
+
+type SlaResult = {
+  summary: {
+    answered_count: number
+    met_count: number
+    sla_met_pct: number
+    avg_first_response_minutes: number
+    unanswered_open_count: number
+    sla_minutes: number
+  }
+  by_advisor: SlaAdvisorRow[]
+  area_label: string
+  filters: { from: string; to: string; category: string[] | null }
+  note: string
+}
 
 type FilterOptions = {
   segments: { slug: string; label: string; color_key: string; category?: string }[]
@@ -122,7 +146,7 @@ type ChatHistResult = {
 }
 
 function tabFromParam(raw: string | null): TabId {
-  if (raw === 'segments' || raw === 'chat') return raw
+  if (raw === 'segments' || raw === 'chat' || raw === 'sla') return raw
   return 'communications'
 }
 
@@ -133,6 +157,7 @@ export function SettingsReporteriaPage() {
   const [commData, setCommData] = useState<CommResult | null>(null)
   const [segData, setSegData] = useState<SegmentHistResult | null>(null)
   const [chatData, setChatData] = useState<ChatHistResult | null>(null)
+  const [slaData, setSlaData] = useState<SlaResult | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
   const [listLoading, setListLoading] = useState(false)
   const [busy, setBusy] = useState('')
@@ -294,6 +319,32 @@ export function SettingsReporteriaPage() {
         cancelled = true
       }
     }
+    if (tab === 'sla') {
+      const slaQs = new URLSearchParams()
+      slaQs.set('from', from)
+      slaQs.set('to', to)
+      if (scope.query) {
+        for (const part of scope.query.split('&')) {
+          const [key, value] = part.split('=')
+          if (key && value) slaQs.append(key, decodeURIComponent(value))
+        }
+      }
+      apiClient
+        .get<SlaResult>(`/api/reports/education-sla?${slaQs.toString()}`)
+        .then((result) => {
+          if (cancelled) return
+          if (!result.ok) {
+            notify.error(result.error)
+            setLoadFailed(true)
+            return
+          }
+          setSlaData(result.data)
+        })
+        .finally(done)
+      return () => {
+        cancelled = true
+      }
+    }
     apiClient
       .get<ChatHistResult>(`/api/reports/conversation-history${suffix}`)
       .then((result) => {
@@ -309,7 +360,7 @@ export function SettingsReporteriaPage() {
     return () => {
       cancelled = true
     }
-  }, [tab, filterQs, from, to, page, rangeReady])
+  }, [tab, filterQs, from, to, page, rangeReady, scope.query, scope.revision])
 
   function setTab(next: TabId) {
     const sp = new URLSearchParams(searchParams)
@@ -360,6 +411,14 @@ export function SettingsReporteriaPage() {
       if (attrValue) qs.set('attr_value', attrValue)
     } else if (tab === 'segments') {
       path = '/api/reports/segment-history/export'
+    } else if (tab === 'sla') {
+      path = '/api/reports/education-sla/export'
+      if (scope.query) {
+        for (const part of scope.query.split('&')) {
+          const [key, value] = part.split('=')
+          if (key && value) qs.append(key, decodeURIComponent(value))
+        }
+      }
     } else {
       path = '/api/reports/conversation-history/export'
     }
@@ -381,9 +440,11 @@ export function SettingsReporteriaPage() {
       ? commData?.pagination
       : tab === 'segments'
         ? segData?.pagination
-        : chatData?.pagination
+        : tab === 'chat'
+          ? chatData?.pagination
+          : null
 
-  if (loadFailed && !commData && !segData && !chatData) {
+  if (loadFailed && !commData && !segData && !chatData && !slaData) {
     return <p className="text-muted">No se pudo cargar la reportería.</p>
   }
 
@@ -400,6 +461,7 @@ export function SettingsReporteriaPage() {
             ['communications', 'Comunicaciones'],
             ['segments', 'Hist. segmentos'],
             ['chat', 'Hist. chat'],
+            ['sla', 'SLA 1.ª respuesta'],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -523,8 +585,71 @@ export function SettingsReporteriaPage() {
           {chatData.note} Área <strong>{chatData.area_label}</strong>.
         </p>
       ) : null}
+      {tab === 'sla' && slaData ? (
+        <p className="text-sm text-muted">{slaData.note}</p>
+      ) : null}
 
-      {!pagination ? (
+      {tab === 'sla' ? (
+        !slaData ? (
+          <p className="text-muted">Cargando…</p>
+        ) : (
+          <div className="space-y-4">
+            {listLoading ? (
+              <p className="text-sm text-muted">Actualizando…</p>
+            ) : null}
+            <p className="text-sm text-muted">
+              Promedio 1.ª respuesta: <strong>{slaData.summary.avg_first_response_minutes} min</strong>
+              {' · '}
+              Cumplimiento SLA ({slaData.summary.sla_minutes} min):{' '}
+              <strong>{slaData.summary.sla_met_pct}%</strong>
+              {' · '}
+              Respondidos: {slaData.summary.answered_count}
+              {' · '}
+              Abiertos sin respuesta: {slaData.summary.unanswered_open_count}
+            </p>
+            <div className="overflow-auto rounded-lg border border-line">
+              <table className="min-w-full text-left text-sm">
+                <thead className="border-b border-line bg-surface text-xs text-muted">
+                  <tr>
+                    <th className="px-3 py-2">Asesor</th>
+                    <th className="px-3 py-2">Respondidos</th>
+                    <th className="px-3 py-2">Dentro de SLA</th>
+                    <th className="px-3 py-2">% SLA</th>
+                    <th className="px-3 py-2">Promedio min</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {slaData.by_advisor.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-4 text-muted">
+                        Sin ciclos respondidos en el rango.
+                      </td>
+                    </tr>
+                  ) : (
+                    slaData.by_advisor.map((row) => (
+                      <tr
+                        key={
+                          row.assigned_user_id != null
+                            ? String(row.assigned_user_id)
+                            : 'none'
+                        }
+                      >
+                        <td className="px-3 py-2">{row.advisor_label}</td>
+                        <td className="px-3 py-2">{row.answered_count}</td>
+                        <td className="px-3 py-2">{row.met_count}</td>
+                        <td className="px-3 py-2">{row.sla_met_pct}%</td>
+                        <td className="px-3 py-2">
+                          {row.avg_first_response_minutes}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      ) : !pagination ? (
         <p className="text-muted">Cargando…</p>
       ) : (
         <>

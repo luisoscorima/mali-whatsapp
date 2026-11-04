@@ -9,6 +9,7 @@ Histórico: [REPORTERIA-CHANGELOG.md](./REPORTERIA-CHANGELOG.md). Relacionado: [
 - Panel: `/settings/reporteria`.
 - KPIs de campañas (salida, lectura, respondieron, costo) en detalle de campaña.
 - Embudo Meta en producto ≠ informes de la cuenta Ads.
+- **SLA 1.ª respuesta (Educación):** pestaña en el mismo panel; `GET /api/reports/education-sla` (+ export). Promedio de minutos hábiles hasta `first_human_reply_at`, % ≤ 10 min, corte por asesor. Filtro de fechas y categoría (CA/EP/General). Regla y horario en [LEADS.md](./LEADS.md).
 - Reportes por fuente + email a jefes (Educación / Sheet): pendiente; ver backlog en [LEADS.md](./LEADS.md).
 
 ## Bitácora / auditoría

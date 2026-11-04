@@ -5,6 +5,7 @@ import { CAMPAIGN_SCHEDULE_POLL_MS } from '../campaigns/campaign-config.util';
 import {
   AUDIT_PURGE_MS,
   EDUCATION_LEAD_EXPIRE_MS,
+  EDUCATION_SLA_FIRST_REPLY_MS,
   MAINTENANCE_QUEUE,
   MaintenanceJobName,
 } from './queue.constants';
@@ -77,6 +78,18 @@ export class QueueBootstrapService implements OnModuleInit {
       {
         ...REPEAT_JOB_OPTS,
         repeat: { every: EDUCATION_LEAD_EXPIRE_MS, key: 'expire-education-leads' },
+      },
+    );
+
+    await this.maintenanceQueue.add(
+      MaintenanceJobName.EDUCATION_SLA_FIRST_REPLY,
+      {},
+      {
+        ...REPEAT_JOB_OPTS,
+        repeat: {
+          every: EDUCATION_SLA_FIRST_REPLY_MS,
+          key: 'education-sla-first-reply',
+        },
       },
     );
 

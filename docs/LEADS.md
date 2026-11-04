@@ -71,7 +71,11 @@ En WhatsApp el nombre es el perfil (`wa_profile_name`). Vacío si no hay, para q
 
 `meta_lead_form` · `meta_ctwa` · `widget` · `web_button` · `mali_one_link` · `tiktok` · `organic_wa` · `import` · `other`
 
-`import` = históricos del Sheet. `other` = respaldo. `manual` ya no se acepta en altas nuevas.
+`import` = históricos del Sheet / carga masiva. `other` = respaldo y **alta manual ONE** (`source_key`: `manual_call` | `manual_historical` | `manual_organic` vía `POST /api/crm/education/leads/manual`). El canal `manual` ya no se acepta en altas nuevas. El asesor **no** crea leads en el inbox; solo edita contactos y opera el ciclo.
+
+**RQ0015:** si el alta manual coincide por teléfono/DNI/email con una ficha Educación → `409 already_exists` (no segunda persona).
+
+**RQ0017:** `PATCH .../management` a `venta_exitosa` / `convertido` exige ficha mínima; si falta algo → `400 missing_fields` y el estado no cambia.
 
 ---
 
@@ -223,6 +227,18 @@ Un contacto puede tener varios ciclos históricos; un asesor vigente por ciclo a
 
 ---
 
+## SLA de primera respuesta
+
+Meta: **10 minutos hábiles** desde `education_lead_cycles.started_at` hasta `first_human_reply_at` (primer outbound humano).
+
+Horario fijo (America/Lima): L–V 08:30–20:00, sáb 08:30–18:00, dom 09:00–18:00. Fuera de franja el reloj no avanza.
+
+- Incumplimiento: job `education-sla-first-reply` → `education_lead_alerts.event_type = sla_first_reply` (uno por ciclo).
+- UI: centro de avisos del inbox (campanita: chats no leídos + leads nuevos/SLA) + toast; toggle de notificaciones del navegador dentro del panel. Listado `GET /api/leads/alerts`.
+- Métricas: vitrina en **MALI ONE → CRM Educación → Oportunidades** (`GET /api/crm/education/sla`); espejo en WhatsApp Reportería (`GET /api/reports/education-sla`).
+
+Código: `api/src/leads/education-lead-sla.util.ts`.
+
 ## Operación
 
 ### Hub
@@ -308,7 +324,8 @@ El CRM Educación en MALI ONE ya muestra Contactos y Oportunidades. Pagos y Camp
 | Ventana 60 días y clasificación | Hecho | |
 | Distribuir números sin historial | Hecho | |
 | Reglas extra de conflicto | Pendiente | |
-| Alerta sin gestionar (+N días) | Falta | |
+| Alerta sin gestionar (+N días) | Falta | Distinto del SLA 10 min |
+| SLA primera respuesta (10 min) | Hecho | Minutos hábiles Lima; alert `sla_first_reply`; reportería |
 | Reportes por fuente + email | Falta | SES desde ONE |
 | Estados EP del Sheet | Pendiente | Alinear catálogo |
 | Curso en listado | Hecho | `payload.curso` |

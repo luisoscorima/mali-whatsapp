@@ -9,6 +9,7 @@ import type {
   AuditLogListResult,
   CommunicationReportResult,
   ConversationHistoryReportResult,
+  EducationSlaReportResult,
   SegmentHistoryReportResult,
 } from './reports.types';
 
@@ -116,6 +117,31 @@ export class ReportsController {
   ): Promise<void> {
     const { buffer, filename } =
       await this.reportsService.exportConversationHistory(user, query);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  }
+
+  @Get('education-sla')
+  async educationSla(
+    @CurrentUser() user: AuthUser,
+    @Query() query: Record<string, string | string[] | undefined>,
+  ): Promise<ApiResponse<EducationSlaReportResult>> {
+    const data = await this.reportsService.listEducationSla(user, query);
+    return { ok: true, data };
+  }
+
+  @Get('education-sla/export')
+  async exportEducationSla(
+    @CurrentUser() user: AuthUser,
+    @Query() query: Record<string, string | string[] | undefined>,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { buffer, filename } =
+      await this.reportsService.exportEducationSla(user, query);
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

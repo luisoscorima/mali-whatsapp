@@ -2,6 +2,8 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -33,6 +35,16 @@ import { ProspectiaAdvisorService } from './prospectia-advisor.service';
 import { endLeadConversationLinks, projectLeadAssignee, withLeadCreateSavepoint } from './education-lead-lifecycle.util';
 import { cursoFromOriginPayload } from './lead-curso.util';
 import { formatAdvisorLabel } from '../users/advisor-label.util';
+import {
+  NEW_LEAD_ALERT_EVENT_TYPE,
+  SLA_ALERT_EVENT_TYPE,
+  SLA_FIRST_REPLY_MINUTES,
+  isSlaBreached,
+} from './education-lead-sla.util';
+import {
+  isSaleClosingStatusSlug,
+  missingFieldsForVentaExitosa,
+} from './education-lead-sale-ready.util';
 
 function isUniqueViolation(error: unknown): boolean {
   return (
@@ -878,6 +890,29 @@ export class EducationLeadWorkflowService {
       const previousStatusId = cycle.lead_status_id;
       const now = new Date();
       const closing = Boolean(nextStatus?.is_terminal || isTerminalEducationStatusSlug(nextStatus?.slug));
+      if (closing && isSaleClosingStatusSlug(nextStatus?.slug)) {
+        const fresh = await tx.contacts.findFirst({
+          where: { id: contactId },
+          select: {
+            name: true, last_name: true, phone: true, whatsapp_user_id: true,
+            email: true, dni: true,
+          },
+        });
+        const missing = missingFieldsForVentaExitosa(fresh ?? {}, {
+          program_id: cycle.program_id,
+          area: cycle.area,
+        });
+        if (missing.length) {
+          throw new HttpException(
+            {
+              code: 'missing_fields',
+              message: 'Completa los datos del contacto antes de marcar venta exitosa',
+              missing_fields: missing,
+            },
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+      }
       cycle = await tx.education_lead_cycles.update({
         where: { id: cycle.id },
         data: {
@@ -1734,7 +1769,7 @@ export class EducationLeadWorkflowService {
     const alerts = await this.prisma.education_lead_alerts.findMany({
       where: {
         area: { in: areas },
-        event_type: 'new_lead',
+        event_type: { in: [NEW_LEAD_ALERT_EVENT_TYPE, SLA_ALERT_EVENT_TYPE] },
         reads: { none: { user_id: user.id } },
         cycle: { closed_at: null },
         ...categoryFilter,
@@ -1752,6 +1787,12 @@ export class EducationLeadWorkflowService {
             contact: {
               select: { id: true, name: true, last_name: true, phone: true },
             },
+            conversation_links: {
+              where: { unlinked_at: null },
+              orderBy: { linked_at: 'desc' },
+              take: 1,
+              select: { conversation_id: true },
+            },
           },
         },
       },
@@ -1762,14 +1803,67 @@ export class EducationLeadWorkflowService {
         cycle_id: alert.cycle_id,
         area: alert.area,
         program_id: alert.program_id,
+        event_type: alert.event_type,
         created_at: alert.created_at,
         contact_id: alert.cycle.contact_id,
         contact_name: [alert.cycle.contact.name, alert.cycle.contact.last_name]
           .filter(Boolean).join(' '),
         phone: alert.cycle.contact.phone,
         assigned_user_id: alert.cycle.assigned_user_id,
+        conversation_id:
+          alert.cycle.conversation_links[0]?.conversation_id ?? null,
       })),
     };
+  }
+
+  /**
+   * Creates sla_first_reply alerts for open cycles past 10 business minutes
+   * without first_human_reply_at. Unique (cycle_id, event_type) prevents duplicates.
+   */
+  async createSlaFirstReplyAlerts(limit = 200): Promise<{ created: number; scanned: number }> {
+    if (!(await this.isAttentionV1Enabled())) return { created: 0, scanned: 0 };
+    const now = new Date();
+    const wallFloor = new Date(
+      now.getTime() - SLA_FIRST_REPLY_MINUTES * 60 * 1000,
+    );
+    const candidates = await this.prisma.education_lead_cycles.findMany({
+      where: {
+        area: { in: EDUCATION_AREAS },
+        closed_at: null,
+        first_human_reply_at: null,
+        started_at: { lte: wallFloor },
+        alerts: { none: { event_type: SLA_ALERT_EVENT_TYPE } },
+      },
+      orderBy: { started_at: 'asc' },
+      take: limit,
+      select: {
+        id: true,
+        area: true,
+        program_id: true,
+        business_area_id: true,
+        started_at: true,
+      },
+    });
+    let created = 0;
+    for (const cycle of candidates) {
+      if (!isSlaBreached(cycle.started_at, now)) continue;
+      try {
+        await this.prisma.education_lead_alerts.create({
+          data: {
+            cycle_id: cycle.id,
+            business_area_id: cycle.business_area_id,
+            program_id: cycle.program_id,
+            area: cycle.area,
+            event_type: SLA_ALERT_EVENT_TYPE,
+          },
+        });
+        created += 1;
+      } catch (error) {
+        if (isUniqueViolation(error)) continue;
+        throw error;
+      }
+    }
+    return { created, scanned: candidates.length };
   }
 
   async markAlertRead(alertId: number, userId: number) {

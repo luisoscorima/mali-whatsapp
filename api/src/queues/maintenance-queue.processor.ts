@@ -113,6 +113,16 @@ export class MaintenanceQueueProcessor extends WorkerHost {
         return;
       }
 
+      case MaintenanceJobName.EDUCATION_SLA_FIRST_REPLY: {
+        const result = await this.educationLeads.createSlaFirstReplyAlerts();
+        if (result.created > 0) {
+          this.logger.log(
+            `Leads Educación SLA: ${result.created} alerta(s) de primera respuesta`,
+          );
+        }
+        return;
+      }
+
       default:
         this.logger.warn(`Job de mantenimiento desconocido: ${job.name}`);
     }

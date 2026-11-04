@@ -74,3 +74,6 @@ export type ConversationHistoryReportResult = {
   retention_days: number;
   note: string;
 };
+
+export type EducationSlaReportResult =
+  import('./education-sla-report.util').EducationSlaReportResult;

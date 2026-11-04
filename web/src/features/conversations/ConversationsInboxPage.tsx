@@ -65,6 +65,7 @@ import {
   chatActionsFromListItem,
   type ChatActionsContext,
 } from './inboxChatActions'
+import { InboxAlertsCenter } from './InboxAlertsCenter'
 import { useAssignedInboxBrowserNotify } from './useAssignedInboxBrowserNotify'
 import { chatDisplayName, chatSecondaryLabel, displayPhoneNumber, isContactPhone } from './whatsappIdentity'
 import { leadScoreLabel, leadScoreTone } from './leadScore'
@@ -144,46 +145,6 @@ function ArchiveChatsIcon() {
       <polyline points="21 8 21 21 3 21 3 8" />
       <rect x="1" y="3" width="22" height="5" rx="1" />
       <line x1="10" y1="12" x2="14" y2="12" />
-    </svg>
-  )
-}
-
-function InboxNotifyBellIcon({ active }: { active: boolean }) {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill={active ? 'currentColor' : 'none'}
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-    </svg>
-  )
-}
-
-function InboxNotifyBellOffIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M8.7 3A6 6 0 0 1 18 8c0 2.2.4 4 1.1 5.4" />
-      <path d="M17 17H3s3-2 3-9a6 6 0 0 1 .3-1.9" />
-      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-      <line x1="2" y1="2" x2="22" y2="22" />
     </svg>
   )
 }
@@ -3029,40 +2990,20 @@ export function ConversationsInboxPage() {
               <ServiceReplyQuotaList lines={serviceReplies.lines} />
             )}
           </PopoverContent></Popover> : null}
-          {browserNotifySupported ? (
-            <button
-              type="button"
-              className={`small-btn compact inbox-notify-bell-btn${browserNotifyActive ? ' is-active' : ''}`}
-              aria-pressed={browserNotifyActive}
-              aria-label={
-                browserNotifyPermission === 'denied'
-                  ? 'Avisos bloqueados en el navegador'
-                  : browserNotifyActive
-                    ? 'Desactivar avisos de Mis chats'
-                    : 'Activar avisos de Mis chats'
-              }
-              title={
-                browserNotifyPermission === 'denied'
-                  ? 'Avisos bloqueados en el navegador. Actívalos en la configuración del sitio.'
-                  : browserNotifyActive
-                    ? 'Avisos activos — clic para desactivar'
-                    : 'Activar avisos de Mis chats'
-              }
-              onClick={() => {
-                if (browserNotifyActive) {
-                  disableBrowserNotify()
-                  return
-                }
-                void enableBrowserNotify()
-              }}
-            >
-              {browserNotifyPermission === 'denied' && !browserNotifyActive ? (
-                <InboxNotifyBellOffIcon />
-              ) : (
-                <InboxNotifyBellIcon active={browserNotifyActive} />
-              )}
-            </button>
-          ) : null}
+          <InboxAlertsCenter
+            unreadCount={list?.unread_count ?? 0}
+            browserNotify={{
+              supported: browserNotifySupported,
+              permission: browserNotifyPermission,
+              active: browserNotifyActive,
+              enable: enableBrowserNotify,
+              disable: disableBrowserNotify,
+            }}
+            onShowUnreadChats={() => setChatFilter('unread')}
+            onOpenConversation={(conversationId) => {
+              navigate(conversationPath(conversationId))
+            }}
+          />
           </>
         }
         filters={filterPills}

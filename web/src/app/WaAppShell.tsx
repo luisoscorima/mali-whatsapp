@@ -2,6 +2,7 @@ import { Outlet, useLocation, useOutletContext } from 'react-router-dom'
 import { Suspense, useEffect, useState } from 'react'
 import { apiClient, onUnauthorized } from '@/shared/api'
 import { areaLabel } from '@/features/admin/areaLabels'
+import { LeadAlertsProvider } from '@/features/leads/leadAlertsContext'
 import { hasInboxDetailRoute } from '@/shared/layout/inboxDetailRoute'
 import { TooltipProvider } from '@/shared/ui/shadcn/tooltip'
 import { WaLayout } from '@/shared/ui/shell/WaLayout'
@@ -80,24 +81,26 @@ export function WaAppShell() {
 
   return (
     <TooltipProvider>
-      <div className="page-wa page-conversations text-ink">
-        <WaLayout className={layoutClass}>
-          <WaRail
-            user={user}
-            onUserUpdate={setUser}
-            conversationsUnreadCount={conversationsUnreadCount}
-          />
-          <Suspense
-            fallback={
-              <div role="status" className="p-4 text-muted">
-                Cargando…
-              </div>
-            }
-          >
-            <Outlet context={outletContext} />
-          </Suspense>
-        </WaLayout>
-      </div>
+      <LeadAlertsProvider user={user}>
+        <div className="page-wa page-conversations text-ink">
+          <WaLayout className={layoutClass}>
+            <WaRail
+              user={user}
+              onUserUpdate={setUser}
+              conversationsUnreadCount={conversationsUnreadCount}
+            />
+            <Suspense
+              fallback={
+                <div role="status" className="p-4 text-muted">
+                  Cargando…
+                </div>
+              }
+            >
+              <Outlet context={outletContext} />
+            </Suspense>
+          </WaLayout>
+        </div>
+      </LeadAlertsProvider>
     </TooltipProvider>
   )
 }
