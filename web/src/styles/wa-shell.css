@@ -523,6 +523,8 @@
 
 /* Sidebar column */
 .inbox-sidebar {
+  position: relative;
+  z-index: 3; /* por encima de .inbox-main para el panel de la campana */
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -536,6 +538,8 @@
 }
 
 .inbox-sidebar-header {
+  position: relative;
+  z-index: 5; /* panel de avisos por encima de filtros / lista */
   padding: 14px 16px 10px;
   border-bottom: none;
   background: var(--wa-list-bg);
@@ -564,7 +568,7 @@
 
 .inbox-sidebar-toolbar {
   position: relative;
-  z-index: 2;
+  z-index: 6;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -591,6 +595,7 @@
 
 .inbox-alerts-center {
   position: relative;
+  z-index: 6;
 }
 
 .inbox-alerts-center__icon-wrap {
@@ -618,7 +623,7 @@
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  z-index: 40;
+  z-index: 50;
   width: min(340px, 85vw);
   max-height: 420px;
   overflow: auto;
