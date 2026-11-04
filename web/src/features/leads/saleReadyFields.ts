@@ -2,6 +2,7 @@
 
 const LABELS: Record<string, string> = {
   nombre: 'Nombre',
+  apellido: 'Apellido',
   dni: 'DNI',
   email: 'Email',
   telefono: 'Teléfono',

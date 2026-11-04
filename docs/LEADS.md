@@ -75,7 +75,7 @@ En WhatsApp el nombre es el perfil (`wa_profile_name`). Vacío si no hay, para q
 
 **RQ0015:** si el alta manual coincide por teléfono/DNI/email con una ficha Educación → `409 already_exists` (no segunda persona).
 
-**RQ0017:** `PATCH .../status` (inbox) y `.../management` a `venta_exitosa` / `convertido` exigen ficha mínima (nombre usable, DNI, email, teléfono/WA, categoría). Si falta algo → `400 missing_fields` y el estado no cambia; la UI abre la ficha para completar y reintenta al guardar.
+**RQ0017:** `PATCH .../status` (inbox) y `.../management` a `venta_exitosa` / `convertido` exigen ficha mínima (nombre y apellido usables, DNI, email, teléfono/WA, categoría). Si falta algo → `400 missing_fields` y el estado no cambia; la UI abre la ficha para completar y reintenta al guardar.
 
 ---
 

@@ -24,6 +24,7 @@ export type SaleReadyCycle = {
 
 export type SaleReadyMissingField =
   | 'nombre'
+  | 'apellido'
   | 'dni'
   | 'email'
   | 'telefono'
@@ -33,10 +34,9 @@ function clean(value?: string | null): string {
   return (value ?? '').trim();
 }
 
-function hasUsableName(contact: SaleReadyContact): boolean {
-  const full = `${clean(contact.name)} ${clean(contact.last_name)}`.trim();
-  if (full.length < 2) return false;
-  const normalized = full.toLowerCase().replace(/\s+/g, ' ');
+function isUsablePersonName(value: string): boolean {
+  if (value.length < 2) return false;
+  const normalized = value.toLowerCase().replace(/\s+/g, ' ');
   if (PLACEHOLDER_NAMES.has(normalized)) return false;
   // Solo dígitos / teléfono como nombre
   if (/^[\d+\s\-()]+$/.test(normalized)) return false;
@@ -55,7 +55,8 @@ export function missingFieldsForVentaExitosa(
   cycle: SaleReadyCycle,
 ): SaleReadyMissingField[] {
   const missing: SaleReadyMissingField[] = [];
-  if (!hasUsableName(contact)) missing.push('nombre');
+  if (!isUsablePersonName(clean(contact.name))) missing.push('nombre');
+  if (!isUsablePersonName(clean(contact.last_name))) missing.push('apellido');
   if (!clean(contact.dni)) missing.push('dni');
   if (!clean(contact.email) || !clean(contact.email).includes('@')) missing.push('email');
   if (!clean(contact.phone) && !clean(contact.whatsapp_user_id)) missing.push('telefono');

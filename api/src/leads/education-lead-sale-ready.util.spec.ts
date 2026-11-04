@@ -38,7 +38,16 @@ describe('education-lead-sale-ready', () => {
         { name: 'Lead', last_name: '', phone: null, email: null, dni: null },
         { area: 'educacion' },
       ),
-    ).toEqual(['nombre', 'dni', 'email', 'telefono', 'categoria']);
+    ).toEqual(['nombre', 'apellido', 'dni', 'email', 'telefono', 'categoria']);
+  });
+
+  it('exige apellido aunque el nombre esté completo', () => {
+    expect(
+      missingFieldsForVentaExitosa(
+        { ...readyContact, last_name: '' },
+        { program_id: 2 },
+      ),
+    ).toEqual(['apellido']);
   });
 
   it('acepta area educacion_ca como categoría', () => {
