@@ -6,6 +6,9 @@ export type ApiSuccess<T> = {
 export type ApiFailure = {
   ok: false;
   error: string;
+  /** Código de negocio (p. ej. missing_fields / already_exists). */
+  code?: string;
+  missing_fields?: string[];
 };
 
 export type ApiResponse<T> = ApiSuccess<T> | ApiFailure;

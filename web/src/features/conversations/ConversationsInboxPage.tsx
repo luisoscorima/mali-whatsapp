@@ -1266,6 +1266,13 @@ export function ConversationsInboxPage() {
   const [contactSheetPhone, setContactSheetPhone] = useState('')
   const [contactSheetUserId, setContactSheetUserId] = useState<string | null>(null)
   const [contactSheetPrefillName, setContactSheetPrefillName] = useState('')
+  const [contactSheetSaleMissing, setContactSheetSaleMissing] = useState<string[]>([])
+  const [pendingSaleStatus, setPendingSaleStatus] = useState<{
+    statusId: number
+    contactId: number
+    category: string
+    conversationId: number | null
+  } | null>(null)
   const [replyToMessage, setReplyToMessage] = useState<ReplyToMessage | null>(null)
   const [contactAttributes, setContactAttributes] = useState<Record<string, string>>({})
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false)
@@ -2011,6 +2018,7 @@ export function ConversationsInboxPage() {
     phone: string
     whatsappUserId?: string | null
     prefillName?: string
+    saleMissingFields?: string[]
   }) {
     setContactSheetMode(opts.mode)
     setContactSheetContactId(opts.contactId ?? null)
@@ -2019,6 +2027,8 @@ export function ConversationsInboxPage() {
     setContactSheetPrefillName(
       opts.mode === 'create' ? String(opts.prefillName ?? '').trim() : '',
     )
+    setContactSheetSaleMissing(opts.saleMissingFields ?? [])
+    if (!opts.saleMissingFields?.length) setPendingSaleStatus(null)
     setContactSheetOpen(true)
   }
 
@@ -2278,20 +2288,32 @@ export function ConversationsInboxPage() {
     void loadList()
   }
 
-  async function onLeadStatus(statusId: number): Promise<boolean> {
+  async function onLeadStatus(
+    statusId: number,
+    opts?: {
+      contactId?: number
+      category?: string
+      conversationId?: number | null
+      skipContextClear?: boolean
+    },
+  ): Promise<boolean> {
     const contactId =
+      opts?.contactId ??
       leadStatusContext?.contactId ??
       actionsContext?.contactId ??
       detail?.conversation.contact_id ??
       null
     if (!contactId) return false
     const conversationId =
-      leadStatusContext?.conversationId ??
-      actionsContext?.conversationId ??
-      detail?.conversation.id ??
-      selectedId ??
-      null
+      opts?.conversationId !== undefined
+        ? opts.conversationId
+        : leadStatusContext?.conversationId ??
+          actionsContext?.conversationId ??
+          detail?.conversation.id ??
+          selectedId ??
+          null
     const category =
+      opts?.category ||
       leadStatusContext?.category ||
       detail?.conversation.line_program ||
       'general'
@@ -2306,11 +2328,42 @@ export function ConversationsInboxPage() {
     })
     setLeadStatusBusy(false)
     if (!result.ok) {
+      if (result.code === 'missing_fields') {
+        const phone =
+          leadStatusContext?.phone ||
+          actionsContext?.phone ||
+          detail?.conversation.phone ||
+          ''
+        const whatsappUserId =
+          detail?.conversation.whatsapp_user_id ?? null
+        setPendingSaleStatus({
+          statusId,
+          contactId,
+          category,
+          conversationId:
+            conversationId && conversationId > 0 ? conversationId : null,
+        })
+        if (!opts?.skipContextClear) setLeadStatusContext(null)
+        notify.error(
+          result.error ||
+            'Completa los datos del contacto antes de marcar venta exitosa',
+        )
+        openContactSheet({
+          mode: 'edit',
+          contactId,
+          phone,
+          whatsappUserId,
+          saleMissingFields: result.missing_fields ?? [],
+        })
+        return false
+      }
       notify.error(result.error)
       return false
     }
+    setPendingSaleStatus(null)
+    setContactSheetSaleMissing([])
     const fromActions = leadStatusContext?.returnToActions
-    setLeadStatusContext(null)
+    if (!opts?.skipContextClear) setLeadStatusContext(null)
     notify.success(
       result.data.lead_status?.label
         ? `Estado: ${result.data.lead_status.label}`
@@ -3714,7 +3767,10 @@ export function ConversationsInboxPage() {
 
       <InboxContactSheet
         open={contactSheetOpen}
-        onOpenChange={setContactSheetOpen}
+        onOpenChange={(open) => {
+          setContactSheetOpen(open)
+          if (!open) setContactSheetSaleMissing([])
+        }}
         mode={contactSheetMode}
         contactId={contactSheetContactId}
         conversationId={selectedId}
@@ -3725,9 +3781,21 @@ export function ConversationsInboxPage() {
         category={
           detail ? detail.conversation.line_program || 'general' : null
         }
+        saleMissingFields={contactSheetSaleMissing}
         onSaved={() => {
           void loadList()
           if (selectedId) void loadDetail(selectedId)
+          const pending = pendingSaleStatus
+          if (!pending) return
+          setContactSheetSaleMissing([])
+          void onLeadStatus(pending.statusId, {
+            contactId: pending.contactId,
+            category: pending.category,
+            conversationId: pending.conversationId,
+            skipContextClear: true,
+          }).then((ok) => {
+            if (ok) setPendingSaleStatus(null)
+          })
         }}
       />
 

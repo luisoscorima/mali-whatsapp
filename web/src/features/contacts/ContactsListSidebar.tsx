@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
@@ -13,6 +13,12 @@ import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import { SearchableSelect } from '@/shared/ui/SearchableSelect'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import { Button } from '@/shared/ui/shadcn/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/ui/shadcn/dropdown-menu'
 
 const BULK_NATIVE_ATTR_SLUGS = new Set(['dni', 'email', 'correo'])
 
@@ -114,7 +120,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
   const [chatOpeningId, setChatOpeningId] = useState<number | null>(null)
   const [listScrollAtEnd, setListScrollAtEnd] = useState(false)
   const [listCanScroll, setListCanScroll] = useState(false)
-  const fabRef = useRef<HTMLDetailsElement>(null)
+  const [fabOpen, setFabOpen] = useState(false)
   const { openContactChat, linePickerDialog } = useOpenContactChat()
   const categoryScope = useCategoryScope()
 
@@ -196,20 +202,6 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
     }, SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
   }, [searchInput])
-
-  useEffect(() => {
-    function onPointerDown(ev: MouseEvent) {
-      const fab = fabRef.current
-      if (!fab?.open) return
-      if (!fab.contains(ev.target as Node)) fab.open = false
-    }
-    document.addEventListener('click', onPointerDown)
-    return () => document.removeEventListener('click', onPointerDown)
-  }, [])
-
-  function closeFab() {
-    if (fabRef.current) fabRef.current.open = false
-  }
 
   function updateParams(mutator: (sp: URLSearchParams) => void) {
     const sp = new URLSearchParams(searchParams)
@@ -387,10 +379,10 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
   }
 
   async function handleExport() {
+    setFabOpen(false)
     setExportBusy(true)
     const res = await apiClient.download(`/api/contacts/export${exportQuery}`)
     setExportBusy(false)
-    closeFab()
     if (!res.ok) notify.error(res.error)
   }
 
@@ -433,121 +425,77 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
               {listScrollAtEnd ? '↑' : '↓'}
             </Button>
           ) : null}
-          <details
-            ref={fabRef}
-            className={`contact-fab${showPager ? ' contact-fab--above-pager' : ''}`}
-          >
-          <summary
-            className="contact-fab__trigger"
-            title="Añadir, importar o exportar contactos"
-            aria-label="Añadir, importar o exportar contactos"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-              focusable="false"
+          <DropdownMenu open={fabOpen} onOpenChange={setFabOpen}>
+            <div
+              className={`contact-fab${showPager ? ' contact-fab--above-pager' : ''}`}
             >
-              <path d="M12 5v14" />
-              <path d="M5 12h14" />
-            </svg>
-          </summary>
-          <div className="contact-fab__menu" role="menu" aria-label="Acciones de contactos">
-            <Link
-              to={`/contacts/new${listQuery}`}
-              className={`contact-fab__action ${path === '/contacts/new' ? 'is-active' : ''}`}
-              role="menuitem"
-              onClick={closeFab}
-            >
-              <span className="contact-fab__action-icon" aria-hidden="true">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="contact-fab__trigger"
+                  title="Añadir, importar o exportar contactos"
+                  aria-label="Añadir, importar o exportar contactos"
                 >
-                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                  <circle cx="9" cy="7" r="4" />
-                  <line x1="19" y1="8" x2="19" y2="14" />
-                  <line x1="22" y1="11" x2="16" y2="11" />
-                </svg>
-              </span>
-              <span>Nuevo</span>
-            </Link>
-            <Link
-              to={`/contacts/import${listQuery}`}
-              className={`contact-fab__action ${path === '/contacts/import' ? 'is-active' : ''}`}
-              role="menuitem"
-              onClick={closeFab}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path d="M12 5v14" />
+                    <path d="M5 12h14" />
+                  </svg>
+                </button>
+              </DropdownMenuTrigger>
+            </div>
+            <DropdownMenuContent
+              side="top"
+              align="end"
+              sideOffset={10}
+              collisionPadding={12}
+              className="min-w-[13rem]"
             >
-              <span className="contact-fab__action-icon" aria-hidden="true">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+              <DropdownMenuItem asChild>
+                <Link
+                  to={`/contacts/new${listQuery}`}
+                  className={path === '/contacts/new' ? 'font-semibold text-accent' : undefined}
                 >
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                  <path d="M12 18V9" />
-                  <polyline points="9 12 12 9 15 12" />
-                </svg>
-              </span>
-              <span>Importar</span>
-            </Link>
-            <button
-              type="button"
-              className="contact-fab__action"
-              role="menuitem"
-              disabled={exportBusy}
-              title={
-                hasFilters
-                  ? 'Exportar contactos que coinciden con los filtros actuales'
-                  : 'Exportar todos los contactos activos del área'
-              }
-              onClick={() => void handleExport()}
-            >
-              <span className="contact-fab__action-icon" aria-hidden="true">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                  Nuevo
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link
+                  to={`/contacts/import${listQuery}`}
+                  className={
+                    path === '/contacts/import' ? 'font-semibold text-accent' : undefined
+                  }
                 >
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                  <path d="M12 18V9" />
-                  <polyline points="9 12 12 15 15 12" />
-                </svg>
-              </span>
-              <span>
+                  Importar
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={exportBusy}
+                title={
+                  hasFilters
+                    ? 'Exportar contactos que coinciden con los filtros actuales'
+                    : 'Exportar todos los contactos activos del área'
+                }
+                onSelect={(event) => {
+                  event.preventDefault()
+                  void handleExport()
+                }}
+              >
                 {exportBusy ? 'Exportando…' : hasFilters ? 'Exportar filtro' : 'Exportar'}
-              </span>
-            </button>
-          </div>
-        </details>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </>
       }
       filters={

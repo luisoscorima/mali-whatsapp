@@ -32,25 +32,36 @@ function notifyUnauthorized(): void {
 function parseErrorBody(
   body: unknown,
   fallback: string,
-): string {
+): { error: string; code?: string; missing_fields?: string[] } {
   if (body && typeof body === 'object') {
     const record = body as Record<string, unknown>;
+    const code = typeof record.code === 'string' ? record.code : undefined;
+    const missing_fields = Array.isArray(record.missing_fields)
+      ? record.missing_fields.map(String)
+      : undefined;
     // NestJS pone el detalle útil en `message`; `error` suele ser solo "Bad Request".
     if (typeof record.message === 'string' && record.message.trim()) {
-      return record.message;
+      return { error: record.message, code, missing_fields };
     }
     if (Array.isArray(record.message)) {
-      return record.message.map(String).join(', ');
+      return {
+        error: record.message.map(String).join(', '),
+        code,
+        missing_fields,
+      };
     }
     if (
       typeof record.error === 'string' &&
       record.error.trim() &&
       record.error !== 'Bad Request'
     ) {
-      return record.error;
+      return { error: record.error, code, missing_fields };
+    }
+    if (code || missing_fields?.length) {
+      return { error: fallback, code, missing_fields };
     }
   }
-  return fallback;
+  return { error: fallback };
 }
 
 async function request<T>(
@@ -99,17 +110,30 @@ async function request<T>(
   }
 
   if (body && typeof body === 'object' && 'ok' in body) {
-    const envelope = body as ApiResponse<T>;
+    const envelope = body as ApiResponse<T> & {
+      code?: string;
+      missing_fields?: string[];
+    };
     if (!envelope.ok) {
-      return { ok: false, error: envelope.error || 'Error de solicitud' };
+      return {
+        ok: false,
+        error: envelope.error || 'Error de solicitud',
+        ...(typeof envelope.code === 'string' ? { code: envelope.code } : {}),
+        ...(Array.isArray(envelope.missing_fields)
+          ? { missing_fields: envelope.missing_fields.map(String) }
+          : {}),
+      };
     }
     return envelope;
   }
 
   if (!res.ok) {
+    const parsed = parseErrorBody(body, `Error ${res.status}`);
     return {
       ok: false,
-      error: parseErrorBody(body, `Error ${res.status}`),
+      error: parsed.error,
+      ...(parsed.code ? { code: parsed.code } : {}),
+      ...(parsed.missing_fields ? { missing_fields: parsed.missing_fields } : {}),
     };
   }
 
@@ -169,7 +193,15 @@ export const apiClient = {
     }
 
     if (!res.ok) {
-      return { ok: false, error: parseErrorBody(body, `Error ${res.status}`) };
+      const parsed = parseErrorBody(body, `Error ${res.status}`);
+      return {
+        ok: false,
+        error: parsed.error,
+        ...(parsed.code ? { code: parsed.code } : {}),
+        ...(parsed.missing_fields
+          ? { missing_fields: parsed.missing_fields }
+          : {}),
+      };
     }
 
     return { ok: true, data: body as T };

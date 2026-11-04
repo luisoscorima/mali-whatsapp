@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiClient } from '@/shared/api'
 import { notify } from '@/shared/notify'
+import { formatSaleMissingFields } from '@/features/leads/saleReadyFields'
 import { ContactForm } from '../contacts/ContactForm'
 import { splitPhoneForForm } from '../contacts/phoneUtils'
 import { isWhatsAppBsuid } from './whatsappIdentity'
@@ -81,6 +82,8 @@ export type InboxContactSheetProps = {
   prefillUsername?: string | null
   prefillName?: string
   category?: string | null
+  /** Campos faltantes al intentar marcar venta exitosa (RQ0017). */
+  saleMissingFields?: string[]
   onSaved: () => void
 }
 
@@ -95,6 +98,7 @@ export function InboxContactSheet({
   prefillUsername = null,
   prefillName = '',
   category = null,
+  saleMissingFields = [],
   onSaved,
 }: InboxContactSheetProps) {
   const [contact, setContact] = useState<ContactDetail | null>(null)
@@ -104,6 +108,7 @@ export function InboxContactSheet({
   const [leadStatuses, setLeadStatuses] = useState<LeadStatusOption[]>([])
   const [leadStatusBusy, setLeadStatusBusy] = useState(false)
   const [attentionBusy, setAttentionBusy] = useState(false)
+  const [localMissingFields, setLocalMissingFields] = useState<string[]>([])
   const [openLead, setOpenLead] = useState<{
     id: number
     assigned_user_label: string | null
@@ -272,9 +277,18 @@ export function InboxContactSheet({
       return
     }
     notify.success('Contacto actualizado.')
-    onOpenChange(false)
+    // onSaved antes de cerrar: el padre puede reintentar venta exitosa con el pending.
     onSaved()
+    onOpenChange(false)
   }
+
+  useEffect(() => {
+    if (!open) {
+      setLocalMissingFields([])
+      return
+    }
+    setLocalMissingFields(saleMissingFields)
+  }, [open, saleMissingFields])
 
   async function onLeadStatusChange(statusId: number) {
     if (!contactId || !contact) return
@@ -289,9 +303,18 @@ export function InboxContactSheet({
     })
     setLeadStatusBusy(false)
     if (!result.ok) {
+      if (result.code === 'missing_fields') {
+        setLocalMissingFields(result.missing_fields ?? [])
+        notify.error(
+          result.error ||
+            'Completa los datos del contacto antes de marcar venta exitosa',
+        )
+        return
+      }
       notify.error(result.error)
       return
     }
+    setLocalMissingFields([])
     setContact((prev) =>
       prev
         ? {
@@ -385,6 +408,12 @@ export function InboxContactSheet({
             <p className="text-sm text-muted">Cargando formulario…</p>
           ) : (
             <>
+              {mode === 'edit' && localMissingFields.length > 0 ? (
+                <p className="mb-3 text-sm text-bad">
+                  Para marcar venta exitosa completa:{' '}
+                  {formatSaleMissingFields(localMissingFields)}.
+                </p>
+              ) : null}
               {mode === 'edit' ? (
                 <div className="mb-4 space-y-2 rounded-lg border border-line bg-bg p-3">
                   <p className="text-sm font-medium">Atención actual</p>

@@ -64,6 +64,10 @@ import {
 } from './leads-export.util';
 import { syncEducationLeadStatuses, isEducationLeadArea } from './education-lead-statuses';
 import {
+  isSaleClosingStatusSlug,
+  missingFieldsForVentaExitosa,
+} from './education-lead-sale-ready.util';
+import {
   addDaysYmd,
   getReportDisplayTimeZone,
   isYmdDate,
@@ -1507,6 +1511,98 @@ export class LeadsService implements OnModuleInit {
             opts.category,
           )
         : undefined;
+
+    // Resolver ciclo antes de escribir: candado RQ0017 y update atómico.
+    let resolvedCycle: {
+      id: number;
+      area: string;
+      program_id: number | null;
+      program: { slug: string } | null;
+    } | null = null;
+    if (isEducationAttentionArea(areaNorm)) {
+      if (opts?.leadId) {
+        resolvedCycle = await this.prisma.education_lead_cycles.findFirst({
+          where: {
+            id: opts.leadId,
+            person_id: contact.person_id,
+            closed_at: null,
+          },
+          select: {
+            id: true,
+            area: true,
+            program_id: true,
+            program: { select: { slug: true } },
+          },
+        });
+        if (!resolvedCycle) {
+          throw new BadRequestException(
+            'Lead no encontrado o ya cerrado para este contacto',
+          );
+        }
+      } else if (programId !== undefined) {
+        resolvedCycle = await this.prisma.education_lead_cycles.findFirst({
+          where: exactOpenCycleWhere({
+            personId: contact.person_id,
+            area: areaNorm,
+            programId,
+          }),
+          orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+          select: {
+            id: true,
+            area: true,
+            program_id: true,
+            program: { select: { slug: true } },
+          },
+        });
+      } else {
+        const openCycles = await this.prisma.education_lead_cycles.findMany({
+          where: {
+            person_id: contact.person_id,
+            closed_at: null,
+            area: { in: this.educationAreas() },
+          },
+          orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+          take: 2,
+          select: {
+            id: true,
+            area: true,
+            program_id: true,
+            program: { select: { slug: true } },
+          },
+        });
+        if (openCycles.length > 1) {
+          throw new BadRequestException(
+            'Indica lead_id o category: hay más de una oportunidad abierta',
+          );
+        }
+        resolvedCycle = openCycles[0] ?? null;
+      }
+      if (resolvedCycle && opts?.user && this.educationWorkflow) {
+        this.educationWorkflow.assertCanAccessLeadContext(
+          opts.user,
+          resolvedCycle,
+        );
+      }
+    }
+
+    if (isSaleClosingStatusSlug(status.slug)) {
+      const missing = missingFieldsForVentaExitosa(contact, {
+        program_id: resolvedCycle?.program_id ?? programId ?? null,
+        area: resolvedCycle?.area ?? areaNorm,
+      });
+      if (missing.length) {
+        throw new HttpException(
+          {
+            code: 'missing_fields',
+            message:
+              'Completa los datos del contacto antes de marcar venta exitosa',
+            missing_fields: missing,
+          },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+    }
+
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${contact.person_id}::integer, ${programId ?? opts?.leadId ?? 0}::integer)`;
       const row = await tx.contacts.update({
@@ -1518,94 +1614,28 @@ export class LeadsService implements OnModuleInit {
         },
         include: { lead_status: true },
       });
-      if (isEducationAttentionArea(areaNorm)) {
-        let cycle: {
-          id: number;
-          area: string;
-          program_id: number | null;
-          program: { slug: string } | null;
-        } | null = null;
-        if (opts?.leadId) {
-          cycle = await tx.education_lead_cycles.findFirst({
-            where: {
-              id: opts.leadId,
-              person_id: contact.person_id,
-              closed_at: null,
-            },
-            select: {
-              id: true,
-              area: true,
-              program_id: true,
-              program: { select: { slug: true } },
-            },
-          });
-          if (!cycle) {
-            throw new BadRequestException(
-              'Lead no encontrado o ya cerrado para este contacto',
-            );
-          }
-        } else if (programId !== undefined) {
-          cycle = await tx.education_lead_cycles.findFirst({
-            where: exactOpenCycleWhere({
-              personId: contact.person_id,
-              area: areaNorm,
-              programId,
-            }),
-            orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
-            select: {
-              id: true,
-              area: true,
-              program_id: true,
-              program: { select: { slug: true } },
-            },
-          });
-        } else {
-          const openCycles = await tx.education_lead_cycles.findMany({
-            where: {
-              person_id: contact.person_id,
-              closed_at: null,
-              area: { in: this.educationAreas() },
-            },
-            orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
-            take: 2,
-            select: {
-              id: true,
-              area: true,
-              program_id: true,
-              program: { select: { slug: true } },
-            },
-          });
-          if (openCycles.length > 1) {
-            throw new BadRequestException(
-              'Indica lead_id o category: hay más de una oportunidad abierta',
-            );
-          }
-          cycle = openCycles[0] ?? null;
-        }
-        if (cycle && opts?.user && this.educationWorkflow) {
-          this.educationWorkflow.assertCanAccessLeadContext(opts.user, cycle);
-        }
-        if (cycle) {
-          const now = new Date();
-          await tx.education_lead_cycles.update({
-            where: { id: cycle.id },
-            data: {
-              lead_status_id: statusId,
-              updated_at: now,
-              ...(status.is_terminal
-                ? {
-                    closed_at: now,
-                    close_reason:
-                      status.slug === 'venta_exitosa' || status.slug === 'convertido'
-                        ? 'sold'
-                        : status.slug === 'perdido' || status.slug === 'no_interesado'
-                          ? 'lost'
-                          : 'terminal_status',
-                  }
-                : {}),
-            },
-          });
-          if (status.is_terminal) await endLeadConversationLinks(tx, cycle.id, now);
+      if (resolvedCycle) {
+        const now = new Date();
+        await tx.education_lead_cycles.update({
+          where: { id: resolvedCycle.id },
+          data: {
+            lead_status_id: statusId,
+            updated_at: now,
+            ...(status.is_terminal
+              ? {
+                  closed_at: now,
+                  close_reason:
+                    status.slug === 'venta_exitosa' || status.slug === 'convertido'
+                      ? 'sold'
+                      : status.slug === 'perdido' || status.slug === 'no_interesado'
+                        ? 'lost'
+                        : 'terminal_status',
+                }
+              : {}),
+          },
+        });
+        if (status.is_terminal) {
+          await endLeadConversationLinks(tx, resolvedCycle.id, now);
         }
       }
       return row;

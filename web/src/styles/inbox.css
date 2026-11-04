@@ -3044,7 +3044,6 @@ html[data-theme='dark'] .contact-filter-pill[data-seg-tone='slate'] {
   right: 16px;
   bottom: 16px;
   z-index: 4;
-  list-style: none;
 }
 
 .contact-fab--above-pager {
@@ -3075,15 +3074,6 @@ html[data-theme='dark'] .contact-filter-pill[data-seg-tone='slate'] {
   }
 }
 
-.contact-fab summary {
-  list-style: none;
-  cursor: pointer;
-}
-
-.contact-fab summary::-webkit-details-marker {
-  display: none;
-}
-
 .contact-fab__trigger {
   display: inline-flex;
   align-items: center;
@@ -3095,64 +3085,17 @@ html[data-theme='dark'] .contact-filter-pill[data-seg-tone='slate'] {
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
   color: #fff;
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.18);
+  cursor: pointer;
 }
 
 .contact-fab__trigger:hover,
-.contact-fab[open] .contact-fab__trigger {
+.contact-fab__trigger[data-state='open'] {
   filter: brightness(1.03);
 }
 
 .contact-fab__trigger:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
-}
-
-.contact-fab__menu {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 10px);
-  min-width: 220px;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface);
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.2);
-  display: grid;
-  gap: 6px;
-}
-
-.contact-fab__action {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  margin: 0;
-  padding: 10px 12px;
-  border: none;
-  border-radius: 12px;
-  background: transparent;
-  color: var(--ink);
-  text-align: left;
-  text-decoration: none;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.contact-fab__action:hover,
-.contact-fab__action.is-active {
-  background: color-mix(in srgb, var(--accent-soft) 72%, var(--surface));
-  color: var(--accent);
-}
-
-.contact-fab__action:disabled {
-  opacity: 0.65;
-  cursor: wait;
-}
-
-.contact-fab__action-icon {
-  display: inline-flex;
-  color: currentColor;
 }
 
 .inbox-sidebar--contacts .inbox-chat-list {

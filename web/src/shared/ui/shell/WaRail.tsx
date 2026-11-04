@@ -1,9 +1,15 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import type { AuthUser } from '@/shared/api'
 import { PERMISSION, defaultHomePath, userHasPermission } from '@/shared/auth/permissions'
 import { MALI_LOGO_URL } from '@/shared/brand'
 import { useTheme } from '@/shared/theme/useTheme'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/ui/shadcn/dropdown-menu'
 
 import { WaAccountMenu } from '@/shared/ui/shell/WaAccountMenu'
 import { WaAreaSwitchPill } from '@/shared/ui/shell/WaAreaSwitchPill'
@@ -145,22 +151,12 @@ type WaRailProps = {
 export function WaRail({ user, onUserUpdate, conversationsUnreadCount = 0 }: WaRailProps) {
   const location = useLocation()
   const { toggleTheme } = useTheme()
-  const moreRef = useRef<HTMLDetailsElement>(null)
+  const [moreOpen, setMoreOpen] = useState(false)
   const nav = navFromPath(location.pathname)
   const mobileMoreActive = MORE_NAV.includes(nav as (typeof MORE_NAV)[number])
 
   useEffect(() => {
-    function onDocClick(ev: MouseEvent) {
-      const el = moreRef.current
-      if (!el?.open) return
-      if (!el.contains(ev.target as Node)) el.open = false
-    }
-    document.addEventListener('click', onDocClick)
-    return () => document.removeEventListener('click', onDocClick)
-  }, [])
-
-  useEffect(() => {
-    if (moreRef.current) moreRef.current.open = false
+    setMoreOpen(false)
   }, [location.pathname])
 
   const provisionedItems =
@@ -202,6 +198,8 @@ export function WaRail({ user, onUserUpdate, conversationsUnreadCount = 0 }: WaR
     return true
   })
 
+  const moreItems = visibleItems.filter((item) => item.mobileSecondary)
+
   return (
     <aside className="wa-rail" aria-label="Navegación principal">
       <div className="wa-rail__brand">
@@ -240,35 +238,44 @@ export function WaRail({ user, onUserUpdate, conversationsUnreadCount = 0 }: WaR
           </Link>
         ))}
 
-        <details ref={moreRef} className={`wa-rail__more ${mobileMoreActive ? 'is-active' : ''}`}>
-          <summary className="wa-rail__item wa-rail__item--more" aria-label="Más secciones" title="Más">
-            <span className="wa-rail__icon" aria-hidden="true">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="1.5" />
-                <circle cx="19" cy="12" r="1.5" />
-                <circle cx="5" cy="12" r="1.5" />
-              </svg>
-            </span>
-            <span className="wa-rail__label">Más</span>
-          </summary>
-          <div className="wa-rail__more-panel" role="menu" aria-label="Más secciones">
-            {visibleItems
-              .filter((item) => item.mobileSecondary)
-              .map((item) => (
-                <Link
-                  key={item.key}
-                  to={item.to}
-                  className={nav === item.key ? 'is-active' : ''}
-                  role="menuitem"
-                  onClick={() => {
-                    if (moreRef.current) moreRef.current.open = false
-                  }}
+        {moreItems.length > 0 ? (
+          <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
+            <div className={`wa-rail__more ${mobileMoreActive ? 'is-active' : ''}`}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="wa-rail__item wa-rail__item--more"
+                  aria-label="Más secciones"
+                  title="Más"
                 >
-                  {item.label}
-                </Link>
+                  <span className="wa-rail__icon" aria-hidden="true">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="1.5" />
+                      <circle cx="19" cy="12" r="1.5" />
+                      <circle cx="5" cy="12" r="1.5" />
+                    </svg>
+                  </span>
+                  <span className="wa-rail__label">Más</span>
+                </button>
+              </DropdownMenuTrigger>
+            </div>
+            <DropdownMenuContent
+              side="top"
+              align="end"
+              sideOffset={8}
+              collisionPadding={12}
+              className="min-w-[11rem]"
+            >
+              {moreItems.map((item) => (
+                <DropdownMenuItem key={item.key} asChild>
+                  <Link to={item.to} className={nav === item.key ? 'font-semibold text-accent' : undefined}>
+                    {item.label}
+                  </Link>
+                </DropdownMenuItem>
               ))}
-          </div>
-        </details>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
       </nav>
 
       <div className="wa-rail__footer">
