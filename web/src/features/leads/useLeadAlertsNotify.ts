@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { apiClient } from '@/shared/api'
 import {
@@ -7,6 +8,8 @@ import {
 } from '@/shared/browserNotify'
 
 const POLL_MS = 15000
+const SEEN_STORAGE_KEY = 'mali.leadAlerts.seen'
+const SEEN_CAP = 200
 
 export type LeadAlertEventType = 'new_lead' | 'sla_first_reply' | string
 
@@ -37,12 +40,36 @@ function alertCopy(alert: LeadAlertItem): { title: string; body: string } {
   }
 }
 
+function readSeenIds(): Set<number> {
+  try {
+    const raw = sessionStorage.getItem(SEEN_STORAGE_KEY)
+    if (!raw) return new Set()
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return new Set()
+    return new Set(
+      parsed.filter((id): id is number => typeof id === 'number' && Number.isFinite(id)),
+    )
+  } catch {
+    return new Set()
+  }
+}
+
+function writeSeenIds(ids: Set<number>) {
+  try {
+    const trimmed = [...ids].slice(-SEEN_CAP)
+    sessionStorage.setItem(SEEN_STORAGE_KEY, JSON.stringify(trimmed))
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
 /**
  * Polls persistent lead alerts (new + SLA) and shows in-app toast + browser notify.
  */
 export function useLeadAlertsNotify(enabled: boolean) {
   const [items, setItems] = useState<LeadAlertItem[]>([])
-  const seenRef = useRef<Set<number>>(new Set())
+  const seenRef = useRef<Set<number>>(readSeenIds())
+  const navigate = useNavigate()
   const permission = getBrowserNotifyPermission()
 
   const refresh = useCallback(async () => {
@@ -54,9 +81,11 @@ export function useLeadAlertsNotify(enabled: boolean) {
     const next = res.data.items
     setItems(next)
 
+    let seenChanged = false
     for (const alert of next) {
       if (seenRef.current.has(alert.id)) continue
       seenRef.current.add(alert.id)
+      seenChanged = true
       const copy = alertCopy(alert)
       const href = alert.conversation_id
         ? `/conversations/${alert.conversation_id}`
@@ -69,7 +98,7 @@ export function useLeadAlertsNotify(enabled: boolean) {
           action: {
             label: 'Ir al chat',
             onClick: () => {
-              window.location.assign(href)
+              navigate(href)
             },
           },
         })
@@ -81,7 +110,8 @@ export function useLeadAlertsNotify(enabled: boolean) {
         })
       }
     }
-  }, [enabled, permission])
+    if (seenChanged) writeSeenIds(seenRef.current)
+  }, [enabled, navigate, permission])
 
   useEffect(() => {
     if (!enabled) {

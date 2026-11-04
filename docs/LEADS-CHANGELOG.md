@@ -5,9 +5,9 @@ Vigente: [LEADS.md](./LEADS.md).
 ## 2026-11-04 — SLA primera respuesta (10 min hábiles)
 
 - Reloj desde `started_at`; responde = `first_human_reply_at`; fuera de horario Lima no corre.
-- Job `education-sla-first-reply` crea alert `sla_first_reply`.
-- Centro de avisos del inbox: chats + leads (nuevo/SLA) + toggle de notificaciones del navegador; toast al incumplir.
-- Reportería: promedio / % / por asesor (`/api/reports/education-sla`).
+- Cumple ≤ 10 min; alerta solo si > 10. Job `education-sla-first-reply` prefiltra con `latestStartTimeForBreach` (no atasca el batch con overnight aún válidos).
+- Centro de avisos del inbox: chats + leads (nuevo/SLA) + toggle de notificaciones del navegador; toast al incumplir (SPA, sin recargar).
+- Reportería: promedio / % / por asesor (`/api/reports/education-sla`); pestaña solo si el usuario es Educación.
 
 ## 2026-10-30 — Canal Botones web (`web_button`)
 

@@ -3,6 +3,7 @@ import {
   businessMinutesBetween,
   isSlaBreached,
   isSlaMet,
+  latestStartTimeForBreach,
 } from './education-lead-sla.util';
 
 /** Lima wall → UTC Date (Peru UTC−5). */
@@ -40,10 +41,20 @@ describe('education-lead-sla.util', () => {
     expect(businessMinutesBetween(start, end)).toBe(5 + 570 + 540 + 5);
   });
 
-  it('breaches after 10 business minutes across overnight gap', () => {
+  it('breaches only after exceeding 10 business minutes (reply at T+10 still met)', () => {
     const start = lima(2026, 11, 4, 19, 55); // Wed
-    expect(isSlaBreached(start, lima(2026, 11, 5, 8, 34))).toBe(false); // 5+4
-    expect(isSlaBreached(start, lima(2026, 11, 5, 8, 35))).toBe(true); // 5+5
+    expect(isSlaBreached(start, lima(2026, 11, 5, 8, 35))).toBe(false); // 5+5 = 10
+    expect(isSlaBreached(start, lima(2026, 11, 5, 8, 36))).toBe(true); // 5+6 = 11
+    expect(isSlaMet(start, lima(2026, 11, 5, 8, 35))).toBe(true);
+  });
+
+  it('latestStartTimeForBreach excludes overnight waiters still inside SLA', () => {
+    // Thu 08:34 → only 4 min open; need >10 → bound lands Wed before close.
+    const now = lima(2026, 11, 5, 8, 34);
+    const bound = latestStartTimeForBreach(now);
+    expect(isSlaBreached(bound, now)).toBe(true);
+    expect(isSlaBreached(lima(2026, 11, 4, 19, 55), now)).toBe(false); // 5+4
+    expect(bound.getTime()).toBeLessThan(lima(2026, 11, 4, 19, 55).getTime());
   });
 
   it('uses Sunday 09:00–18:00 window', () => {

@@ -233,9 +233,10 @@ Meta: **10 minutos hábiles** desde `education_lead_cycles.started_at` hasta `fi
 
 Horario fijo (America/Lima): L–V 08:30–20:00, sáb 08:30–18:00, dom 09:00–18:00. Fuera de franja el reloj no avanza.
 
-- Incumplimiento: job `education-sla-first-reply` → `education_lead_alerts.event_type = sla_first_reply` (uno por ciclo).
+- **Cumple** si la 1.ª respuesta humana llega en **≤ 10** min hábiles.
+- **Alerta** (`sla_first_reply`) solo si ya pasaron **> 10** min hábiles sin respuesta (el job no cuenta ciclos que aún están dentro del margen, p. ej. overnight).
 - UI: centro de avisos del inbox (campanita: chats no leídos + leads nuevos/SLA) + toast; toggle de notificaciones del navegador dentro del panel. Listado `GET /api/leads/alerts`.
-- Métricas: vitrina en **MALI ONE → CRM Educación → Oportunidades** (`GET /api/crm/education/sla`); espejo en WhatsApp Reportería (`GET /api/reports/education-sla`).
+- Métricas: vitrina en **MALI ONE → CRM Educación → Oportunidades** (`GET /api/crm/education/sla`); espejo en WhatsApp Reportería solo área Educación (`GET /api/reports/education-sla`).
 
 Código: `api/src/leads/education-lead-sla.util.ts`.
 

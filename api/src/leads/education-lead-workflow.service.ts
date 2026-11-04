@@ -38,8 +38,8 @@ import { formatAdvisorLabel } from '../users/advisor-label.util';
 import {
   NEW_LEAD_ALERT_EVENT_TYPE,
   SLA_ALERT_EVENT_TYPE,
-  SLA_FIRST_REPLY_MINUTES,
   isSlaBreached,
+  latestStartTimeForBreach,
 } from './education-lead-sla.util';
 import {
   isSaleClosingStatusSlug,
@@ -1819,19 +1819,19 @@ export class EducationLeadWorkflowService {
   /**
    * Creates sla_first_reply alerts for open cycles past 10 business minutes
    * without first_human_reply_at. Unique (cycle_id, event_type) prevents duplicates.
+   * Prefiltro `latestStartTimeForBreach` evita que ciclos aún dentro de SLA (p. ej. overnight)
+   * ocupen el batch y retrasen alertas reales.
    */
   async createSlaFirstReplyAlerts(limit = 200): Promise<{ created: number; scanned: number }> {
     if (!(await this.isAttentionV1Enabled())) return { created: 0, scanned: 0 };
     const now = new Date();
-    const wallFloor = new Date(
-      now.getTime() - SLA_FIRST_REPLY_MINUTES * 60 * 1000,
-    );
+    const startedBy = latestStartTimeForBreach(now);
     const candidates = await this.prisma.education_lead_cycles.findMany({
       where: {
         area: { in: EDUCATION_AREAS },
         closed_at: null,
         first_human_reply_at: null,
-        started_at: { lte: wallFloor },
+        started_at: { lte: startedBy },
         alerts: { none: { event_type: SLA_ALERT_EVENT_TYPE } },
       },
       orderBy: { started_at: 'asc' },

@@ -7,6 +7,7 @@ import {
   auditSegmentCategorySql,
   parseCategorySlugs,
 } from '../config/category-scope';
+import { isEducationAreaSlug } from '../config/education-scope';
 import { PrismaService } from '../prisma/prisma.service';
 import { formatExportDate } from '../campaigns/campaign-format.util';
 import { userCanAccessSettingsModule } from '../settings/settings-modules.util';
@@ -434,11 +435,21 @@ export class ReportsService {
     };
   }
 
+  private assertEducationReportsAccess(user: AuthUser): void {
+    this.assertReportsAccess(user);
+    const areas = [user.area, ...(user.allowedAreas ?? [])];
+    if (!areas.some((area) => isEducationAreaSlug(area))) {
+      throw new ForbiddenException(
+        'El reporte SLA de primera respuesta es solo para Educación',
+      );
+    }
+  }
+
   async listEducationSla(
     user: AuthUser,
     query: Record<string, string | string[] | undefined>,
   ): Promise<EducationSlaReportResult> {
-    this.assertReportsAccess(user);
+    this.assertEducationReportsAccess(user);
     const categories = parseCategorySlugs(
       query.category as string | string[] | undefined,
     );
@@ -453,7 +464,7 @@ export class ReportsService {
     user: AuthUser,
     query: Record<string, string | string[] | undefined>,
   ): Promise<{ buffer: Buffer; filename: string }> {
-    this.assertReportsAccess(user);
+    this.assertEducationReportsAccess(user);
     const categories = parseCategorySlugs(
       query.category as string | string[] | undefined,
     );

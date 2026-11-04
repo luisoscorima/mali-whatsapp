@@ -90,12 +90,49 @@ export function isSlaMet(startedAt: Date, repliedAt: Date): boolean {
   );
 }
 
-/** Open cycle without human reply and ≥10 business minutes elapsed. */
+/**
+ * Open cycle without human reply and past the 10-minute SLA.
+ * Strict `>` so a reply at exactly T+10 still counts as met (`isSlaMet` uses `<=`).
+ */
 export function isSlaBreached(
   startedAt: Date,
   now: Date = new Date(),
 ): boolean {
-  return businessMinutesBetween(startedAt, now) >= SLA_FIRST_REPLY_MINUTES;
+  return businessMinutesBetween(startedAt, now) > SLA_FIRST_REPLY_MINUTES;
+}
+
+/**
+ * Latest `started_at` that already exceeds the SLA by `now`.
+ * Use as query upper bound so overnight waiters (not yet breached) do not fill the scan batch.
+ */
+export function latestStartTimeForBreach(now: Date = new Date()): Date {
+  let remainingMs = SLA_FIRST_REPLY_MINUTES * 60_000;
+  let cursor = now;
+  for (let i = 0; i < 400 && remainingMs > 0; i += 1) {
+    const p = limaParts(cursor);
+    const sched = SCHEDULE[p.dow];
+    if (sched) {
+      const dayStart = fromLima(p.y, p.m, p.day, sched.from);
+      const dayEnd = fromLima(p.y, p.m, p.day, sched.to);
+      const b = Math.min(cursor.getTime(), dayEnd.getTime());
+      const a = dayStart.getTime();
+      if (b > a) {
+        const available = b - a;
+        if (available > remainingMs) {
+          // Need strictly more than SLA minutes → start must be before (b - remainingMs).
+          return new Date(b - remainingMs - 1);
+        }
+        remainingMs -= available;
+        if (remainingMs === 0) {
+          // Exactly SLA minutes from dayStart → breach needs an earlier start.
+          return new Date(a - 1);
+        }
+      }
+    }
+    // 1 ms before this Lima midnight → previous calendar day.
+    cursor = new Date(fromLima(p.y, p.m, p.day, 0).getTime() - 1);
+  }
+  return cursor;
 }
 
 export function roundMinutes(value: number, digits = 1): number {

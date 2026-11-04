@@ -163,7 +163,9 @@ export function SettingsReporteriaPage() {
   const [busy, setBusy] = useState('')
   const [rangeReady, setRangeReady] = useState(false)
 
-  const tab = tabFromParam(searchParams.get('tab'))
+  const requestedTab = tabFromParam(searchParams.get('tab'))
+  const tab: TabId =
+    requestedTab === 'sla' && !scope.education ? 'communications' : requestedTab
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1)
   const from = searchParams.get('from') || ''
   const to = searchParams.get('to') || ''
@@ -461,7 +463,9 @@ export function SettingsReporteriaPage() {
             ['communications', 'Comunicaciones'],
             ['segments', 'Hist. segmentos'],
             ['chat', 'Hist. chat'],
-            ['sla', 'SLA 1.ª respuesta'],
+            ...(scope.education
+              ? ([['sla', 'SLA 1.ª respuesta']] as const)
+              : []),
           ] as const
         ).map(([id, label]) => (
           <button
