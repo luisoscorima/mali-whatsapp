@@ -295,9 +295,9 @@ Caso de uso app Meta: Lead Ads + WhatsApp. Webhook Page + `leadgen`.
 
 ### Backfill Instant Forms Meta
 
-UI → `POST /api/leads/meta-forms/backfill`. Page access token obligatorio.
+UI → `POST /api/leads/meta-forms/backfill` con el `form_id`. Page access token obligatorio. Crea los leads que faltan y, en los que ya existen y Graph todavía devuelve, completa `payload.meta` y `raw` (campaña, anuncio, conjunto, plataforma) sin abrir otro ingreso. Lo mismo en TikTok: `POST /api/leads/tiktok-forms/backfill`. El webhook sigue omitiendo un id repetido.
 
-Por lead Graph: contacto + origen + `meta_leadgen_leads`. Custom fields en payload; si la pregunta nombra curso/programa → `payload.curso`. `leadgen_id` duplicado se omite.
+En el alta, las respuestas quedan en el payload; si la pregunta nombra curso o programa → `payload.curso`.
 
 ### Nombres de anuncios CTWA
 

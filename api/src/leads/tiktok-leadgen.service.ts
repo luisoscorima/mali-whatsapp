@@ -37,6 +37,8 @@ type LeadNotice = {
   /** Campos ya presentes en el webhook (Custom CRM). */
   inline_fields?: Record<string, unknown>;
   created_time?: string;
+  /** Campaña, conjunto y anuncio que vinieron en la descarga. */
+  meta?: Record<string, unknown>;
   raw: Record<string, unknown>;
 };
 
@@ -499,36 +501,43 @@ export class TikTokLeadgenService {
     let adId = String(notice.ad_id || '').trim();
     let createdTimeStr = notice.created_time;
 
-    const hasInlineIdentity = Boolean(
-      this.mapFieldData(leadData).phone ||
-        this.mapFieldData(leadData).email ||
-        this.mapFieldData(leadData).dni,
-    );
+    const inline = this.mapFieldData(leadData);
+    const hasInlineIdentity = Boolean(inline.phone || inline.email || inline.dni);
+    if (!advertiserId) {
+      advertiserId = this.defaultAdvertiserId();
+    }
 
-    if (!hasInlineIdentity) {
-      if (!advertiserId) {
-        advertiserId = this.defaultAdvertiserId();
-      }
-      if (!advertiserId) {
-        throw new BadRequestException(
-          `Lead ${leadId}: falta advertiser_id y no hay campos inline`,
+    if (advertiserId) {
+      try {
+        const fetched = await this.fetchLeadFromApi({
+          leadId,
+          advertiserId,
+          formId: formId || undefined,
+        });
+        if (Object.keys(fetched.lead_data).length > 0) {
+          leadData = { ...leadData, ...fetched.lead_data };
+        }
+        meta = fetched.meta_data;
+        rawApi = fetched.raw;
+        formId =
+          formId ||
+          String(meta.page_id || meta.form_id || '').trim() ||
+          'unknown';
+        adId = adId || String(meta.ad_id || '').trim();
+        createdTimeStr =
+          createdTimeStr || String(meta.create_time || '').trim();
+      } catch (err) {
+        if (!hasInlineIdentity) throw err;
+        this.logger.warn(
+          `Lead ${leadId}: lead/get falló, se guarda el webhook: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
         );
       }
-      const fetched = await this.fetchLeadFromApi({
-        leadId,
-        advertiserId,
-        formId: formId || undefined,
-      });
-      leadData = fetched.lead_data;
-      meta = fetched.meta_data;
-      rawApi = fetched.raw;
-      formId =
-        formId ||
-        String(meta.page_id || meta.form_id || '').trim() ||
-        'unknown';
-      adId = adId || String(meta.ad_id || '').trim();
-      createdTimeStr =
-        createdTimeStr || String(meta.create_time || '').trim();
+    } else if (!hasInlineIdentity) {
+      throw new BadRequestException(
+        `Lead ${leadId}: falta advertiser_id y no hay campos inline`,
+      );
     }
 
     if (!formId) formId = 'unknown';
@@ -594,6 +603,7 @@ export class TikTokLeadgenService {
         form_name: formName,
         advertiser_id: advertiserId || null,
         ...(mapped.curso ? { curso: mapped.curso } : {}),
+        ...(Object.keys(meta).length > 0 ? { meta } : {}),
       },
       contact: {
         phone: mapped.phone,
@@ -815,27 +825,42 @@ export class TikTokLeadgenService {
     const leadId = pick('lead_id', 'Lead ID', 'leadId', 'id');
     if (!leadId) return null;
 
-    const metaKeys = new Set(
-      [
-        'lead_id',
-        'Lead ID',
-        'leadId',
-        'id',
-        'page_id',
-        'form_id',
-        'advertiser_id',
-        'ad_id',
-        'adgroup_id',
-        'campaign_id',
-        'create_time',
-        'created_time',
-        'Created Time',
-      ].map((k) => k.toLowerCase()),
-    );
+    const normKey = (key: string) =>
+      key.toLowerCase().replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const metaFieldByNorm: Record<string, string> = {
+      'campaign id': 'campaign_id',
+      'campaign name': 'campaign_name',
+      'adgroup id': 'adgroup_id',
+      'ad group id': 'adgroup_id',
+      'adgroup name': 'adgroup_name',
+      'ad group name': 'adgroup_name',
+      'adset id': 'adgroup_id',
+      'adset name': 'adgroup_name',
+      'ad id': 'ad_id',
+      'ad name': 'ad_name',
+    };
+    const skipInline = new Set([
+      ...Object.keys(metaFieldByNorm),
+      'lead id',
+      'page id',
+      'form id',
+      'form name',
+      'advertiser id',
+      'create time',
+      'created time',
+      'id',
+    ]);
+    const meta: Record<string, unknown> = {};
     const inline: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(row)) {
-      if (!k || metaKeys.has(k.toLowerCase())) continue;
-      if (v == null || String(v).trim() === '') continue;
+      if (!k || v == null || String(v).trim() === '') continue;
+      const norm = normKey(k);
+      const metaField = metaFieldByNorm[norm];
+      if (metaField) {
+        meta[metaField] = String(v).trim();
+        continue;
+      }
+      if (skipInline.has(norm)) continue;
       inline[k] = v;
     }
 
@@ -845,14 +870,97 @@ export class TikTokLeadgenService {
         pick('page_id', 'form_id', 'Page ID') || defaults.formId || undefined,
       advertiser_id:
         pick('advertiser_id') || defaults.advertiserId || undefined,
-      ad_id: pick('ad_id', 'Ad ID') || undefined,
+      ad_id: pick('ad_id', 'Ad ID') || String(meta.ad_id ?? '') || undefined,
       created_time: pick('create_time', 'created_time', 'Created Time') || undefined,
       inline_fields: Object.keys(inline).length ? inline : undefined,
+      ...(Object.keys(meta).length ? { meta } : {}),
       raw: row,
     };
   }
 
-  async backfillForm(formId: string): Promise<{ imported: number }> {
+  /** Completa campaña/anuncio en un lead que ya existe. No abre otro ingreso. */
+  private async refreshStoredLead(notice: LeadNotice): Promise<boolean> {
+    const leadId = String(notice.lead_id || '').trim();
+    if (!leadId) return false;
+    const row = await this.prisma.tiktok_leads.findUnique({
+      where: { lead_id: leadId },
+      select: { id: true, contact_origin_id: true, ad_id: true },
+    });
+    if (!row) return false;
+
+    let meta: Record<string, unknown> = { ...(notice.meta || {}) };
+    let raw: Prisma.InputJsonValue | null = null;
+    const hasName = Boolean(meta.campaign_name || meta.ad_name || meta.adgroup_name);
+    if (!hasName) {
+      const advertiserId =
+        String(notice.advertiser_id || '').trim() || this.defaultAdvertiserId();
+      if (advertiserId) {
+        try {
+          const fetched = await this.fetchLeadFromApi({
+            leadId,
+            advertiserId,
+            formId: notice.form_id,
+          });
+          meta = { ...meta, ...fetched.meta_data };
+          raw = fetched.raw as Prisma.InputJsonValue;
+        } catch (err) {
+          this.logger.warn(
+            `TikTok refresh ${leadId}: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
+      }
+    }
+    if (!Object.keys(meta).length) return false;
+    if (!raw) raw = notice.raw as Prisma.InputJsonValue;
+
+    const adId = String(meta.ad_id || notice.ad_id || '').trim();
+    await this.prisma.tiktok_leads.update({
+      where: { id: row.id },
+      data: {
+        raw,
+        ...(adId && !row.ad_id ? { ad_id: adId } : {}),
+        updated_at: new Date(),
+      },
+    });
+    if (row.contact_origin_id) {
+      await this.mergeOriginMeta(row.contact_origin_id, meta);
+    }
+    return true;
+  }
+
+  private async mergeOriginMeta(
+    originId: number,
+    meta: Record<string, unknown>,
+  ): Promise<void> {
+    if (!Object.keys(meta).length) return;
+    const origin = await this.prisma.contact_origins.findUnique({
+      where: { id: originId },
+      select: { payload: true },
+    });
+    if (!origin) return;
+    const base =
+      origin.payload &&
+      typeof origin.payload === 'object' &&
+      !Array.isArray(origin.payload)
+        ? { ...(origin.payload as Record<string, unknown>) }
+        : {};
+    const prev =
+      base.meta && typeof base.meta === 'object' && !Array.isArray(base.meta)
+        ? (base.meta as Record<string, unknown>)
+        : {};
+    base.meta = { ...prev, ...meta };
+    await this.prisma.contact_origins.update({
+      where: { id: originId },
+      data: {
+        payload: base as Prisma.InputJsonValue,
+        updated_at: new Date(),
+      },
+    });
+  }
+
+  async backfillForm(formId: string): Promise<{ imported: number; refreshed: number }> {
     const formIdNorm = String(formId ?? '').trim();
     if (!formIdNorm) throw new BadRequestException('form_id requerido');
 
@@ -994,7 +1102,18 @@ export class TikTokLeadgenService {
             },
             { formId: formIdNorm, advertiserId },
           );
-          if (notice) notices.push(notice);
+          if (notice) {
+            const fromApi: Record<string, unknown> = {};
+            for (const [key, value] of Object.entries(meta)) {
+              if (value == null || typeof value === 'object') continue;
+              if (String(value).trim() === '') continue;
+              fromApi[key] = value;
+            }
+            if (Object.keys(fromApi).length) {
+              notice.meta = { ...(notice.meta || {}), ...fromApi };
+            }
+            notices.push(notice);
+          }
         }
       } catch (err) {
         if (err instanceof BadRequestException) throw err;
@@ -1019,10 +1138,12 @@ export class TikTokLeadgenService {
     }
 
     let imported = 0;
+    let refreshed = 0;
     for (const notice of notices) {
       try {
         const result = await this.ingestLead(notice);
         if (result.created) imported += 1;
+        else if (await this.refreshStoredLead(notice)) refreshed += 1;
       } catch (err) {
         this.logger.warn(
           `TikTok backfill skip ${notice.lead_id}: ${
@@ -1031,7 +1152,7 @@ export class TikTokLeadgenService {
         );
       }
     }
-    return { imported };
+    return { imported, refreshed };
   }
 
   async listFormLeads(

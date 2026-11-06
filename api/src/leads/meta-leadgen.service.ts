@@ -36,15 +36,59 @@ type GraphLead = {
   id?: string;
   created_time?: string;
   ad_id?: string;
+  ad_name?: string;
   /** Meta renombró adgroup → adset; Graph ya no acepta `adgroup_id` en fields. */
   adset_id?: string;
+  adset_name?: string;
+  campaign_id?: string;
+  campaign_name?: string;
   form_id?: string;
   field_data?: LeadgenField[];
+  is_organic?: boolean;
+  platform?: string;
+  partner_name?: string;
+  custom_disclaimer_responses?: unknown;
 };
 
 /** Campos Lead válidos en Graph v23 (no usar `adgroup_id`). */
-const LEAD_GRAPH_FIELDS =
-  'created_time,id,ad_id,adset_id,form_id,field_data';
+const LEAD_GRAPH_FIELDS = [
+  'created_time',
+  'id',
+  'ad_id',
+  'ad_name',
+  'adset_id',
+  'adset_name',
+  'campaign_id',
+  'campaign_name',
+  'form_id',
+  'field_data',
+  'is_organic',
+  'platform',
+  'partner_name',
+  'custom_disclaimer_responses',
+].join(',');
+
+const GRAPH_AD_META_KEYS = [
+  'ad_name',
+  'adset_id',
+  'adset_name',
+  'campaign_id',
+  'campaign_name',
+  'platform',
+  'is_organic',
+  'partner_name',
+  'custom_disclaimer_responses',
+] as const;
+
+function graphAdMeta(graph: GraphLead): Record<string, unknown> {
+  const meta: Record<string, unknown> = {};
+  for (const key of GRAPH_AD_META_KEYS) {
+    const value = graph[key];
+    if (value == null || value === '') continue;
+    meta[key] = value;
+  }
+  return meta;
+}
 
 type GraphLeadgenForm = {
   id?: string;
@@ -546,6 +590,7 @@ export class MetaLeadgenService {
     });
 
     const placed = writeFormRoute(route?.area || area, route?.program_key);
+    const adMeta = graphAdMeta(graph);
     const origin = await this.leads.upsertOrigin({
       area: placed.area,
       channel: 'meta_lead_form',
@@ -560,6 +605,7 @@ export class MetaLeadgenService {
         form_id: formId,
         form_name: route?.form_name ?? null,
         ...(mapped.curso ? { curso: mapped.curso } : {}),
+        ...(Object.keys(adMeta).length > 0 ? { meta: adMeta } : {}),
       },
       contact: {
         phone: mapped.phone,
@@ -673,10 +719,67 @@ export class MetaLeadgenService {
     return 'ti';
   }
 
+  /** Completa campaña/anuncio en un lead que ya existe. No abre otro ingreso. */
+  private async refreshStoredLead(graph: GraphLead): Promise<boolean> {
+    const leadgenId = String(graph.id ?? '').trim();
+    if (!leadgenId) return false;
+    const row = await this.prisma.meta_leadgen_leads.findUnique({
+      where: { leadgen_id: leadgenId },
+      select: { id: true, contact_origin_id: true },
+    });
+    if (!row) return false;
+
+    const meta = graphAdMeta(graph);
+    await this.prisma.meta_leadgen_leads.update({
+      where: { id: row.id },
+      data: {
+        raw: graph as Prisma.InputJsonValue,
+        ...(graph.field_data
+          ? { field_data: graph.field_data as Prisma.InputJsonValue }
+          : {}),
+        ...(graph.ad_id ? { ad_id: String(graph.ad_id) } : {}),
+        ...(graph.adset_id ? { adgroup_id: String(graph.adset_id) } : {}),
+        updated_at: new Date(),
+      },
+    });
+    if (row.contact_origin_id) await this.mergeOriginMeta(row.contact_origin_id, meta);
+    return true;
+  }
+
+  private async mergeOriginMeta(
+    originId: number,
+    meta: Record<string, unknown>,
+  ): Promise<void> {
+    if (!Object.keys(meta).length) return;
+    const origin = await this.prisma.contact_origins.findUnique({
+      where: { id: originId },
+      select: { payload: true },
+    });
+    if (!origin) return;
+    const base =
+      origin.payload &&
+      typeof origin.payload === 'object' &&
+      !Array.isArray(origin.payload)
+        ? { ...(origin.payload as Record<string, unknown>) }
+        : {};
+    const prev =
+      base.meta && typeof base.meta === 'object' && !Array.isArray(base.meta)
+        ? (base.meta as Record<string, unknown>)
+        : {};
+    base.meta = { ...prev, ...meta };
+    await this.prisma.contact_origins.update({
+      where: { id: originId },
+      data: {
+        payload: base as Prisma.InputJsonValue,
+        updated_at: new Date(),
+      },
+    });
+  }
+
   async backfillForm(
     area: string,
     formId: string,
-  ): Promise<{ imported: number }> {
+  ): Promise<{ imported: number; refreshed: number }> {
     const formIdNorm = String(formId ?? '').trim();
     if (!formIdNorm) throw new BadRequestException('form_id requerido');
 
@@ -696,6 +799,7 @@ export class MetaLeadgenService {
     );
     const { token } = await this.getPageCredentials(resolvedArea);
     let imported = 0;
+    let refreshed = 0;
     let after: string | undefined;
     do {
       const url = new URL(
@@ -721,6 +825,14 @@ export class MetaLeadgenService {
         if (!id) continue;
         try {
           const leadFormId = String(lead.form_id || formIdNorm).trim();
+          const already = await this.prisma.meta_leadgen_leads.findUnique({
+            where: { leadgen_id: id },
+            select: { id: true },
+          });
+          if (already) {
+            if (await this.refreshStoredLead(lead)) refreshed += 1;
+            continue;
+          }
           const leadArea = await this.resolveAreaForLeadgen(
             pageIdHint,
             leadFormId,
@@ -745,7 +857,7 @@ export class MetaLeadgenService {
       after = json.paging?.next ? json.paging?.cursors?.after : undefined;
     } while (after);
 
-    return { imported };
+    return { imported, refreshed };
   }
 
   async listForms(area: string) {

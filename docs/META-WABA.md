@@ -451,7 +451,7 @@ curl -G "https://graph.facebook.com/v23.0/1684299678482303/subscribed_apps" \
 
 1. Mismo callback HTTPS de la app (o el configurado para Page).
 2. Objeto **Page** → suscribir campo **`leadgen`**.
-3. Mali procesa el aviso, lee `leadgen_id` y hace `GET /{leadgen_id}` con el Page token para obtener `field_data`.
+3. Mali procesa el aviso, lee `leadgen_id` y hace `GET /{leadgen_id}` con el Page token. Guarda `field_data` y el metadato del anuncio (`campaign_*`, `ad_name`, `adset_*`, `platform`, `is_organic`, `partner_name`, `custom_disclaimer_responses`) en `meta_leadgen_leads.raw` y en `payload.meta`.
 
 ### Enrutado a categoría (CA / EP / general)
 
@@ -476,7 +476,7 @@ Contraste: **CTWA** enruta por `phone_number_id` de la línea WA (902… CA, 922
 ```bash
 curl -G "https://graph.facebook.com/v23.0/{FORM_ID}/leads" \
   -d "access_token={PAGE_ACCESS_TOKEN}" \
-  -d "fields=created_time,id,ad_id,adset_id,form_id,field_data"
+  -d "fields=created_time,id,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,form_id,field_data,is_organic,platform,partner_name,custom_disclaimer_responses"
 ```
 
 **Nota:** no pedir `adgroup_id` — Graph responde `(#100) Tried accessing nonexisting field (adgroup_id)`. El equivalente actual es `adset_id`.

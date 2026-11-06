@@ -144,7 +144,7 @@ export function TikTokFormsPage() {
   async function onBackfill(e: FormEvent) {
     e.preventDefault()
     setBusy(true)
-    const res = await apiClient.post<{ imported: number }>(
+    const res = await apiClient.post<{ imported: number; refreshed?: number }>(
       '/api/leads/tiktok-forms/backfill',
       { form_id: formId.trim() },
     )
@@ -153,7 +153,9 @@ export function TikTokFormsPage() {
       notify.error(res.error)
       return
     }
-    notify.success(`Importados: ${res.data.imported}`)
+    notify.success(
+      `Nuevos: ${res.data.imported}. Actualizados: ${res.data.refreshed ?? 0}`,
+    )
     void reload()
   }
 
@@ -375,7 +377,7 @@ export function TikTokFormsPage() {
           disabled={busy}
           className="rounded-lg bg-accent px-4 py-2 text-sm text-white disabled:opacity-60"
         >
-          {busy ? 'Importando…' : 'Importar leads'}
+          {busy ? 'Procesando…' : 'Importar y actualizar'}
         </button>
       </form>
 
