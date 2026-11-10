@@ -1189,7 +1189,30 @@ export class ContactsService {
       scoped ? area : undefined,
       programId,
     );
-    return this.mapContactDetail(area, row, segmentSlugs, programId);
+    const detail = await this.mapContactDetail(area, row, segmentSlugs, programId);
+    if (!isEducationAttentionArea(area)) return detail;
+
+    // Educación: estado del ciclo de la categoría, nunca el del contacto.
+    if (programId === undefined || programId === -1) {
+      return { ...detail, lead_status_id: null, lead_status: null };
+    }
+    const cycle = await this.prisma.education_lead_cycles.findFirst({
+      where: exactOpenCycleWhere({
+        personId: row.person_id,
+        area,
+        programId,
+      }),
+      orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+      select: {
+        lead_status_id: true,
+        lead_status: { select: { id: true, slug: true, label: true } },
+      },
+    });
+    return {
+      ...detail,
+      lead_status_id: cycle?.lead_status_id ?? null,
+      lead_status: cycle?.lead_status ?? null,
+    };
   }
 
   private async assertConversationIdentityCompatible(

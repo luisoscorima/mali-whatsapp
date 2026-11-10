@@ -1023,8 +1023,9 @@ export class MetaLeadgenService {
           row.contact_origins?.first_seen_at ?? row.created_time ?? null,
       })),
     );
+    const withCycleStatus = await this.leads.projectLeadStatusFromCycles(enriched);
 
-    return { total, items: enriched, limit: take, offset: skip };
+    return { total, items: withCycleStatus, limit: take, offset: skip };
   }
 
   async exportFormLeads(

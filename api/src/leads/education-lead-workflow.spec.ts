@@ -68,7 +68,10 @@ describe('Education lead cycle creation', () => {
     expect(tx.education_lead_alerts.create).toHaveBeenCalled();
     expect(tx.$executeRaw.mock.calls.some(([sql]) => sql.join('?').includes('UPDATE conversations c'))).toBe(true);
     expect(tx.contacts.update).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ lead_status_id: 99, lead_score: null }),
+      data: expect.objectContaining({ lead_score: null }),
+    }));
+    expect(tx.contacts.update).not.toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ lead_status_id: expect.anything() }),
     }));
     expect(tx.education_lead_entries.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       classification: 'new', assignment_rule: 'reassignable',

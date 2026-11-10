@@ -294,6 +294,7 @@ export class ConversationsService {
         email: string | null;
         dni: string | null;
         area: string;
+        person_id: number;
         lead_score: number | null;
         lead_status_id: number | null;
         lead_status_slug: string | null;
@@ -308,6 +309,7 @@ export class ConversationsService {
         c.email,
         c.dni,
         c.area,
+        c.person_id,
         c.lead_score,
         c.lead_status_id,
         ls.slug AS lead_status_slug,
@@ -328,21 +330,57 @@ export class ConversationsService {
     if (!row) return null;
     const local = canonicalBusinessArea(row.area) === canonical;
     const include = input.includeAreaData && local;
+
+    // Educación: estado/score viven en el ciclo de la categoría de la línea,
+    // no en contacts.lead_status_id (compartido entre todas las líneas).
+    let leadScore: number | null = include ? row.lead_score : null;
+    let leadStatus: InboxContact['lead_status'] =
+      include && row.lead_status_id != null && row.lead_status_label
+        ? {
+            id: Number(row.lead_status_id),
+            slug: String(row.lead_status_slug ?? ''),
+            label: String(row.lead_status_label),
+          }
+        : null;
+    if (include && isEducationAttentionArea(canonical)) {
+      leadScore = null;
+      leadStatus = null;
+      const conversation = await this.prisma.conversations.findFirst({
+        where: { id: input.conversationId },
+        select: { whatsapp_line: { select: { program_id: true } } },
+      });
+      const cycle = await this.prisma.education_lead_cycles.findFirst({
+        where: exactOpenCycleWhere({
+          personId: Number(row.person_id),
+          area: canonical,
+          programId: conversation?.whatsapp_line?.program_id ?? null,
+        }),
+        orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+        select: {
+          lead_score: true,
+          lead_status: { select: { id: true, slug: true, label: true } },
+        },
+      });
+      if (cycle) {
+        leadScore = cycle.lead_score;
+        leadStatus = cycle.lead_status
+          ? {
+              id: cycle.lead_status.id,
+              slug: cycle.lead_status.slug,
+              label: cycle.lead_status.label,
+            }
+          : null;
+      }
+    }
+
     return {
       name: row.name,
       last_name: row.last_name,
       phone: row.phone,
       email: row.email,
       dni: row.dni,
-      lead_score: include ? row.lead_score : null,
-      lead_status:
-        include && row.lead_status_id != null && row.lead_status_label
-          ? {
-              id: Number(row.lead_status_id),
-              slug: String(row.lead_status_slug ?? ''),
-              label: String(row.lead_status_label),
-            }
-          : null,
+      lead_score: leadScore,
+      lead_status: leadStatus,
       segment_slugs: include ? row.segment_slugs ?? [] : [],
       other_area_fichas: input.otherAreaFichas,
     };
@@ -3372,7 +3410,11 @@ export class ConversationsService {
     }
     const conv = await this.prisma.conversations.findFirst({
       where: this.conversationLookup(area, conversationId),
-      select: { contact_id: true },
+      select: {
+        contact_id: true,
+        whatsapp_line: { select: { program_id: true } },
+        contacts: { select: { person_id: true } },
+      },
     });
     if (!conv) {
       throw new NotFoundException('Conversacion no encontrada');
@@ -3386,9 +3428,13 @@ export class ConversationsService {
       where: { id: conv.contact_id, area },
       data: { lead_score: clear ? null : score, updated_at: new Date() },
     });
-    if (['educacion', 'educacion_ca', 'educacion_ep'].includes(area)) {
+    if (isEducationAttentionArea(area) && conv.contacts?.person_id) {
       const cycle = await this.prisma.education_lead_cycles.findFirst({
-        where: { contact_id: conv.contact_id, area },
+        where: exactOpenCycleWhere({
+          personId: conv.contacts.person_id,
+          area,
+          programId: conv.whatsapp_line?.program_id ?? null,
+        }),
         orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
         select: { id: true },
       });

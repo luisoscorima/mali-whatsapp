@@ -39,8 +39,6 @@ type ContactDetail = {
   email: string | null
   dni: string | null
   segment_slugs: string[]
-  lead_status_id: number | null
-  lead_status: { id: number; slug: string; label: string } | null
   attributes: Record<string, string>
 }
 
@@ -112,7 +110,7 @@ export function InboxContactSheet({
   const [openLead, setOpenLead] = useState<{
     id: number
     assigned_user_label: string | null
-    lead_status: { label: string } | null
+    lead_status: { id: number; label: string } | null
     closed_at: string | null
   } | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
@@ -157,7 +155,7 @@ export function InboxContactSheet({
           apiClient.get<{
             id: number
             assigned_user_label: string | null
-            lead_status: { label: string } | null
+            lead_status: { id: number; label: string } | null
             closed_at: string | null
           } | null>(`/api/leads/attention/current?${attentionQs}`),
         ])
@@ -295,11 +293,12 @@ export function InboxContactSheet({
     setLeadStatusBusy(true)
     const result = await apiClient.patch<{
       lead_status_id: number | null
-      lead_status: ContactDetail['lead_status']
+      lead_status: { id: number; slug: string; label: string } | null
     }>(`/api/leads/contacts/${contactId}/status`, {
       status_id: statusId,
       ...(openLead?.id ? { lead_id: openLead.id } : {}),
       ...(category ? { category } : {}),
+      ...(conversationId ? { conversation_id: conversationId } : {}),
     })
     setLeadStatusBusy(false)
     if (!result.ok) {
@@ -315,25 +314,15 @@ export function InboxContactSheet({
       return
     }
     setLocalMissingFields([])
-    setContact((prev) =>
-      prev
-        ? {
-            ...prev,
-            lead_status_id: result.data.lead_status_id,
-            lead_status: result.data.lead_status,
-          }
-        : prev,
-    )
-    const terminal = leadStatuses.find((s) => s.id === statusId)
-    if (terminal && !terminal.active) {
-      /* keep sheet consistent */
-    }
     setOpenLead((prev) =>
       prev
         ? {
             ...prev,
             lead_status: result.data.lead_status
-              ? { label: result.data.lead_status.label }
+              ? {
+                  id: result.data.lead_status.id,
+                  label: result.data.lead_status.label,
+                }
               : prev.lead_status,
           }
         : prev,
@@ -361,9 +350,14 @@ export function InboxContactSheet({
     setOpenLead({
       id: result.data.id,
       assigned_user_label: null,
-      lead_status: contact?.lead_status
-        ? { label: contact.lead_status.label }
-        : { label: 'Por contactar' },
+      lead_status: result.data.lead_status_id
+        ? {
+            id: result.data.lead_status_id,
+            label:
+              leadStatuses.find((s) => s.id === result.data.lead_status_id)
+                ?.label || 'Por contactar',
+          }
+        : { id: 0, label: 'Por contactar' },
       closed_at: null,
     })
     notify.success('Nueva atención iniciada')
@@ -381,9 +375,9 @@ export function InboxContactSheet({
     (mode === 'create' || contact != null)
 
   const statusOptions =
-    mode === 'edit' && contact
+    mode === 'edit' && openLead
       ? leadStatuses
-          .filter((s) => s.active || s.id === contact.lead_status_id)
+          .filter((s) => s.active || s.id === openLead.lead_status?.id)
           .map((s) => ({ id: s.id, label: s.label }))
       : []
 
@@ -480,7 +474,7 @@ export function InboxContactSheet({
                 leadStatusOptions={
                   mode === 'edit' && openLead ? statusOptions : undefined
                 }
-                leadStatusId={contact?.lead_status_id ?? null}
+                leadStatusId={openLead?.lead_status?.id ?? null}
                 leadStatusBusy={leadStatusBusy}
                 onLeadStatusChange={
                   mode === 'edit' && openLead

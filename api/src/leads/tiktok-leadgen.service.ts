@@ -1251,8 +1251,9 @@ export class TikTokLeadgenService {
         contacts: row.contacts,
       })),
     );
+    const withCycleStatus = await this.leads.projectLeadStatusFromCycles(enriched);
 
-    return { items: enriched, total };
+    return { items: withCycleStatus, total };
   }
 
   async processWebhook(body: unknown): Promise<number> {

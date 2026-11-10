@@ -1055,7 +1055,12 @@ export class LeadsService implements OnModuleInit {
       } else if (!existing.last_name && last_name) {
         data.last_name = last_name;
       }
-      if (existing.lead_status_id == null && defaultStatusId) {
+      // Educación: el estado vive en el ciclo, no en el contacto.
+      if (
+        !isEducationAttentionArea(areaNorm) &&
+        existing.lead_status_id == null &&
+        defaultStatusId
+      ) {
         data.lead_status = { connect: { id: defaultStatusId } };
         data.lead_status_updated_at = new Date();
       }
@@ -1086,8 +1091,12 @@ export class LeadsService implements OnModuleInit {
         email,
         opt_in: input.opt_in ?? true,
         opt_in_email: input.opt_in_email ?? Boolean(email),
-        lead_status_id: defaultStatusId,
-        lead_status_updated_at: defaultStatusId ? new Date() : null,
+        ...(!isEducationAttentionArea(areaNorm) && defaultStatusId
+          ? {
+              lead_status_id: defaultStatusId,
+              lead_status_updated_at: new Date(),
+            }
+          : {}),
         updated_at: new Date(),
       },
     });
@@ -1491,12 +1500,11 @@ export class LeadsService implements OnModuleInit {
       include: { lead_status: { select: { id: true, label: true } } },
     });
     if (!contact) throw new NotFoundException('Contacto no encontrado');
-    const previousStatus = contact.lead_status;
     const status = await this.prisma.lead_status_definitions.findFirst({
       where: { id: statusId, area: areaNorm, active: true },
     });
     if (!status) throw new NotFoundException('Estado no encontrado');
-    const programId =
+    let programId =
       opts?.category != null
         ? await programIdForCategory(
             (slug) =>
@@ -1513,11 +1521,19 @@ export class LeadsService implements OnModuleInit {
         : undefined;
 
     // Resolver ciclo antes de escribir: candado RQ0017 y update atómico.
+    const cycleSelect = {
+      id: true,
+      area: true,
+      program_id: true,
+      program: { select: { slug: true } },
+      lead_status: { select: { id: true, label: true } },
+    } as const;
     let resolvedCycle: {
       id: number;
       area: string;
       program_id: number | null;
       program: { slug: string } | null;
+      lead_status: { id: number; label: string } | null;
     } | null = null;
     if (isEducationAttentionArea(areaNorm)) {
       if (opts?.leadId) {
@@ -1527,18 +1543,37 @@ export class LeadsService implements OnModuleInit {
             person_id: contact.person_id,
             closed_at: null,
           },
-          select: {
-            id: true,
-            area: true,
-            program_id: true,
-            program: { select: { slug: true } },
-          },
+          select: cycleSelect,
         });
         if (!resolvedCycle) {
           throw new BadRequestException(
             'Lead no encontrado o ya cerrado para este contacto',
           );
         }
+      } else if (opts?.conversationId) {
+        // Preferir la categoría de la línea del chat (no el espejo del contacto).
+        const conversation = await this.prisma.conversations.findFirst({
+          where: {
+            id: opts.conversationId,
+            contact_id: contactId,
+          },
+          select: { whatsapp_line: { select: { program_id: true } } },
+        });
+        if (!conversation) {
+          throw new BadRequestException(
+            'La conversación no pertenece a este contacto',
+          );
+        }
+        programId = conversation.whatsapp_line?.program_id ?? null;
+        resolvedCycle = await this.prisma.education_lead_cycles.findFirst({
+          where: exactOpenCycleWhere({
+            personId: contact.person_id,
+            area: areaNorm,
+            programId,
+          }),
+          orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+          select: cycleSelect,
+        });
       } else if (programId !== undefined) {
         resolvedCycle = await this.prisma.education_lead_cycles.findFirst({
           where: exactOpenCycleWhere({
@@ -1547,12 +1582,7 @@ export class LeadsService implements OnModuleInit {
             programId,
           }),
           orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
-          select: {
-            id: true,
-            area: true,
-            program_id: true,
-            program: { select: { slug: true } },
-          },
+          select: cycleSelect,
         });
       } else {
         const openCycles = await this.prisma.education_lead_cycles.findMany({
@@ -1563,12 +1593,7 @@ export class LeadsService implements OnModuleInit {
           },
           orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
           take: 2,
-          select: {
-            id: true,
-            area: true,
-            program_id: true,
-            program: { select: { slug: true } },
-          },
+          select: cycleSelect,
         });
         if (openCycles.length > 1) {
           throw new BadRequestException(
@@ -1577,7 +1602,12 @@ export class LeadsService implements OnModuleInit {
         }
         resolvedCycle = openCycles[0] ?? null;
       }
-      if (resolvedCycle && opts?.user && this.educationWorkflow) {
+      if (!resolvedCycle) {
+        throw new BadRequestException(
+          'No hay oportunidad abierta para esta categoría',
+        );
+      }
+      if (opts?.user && this.educationWorkflow) {
         this.educationWorkflow.assertCanAccessLeadContext(
           opts.user,
           resolvedCycle,
@@ -1603,17 +1633,12 @@ export class LeadsService implements OnModuleInit {
       }
     }
 
+    const previousStatus = isEducationAttentionArea(areaNorm)
+      ? resolvedCycle?.lead_status ?? null
+      : contact.lead_status;
+
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${contact.person_id}::integer, ${programId ?? opts?.leadId ?? 0}::integer)`;
-      const row = await tx.contacts.update({
-        where: { id: contactId },
-        data: {
-          lead_status_id: statusId,
-          lead_status_updated_at: new Date(),
-          updated_at: new Date(),
-        },
-        include: { lead_status: true },
-      });
       if (resolvedCycle) {
         const now = new Date();
         await tx.education_lead_cycles.update({
@@ -1637,8 +1662,22 @@ export class LeadsService implements OnModuleInit {
         if (status.is_terminal) {
           await endLeadConversationLinks(tx, resolvedCycle.id, now);
         }
+        // Educación: no escribir estado en contacts (fuente = ciclo por categoría).
+        return {
+          id: contactId,
+          lead_status_id: statusId,
+          lead_status: status,
+        };
       }
-      return row;
+      return tx.contacts.update({
+        where: { id: contactId },
+        data: {
+          lead_status_id: statusId,
+          lead_status_updated_at: new Date(),
+          updated_at: new Date(),
+        },
+        include: { lead_status: true },
+      });
     });
 
     if (opts?.user && previousStatus?.id !== statusId) {
@@ -1649,6 +1688,7 @@ export class LeadsService implements OnModuleInit {
         meta: {
           contact_id: contactId,
           conversation_id: opts.conversationId ?? null,
+          cycle_id: resolvedCycle?.id ?? null,
           from_status_id: previousStatus?.id ?? null,
           from_status_label: previousStatus?.label ?? null,
           to_status_id: status.id,
@@ -1806,10 +1846,11 @@ export class LeadsService implements OnModuleInit {
     ]);
 
     const enriched = await this.enrichLeadRowsWithChat(scope.canonicalArea, items);
+    const withCycleStatus = await this.projectLeadStatusFromCycles(enriched);
 
     return {
       total,
-      items: enriched.map((item) => ({
+      items: withCycleStatus.map((item) => ({
         ...item,
         ...leadCategoryOf(item),
         payload: payloadWithStandardCurso(item.payload),
@@ -1817,6 +1858,79 @@ export class LeadsService implements OnModuleInit {
       limit: take,
       offset: skip,
     };
+  }
+
+  /**
+   * Educación: proyecta el estado del ciclo abierto sobre `contacts.lead_status`
+   * en respuestas legacy (hub/orígenes/forms). Nunca lee el espejo del contacto.
+   */
+  async projectLeadStatusFromCycles<
+    T extends {
+      contact_id?: number | null;
+      program_id?: number | null;
+      contacts: {
+        lead_status_id?: number | null;
+        lead_status: { id?: number; slug?: string; label: string } | null;
+      } | null;
+    },
+  >(items: T[]): Promise<T[]> {
+    const contactIds = [
+      ...new Set(
+        items
+          .map((item) => item.contact_id)
+          .filter((id): id is number => typeof id === 'number' && id > 0),
+      ),
+    ];
+    if (!contactIds.length) {
+      return items.map((item) =>
+        item.contacts
+          ? {
+              ...item,
+              contacts: {
+                ...item.contacts,
+                lead_status_id: null,
+                lead_status: null,
+              },
+            }
+          : item,
+      );
+    }
+    const cycles = await this.prisma.education_lead_cycles.findMany({
+      where: { contact_id: { in: contactIds }, closed_at: null },
+      orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+      select: {
+        contact_id: true,
+        program_id: true,
+        lead_status_id: true,
+        lead_status: { select: { id: true, slug: true, label: true } },
+      },
+    });
+    const byKey = new Map<
+      string,
+      (typeof cycles)[number]
+    >();
+    const latestByContact = new Map<number, (typeof cycles)[number]>();
+    for (const cycle of cycles) {
+      byKey.set(`${cycle.contact_id}:${cycle.program_id ?? 'null'}`, cycle);
+      if (!latestByContact.has(cycle.contact_id)) {
+        latestByContact.set(cycle.contact_id, cycle);
+      }
+    }
+    return items.map((item) => {
+      if (!item.contacts || item.contact_id == null) return item;
+      const cycle =
+        item.program_id !== undefined
+          ? byKey.get(`${item.contact_id}:${item.program_id ?? 'null'}`)
+          : latestByContact.get(item.contact_id);
+      return {
+        ...item,
+        contacts: {
+          ...item.contacts,
+          lead_status_id: cycle?.lead_status_id ?? null,
+          lead_status: cycle?.lead_status ?? null,
+        },
+      };
+    });
   }
 
   async exportOrigins(params: {

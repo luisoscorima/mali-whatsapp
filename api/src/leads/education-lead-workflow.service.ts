@@ -372,7 +372,7 @@ export class EducationLeadWorkflowService {
               // Forms without chat: first_inbound_at stays null (response time N/A).
               first_inbound_at: inboundEvidence ? input.occurredAt : null,
               inactivity_deadline_at: inactivityDeadlineFrom(input.occurredAt),
-              lead_status_id: previous ? (status?.id ?? null) : (contact.lead_status_id ?? status?.id ?? null),
+              lead_status_id: status?.id ?? null,
               lead_score: previous ? null : contact.lead_score,
               assigned_user_id: previous?.assigned_user_id ?? existingConversation?.assigned_user_id ?? null,
               first_assigned_at: (previous?.assigned_user_id ?? existingConversation?.assigned_user_id)
@@ -429,11 +429,7 @@ export class EducationLeadWorkflowService {
             }
             await tx.contacts.update({
               where: { id: input.contactId },
-              data: {
-                lead_status_id: status?.id ?? null,
-                lead_status_updated_at: new Date(),
-                lead_score: null,
-              },
+              data: { lead_score: null },
             });
           }
         }
@@ -862,6 +858,10 @@ export class EducationLeadWorkflowService {
         throw new NotFoundException('Oportunidad no encontrada');
       }
       if (!cycle) {
+        const defaultStatus = await tx.lead_status_definitions.findFirst({
+          where: { area: managementArea, is_default: true, active: true },
+          select: { id: true },
+        });
         cycle = await tx.education_lead_cycles.create({ data: {
           contact_id: contactId,
           person_id: contact.person_id,
@@ -869,7 +869,7 @@ export class EducationLeadWorkflowService {
           started_at: contact.created_at,
           last_interaction_at: contact.created_at,
           inactivity_deadline_at: inactivityDeadlineFrom(contact.created_at),
-          lead_status_id: contact.lead_status_id,
+          lead_status_id: nextStatus?.id ?? defaultStatus?.id ?? null,
           lead_score: contact.lead_score,
         } });
         await tx.education_lead_alerts.create({
@@ -938,11 +938,6 @@ export class EducationLeadWorkflowService {
         await projectLeadAssignee(tx, cycle.id, changes.assigned_user_id!, now);
       }
       if (closing) await endLeadConversationLinks(tx, cycle.id, now);
-      if (changes.lead_status_id !== undefined) {
-        await tx.contacts.update({ where: { id: contactId }, data: {
-          lead_status_id: changes.lead_status_id, lead_status_updated_at: now, updated_at: now,
-        } });
-      }
       if (changes.assigned_user_id !== undefined || changes.lead_status_id !== undefined) {
         await tx.audit_logs.create({ data: {
           event_type: 'education.lead.management',
@@ -1213,9 +1208,10 @@ export class EducationLeadWorkflowService {
             event_type: 'new_lead',
           },
         }).catch(() => undefined);
-        await tx.contacts.update({ where: { id: entry.contact_id }, data: {
-          lead_status_id: status?.id ?? null, lead_status_updated_at: new Date(), lead_score: null,
-        } });
+        await tx.contacts.update({
+          where: { id: entry.contact_id },
+          data: { lead_score: null },
+        });
       } else if (action === 'keep_existing' && cycleId) {
         await tx.education_lead_cycles.update({ where: { id: cycleId }, data: {
           last_interaction_at: latestCycle && latestCycle.last_interaction_at > entry.occurred_at

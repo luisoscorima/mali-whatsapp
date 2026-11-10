@@ -935,12 +935,8 @@ export class CrmService {
       assigned_user_label: row.education_lead_cycles[0]?.assigned_user
         ? formatAdvisorLabel(row.education_lead_cycles[0].assigned_user)
         : null,
-      lead_status_id:
-        row.education_lead_cycles[0]?.lead_status_id ?? row.lead_status_id,
-      lead_status_label:
-        row.education_lead_cycles[0]?.lead_status?.label ??
-        row.lead_status?.label ??
-        null,
+      lead_status_id: row.education_lead_cycles[0]?.lead_status_id ?? null,
+      lead_status_label: row.education_lead_cycles[0]?.lead_status?.label ?? null,
       ...(includeLatestProspectia
         ? {
             prospectia_match:

@@ -37,10 +37,6 @@ export async function syncEducationLeadStatuses(
       });
       if (!dest || dest.id === src.id) continue;
       const now = new Date();
-      await tx.contacts.updateMany({
-        where: { lead_status_id: src.id },
-        data: { lead_status_id: dest.id, lead_status_updated_at: now, updated_at: now },
-      });
       await tx.education_lead_cycles.updateMany({
         where: { lead_status_id: src.id },
         data: { lead_status_id: dest.id, updated_at: now },
