@@ -809,7 +809,28 @@ export class ConversationsService {
         c.assigned_user_id,
         c.automation_touched_at,
         ${this.inboxAssignedUserLabelSql()} AS assigned_user_label,
-        ct.lead_score AS contact_lead_score,
+        CASE
+          WHEN ct.area IN ('educacion', 'educacion_ca', 'educacion_ep') THEN (
+            SELECT elc.lead_score
+            FROM education_lead_cycles elc
+            WHERE elc.person_id = ct.person_id
+              AND elc.closed_at IS NULL
+              AND (
+                (
+                  scope_line.program_id IS NOT NULL
+                  AND elc.program_id = scope_line.program_id
+                )
+                OR (
+                  scope_line.program_id IS NULL
+                  AND elc.program_id IS NULL
+                  AND elc.area = 'educacion'
+                )
+              )
+            ORDER BY elc.started_at DESC, elc.id DESC
+            LIMIT 1
+          )
+          ELSE ct.lead_score
+        END AS contact_lead_score,
         COALESCE(
           ${this.inboxContactNameSql('ct')},
           (
@@ -3424,11 +3445,12 @@ export class ConversationsService {
         'No hay contacto vinculado; crea o vincula el contacto para poder calificar el lead.',
       );
     }
-    await this.prisma.contacts.updateMany({
-      where: { id: conv.contact_id, area },
-      data: { lead_score: clear ? null : score, updated_at: new Date() },
-    });
-    if (isEducationAttentionArea(area) && conv.contacts?.person_id) {
+    if (isEducationAttentionArea(area)) {
+      if (!conv.contacts?.person_id) {
+        throw new BadRequestException(
+          'No hay oportunidad abierta para calificar en esta categoría',
+        );
+      }
       const cycle = await this.prisma.education_lead_cycles.findFirst({
         where: exactOpenCycleWhere({
           personId: conv.contacts.person_id,
@@ -3438,11 +3460,20 @@ export class ConversationsService {
         orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
         select: { id: true },
       });
-      if (cycle)
-        await this.prisma.education_lead_cycles.update({
-          where: { id: cycle.id },
-          data: { lead_score: clear ? null : score, updated_at: new Date() },
-        });
+      if (!cycle) {
+        throw new BadRequestException(
+          'No hay oportunidad abierta para calificar en esta categoría',
+        );
+      }
+      await this.prisma.education_lead_cycles.update({
+        where: { id: cycle.id },
+        data: { lead_score: clear ? null : score, updated_at: new Date() },
+      });
+    } else {
+      await this.prisma.contacts.updateMany({
+        where: { id: conv.contact_id, area },
+        data: { lead_score: clear ? null : score, updated_at: new Date() },
+      });
     }
     await this.auditLog.write({
       event_type: AuditEvent.CONTACT_LEAD_SCORE,

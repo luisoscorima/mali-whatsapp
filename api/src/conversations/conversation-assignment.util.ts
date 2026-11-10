@@ -5,6 +5,10 @@ import { formatAdvisorLabel } from '../users/advisor-label.util';
 import { userWorksArea } from '../users/area-membership.where';
 import type { PrismaService } from '../prisma/prisma.service';
 import {
+  exactOpenCycleWhere,
+  isEducationAttentionArea,
+} from '../leads/education-lead-context.util';
+import {
   isHumanAdvisorOutboundMessage,
   matchAuditSenderActor,
   readMessageSenderUserId,
@@ -195,13 +199,29 @@ export async function autoAssignConversationIfUnassigned(
 ): Promise<boolean> {
   const conversation = await prisma.conversations.findFirst({
     where: { id: conversationId, area },
-    select: { id: true, assigned_user_id: true, contact_id: true },
+    select: {
+      id: true,
+      assigned_user_id: true,
+      contact_id: true,
+      whatsapp_line: { select: { program_id: true } },
+      contacts: { select: { person_id: true } },
+    },
   });
   if (!conversation || conversation.assigned_user_id) return false;
   let leadOwner: { userId: number; label: string } | null = null;
-  if (conversation.contact_id && ['educacion', 'educacion_ca', 'educacion_ep'].includes(area)) {
+  const educationCycleWhere =
+    conversation.contact_id &&
+    conversation.contacts?.person_id &&
+    isEducationAttentionArea(area)
+      ? exactOpenCycleWhere({
+          personId: conversation.contacts.person_id,
+          area,
+          programId: conversation.whatsapp_line?.program_id ?? null,
+        })
+      : null;
+  if (educationCycleWhere) {
     const cycle = await prisma.education_lead_cycles.findFirst({
-      where: { contact_id: conversation.contact_id, area, closed_at: null },
+      where: educationCycleWhere,
       orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
     });
     if (cycle?.requires_review) return false;
@@ -228,9 +248,9 @@ export async function autoAssignConversationIfUnassigned(
     },
   });
   if (!updated.count) return false;
-  if (conversation.contact_id && ['educacion', 'educacion_ca', 'educacion_ep'].includes(area)) {
+  if (educationCycleWhere) {
     const cycle = await prisma.education_lead_cycles.findFirst({
-      where: { contact_id: conversation.contact_id, area, closed_at: null },
+      where: educationCycleWhere,
       orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
       select: { id: true, first_assigned_at: true },
     });

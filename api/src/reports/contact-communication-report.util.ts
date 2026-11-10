@@ -385,11 +385,21 @@ async function fetchContactIdsForReport(
         WHERE co.contact_id = c.id AND ${areaFamilySql('co', area)}
       ), '') AS origins,
       COALESCE(ls.label, '') AS lead_status,
-      CASE c.lead_score
-        WHEN 1 THEN 'Bajo'
-        WHEN 2 THEN 'Medio'
-        WHEN 3 THEN 'Alto'
-        ELSE ''
+      CASE
+        WHEN c.area IN ('educacion', 'educacion_ca', 'educacion_ep') THEN
+          CASE lead_cycle.lead_score
+            WHEN 1 THEN 'Bajo'
+            WHEN 2 THEN 'Medio'
+            WHEN 3 THEN 'Alto'
+            ELSE ''
+          END
+        ELSE
+          CASE c.lead_score
+            WHEN 1 THEN 'Bajo'
+            WHEN 2 THEN 'Medio'
+            WHEN 3 THEN 'Alto'
+            ELSE ''
+          END
       END AS lead_score,
       COALESCE(${advisorLabelSql('assignee')}, '') AS assigned_advisor
     FROM contacts c
@@ -397,10 +407,23 @@ async function fetchContactIdsForReport(
         conv.contact_id = c.id OR (c.phone IS NOT NULL AND conv.phone = c.phone)
         OR (c.whatsapp_user_id IS NOT NULL AND conv.whatsapp_user_id = c.whatsapp_user_id)
       )
+    LEFT JOIN whatsapp_lines conv_line ON conv_line.id = conv.whatsapp_line_id
     LEFT JOIN LATERAL (
-      SELECT elc.assigned_user_id
+      SELECT elc.assigned_user_id, elc.lead_status_id, elc.lead_score
       FROM education_lead_cycles elc
-      WHERE elc.contact_id = c.id AND ${areaFamilySql('elc', area)}
+      WHERE elc.person_id = c.person_id
+        AND elc.closed_at IS NULL
+        AND (
+          (
+            conv_line.program_id IS NOT NULL
+            AND elc.program_id = conv_line.program_id
+          )
+          OR (
+            conv_line.program_id IS NULL
+            AND elc.program_id IS NULL
+            AND elc.area = 'educacion'
+          )
+        )
       ORDER BY elc.started_at DESC, elc.id DESC
       LIMIT 1
     ) lead_cycle ON true
@@ -408,7 +431,11 @@ async function fetchContactIdsForReport(
       lead_cycle.assigned_user_id,
       conv.assigned_user_id
     )
-    LEFT JOIN lead_status_definitions ls ON ls.id = c.lead_status_id
+    LEFT JOIN lead_status_definitions ls ON ls.id = CASE
+      WHEN c.area IN ('educacion', 'educacion_ca', 'educacion_ep')
+        THEN lead_cycle.lead_status_id
+      ELSE c.lead_status_id
+    END
     WHERE ${where}
     ORDER BY COALESCE(NULLIF(c.name, ''), c.phone) ASC, c.id ASC
     ${limitSql}

@@ -373,7 +373,7 @@ export class EducationLeadWorkflowService {
               first_inbound_at: inboundEvidence ? input.occurredAt : null,
               inactivity_deadline_at: inactivityDeadlineFrom(input.occurredAt),
               lead_status_id: status?.id ?? null,
-              lead_score: previous ? null : contact.lead_score,
+              lead_score: null,
               assigned_user_id: previous?.assigned_user_id ?? existingConversation?.assigned_user_id ?? null,
               first_assigned_at: (previous?.assigned_user_id ?? existingConversation?.assigned_user_id)
                 ? input.occurredAt
@@ -427,10 +427,6 @@ export class EducationLeadWorkflowService {
             if (previous.assigned_user_id) {
               await projectLeadAssignee(tx, cycle.id, previous.assigned_user_id, new Date());
             }
-            await tx.contacts.update({
-              where: { id: input.contactId },
-              data: { lead_score: null },
-            });
           }
         }
       } else if (classification === 'duplicate' && previous &&
@@ -870,7 +866,7 @@ export class EducationLeadWorkflowService {
           last_interaction_at: contact.created_at,
           inactivity_deadline_at: inactivityDeadlineFrom(contact.created_at),
           lead_status_id: nextStatus?.id ?? defaultStatus?.id ?? null,
-          lead_score: contact.lead_score,
+          lead_score: null,
         } });
         await tx.education_lead_alerts.create({
           data: {
@@ -1208,10 +1204,6 @@ export class EducationLeadWorkflowService {
             event_type: 'new_lead',
           },
         }).catch(() => undefined);
-        await tx.contacts.update({
-          where: { id: entry.contact_id },
-          data: { lead_score: null },
-        });
       } else if (action === 'keep_existing' && cycleId) {
         await tx.education_lead_cycles.update({ where: { id: cycleId }, data: {
           last_interaction_at: latestCycle && latestCycle.last_interaction_at > entry.occurred_at

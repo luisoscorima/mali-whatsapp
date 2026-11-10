@@ -46,9 +46,18 @@ Alineado con [AREAS.md](./AREAS.md) / [CATEGORIAS.md](./CATEGORIAS.md) / [LINEAS
 | **Ficha** (`contacts`) | Una ficha activa por persona en `educacion` |
 | **Origen** (`contact_origins`) | Evento de captación (canal + categoría). Contador del Hub |
 | **Entrada** (`education_lead_entries`) | Intento gestionable, ventana 60 días, hacia una categoría |
-| **Ciclo** (`education_lead_cycles`) | Atención de una categoría: asesor, **estado** y calificación. El estado del lead **no** vive en `contacts` |
+| **Ciclo** (`education_lead_cycles`) | Atención de una categoría: asesor, **estado** y **calificación**. Estado y score **no** viven en `contacts` (una ficha, varios ciclos) |
 
 **Objetivo duro:** no hay fichas ni captación en `educacion_ca` / `educacion_ep` como área. Solo **`educacion`** + categoría (`program_id` / `program_key` ca|ep|general). Los aliases en API se traducen a categoría; la lectura DB es solo `educacion`.
+
+**Fuente de verdad operativa (Educación):**
+| Dato | Dónde |
+|------|--------|
+| Identidad / ficha | `contacts` (+ `people`) |
+| Estado del lead | `education_lead_cycles.lead_status_id` |
+| Calificación | `education_lead_cycles.lead_score` |
+| Asesor del lead | `education_lead_cycles.assigned_user_id` (el chat puede reflejarlo) |
+| `contacts.lead_status_*` / `contacts.lead_score` | Legado; en Educación no se usan |
 
 | Producto Meta / TikTok | Qué es |
 |------------------------|--------|

@@ -231,9 +231,37 @@ export class MetaAdsService {
       platform_label: formatAdPlatformLabel(row.ad_platform),
     };
 
+    const contactIds = [
+      ...new Set(
+        leads
+          .map((lead) => lead.contacts?.id ?? lead.contact_id)
+          .filter((id): id is number => typeof id === 'number' && id > 0),
+      ),
+    ];
+    const cycles = contactIds.length
+      ? await this.prisma.education_lead_cycles.findMany({
+          where: { contact_id: { in: contactIds }, closed_at: null },
+          orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+          select: {
+            contact_id: true,
+            lead_score: true,
+            lead_status: { select: { id: true, slug: true, label: true } },
+          },
+        })
+      : [];
+    const cycleByContact = new Map<number, (typeof cycles)[number]>();
+    for (const cycle of cycles) {
+      if (!cycleByContact.has(cycle.contact_id)) {
+        cycleByContact.set(cycle.contact_id, cycle);
+      }
+    }
+
     return {
       ad,
-      leads: leads.map((lead) => ({
+      leads: leads.map((lead) => {
+        const contactId = lead.contacts?.id ?? lead.contact_id ?? null;
+        const cycle = contactId ? cycleByContact.get(contactId) : undefined;
+        return {
         phone: lead.phone,
         wa_username: lead.conversations?.wa_username ?? null,
         wa_profile_name: lead.conversations?.wa_profile_name ?? null,
@@ -243,10 +271,10 @@ export class MetaAdsService {
               .filter(Boolean)
               .join(' ')
           : null,
-        contact_id: lead.contacts?.id ?? lead.contact_id ?? null,
+        contact_id: contactId,
         contact_email: lead.contacts?.email ?? null,
-        lead_score: lead.contacts?.lead_score ?? null,
-        lead_status: lead.contacts?.lead_status ?? null,
+        lead_score: cycle?.lead_score ?? null,
+        lead_status: cycle?.lead_status ?? null,
         segment_slugs:
           lead.contacts?.contact_segments.map((s) => s.segment_slug) ?? [],
         conversation_id: lead.conversation_id,
@@ -260,7 +288,8 @@ export class MetaAdsService {
               name: formatAdvisorLabel(lead.conversations.assigned_user),
             }
           : null,
-      })),
+      };
+      }),
     };
   }
 
