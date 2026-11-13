@@ -1719,16 +1719,11 @@ export class EducationLeadWorkflowService {
     allowedAreas?: string[];
   }, params?: { limit?: number }) {
     if (!(await this.isAttentionV1Enabled())) return { items: [] };
-    const allowed = new Set(
-      (user.allowedAreas ?? []).filter((area) => EDUCATION_AREAS.includes(area)),
-    );
-    if (user.is_master) EDUCATION_AREAS.forEach((area) => allowed.add(area));
-    if (isEducationAttentionArea(user.area)) allowed.add(user.area);
-    // Never expand to all educación* for PAM/other areas.
-    if (!user.is_master && !isEducationAttentionArea(user.area) && allowed.size === 0) {
+    // Solo avisar con área activa Educación (tampoco master en PAM/otras).
+    if (!isEducationAttentionArea(user.area)) {
       return { items: [] };
     }
-    const areas = user.is_master ? [...EDUCATION_AREAS] : [...allowed];
+    const areas = [...EDUCATION_AREAS];
     if (!areas.length) return { items: [] };
 
     const access = user.businessAccess;

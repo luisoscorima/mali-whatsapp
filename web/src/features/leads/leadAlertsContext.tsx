@@ -24,10 +24,8 @@ export function educationLeadAlertsEnabled(user: AuthUser | null): boolean {
   if (!userHasPermission(user, PERMISSION.LEADS_LIST) && !user.canManageLeads) {
     return false
   }
-  if (canonicalArea(user.area) === 'educacion') return true
-  return (user.allowedAreas ?? []).some(
-    (area) => canonicalArea(area) === 'educacion',
-  )
+  // Solo con área activa Educación (no por membresía multiárea en PAM/otras).
+  return canonicalArea(user.area) === 'educacion'
 }
 
 export function LeadAlertsProvider({
