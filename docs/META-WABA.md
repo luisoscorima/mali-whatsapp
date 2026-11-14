@@ -205,11 +205,11 @@ curl -G "https://graph.facebook.com/v20.0/{WABA_ID}/subscribed_apps" \
   -d "access_token=TU_TOKEN_DE_SISTEMA"
 ```
 
-**Ejemplo** (WABA Educación MALI):
+**Ejemplo** (sustituye WABA y token; **nunca** pegues un token real en docs/chats):
 
 ```bash
-curl -G "https://graph.facebook.com/v20.0/983584127989245/subscribed_apps" \
-  -d "access_token=EAAM4bQO7kUkBRNSaT4iV5SZAb73safm9UPdhyyhOzz4z4XrQVsrqB4j333cW1tCt08vwBN9lU8coHALg89TjbxBSXtCpqi8ay93MQLnGIJDoGzdGHZAGgtScZBtoPdG3lNQYtXUFpykHMU4CLaSVuJ27YZBseWamafW2AzZACrXpFjA8636u5upn5YK6kocqu6QZDZD"
+curl -G "https://graph.facebook.com/v20.0/{WABA_ID}/subscribed_apps" \
+  -d "access_token=TU_TOKEN_DE_SISTEMA"
 ```
 
 Respuesta **válida** (tu app aparece en `data`), ejemplo:
@@ -232,8 +232,8 @@ curl -X POST "https://graph.facebook.com/v20.0/{WABA_ID}/subscribed_apps" \
 **Ejemplo:**
 
 ```bash
-curl -X POST "https://graph.facebook.com/v20.0/983584127989245/subscribed_apps" \
-  -d "access_token=EAAM4bQO7kUkBRNSaT4iV5SZAb73safm9UPdhyyhOzz4z4XrQVsrqB4j333cW1tCt08vwBN9lU8coHALg89TjbxBSXtCpqi8ay93MQLnGIJDoGzdGHZAGgtScZBtoPdG3lNQYtXUFpykHMU4CLaSVuJ27YZBseWamafW2AzZACrXpFjA8636u5upn5YK6kocqu6QZDZD"
+curl -X POST "https://graph.facebook.com/v20.0/{WABA_ID}/subscribed_apps" \
+  -d "access_token=TU_TOKEN_DE_SISTEMA"
 ```
 
 Vuelve a ejecutar el **GET** de [7.1](#71-ver-en-qué-apps-está-suscrita-la-waba): debe aparecer tu **App ID** (p. ej. `906465795346761`).
