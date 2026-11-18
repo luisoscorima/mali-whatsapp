@@ -8,6 +8,7 @@ Vigente: [LEADS.md](./LEADS.md).
 - Associate: política intermedia de estados Treasury (positivo cierra; en proceso asocia+obs; negativo rechaza). Ver [PAYMENT-LOOKUP-WA.md](./PAYMENT-LOOKUP-WA.md).
 - Identificador `payment_link` (ONE `EducacionSale`) en Oportunidades, Treasury y WA header/ficha.
 - API: `GET /api/leads/payments/link`, `POST /api/leads/attention/close-without-payment`.
+- Ventas históricas cerradas sin pago: CTA asociar (attention/current también devuelve el último ciclo cerrado).
 
 ## 2026-11-18 — Plan canónico F0–F1 (destino ONE, WA estable)
 

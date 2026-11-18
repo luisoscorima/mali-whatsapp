@@ -11,7 +11,7 @@ export type LeadStatusOption = {
 
 const CLOSE_WITHOUT_PAYMENT_REASONS = [
   { id: 'credito', label: 'Crédito / financiamiento' },
-  { id: 'fuera_treasury', label: 'Pago fuera de Treasury' },
+  { id: 'fuera_treasury', label: 'Pago por otro medio' },
   { id: 'otro', label: 'Otro' },
 ] as const
 
@@ -20,7 +20,7 @@ type InboxLeadStatusPickerProps = {
   busy?: boolean
   /** Educación sin ciclo abierto: mostrar iniciar en lugar de estados. */
   needsStartAttention?: boolean
-  /** Ciclo abierto en venta exitosa: asociar pago o cerrar sin pago. */
+  /** Venta exitosa (abierta o histórica cerrada) sin payment_link: asociar pago. */
   needsAssociatePayment?: boolean
   /** Si el ciclo está cerrado, etiqueta del último estado (p. ej. Venta exitosa). */
   closedStatusLabel?: string | null
@@ -44,14 +44,18 @@ export function InboxLeadStatusPicker({
   onCloseWithoutPayment,
   onSelect,
 }: InboxLeadStatusPickerProps) {
+  const associateOnly =
+    needsAssociatePayment && !onCloseWithoutPayment
   const [options, setOptions] = useState<LeadStatusOption[]>([])
-  const [loading, setLoading] = useState(!needsStartAttention)
+  const [loading, setLoading] = useState(
+    !needsStartAttention && !associateOnly,
+  )
   const [closeReason, setCloseReason] = useState<string>('credito')
   const [closeNote, setCloseNote] = useState('')
   const [closingUnpaid, setClosingUnpaid] = useState(false)
 
   useEffect(() => {
-    if (needsStartAttention) {
+    if (needsStartAttention || associateOnly) {
       setLoading(false)
       return
     }
@@ -71,7 +75,7 @@ export function InboxLeadStatusPicker({
     return () => {
       cancelled = true
     }
-  }, [needsStartAttention])
+  }, [needsStartAttention, associateOnly])
 
   if (needsStartAttention) {
     const closed = Boolean(closedStatusLabel)
@@ -106,10 +110,13 @@ export function InboxLeadStatusPicker({
   return (
     <div className="inbox-oneclick-picker">
       {needsAssociatePayment ? (
-        <div className="space-y-2 border-b border-line p-3">
+        <div
+          className={`space-y-2 p-3${onCloseWithoutPayment ? ' border-b border-line' : ''}`}
+        >
           <p className="muted text-sm">
-            Venta registrada. Asocia el pago para cerrar el ciclo, o ciérralo sin
-            pago si no aplica Treasury.
+            {onCloseWithoutPayment
+              ? 'Venta registrada. Asocia el pago para cerrar el ciclo, o ciérralo sin pago si el cobro no aplica aquí.'
+              : 'Venta cerrada sin pago vinculado. Asocia el cobro para registrar el vínculo.'}
           </p>
           <button
             type="button"
@@ -166,29 +173,32 @@ export function InboxLeadStatusPicker({
           ) : null}
         </div>
       ) : null}
-      <div
-        className="inbox-oneclick-picker__list"
-        role="listbox"
-        aria-label="Estado del lead"
-      >
-        {visible.length === 0 ? (
-          <p className="text-sm text-muted p-2">No hay estados configurados</p>
-        ) : (
-          visible.map((status) => (
-            <button
-              key={status.id}
-              type="button"
-              role="option"
-              aria-selected={currentStatusId === status.id}
-              disabled={busy}
-              className={`inbox-oneclick-picker__option${currentStatusId === status.id ? ' is-active' : ''}`}
-              onClick={() => void onSelect(status.id)}
-            >
-              {status.label}
-            </button>
-          ))
-        )}
-      </div>
+      {/* Históricos ya cerrados: solo asociar; no cambiar estado del ciclo cerrado. */}
+      {associateOnly ? null : (
+        <div
+          className="inbox-oneclick-picker__list"
+          role="listbox"
+          aria-label="Estado del lead"
+        >
+          {visible.length === 0 ? (
+            <p className="text-sm text-muted p-2">No hay estados configurados</p>
+          ) : (
+            visible.map((status) => (
+              <button
+                key={status.id}
+                type="button"
+                role="option"
+                aria-selected={currentStatusId === status.id}
+                disabled={busy}
+                className={`inbox-oneclick-picker__option${currentStatusId === status.id ? ' is-active' : ''}`}
+                onClick={() => void onSelect(status.id)}
+              >
+                {status.label}
+              </button>
+            ))
+          )}
+        </div>
+      )}
     </div>
   )
 }

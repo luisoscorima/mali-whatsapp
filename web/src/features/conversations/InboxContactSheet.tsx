@@ -478,8 +478,9 @@ export function InboxContactSheet({
                       >
                         Asociar pago
                       </button>
-                      {openLead.lead_status?.slug === 'venta_exitosa' ||
-                      openLead.lead_status?.slug === 'convertido' ? (
+                      {!openLead.closed_at &&
+                      (openLead.lead_status?.slug === 'venta_exitosa' ||
+                        openLead.lead_status?.slug === 'convertido') ? (
                         <>
                           <select
                             className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
@@ -489,7 +490,7 @@ export function InboxContactSheet({
                             aria-label="Motivo cierre sin pago"
                           >
                             <option value="credito">Crédito</option>
-                            <option value="fuera_treasury">Fuera Treasury</option>
+                            <option value="fuera_treasury">Pago por otro medio</option>
                             <option value="otro">Otro</option>
                           </select>
                           <button
@@ -520,6 +521,13 @@ export function InboxContactSheet({
                             {closeUnpaidBusy ? 'Cerrando…' : 'Cerrar sin pago'}
                           </button>
                         </>
+                      ) : null}
+                      {openLead.closed_at ? (
+                        <p className="muted w-full text-sm">
+                          Ciclo cerrado
+                          {paymentLinkLabel ? ` · ${paymentLinkLabel}` : ''}.
+                          Puedes asociar o actualizar el pago.
+                        </p>
                       ) : null}
                     </div>
                   )}
@@ -622,7 +630,31 @@ export function InboxContactSheet({
               : undefined
           }
           onAssociated={() => {
-            setOpenLead(null)
+            // Mantener el ciclo (incl. históricos cerrados) y refrescar el vínculo.
+            void apiClient
+              .get<{
+                payment_link: { status: string; code: string | null } | null
+              }>(`/api/leads/payments/link?waCycleId=${openLead.id}`)
+              .then((linkRes) => {
+                if (!linkRes.ok || !linkRes.data?.payment_link) {
+                  setPaymentLinkLabel(null)
+                  return
+                }
+                const link = linkRes.data.payment_link
+                const statusLabel =
+                  link.status === 'pagado'
+                    ? 'Pagado'
+                    : link.status === 'parcial'
+                      ? 'Parcial'
+                      : link.status === 'revertido'
+                        ? 'Revertido'
+                        : 'Asociado'
+                setPaymentLinkLabel(
+                  link.code
+                    ? `Pago ${statusLabel} · ${link.code}`
+                    : `Pago ${statusLabel}`,
+                )
+              })
             onSaved()
           }}
         />

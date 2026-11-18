@@ -317,6 +317,9 @@ function ProfileBlock({
   onStartAttention,
   onAssociatePayment,
   onCloseWithoutPayment,
+  paymentLinkLabel = null,
+  needsAssociatePayment = false,
+  needsStartAttention = false,
   onSegmentsChanged,
   onOpenContact,
   onBack,
@@ -343,71 +346,22 @@ function ProfileBlock({
     reason: string
     note?: string
   }) => boolean | Promise<boolean>
+  paymentLinkLabel?: string | null
+  needsAssociatePayment?: boolean
+  needsStartAttention?: boolean
   onSegmentsChanged: () => void
   onOpenContact: () => void
   onBack?: () => void
   actions?: ReactNode
 }) {
   const user = useAppUser()
-  const canManageLeads = Boolean(user?.canManageLeads)
   const contactId = detail.conversation.contact_id
-  const isEducation = canonicalArea(user?.area ?? '') === 'educacion'
   // Solo “iniciar” si no hay ciclo abierto. Ciclo cerrado (venta exitosa)
   // sigue mostrando su estado; no parecer “sin ciclo”.
   const cycleOpen = detail.contact?.lead_cycle_open === true
-  const leadSlug = detail.contact?.lead_status?.slug ?? ''
-  const cycleId = detail.contact?.lead_cycle_id ?? null
   const [assigneeOpen, setAssigneeOpen] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
   const [segmentsOpen, setSegmentsOpen] = useState(false)
-  const [paymentLinkLabel, setPaymentLinkLabel] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!isEducation || !canManageLeads || !cycleId) {
-      setPaymentLinkLabel(null)
-      return
-    }
-    let cancelled = false
-    void apiClient
-      .get<{
-        payment_link: {
-          status: string
-          code: string | null
-        } | null
-      }>(`/api/leads/payments/link?waCycleId=${cycleId}`)
-      .then((res) => {
-        if (cancelled) return
-        const link = res.ok ? res.data?.payment_link : null
-        if (!link) {
-          setPaymentLinkLabel(null)
-          return
-        }
-        const statusLabel =
-          link.status === 'pagado'
-            ? 'Pagado'
-            : link.status === 'parcial'
-              ? 'Parcial'
-              : link.status === 'revertido'
-                ? 'Revertido'
-                : 'Asociado'
-        setPaymentLinkLabel(
-          link.code ? `Pago ${statusLabel} · ${link.code}` : `Pago ${statusLabel}`,
-        )
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [isEducation, canManageLeads, cycleId])
-
-  const needsStartAttention = Boolean(
-    isEducation && contactId && !cycleOpen,
-  )
-  const needsAssociatePayment = Boolean(
-    isEducation &&
-      cycleOpen &&
-      (leadSlug === 'venta_exitosa' || leadSlug === 'convertido') &&
-      !paymentLinkLabel,
-  )
   const contactMode = contactId ? 'edit' : 'create'
   const contactActionLabel = contactId ? 'Editar contacto' : 'Añadir contacto'
   const canOpenContact = contactId
@@ -463,6 +417,11 @@ function ProfileBlock({
     </>
   )
 
+  const statusPaymentDetail = paymentLinkLabel
+    ? paymentLinkLabel
+    : needsAssociatePayment
+      ? 'Pendiente de pago'
+      : null
   const statusBlock = (
     <>
       <span className="inbox-chat-header-context-icon" aria-hidden>
@@ -471,13 +430,14 @@ function ProfileBlock({
       <span className="inbox-chat-header-context-copy">
         <span className="inbox-chat-header-context-label">Estado del lead</span>
         <span className="inbox-chat-header-context-value">
-          {paymentLinkLabel && leadStatusLabel
-            ? `${leadStatusLabel} · ${paymentLinkLabel}`
-            : needsAssociatePayment && leadStatusLabel
-              ? `${leadStatusLabel} · pendiente de pago`
-              : leadStatusLabel ||
-                (needsStartAttention ? 'Sin ciclo iniciado' : 'Sin estado')}
+          {leadStatusLabel ||
+            (needsStartAttention ? 'Sin ciclo iniciado' : 'Sin estado')}
         </span>
+        {statusPaymentDetail ? (
+          <span className="inbox-chat-header-context-detail">
+            {statusPaymentDetail}
+          </span>
+        ) : null}
       </span>
     </>
   )
@@ -667,7 +627,7 @@ function ProfileBlock({
                   : undefined
               }
               onCloseWithoutPayment={
-                onCloseWithoutPayment
+                cycleOpen && onCloseWithoutPayment
                   ? (input) =>
                       void Promise.resolve(onCloseWithoutPayment(input)).then(
                         (ok) => {
@@ -1386,6 +1346,9 @@ export function ConversationsInboxPage() {
   } | null>(null)
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [paymentBusy, setPaymentBusy] = useState(false)
+  const [detailPaymentLinkLabel, setDetailPaymentLinkLabel] = useState<
+    string | null
+  >(null)
   const [assignees, setAssignees] = useState<ConversationAssignee[]>([])
   const [assigneesLoading, setAssigneesLoading] = useState(false)
   const [assignSaving, setAssignSaving] = useState(false)
@@ -1411,6 +1374,62 @@ export function ConversationsInboxPage() {
   const [showSummary, setShowSummary] = useState(false)
   const [listScrollAtEnd, setListScrollAtEnd] = useState(false)
   const [listCanScroll, setListCanScroll] = useState(false)
+
+  const detailCycleId = detail?.contact?.lead_cycle_id ?? null
+  const detailSaleSlug = detail?.contact?.lead_status?.slug ?? ''
+  const detailIsSaleStatus =
+    detailSaleSlug === 'venta_exitosa' || detailSaleSlug === 'convertido'
+  const detailNeedsAssociatePayment = Boolean(
+    canonicalArea(user?.area ?? '') === 'educacion' &&
+      user?.canManageLeads &&
+      detailCycleId &&
+      detailIsSaleStatus &&
+      !detailPaymentLinkLabel,
+  )
+  const detailNeedsStartAttention = Boolean(
+    canonicalArea(user?.area ?? '') === 'educacion' &&
+      detail?.conversation.contact_id &&
+      detail.contact?.lead_cycle_open !== true &&
+      !detailNeedsAssociatePayment,
+  )
+
+  useEffect(() => {
+    if (
+      canonicalArea(user?.area ?? '') !== 'educacion' ||
+      !user?.canManageLeads ||
+      !detailCycleId
+    ) {
+      setDetailPaymentLinkLabel(null)
+      return
+    }
+    let cancelled = false
+    void apiClient
+      .get<{
+        payment_link: { status: string; code: string | null } | null
+      }>(`/api/leads/payments/link?waCycleId=${detailCycleId}`)
+      .then((res) => {
+        if (cancelled) return
+        const link = res.ok ? res.data?.payment_link : null
+        if (!link) {
+          setDetailPaymentLinkLabel(null)
+          return
+        }
+        const statusLabel =
+          link.status === 'pagado'
+            ? 'Pagado'
+            : link.status === 'parcial'
+              ? 'Parcial'
+              : link.status === 'revertido'
+                ? 'Revertido'
+                : 'Asociado'
+        setDetailPaymentLinkLabel(
+          link.code ? `Pago ${statusLabel} · ${link.code}` : `Pago ${statusLabel}`,
+        )
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [user?.area, user?.canManageLeads, detailCycleId])
 
   const selectedId = idParam ? Number(idParam) : null
   const filterQuerySuffix = useMemo(() => {
@@ -3822,7 +3841,14 @@ export function ConversationsInboxPage() {
                   onLeadStatus={onLeadStatus}
                   onStartAttention={onStartAttention}
                   onAssociatePayment={openAssociatePaymentFromDetail}
-                  onCloseWithoutPayment={onCloseWithoutPayment}
+                  onCloseWithoutPayment={
+                    detail.contact?.lead_cycle_open === true
+                      ? onCloseWithoutPayment
+                      : undefined
+                  }
+                  paymentLinkLabel={detailPaymentLinkLabel}
+                  needsAssociatePayment={detailNeedsAssociatePayment}
+                  needsStartAttention={detailNeedsStartAttention}
                   onSegmentsChanged={() => {
                     void loadList()
                     if (selectedId) void loadDetail(selectedId)
@@ -4129,17 +4155,8 @@ export function ConversationsInboxPage() {
           currentStatusId={leadStatusContext.leadStatusId}
           currentStatusLabel={leadStatusContext.leadStatusLabel}
           busy={leadStatusBusy}
-          needsStartAttention={Boolean(
-            canonicalArea(user?.area ?? '') === 'educacion' &&
-              leadStatusContext.contactId &&
-              detail?.contact?.lead_cycle_open !== true,
-          )}
-          needsAssociatePayment={Boolean(
-            canonicalArea(user?.area ?? '') === 'educacion' &&
-              detail?.contact?.lead_cycle_open === true &&
-              (detail.contact.lead_status?.slug === 'venta_exitosa' ||
-                detail.contact.lead_status?.slug === 'convertido'),
-          )}
+          needsStartAttention={detailNeedsStartAttention}
+          needsAssociatePayment={detailNeedsAssociatePayment}
           closedStatusLabel={
             detail?.contact?.lead_cycle_open === false
               ? detail.contact.lead_status?.label ??
@@ -4153,7 +4170,11 @@ export function ConversationsInboxPage() {
             })
           }
           onAssociatePayment={openAssociatePaymentFromDetail}
-          onCloseWithoutPayment={onCloseWithoutPayment}
+          onCloseWithoutPayment={
+            detail?.contact?.lead_cycle_open === true
+              ? onCloseWithoutPayment
+              : undefined
+          }
           onSelect={onLeadStatus}
           onBack={
             leadStatusContext.returnToActions
@@ -4174,6 +4195,7 @@ export function ConversationsInboxPage() {
           contactId={paymentContext.contactId}
           contactLabel={paymentContext.contactLabel}
           onAssociated={() => {
+            setDetailPaymentLinkLabel(null)
             if (selectedId) void loadDetail(selectedId)
             void loadList()
           }}

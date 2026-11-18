@@ -48,7 +48,7 @@ type InboxChatActionsDialogProps = {
   canAssign?: boolean
   onAssign?: () => void
   onOpenLeadStatus?: () => void
-  /** Educación con ciclo: asociar código Treasury. */
+  /** Educación con ciclo: asociar código de pago. */
   onOpenAssociatePayment?: () => void
   onOpenContact: () => void
   canOpenContact?: boolean

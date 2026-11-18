@@ -1445,21 +1445,34 @@ export class EducationLeadWorkflowService {
       programId = conversation.whatsapp_line?.program_id ?? null;
       lineId = conversation.whatsapp_line_id ?? null;
     }
-    const cycle = await this.prisma.education_lead_cycles.findFirst({
+    const cycleInclude = {
+      program: { select: { slug: true } },
+      lead_status: { select: { id: true, label: true, slug: true } },
+      assigned_user: {
+        select: { id: true, first_name: true, last_name: true, email: true },
+      },
+    } as const;
+    const openCycle = await this.prisma.education_lead_cycles.findFirst({
       where: exactOpenCycleWhere({
         personId: contact.person_id,
         area: input.area,
         programId,
       }),
       orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
-      include: {
-        program: { select: { slug: true } },
-        lead_status: { select: { id: true, label: true, slug: true } },
-        assigned_user: {
-          select: { id: true, first_name: true, last_name: true, email: true },
-        },
-      },
+      include: cycleInclude,
     });
+    // Históricos: venta cerrada (regla vieja) también debe poder asociar pago.
+    const cycle =
+      openCycle ??
+      (await this.prisma.education_lead_cycles.findFirst({
+        where: exactCategoryCycleWhere({
+          personId: contact.person_id,
+          area: input.area,
+          programId,
+        }),
+        orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+        include: cycleInclude,
+      }));
     if (!cycle) return null;
     if (input.user) {
       this.assertCanAccessLeadContext(input.user, cycle, lineId);

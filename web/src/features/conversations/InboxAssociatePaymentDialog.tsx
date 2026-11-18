@@ -127,7 +127,7 @@ function TreasuryStatusChip({ status }: { status: string }) {
   )
 }
 
-/** Modal asesor: buscar cobro en Treasury (vía ONE) y asociarlo al ciclo actual. */
+/** Modal asesor: buscar cobro y asociarlo al ciclo actual. */
 export function InboxAssociatePaymentDialog({
   open,
   onOpenChange,
@@ -173,7 +173,7 @@ export function InboxAssociatePaymentDialog({
       }
       const list = Array.isArray(res.data?.hits) ? res.data.hits : []
       setHits(list)
-      if (!list.length) notify.error('Sin coincidencias en Treasury')
+      if (!list.length) notify.error('Sin coincidencias')
     } catch (err) {
       notify.error(err instanceof Error ? err.message : 'Error al buscar')
       setHits([])
@@ -226,7 +226,7 @@ export function InboxAssociatePaymentDialog({
         <DialogHeader>
           <DialogTitle>Asociar pago</DialogTitle>
           <DialogDescription>
-            Busca en Treasury sin salir del chat
+            Busca el código de pago sin salir del chat
             {contactLabel ? ` · ${contactLabel}` : ''}. Ciclo #{cycleId}.
           </DialogDescription>
         </DialogHeader>
@@ -318,7 +318,7 @@ export function InboxAssociatePaymentDialog({
           ) : null}
           {selectedKind === 'in_progress' || selectedKind === 'unknown' ? (
             <p className="muted text-sm">
-              Este cobro aún no está liquidado: se asociará con observación y el
+              Este cobro aún no está confirmado: se asociará con observación y el
               ciclo permanecerá abierto hasta confirmación.
             </p>
           ) : null}

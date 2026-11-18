@@ -54,11 +54,12 @@ Derivado expuesto como `payment_link`:
 
 - **CRM Educación → Oportunidades:** columna **Pago** (ícono + tooltip).
 - **Treasury (Ventas Niubiz):** columna **Edu** + detalle “CRM Educación · ciclo #…”.
-- **WA inbox:** texto en header/ficha (`Pago Asociado · {código}`); CTA “pendiente de pago” solo si venta exitosa abierta **y** aún no hay `payment_link`.
+- **WA inbox:** texto en header/ficha (`Pago Asociado · {código}`); CTA “pendiente de pago” si venta exitosa (abierta o histórica cerrada) **y** aún no hay `payment_link`.
 
 ## UX
 
 - Modal inbox: ficha / ⋮ / picker post-venta → **Asociar pago** (`InboxAssociatePaymentDialog`).
+- También en **ventas históricas ya cerradas** (`closed_at` por la regla vieja) sin `payment_link`: CTA de asociar; no “iniciar ciclo” hasta tener vínculo o otro motivo.
 - Lookup muestra hits; **negativos deshabilitados**; en proceso avisa “se asocia sin cerrar”.
 - Si ONE/Treasury cae, el chat sigue; el endpoint responde 503.
 
