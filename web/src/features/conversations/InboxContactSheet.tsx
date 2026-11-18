@@ -5,6 +5,7 @@ import { notify } from '@/shared/notify'
 import { formatSaleMissingFields } from '@/features/leads/saleReadyFields'
 import { ContactForm } from '../contacts/ContactForm'
 import { splitPhoneForForm } from '../contacts/phoneUtils'
+import { InboxAssociatePaymentDialog } from './InboxAssociatePaymentDialog'
 import { isWhatsAppBsuid } from './whatsappIdentity'
 import { segmentOptionsForAssignment, pruneSegmentSlugsToOptions } from '../segments/segmentOptions'
 import {
@@ -116,6 +117,7 @@ export function InboxContactSheet({
   const [loadFailed, setLoadFailed] = useState(false)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [paymentOpen, setPaymentOpen] = useState(false)
 
   const phoneParts = useMemo(
     () => splitPhoneForForm(isWhatsAppBsuid(prefillPhone) ? '' : prefillPhone),
@@ -431,7 +433,15 @@ export function InboxContactSheet({
                     >
                       {attentionBusy ? 'Iniciando…' : 'Iniciar atención'}
                     </button>
-                  ) : null}
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setPaymentOpen(true)}
+                      className="rounded-lg border border-line bg-surface-strong px-3 py-1.5 text-sm"
+                    >
+                      Asociar pago
+                    </button>
+                  )}
                 </div>
               ) : null}
               <p className="mb-2 text-sm font-medium">Perfil del contacto</p>
@@ -501,6 +511,19 @@ export function InboxContactSheet({
           <SheetClose disabled={saving}>Cerrar</SheetClose>
         </SheetFooter>
       </SheetContent>
+      {openLead && contactId ? (
+        <InboxAssociatePaymentDialog
+          open={paymentOpen}
+          onOpenChange={setPaymentOpen}
+          cycleId={openLead.id}
+          contactId={contactId}
+          contactLabel={
+            contact
+              ? [contact.name, contact.last_name].filter(Boolean).join(' ')
+              : undefined
+          }
+        />
+      ) : null}
     </Sheet>
   )
 }

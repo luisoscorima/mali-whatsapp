@@ -27,11 +27,13 @@ export class MaliOnePaymentService {
     return { base, token };
   }
 
-  async lookup(code: string): Promise<unknown> {
+  async lookup(code: string, provider?: string): Promise<unknown> {
     const q = String(code ?? '').trim();
     if (q.length < 4) throw new BadRequestException('Código demasiado corto');
     const { base, token } = this.assertConfigured();
-    const url = `${base}/api/crm-educacion/internal/payments/lookup?${new URLSearchParams({ code: q })}`;
+    const qs = new URLSearchParams({ code: q });
+    if (provider && provider !== 'all') qs.set('provider', provider);
+    const url = `${base}/api/crm-educacion/internal/payments/lookup?${qs}`;
     try {
       const res = await fetch(url, {
         method: 'GET',

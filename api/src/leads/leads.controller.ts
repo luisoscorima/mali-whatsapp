@@ -595,9 +595,13 @@ export class LeadsController {
   async lookupPayment(
     @CurrentUser() user: AuthUser,
     @Query('code') code?: string,
+    @Query('provider') provider?: string,
   ): Promise<ApiResponse<unknown>> {
     assertCanManageLeads(user);
-    const data = await this.maliOnePayments.lookup(String(code ?? ''));
+    const data = await this.maliOnePayments.lookup(
+      String(code ?? ''),
+      provider ? String(provider) : undefined,
+    );
     return { ok: true, data };
   }
 

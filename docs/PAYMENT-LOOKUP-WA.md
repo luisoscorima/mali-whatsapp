@@ -28,6 +28,6 @@ Modal en ficha/ciclo del inbox: código → validar → asociar. Si ONE/Treasury
 
 ## Estado
 
-- API proxy WA: implementada (aditiva).
-- UI modal inbox: siguiente entrega front WA.
-- UI estrecha ONE (CRM → Pagos): disponible en transición.
+- API proxy WA: implementada (aditiva); query `provider` opcional.
+- UI modal inbox: ficha contacto → **Asociar pago** (`InboxAssociatePaymentDialog`).
+- UI ONE: CRM Educación → Pagos (fuente + búsqueda + asociar) y botón en Oportunidades.
