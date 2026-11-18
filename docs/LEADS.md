@@ -27,7 +27,7 @@ Histórico: [LEADS-CHANGELOG.md](./LEADS-CHANGELOG.md). Si chocan, **manda este*
 
 | Pieza | Dónde | Rol |
 |-------|--------|-----|
-| **Motor comercial (hoy)** | mali-whatsapp | Persona, orígenes, ciclos, ownership, estados, SLA, Prospectia |
+| **Motor comercial (hoy)** | mali-whatsapp | Persona, orígenes, ciclos, ownership, estados, SLA |
 | **Vitrina / jefes** | MALI ONE (CRM Educación) | Listar, asignar, revisar, reportar vía CRM API. Sin BD paralela de leads |
 | **Captura web** | MALI ONE | Widget → `EducacionLead` (buffer) → sync `channel=widget` a WA |
 | **Chat / campañas WA** | mali-whatsapp | Casa del asesor; cambios aditivos y reversibles |
@@ -172,7 +172,7 @@ La Página Facebook **MALI Educación** (`1684299678482303`) cubre General, CA y
 
 ## Flujo de captación
 
-Solo entra a este CRM el área canónica **`educacion`**. Un origen de otra área (widget sin área → `ti`) queda en contactos/orígenes: no Prospectia ni clasificación aquí.
+Solo entra a este CRM el área canónica **`educacion`**. Un origen de otra área (widget sin área → `ti`) queda en contactos/orígenes: sin clasificación aquí.
 
 ```text
 Conector o inbound de WhatsApp
@@ -183,7 +183,7 @@ Contacto (crear o enlazar) + contact_origins
         ↓
 education_lead_entries (+ ciclo si corresponde)
         ↓
-Prospectia (si falla, la entrada ya quedó)
+link-cycle a ONE (si hay oportunidad abierta; si falla, el chat sigue)
         ↓
 CRM Educación en MALI ONE
 ```
@@ -228,7 +228,7 @@ Cierra el General (`close_reason=superseded_by_category`) y rellena `origin.prog
 
 `mali_one_link` se atribuye al **enviar** el WA prellenado, no al clic del acortador. Cuerpo con `ref:{slug}` al inicio (`ref:{slug} · mensaje`); históricos pueden traerlo al final. Sin `ref:`, texto normalizado (≥12 caracteres) vs catálogo. Varios links con el mismo texto → el más exacto + marca ambiguo. Con `referral` de anuncio no se evalúa como link. Los `ref:web_*` van a **web_button**, no aquí.
 
-Backfill: `POST /api/leads/mali-one-links/backfill` (dry-run); `?apply=1` reclasifica orgánicos coincidentes sin abrir ciclo ni Prospectia.
+Backfill: `POST /api/leads/mali-one-links/backfill` (dry-run); `?apply=1` reclasifica orgánicos coincidentes sin abrir ciclo.
 
 ### Orgánico y la sesión de 24 horas
 
@@ -243,15 +243,11 @@ Limpieza de orgánicos falsos históricos (form/TikTok previo + orgánico espuri
 
 Misma conversación o entrada del mismo contacto en 24 h: no otra entrada; solo `last_interaction_at` (salvo conflicto). Un saliente no amplía la ventana de 60 días.
 
-### Prospectia
+### Prospectia (solo en MALI ONE)
 
-Después de persistir la entrada. Busca por teléfono, usuario WA o BSUID.
+Prospectia (Chatwoot) vive en ONE: ingesta, check e import. WA no llama a Prospectia ni escribe orígenes `prospectia`.
 
-Sin token / API caída / match ambiguo → `unverified` y el flujo sigue.
-
-El asesor de Prospectia se copia al ciclo solo si: match único no truncado; allá hay conversación abierta/pendiente con email; ese email es usuario del área; el ciclo Mali no tiene asesor y no está en `requires_review`.
-
-Ciclo con asesor, o regreso >60 días (revisión), no se reasignan solos. Al arrancar la API se reconsulta `prospectia_checked_at` nulo. `POST/GET /api/crm/education/prospectia/sync`.
+Tras `recordEntry`, `MaliOneOpportunityLinkService` intenta `POST .../internal/opportunities/link-cycle` si el teléfono/email ya tiene oportunidad ONE abierta; si ONE cae, el chat sigue. Columnas `prospectia_*` en entradas WA quedan sin uso (sin migración de drop).
 
 ### Clasificación
 

@@ -30,8 +30,6 @@ import { EducationLeadWorkflowService } from '../leads/education-lead-workflow.s
 import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, Min, ValidateNested } from 'class-validator';
 import { educationProgramOf, isEducationAreaSlug } from '../config/education-scope';
 import { Type } from 'class-transformer';
-import { ProspectiaAdvisorService } from '../leads/prospectia-advisor.service';
-import { ProspectiaSyncService } from '../leads/prospectia-sync.service';
 import type { LeadChannel } from '../leads/leads.types';
 import { BadRequestException } from '@nestjs/common';
 import { LEAD_CHANNELS, MANUAL_LEAD_SOURCE_KEYS } from '../leads/leads.types';
@@ -52,18 +50,6 @@ class EducationManagementDto {
 class EducationReviewDto {
   @IsIn(['open_new', 'keep_existing', 'dismiss']) action!: 'open_new' | 'keep_existing' | 'dismiss';
   @IsOptional() @IsString() @MaxLength(120) actor_email?: string;
-}
-
-class ProspectiaSubjectDto {
-  @IsString() @MaxLength(160) key!: string;
-  @IsOptional() @IsString() @MaxLength(32) phone?: string | null;
-  @IsOptional() @IsString() @MaxLength(64) username?: string | null;
-  @IsOptional() @IsString() @MaxLength(128) whatsapp_user_id?: string | null;
-}
-
-class ProspectiaCheckDto {
-  @IsArray() @ValidateNested({ each: true }) @Type(() => ProspectiaSubjectDto)
-  subjects!: ProspectiaSubjectDto[];
 }
 
 class EducationDistributeDto {
@@ -129,8 +115,6 @@ export class CrmController {
     private readonly crm: CrmService,
     private readonly leads: LeadsService,
     private readonly educationWorkflow: EducationLeadWorkflowService,
-    private readonly prospectia: ProspectiaAdvisorService,
-    private readonly prospectiaSync: ProspectiaSyncService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -245,26 +229,6 @@ export class CrmController {
       actorEmail: body.actor_email,
     });
     return { ok: true, data };
-  }
-
-  @Post('education/prospectia/check')
-  async educationProspectiaCheck(@Body() body: ProspectiaCheckDto) {
-    if (body.subjects.length > 50 || body.subjects.some((subject) =>
-      subject.key.length > 160 || (subject.phone?.length ?? 0) > 32 ||
-      (subject.username?.length ?? 0) > 64 || (subject.whatsapp_user_id?.length ?? 0) > 128)) {
-      throw new BadRequestException('Máximo 50 contactos');
-    }
-    return { ok: true, data: await this.prospectia.checkSubjects(body.subjects) };
-  }
-
-  @Post('education/prospectia/sync')
-  educationProspectiaSync() {
-    return { ok: true, data: this.prospectiaSync.start('all') };
-  }
-
-  @Get('education/prospectia/sync')
-  educationProspectiaSyncStatus() {
-    return { ok: true, data: this.prospectiaSync.status() };
   }
 
   @Get('education/management-catalogs')

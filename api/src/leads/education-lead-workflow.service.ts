@@ -31,7 +31,7 @@ import {
   educationWriteArea,
 } from '../config/education-scope';
 import { userWorksArea } from '../users/area-membership.where';
-import { ProspectiaAdvisorService } from './prospectia-advisor.service';
+import { MaliOneOpportunityLinkService } from './mali-one-opportunity-link.service';
 import { endLeadConversationLinks, projectLeadAssignee, withLeadCreateSavepoint } from './education-lead-lifecycle.util';
 import { cursoFromOriginPayload } from './lead-curso.util';
 import { formatAdvisorLabel } from '../users/advisor-label.util';
@@ -93,7 +93,7 @@ function educationAreasOf(user: {
 export class EducationLeadWorkflowService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly prospectia?: ProspectiaAdvisorService,
+    private readonly oneOpportunityLink?: MaliOneOpportunityLinkService,
   ) {}
 
   private areas(area?: string): string[] {
@@ -477,134 +477,31 @@ export class EducationLeadWorkflowService {
       }
       return classification === 'new' && !previous ? cycleId : null;
     });
-    if (this.prospectia) await this.captureProspectia(input.area, input.eventKey);
+    await this.linkOneOpportunity(input.area, input.eventKey);
   }
 
-  private async captureProspectia(area: string, eventKey: string): Promise<void> {
+  /** Aditivo: si ONE ya tiene oportunidad abierta para el contacto, vincula el ciclo WA. */
+  private async linkOneOpportunity(
+    area: string,
+    eventKey: string,
+  ): Promise<void> {
+    if (!this.oneOpportunityLink) return;
     const entry = await this.prisma.education_lead_entries.findUnique({
       where: { area_event_key: { area, event_key: eventKey } },
       select: {
-        id: true, contact_id: true, area: true,
-        contact: { select: {
-          phone: true, whatsapp_user_id: true,
-          conversations: { where: { wa_username: { not: null } },
-            orderBy: { updated_at: 'desc' }, take: 1, select: { wa_username: true } },
-        } },
+        cycle_id: true,
+        contact_id: true,
+        contact: { select: { phone: true, email: true } },
       },
     });
-    if (!entry) return;
-    const result = await this.prospectia!.lookup({
-      key: String(entry.id),
+    if (!entry?.cycle_id) return;
+    await this.oneOpportunityLink.tryLinkCycle({
+      waCycleId: entry.cycle_id,
+      waContactId: entry.contact_id,
       phone: entry.contact.phone,
-      username: entry.contact.conversations[0]?.wa_username,
-      whatsapp_user_id: entry.contact.whatsapp_user_id,
+      email: entry.contact.email,
+      markInbound: true,
     });
-    await this.applyProspectiaSnapshot(entry.id, entry.contact_id, entry.area, result);
-  }
-
-  async applyProspectiaSnapshot(
-    entryId: number, contactId: number, area: string,
-    result: { match: 'exists' | 'missing' | 'unverified'; advisorEmail: string | null },
-  ): Promise<void> {
-    await this.prisma.education_lead_entries.update({
-      where: { id: entryId },
-      data: {
-        prospectia_match: result.match,
-        prospectia_advisor_email: result.advisorEmail,
-        prospectia_checked_at: new Date(),
-      },
-    });
-    if (!result.advisorEmail) return;
-    const current = await this.prisma.education_lead_cycles.findFirst({
-      where: { contact_id: contactId, area },
-      orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
-      select: { id: true, assigned_user_id: true, requires_review: true },
-    });
-    if (!current || current.assigned_user_id || current.requires_review) return;
-    await this.assignKnownAdvisor(contactId, area, current.id, result.advisorEmail);
-  }
-
-  private async assignKnownAdvisor(contactId: number, area: string, cycleId: number, email: string): Promise<void> {
-    const advisor = await this.prisma.users.findFirst({
-      where: { email: { equals: email, mode: 'insensitive' }, is_provisioned: true,
-        OR: [{ area }, { is_master: true }, { user_areas: { some: { area } } }, userWorksArea(area)],
-      }, select: { id: true },
-    });
-    if (!advisor) return;
-    await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(20260924::integer, ${contactId}::integer)`;
-      const latest = await tx.education_lead_cycles.findFirst({
-        where: { contact_id: contactId, area },
-        orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
-        select: { id: true },
-      });
-      if (latest?.id !== cycleId) return;
-      const updated = await tx.education_lead_cycles.updateMany({
-        where: {
-          id: cycleId,
-          assigned_user_id: null,
-          requires_review: false,
-          closed_at: null,
-        },
-        data: {
-          assigned_user_id: advisor.id,
-          first_assigned_at: new Date(),
-          updated_at: new Date(),
-        },
-      });
-      if (!updated.count) return;
-      await projectLeadAssignee(tx, cycleId, advisor.id, new Date(), true);
-      await tx.audit_logs.create({ data: {
-        event_type: 'education.lead.prospectia_assigned',
-        message: `Lead ${cycleId} asignado según Prospectia`,
-        actor_email: 'prospectia@system', area,
-        meta: { contact_id: contactId, cycle_id: cycleId, assigned_user_id: advisor.id },
-      } });
-    });
-  }
-
-  prospectiaLatestCheckedAt() {
-    return this.prisma.education_lead_entries.findFirst({
-      where: { area: { in: EDUCATION_AREAS }, prospectia_checked_at: { not: null } },
-      orderBy: { prospectia_checked_at: 'desc' },
-      select: { prospectia_checked_at: true },
-    }).then((row) => row?.prospectia_checked_at ?? null);
-  }
-
-  prospectiaSyncCount(mode: 'pending' | 'all') {
-    return this.prisma.education_lead_entries.count({
-      where: {
-        area: { in: EDUCATION_AREAS },
-        ...(mode === 'pending' ? { prospectia_checked_at: null } : {}),
-      },
-    });
-  }
-
-  async prospectiaSyncBatch(mode: 'pending' | 'all', cursorId: number) {
-    const rows = await this.prisma.education_lead_entries.findMany({
-      where: {
-        area: { in: EDUCATION_AREAS },
-        ...(mode === 'pending' ? { prospectia_checked_at: null } : { id: { gt: cursorId } }),
-      },
-      orderBy: [{ id: 'asc' }],
-      take: 40,
-      select: {
-        id: true, area: true, contact_id: true,
-        contact: { select: {
-          phone: true, whatsapp_user_id: true,
-          conversations: { where: { wa_username: { not: null } },
-            orderBy: { updated_at: 'desc' }, take: 1, select: { wa_username: true } },
-        } },
-      },
-    });
-    return rows.map((row) => ({
-      id: row.id,
-      area: row.area,
-      contactId: row.contact_id,
-      phone: row.contact.phone,
-      username: row.contact.conversations[0]?.wa_username ?? null,
-      whatsappUserId: row.contact.whatsapp_user_id,
-    }));
   }
 
   async listEntries(params: {
@@ -723,9 +620,6 @@ export class EducationLeadWorkflowService {
         previous_status_label: item.previous_status_label,
         previous_interaction_at: item.previous_interaction_at,
         reviewed_at: item.reviewed_at, cycle_id: item.cycle_id,
-        prospectia_match: item.prospectia_match,
-        prospectia_advisor_email: item.prospectia_advisor_email,
-        prospectia_checked_at: item.prospectia_checked_at,
         assigned_user_id: item.cycle?.assigned_user_id ?? null,
         requires_review: item.cycle?.requires_review ?? false,
         is_current_cycle: item.cycle_id !== null &&

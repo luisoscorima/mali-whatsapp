@@ -440,7 +440,7 @@ export class LeadsService implements OnModuleInit {
 
   /**
    * Pasa a mali_one_link los orígenes orgánicos cuyo primer inbound coincide
-   * con el catálogo. No abre ciclos ni vuelve a consultar Prospectia.
+   * con el catálogo. No abre ciclos.
    * Sin `apply` solo cuenta.
    */
   async backfillOrganicMaliOneLinks(opts?: { apply?: boolean }): Promise<{
@@ -590,7 +590,7 @@ export class LeadsService implements OnModuleInit {
 
   /**
    * Pasa a web_button los orgánicos cuyo primer inbound es botón WP
-   * (`ref:web_*` o prefijo «Vengo desde la web»). Sin ciclos/Prospectia.
+   * (`ref:web_*` o prefijo «Vengo desde la web»). Sin ciclos.
    */
   async backfillOrganicWebButtons(opts?: { apply?: boolean }): Promise<{
     scanned: number;

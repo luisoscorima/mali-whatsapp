@@ -5,10 +5,9 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { LeadsController } from './leads.controller';
 import { LeadsService } from './leads.service';
 import { EducationLeadWorkflowService } from './education-lead-workflow.service';
-import { ProspectiaAdvisorService } from './prospectia-advisor.service';
-import { ProspectiaSyncService } from './prospectia-sync.service';
 import { MaliOneLinksCatalogService } from './mali-one-links-catalog.service';
 import { MaliOnePaymentService } from './mali-one-payment.service';
+import { MaliOneOpportunityLinkService } from './mali-one-opportunity-link.service';
 import { MetaLeadgenService } from './meta-leadgen.service';
 import { TikTokLeadgenService } from './tiktok-leadgen.service';
 
@@ -18,22 +17,20 @@ import { TikTokLeadgenService } from './tiktok-leadgen.service';
   providers: [
     LeadsService,
     EducationLeadWorkflowService,
-    ProspectiaAdvisorService,
-    ProspectiaSyncService,
     MetaLeadgenService,
     TikTokLeadgenService,
     MaliOneLinksCatalogService,
     MaliOnePaymentService,
+    MaliOneOpportunityLinkService,
   ],
   exports: [
     LeadsService,
     EducationLeadWorkflowService,
-    ProspectiaAdvisorService,
-    ProspectiaSyncService,
     MetaLeadgenService,
     TikTokLeadgenService,
     MaliOneLinksCatalogService,
     MaliOnePaymentService,
+    MaliOneOpportunityLinkService,
   ],
 })
 export class LeadsModule {}
