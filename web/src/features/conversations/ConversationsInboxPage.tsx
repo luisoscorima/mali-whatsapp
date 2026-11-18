@@ -355,6 +355,7 @@ function ProfileBlock({
   actions?: ReactNode
 }) {
   const user = useAppUser()
+  const canManageLeads = Boolean(user?.canManageLeads)
   const contactId = detail.conversation.contact_id
   // Solo “iniciar” si no hay ciclo abierto. Ciclo cerrado (venta exitosa)
   // sigue mostrando su estado; no parecer “sin ciclo”.
