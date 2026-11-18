@@ -447,6 +447,8 @@ export function InboxContactSheet({
               <p className="mb-2 text-sm font-medium">Perfil del contacto</p>
               <ContactForm
                 key={formKey}
+                formId="inbox-contact-sheet-form"
+                hideSubmit
                 mode={mode}
                 segments={segments}
                 attributeDefinitions={attributeDefinitions}
@@ -492,23 +494,39 @@ export function InboxContactSheet({
                     : undefined
                 }
               />
-              {mode === 'edit' && contactId ? (
-                <p className="mt-4 text-sm">
-                  <Link
-                    to={`/contacts/${contactId}`}
-                    className="text-accent hover:underline"
-                    onClick={() => onOpenChange(false)}
-                  >
-                    Abrir perfil completo
-                  </Link>
-                </p>
-              ) : null}
             </>
           )}
         </SheetBody>
 
-        <SheetFooter>
-          <SheetClose disabled={saving}>Cerrar</SheetClose>
+        <SheetFooter className="justify-between gap-3">
+          {mode === 'edit' && contactId ? (
+            <Link
+              to={`/contacts/${contactId}`}
+              className="mr-auto text-sm text-accent hover:underline"
+              onClick={() => onOpenChange(false)}
+            >
+              Abrir perfil completo
+            </Link>
+          ) : (
+            <span />
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <SheetClose disabled={saving}>Cerrar</SheetClose>
+            {!loadFailed && ready ? (
+              <button
+                type="submit"
+                form="inbox-contact-sheet-form"
+                disabled={saving}
+                className="rounded-lg bg-accent px-4 py-2 text-sm text-white disabled:opacity-60"
+              >
+                {saving
+                  ? 'Guardando…'
+                  : mode === 'create'
+                    ? 'Guardar'
+                    : 'Guardar cambios'}
+              </button>
+            ) : null}
+          </div>
         </SheetFooter>
       </SheetContent>
       {openLead && contactId ? (

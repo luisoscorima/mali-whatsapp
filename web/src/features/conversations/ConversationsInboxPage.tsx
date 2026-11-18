@@ -313,6 +313,7 @@ function ProfileBlock({
   onAssigneeOpenChange,
   onAssign,
   onLeadStatus,
+  onStartAttention,
   onSegmentsChanged,
   onOpenContact,
   onBack,
@@ -333,6 +334,7 @@ function ProfileBlock({
   onAssigneeOpenChange: (open: boolean) => void
   onAssign: (assignedUserId: number | null) => boolean | Promise<boolean>
   onLeadStatus: (statusId: number) => boolean | Promise<boolean>
+  onStartAttention: () => boolean | Promise<boolean>
   onSegmentsChanged: () => void
   onOpenContact: () => void
   onBack?: () => void
@@ -341,6 +343,10 @@ function ProfileBlock({
   const user = useAppUser()
   const canManageLeads = Boolean(user?.canManageLeads)
   const contactId = detail.conversation.contact_id
+  const isEducation = canonicalArea(user?.area ?? '') === 'educacion'
+  const needsStartAttention = Boolean(
+    isEducation && contactId && !detail.contact?.lead_status,
+  )
   const contactMode = contactId ? 'edit' : 'create'
   const contactActionLabel = contactId ? 'Editar contacto' : 'Añadir contacto'
   const canOpenContact = contactId
@@ -407,7 +413,8 @@ function ProfileBlock({
       <span className="inbox-chat-header-context-copy">
         <span className="inbox-chat-header-context-label">Estado del lead</span>
         <span className="inbox-chat-header-context-value">
-          {leadStatusLabel || 'Sin estado'}
+          {leadStatusLabel ||
+            (needsStartAttention ? 'Sin oportunidad · Iniciar' : 'Sin estado')}
         </span>
       </span>
     </>
@@ -579,6 +586,12 @@ function ProfileBlock({
             <InboxLeadStatusPicker
               currentStatusId={leadStatusId}
               busy={leadStatusBusy}
+              needsStartAttention={needsStartAttention}
+              onStartAttention={() =>
+                void Promise.resolve(onStartAttention()).then((ok) => {
+                  if (ok) setStatusOpen(false)
+                })
+              }
               onSelect={(id) => {
                 void Promise.resolve(onLeadStatus(id)).then((ok) => {
                   if (ok) setStatusOpen(false)
@@ -2288,6 +2301,49 @@ export function ConversationsInboxPage() {
     void loadList()
   }
 
+  async function onStartAttention(opts?: {
+    contactId?: number | null
+    conversationId?: number | null
+  }): Promise<boolean> {
+    const contactId =
+      opts?.contactId ??
+      leadStatusContext?.contactId ??
+      actionsContext?.contactId ??
+      detail?.conversation.contact_id ??
+      null
+    if (!contactId) {
+      notify.error('Vincula un contacto antes de iniciar atención')
+      return false
+    }
+    const conversationId =
+      opts?.conversationId !== undefined
+        ? opts.conversationId
+        : leadStatusContext?.conversationId ??
+          actionsContext?.conversationId ??
+          detail?.conversation.id ??
+          selectedId ??
+          null
+    setLeadStatusBusy(true)
+    const result = await apiClient.post<{
+      id: number
+      lead_status_id: number | null
+    }>('/api/leads/attention/start', {
+      contact_id: contactId,
+      conversation_id:
+        conversationId && conversationId > 0 ? conversationId : undefined,
+    })
+    setLeadStatusBusy(false)
+    if (!result.ok) {
+      notify.error(result.error)
+      return false
+    }
+    notify.success('Atención iniciada')
+    setLeadStatusContext(null)
+    if (selectedId) void loadDetail(selectedId)
+    void loadList()
+    return true
+  }
+
   async function onLeadStatus(
     statusId: number,
     opts?: {
@@ -3566,6 +3622,7 @@ export function ConversationsInboxPage() {
                   onAssigneeOpenChange={setAssigneePickerOpen}
                   onAssign={onAssign}
                   onLeadStatus={onLeadStatus}
+                  onStartAttention={onStartAttention}
                   onSegmentsChanged={() => {
                     void loadList()
                     if (selectedId) void loadDetail(selectedId)
@@ -3860,6 +3917,17 @@ export function ConversationsInboxPage() {
           currentStatusId={leadStatusContext.leadStatusId}
           currentStatusLabel={leadStatusContext.leadStatusLabel}
           busy={leadStatusBusy}
+          needsStartAttention={Boolean(
+            canonicalArea(user?.area ?? '') === 'educacion' &&
+              leadStatusContext.contactId &&
+              !leadStatusContext.leadStatusId,
+          )}
+          onStartAttention={() =>
+            onStartAttention({
+              contactId: leadStatusContext.contactId,
+              conversationId: leadStatusContext.conversationId,
+            })
+          }
           onSelect={onLeadStatus}
           onBack={
             leadStatusContext.returnToActions

@@ -20,6 +20,8 @@ type InboxLeadStatusSheetProps = {
   currentStatusId: number | null
   currentStatusLabel?: string | null
   busy?: boolean
+  needsStartAttention?: boolean
+  onStartAttention?: () => void | Promise<boolean>
   onSelect: (statusId: number) => void | Promise<boolean>
   onBack?: () => void
 }
@@ -33,12 +35,16 @@ export function InboxLeadStatusSheet({
   currentStatusId,
   currentStatusLabel,
   busy = false,
+  needsStartAttention = false,
+  onStartAttention,
   onSelect,
   onBack,
 }: InboxLeadStatusSheetProps) {
   const titleBlock = (
     <>
-      <DialogTitle>Estado del lead</DialogTitle>
+      <DialogTitle>
+        {needsStartAttention ? 'Iniciar atención' : 'Estado del lead'}
+      </DialogTitle>
       <DialogDescription>
         {heading} · {chatSecondaryLabel(phone)}
         {currentStatusLabel ? ` · ${currentStatusLabel}` : ''}
@@ -64,6 +70,15 @@ export function InboxLeadStatusSheet({
           <InboxLeadStatusPicker
             currentStatusId={currentStatusId}
             busy={busy}
+            needsStartAttention={needsStartAttention}
+            onStartAttention={
+              onStartAttention
+                ? () =>
+                    void Promise.resolve(onStartAttention()).then((ok) => {
+                      if (ok !== false) onOpenChange(false)
+                    })
+                : undefined
+            }
             onSelect={(id) => {
               void Promise.resolve(onSelect(id)).then((ok) => {
                 if (ok !== false) onOpenChange(false)

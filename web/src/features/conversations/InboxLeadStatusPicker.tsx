@@ -12,18 +12,27 @@ export type LeadStatusOption = {
 type InboxLeadStatusPickerProps = {
   currentStatusId: number | null
   busy?: boolean
+  /** Educación sin ciclo abierto: mostrar iniciar atención en lugar de estados. */
+  needsStartAttention?: boolean
+  onStartAttention?: () => void | boolean | Promise<void | boolean>
   onSelect: (statusId: number) => void | boolean | Promise<void | boolean>
 }
 
 export function InboxLeadStatusPicker({
   currentStatusId,
   busy = false,
+  needsStartAttention = false,
+  onStartAttention,
   onSelect,
 }: InboxLeadStatusPickerProps) {
   const [options, setOptions] = useState<LeadStatusOption[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!needsStartAttention)
 
   useEffect(() => {
+    if (needsStartAttention) {
+      setLoading(false)
+      return
+    }
     let cancelled = false
     setLoading(true)
     void apiClient
@@ -40,7 +49,29 @@ export function InboxLeadStatusPicker({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [needsStartAttention])
+
+  if (needsStartAttention) {
+    return (
+      <div className="inbox-oneclick-picker space-y-2 p-3">
+        <p className="muted text-sm">
+          No hay oportunidad abierta en esta categoría. Inicia atención para poder
+          cambiar el estado.
+        </p>
+        <button
+          type="button"
+          disabled={busy || !onStartAttention}
+          className="w-full rounded-lg border border-line bg-surface-strong px-3 py-2 text-sm font-medium disabled:opacity-60"
+          onClick={() => {
+            if (!onStartAttention) return
+            void Promise.resolve(onStartAttention())
+          }}
+        >
+          {busy ? 'Iniciando…' : 'Iniciar atención'}
+        </button>
+      </div>
+    )
+  }
 
   if (loading) {
     return <p className="text-sm text-muted p-2">Cargando estados…</p>

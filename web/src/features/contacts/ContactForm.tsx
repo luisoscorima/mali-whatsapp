@@ -43,6 +43,10 @@ type ContactFormProps = {
   initial: ContactFormValues
   saving?: boolean
   actions?: ReactNode
+  /** id del <form> para submit externo (p. ej. SheetFooter). */
+  formId?: string
+  /** Oculta el botón Guardar del cuerpo (usar footer del sheet). */
+  hideSubmit?: boolean
   onSubmit: (values: ContactFormValues) => void
   leadStatusOptions?: Array<{ id: number; label: string }>
   leadStatusId?: number | null
@@ -72,6 +76,8 @@ export function ContactForm({
   initial,
   saving = false,
   actions,
+  formId,
+  hideSubmit = false,
   onSubmit,
   leadStatusOptions,
   leadStatusId = null,
@@ -175,7 +181,7 @@ export function ContactForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-lg space-y-4">
+    <form id={formId} onSubmit={handleSubmit} className="max-w-lg space-y-4">
       <label className="block text-sm">
         <span className="text-muted">Nombre</span>
         <input
@@ -413,16 +419,20 @@ export function ContactForm({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="submit"
-          disabled={disabled || saving}
-          className="rounded-lg bg-accent px-4 py-2 text-sm text-white disabled:opacity-60"
-        >
-          {saving ? 'Guardando…' : mode === 'create' ? 'Guardar' : 'Guardar cambios'}
-        </button>
-        {actions}
-      </div>
+      {hideSubmit ? (
+        actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="submit"
+            disabled={disabled || saving}
+            className="rounded-lg bg-accent px-4 py-2 text-sm text-white disabled:opacity-60"
+          >
+            {saving ? 'Guardando…' : mode === 'create' ? 'Guardar' : 'Guardar cambios'}
+          </button>
+          {actions}
+        </div>
+      )}
     </form>
   )
 }

@@ -54,6 +54,38 @@ function formatMoney(amount: number, currency: string) {
   }
 }
 
+/** Misma lógica visual que TreasuryStatusBadge en MALI ONE. */
+function treasuryStatusClass(status: string): string {
+  const key = status
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+  if (key === 'liquidada' || key === 'pagado') {
+    return 'border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+  }
+  if (key === 'autorizada') {
+    return 'border-sky-500/30 bg-sky-500/15 text-sky-700 dark:text-sky-300'
+  }
+  if (key === 'por pagar') {
+    return 'border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300'
+  }
+  if (key === 'anulada' || key === 'denegada' || key === 'expirado') {
+    return 'border-red-500/30 bg-red-500/15 text-red-700 dark:text-red-300'
+  }
+  return 'border-line bg-surface-strong text-muted'
+}
+
+function TreasuryStatusChip({ status }: { status: string }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-medium ${treasuryStatusClass(status)}`}
+    >
+      {status}
+    </span>
+  )
+}
+
 /** Modal asesor: buscar cobro en Treasury (vía ONE) y asociarlo al ciclo actual. */
 export function InboxAssociatePaymentDialog({
   open,
@@ -203,12 +235,14 @@ export function InboxAssociatePaymentDialog({
                           : 'border-line bg-bg hover:bg-surface-strong'
                       }`}
                     >
-                      <span className="font-medium">
-                        {providerLabel(hit.provider)} · {hit.transactionCode}
+                      <span className="flex flex-wrap items-center gap-2 font-medium">
+                        <span>
+                          {providerLabel(hit.provider)} · {hit.transactionCode}
+                        </span>
+                        <TreasuryStatusChip status={hit.status} />
                       </span>
-                      <br />
-                      <span className="muted">
-                        {formatMoney(hit.amount, hit.currency)} · {hit.status}
+                      <span className="muted mt-0.5 block">
+                        {formatMoney(hit.amount, hit.currency)}
                         {hit.customerName ? ` · ${hit.customerName}` : ''}
                         {hit.customerEmail ? ` · ${hit.customerEmail}` : ''}
                       </span>
