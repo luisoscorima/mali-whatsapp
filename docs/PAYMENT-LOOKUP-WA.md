@@ -28,17 +28,18 @@ Header ONE: `x-crm-educacion-service-token`.
 
 `venta_exitosa` / `convertido` **no** cierran el ciclo. El cierre comercial ocurre así:
 
-| Evento | `close_reason` | Ciclo |
-|--------|----------------|-------|
-| Associate con cobro **positivo** (Liquidada, Pagado, approved…) | `paid` | Cierra |
-| Associate con cobro **en proceso** (Autorizada, Por pagar, pending…) | — | **Sigue abierto**; obs en `EducacionSale.billingNote` |
-| Associate con cobro **negativo** (Anulada, Denegada, Expirado, rejected…) | — | **Rechazado** (no asociar) |
-| `POST .../close-without-payment` (crédito / fuera Treasury / otro) | `sold` | Cierra |
-| Estado `perdido` / `no_interesado` / `vencido` | `lost` / terminal | Cierra al marcar |
+| Evento | `close_reason` | Ciclo | Obs Caja |
+|--------|----------------|-------|----------|
+| Associate **positivo** (Liquidada, Pagado, approved…) | `paid` | Cierra | No |
+| Associate **autorizada** (Autorizada, authorized, processing) | `paid` | Cierra | Sí (`billingNote`) |
+| Associate **en proceso** (Por pagar, pending, mediation…) | — | **Sigue abierto** | Sí (`billingNote`) |
+| Associate **negativo** (Anulada, Denegada, Expirado, rejected…) | — | **Rechazado** (no asociar) | — |
+| `POST .../close-without-payment` (crédito / fuera Treasury / otro) | `sold` | Cierra | — |
+| Estado `perdido` / `no_interesado` / `vencido` | `lost` / terminal | Cierra al marcar | — |
 
 Respuesta de associate WA: `{ payment, cycle, closesCycle, settlementKind }`. Solo si `closesCycle === true` se llama a `closeCycleAfterPayment`.
 
-Clasificación de estados: `treasury-settlement.util.ts` en MALI ONE (`positive` | `in_progress` | `negative` | `unknown`). `unknown` se trata como en proceso.
+Clasificación de estados: `treasury-settlement.util.ts` en MALI ONE (`positive` | `authorized` | `in_progress` | `negative` | `unknown`). `unknown` se trata como en proceso (asocia + obs, no cierra). Política suavizada: solo `authorized` cierra con obs.
 
 ## Identificador pago ↔ ciclo
 
@@ -60,7 +61,7 @@ Derivado expuesto como `payment_link`:
 
 - Modal inbox: ficha / ⋮ / picker post-venta → **Asociar pago** (`InboxAssociatePaymentDialog`).
 - También en **ventas históricas ya cerradas** (`closed_at` por la regla vieja) sin `payment_link`: CTA de asociar; no “iniciar ciclo” hasta tener vínculo o otro motivo.
-- Lookup muestra hits; **negativos deshabilitados**; en proceso avisa “se asocia sin cerrar”.
+- Lookup muestra hits; **negativos deshabilitados**; `authorized` avisa que cierra con obs; `in_progress`/`unknown` avisa “se asocia sin cerrar”.
 - Si ONE/Treasury cae, el chat sigue; el endpoint responde 503.
 
 ## Estado

@@ -12,7 +12,12 @@ import {
   DialogTitle,
 } from '@/shared/ui/shadcn/dialog'
 
-type SettlementKind = 'positive' | 'in_progress' | 'negative' | 'unknown'
+type SettlementKind =
+  | 'positive'
+  | 'authorized'
+  | 'in_progress'
+  | 'negative'
+  | 'unknown'
 
 type PaymentHit = {
   provider: string
@@ -38,11 +43,11 @@ function settlementKindOf(hit: PaymentHit): SettlementKind {
   if (['liquidada', 'pagado', 'paid', 'approved', 'success', 'successful', 'completed'].includes(key)) {
     return 'positive'
   }
-  if (
-    ['autorizada', 'por_pagar', 'pending', 'in_process', 'authorized', 'processing'].includes(
-      key,
-    )
-  ) {
+  // Alineado a ONE: Autorizada cierra ciclo + obs; Por pagar no cierra.
+  if (['autorizada', 'authorized', 'processing'].includes(key)) {
+    return 'authorized'
+  }
+  if (['por_pagar', 'pending', 'in_process', 'mediation'].includes(key)) {
     return 'in_progress'
   }
   if (
@@ -202,9 +207,13 @@ export function InboxAssociatePaymentDialog({
       const closesCycle = Boolean(
         (res.data as { closesCycle?: boolean } | undefined)?.closesCycle,
       )
+      const kind = (res.data as { settlementKind?: SettlementKind } | undefined)
+        ?.settlementKind
       notify.success(
         closesCycle
-          ? 'Pago asociado. Ciclo cerrado.'
+          ? kind === 'authorized'
+            ? 'Pago autorizado asociado. Ciclo cerrado (queda observación en caja).'
+            : 'Pago asociado. Ciclo cerrado.'
           : 'Pago asociado (pendiente de confirmación). El ciclo sigue abierto.',
       )
       onOpenChange(false)
@@ -306,15 +315,23 @@ export function InboxAssociatePaymentDialog({
                         {hit.customerEmail ? ` · ${hit.customerEmail}` : ''}
                         {blocked
                           ? ' · No asociable (denegado/anulado)'
-                          : kind === 'in_progress' || kind === 'unknown'
-                            ? ' · Se asociará sin cerrar el ciclo'
-                            : ''}
+                          : kind === 'authorized'
+                            ? ' · Se asociará y cerrará el ciclo (obs. en caja)'
+                            : kind === 'in_progress' || kind === 'unknown'
+                              ? ' · Se asociará sin cerrar el ciclo'
+                              : ''}
                       </span>
                     </button>
                   </li>
                 )
               })}
             </ul>
+          ) : null}
+          {selectedKind === 'authorized' ? (
+            <p className="muted text-sm">
+              Cobro autorizado: se asociará, cerrará el ciclo y dejará
+              observación en caja.
+            </p>
           ) : null}
           {selectedKind === 'in_progress' || selectedKind === 'unknown' ? (
             <p className="muted text-sm">

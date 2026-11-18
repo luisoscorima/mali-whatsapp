@@ -106,11 +106,11 @@ En WhatsApp el nombre es el perfil (`wa_profile_name`). Vacío si no hay, para q
 
 `venta_exitosa` / `convertido` son terminales **comerciales** (`is_terminal` en catálogo) pero **no** ponen `closed_at` al marcarse. El ciclo sigue abierto hasta:
 
-1. **Primer pago asociado positivo** (Treasury → `close_reason: paid`), o
+1. **Pago asociado que cierra** (Treasury positivo o **Autorizada** → `close_reason: paid`; Autorizada además deja obs en caja), o
 2. **Cerrar sin pago** (`POST /api/leads/attention/close-without-payment`, motivos `credito` \| `fuera_treasury` \| `otro` → `close_reason: sold`), o
 3. **Pérdida** (`perdido` / `no_interesado` / `vencido` → cierran al cambiar estado).
 
-Cobros en proceso se pueden asociar con observación **sin** cerrar; cobros negativos no se asocian. Detalle y endpoints: [PAYMENT-LOOKUP-WA.md](./PAYMENT-LOOKUP-WA.md).
+Cobros **Por pagar / pending** se asocian con observación **sin** cerrar; **Autorizada** asocia, cierra y deja obs; negativos no se asocian. Detalle: [PAYMENT-LOOKUP-WA.md](./PAYMENT-LOOKUP-WA.md).
 
 El indicador visual de vínculo pago↔ciclo (`payment_link`) vive en ONE (`EducacionSale`) y se muestra en Oportunidades, Treasury y el header/ficha del inbox.
 

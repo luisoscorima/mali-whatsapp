@@ -5,7 +5,7 @@ Vigente: [LEADS.md](./LEADS.md).
 ## 2026-11-18 — Option A: cierre por pago + indicador
 
 - `venta_exitosa` / `convertido` ya no cierran el ciclo al marcarse; cierre con pago positivo (`paid`), “cerrar sin pago” (`sold`) o perdido/no interesado.
-- Associate: política intermedia de estados Treasury (positivo cierra; en proceso asocia+obs; negativo rechaza). Ver [PAYMENT-LOOKUP-WA.md](./PAYMENT-LOOKUP-WA.md).
+- Associate: política Treasury (positivo cierra; **Autorizada** cierra + obs; Por pagar asocia+obs sin cerrar; negativo rechaza). Ver [PAYMENT-LOOKUP-WA.md](./PAYMENT-LOOKUP-WA.md).
 - Identificador `payment_link` (ONE `EducacionSale`) en Oportunidades, Treasury y WA header/ficha.
 - API: `GET /api/leads/payments/link`, `POST /api/leads/attention/close-without-payment`.
 - Ventas históricas cerradas sin pago: CTA asociar (attention/current también devuelve el último ciclo cerrado).

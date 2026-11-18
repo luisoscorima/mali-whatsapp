@@ -644,7 +644,7 @@ export class LeadsController {
       settlementKind?: string;
       candidate?: { status?: string };
     };
-    // Solo cobros positivos cierran el ciclo. En proceso: asociado + obs, ciclo abierto.
+    // Cierra si ONE marca closesCycle (positivo o Autorizada). Por pagar: asocia + obs, ciclo abierto.
     const closesCycle = data?.closesCycle === true;
     let closed: unknown = null;
     if (closesCycle) {
