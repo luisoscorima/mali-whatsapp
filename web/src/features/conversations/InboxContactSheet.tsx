@@ -362,7 +362,7 @@ export function InboxContactSheet({
         : { id: 0, label: 'Por contactar' },
       closed_at: null,
     })
-    notify.success('Nueva atención iniciada')
+    notify.success('Ciclo iniciado')
     onSaved()
   }
 
@@ -421,7 +421,7 @@ export function InboxContactSheet({
                     </p>
                   ) : (
                     <p className="muted text-sm">
-                      No hay oportunidad abierta. Puedes chatear y, si corresponde, iniciar una nueva atención.
+                      Sin ciclo iniciado. Puedes chatear y, si corresponde, iniciar uno nuevo.
                     </p>
                   )}
                   {!openLead ? (
@@ -431,7 +431,7 @@ export function InboxContactSheet({
                       onClick={() => void onStartAttention()}
                       className="rounded-lg border border-line bg-surface-strong px-3 py-1.5 text-sm disabled:opacity-60"
                     >
-                      {attentionBusy ? 'Iniciando…' : 'Iniciar atención'}
+                      {attentionBusy ? 'Iniciando…' : 'Iniciar ciclo'}
                     </button>
                   ) : (
                     <button

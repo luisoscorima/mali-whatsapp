@@ -39,6 +39,7 @@ import { InboxChatActionsDialog } from './InboxChatActionsDialog'
 import { InboxLeadStatusPicker } from './InboxLeadStatusPicker'
 import { InboxLeadStatusSheet } from './InboxLeadStatusSheet'
 import { groupAssignableSegments } from './assignableSegmentsUi'
+import { InboxAssociatePaymentDialog } from './InboxAssociatePaymentDialog'
 import { InboxContactSheet } from './InboxContactSheet'
 import { areaLabel } from '../admin/areaLabels'
 import { InboxSendTemplateDialog } from './InboxSendTemplateDialog'
@@ -414,7 +415,7 @@ function ProfileBlock({
         <span className="inbox-chat-header-context-label">Estado del lead</span>
         <span className="inbox-chat-header-context-value">
           {leadStatusLabel ||
-            (needsStartAttention ? 'Sin oportunidad · Iniciar' : 'Sin estado')}
+            (needsStartAttention ? 'Sin ciclo iniciado' : 'Sin estado')}
         </span>
       </span>
     </>
@@ -1293,6 +1294,13 @@ export function ConversationsInboxPage() {
   const [leadStatusContext, setLeadStatusContext] = useState<LeadStatusContext | null>(
     null,
   )
+  const [paymentContext, setPaymentContext] = useState<{
+    cycleId: number
+    contactId: number
+    contactLabel?: string
+  } | null>(null)
+  const [paymentOpen, setPaymentOpen] = useState(false)
+  const [paymentBusy, setPaymentBusy] = useState(false)
   const [assignees, setAssignees] = useState<ConversationAssignee[]>([])
   const [assigneesLoading, setAssigneesLoading] = useState(false)
   const [assignSaving, setAssignSaving] = useState(false)
@@ -2018,6 +2026,40 @@ export function ConversationsInboxPage() {
     })
   }
 
+  async function openAssociatePaymentFromActions(ctx: ChatActionsContext) {
+    if (!ctx.contactId) return
+    // Solo con ciclo iniciado (mismo criterio que la ficha).
+    if (!ctx.leadStatusId && !ctx.leadStatusLabel) {
+      notify.error('Sin ciclo iniciado. Inicia el ciclo antes de asociar un pago.')
+      return
+    }
+    setPaymentBusy(true)
+    const qs = new URLSearchParams({ contact_id: String(ctx.contactId) })
+    if (ctx.conversationId && ctx.conversationId > 0) {
+      qs.set('conversation_id', String(ctx.conversationId))
+    }
+    const attention = await apiClient.get<{
+      id: number
+      closed_at: string | null
+    } | null>(`/api/leads/attention/current?${qs}`)
+    setPaymentBusy(false)
+    if (!attention.ok || !attention.data?.id || attention.data.closed_at) {
+      notify.error(
+        attention.ok
+          ? 'Sin ciclo iniciado. Inicia el ciclo antes de asociar un pago.'
+          : attention.error,
+      )
+      return
+    }
+    setActionsOpen(false)
+    setPaymentContext({
+      cycleId: attention.data.id,
+      contactId: ctx.contactId,
+      contactLabel: ctx.heading,
+    })
+    setPaymentOpen(true)
+  }
+
   function backToChatActions() {
     reopeningActionsRef.current = true
     setAssignContext(null)
@@ -2312,7 +2354,7 @@ export function ConversationsInboxPage() {
       detail?.conversation.contact_id ??
       null
     if (!contactId) {
-      notify.error('Vincula un contacto antes de iniciar atención')
+      notify.error('Vincula un contacto antes de iniciar el ciclo')
       return false
     }
     const conversationId =
@@ -2337,7 +2379,7 @@ export function ConversationsInboxPage() {
       notify.error(result.error)
       return false
     }
-    notify.success('Atención iniciada')
+    notify.success('Ciclo iniciado')
     setLeadStatusContext(null)
     if (selectedId) void loadDetail(selectedId)
     void loadList()
@@ -3203,11 +3245,12 @@ export function ConversationsInboxPage() {
               const showPhoneRow = hasContactName || hasWaAlias || !item.phone
               const leadScore = item.contact_lead_score
               const hasConversation = !item.is_virtual
-              const actionsCtx = chatActionsFromListItem(
-                item,
-                list!.ai_area_enabled,
-                name,
-              )
+              const actionsCtx =
+                detail &&
+                !item.is_virtual &&
+                detail.conversation.id === item.id
+                  ? chatActionsFromDetail(detail, name, list!.ai_area_enabled)
+                  : chatActionsFromListItem(item, list!.ai_area_enabled, name)
               const windowHours = !item.is_virtual
                 ? windowRemainingHoursLabel(
                     item.user_service_window_open,
@@ -3800,6 +3843,16 @@ export function ConversationsInboxPage() {
           canAssign={canAssign}
           onAssign={() => openAssignFromActions(actionsContext)}
           onOpenLeadStatus={() => openLeadStatusFromActions(actionsContext)}
+          onOpenAssociatePayment={
+            canonicalArea(user?.area ?? '') === 'educacion' &&
+            Boolean(
+              actionsContext.contactId &&
+                (actionsContext.leadStatusId || actionsContext.leadStatusLabel),
+            ) &&
+            !paymentBusy
+              ? () => void openAssociatePaymentFromActions(actionsContext)
+              : undefined
+          }
           canOpenContact={canOpenListContact(actionsContext.contactId, actionsContext.phone)}
           onOpenContact={() =>
             openContactSheet({
@@ -3934,6 +3987,19 @@ export function ConversationsInboxPage() {
               ? () => backToChatActions()
               : undefined
           }
+        />
+      ) : null}
+
+      {paymentContext ? (
+        <InboxAssociatePaymentDialog
+          open={paymentOpen}
+          onOpenChange={(open) => {
+            setPaymentOpen(open)
+            if (!open) setPaymentContext(null)
+          }}
+          cycleId={paymentContext.cycleId}
+          contactId={paymentContext.contactId}
+          contactLabel={paymentContext.contactLabel}
         />
       ) : null}
 

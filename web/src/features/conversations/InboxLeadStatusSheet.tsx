@@ -43,7 +43,7 @@ export function InboxLeadStatusSheet({
   const titleBlock = (
     <>
       <DialogTitle>
-        {needsStartAttention ? 'Iniciar atención' : 'Estado del lead'}
+        {needsStartAttention ? 'Iniciar ciclo' : 'Estado del lead'}
       </DialogTitle>
       <DialogDescription>
         {heading} · {chatSecondaryLabel(phone)}

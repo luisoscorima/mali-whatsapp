@@ -55,8 +55,8 @@ export function InboxLeadStatusPicker({
     return (
       <div className="inbox-oneclick-picker space-y-2 p-3">
         <p className="muted text-sm">
-          No hay oportunidad abierta en esta categoría. Inicia atención para poder
-          cambiar el estado.
+          Aún no hay ciclo iniciado en esta categoría. Inícialo para poder cambiar
+          el estado.
         </p>
         <button
           type="button"
@@ -67,7 +67,7 @@ export function InboxLeadStatusPicker({
             void Promise.resolve(onStartAttention())
           }}
         >
-          {busy ? 'Iniciando…' : 'Iniciar atención'}
+          {busy ? 'Iniciando…' : 'Iniciar ciclo'}
         </button>
       </div>
     )

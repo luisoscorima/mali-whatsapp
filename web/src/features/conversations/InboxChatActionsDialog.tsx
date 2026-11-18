@@ -48,6 +48,8 @@ type InboxChatActionsDialogProps = {
   canAssign?: boolean
   onAssign?: () => void
   onOpenLeadStatus?: () => void
+  /** Educación con ciclo: asociar código Treasury. */
+  onOpenAssociatePayment?: () => void
   onOpenContact: () => void
   canOpenContact?: boolean
   onSegmentAdded?: () => void
@@ -77,6 +79,7 @@ export function InboxChatActionsDialog({
   canAssign = false,
   onAssign,
   onOpenLeadStatus,
+  onOpenAssociatePayment,
   onOpenContact,
   canOpenContact = true,
   onSegmentAdded,
@@ -217,6 +220,16 @@ export function InboxChatActionsDialog({
                     {leadStatusLabel}
                   </span>
                 ) : null}
+              </Button>
+            ) : null}
+            {hasConversation && contactId && onOpenAssociatePayment ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full justify-start"
+                onClick={() => onOpenAssociatePayment()}
+              >
+                Asociar pago
               </Button>
             ) : null}
             {canOpenContact ? (
