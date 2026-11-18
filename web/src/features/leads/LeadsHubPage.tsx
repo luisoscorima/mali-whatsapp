@@ -194,13 +194,14 @@ type OriginRow = ContactOriginSummary & {
   came_with_inbound: boolean
   categoria?: string
   linea?: string
+  lead_status?: { label: string } | null
   contacts: {
     id: number
     name: string
     phone: string | null
     whatsapp_user_id: string | null
     email: string | null
-    lead_status: { label: string } | null
+    lead_status?: { label: string } | null
   } | null
 }
 
@@ -492,7 +493,7 @@ function LeadsUnifiedList() {
                         ) : null}
                       </td>
                       <td className="px-2 py-2">
-                        {o.contacts?.lead_status?.label || '—'}
+                        {o.lead_status?.label || o.contacts?.lead_status?.label || '—'}
                       </td>
                       <td className="px-2 py-2">
                         <LeadOpenChatButton

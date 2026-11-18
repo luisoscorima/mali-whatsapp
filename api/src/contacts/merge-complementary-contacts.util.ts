@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { isEducationAttentionArea } from '../leads/education-lead-context.util';
 import {
   pickComplementaryKeepDrop,
   type IdentityFields,
@@ -61,6 +62,8 @@ export async function mergeComplementaryContacts(
   const dropFull = drop.id === contactA.id ? contactA : contactB;
   const keepFull = keep.id === contactA.id ? contactA : contactB;
 
+  // Educación: lead vive en el ciclo, nunca en el contacto (ni al fusionar).
+  const education = isEducationAttentionArea(area);
   await tx.contacts.update({
     where: { id: keep.id },
     data: {
@@ -69,9 +72,13 @@ export async function mergeComplementaryContacts(
       dni: keepFull.dni?.trim() || dropFull.dni?.trim() || undefined,
       last_name:
         keepFull.last_name?.trim() || dropFull.last_name?.trim() || undefined,
-      lead_status_id:
-        keepFull.lead_status_id ?? dropFull.lead_status_id ?? undefined,
-      lead_score: keepFull.lead_score ?? dropFull.lead_score ?? undefined,
+      ...(education
+        ? { lead_status_id: null, lead_score: null }
+        : {
+            lead_status_id:
+              keepFull.lead_status_id ?? dropFull.lead_status_id ?? undefined,
+            lead_score: keepFull.lead_score ?? dropFull.lead_score ?? undefined,
+          }),
       updated_at: new Date(),
     },
   });

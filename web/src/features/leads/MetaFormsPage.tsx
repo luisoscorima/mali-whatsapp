@@ -38,12 +38,13 @@ type LeadRow = {
   created_time: string | null
   chat_conversation_id: number | null
   came_with_inbound: boolean
+  lead_status?: { label: string } | null
   contacts: {
     id: number
     name: string
     phone: string | null
     email: string | null
-    lead_status: { label: string } | null
+    lead_status?: { label: string } | null
   } | null
 }
 
@@ -585,7 +586,7 @@ export function MetaFormsPage() {
                         </div>
                       </td>
                       <td className="px-2 py-2">
-                        {lead.contacts?.lead_status?.label || '—'}
+                        {lead.lead_status?.label || lead.contacts?.lead_status?.label || '—'}
                       </td>
                       <td className="px-2 py-2">
                         <LeadOpenChatButton

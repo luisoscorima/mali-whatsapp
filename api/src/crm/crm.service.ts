@@ -900,7 +900,6 @@ export class CrmService {
                 },
               }
             : {}),
-          lead_status: { select: { label: true } },
         },
       }),
     ]);

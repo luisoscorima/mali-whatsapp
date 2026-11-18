@@ -1662,7 +1662,19 @@ export class LeadsService implements OnModuleInit {
         if (status.is_terminal) {
           await endLeadConversationLinks(tx, resolvedCycle.id, now);
         }
-        // Educación: no escribir estado en contacts (fuente = ciclo por categoría).
+        // Educación: fuente = ciclo. Limpia cualquier espejo legacy en contacts.
+        await tx.contacts.updateMany({
+          where: {
+            id: contactId,
+            OR: [{ lead_status_id: { not: null } }, { lead_score: { not: null } }],
+          },
+          data: {
+            lead_status_id: null,
+            lead_score: null,
+            lead_status_updated_at: now,
+            updated_at: now,
+          },
+        });
         return {
           id: contactId,
           lead_status_id: statusId,
@@ -1823,8 +1835,6 @@ export class LeadsService implements OnModuleInit {
               whatsapp_user_id: true,
               email: true,
               dni: true,
-              lead_status_id: true,
-              lead_status: true,
             },
           },
           conversations: {
@@ -1861,13 +1871,15 @@ export class LeadsService implements OnModuleInit {
   }
 
   /**
-   * Educación: proyecta el estado del ciclo abierto sobre `contacts.lead_status`
-   * en respuestas legacy (hub/orígenes/forms). Nunca lee el espejo del contacto.
+   * Educación: estado del ciclo abierto a nivel ítem (captación/hub).
+   * Nunca cuelga lead del objeto `contacts` (espejo legacy → null).
    */
   async projectLeadStatusFromCycles<
     T extends {
       contact_id?: number | null;
       program_id?: number | null;
+      lead_status_id?: number | null;
+      lead_status?: { id?: number; slug?: string; label: string } | null;
       contacts: {
         lead_status_id?: number | null;
         lead_status: { id?: number; slug?: string; label: string } | null;
@@ -1881,19 +1893,24 @@ export class LeadsService implements OnModuleInit {
           .filter((id): id is number => typeof id === 'number' && id > 0),
       ),
     ];
+    const stripContactLead = (item: T, cycleStatus?: {
+      lead_status_id: number | null;
+      lead_status: { id: number; slug: string; label: string } | null;
+    } | null): T => ({
+      ...item,
+      lead_status_id: cycleStatus?.lead_status_id ?? null,
+      lead_status: cycleStatus?.lead_status ?? null,
+      contacts: item.contacts
+        ? {
+            ...item.contacts,
+            lead_status_id: null,
+            lead_status: null,
+          }
+        : item.contacts,
+    });
+
     if (!contactIds.length) {
-      return items.map((item) =>
-        item.contacts
-          ? {
-              ...item,
-              contacts: {
-                ...item.contacts,
-                lead_status_id: null,
-                lead_status: null,
-              },
-            }
-          : item,
-      );
+      return items.map((item) => stripContactLead(item));
     }
     const cycles = await this.prisma.education_lead_cycles.findMany({
       where: { contact_id: { in: contactIds }, closed_at: null },
@@ -1905,10 +1922,7 @@ export class LeadsService implements OnModuleInit {
         lead_status: { select: { id: true, slug: true, label: true } },
       },
     });
-    const byKey = new Map<
-      string,
-      (typeof cycles)[number]
-    >();
+    const byKey = new Map<string, (typeof cycles)[number]>();
     const latestByContact = new Map<number, (typeof cycles)[number]>();
     for (const cycle of cycles) {
       byKey.set(`${cycle.contact_id}:${cycle.program_id ?? 'null'}`, cycle);
@@ -1917,19 +1931,12 @@ export class LeadsService implements OnModuleInit {
       }
     }
     return items.map((item) => {
-      if (!item.contacts || item.contact_id == null) return item;
+      if (item.contact_id == null) return stripContactLead(item);
       const cycle =
         item.program_id !== undefined
           ? byKey.get(`${item.contact_id}:${item.program_id ?? 'null'}`)
           : latestByContact.get(item.contact_id);
-      return {
-        ...item,
-        contacts: {
-          ...item.contacts,
-          lead_status_id: cycle?.lead_status_id ?? null,
-          lead_status: cycle?.lead_status ?? null,
-        },
-      };
+      return stripContactLead(item, cycle ?? null);
     });
   }
 
@@ -2050,7 +2057,10 @@ export class LeadsService implements OnModuleInit {
         phone: o.contacts?.phone || o.phone || '',
         email: o.contacts?.email || o.email || '',
         dni: o.contacts?.dni || o.dni || '',
-        lead_status: o.contacts?.lead_status?.label || '',
+        lead_status:
+          (o as { lead_status?: { label?: string } | null }).lead_status?.label ||
+          o.contacts?.lead_status?.label ||
+          '',
         source_label: o.source_label || '',
         source_key: o.source_key || '',
         curso: cursoFromOriginPayload(payload),

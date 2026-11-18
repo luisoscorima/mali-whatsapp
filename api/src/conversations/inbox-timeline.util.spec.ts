@@ -1,8 +1,25 @@
 import { AuditEvent } from '../audit/audit-events';
 import {
+  EDUCATION_CONTACT_SCOPED_TIMELINE_EVENTS,
+  EDUCATION_CYCLE_SCOPED_TIMELINE_EVENTS,
   collectUserIdsFromAuditRows,
   formatInboxTimelineEventLabel,
 } from './inbox-timeline.util';
+
+describe('education timeline scoping', () => {
+  it('keeps lead status/score off the contact fan-out list', () => {
+    expect([...EDUCATION_CYCLE_SCOPED_TIMELINE_EVENTS]).toEqual([
+      AuditEvent.CONTACT_LEAD_SCORE,
+      AuditEvent.CONTACT_LEAD_STATUS,
+    ]);
+    expect([...EDUCATION_CONTACT_SCOPED_TIMELINE_EVENTS]).toEqual([
+      AuditEvent.CONTACT_UPDATED,
+    ]);
+    expect(EDUCATION_CONTACT_SCOPED_TIMELINE_EVENTS).not.toContain(
+      AuditEvent.CONTACT_LEAD_STATUS,
+    );
+  });
+});
 
 describe('direct template assignment timeline', () => {
   const row = {

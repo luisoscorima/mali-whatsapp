@@ -30,3 +30,4 @@ Inventario ligero de quién llama a mali-whatsapp `/api/crm/*` (token `X-Crm-Ser
 - Escrituras comerciales del asesor en destino: UI WA → API ONE (tras cutover).
 - Hoy: UI WA y UI ONE (jefes) escriben al motor WA.
 - No dual-write de oportunidades.
+- Educación: estado/score/asignación comercial viven en el **ciclo** (categoría/línea), nunca en `contacts.lead_*`.

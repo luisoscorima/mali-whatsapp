@@ -38,7 +38,7 @@ describe('education-lead-sale-ready', () => {
         { name: 'Lead', last_name: '', phone: null, email: null, dni: null },
         { area: 'educacion' },
       ),
-    ).toEqual(['nombre', 'apellido', 'dni', 'email', 'telefono', 'categoria']);
+    ).toEqual(['nombre', 'apellido', 'dni', 'email', 'telefono']);
   });
 
   it('exige apellido aunque el nombre esté completo', () => {
@@ -50,9 +50,22 @@ describe('education-lead-sale-ready', () => {
     ).toEqual(['apellido']);
   });
 
+  it('acepta General (educacion sin program_id) como categoría', () => {
+    expect(
+      missingFieldsForVentaExitosa(readyContact, {
+        area: 'educacion',
+        program_id: null,
+      }),
+    ).toEqual([]);
+  });
+
   it('acepta area educacion_ca como categoría', () => {
     expect(
       missingFieldsForVentaExitosa(readyContact, { area: 'educacion_ca', program_id: null }),
     ).toEqual([]);
+  });
+
+  it('sigue pidiendo categoría si no hay area ni program', () => {
+    expect(missingFieldsForVentaExitosa(readyContact, {})).toEqual(['categoria']);
   });
 });

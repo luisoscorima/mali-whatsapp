@@ -1047,7 +1047,10 @@ export class MetaLeadgenService {
         phone: row.contacts?.phone || '',
         email: row.contacts?.email || '',
         dni: row.contacts?.dni || '',
-        lead_status: row.contacts?.lead_status?.label || '',
+        lead_status:
+          (row as { lead_status?: { label?: string } | null }).lead_status?.label ||
+          row.contacts?.lead_status?.label ||
+          '',
         form_id: row.form_id,
         form_name: row.form_name || '',
         leadgen_id: row.leadgen_id,

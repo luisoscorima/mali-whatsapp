@@ -184,8 +184,6 @@ export class MetaAdsService {
             name: true,
             last_name: true,
             email: true,
-            lead_score: true,
-            lead_status: { select: { id: true, slug: true, label: true } },
             contact_segments: { select: { segment_slug: true } },
           },
         },

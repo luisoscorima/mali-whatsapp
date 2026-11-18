@@ -15,6 +15,20 @@ export const INBOX_TIMELINE_EVENT_TYPES = [
   AuditEvent.CONTACT_UPDATED,
 ] as const;
 
+/**
+ * En Educación el estado del lead no es del contacto: es del ciclo/categoría.
+ * Estos eventos no deben listarse por contact_id en todos los chats.
+ */
+export const EDUCATION_CYCLE_SCOPED_TIMELINE_EVENTS = [
+  AuditEvent.CONTACT_LEAD_SCORE,
+  AuditEvent.CONTACT_LEAD_STATUS,
+] as const;
+
+/** Eventos que aún pueden mirarse por contact_id en Educación (no estado). */
+export const EDUCATION_CONTACT_SCOPED_TIMELINE_EVENTS = [
+  AuditEvent.CONTACT_UPDATED,
+] as const;
+
 type AuditRow = {
   id: bigint;
   created_at: Date;

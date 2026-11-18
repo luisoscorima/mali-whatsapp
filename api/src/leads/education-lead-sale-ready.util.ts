@@ -45,8 +45,13 @@ function isUsablePersonName(value: string): boolean {
 
 function hasCategoria(cycle: SaleReadyCycle): boolean {
   if (cycle.program_id != null && cycle.program_id > 0) return true;
+  // General = área educacion sin program_id; CA/EP legacy por area slug.
   const area = clean(cycle.area).toLowerCase();
-  return area === 'educacion_ca' || area === 'educacion_ep';
+  return (
+    area === 'educacion' ||
+    area === 'educacion_ca' ||
+    area === 'educacion_ep'
+  );
 }
 
 /** Lista de campos faltantes; vacía si puede cerrar como venta. */

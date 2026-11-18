@@ -170,6 +170,8 @@ import { autoAssignConversationIfUnassigned } from './conversation-assignment.ut
 import {
   advisorLabelFromUserRow,
   collectUserIdsFromAuditRows,
+  EDUCATION_CONTACT_SCOPED_TIMELINE_EVENTS,
+  EDUCATION_CYCLE_SCOPED_TIMELINE_EVENTS,
   INBOX_TIMELINE_EVENT_TYPES,
   mapAuditRowsToTimelineEvents,
 } from './inbox-timeline.util';
@@ -331,20 +333,10 @@ export class ConversationsService {
     const local = canonicalBusinessArea(row.area) === canonical;
     const include = input.includeAreaData && local;
 
-    // Educación: estado/score viven en el ciclo de la categoría de la línea,
-    // no en contacts.lead_status_id (compartido entre todas las líneas).
-    let leadScore: number | null = include ? row.lead_score : null;
-    let leadStatus: InboxContact['lead_status'] =
-      include && row.lead_status_id != null && row.lead_status_label
-        ? {
-            id: Number(row.lead_status_id),
-            slug: String(row.lead_status_slug ?? ''),
-            label: String(row.lead_status_label),
-          }
-        : null;
+    // Educación: estado/score SOLO del ciclo de la línea. Nunca contacts.lead_*.
+    let leadScore: number | null = null;
+    let leadStatus: InboxContact['lead_status'] = null;
     if (include && isEducationAttentionArea(canonical)) {
-      leadScore = null;
-      leadStatus = null;
       const conversation = await this.prisma.conversations.findFirst({
         where: { id: input.conversationId },
         select: { whatsapp_line: { select: { program_id: true } } },
@@ -371,6 +363,16 @@ export class ConversationsService {
             }
           : null;
       }
+    } else if (include) {
+      leadScore = row.lead_score;
+      leadStatus =
+        row.lead_status_id != null && row.lead_status_label
+          ? {
+              id: Number(row.lead_status_id),
+              slug: String(row.lead_status_slug ?? ''),
+              label: String(row.lead_status_label),
+            }
+          : null;
     }
 
     return {
@@ -911,7 +913,10 @@ export class ConversationsService {
         NULL::int AS assigned_user_id,
         NULL::timestamptz AS automation_touched_at,
         NULL::text AS assigned_user_label,
-        ct.lead_score AS contact_lead_score,
+        CASE
+          WHEN ct.area IN ('educacion', 'educacion_ca', 'educacion_ep') THEN NULL
+          ELSE ct.lead_score
+        END AS contact_lead_score,
         ${this.inboxContactNameSql('ct')} AS contact_name,
         NULL::text AS wa_profile_name,
         NULL::text AS wa_username,
@@ -2565,15 +2570,44 @@ export class ConversationsService {
     afterAuditId = BigInt(0),
     range: { from?: Date; to?: Date } = {},
   ): Promise<InboxTimelineEvent[]> {
-    const contactEventTypes = [
-      AuditEvent.CONTACT_LEAD_SCORE,
-      AuditEvent.CONTACT_LEAD_STATUS,
-      AuditEvent.CONTACT_UPDATED,
-    ];
+    // Educación: estado/score viven en el ciclo por categoría — NUNCA fan-out
+    // por contact_id (replicaba "cambió el estado…" en todas las líneas).
+    // Otras áreas: lead_status aún puede vivir en el contacto.
+    const educationScoped = isEducationAttentionArea(area);
+    const contactScopedEventTypes = educationScoped
+      ? [...EDUCATION_CONTACT_SCOPED_TIMELINE_EVENTS]
+      : [
+          AuditEvent.CONTACT_LEAD_SCORE,
+          AuditEvent.CONTACT_LEAD_STATUS,
+          AuditEvent.CONTACT_UPDATED,
+        ];
+    const leadCycleEventTypes = [...EDUCATION_CYCLE_SCOPED_TIMELINE_EVENTS];
     const rangeSql = Prisma.sql`
       ${range.from ? Prisma.sql` AND created_at >= ${range.from}` : Prisma.empty}
       ${range.to ? Prisma.sql` AND created_at <= ${range.to}` : Prisma.empty}
     `;
+    const educationCycleMatchSql = educationScoped && contactId
+      ? Prisma.sql`
+          OR (
+            event_type IN (${Prisma.join(leadCycleEventTypes)})
+            AND NULLIF(meta->>'cycle_id', '') IS NOT NULL
+            AND (meta->>'cycle_id')::bigint IN (
+              SELECT elcl.cycle_id
+              FROM education_lead_conversation_links elcl
+              WHERE elcl.conversation_id = ${conversationId}
+              UNION
+              SELECT elc.id
+              FROM education_lead_cycles elc
+              INNER JOIN contacts ct
+                ON ct.person_id = elc.person_id AND ct.id = ${contactId}
+              INNER JOIN conversations conv ON conv.id = ${conversationId}
+              LEFT JOIN whatsapp_lines wl ON wl.id = conv.whatsapp_line_id
+              WHERE elc.area = ${area}
+                AND elc.program_id IS NOT DISTINCT FROM wl.program_id
+            )
+          )
+        `
+      : Prisma.empty;
     const rows = contactId
       ? await this.prisma.$queryRaw<
           {
@@ -2594,8 +2628,9 @@ export class ConversationsService {
               (meta->>'conversation_id')::int = ${conversationId}
               OR (
                 (meta->>'contact_id')::int = ${contactId}
-                AND event_type IN (${Prisma.join(contactEventTypes)})
+                AND event_type IN (${Prisma.join(contactScopedEventTypes)})
               )
+              ${educationCycleMatchSql}
             )
           ORDER BY created_at ASC, id ASC
         `)
@@ -3445,6 +3480,7 @@ export class ConversationsService {
         'No hay contacto vinculado; crea o vincula el contacto para poder calificar el lead.',
       );
     }
+    let cycleId: number | null = null;
     if (isEducationAttentionArea(area)) {
       if (!conv.contacts?.person_id) {
         throw new BadRequestException(
@@ -3465,9 +3501,26 @@ export class ConversationsService {
           'No hay oportunidad abierta para calificar en esta categoría',
         );
       }
-      await this.prisma.education_lead_cycles.update({
-        where: { id: cycle.id },
-        data: { lead_score: clear ? null : score, updated_at: new Date() },
+      cycleId = cycle.id;
+      await this.prisma.$transaction(async (tx) => {
+        await tx.education_lead_cycles.update({
+          where: { id: cycle.id },
+          data: { lead_score: clear ? null : score, updated_at: new Date() },
+        });
+        // Higiene: nunca dejar score colgado del contacto en Educación.
+        await tx.contacts.updateMany({
+          where: {
+            id: conv.contact_id!,
+            area,
+            OR: [{ lead_score: { not: null } }, { lead_status_id: { not: null } }],
+          },
+          data: {
+            lead_score: null,
+            lead_status_id: null,
+            lead_status_updated_at: new Date(),
+            updated_at: new Date(),
+          },
+        });
       });
     } else {
       await this.prisma.contacts.updateMany({
@@ -3484,6 +3537,7 @@ export class ConversationsService {
       meta: {
         conversation_id: conversationId,
         contact_id: conv.contact_id,
+        cycle_id: cycleId,
         cleared: clear,
         score: clear ? null : score,
       },
