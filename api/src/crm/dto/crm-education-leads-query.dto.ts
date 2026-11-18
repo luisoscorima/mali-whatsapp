@@ -18,7 +18,7 @@ export class CrmEducationLeadsQueryDto {
   q?: string;
 
   @IsOptional()
-  @IsIn(['recent', 'new_number', 'duplicate', 'reassignable', 'conflict', 'in_progress', 'all'])
+  @IsIn(['recent', 'new_number', 'duplicate', 'reassignable', 'conflict', 'in_progress', 'all', 'solo_contacto'])
   view?: string;
 
   @IsOptional()

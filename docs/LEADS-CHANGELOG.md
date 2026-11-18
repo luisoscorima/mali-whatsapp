@@ -2,6 +2,12 @@
 
 Vigente: [LEADS.md](./LEADS.md).
 
+## 2026-11-18 — Plan canónico F0–F1 (destino ONE, WA estable)
+
+- Docs: destino vs transición; asesor ≠ chat; inventario [CRM-CONSUMERS.md](./CRM-CONSUMERS.md); runbook [CUTOVER-COMERCIAL.md](./CUTOVER-COMERCIAL.md).
+- Ciclos: vistas `stale` (3 días) y `solo_contacto`; campos `promise_at` / `lost_reason`.
+- Outbox `commercial_channel_outbox` (scaffolding F4).
+
 ## 2026-11-04 — SLA editable (horario + meta)
 
 - Config en Ajustes (`/settings/sla` / `GET|PATCH /api/settings/education-sla`); defaults 10 min y horario RQ.

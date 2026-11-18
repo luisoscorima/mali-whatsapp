@@ -18,8 +18,8 @@ export class CrmEducationCyclesQueryDto {
   q?: string;
 
   @IsOptional()
-  @IsIn(['open', 'closed', 'review', 'unassigned'])
-  view?: 'open' | 'closed' | 'review' | 'unassigned';
+  @IsIn(['open', 'closed', 'review', 'unassigned', 'stale', 'solo_contacto'])
+  view?: 'open' | 'closed' | 'review' | 'unassigned' | 'stale' | 'solo_contacto';
 
   @IsOptional()
   @Transform(({ value }) => (value === undefined ? 1 : Number(value)))

@@ -10,15 +10,31 @@ Histórico: [LEADS-CHANGELOG.md](./LEADS-CHANGELOG.md). Si chocan, **manda este*
 
 ## Quién guarda qué
 
+### Destino de producto (acordado)
+
+| Pieza | Dueño destino | Notas |
+|-------|---------------|--------|
+| Mensajería, inbox, plantillas, campañas WA | **mali-whatsapp** | Superficie diaria del asesor; **no puede caerse** en el camino crítico |
+| Personas comerciales, oportunidades, reglas 60 días | **MALI ONE** (tras cutover) | Hoy el motor sigue en WA (transición) |
+| Venta, aplicación de cobro, postventa | **MALI ONE** | Treasury = operaciones crudas; Caja aplica |
+| Lookup código de transacción (UX asesor) | API ONE; proxy WA `GET/POST /api/leads/payments/*` | El asesor no entra a `/treasury`. Detalle: [PAYMENT-LOOKUP-WA.md](./PAYMENT-LOOKUP-WA.md) |
+
+**Destino UX:** el asesor vive en mali-whatsapp (etapa, ficha, chat, asociar código). CRM Educación = jefes / Caja / ops.
+
+**Transición UX:** el asesor puede usar CRM Educación **solo** para (1) alta de lead no captado y (2) asociar código de pago. Etapa y ficha siguen **solo en WA**.
+
+### Hoy (transición)
+
 | Pieza | Dónde | Rol |
 |-------|--------|-----|
-| **Fuente de verdad** | mali-whatsapp | Persona, orígenes, `lead_status`, ownership/asignación, regla de recontacto, historial, chat y campañas |
-| **Vitrina operativa** | MALI ONE (CRM Educación) | UI de asesoras y jefes: listar, verificar, asignar, revisar, reportar. Consume la CRM API. Sin BD paralela de leads |
-| **Captura web y dinero** | MALI ONE | Widget → `EducacionLead` (ingesta y reintento) → sync a WhatsApp (`channel=widget`). Pagos y ROI |
+| **Motor comercial (hoy)** | mali-whatsapp | Persona, orígenes, ciclos, ownership, estados, SLA, Prospectia |
+| **Vitrina / jefes** | MALI ONE (CRM Educación) | Listar, asignar, revisar, reportar vía CRM API. Sin BD paralela de leads |
+| **Captura web** | MALI ONE | Widget → `EducacionLead` (buffer) → sync `channel=widget` a WA |
+| **Chat / campañas WA** | mali-whatsapp | Casa del asesor; cambios aditivos y reversibles |
 
-WhatsApp **reemplaza el Excel**. MALI ONE es la **vitrina** (mismo patrón que CRM PAM).
+WhatsApp **reemplaza el Excel**. En transición el motor comercial sigue en WA; el destino es ONE como CRM sin tumbar la mensajería.
 
-**WhatsApp guarda y decide; MALI ONE muestra y opera.**
+**Regla dura:** un solo escritor por dato. Asesor comercial ≠ responsable del chat.
 
 ### Qué hacía el Sheet (referencia)
 

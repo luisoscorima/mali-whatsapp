@@ -611,7 +611,7 @@ export class EducationLeadWorkflowService {
     const scope = this.leadScope(params.area);
     const areas = scope.areas;
     const view = params.view || 'recent';
-    if (!['recent', 'new_number', 'duplicate', 'reassignable', 'conflict', 'in_progress', 'all'].includes(view)) {
+    if (!['recent', 'new_number', 'duplicate', 'reassignable', 'conflict', 'in_progress', 'all', 'solo_contacto'].includes(view)) {
       throw new BadRequestException('Vista de leads inválida');
     }
     const cutoff = new Date(Date.now() - SIXTY_DAYS_MS);
@@ -776,6 +776,8 @@ export class EducationLeadWorkflowService {
   async updateManagement(contactId: number, area: string, changes: {
     assigned_user_id?: number | null; lead_status_id?: number | null; actor_email?: string;
     lead_id?: number;
+    promise_at?: string | null;
+    lost_reason?: string | null;
   }) {
     this.areas(area);
     const contact = await this.prisma.contacts.findFirst({
@@ -910,6 +912,30 @@ export class EducationLeadWorkflowService {
           );
         }
       }
+      let promiseAt: Date | null | undefined;
+      if (changes.promise_at !== undefined) {
+        if (changes.promise_at === null || changes.promise_at === '') {
+          promiseAt = null;
+        } else {
+          const parsed = new Date(changes.promise_at);
+          if (Number.isNaN(parsed.getTime())) {
+            throw new BadRequestException('promise_at inválida');
+          }
+          promiseAt = parsed;
+        }
+      }
+      if (nextStatus?.slug === 'promesa' && promiseAt === undefined && !cycle.promise_at) {
+        throw new BadRequestException('Promesa requiere fecha (promise_at)');
+      }
+      if (nextStatus?.slug === 'promesa' && promiseAt === null) {
+        throw new BadRequestException('Promesa requiere fecha (promise_at)');
+      }
+      const lostReason = changes.lost_reason === undefined
+        ? undefined
+        : (String(changes.lost_reason ?? '').trim() || null);
+      if (nextStatus?.slug === 'perdido' && !lostReason && !cycle.lost_reason) {
+        throw new BadRequestException('Perdido requiere motivo (lost_reason)');
+      }
       cycle = await tx.education_lead_cycles.update({
         where: { id: cycle.id },
         data: {
@@ -919,6 +945,8 @@ export class EducationLeadWorkflowService {
             first_assigned_at: cycle.first_assigned_at ?? now,
           } : {}),
           ...(changes.lead_status_id !== undefined ? { lead_status_id: changes.lead_status_id } : {}),
+          ...(promiseAt !== undefined ? { promise_at: promiseAt } : {}),
+          ...(lostReason !== undefined ? { lost_reason: lostReason } : {}),
           ...(closing ? {
             closed_at: now,
             close_reason: nextStatus?.slug === 'venta_exitosa' || nextStatus?.slug === 'convertido'
@@ -1573,7 +1601,7 @@ export class EducationLeadWorkflowService {
 
   async listCycles(params: {
     area?: string; channel?: string; q?: string;
-    view?: 'open' | 'closed' | 'review' | 'unassigned';
+    view?: 'open' | 'closed' | 'review' | 'unassigned' | 'stale' | 'solo_contacto';
     page?: number; limit?: number;
   }) {
     const scope = this.leadScope(params.area);
@@ -1581,6 +1609,8 @@ export class EducationLeadWorkflowService {
     const limit = params.limit ?? 50;
     const view = params.view ?? 'open';
     const q = String(params.q ?? '').trim();
+    const now = new Date();
+    const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
     const scoped: Prisma.education_lead_cyclesWhereInput[] = [];
     if (scope.onlyGeneral) scoped.push({ program_id: null, area: 'educacion' });
     else if (scope.program) scoped.push(this.programOrLegacyCycleFilter(scope.program));
@@ -1601,17 +1631,32 @@ export class EducationLeadWorkflowService {
         ],
       });
     }
-    const stateWhere: Record<typeof view, Prisma.education_lead_cyclesWhereInput> = {
+    const formLikeChannels = ['meta_lead_form', 'tiktok', 'widget'];
+    const stateWhere: Record<string, Prisma.education_lead_cyclesWhereInput> = {
       open: { closed_at: null },
       closed: { closed_at: { not: null } },
       review: { closed_at: null, requires_review: true },
       unassigned: { closed_at: null, assigned_user_id: null },
+      // RQ0016: sin gestión ~3 días (deadline o última interacción).
+      stale: {
+        closed_at: null,
+        OR: [
+          { inactivity_deadline_at: { not: null, lte: now } },
+          { last_interaction_at: { lte: threeDaysAgo } },
+        ],
+      },
+      // RQ0006: captación form/widget sin hilo vinculado.
+      solo_contacto: {
+        closed_at: null,
+        conversation_links: { none: { unlinked_at: null } },
+        entries: { some: { channel: { in: formLikeChannels } } },
+      },
     };
     const baseWhere: Prisma.education_lead_cyclesWhereInput = scoped.length ? { AND: scoped } : {};
     const where: Prisma.education_lead_cyclesWhereInput = {
       AND: [baseWhere, stateWhere[view]],
     };
-    const [total, items, open, closed, review, unassigned] = await this.prisma.$transaction([
+    const [total, items, open, closed, review, unassigned, stale, soloContacto] = await this.prisma.$transaction([
       this.prisma.education_lead_cycles.count({ where }),
       this.prisma.education_lead_cycles.findMany({
         where,
@@ -1656,6 +1701,8 @@ export class EducationLeadWorkflowService {
       this.prisma.education_lead_cycles.count({ where: { AND: [baseWhere, stateWhere.closed] } }),
       this.prisma.education_lead_cycles.count({ where: { AND: [baseWhere, stateWhere.review] } }),
       this.prisma.education_lead_cycles.count({ where: { AND: [baseWhere, stateWhere.unassigned] } }),
+      this.prisma.education_lead_cycles.count({ where: { AND: [baseWhere, stateWhere.stale] } }),
+      this.prisma.education_lead_cycles.count({ where: { AND: [baseWhere, stateWhere.solo_contacto] } }),
     ]);
     return {
       items: items.map((item) => {
@@ -1678,6 +1725,8 @@ export class EducationLeadWorkflowService {
           started_at: item.started_at,
           last_interaction_at: item.last_interaction_at,
           closed_at: item.closed_at,
+          promise_at: item.promise_at,
+          lost_reason: item.lost_reason,
           assigned_user_id: item.assigned_user_id,
           assigned_user_label: item.assigned_user ? formatAdvisorLabel(item.assigned_user) : null,
           lead_status_id: item.lead_status_id,
@@ -1697,7 +1746,7 @@ export class EducationLeadWorkflowService {
           },
         };
       }),
-      counts: { open, closed, review, unassigned },
+      counts: { open, closed, review, unassigned, stale, solo_contacto: soloContacto },
       total,
       page,
       limit,

@@ -21,8 +21,15 @@ import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-va
 import { parseCategorySlugs } from '../config/category-scope';
 import { LeadsService } from './leads.service';
 import { EducationLeadWorkflowService } from './education-lead-workflow.service';
+import { MaliOnePaymentService } from './mali-one-payment.service';
 import { MetaLeadgenService } from './meta-leadgen.service';
 import { TikTokLeadgenService } from './tiktok-leadgen.service';
+
+class AssociatePaymentDto {
+  @IsInt() @Min(1) waCycleId!: number;
+  @IsOptional() @IsInt() @Min(1) waContactId?: number;
+  @IsString() @MaxLength(120) transactionCode!: string;
+}
 
 class CreateLeadStatusDto {
   @IsString()
@@ -147,6 +154,7 @@ export class LeadsController {
     private readonly educationWorkflow: EducationLeadWorkflowService,
     private readonly metaLeadgen: MetaLeadgenService,
     private readonly tiktokLeadgen: TikTokLeadgenService,
+    private readonly maliOnePayments: MaliOnePaymentService,
   ) {}
 
   @Post('mali-one-links/backfill')
@@ -579,6 +587,33 @@ export class LeadsController {
   ): Promise<ApiResponse<unknown>> {
     assertCanManageLeads(user);
     const data = await this.tiktokLeadgen.backfillForm(body.form_id);
+    return { ok: true, data };
+  }
+
+  /** Lookup código Treasury vía MALI ONE (asesor; sin UI Treasury). */
+  @Get('payments/lookup')
+  async lookupPayment(
+    @CurrentUser() user: AuthUser,
+    @Query('code') code?: string,
+  ): Promise<ApiResponse<unknown>> {
+    assertCanManageLeads(user);
+    const data = await this.maliOnePayments.lookup(String(code ?? ''));
+    return { ok: true, data };
+  }
+
+  /** Asociar código a ciclo/oportunidad vía MALI ONE. */
+  @Post('payments/associate')
+  async associatePayment(
+    @CurrentUser() user: AuthUser,
+    @Body() body: AssociatePaymentDto,
+  ): Promise<ApiResponse<unknown>> {
+    assertCanManageLeads(user);
+    const data = await this.maliOnePayments.associate({
+      waCycleId: body.waCycleId,
+      waContactId: body.waContactId,
+      transactionCode: body.transactionCode,
+      actorEmail: user.email,
+    });
     return { ok: true, data };
   }
 }

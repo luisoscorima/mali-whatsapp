@@ -43,6 +43,10 @@ class EducationManagementDto {
   @IsOptional() @IsInt() @Min(1) lead_status_id?: number | null;
   @IsOptional() @IsInt() @Min(1) lead_id?: number;
   @IsOptional() @IsString() @MaxLength(120) actor_email?: string;
+  /** ISO date for estado promesa. */
+  @IsOptional() @IsString() @MaxLength(40) promise_at?: string | null;
+  /** Motivo al pasar a perdido. */
+  @IsOptional() @IsString() @MaxLength(64) lost_reason?: string | null;
 }
 
 class EducationReviewDto {

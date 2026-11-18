@@ -8,6 +8,7 @@ import { EducationLeadWorkflowService } from './education-lead-workflow.service'
 import { ProspectiaAdvisorService } from './prospectia-advisor.service';
 import { ProspectiaSyncService } from './prospectia-sync.service';
 import { MaliOneLinksCatalogService } from './mali-one-links-catalog.service';
+import { MaliOnePaymentService } from './mali-one-payment.service';
 import { MetaLeadgenService } from './meta-leadgen.service';
 import { TikTokLeadgenService } from './tiktok-leadgen.service';
 
@@ -22,6 +23,7 @@ import { TikTokLeadgenService } from './tiktok-leadgen.service';
     MetaLeadgenService,
     TikTokLeadgenService,
     MaliOneLinksCatalogService,
+    MaliOnePaymentService,
   ],
   exports: [
     LeadsService,
@@ -31,6 +33,7 @@ import { TikTokLeadgenService } from './tiktok-leadgen.service';
     MetaLeadgenService,
     TikTokLeadgenService,
     MaliOneLinksCatalogService,
+    MaliOnePaymentService,
   ],
 })
 export class LeadsModule {}
