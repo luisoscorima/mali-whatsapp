@@ -1874,18 +1874,18 @@ export class LeadsService implements OnModuleInit {
    * Educación: estado del ciclo abierto a nivel ítem (captación/hub).
    * Nunca cuelga lead del objeto `contacts` (espejo legacy → null).
    */
-  async projectLeadStatusFromCycles<
-    T extends {
-      contact_id?: number | null;
-      program_id?: number | null;
-      lead_status_id?: number | null;
-      lead_status?: { id?: number; slug?: string; label: string } | null;
-      contacts: {
-        lead_status_id?: number | null;
-        lead_status: { id?: number; slug?: string; label: string } | null;
-      } | null;
-    },
-  >(items: T[]): Promise<T[]> {
+  async projectLeadStatusFromCycles<T extends {
+    contact_id?: number | null;
+    program_id?: number | null;
+    contacts?: Record<string, unknown> | null;
+  }>(items: T[]): Promise<Array<T & {
+    lead_status_id: number | null;
+    lead_status: { id: number; slug: string; label: string } | null;
+  }>> {
+    type CycleStatus = {
+      lead_status_id: number | null;
+      lead_status: { id: number; slug: string; label: string } | null;
+    };
     const contactIds = [
       ...new Set(
         items
@@ -1893,21 +1893,21 @@ export class LeadsService implements OnModuleInit {
           .filter((id): id is number => typeof id === 'number' && id > 0),
       ),
     ];
-    const stripContactLead = (item: T, cycleStatus?: {
-      lead_status_id: number | null;
-      lead_status: { id: number; slug: string; label: string } | null;
-    } | null): T => ({
-      ...item,
-      lead_status_id: cycleStatus?.lead_status_id ?? null,
-      lead_status: cycleStatus?.lead_status ?? null,
-      contacts: item.contacts
+    const stripContactLead = (item: T, cycleStatus?: CycleStatus | null) => {
+      const contacts = item.contacts
         ? {
             ...item.contacts,
             lead_status_id: null,
             lead_status: null,
           }
-        : item.contacts,
-    });
+        : item.contacts ?? null;
+      return {
+        ...item,
+        lead_status_id: cycleStatus?.lead_status_id ?? null,
+        lead_status: cycleStatus?.lead_status ?? null,
+        contacts,
+      };
+    };
 
     if (!contactIds.length) {
       return items.map((item) => stripContactLead(item));
@@ -2057,10 +2057,7 @@ export class LeadsService implements OnModuleInit {
         phone: o.contacts?.phone || o.phone || '',
         email: o.contacts?.email || o.email || '',
         dni: o.contacts?.dni || o.dni || '',
-        lead_status:
-          (o as { lead_status?: { label?: string } | null }).lead_status?.label ||
-          o.contacts?.lead_status?.label ||
-          '',
+        lead_status: o.lead_status?.label || '',
         source_label: o.source_label || '',
         source_key: o.source_key || '',
         curso: cursoFromOriginPayload(payload),
