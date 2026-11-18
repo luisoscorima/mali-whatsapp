@@ -1,6 +1,7 @@
 import {
   isSaleClosingStatusSlug,
   missingFieldsForVentaExitosa,
+  statusClosesEducationCycle,
 } from './education-lead-sale-ready.util';
 
 describe('education-lead-sale-ready', () => {
@@ -17,6 +18,14 @@ describe('education-lead-sale-ready', () => {
     expect(isSaleClosingStatusSlug('venta_exitosa')).toBe(true);
     expect(isSaleClosingStatusSlug('convertido')).toBe(true);
     expect(isSaleClosingStatusSlug('promesa')).toBe(false);
+  });
+
+  it('venta no cierra ciclo; perdido sí', () => {
+    expect(statusClosesEducationCycle('venta_exitosa')).toBe(false);
+    expect(statusClosesEducationCycle('convertido')).toBe(false);
+    expect(statusClosesEducationCycle('perdido')).toBe(true);
+    expect(statusClosesEducationCycle('no_interesado')).toBe(true);
+    expect(statusClosesEducationCycle('promesa')).toBe(false);
   });
 
   it('pasa con ficha completa y categoría', () => {

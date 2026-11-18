@@ -43,8 +43,11 @@ import {
 } from './education-lead-sla.util';
 import { ensureEducationSlaAlertsSince } from './education-sla-config.loader';
 import {
+  isCloseWithoutPaymentReason,
   isSaleClosingStatusSlug,
   missingFieldsForVentaExitosa,
+  statusClosesEducationCycle,
+  type CloseWithoutPaymentReason,
 } from './education-lead-sale-ready.util';
 
 function isUniqueViolation(error: unknown): boolean {
@@ -888,8 +891,14 @@ export class EducationLeadWorkflowService {
       const previousAssigneeId = cycle.assigned_user_id;
       const previousStatusId = cycle.lead_status_id;
       const now = new Date();
-      const closing = Boolean(nextStatus?.is_terminal || isTerminalEducationStatusSlug(nextStatus?.slug));
-      if (closing && isSaleClosingStatusSlug(nextStatus?.slug)) {
+      // Venta exitosa / convertido: estado terminal comercial, pero el ciclo sigue
+      // abierto hasta asociar pago (o “cerrar sin pago”).
+      const closing = nextStatus
+        ? statusClosesEducationCycle(nextStatus.slug) ||
+          (Boolean(nextStatus.is_terminal) &&
+            !isSaleClosingStatusSlug(nextStatus.slug))
+        : false;
+      if (isSaleClosingStatusSlug(nextStatus?.slug)) {
         const fresh = await tx.contacts.findFirst({
           where: { id: contactId },
           select: {
@@ -949,9 +958,8 @@ export class EducationLeadWorkflowService {
           ...(lostReason !== undefined ? { lost_reason: lostReason } : {}),
           ...(closing ? {
             closed_at: now,
-            close_reason: nextStatus?.slug === 'venta_exitosa' || nextStatus?.slug === 'convertido'
-              ? 'sold'
-              : nextStatus?.slug === 'perdido' || nextStatus?.slug === 'no_interesado'
+            close_reason:
+              nextStatus?.slug === 'perdido' || nextStatus?.slug === 'no_interesado'
                 ? 'lost'
                 : 'terminal_status',
           } : {}),
@@ -1596,6 +1604,122 @@ export class EducationLeadWorkflowService {
         },
       });
       return cycle;
+    });
+  }
+
+  /**
+   * Cierra el ciclo tras asociar el primer pago Treasury (Option A).
+   * Idempotente si ya está cerrado.
+   */
+  async closeCycleAfterPayment(input: {
+    cycleId: number;
+    actorEmail?: string;
+    user?: AuthUser;
+    transactionCode?: string;
+  }) {
+    const cycle = await this.prisma.education_lead_cycles.findFirst({
+      where: { id: input.cycleId },
+      include: {
+        lead_status: { select: { slug: true } },
+        program: { select: { slug: true } },
+      },
+    });
+    if (!cycle) throw new NotFoundException('Ciclo no encontrado');
+    if (input.user) {
+      this.assertCanAccessLeadContext(input.user, cycle);
+    }
+    if (cycle.closed_at) {
+      return cycle;
+    }
+    const now = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.education_lead_cycles.update({
+        where: { id: cycle.id },
+        data: {
+          closed_at: now,
+          close_reason: 'paid',
+          updated_at: now,
+        },
+      });
+      await endLeadConversationLinks(tx, cycle.id, now);
+      await tx.audit_logs.create({
+        data: {
+          event_type: 'education.lead.closed_paid',
+          message: `Ciclo ${cycle.id} cerrado por pago asociado`,
+          actor_email: input.actorEmail ?? 'system@mali',
+          area: cycle.area,
+          meta: {
+            cycle_id: cycle.id,
+            contact_id: cycle.contact_id,
+            transaction_code: input.transactionCode ?? null,
+            status_slug: cycle.lead_status?.slug ?? null,
+          },
+        },
+      });
+      return updated;
+    });
+  }
+
+  /**
+   * Cierra venta sin asociar pago Treasury (crédito, fuera de caja, etc.).
+   */
+  async closeWithoutPayment(input: {
+    cycleId: number;
+    reason: CloseWithoutPaymentReason;
+    note?: string | null;
+    actorEmail?: string;
+    user?: AuthUser;
+  }) {
+    if (!isCloseWithoutPaymentReason(input.reason)) {
+      throw new BadRequestException('Motivo de cierre inválido');
+    }
+    const cycle = await this.prisma.education_lead_cycles.findFirst({
+      where: { id: input.cycleId },
+      include: {
+        lead_status: { select: { id: true, slug: true } },
+        program: { select: { slug: true } },
+      },
+    });
+    if (!cycle) throw new NotFoundException('Ciclo no encontrado');
+    if (input.user) {
+      this.assertCanAccessLeadContext(input.user, cycle);
+    }
+    if (cycle.closed_at) {
+      throw new BadRequestException('El ciclo ya está cerrado');
+    }
+    if (!isSaleClosingStatusSlug(cycle.lead_status?.slug)) {
+      throw new BadRequestException(
+        'Solo se puede cerrar sin pago tras marcar venta exitosa',
+      );
+    }
+    const now = new Date();
+    const note = String(input.note ?? '').trim() || null;
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.education_lead_cycles.update({
+        where: { id: cycle.id },
+        data: {
+          closed_at: now,
+          close_reason: 'sold',
+          updated_at: now,
+        },
+      });
+      await endLeadConversationLinks(tx, cycle.id, now);
+      await tx.audit_logs.create({
+        data: {
+          event_type: 'education.lead.closed_without_payment',
+          message: `Ciclo ${cycle.id} cerrado sin pago (${input.reason})`,
+          actor_email: input.actorEmail ?? 'system@mali',
+          area: cycle.area,
+          meta: {
+            cycle_id: cycle.id,
+            contact_id: cycle.contact_id,
+            reason: input.reason,
+            note,
+            status_slug: cycle.lead_status?.slug ?? null,
+          },
+        },
+      });
+      return updated;
     });
   }
 

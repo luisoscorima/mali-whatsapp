@@ -12,6 +12,8 @@ import {
   DialogTitle,
 } from '@/shared/ui/shadcn/dialog'
 
+type SettlementKind = 'positive' | 'in_progress' | 'negative' | 'unknown'
+
 type PaymentHit = {
   provider: string
   providerPaymentId: string
@@ -19,9 +21,47 @@ type PaymentHit = {
   amount: number
   currency: string
   status: string
+  settlementKind?: SettlementKind
   customerName: string | null
   customerEmail: string | null
   transactedAt: string | null
+}
+
+function settlementKindOf(hit: PaymentHit): SettlementKind {
+  if (hit.settlementKind) return hit.settlementKind
+  const key = hit.status
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+  if (['liquidada', 'pagado', 'paid', 'approved', 'success', 'successful', 'completed'].includes(key)) {
+    return 'positive'
+  }
+  if (
+    ['autorizada', 'por_pagar', 'pending', 'in_process', 'authorized', 'processing'].includes(
+      key,
+    )
+  ) {
+    return 'in_progress'
+  }
+  if (
+    [
+      'anulada',
+      'denegada',
+      'expirado',
+      'expired',
+      'rejected',
+      'cancelled',
+      'canceled',
+      'refunded',
+      'failed',
+      'denied',
+    ].includes(key)
+  ) {
+    return 'negative'
+  }
+  return 'unknown'
 }
 
 type InboxAssociatePaymentDialogProps = {
@@ -30,6 +70,7 @@ type InboxAssociatePaymentDialogProps = {
   cycleId: number
   contactId: number
   contactLabel?: string
+  onAssociated?: () => void
 }
 
 const PROVIDERS = [
@@ -91,6 +132,7 @@ export function InboxAssociatePaymentDialog({
   open,
   onOpenChange,
   cycleId,
+  onAssociated,
   contactId,
   contactLabel,
 }: InboxAssociatePaymentDialogProps) {
@@ -157,14 +199,26 @@ export function InboxAssociatePaymentDialog({
         notify.error(res.error || 'No se pudo asociar el pago')
         return
       }
-      notify.success('Pago asociado a esta oportunidad')
+      const closesCycle = Boolean(
+        (res.data as { closesCycle?: boolean } | undefined)?.closesCycle,
+      )
+      notify.success(
+        closesCycle
+          ? 'Pago asociado. Ciclo cerrado.'
+          : 'Pago asociado (pendiente de confirmación). El ciclo sigue abierto.',
+      )
       onOpenChange(false)
+      onAssociated?.()
     } catch (err) {
       notify.error(err instanceof Error ? err.message : 'No se pudo asociar')
     } finally {
       setBusy(false)
     }
   }
+
+  const selectedHit = hits.find((h) => h.transactionCode === selectedCode)
+  const selectedKind = selectedHit ? settlementKindOf(selectedHit) : null
+  const selectedBlocked = selectedKind === 'negative'
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -220,19 +274,24 @@ export function InboxAssociatePaymentDialog({
             <ul className="max-h-56 space-y-2 overflow-y-auto">
               {hits.map((hit) => {
                 const active = selectedCode === hit.transactionCode
+                const kind = settlementKindOf(hit)
+                const blocked = kind === 'negative'
                 return (
                   <li key={`${hit.provider}-${hit.providerPaymentId}`}>
                     <button
                       type="button"
-                      disabled={busy}
+                      disabled={busy || blocked}
                       onClick={() => {
+                        if (blocked) return
                         setSelectedCode(hit.transactionCode)
                         setCode(hit.transactionCode)
                       }}
                       className={`w-full rounded-lg border px-3 py-2 text-left text-sm ${
-                        active
-                          ? 'border-accent bg-accent/10'
-                          : 'border-line bg-bg hover:bg-surface-strong'
+                        blocked
+                          ? 'cursor-not-allowed border-line bg-bg opacity-60'
+                          : active
+                            ? 'border-accent bg-accent/10'
+                            : 'border-line bg-bg hover:bg-surface-strong'
                       }`}
                     >
                       <span className="flex flex-wrap items-center gap-2 font-medium">
@@ -245,6 +304,11 @@ export function InboxAssociatePaymentDialog({
                         {formatMoney(hit.amount, hit.currency)}
                         {hit.customerName ? ` · ${hit.customerName}` : ''}
                         {hit.customerEmail ? ` · ${hit.customerEmail}` : ''}
+                        {blocked
+                          ? ' · No asociable (denegado/anulado)'
+                          : kind === 'in_progress' || kind === 'unknown'
+                            ? ' · Se asociará sin cerrar el ciclo'
+                            : ''}
                       </span>
                     </button>
                   </li>
@@ -252,12 +316,22 @@ export function InboxAssociatePaymentDialog({
               })}
             </ul>
           ) : null}
+          {selectedKind === 'in_progress' || selectedKind === 'unknown' ? (
+            <p className="muted text-sm">
+              Este cobro aún no está liquidado: se asociará con observación y el
+              ciclo permanecerá abierto hasta confirmación.
+            </p>
+          ) : null}
         </DialogBody>
         <DialogFooter>
           <DialogClose disabled={busy}>Cancelar</DialogClose>
           <button
             type="button"
-            disabled={busy || (!selectedCode && code.trim().length < 4)}
+            disabled={
+              busy ||
+              selectedBlocked ||
+              (!selectedCode && code.trim().length < 4)
+            }
             className="rounded-lg bg-accent px-3 py-1.5 text-sm text-white disabled:opacity-60"
             onClick={() => void associate()}
           >

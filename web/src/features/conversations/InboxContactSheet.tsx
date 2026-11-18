@@ -111,9 +111,12 @@ export function InboxContactSheet({
   const [openLead, setOpenLead] = useState<{
     id: number
     assigned_user_label: string | null
-    lead_status: { id: number; label: string } | null
+    lead_status: { id: number; slug?: string; label: string } | null
     closed_at: string | null
   } | null>(null)
+  const [closeUnpaidBusy, setCloseUnpaidBusy] = useState(false)
+  const [closeUnpaidReason, setCloseUnpaidReason] = useState('credito')
+  const [paymentLinkLabel, setPaymentLinkLabel] = useState<string | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -136,6 +139,7 @@ export function InboxContactSheet({
     setLoading(true)
     setContact(null)
     setOpenLead(null)
+    setPaymentLinkLabel(null)
     setSelectedSegmentSlugs([])
 
     const categoryQs = category ? `category=${encodeURIComponent(category)}` : ''
@@ -157,7 +161,7 @@ export function InboxContactSheet({
           apiClient.get<{
             id: number
             assigned_user_label: string | null
-            lead_status: { id: number; label: string } | null
+            lead_status: { id: number; slug?: string; label: string } | null
             closed_at: string | null
           } | null>(`/api/leads/attention/current?${attentionQs}`),
         ])
@@ -182,7 +186,33 @@ export function InboxContactSheet({
           pruneSegmentSlugsToOptions(detail.data.segment_slugs, options),
         )
         if (statuses.ok) setLeadStatuses(statuses.data)
-        setOpenLead(attention.ok && attention.data ? attention.data : null)
+        const attentionData = attention.ok && attention.data ? attention.data : null
+        setOpenLead(attentionData)
+        if (attentionData?.id) {
+          const linkRes = await apiClient.get<{
+            payment_link: { status: string; code: string | null } | null
+          }>(`/api/leads/payments/link?waCycleId=${attentionData.id}`)
+          if (!cancelled && linkRes.ok && linkRes.data?.payment_link) {
+            const link = linkRes.data.payment_link
+            const statusLabel =
+              link.status === 'pagado'
+                ? 'Pagado'
+                : link.status === 'parcial'
+                  ? 'Parcial'
+                  : link.status === 'revertido'
+                    ? 'Revertido'
+                    : 'Asociado'
+            setPaymentLinkLabel(
+              link.code
+                ? `Pago ${statusLabel} · ${link.code}`
+                : `Pago ${statusLabel}`,
+            )
+          } else if (!cancelled) {
+            setPaymentLinkLabel(null)
+          }
+        } else if (!cancelled) {
+          setPaymentLinkLabel(null)
+        }
         setLoading(false)
         return
       }
@@ -418,6 +448,12 @@ export function InboxContactSheet({
                       Estado: {openLead.lead_status?.label || '—'}
                       <br />
                       Asesor: {openLead.assigned_user_label || 'Sin asignar'}
+                      {paymentLinkLabel ? (
+                        <>
+                          <br />
+                          {paymentLinkLabel}
+                        </>
+                      ) : null}
                     </p>
                   ) : (
                     <p className="muted text-sm">
@@ -434,13 +470,58 @@ export function InboxContactSheet({
                       {attentionBusy ? 'Iniciando…' : 'Iniciar ciclo'}
                     </button>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => setPaymentOpen(true)}
-                      className="rounded-lg border border-line bg-surface-strong px-3 py-1.5 text-sm"
-                    >
-                      Asociar pago
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentOpen(true)}
+                        className="rounded-lg border border-line bg-surface-strong px-3 py-1.5 text-sm"
+                      >
+                        Asociar pago
+                      </button>
+                      {openLead.lead_status?.slug === 'venta_exitosa' ||
+                      openLead.lead_status?.slug === 'convertido' ? (
+                        <>
+                          <select
+                            className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm"
+                            value={closeUnpaidReason}
+                            disabled={closeUnpaidBusy}
+                            onChange={(e) => setCloseUnpaidReason(e.target.value)}
+                            aria-label="Motivo cierre sin pago"
+                          >
+                            <option value="credito">Crédito</option>
+                            <option value="fuera_treasury">Fuera Treasury</option>
+                            <option value="otro">Otro</option>
+                          </select>
+                          <button
+                            type="button"
+                            disabled={closeUnpaidBusy}
+                            className="rounded-lg border border-line px-3 py-1.5 text-sm disabled:opacity-60"
+                            onClick={() => {
+                              void (async () => {
+                                setCloseUnpaidBusy(true)
+                                const res = await apiClient.post(
+                                  '/api/leads/attention/close-without-payment',
+                                  {
+                                    cycle_id: openLead.id,
+                                    reason: closeUnpaidReason,
+                                  },
+                                )
+                                setCloseUnpaidBusy(false)
+                                if (!res.ok) {
+                                  notify.error(res.error)
+                                  return
+                                }
+                                notify.success('Ciclo cerrado sin pago')
+                                setOpenLead(null)
+                                onSaved()
+                              })()
+                            }}
+                          >
+                            {closeUnpaidBusy ? 'Cerrando…' : 'Cerrar sin pago'}
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
                   )}
                 </div>
               ) : null}
@@ -540,6 +621,10 @@ export function InboxContactSheet({
               ? [contact.name, contact.last_name].filter(Boolean).join(' ')
               : undefined
           }
+          onAssociated={() => {
+            setOpenLead(null)
+            onSaved()
+          }}
         />
       ) : null}
     </Sheet>

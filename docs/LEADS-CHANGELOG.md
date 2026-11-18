@@ -2,6 +2,13 @@
 
 Vigente: [LEADS.md](./LEADS.md).
 
+## 2026-11-18 — Option A: cierre por pago + indicador
+
+- `venta_exitosa` / `convertido` ya no cierran el ciclo al marcarse; cierre con pago positivo (`paid`), “cerrar sin pago” (`sold`) o perdido/no interesado.
+- Associate: política intermedia de estados Treasury (positivo cierra; en proceso asocia+obs; negativo rechaza). Ver [PAYMENT-LOOKUP-WA.md](./PAYMENT-LOOKUP-WA.md).
+- Identificador `payment_link` (ONE `EducacionSale`) en Oportunidades, Treasury y WA header/ficha.
+- API: `GET /api/leads/payments/link`, `POST /api/leads/attention/close-without-payment`.
+
 ## 2026-11-18 — Plan canónico F0–F1 (destino ONE, WA estable)
 
 - Docs: destino vs transición; asesor ≠ chat; inventario [CRM-CONSUMERS.md](./CRM-CONSUMERS.md); runbook [CUTOVER-COMERCIAL.md](./CUTOVER-COMERCIAL.md).

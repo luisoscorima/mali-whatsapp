@@ -24,11 +24,18 @@ import { EducationLeadWorkflowService } from './education-lead-workflow.service'
 import { MaliOnePaymentService } from './mali-one-payment.service';
 import { MetaLeadgenService } from './meta-leadgen.service';
 import { TikTokLeadgenService } from './tiktok-leadgen.service';
+import { isCloseWithoutPaymentReason } from './education-lead-sale-ready.util';
 
 class AssociatePaymentDto {
   @IsInt() @Min(1) waCycleId!: number;
   @IsOptional() @IsInt() @Min(1) waContactId?: number;
   @IsString() @MaxLength(120) transactionCode!: string;
+}
+
+class CloseWithoutPaymentDto {
+  @IsInt() @Min(1) cycle_id!: number;
+  @IsString() @MaxLength(32) reason!: string;
+  @IsOptional() @IsString() @MaxLength(500) note?: string;
 }
 
 class CreateLeadStatusDto {
@@ -605,6 +612,21 @@ export class LeadsController {
     return { ok: true, data };
   }
 
+  /** Identificador pago↔ciclo (EducacionSale en ONE). */
+  @Get('payments/link')
+  async paymentLink(
+    @CurrentUser() user: AuthUser,
+    @Query('waCycleId') waCycleIdRaw?: string,
+  ): Promise<ApiResponse<unknown>> {
+    assertCanManageLeads(user);
+    const waCycleId = Number(waCycleIdRaw);
+    if (!Number.isInteger(waCycleId) || waCycleId < 1) {
+      throw new BadRequestException('waCycleId inválido');
+    }
+    const data = await this.maliOnePayments.paymentLink(waCycleId);
+    return { ok: true, data };
+  }
+
   /** Asociar código a ciclo/oportunidad vía MALI ONE. */
   @Post('payments/associate')
   async associatePayment(
@@ -612,11 +634,61 @@ export class LeadsController {
     @Body() body: AssociatePaymentDto,
   ): Promise<ApiResponse<unknown>> {
     assertCanManageLeads(user);
-    const data = await this.maliOnePayments.associate({
+    const data = (await this.maliOnePayments.associate({
       waCycleId: body.waCycleId,
       waContactId: body.waContactId,
       transactionCode: body.transactionCode,
       actorEmail: user.email,
+    })) as {
+      closesCycle?: boolean;
+      settlementKind?: string;
+      candidate?: { status?: string };
+    };
+    // Solo cobros positivos cierran el ciclo. En proceso: asociado + obs, ciclo abierto.
+    const closesCycle = data?.closesCycle === true;
+    let closed: unknown = null;
+    if (closesCycle) {
+      try {
+        closed = await this.educationWorkflow.closeCycleAfterPayment({
+          cycleId: body.waCycleId,
+          actorEmail: user.email,
+          user,
+          transactionCode: body.transactionCode,
+        });
+      } catch {
+        // El pago ya quedó en ONE; no revertimos.
+        closed = null;
+      }
+    }
+    return {
+      ok: true,
+      data: {
+        payment: data,
+        cycle: closed,
+        closesCycle,
+        settlementKind: data?.settlementKind ?? null,
+      },
+    };
+  }
+
+  /** Cerrar venta exitosa sin asociar pago Treasury. */
+  @Post('attention/close-without-payment')
+  async closeWithoutPayment(
+    @CurrentUser() user: AuthUser,
+    @Body() body: CloseWithoutPaymentDto,
+  ): Promise<ApiResponse<unknown>> {
+    assertCanManageLeads(user);
+    if (!isCloseWithoutPaymentReason(body.reason)) {
+      throw new BadRequestException(
+        'Motivo inválido (credito | fuera_treasury | otro)',
+      );
+    }
+    const data = await this.educationWorkflow.closeWithoutPayment({
+      cycleId: body.cycle_id,
+      reason: body.reason,
+      note: body.note,
+      actorEmail: user.email,
+      user,
     });
     return { ok: true, data };
   }

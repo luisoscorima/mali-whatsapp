@@ -36,7 +36,8 @@ describe('education lead 60-day classification', () => {
     }).classification).toBe('duplicate');
   });
 
-  it('opens a new opportunity after a closed or terminal previous cycle', () => {
+  it('opens a new opportunity after a closed or lost previous cycle', () => {
+    // convertido sin closed_at + >60d: nuevo por ventana (venta abierta stale).
     expect(classifyEducationIntake({
       occurredAt,
       previousStatusSlug: 'convertido',
@@ -51,6 +52,28 @@ describe('education lead 60-day classification', () => {
       previousStatusSlug: 'no_interesado',
       previousClosedAt: new Date(occurredAt.getTime() - 10 * 24 * 60 * 60 * 1000),
       previousInteractionAt: new Date(occurredAt.getTime() - 10 * 24 * 60 * 60 * 1000),
+    })).toEqual({
+      classification: 'new',
+      assignmentRule: 'reassignable',
+      conflictReason: null,
+    });
+  });
+
+  it('keeps venta_exitosa open (awaiting payment) as duplicate within the window', () => {
+    expect(classifyEducationIntake({
+      occurredAt,
+      previousStatusSlug: 'venta_exitosa',
+      previousInteractionAt: new Date(occurredAt.getTime() - 5 * 24 * 60 * 60 * 1000),
+    })).toEqual({
+      classification: 'duplicate',
+      assignmentRule: 'same_advisor',
+      conflictReason: null,
+    });
+    expect(classifyEducationIntake({
+      occurredAt,
+      previousStatusSlug: 'venta_exitosa',
+      previousClosedAt: new Date(occurredAt.getTime() - 5 * 24 * 60 * 60 * 1000),
+      previousInteractionAt: new Date(occurredAt.getTime() - 5 * 24 * 60 * 60 * 1000),
     })).toEqual({
       classification: 'new',
       assignmentRule: 'reassignable',

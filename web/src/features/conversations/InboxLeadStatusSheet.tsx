@@ -21,8 +21,14 @@ type InboxLeadStatusSheetProps = {
   currentStatusLabel?: string | null
   busy?: boolean
   needsStartAttention?: boolean
+  needsAssociatePayment?: boolean
   closedStatusLabel?: string | null
   onStartAttention?: () => void | Promise<boolean>
+  onAssociatePayment?: () => void
+  onCloseWithoutPayment?: (input: {
+    reason: string
+    note?: string
+  }) => void | Promise<boolean>
   onSelect: (statusId: number) => void | Promise<boolean>
   onBack?: () => void
 }
@@ -37,15 +43,22 @@ export function InboxLeadStatusSheet({
   currentStatusLabel,
   busy = false,
   needsStartAttention = false,
+  needsAssociatePayment = false,
   closedStatusLabel = null,
   onStartAttention,
+  onAssociatePayment,
+  onCloseWithoutPayment,
   onSelect,
   onBack,
 }: InboxLeadStatusSheetProps) {
   const titleBlock = (
     <>
       <DialogTitle>
-        {needsStartAttention ? 'Iniciar ciclo' : 'Estado del lead'}
+        {needsStartAttention
+          ? 'Iniciar ciclo'
+          : needsAssociatePayment
+            ? 'Venta · pago'
+            : 'Estado del lead'}
       </DialogTitle>
       <DialogDescription>
         {heading} · {chatSecondaryLabel(phone)}
@@ -73,6 +86,7 @@ export function InboxLeadStatusSheet({
             currentStatusId={currentStatusId}
             busy={busy}
             needsStartAttention={needsStartAttention}
+            needsAssociatePayment={needsAssociatePayment}
             closedStatusLabel={closedStatusLabel}
             onStartAttention={
               onStartAttention
@@ -80,6 +94,24 @@ export function InboxLeadStatusSheet({
                     void Promise.resolve(onStartAttention()).then((ok) => {
                       if (ok !== false) onOpenChange(false)
                     })
+                : undefined
+            }
+            onAssociatePayment={
+              onAssociatePayment
+                ? () => {
+                    onOpenChange(false)
+                    onAssociatePayment()
+                  }
+                : undefined
+            }
+            onCloseWithoutPayment={
+              onCloseWithoutPayment
+                ? (input) =>
+                    void Promise.resolve(onCloseWithoutPayment(input)).then(
+                      (ok) => {
+                        if (ok !== false) onOpenChange(false)
+                      },
+                    )
                 : undefined
             }
             onSelect={(id) => {

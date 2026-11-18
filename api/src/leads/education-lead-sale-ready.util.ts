@@ -73,3 +73,36 @@ export function isSaleClosingStatusSlug(slug?: string | null): boolean {
   const status = slug?.trim().toLowerCase().replace(/[\s-]+/g, '_') ?? '';
   return status === 'venta_exitosa' || status === 'convertido';
 }
+
+/**
+ * ¿Este cambio de estado cierra el ciclo YA?
+ * Venta exitosa / convertido NO: el cierre comercial es por pago (o “cerrar sin pago”).
+ * Perdido / no interesado / vencido SÍ.
+ */
+export function statusClosesEducationCycle(slug?: string | null): boolean {
+  if (isSaleClosingStatusSlug(slug)) return false;
+  const status = slug?.trim().toLowerCase().replace(/[\s-]+/g, '_') ?? '';
+  return (
+    status === 'perdido' ||
+    status === 'no_interesado' ||
+    status === 'vencido'
+  );
+}
+
+export const CLOSE_WITHOUT_PAYMENT_REASONS = [
+  'credito',
+  'fuera_treasury',
+  'otro',
+] as const;
+
+export type CloseWithoutPaymentReason =
+  (typeof CLOSE_WITHOUT_PAYMENT_REASONS)[number];
+
+export function isCloseWithoutPaymentReason(
+  value: unknown,
+): value is CloseWithoutPaymentReason {
+  return (
+    typeof value === 'string' &&
+    (CLOSE_WITHOUT_PAYMENT_REASONS as readonly string[]).includes(value)
+  );
+}

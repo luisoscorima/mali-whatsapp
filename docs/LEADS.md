@@ -102,6 +102,18 @@ En WhatsApp el nombre es el perfil (`wa_profile_name`). Vacío si no hay, para q
 
 **RQ0017:** `PATCH .../status` (inbox) y `.../management` a `venta_exitosa` / `convertido` exigen ficha mínima (nombre y apellido usables, DNI, email, teléfono/WA, categoría). Si falta algo → `400 missing_fields` y el estado no cambia; la UI abre la ficha para completar y reintenta al guardar.
 
+### Cierre del ciclo (Educación) — Option A
+
+`venta_exitosa` / `convertido` son terminales **comerciales** (`is_terminal` en catálogo) pero **no** ponen `closed_at` al marcarse. El ciclo sigue abierto hasta:
+
+1. **Primer pago asociado positivo** (Treasury → `close_reason: paid`), o
+2. **Cerrar sin pago** (`POST /api/leads/attention/close-without-payment`, motivos `credito` \| `fuera_treasury` \| `otro` → `close_reason: sold`), o
+3. **Pérdida** (`perdido` / `no_interesado` / `vencido` → cierran al cambiar estado).
+
+Cobros en proceso se pueden asociar con observación **sin** cerrar; cobros negativos no se asocian. Detalle y endpoints: [PAYMENT-LOOKUP-WA.md](./PAYMENT-LOOKUP-WA.md).
+
+El indicador visual de vínculo pago↔ciclo (`payment_link`) vive en ONE (`EducacionSale`) y se muestra en Oportunidades, Treasury y el header/ficha del inbox.
+
 ---
 
 ## Cómo leer el Hub (`/leads`)
@@ -248,10 +260,12 @@ Cada entrada se compara con el ciclo previo del contacto en esa categoría/conte
 | Situación | Clasificación | Asesor |
 |-----------|---------------|--------|
 | Sin historial | `new` / `new_number` | Sin asesor; reparto `POST .../distribute` |
-| ≤60 días | `duplicate` / `same_advisor` | Mismo ciclo; actualiza interacción |
+| ≤60 días (ciclo abierto, incl. venta sin pago aún) | `duplicate` / `same_advisor` | Mismo ciclo; actualiza interacción |
 | >60 días | `new` / `reassignable` | Ciclo nuevo; conserva asesor previo hasta confirmar; `requires_review` |
-| `convertido` / `venta_exitosa` | `conflict` | Revisión manual |
-| `no_interesado` y ≤60 días | `conflict` | Igual |
+| Ciclo **cerrado** (`closed_at`) o pérdida (`perdido` / `no_interesado` / `vencido`) | `new` / `reassignable` | Reabre oportunidad (captación comercial explícita) |
+| `no_interesado` legacy sin `closed_at` y ≤60 días | trata como cerrado comercial | Igual |
+
+Nota: `venta_exitosa` **sin** `closed_at` no cuenta como ciclo cerrado (Option A: espera pago).
 
 Revisión: `PATCH .../entries/:id/review` (`open_new` / `keep_existing` / `dismiss`). Gestión: `PATCH .../contacts/:id/management` (no acepta `assigned_user_id: null`).
 

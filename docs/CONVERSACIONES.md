@@ -14,6 +14,7 @@ Histórico: [CONVERSACIONES-CHANGELOG.md](./CONVERSACIONES-CHANGELOG.md). Relaci
 | Segmentos en cabecera | Solo de la ficha del área del chat. Si la persona tiene fichas en otras áreas, nota: “También tiene ficha en: …” (sin chips ajenos) |
 | Asesor del chat | Asignación en el hilo | Cubrir el inbox **no** transfiere la venta ni la comisión |
 | Asesor comercial | Ownership del **ciclo** ([LEADS.md](./LEADS.md)) | Dato distinto del responsable del chat; reasignar oportunidad puede *solicitar* cambio de chat |
+| Pago ↔ ciclo | Chip en header/ficha si hay `payment_link` | Proxy [PAYMENT-LOOKUP-WA.md](./PAYMENT-LOOKUP-WA.md); no es columna del inbox |
 | Modo | `bot` (IA si el área tiene bot) / `human` |
 
 ## Pantallas

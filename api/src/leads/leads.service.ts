@@ -66,6 +66,7 @@ import { syncEducationLeadStatuses, isEducationLeadArea } from './education-lead
 import {
   isSaleClosingStatusSlug,
   missingFieldsForVentaExitosa,
+  statusClosesEducationCycle,
 } from './education-lead-sale-ready.util';
 import {
   addDaysYmd,
@@ -1641,25 +1642,27 @@ export class LeadsService implements OnModuleInit {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${contact.person_id}::integer, ${programId ?? opts?.leadId ?? 0}::integer)`;
       if (resolvedCycle) {
         const now = new Date();
+        // Venta exitosa NO cierra: el ciclo sigue abierto hasta pago o “cerrar sin pago”.
+        const closing =
+          statusClosesEducationCycle(status.slug) ||
+          (Boolean(status.is_terminal) && !isSaleClosingStatusSlug(status.slug));
         await tx.education_lead_cycles.update({
           where: { id: resolvedCycle.id },
           data: {
             lead_status_id: statusId,
             updated_at: now,
-            ...(status.is_terminal
+            ...(closing
               ? {
                   closed_at: now,
                   close_reason:
-                    status.slug === 'venta_exitosa' || status.slug === 'convertido'
-                      ? 'sold'
-                      : status.slug === 'perdido' || status.slug === 'no_interesado'
-                        ? 'lost'
-                        : 'terminal_status',
+                    status.slug === 'perdido' || status.slug === 'no_interesado'
+                      ? 'lost'
+                      : 'terminal_status',
                 }
               : {}),
           },
         });
-        if (status.is_terminal) {
+        if (closing) {
           await endLeadConversationLinks(tx, resolvedCycle.id, now);
         }
         // Educación: fuente = ciclo. Limpia cualquier espejo legacy en contacts.

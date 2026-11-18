@@ -31,3 +31,4 @@ Inventario ligero de quién llama a mali-whatsapp `/api/crm/*` (token `X-Crm-Ser
 - Hoy: UI WA y UI ONE (jefes) escriben al motor WA.
 - No dual-write de oportunidades.
 - Educación: estado/score/asignación comercial viven en el **ciclo** (categoría/línea), nunca en `contacts.lead_*`.
+- Vínculo pago↔ciclo: `EducacionSale` en ONE; WA solo proxy (`/api/leads/payments/*`). Detalle: [PAYMENT-LOOKUP-WA.md](./PAYMENT-LOOKUP-WA.md).

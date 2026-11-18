@@ -61,6 +61,55 @@ export class MaliOnePaymentService {
     }
   }
 
+  async paymentLink(waCycleId: number): Promise<{
+    payment_link: {
+      saleId: string;
+      waCycleId: number;
+      status: 'reportado' | 'parcial' | 'pagado' | 'revertido';
+      code: string | null;
+    } | null;
+  } | null> {
+    if (!Number.isInteger(waCycleId) || waCycleId < 1) {
+      throw new BadRequestException('waCycleId inválido');
+    }
+    const { base, token } = this.assertConfigured();
+    const url = `${base}/api/crm-educacion/internal/sales/by-cycle/${waCycleId}`;
+    try {
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          'x-crm-educacion-service-token': token,
+        },
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new BadRequestException(
+          text || `ONE sale-link HTTP ${res.status}`,
+        );
+      }
+      return res.json() as Promise<{
+        payment_link: {
+          saleId: string;
+          waCycleId: number;
+          status: 'reportado' | 'parcial' | 'pagado' | 'revertido';
+          code: string | null;
+        } | null;
+      }>;
+    } catch (err) {
+      if (err instanceof BadRequestException || err instanceof ServiceUnavailableException) {
+        throw err;
+      }
+      this.logger.warn(
+        `ONE payment link falló: ${err instanceof Error ? err.message : err}`,
+      );
+      throw new ServiceUnavailableException(
+        'No se pudo consultar el vínculo de pago (MALI ONE)',
+      );
+    }
+  }
+
   async associate(input: {
     waCycleId: number;
     waContactId?: number;

@@ -1,3 +1,5 @@
+import { statusClosesEducationCycle } from './education-lead-sale-ready.util';
+
 export const EDUCATION_LEAD_WINDOW_MS = 60 * 24 * 60 * 60 * 1000;
 
 const TERMINAL_SLUGS = new Set([
@@ -15,7 +17,8 @@ export function isTerminalEducationStatusSlug(slug?: string | null): boolean {
 
 /**
  * Classifies a commercial intake against the previous cycle in the same category.
- * Closed/terminal previous cycles reopen as a new opportunity for explicit commercial entries.
+ * Closed previous cycles reopen as a new opportunity for explicit commercial entries.
+ * Venta exitosa sin closed_at NO cuenta como cerrado (sigue esperando pago).
  * Organic/ambiguous post-close handling is done by the caller (do not open automatically).
  */
 export function classifyEducationIntake(input: {
@@ -28,8 +31,10 @@ export function classifyEducationIntake(input: {
   assignmentRule: 'new_number' | 'same_advisor' | 'reassignable' | 'conflict';
   conflictReason: string | null;
 } {
-  const previousClosed = Boolean(input.previousClosedAt)
-    || isTerminalEducationStatusSlug(input.previousStatusSlug);
+  // perdido/no_interesado/vencido (sin venta) o closed_at explícito.
+  const previousClosed =
+    Boolean(input.previousClosedAt) ||
+    statusClosesEducationCycle(input.previousStatusSlug);
   const gap = input.previousInteractionAt
     ? input.occurredAt.getTime() - input.previousInteractionAt.getTime()
     : Infinity;
