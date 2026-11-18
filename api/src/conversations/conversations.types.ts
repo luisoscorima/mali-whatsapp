@@ -145,6 +145,10 @@ export type InboxContact = {
   dni: string | null;
   lead_score: number | null;
   lead_status: { id: number; slug: string; label: string } | null;
+  /** Ciclo de la categoría de la línea (abierto o el último cerrado). */
+  lead_cycle_id?: number | null;
+  /** false = ciclo cerrado (p. ej. venta exitosa); no confundir con “sin ciclo”. */
+  lead_cycle_open?: boolean;
   segment_slugs: string[];
   /** Fichas activas de la misma persona en otras áreas (aviso operador). */
   other_area_fichas: InboxOtherAreaFicha[];

@@ -124,6 +124,7 @@ import {
   formatAdvisorLabel,
 } from '../users/advisor-label.util';
 import {
+  exactCategoryCycleWhere,
   exactOpenCycleWhere,
   isEducationAttentionArea,
 } from '../leads/education-lead-context.util';
@@ -334,26 +335,47 @@ export class ConversationsService {
     const include = input.includeAreaData && local;
 
     // Educación: estado/score SOLO del ciclo de la línea. Nunca contacts.lead_*.
+    // Si el ciclo se cerró (venta exitosa), seguimos mostrando ese estado;
+    // lead_cycle_open=false evita el falso “Sin ciclo iniciado”.
     let leadScore: number | null = null;
     let leadStatus: InboxContact['lead_status'] = null;
+    let leadCycleId: number | null = null;
+    let leadCycleOpen = false;
     if (include && isEducationAttentionArea(canonical)) {
       const conversation = await this.prisma.conversations.findFirst({
         where: { id: input.conversationId },
         select: { whatsapp_line: { select: { program_id: true } } },
       });
-      const cycle = await this.prisma.education_lead_cycles.findFirst({
+      const programId = conversation?.whatsapp_line?.program_id ?? null;
+      const cycleSelect = {
+        id: true,
+        closed_at: true,
+        lead_score: true,
+        lead_status: { select: { id: true, slug: true, label: true } },
+      } as const;
+      const openCycle = await this.prisma.education_lead_cycles.findFirst({
         where: exactOpenCycleWhere({
           personId: Number(row.person_id),
           area: canonical,
-          programId: conversation?.whatsapp_line?.program_id ?? null,
+          programId,
         }),
         orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
-        select: {
-          lead_score: true,
-          lead_status: { select: { id: true, slug: true, label: true } },
-        },
+        select: cycleSelect,
       });
+      const cycle =
+        openCycle ??
+        (await this.prisma.education_lead_cycles.findFirst({
+          where: exactCategoryCycleWhere({
+            personId: Number(row.person_id),
+            area: canonical,
+            programId,
+          }),
+          orderBy: [{ started_at: 'desc' }, { id: 'desc' }],
+          select: cycleSelect,
+        }));
       if (cycle) {
+        leadCycleId = cycle.id;
+        leadCycleOpen = cycle.closed_at == null;
         leadScore = cycle.lead_score;
         leadStatus = cycle.lead_status
           ? {
@@ -373,6 +395,7 @@ export class ConversationsService {
               label: String(row.lead_status_label),
             }
           : null;
+      leadCycleOpen = leadStatus != null;
     }
 
     return {
@@ -383,6 +406,8 @@ export class ConversationsService {
       dni: row.dni,
       lead_score: leadScore,
       lead_status: leadStatus,
+      lead_cycle_id: leadCycleId,
+      lead_cycle_open: leadCycleOpen,
       segment_slugs: include ? row.segment_slugs ?? [] : [],
       other_area_fichas: input.otherAreaFichas,
     };

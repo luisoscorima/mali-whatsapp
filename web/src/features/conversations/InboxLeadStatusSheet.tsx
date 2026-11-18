@@ -21,6 +21,7 @@ type InboxLeadStatusSheetProps = {
   currentStatusLabel?: string | null
   busy?: boolean
   needsStartAttention?: boolean
+  closedStatusLabel?: string | null
   onStartAttention?: () => void | Promise<boolean>
   onSelect: (statusId: number) => void | Promise<boolean>
   onBack?: () => void
@@ -36,6 +37,7 @@ export function InboxLeadStatusSheet({
   currentStatusLabel,
   busy = false,
   needsStartAttention = false,
+  closedStatusLabel = null,
   onStartAttention,
   onSelect,
   onBack,
@@ -71,6 +73,7 @@ export function InboxLeadStatusSheet({
             currentStatusId={currentStatusId}
             busy={busy}
             needsStartAttention={needsStartAttention}
+            closedStatusLabel={closedStatusLabel}
             onStartAttention={
               onStartAttention
                 ? () =>

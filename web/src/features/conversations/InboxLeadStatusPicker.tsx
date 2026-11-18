@@ -12,8 +12,10 @@ export type LeadStatusOption = {
 type InboxLeadStatusPickerProps = {
   currentStatusId: number | null
   busy?: boolean
-  /** Educación sin ciclo abierto: mostrar iniciar atención en lugar de estados. */
+  /** Educación sin ciclo abierto: mostrar iniciar en lugar de estados. */
   needsStartAttention?: boolean
+  /** Si el ciclo está cerrado, etiqueta del último estado (p. ej. Venta exitosa). */
+  closedStatusLabel?: string | null
   onStartAttention?: () => void | boolean | Promise<void | boolean>
   onSelect: (statusId: number) => void | boolean | Promise<void | boolean>
 }
@@ -22,6 +24,7 @@ export function InboxLeadStatusPicker({
   currentStatusId,
   busy = false,
   needsStartAttention = false,
+  closedStatusLabel = null,
   onStartAttention,
   onSelect,
 }: InboxLeadStatusPickerProps) {
@@ -52,11 +55,13 @@ export function InboxLeadStatusPicker({
   }, [needsStartAttention])
 
   if (needsStartAttention) {
+    const closed = Boolean(closedStatusLabel)
     return (
       <div className="inbox-oneclick-picker space-y-2 p-3">
         <p className="muted text-sm">
-          Aún no hay ciclo iniciado en esta categoría. Inícialo para poder cambiar
-          el estado.
+          {closed
+            ? `Ciclo cerrado (${closedStatusLabel}). Inicia uno nuevo solo si corresponde otra venta.`
+            : 'Aún no hay ciclo iniciado en esta categoría. Inícialo para poder cambiar el estado.'}
         </p>
         <button
           type="button"
@@ -67,7 +72,7 @@ export function InboxLeadStatusPicker({
             void Promise.resolve(onStartAttention())
           }}
         >
-          {busy ? 'Iniciando…' : 'Iniciar ciclo'}
+          {busy ? 'Iniciando…' : closed ? 'Iniciar nuevo ciclo' : 'Iniciar ciclo'}
         </button>
       </div>
     )

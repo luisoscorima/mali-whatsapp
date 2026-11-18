@@ -345,8 +345,11 @@ function ProfileBlock({
   const canManageLeads = Boolean(user?.canManageLeads)
   const contactId = detail.conversation.contact_id
   const isEducation = canonicalArea(user?.area ?? '') === 'educacion'
+  // Solo “iniciar” si no hay ciclo abierto. Ciclo cerrado (venta exitosa)
+  // sigue mostrando su estado; no parecer “sin ciclo”.
+  const cycleOpen = detail.contact?.lead_cycle_open === true
   const needsStartAttention = Boolean(
-    isEducation && contactId && !detail.contact?.lead_status,
+    isEducation && contactId && !cycleOpen,
   )
   const contactMode = contactId ? 'edit' : 'create'
   const contactActionLabel = contactId ? 'Editar contacto' : 'Añadir contacto'
@@ -588,6 +591,9 @@ function ProfileBlock({
               currentStatusId={leadStatusId}
               busy={leadStatusBusy}
               needsStartAttention={needsStartAttention}
+              closedStatusLabel={
+                needsStartAttention && leadStatusLabel ? leadStatusLabel : null
+              }
               onStartAttention={() =>
                 void Promise.resolve(onStartAttention()).then((ok) => {
                   if (ok) setStatusOpen(false)
@@ -840,6 +846,8 @@ type InboxDetail = {
     dni: string | null
     lead_score: number | null
     lead_status: { id: number; slug: string; label: string } | null
+    lead_cycle_id?: number | null
+    lead_cycle_open?: boolean
     segment_slugs: string[]
     other_area_fichas?: { area: string; contact_id: number }[]
   } | null
@@ -2028,7 +2036,21 @@ export function ConversationsInboxPage() {
 
   async function openAssociatePaymentFromActions(ctx: ChatActionsContext) {
     if (!ctx.contactId) return
-    // Solo con ciclo iniciado (mismo criterio que la ficha).
+    // Preferir ciclo del detail (incluye cerrado tras venta exitosa).
+    const fromDetail =
+      detail?.conversation.contact_id === ctx.contactId
+        ? detail.contact
+        : null
+    if (fromDetail?.lead_cycle_id) {
+      setActionsOpen(false)
+      setPaymentContext({
+        cycleId: fromDetail.lead_cycle_id,
+        contactId: ctx.contactId,
+        contactLabel: ctx.heading,
+      })
+      setPaymentOpen(true)
+      return
+    }
     if (!ctx.leadStatusId && !ctx.leadStatusLabel) {
       notify.error('Sin ciclo iniciado. Inicia el ciclo antes de asociar un pago.')
       return
@@ -2043,7 +2065,7 @@ export function ConversationsInboxPage() {
       closed_at: string | null
     } | null>(`/api/leads/attention/current?${qs}`)
     setPaymentBusy(false)
-    if (!attention.ok || !attention.data?.id || attention.data.closed_at) {
+    if (!attention.ok || !attention.data?.id) {
       notify.error(
         attention.ok
           ? 'Sin ciclo iniciado. Inicia el ciclo antes de asociar un pago.'
@@ -3847,7 +3869,9 @@ export function ConversationsInboxPage() {
             canonicalArea(user?.area ?? '') === 'educacion' &&
             Boolean(
               actionsContext.contactId &&
-                (actionsContext.leadStatusId || actionsContext.leadStatusLabel),
+                (detail?.contact?.lead_cycle_id ||
+                  actionsContext.leadStatusId ||
+                  actionsContext.leadStatusLabel),
             ) &&
             !paymentBusy
               ? () => void openAssociatePaymentFromActions(actionsContext)
@@ -3973,8 +3997,14 @@ export function ConversationsInboxPage() {
           needsStartAttention={Boolean(
             canonicalArea(user?.area ?? '') === 'educacion' &&
               leadStatusContext.contactId &&
-              !leadStatusContext.leadStatusId,
+              detail?.contact?.lead_cycle_open !== true,
           )}
+          closedStatusLabel={
+            detail?.contact?.lead_cycle_open === false
+              ? detail.contact.lead_status?.label ??
+                leadStatusContext.leadStatusLabel
+              : null
+          }
           onStartAttention={() =>
             onStartAttention({
               contactId: leadStatusContext.contactId,
