@@ -26,9 +26,12 @@ export class MaliOneChannelEventService {
     if (!cfg) return;
     this.authorityLogged = true;
     try {
-      const res = await fetch(`${cfg.base}/api/crm-educacion/commercial-authority`, {
+      const res = await fetch(`${cfg.base}/api/crm-educacion/internal/commercial-authority`, {
         method: 'GET',
-        headers: { Accept: 'application/json' },
+        headers: {
+          Accept: 'application/json',
+          'x-crm-educacion-service-token': cfg.token,
+        },
         signal: AbortSignal.timeout(5_000),
       });
       if (!res.ok) {
