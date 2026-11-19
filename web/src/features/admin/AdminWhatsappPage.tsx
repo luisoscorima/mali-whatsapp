@@ -471,7 +471,8 @@ export function AdminWhatsappPage() {
         {showLines ? (
           <div className="space-y-4">
             <p className="text-sm text-muted">
-              Flujo típico: Pendiente → Registrar en Cloud API (PIN) → Validar → Activar.
+              Flujo típico: Pendiente → Registrar en Cloud API (PIN) → Activar. El registro
+              también valida la línea contra Meta.
             </p>
             {grouped.map((area) => (
           <section key={area.key} className="overflow-hidden rounded-xl border border-line">
@@ -558,14 +559,17 @@ export function AdminWhatsappPage() {
                         >
                           Registrar Cloud API
                         </button>
-                        <button
-                          type="button"
-                          className="small-btn"
-                          disabled={validatingId === line.id || switchingId === line.id}
-                          onClick={() => void validateLine(line.id)}
-                        >
-                          {validatingId === line.id ? 'Validando…' : 'Validar en Meta'}
-                        </button>
+                        {line.registration_status === 'validated' ? (
+                          <button
+                            type="button"
+                            className="small-btn secondary"
+                            title="Volver a comprobar la línea y su nombre visible en Meta"
+                            disabled={validatingId === line.id || switchingId === line.id}
+                            onClick={() => void validateLine(line.id)}
+                          >
+                            {validatingId === line.id ? 'Validando…' : 'Revalidar en Meta'}
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           className={line.active ? 'small-btn secondary' : 'small-btn'}

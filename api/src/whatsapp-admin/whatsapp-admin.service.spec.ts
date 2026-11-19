@@ -131,7 +131,9 @@ describe('WhatsApp administration lifecycle', () => {
       credential_override: { active: true, validation_status: 'valid' },
       registration_status: 'draft',
     });
-    await expect(service.activateLine(4)).rejects.toThrow('Valida la línea');
+    await expect(service.activateLine(4)).rejects.toThrow(
+      'Registra la línea en Cloud API',
+    );
     expect(db.whatsapp_lines.update).not.toHaveBeenCalled();
   });
   it('switches defaults inside the same locked transaction', async () => {
@@ -155,6 +157,7 @@ describe('WhatsApp administration lifecycle', () => {
   });
   it('does not invalidate a shared credential when one line fails Meta membership', async () => {
     db.whatsapp_lines.findUnique.mockResolvedValue({
+      registration_status: 'validated',
       waba: { meta_waba_id: '12345' },
       credential_override: {
         id: 3,
@@ -168,6 +171,22 @@ describe('WhatsApp administration lifecycle', () => {
       .mockRejectedValue(new Error('No pertenece al WABA'));
     await expect(service.validateLine(4)).rejects.toThrow('No pertenece');
     expect(db.meta_credentials.update).not.toHaveBeenCalled();
+  });
+  it('requires Cloud API registration before manual validation', async () => {
+    db.whatsapp_lines.findUnique.mockResolvedValue({
+      registration_status: 'draft',
+      waba: { meta_waba_id: '12345' },
+      credential_override: {
+        id: 3,
+        active: true,
+        secret_source: 'env',
+        secret_ref: 'TEST_UNUSED_TOKEN',
+      },
+    });
+    await expect(service.validateLine(4)).rejects.toThrow(
+      'Registra la línea en Cloud API',
+    );
+    expect(inspectWhatsAppLine).not.toHaveBeenCalled();
   });
   it('can add a token to a draft that has no effective credential, without altering shared credentials', async () => {
     db.whatsapp_lines.findUnique.mockResolvedValue({
@@ -327,15 +346,15 @@ describe('WhatsApp administration lifecycle', () => {
     delete process.env.TEST_LINE_SYNC_TOKEN;
   });
 
-  it('registers a line in Cloud API with a 6-digit PIN and marks it validated', async () => {
+  it('registers a custom Education category and keeps the canonical area', async () => {
     process.env.TEST_REGISTER_TOKEN = 'register-token-value';
     db.whatsapp_lines.findUnique.mockResolvedValue({
       id: 11,
       waba_id: 4,
       phone_number_id: '1473593759161176',
       credential_override_id: null,
-      legacy_area: null,
-      program_key: 'ca',
+      legacy_area: 'educacion_ca',
+      program_key: 'norte',
       waba: {
         meta_waba_id: '958313150113818',
         active: true,
@@ -373,7 +392,7 @@ describe('WhatsApp administration lifecycle', () => {
     );
     expect(db.whatsapp_lines.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ program_key: 'ca' }),
+        where: expect.objectContaining({ program_key: 'norte' }),
       }),
     );
     expect(db.whatsapp_lines.update).toHaveBeenCalledWith(
@@ -381,7 +400,7 @@ describe('WhatsApp administration lifecycle', () => {
         data: expect.objectContaining({
           registration_status: 'validated',
           credential_override_id: 5,
-          legacy_area: 'educacion_ca',
+          legacy_area: 'educacion',
         }),
       }),
     );

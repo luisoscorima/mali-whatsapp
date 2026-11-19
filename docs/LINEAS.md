@@ -21,13 +21,14 @@ Conversación → Línea + Persona
 
 Pantalla master: **Administración → Líneas** (`/admin/lines`).
 
-Orden: **crear (borrador) → Validar en Meta → Activar**.
+Orden: **crear o sincronizar (borrador) → Registrar Cloud API → Activar**.
 
 1. Elegir WABA (y token compartido o token de línea).
-2. Crear borrador con área canónica y categoría opcional.
-3. Validar PID contra Meta (fallo = no se puede activar; no pisa otros tokens).
+2. Crear el borrador o sincronizar las líneas de la WABA y asignar área canónica y categoría.
+3. Registrar cada PID en Cloud API con su PIN. Este paso también valida la pertenencia a la WABA y actualiza el nombre verificado de Meta.
 4. Activar. Inbound/respuesta sin reiniciar contenedores. Réplicas refrescan catálogo (~15 s).
-5. Desactivar: deja de enrutar; un PID desactivado no revive por fallback `.env`.
+5. Revalidar en Meta solo cuando se quiera volver a comprobar una línea ya registrada.
+6. Desactivar: deja de enrutar; un PID desactivado no revive por fallback `.env`.
 
 Cambiar nombre visible no altera la identidad de las conversaciones. Cambiar categoría solo mueve el programa. Elegir línea predeterminada del área es transaccional; los chats existentes siguen respondiendo por su propio PID.
 

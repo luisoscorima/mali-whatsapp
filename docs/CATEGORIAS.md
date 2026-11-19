@@ -22,7 +22,7 @@ Una categoría nueva se crea en **Administración → Áreas**, sin cambiar cód
 | CA | `ca` | Cursos de Arte |
 | EP | `ep` | Arte y cultura / FORM EP |
 
-Los alias de área `educacion_ca` / `educacion_ep` se aceptan en API y se resuelven a categoría; la ficha queda en `educacion`.
+`educacion_ca` y `educacion_ep` no son áreas actuales. Solo se conservan como compatibilidad de lectura para datos históricos; toda alta o actualización nueva guarda el área `educacion` y la categoría en `program_id`.
 
 ## Dónde impacta
 

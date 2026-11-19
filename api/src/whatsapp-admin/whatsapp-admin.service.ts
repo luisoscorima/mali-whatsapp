@@ -105,22 +105,14 @@ export class WhatsAppAdminService {
   }
 
   /**
-   * Huella de área canónica en la línea. CA/EP viven en program_id / program_key;
-   * ya no se escribe educacion_ca / educacion_ep en líneas nuevas.
+   * Huella de área canónica en la línea. La categoría vive exclusivamente en
+   * program_id / program_key y nunca modifica el área canónica.
    */
-  private legacyAreaForProgram(
-    programKey: string | null | undefined,
-    areaSlug?: string | null,
-  ): string | null {
+  private legacyAreaForCanonicalArea(areaSlug?: string | null): string | null {
     const slug = String(areaSlug || '')
       .trim()
       .toLowerCase();
-    if (slug === 'educacion' || slug.startsWith('educacion')) return 'educacion';
-    const key = String(programKey || '')
-      .trim()
-      .toLowerCase();
-    if (key === 'ca' || key === 'ep' || key === 'general') return 'educacion';
-    return null;
+    return slug === 'educacion' ? 'educacion' : null;
   }
 
   private async effectiveLineCredential(lineId: number) {
@@ -778,10 +770,7 @@ export class WhatsAppAdminService {
       current.program?.slug || current.program_key || 'general';
     const nextCategory = program?.slug || 'general';
     const canonicalArea = current.business_area.slug;
-    const legacyArea = this.legacyAreaForProgram(
-      program?.slug ?? null,
-      canonicalArea,
-    );
+    const legacyArea = this.legacyAreaForCanonicalArea(canonicalArea);
 
     const { updated, conversationsMoved } = await this.prisma.$transaction(
       async (tx) => {
@@ -939,6 +928,11 @@ export class WhatsAppAdminService {
 
   async validateLine(id: number, actor?: AdminActor) {
     const { line, credential } = await this.effectiveLineCredential(id);
+    if (line.registration_status !== 'validated') {
+      throw new BadRequestException(
+        'Registra la línea en Cloud API antes de validarla',
+      );
+    }
     try {
       const token = await this.resolveCredentialToken(credential);
       const inspection = await inspectWhatsAppLine(
@@ -1025,11 +1019,9 @@ export class WhatsAppAdminService {
       );
       const now = new Date();
       const legacyArea =
-        line.legacy_area ||
-        this.legacyAreaForProgram(
-          line.program_key,
-          line.business_area?.slug,
-        );
+        this.legacyAreaForCanonicalArea(line.business_area?.slug) ??
+        line.legacy_area ??
+        null;
       await this.prisma.$transaction([
         this.prisma.meta_credentials.update({
           where: { id: credential.id },
@@ -1050,7 +1042,7 @@ export class WhatsAppAdminService {
             ...(inspection.verifiedName
               ? { label: inspection.verifiedName.slice(0, 120) }
               : {}),
-            // Fijar token + alias de categoría (todas las líneas sync, no solo una).
+            // Fijar token y normalizar la huella del área canónica.
             ...(!line.credential_override_id
               ? { credential_override_id: credential.id }
               : {}),
@@ -1216,12 +1208,15 @@ export class WhatsAppAdminService {
       throw new BadRequestException('La credencial no está validada');
     }
     if (line.registration_status !== 'validated' || !line.last_validated_at) {
-      throw new BadRequestException('Valida la línea antes de activarla');
+      throw new BadRequestException(
+        'Registra la línea en Cloud API antes de activarla',
+      );
     }
 
     const legacyArea =
-      line.legacy_area ||
-      this.legacyAreaForProgram(line.program_key, line.business_area?.slug);
+      this.legacyAreaForCanonicalArea(line.business_area?.slug) ??
+      line.legacy_area ??
+      null;
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM business_areas WHERE id = ${line.business_area_id} FOR UPDATE`;
       if (line.is_default) {
