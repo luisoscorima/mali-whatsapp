@@ -1,16 +1,71 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { AppConfigService } from '../config/app-config.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 /**
  * Outbox shadow hacia MALI ONE (EducacionChannelEvent).
  * Aditivo: no escribe etapa/assign en ONE; fallo no tumba gestión WA.
  */
 @Injectable()
-export class MaliOneChannelEventService {
+export class MaliOneChannelEventService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MaliOneChannelEventService.name);
   private authorityLogged = false;
 
-  constructor(private readonly config: AppConfigService) {}
+  private timer?: ReturnType<typeof setInterval>;
+  private draining = false;
+  private stopped = false;
+
+  constructor(
+    private readonly config: AppConfigService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  onModuleInit(): void {
+    this.timer = setInterval(() => { void this.drain(); }, 30_000);
+    this.timer.unref();
+    void this.drain();
+  }
+
+  onModuleDestroy(): void {
+    this.stopped = true;
+    if (this.timer) clearInterval(this.timer);
+  }
+
+  /** At-least-once delivery. ONE deduplicates event_id; no history is deleted. */
+  async drain(): Promise<void> {
+    if (this.draining || this.stopped || !this.configured()) return;
+    this.draining = true;
+    try {
+      const rows = await this.prisma.commercial_channel_outbox.findMany({
+        where: { delivered_at: null },
+        orderBy: [{ attempts: 'asc' }, { id: 'asc' }],
+        take: 25,
+      });
+      for (const row of rows) {
+        if (this.stopped) break;
+        const result = await this.tryEmit({
+          eventId: row.event_id, eventType: row.event_type,
+          occurredAt: row.occurred_at,
+          payload: row.payload as Record<string, unknown>,
+        });
+        await this.prisma.commercial_channel_outbox.updateMany({
+          where: { id: row.id, delivered_at: null },
+          data: {
+            attempts: { increment: 1 },
+            ...(result?.ok
+              ? { delivered_at: new Date(), last_error: null }
+              : { last_error: 'Delivery failed; retained for retry' }),
+          },
+        });
+        // Back off an unavailable ONE until the next poll.
+        if (!result?.ok) break;
+      }
+    } catch (err) {
+      this.logger.warn(`Shadow outbox: ${err instanceof Error ? err.message : err}`);
+    } finally {
+      this.draining = false;
+    }
+  }
 
   private configured(): { base: string; token: string } | null {
     const base = this.config.maliOneApiBaseUrl;

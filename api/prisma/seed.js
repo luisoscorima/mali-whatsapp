@@ -231,7 +231,11 @@ async function main() {
       );
     }
 
-    await migrateOperationalRoles(prisma);
+    // Administrative reset only. Routine container restarts must preserve
+    // current roles and area memberships configured by administrators.
+    if (process.env.APPLY_OPERATIONAL_ROLE_SEED === 'true') {
+      await migrateOperationalRoles(prisma);
+    }
   } catch (error) {
     console.error(
       JSON.stringify({

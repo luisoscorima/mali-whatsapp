@@ -24,6 +24,7 @@ export class MaliOneOpportunityLinkService {
     phone?: string | null;
     email?: string | null;
     markInbound?: boolean;
+    category?: string;
   }): Promise<{ linked: boolean } | null> {
     if (!Number.isInteger(input.waCycleId) || input.waCycleId < 1) return null;
     const cfg = this.configured();
@@ -33,6 +34,7 @@ export class MaliOneOpportunityLinkService {
     if (!phone && !email) return null;
     const url = `${cfg.base}/api/crm-educacion/internal/opportunities/link-cycle`;
     const body = {
+      category: input.category,
       waCycleId: input.waCycleId,
       waContactId: input.waContactId,
       phone: phone || undefined,

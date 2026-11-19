@@ -34,3 +34,20 @@ Inventario ligero de quién llama a mali-whatsapp `/api/crm/*` (token `X-Crm-Ser
 - No dual-write de oportunidades.
 - Educación: estado/score/asignación comercial viven en el **ciclo** (categoría/línea), nunca en `contacts.lead_*`.
 - Vínculo pago↔ciclo: `EducacionSale` en ONE; WA solo proxy (`/api/leads/payments/*`). Detalle: [PAYMENT-LOOKUP-WA.md](./PAYMENT-LOOKUP-WA.md).
+# Entrega shadow durable (consolidación ventana 6h)
+
+La migración `20261120010000_cycle_shadow_outbox_trigger` añade un trigger de
+INSERT/UPDATE de ciclos. Encola cambios reales de etapa, asesor y cierre en la
+misma transacción, incluidos inbox, distribución, pagos y vencimiento. No hace
+backfill ni modifica ciclos existentes. El historial de actor permanece en audit_logs.
+
+`MaliOneChannelEventService` entrega hasta 25 pendientes cada 30 segundos; si
+ONE falla conserva filas, registra intentos y reintenta después del reinicio.
+ONE deduplica por event_id sin reemplazar el hecho original. No se eliminan filas
+entregadas, ni se escribe etapa/asignación en ONE. Authority sigue WA.
+
+El vínculo de ciclo envía categoría y ONE conserva vínculos existentes; coincidencias
+ambiguas quedan sin enlazar. No sustituye otro ciclo ni modifica precio, etapa o asesor.
+
+El seed de roles operativos requiere `APPLY_OPERATIONAL_ROLE_SEED=true` explícito.
+No habilitarlo en despliegues ordinarios: restablece roles y membresías de áreas.
