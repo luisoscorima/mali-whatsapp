@@ -32,6 +32,7 @@ import {
 } from '../config/education-scope';
 import { userWorksArea } from '../users/area-membership.where';
 import { MaliOneOpportunityLinkService } from './mali-one-opportunity-link.service';
+import { MaliOneChannelEventService } from './mali-one-channel-event.service';
 import { endLeadConversationLinks, projectLeadAssignee, withLeadCreateSavepoint } from './education-lead-lifecycle.util';
 import { cursoFromOriginPayload } from './lead-curso.util';
 import { formatAdvisorLabel } from '../users/advisor-label.util';
@@ -94,6 +95,7 @@ export class EducationLeadWorkflowService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly oneOpportunityLink?: MaliOneOpportunityLinkService,
+    private readonly oneChannelEvents?: MaliOneChannelEventService,
   ) {}
 
   private areas(area?: string): string[] {
@@ -777,7 +779,22 @@ export class EducationLeadWorkflowService {
         }).catch(() => undefined);
       }
       if (cycle.closed_at && changes.lead_status_id === undefined && changes.assigned_user_id === undefined) {
-        return cycle;
+        return {
+          cycle,
+          shadow: {
+            contactId,
+            managementArea,
+            previousAssigneeId: cycle.assigned_user_id,
+            previousStatusId: cycle.lead_status_id,
+            nextStatusSlug: null,
+            actorEmail: changes.actor_email ?? 'mali-one@system',
+            closedAt: cycle.closed_at,
+            assignedChanged: false,
+            statusChanged: false,
+            toAssignedUserId: cycle.assigned_user_id,
+            toLeadStatusId: cycle.lead_status_id,
+          },
+        };
       }
       if (cycle.closed_at && (changes.assigned_user_id !== undefined || changes.lead_status_id !== undefined)) {
         throw new BadRequestException('El lead está cerrado; inicia una nueva atención');
@@ -880,6 +897,52 @@ export class EducationLeadWorkflowService {
             closed_at: cycle.closed_at,
           },
         } });
+      }
+      return {
+        cycle,
+        shadow: {
+          contactId,
+          managementArea,
+          previousAssigneeId,
+          previousStatusId,
+          nextStatusSlug: nextStatus?.slug ?? null,
+          actorEmail: changes.actor_email ?? 'mali-one@system',
+          closedAt: cycle.closed_at,
+          assignedChanged: changes.assigned_user_id !== undefined,
+          statusChanged: changes.lead_status_id !== undefined,
+          toAssignedUserId: changes.assigned_user_id === undefined
+            ? previousAssigneeId : changes.assigned_user_id,
+          toLeadStatusId: changes.lead_status_id === undefined
+            ? previousStatusId : changes.lead_status_id,
+        },
+      };
+    }).then(async (result) => {
+      const { cycle, shadow } = result;
+      if (this.oneChannelEvents && (shadow.assignedChanged || shadow.statusChanged)) {
+        const kinds: string[] = [];
+        if (shadow.statusChanged) kinds.push('stage');
+        if (shadow.assignedChanged) kinds.push('assign');
+        if (shadow.closedAt) kinds.push('close');
+        void this.oneChannelEvents.tryEmit({
+          eventId: `wa-mgmt-${cycle.id}-${Date.now()}`,
+          eventType: `education.management.${kinds.join('_') || 'update'}`,
+          occurredAt: new Date(),
+          payload: {
+            source: 'mali-whatsapp',
+            shadow: true,
+            writer: 'wa',
+            contact_id: shadow.contactId,
+            wa_cycle_id: cycle.id,
+            management_area: shadow.managementArea,
+            stage_slug: shadow.nextStatusSlug,
+            from_assigned_user_id: shadow.previousAssigneeId,
+            to_assigned_user_id: shadow.toAssignedUserId,
+            from_lead_status_id: shadow.previousStatusId,
+            to_lead_status_id: shadow.toLeadStatusId,
+            closed_at: shadow.closedAt,
+            actor_email: shadow.actorEmail,
+          },
+        });
       }
       return cycle;
     });

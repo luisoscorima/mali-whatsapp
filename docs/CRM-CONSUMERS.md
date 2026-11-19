@@ -7,7 +7,8 @@ Inventario ligero de quién llama a mali-whatsapp `/api/crm/*` (token `X-Crm-Ser
 | Consumidor | Rutas típicas | Uso |
 |------------|---------------|-----|
 | `whatsapp-crm-client.service.ts` | `POST /origins`, `POST /sync`, contacts/leads/cycles/management, statuses, manual lead | CRM Educación + widget Educación + PAM |
-| `mali-one-opportunity-link.service.ts` | `POST /api/crm-educacion/internal/opportunities/link-cycle` | Vincula ciclo WA → oportunidad nativa ONE (p.ej. Prospectia) |
+| `mali-one-opportunity-link.service.ts` | `POST /api/crm-educacion/internal/opportunities/link-cycle` | Vincula ciclo WA → oportunidad nativa ONE (p.ej. Prospectia); retry corto |
+| `mali-one-channel-event.service.ts` | `POST /api/crm-educacion/internal/channel-events` | Outbox shadow management (etapa/assign/cierre); no dual-write |
 | Widget Educación → `EducacionLead` | `POST /origins` (`channel=widget`) | Buffer local + sync |
 | CRM PAM | `POST /sync`, contacts, audience, send-template | Membresías |
 | Catálogo Educación (estados) | `GET/POST/PATCH education/statuses` | Espejo de estados |

@@ -32,7 +32,14 @@ export class MaliOneOpportunityLinkService {
     const email = String(input.email ?? '').trim().toLowerCase();
     if (!phone && !email) return null;
     const url = `${cfg.base}/api/crm-educacion/internal/opportunities/link-cycle`;
-    try {
+    const body = {
+      waCycleId: input.waCycleId,
+      waContactId: input.waContactId,
+      phone: phone || undefined,
+      email: email || undefined,
+      markInbound: input.markInbound !== false,
+    };
+    const attempt = async (): Promise<{ linked: boolean } | null> => {
       const res = await fetch(url, {
         method: 'POST',
         headers: {
@@ -40,13 +47,7 @@ export class MaliOneOpportunityLinkService {
           'Content-Type': 'application/json',
           'x-crm-educacion-service-token': cfg.token,
         },
-        body: JSON.stringify({
-          waCycleId: input.waCycleId,
-          waContactId: input.waContactId,
-          phone: phone || undefined,
-          email: email || undefined,
-          markInbound: input.markInbound !== false,
-        }),
+        body: JSON.stringify(body),
         signal: AbortSignal.timeout(8_000),
       });
       if (!res.ok) {
@@ -56,13 +57,27 @@ export class MaliOneOpportunityLinkService {
         );
         return null;
       }
-      const body = (await res.json()) as { linked?: boolean };
-      return { linked: Boolean(body.linked) };
+      const json = (await res.json()) as { linked?: boolean };
+      return { linked: Boolean(json.linked) };
+    };
+    try {
+      const first = await attempt();
+      if (first) return first;
+      await new Promise((resolve) => setTimeout(resolve, 1_200));
+      return await attempt();
     } catch (err) {
       this.logger.warn(
         `ONE opportunity link-cycle falló: ${err instanceof Error ? err.message : err}`,
       );
-      return null;
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 1_200));
+        return await attempt();
+      } catch (retryErr) {
+        this.logger.warn(
+          `ONE opportunity link-cycle retry falló: ${retryErr instanceof Error ? retryErr.message : retryErr}`,
+        );
+        return null;
+      }
     }
   }
 }

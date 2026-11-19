@@ -8,6 +8,7 @@ import { EducationLeadWorkflowService } from './education-lead-workflow.service'
 import { MaliOneLinksCatalogService } from './mali-one-links-catalog.service';
 import { MaliOnePaymentService } from './mali-one-payment.service';
 import { MaliOneOpportunityLinkService } from './mali-one-opportunity-link.service';
+import { MaliOneChannelEventService } from './mali-one-channel-event.service';
 import { MetaLeadgenService } from './meta-leadgen.service';
 import { TikTokLeadgenService } from './tiktok-leadgen.service';
 
@@ -22,6 +23,7 @@ import { TikTokLeadgenService } from './tiktok-leadgen.service';
     MaliOneLinksCatalogService,
     MaliOnePaymentService,
     MaliOneOpportunityLinkService,
+    MaliOneChannelEventService,
   ],
   exports: [
     LeadsService,
@@ -31,6 +33,7 @@ import { TikTokLeadgenService } from './tiktok-leadgen.service';
     MaliOneLinksCatalogService,
     MaliOnePaymentService,
     MaliOneOpportunityLinkService,
+    MaliOneChannelEventService,
   ],
 })
 export class LeadsModule {}
