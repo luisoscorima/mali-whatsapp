@@ -107,6 +107,14 @@ En el menú lateral: **WhatsApp** → **Introducción** / **API Setup** / **Conf
 
 ## 3. Agregar un número nuevo (desde la app)
 
+Una vez creado el número en Meta, abre **Administración → Líneas → WABAs**
+en Mali. Verifica el ID de la cuenta de mensajes, usa **Suscribir app** si
+falta la suscripción y pulsa **Sincronizar con Meta** para importar los
+números como borrador. Para cada línea, confirma su categoría, regístrala
+en Cloud API si corresponde y actívala después de validar su configuración.
+Consulta el [inventario operativo](INVENTARIO-WHATSAPP.md) para identificar
+la cuenta de destino y su estado.
+
 1. En [developers.facebook.com](https://developers.facebook.com) → **tu app** → **WhatsApp** → flujo de **añadir número** / **Administrar números de teléfono** (el nombre exacto varía).
 2. Sigue el asistente; Meta suele pedir **confirmación por SMS** al número.
 3. Si el SMS no llega o la UI se queda colgada, usa los pasos manuales de las secciones [4](#4-verificar-número-por-sms-request_code) y [6](#6-registrar-el-número-en-cloud-api-register).

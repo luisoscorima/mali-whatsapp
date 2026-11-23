@@ -6,7 +6,7 @@ En producción: **[https://whatsapp.mali.pe](https://whatsapp.mali.pe)**.
 
 ## Características
 
-- **Multi-área y multi-número:** TI, PAM, Patronato, Educación, Educación CA y Educación EP operan como **líneas distintas**. Cada área tiene su token y Phone Number ID (`WHATSAPP_TOKEN_*` / `PHONE_NUMBER_ID_*` en `.env`, o credenciales en **Administración → Credenciales Meta**, con prioridad sobre el entorno). Un mismo webhook de Meta alimenta todas las líneas: el sistema **resuelve el área** según `metadata.phone_number_id`, el WABA (`WABA_ID_*`) o, en casos límite, el teléfono ya vinculado.
+- **Multi-área y multi-número:** Mali administra cuentas de mensajes y líneas desde **Administración → Líneas**. Un mismo webhook de Meta recibe eventos de las cuentas suscritas. El sistema resuelve el área según `metadata.phone_number_id`, la WABA o el teléfono vinculado. Consulta el [inventario operativo](docs/INVENTARIO-WHATSAPP.md) para ver qué líneas y cuentas están vigentes.
 - **CRM canónico (PAM):** `contacts` es la fuente de verdad de personas (phone, email, `opt_in` / `opt_in_email`). MALI ONE sincroniza membresías vía `POST /api/crm/sync` y consulta audiencia email en `GET /api/crm/audience`. Contrato: [docs/CRM-API.md](docs/CRM-API.md).
 - **Integración Meta:** envío de plantillas, recepción de mensajes y medios, estados de entrega (`sent` / `delivered` / `read` / `failed`) y estado de plantillas (`message_template_status_update`).
 - **Campañas en cola:** envíos masivos con **BullMQ + Redis** (inmediato o programado), reintentos automáticos y manuales, KPIs (fallidos, respondieron, costo WABA).
