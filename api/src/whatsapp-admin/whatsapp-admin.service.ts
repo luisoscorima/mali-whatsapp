@@ -176,7 +176,16 @@ export class WhatsAppAdminService {
         },
       }),
       this.prisma.meta_credentials.findMany({ orderBy: { id: 'asc' } }),
-      this.prisma.whatsapp_wabas.findMany({ orderBy: { id: 'asc' } }),
+      this.prisma.whatsapp_wabas.findMany({
+        where: {
+          NOT: {
+            active: false,
+            whatsapp_lines: { none: {} },
+            whatsapp_templates: { some: {} },
+          },
+        },
+        orderBy: { id: 'asc' },
+      }),
       this.prisma.whatsapp_lines.findMany({
         orderBy: [{ business_area_id: 'asc' }, { id: 'asc' }],
         include: { business_area: true, program: true, waba: true },
