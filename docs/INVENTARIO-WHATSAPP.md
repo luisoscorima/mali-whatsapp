@@ -44,6 +44,15 @@ La cuenta de mensajes **Educación Museo** (`963348813298716`) está añadida y
 validada en el catálogo de Mali con ID interno `26`. La suscripción de la app
 y la sincronización de sus líneas quedan pendientes.
 
+Para fijar el área de importación, crear primero **Ate - Mayorazgo**
+(+51 977 337 940, Phone Number ID `1461751663686125`) en **Administración →
+Líneas**, con área **Educación** y WABA **Educación Museo**. Puede quedar
+inactiva. Después, en la fila de la WABA, pulsar **Suscribir app** para
+habilitar los webhooks y **Sincronizar con Meta** para importar las demás
+líneas como borradores del área Educación. Asignar luego a cada sede su
+categoría prevista. La suscripción por sí sola no importa números ni les
+asigna un área.
+
 | Línea | Número | Estado en Meta o acción | Mali producción |
 | --- | --- | --- | --- |
 | PAM (nuevo) | +51 907 825 846 | En Museo · recepción y respuesta verificadas | Activa · ID 2 |
