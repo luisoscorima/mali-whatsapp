@@ -56,14 +56,14 @@ export function AttributeNewPage() {
           segments.some(
             (other) => other.slug === s.slug && other.category !== s.category,
           )
-            ? `${s.label} · ${categoryLabel(s.category)}`
+            ? `${s.label} · ${categoryLabel(s.category, categories.options)}`
             : s.label,
         group: showSegmentCategory
-          ? categoryLabel(s.category)
+          ? categoryLabel(s.category, categories.options)
           : undefined,
         keywords: s.slug,
       })),
-    [segments, categories.education, showSegmentCategory],
+    [segments, categories.education, categories.options, showSegmentCategory],
   )
 
   useEffect(() => {

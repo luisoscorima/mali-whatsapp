@@ -24,10 +24,21 @@ describe('report export source', () => {
       contact_id: 12, phone: '001234567', name: 'Ana', last_name: 'Pérez',
       dni: '00112233', email: '', added: 'Cursos', removed: '',
       segments: 'Cursos', actor_email: 'test@example.test',
-      category: 'ca', whatsapp_line: '',
+      category: 'ca',
+      category_label: 'Cursos de Arte',
+      whatsapp_line: '',
     };
     const buffer = buildSegmentHistoryXlsxBuffer(
-      [record, { ...record, id: '2', name: 'Luis', category: 'ep' }],
+      [
+        record,
+        {
+          ...record,
+          id: '2',
+          name: 'Luis',
+          category: 'ep',
+          category_label: 'Extensión Profesional',
+        },
+      ],
       'educacion',
     );
     const workbook = XLSX.read(buffer, { type: 'buffer' });
@@ -46,6 +57,13 @@ describe('report export source', () => {
       category: 'general',
       whatsapp_line: 'Educación · 51900000000',
     })).toEqual(['General', 'Educación · 51900000000']);
+    expect(reportExportSourceCells('educacion', {
+      category: 'ca',
+      category_label: 'Cursos de Arte',
+    })).toEqual(['Cursos de Arte', 'Sin línea']);
+    expect(reportExportSourceCells('educacion', {
+      category: 'norte',
+    })).toEqual(['NORTE', 'Sin línea']);
     expect(reportExportSourceCells('pam', {
       whatsapp_line: 'PAM · 51923998190',
     })).toEqual(['No aplica', 'PAM · 51923998190']);

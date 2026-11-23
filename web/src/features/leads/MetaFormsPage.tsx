@@ -51,11 +51,7 @@ type LeadRow = {
 const ROUTE_AREA_OPTIONS = AREA_OPTIONS.filter((o) =>
   ['ti', 'pam', 'patronato', 'educacion'].includes(o.slug),
 )
-const ROUTE_CATEGORY_OPTIONS = [
-  { slug: 'general', label: 'General' },
-  { slug: 'ca', label: 'Cursos de Arte' },
-  { slug: 'ep', label: 'Extensión Profesional' },
-]
+const ROUTE_CATEGORY_OPTIONS = [{ slug: 'general', label: 'General' }]
 
 const LEADS_PAGE_SIZE = 25
 

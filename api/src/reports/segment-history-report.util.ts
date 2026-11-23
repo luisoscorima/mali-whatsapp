@@ -96,6 +96,7 @@ export async function fetchSegmentHistoryReport(
       actor_email: string | null;
       meta: unknown;
       category?: string | null;
+      category_label?: string | null;
     }[]
   >(
     `SELECT id, created_at, actor_email, meta,
@@ -106,7 +107,16 @@ export async function fetchSegmentHistoryReport(
            WHERE bp.id = (meta->>'program_id')::int
          )
          ELSE NULLIF(meta->>'category', '')
-       END AS category
+       END AS category,
+       CASE
+         WHEN meta ? 'program_id' AND NULLIF(meta->>'program_id', '') IS NULL THEN 'General'
+         WHEN (meta->>'program_id') ~ '^[0-9]+$' THEN (
+           SELECT COALESCE(NULLIF(BTRIM(bp.label), ''), UPPER(bp.slug))
+           FROM business_programs bp
+           WHERE bp.id = (meta->>'program_id')::int
+         )
+         ELSE NULL
+       END AS category_label
      FROM audit_logs ${whereSql}
      ORDER BY created_at DESC, id DESC
      LIMIT $5 OFFSET $6`,
@@ -147,6 +157,7 @@ export async function fetchSegmentHistoryReport(
         String(meta.phone ?? '').trim() || contact?.phone || '';
       return {
         category: row.category,
+        category_label: row.category_label,
         whatsapp_line: '',
         id: String(row.id),
         created_at: new Date(row.created_at).toISOString(),

@@ -239,7 +239,7 @@ export function FlowDetailPage() {
       <div className="px-3 pt-3 md:px-4 md:pt-4">
         <WaBackLink to="/flows" label="Volver a flujos" />
         {mixesCategories(categories) ? (
-          <p className="mt-2 text-sm text-muted">{categoryLabel(flowCategory)}</p>
+          <p className="mt-2 text-sm text-muted">{categoryLabel(flowCategory, categories.options)}</p>
         ) : null}
       </div>
       <FlowCanvasEditor

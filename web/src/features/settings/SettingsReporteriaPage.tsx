@@ -213,10 +213,10 @@ export function SettingsReporteriaPage() {
       (filterOptions?.segments ?? []).map((seg) => ({
         ...seg,
         group: showSegmentCategory
-          ? categoryLabel(seg.category)
+          ? categoryLabel(seg.category, scope.options)
           : undefined,
       })),
-    [filterOptions?.segments, showSegmentCategory],
+    [filterOptions?.segments, showSegmentCategory, scope.options],
   )
 
   const reporteriaAttrOptions = useMemo(
@@ -224,10 +224,10 @@ export function SettingsReporteriaPage() {
       (filterOptions?.attribute_filters ?? []).map((opt) => ({
         value: opt.slug,
         label: opt.label,
-        group: showAttrCategory ? categoryLabel(opt.category) : undefined,
+        group: showAttrCategory ? categoryLabel(opt.category, scope.options) : undefined,
         keywords: opt.slug,
       })),
-    [filterOptions?.attribute_filters, showAttrCategory],
+    [filterOptions?.attribute_filters, showAttrCategory, scope.options],
   )
 
   useEffect(() => {

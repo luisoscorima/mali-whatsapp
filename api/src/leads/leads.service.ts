@@ -119,24 +119,29 @@ function originsFirstSeenFilter(
 }
 
 function leadCategoryOf(item: {
-  program?: { slug: string } | null;
+  program?: { slug: string; label?: string | null } | null;
   conversations?: {
     whatsapp_line?: {
       label?: string | null;
       display_phone_number?: string | null;
       program_key?: string | null;
-      program?: { slug: string } | null;
+      program?: { slug: string; label?: string | null } | null;
     } | null;
   } | null;
-}): { categoria: string; linea: string } {
+}): { categoria: string; linea: string; categoria_label: string } {
   const line = item.conversations?.whatsapp_line;
   const slug = String(
     item.program?.slug || line?.program?.slug || line?.program_key || 'general',
   )
     .trim()
     .toLowerCase() || 'general';
+  const catalogLabel = String(
+    item.program?.label || line?.program?.label || '',
+  ).trim();
   return {
     categoria: slug,
+    categoria_label:
+      slug === 'general' ? 'General' : catalogLabel || slug.toUpperCase(),
     linea: [line?.label, line?.display_phone_number].filter(Boolean).join(' · '),
   };
 }
@@ -1848,12 +1853,12 @@ export class LeadsService implements OnModuleInit {
                   label: true,
                   display_phone_number: true,
                   program_key: true,
-                  program: { select: { slug: true } },
+                  program: { select: { slug: true, label: true } },
                 },
               },
             },
           },
-          program: { select: { slug: true } },
+          program: { select: { slug: true, label: true } },
         },
       }),
     ]);
@@ -2044,14 +2049,7 @@ export class LeadsService implements OnModuleInit {
       const captura = o.came_with_inbound ? 'Con mensaje' : 'Solo contacto';
       return {
         channel: channelLabels[o.channel] || o.channel,
-        categoria:
-          category.categoria === 'general'
-            ? 'General'
-            : category.categoria === 'ca'
-              ? 'Cursos de Arte'
-              : category.categoria === 'ep'
-                ? 'Extensión Profesional'
-                : category.categoria.toUpperCase(),
+        categoria: category.categoria_label,
         linea: category.linea,
         contact_name: contactName,
         username: o.conversations?.wa_username

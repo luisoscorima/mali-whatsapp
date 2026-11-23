@@ -23,7 +23,14 @@ type SearchableSelectProps = {
   'aria-label'?: string
 }
 
-const GROUP_ORDER = ['General', 'Cursos de Arte', 'Extensión Profesional', 'MARKETING', 'UTILITY', 'AUTHENTICATION', 'SERVICE']
+/** General primero; plantillas Meta en orden fijo; el resto por localeCompare. */
+const GROUP_ORDER = [
+  'General',
+  'MARKETING',
+  'UTILITY',
+  'AUTHENTICATION',
+  'SERVICE',
+]
 
 function groupRank(group?: string): number {
   if (!group) return GROUP_ORDER.length + 1
@@ -75,8 +82,8 @@ export function SearchableSelect({
     return [...filtered].sort(
       (a, b) =>
         groupRank(a.group) - groupRank(b.group) ||
-        (a.group ?? '').localeCompare(b.group ?? '') ||
-        a.label.localeCompare(b.label),
+        (a.group ?? '').localeCompare(b.group ?? '', 'es') ||
+        a.label.localeCompare(b.label, 'es'),
     )
   }, [filtered])
 

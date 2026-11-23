@@ -1,5 +1,5 @@
 import { type FormEvent, type ReactNode, useMemo, useState } from 'react'
-import { categoryLabel } from '@/shared/area/useCategoryScope'
+import { categoryLabel, useCategoryScope } from '@/shared/area/useCategoryScope'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import {
   getApplicableAttributeDefinitions,
@@ -84,6 +84,7 @@ export function ContactForm({
   leadStatusBusy = false,
   onLeadStatusChange,
 }: ContactFormProps) {
+  const categoryScope = useCategoryScope()
   const [name, setName] = useState(initial.name)
   const [lastName, setLastName] = useState(initial.last_name)
   const [phonePrefix, setPhonePrefix] = useState(
@@ -126,10 +127,10 @@ export function ContactForm({
         label: seg.label,
         color_key: seg.color_key ?? 'slate',
         group: showSegmentCategory
-          ? categoryLabel(seg.category)
+          ? categoryLabel(seg.category, categoryScope.options)
           : undefined,
       })),
-    [segments, showSegmentCategory],
+    [segments, showSegmentCategory, categoryScope.options],
   )
 
   const disabled = segments.length === 0
@@ -406,7 +407,7 @@ export function ContactForm({
             return (
               <details key={group.key} className="space-y-3">
                 <summary className="cursor-pointer font-medium">
-                  {categoryLabel(group.key)}
+                  {categoryLabel(group.key, categoryScope.options)}
                   <span className="font-normal text-muted">
                     {' '}
                     · {group.items.length}

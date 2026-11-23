@@ -14,8 +14,8 @@ Histórico: [CATEGORIAS-CHANGELOG.md](./CATEGORIAS-CHANGELOG.md). Relacionado: [
 
 Una categoría nueva se crea en **Administración → Áreas**, sin cambiar código. Se da de baja solo si no tiene líneas activas. Otras áreas (PAM, Patronato, TI) pueden no tener categorías.
 
-La distribución prevista de sedes de Educación entre **Norte y Callao**,
-**Centro y Este** y **Sur** está en el [inventario operativo](INVENTARIO-WHATSAPP.md#distribución-prevista-por-categorías).
+La distribución de sedes de Educación entre **Norte y Callao**,
+**Centro y Este** y **Sur** está en el [inventario operativo](INVENTARIO-WHATSAPP.md#distribución-por-categorías).
 La categoría de cada línea se asigna desde **Administración → Líneas**.
 
 ## Educación

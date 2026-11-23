@@ -223,7 +223,7 @@ export function SettingsBusinessHoursPage() {
         <BusinessHoursForm
           key={slug}
           area={categorySettingsArea(slug, scope.areaCanonical)}
-          heading={mixesCategories(scope) ? categoryLabel(slug) : undefined}
+          heading={mixesCategories(scope) ? categoryLabel(slug, scope.options) : undefined}
         />
       ))}
     </div>

@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
-import { categoryLabel } from '@/shared/area/useCategoryScope'
+import { categoryLabel, useCategoryScope } from '@/shared/area/useCategoryScope'
 import { SearchableSelect } from '@/shared/ui/SearchableSelect'
 import {
   inputTypeForField,
@@ -63,6 +63,7 @@ export function BulkContactActionsDialog({
   allowUnassign = true,
   onApplyAssign,
 }: BulkContactActionsDialogProps) {
+  const categoryScope = useCategoryScope()
   const [segmentSlug, setSegmentSlug] = useState('')
   const [attrKey, setAttrKey] = useState('')
   const [attrValue, setAttrValue] = useState('')
@@ -92,11 +93,11 @@ export function BulkContactActionsDialog({
         value: def.slug,
         label: def.label,
         group: showAttrCategory
-          ? categoryLabel(def.category)
+          ? categoryLabel(def.category, categoryScope.options)
           : undefined,
         keywords: def.slug,
       })),
-    [attributeDefinitions, showAttrCategory],
+    [attributeDefinitions, showAttrCategory, categoryScope.options],
   )
 
   const assigneeOptions = useMemo(() => {

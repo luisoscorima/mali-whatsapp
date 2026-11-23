@@ -9,7 +9,7 @@ import {
 import { insertAtSelection } from '@/shared/textSelection'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
-import { categoryLabel } from '@/shared/area/useCategoryScope'
+import { categoryLabel, useCategoryScope } from '@/shared/area/useCategoryScope'
 import { Button } from '@/shared/ui/shadcn/button'
 import {
   DropdownMenu,
@@ -90,6 +90,7 @@ export function InboxAdvisorNotesPopover({
   contactDni = '',
   triggerIcon,
 }: InboxAdvisorNotesPopoverProps) {
+  const categoryScope = useCategoryScope()
   const { confirm, confirmDialog } = useConfirmDialog()
   const [open, setOpen] = useState(false)
   const [notes, setNotes] = useState<AdvisorNote[]>([])
@@ -142,11 +143,11 @@ export function InboxAdvisorNotesPopover({
             Boolean(a.category?.toLowerCase().includes(q)),
         )
     return [...list].sort((a, b) => {
-      const ga = categoryLabel(a.category)
-      const gb = categoryLabel(b.category)
+      const ga = categoryLabel(a.category, categoryScope.options)
+      const gb = categoryLabel(b.category, categoryScope.options)
       return ga.localeCompare(gb) || a.label.localeCompare(b.label)
     })
-  }, [attrDefs, varQuery])
+  }, [attrDefs, varQuery, categoryScope.options])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -389,13 +390,16 @@ export function InboxAdvisorNotesPopover({
                 ))}
                 {filteredAttrs.map((a, index) => {
                   const group = showAttrCategory
-                    ? categoryLabel(a.category)
+                    ? categoryLabel(a.category, categoryScope.options)
                     : 'Atributos'
                   const prevGroup =
                     index === 0
                       ? null
                       : showAttrCategory
-                        ? categoryLabel(filteredAttrs[index - 1]?.category)
+                        ? categoryLabel(
+                            filteredAttrs[index - 1]?.category,
+                            categoryScope.options,
+                          )
                         : 'Atributos'
                   const showHeader = index === 0 || prevGroup !== group
                   return (

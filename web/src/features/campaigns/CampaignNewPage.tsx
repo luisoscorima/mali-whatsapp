@@ -257,7 +257,7 @@ export function CampaignNewPage() {
     const grouped = new Map<string, SegmentDefinition>()
     for (const segment of segResult.data) {
       const group = categoryScope.enabled
-        ? categoryLabel(segment.category)
+        ? categoryLabel(segment.category, categoryScope.options)
         : undefined
       const existing = grouped.get(segment.slug)
       if (existing) {
@@ -635,7 +635,7 @@ export function CampaignNewPage() {
               Segmentos
             </Link>
             {categoryScope.enabled && lineCategory
-              ? ` para ${categoryLabel(lineCategory)}`
+              ? ` para ${categoryLabel(lineCategory, categoryScope.options)}`
               : ''}
             .
           </p>
@@ -645,7 +645,7 @@ export function CampaignNewPage() {
               Incluye contactos que pertenezcan a <strong>cualquiera</strong> de
               los segmentos marcados (unión)
               {categoryScope.enabled && lineCategory
-                ? ` · ${categoryLabel(lineCategory)}`
+                ? ` · ${categoryLabel(lineCategory, categoryScope.options)}`
                 : ''}
               .
             </p>

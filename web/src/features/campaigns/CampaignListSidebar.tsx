@@ -192,7 +192,7 @@ export function CampaignListSidebar({ selectedId, onRefresh }: CampaignListSideb
               showNoneOption={false}
               segments={segmentOptions.map((seg) => ({
                 ...seg,
-                group: scope.education ? categoryLabel(seg.category) : undefined,
+                group: scope.education ? categoryLabel(seg.category, scope.options) : undefined,
               }))}
               selectedSlugs={selectedSegments}
               onToggle={toggleSegment}

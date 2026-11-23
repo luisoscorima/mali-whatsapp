@@ -22,9 +22,12 @@ function identityReason(reason: string): string {
   return IDENTITY_REASONS[reason] || 'Llegó un dato que no coincide con la persona';
 }
 
-function fichaArea(area: string): string {
-  if (area === 'educacion_ca') return 'Cursos de Arte';
-  if (area === 'educacion_ep') return 'Extensión Profesional';
+function fichaArea(
+  area: string,
+  programLabels: Record<string, string> = {},
+): string {
+  if (area === 'educacion_ca') return programLabels.ca || 'ca';
+  if (area === 'educacion_ep') return programLabels.ep || 'ep';
   if (area === 'educacion') return 'General';
   return area;
 }
@@ -48,7 +51,10 @@ function filled(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
 }
 
-function groupPhones(rows: ConsolidationRow[]) {
+function groupPhones(
+  rows: ConsolidationRow[],
+  programLabels: Record<string, string> = {},
+) {
   const groups = new Map<string, ConsolidationRow[]>();
   for (const row of rows) {
     const list = groups.get(row.phone_norm) ?? [];
@@ -82,7 +88,7 @@ function groupPhones(rows: ConsolidationRow[]) {
         name: [member.name, member.last_name].filter(Boolean).join(' ') || 'Sin nombre',
         first_name: member.name || '',
         last_name: member.last_name || '',
-        area: fichaArea(member.area),
+        area: fichaArea(member.area, programLabels),
         email: member.email,
         dni: member.dni,
         whatsapp_user_id: member.whatsapp_user_id,
@@ -371,56 +377,68 @@ export class AdminAreasService {
       const pages = Math.max(1, Math.ceil(pending / pageSize));
       const page = Math.min(Math.max(1, Math.floor(requestedPage) || 1), pages);
       const offset = (page - 1) * pageSize;
-      const rows = await this.prisma.$queryRaw<ConsolidationRow[]>`
-        SELECT
-          m.contact_id::int AS contact_id,
-          m.canonical_id::int AS canonical_id,
-          m.phone_norm,
-          c.name,
-          c.last_name,
-          c.email,
-          c.dni,
-          c.area,
-          c.whatsapp_user_id,
-          ls.label AS status_label,
-          ${advisorLabelSql('u')} AS advisor,
-          EXISTS (
-            SELECT 1 FROM contacts other
-            WHERE other.whatsapp_user_id = c.whatsapp_user_id
-              AND other.id <> c.id
-              AND NULLIF(REGEXP_REPLACE(COALESCE(other.phone, ''), '\\D', '', 'g'), '')
-                IS DISTINCT FROM m.phone_norm
-          ) AS wuid_outside
-        FROM education_consolidation_map m
-        JOIN contacts c ON c.id = m.contact_id
-        LEFT JOIN lead_status_definitions ls ON ls.id = c.lead_status_id
-        LEFT JOIN LATERAL (
-          SELECT assigned_user_id
-          FROM education_lead_cycles ec
-          WHERE ec.contact_id = c.id
-          ORDER BY ec.last_interaction_at DESC
-          LIMIT 1
-        ) cycle ON TRUE
-        LEFT JOIN users u ON u.id = cycle.assigned_user_id
-        WHERE m.decision = 'review'
-          AND m.phone_norm IN (
-            SELECT phone_norm
-            FROM education_consolidation_map
-            WHERE decision = 'review'
-            GROUP BY phone_norm
-            ORDER BY phone_norm
-            LIMIT ${pageSize}
-            OFFSET ${offset}
-          )
-        ORDER BY m.phone_norm, (m.contact_id = m.canonical_id) DESC, m.contact_id
-      `;
+      const [rows, educationPrograms] = await Promise.all([
+        this.prisma.$queryRaw<ConsolidationRow[]>`
+          SELECT
+            m.contact_id::int AS contact_id,
+            m.canonical_id::int AS canonical_id,
+            m.phone_norm,
+            c.name,
+            c.last_name,
+            c.email,
+            c.dni,
+            c.area,
+            c.whatsapp_user_id,
+            ls.label AS status_label,
+            ${advisorLabelSql('u')} AS advisor,
+            EXISTS (
+              SELECT 1 FROM contacts other
+              WHERE other.whatsapp_user_id = c.whatsapp_user_id
+                AND other.id <> c.id
+                AND NULLIF(REGEXP_REPLACE(COALESCE(other.phone, ''), '\\D', '', 'g'), '')
+                  IS DISTINCT FROM m.phone_norm
+            ) AS wuid_outside
+          FROM education_consolidation_map m
+          JOIN contacts c ON c.id = m.contact_id
+          LEFT JOIN lead_status_definitions ls ON ls.id = c.lead_status_id
+          LEFT JOIN LATERAL (
+            SELECT assigned_user_id
+            FROM education_lead_cycles ec
+            WHERE ec.contact_id = c.id
+            ORDER BY ec.last_interaction_at DESC
+            LIMIT 1
+          ) cycle ON TRUE
+          LEFT JOIN users u ON u.id = cycle.assigned_user_id
+          WHERE m.decision = 'review'
+            AND m.phone_norm IN (
+              SELECT phone_norm
+              FROM education_consolidation_map
+              WHERE decision = 'review'
+              GROUP BY phone_norm
+              ORDER BY phone_norm
+              LIMIT ${pageSize}
+              OFFSET ${offset}
+            )
+          ORDER BY m.phone_norm, (m.contact_id = m.canonical_id) DESC, m.contact_id
+        `,
+        this.prisma.business_programs.findMany({
+          where: {
+            slug: { in: ['ca', 'ep'] },
+            business_area: { slug: 'educacion' },
+          },
+          select: { slug: true, label: true },
+        }),
+      ]);
+      const programLabels = Object.fromEntries(
+        educationPrograms.map((row) => [row.slug, row.label]),
+      );
       return {
         page,
         page_size: pageSize,
         phone_pending: pending,
         phone_done: done,
         phone_joined: joined,
-        phones: groupPhones(rows),
+        phones: groupPhones(rows, programLabels),
         identity,
       };
     } catch {

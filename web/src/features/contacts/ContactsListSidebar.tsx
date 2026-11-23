@@ -320,10 +320,10 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
       (options?.attribute_filters ?? []).map((opt) => ({
         value: opt.slug,
         label: opt.label,
-        group: showAttrCategory ? categoryLabel(opt.category) : undefined,
+        group: showAttrCategory ? categoryLabel(opt.category, categoryScope.options) : undefined,
         keywords: opt.slug,
       })),
-    [options?.attribute_filters, showAttrCategory],
+    [options?.attribute_filters, showAttrCategory, categoryScope.options],
   )
   const canBulkSelect = segments.length > 0 || bulkAttrDefs.length > 0
 
@@ -517,7 +517,7 @@ export function ContactsListSidebar({ selectedId }: ContactsListSidebarProps) {
                 segments={segments.map((seg) => ({
                   ...seg,
                   group: categoryScope.education
-                    ? categoryLabel(seg.category)
+                    ? categoryLabel(seg.category, categoryScope.options)
                     : undefined,
                 }))}
                 selectedSlugs={selectedSegments}

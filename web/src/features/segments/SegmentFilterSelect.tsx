@@ -72,10 +72,17 @@ export function SegmentFilterSelect({
     )
   }, [segments, query])
 
-  const groupOrder = ['General', 'Cursos de Arte', 'Extensión Profesional']
   const ordered = [...filtered].sort((a, b) => {
-    const rank = (group?: string) => groupOrder.includes(group ?? '') ? groupOrder.indexOf(group!) : groupOrder.length
-    return rank(a.group) - rank(b.group) || (a.group ?? '').localeCompare(b.group ?? '')
+    const rank = (group?: string) => {
+      if (!group) return 2
+      if (group === 'General') return 0
+      return 1
+    }
+    return (
+      rank(a.group) - rank(b.group) ||
+      (a.group ?? '').localeCompare(b.group ?? '', 'es') ||
+      a.label.localeCompare(b.label, 'es')
+    )
   })
   const showNoneInList =
     effectiveShowNone &&

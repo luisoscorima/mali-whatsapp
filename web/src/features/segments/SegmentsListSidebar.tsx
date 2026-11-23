@@ -263,7 +263,7 @@ function renderSegmentRow(
         <span className="inbox-chat-link-main">
           {showCategory ? (
             <span className="inbox-chat-line">
-              <span>{categoryLabel(seg.category)}</span>
+              <span>{categoryLabel(seg.category, scope.options)}</span>
             </span>
           ) : null}
           <span className="inbox-chat-row-top">

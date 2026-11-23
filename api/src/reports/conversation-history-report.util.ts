@@ -146,6 +146,7 @@ export async function fetchConversationHistoryReport(
     const enrichRows = await prisma.$queryRaw<
       {
         category?: string | null;
+        category_label?: string | null;
         whatsapp_line?: string | null;
         conversation_id: number;
         phone: string;
@@ -189,6 +190,7 @@ export async function fetchConversationHistoryReport(
     for (const er of enrichRows) {
       enrichByConv.set(Number(er.conversation_id), {
         category: er.category,
+        category_label: er.category_label,
         whatsapp_line: er.whatsapp_line,
         phone: er.phone || '',
         name: er.name || '',
@@ -256,6 +258,7 @@ export async function fetchConversationHistoryReport(
 
       return {
         category: enrich?.category,
+        category_label: enrich?.category_label,
         whatsapp_line: enrich?.whatsapp_line,
         id: String(row.id),
         created_at: new Date(row.created_at).toISOString(),

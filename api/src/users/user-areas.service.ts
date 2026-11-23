@@ -93,12 +93,7 @@ export class UserAreasService {
       { slug: 'general', label: 'General' },
       ...programs.map((program) => ({
         slug: program.slug,
-        label:
-          program.slug === 'ca'
-            ? 'Cursos de Arte'
-            : program.slug === 'ep'
-              ? 'Extensión Profesional'
-              : program.label,
+        label: program.label,
       })),
     ];
     if (user.isMaster) return all;

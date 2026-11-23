@@ -9,17 +9,24 @@ import {
 
 export type CategoryOption = { slug: string; label: string }
 
-export function categoryLabel(slug: string | null | undefined): string {
+/** Display del catálogo: General + label de options; sin mapas ca/ep. */
+export function categoryLabel(
+  slug: string | null | undefined,
+  options: CategoryOption[] = [],
+): string {
   if (!slug || slug === 'general') return 'General'
-  if (slug === 'ca') return 'Cursos de Arte'
-  if (slug === 'ep') return 'Extensión Profesional'
+  const fromCatalog = options.find((item) => item.slug === slug)?.label?.trim()
+  if (fromCatalog) return fromCatalog
   return slug.toUpperCase()
 }
 
-export function categoryLine(slugs: Array<string | null | undefined>): string {
+export function categoryLine(
+  slugs: Array<string | null | undefined>,
+  options: CategoryOption[] = [],
+): string {
   const labels: string[] = []
   for (const slug of slugs) {
-    const label = categoryLabel(slug)
+    const label = categoryLabel(slug, options)
     if (!labels.includes(label)) labels.push(label)
   }
   return labels.join(' · ')

@@ -155,6 +155,7 @@ function buildRowFromMessages(
     id: number;
     conversation_id?: number;
     category?: string | null;
+    category_label?: string | null;
     whatsapp_line?: string | null;
     phone: string;
     wa_username: string | null;
@@ -187,6 +188,7 @@ function buildRowFromMessages(
     contact_id: contact.id,
     conversation_id: contact.conversation_id,
     category: contact.category,
+    category_label: contact.category_label,
     whatsapp_line: contact.whatsapp_line,
     phone: contact.phone,
     wa_identity_display: formatWaIdentityDisplay(
@@ -307,6 +309,7 @@ async function fetchContactIdsForReport(
     dni: string;
     conversation_id: number;
     category?: string | null;
+    category_label?: string | null;
     whatsapp_line?: string | null;
     segments: string;
     origins: string;
@@ -349,6 +352,7 @@ async function fetchContactIdsForReport(
       dni: string;
       conversation_id: number;
       category?: string | null;
+      category_label?: string | null;
       whatsapp_line?: string | null;
       segments: string;
       origins: string;

@@ -430,7 +430,7 @@ function LeadsUnifiedList() {
                     <tr key={o.id} className="border-b border-line last:border-0">
                       {mixesCategories(scope) ? (
                         <td className="px-2 py-2">
-                          {categoryLabel(o.categoria)}
+                          {categoryLabel(o.categoria, scope.options)}
                           {o.linea ? (
                             <div className="mt-1 text-xs text-muted">{o.linea}</div>
                           ) : null}

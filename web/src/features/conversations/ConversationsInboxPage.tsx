@@ -25,7 +25,12 @@ import { formatContactName } from '../contacts/contactName'
 import { type AttributeFieldDefinition } from '../contacts/contactFormUtils'
 import { BulkContactActionsDialog } from '../contacts/BulkContactActionsDialog'
 import { useOpenContactChat } from '../contacts/openContactChat'
-import { useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
+import {
+  categoryLabel,
+  useCategoryScope,
+  withCategoryQuery,
+  type CategoryOption,
+} from '@/shared/area/useCategoryScope'
 import { SegmentFilterSelect } from '../segments/SegmentFilterSelect'
 import { SegmentBadge } from '../segments/SegmentBadge'
 import { ChatMessageBubble } from './ChatMessageBubble'
@@ -286,16 +291,15 @@ function InboxHeaderLockIcon() {
   )
 }
 
-function inboxTeamLabel(lineProgram: string | null | undefined): string | null {
-  const value = String(lineProgram ?? '').trim()
-  if (!value) return null
-  const canonical = canonicalArea(value.toLowerCase())
-  const label = canonical
-    .split(/[_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ')
-  return label ? `Equipo ${label}` : null
+/** Misma etiqueta de categoría que el resto de la app, con prefijo Equipo. */
+function inboxTeamLabel(
+  lineProgram: string | null | undefined,
+  categories: CategoryOption[],
+): string | null {
+  const slug = String(lineProgram ?? '').trim().toLowerCase()
+  if (!slug || slug === 'general') return null
+  const label = categoryLabel(slug, categories)
+  return `Equipo ${label}`
 }
 
 function ProfileBlock({
@@ -324,6 +328,7 @@ function ProfileBlock({
   onOpenContact,
   onBack,
   actions,
+  categoryOptions = [],
 }: {
   detail: InboxDetail
   segments: SegmentOption[]
@@ -353,6 +358,7 @@ function ProfileBlock({
   onOpenContact: () => void
   onBack?: () => void
   actions?: ReactNode
+  categoryOptions?: CategoryOption[]
 }) {
   const user = useAppUser()
   const canManageLeads = Boolean(user?.canManageLeads)
@@ -388,7 +394,7 @@ function ProfileBlock({
     || detail.conversation.line_program?.toUpperCase()
     || (detail.conversation.line_display_phone ? 'Línea de WhatsApp' : null)
   const assigneeName = detail.conversation.assigned_user_label?.trim() || 'Sin asignar'
-  const teamLabel = inboxTeamLabel(detail.conversation.line_program)
+  const teamLabel = inboxTeamLabel(detail.conversation.line_program, categoryOptions)
   const currentSlugs = detail.contact?.segment_slugs ?? []
   const assignableSlugSet = useMemo(
     () => new Set(assignableSegments.map((s) => s.slug)),
@@ -3850,6 +3856,7 @@ export function ConversationsInboxPage() {
                   paymentLinkLabel={detailPaymentLinkLabel}
                   needsAssociatePayment={detailNeedsAssociatePayment}
                   needsStartAttention={detailNeedsStartAttention}
+                  categoryOptions={categoryScope.options}
                   onSegmentsChanged={() => {
                     void loadList()
                     if (selectedId) void loadDetail(selectedId)

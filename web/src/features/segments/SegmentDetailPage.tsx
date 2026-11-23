@@ -194,7 +194,7 @@ export function SegmentDetailPage() {
       <div>
         <WaBackLink to="/segments" label="Volver a segmentos" />
         {mixesCategories(scope) ? (
-          <p className="mt-2 text-sm text-muted">{categoryLabel(payload.segment.category)}</p>
+          <p className="mt-2 text-sm text-muted">{categoryLabel(payload.segment.category, scope.options)}</p>
         ) : null}
         <h1 className="mt-2 text-2xl font-semibold">{label}</h1>
         <p className="font-mono text-sm text-muted">{slug}</p>

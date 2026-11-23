@@ -69,7 +69,7 @@ export function AttributeDetailPage() {
         value: s.slug,
         label: s.label,
         group: showSegmentCategory
-          ? categoryLabel(s.category)
+          ? categoryLabel(s.category, categories.options)
           : undefined,
         keywords: s.slug,
       })),
@@ -183,7 +183,7 @@ export function AttributeDetailPage() {
       <div>
         <WaBackLink to="/attributes" label="Volver a atributos" />
         {mixesCategories(categories) ? (
-          <p className="mt-2 text-sm text-muted">{categoryLabel(def.category)}</p>
+          <p className="mt-2 text-sm text-muted">{categoryLabel(def.category, categories.options)}</p>
         ) : null}
         <h1 className="mt-2 text-2xl font-semibold">{def.label}</h1>
         <p className="font-mono text-sm text-muted">

@@ -86,7 +86,7 @@ export function FlowsListSidebar({ selectedId }: FlowsListSidebarProps) {
                   <span className="inbox-chat-link-main">
                     {mixesCategories(scope) ? (
                       <span className="inbox-chat-line">
-                        <span>{categoryLabel(item.category)}</span>
+                        <span>{categoryLabel(item.category, scope.options)}</span>
                       </span>
                     ) : null}
                     <span className="inbox-chat-row-top">

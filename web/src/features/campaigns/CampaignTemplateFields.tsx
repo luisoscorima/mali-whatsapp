@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
-import { categoryLabel } from '@/shared/area/useCategoryScope'
+import { categoryLabel, useCategoryScope } from '@/shared/area/useCategoryScope'
 import { SearchableSelect } from '@/shared/ui/SearchableSelect'
 
 export type TemplateParamDef = {
@@ -75,6 +75,7 @@ export function TemplateParamRow({
   onValueChange,
   onSourceChange,
 }: TemplateParamRowProps) {
+  const categoryScope = useCategoryScope()
   const isStatic = source === 'static'
   const sourceOptions = useMemo(
     () => [
@@ -111,11 +112,13 @@ export function TemplateParamRow({
       ...attrs.map((a) => ({
         value: `attr.${a.slug}`,
         label: a.label,
-        group: a.category ? categoryLabel(a.category) : 'Atributos',
+        group: a.category
+          ? categoryLabel(a.category, categoryScope.options)
+          : 'Atributos',
         keywords: a.slug,
       })),
     ],
-    [attrs],
+    [attrs, categoryScope.options],
   )
   const sourceLabel =
     sourceOptions.find((o) => o.value === source)?.label.toLowerCase() ||

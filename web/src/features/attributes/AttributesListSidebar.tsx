@@ -280,7 +280,7 @@ function renderAttributeRow(
         <span className="inbox-chat-link-main">
           {showCategory ? (
             <span className="inbox-chat-line">
-              <span>{categoryLabel(def.category)}</span>
+              <span>{categoryLabel(def.category, scope.options)}</span>
             </span>
           ) : null}
           <span className="inbox-chat-row-top">
