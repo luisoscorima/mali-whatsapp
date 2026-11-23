@@ -6,7 +6,13 @@ import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import { SortableSidebarList } from '@/shared/ui/SortableSidebarList'
 import { SegmentBadge } from './SegmentBadge'
-import { categoryLabel, mixesCategories, useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
+import {
+  categoryLabel,
+  mixesCategories,
+  useCategoryScope,
+  withCategoryQuery,
+  type CategoryOption,
+} from '@/shared/area/useCategoryScope'
 import {
   SEGMENTS_LIST_REFRESH_EVENT,
   SEGMENTS_LIST_UPSERT_EVENT,
@@ -232,13 +238,29 @@ export function SegmentsListSidebar({ selectedId }: SegmentsListSidebarProps) {
           items={filteredSegments}
           onReorder={handleReorder}
           renderItem={(seg, dragHandle) =>
-            renderSegmentRow(seg, selectedId, listQuery, dragHandle, mixesCategories(scope))
+            renderSegmentRow(
+              seg,
+              selectedId,
+              listQuery,
+              dragHandle,
+              mixesCategories(scope),
+              scope.options,
+            )
           }
         />
       ) : (
         <ul className="inbox-chat-list">
           {filteredSegments.map((seg) => (
-            <li key={seg.id}>{renderSegmentRow(seg, selectedId, listQuery, undefined, mixesCategories(scope))}</li>
+            <li key={seg.id}>
+              {renderSegmentRow(
+                seg,
+                selectedId,
+                listQuery,
+                undefined,
+                mixesCategories(scope),
+                scope.options,
+              )}
+            </li>
           ))}
         </ul>
       )}
@@ -252,6 +274,7 @@ function renderSegmentRow(
   listQuery: string,
   dragHandle?: ReactNode,
   showCategory = false,
+  categoryOptions: CategoryOption[] = [],
 ) {
   const active = selectedId === seg.id
   return (
@@ -263,7 +286,7 @@ function renderSegmentRow(
         <span className="inbox-chat-link-main">
           {showCategory ? (
             <span className="inbox-chat-line">
-              <span>{categoryLabel(seg.category, scope.options)}</span>
+              <span>{categoryLabel(seg.category, categoryOptions)}</span>
             </span>
           ) : null}
           <span className="inbox-chat-row-top">

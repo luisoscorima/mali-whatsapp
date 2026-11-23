@@ -5,7 +5,13 @@ import { notify } from '@/shared/notify'
 import { useIntervalWhenVisible } from '@/shared/hooks/useIntervalWhenVisible'
 import { WaSidebar } from '@/shared/ui/shell/WaSidebar'
 import { SortableSidebarList } from '@/shared/ui/SortableSidebarList'
-import { categoryLabel, mixesCategories, useCategoryScope, withCategoryQuery } from '@/shared/area/useCategoryScope'
+import {
+  categoryLabel,
+  mixesCategories,
+  useCategoryScope,
+  withCategoryQuery,
+  type CategoryOption,
+} from '@/shared/area/useCategoryScope'
 
 const LIST_POLL_MS = 15000
 
@@ -248,13 +254,31 @@ export function AttributesListSidebar({ selectedId }: AttributesListSidebarProps
           items={filteredDefinitions}
           onReorder={handleReorder}
           renderItem={(def, dragHandle) =>
-            renderAttributeRow(def, selectedId, segments, listQuery, dragHandle, mixesCategories(scope))
+            renderAttributeRow(
+              def,
+              selectedId,
+              segments,
+              listQuery,
+              dragHandle,
+              mixesCategories(scope),
+              scope.options,
+            )
           }
         />
       ) : (
         <ul className="inbox-chat-list">
           {filteredDefinitions.map((def) => (
-            <li key={def.id}>{renderAttributeRow(def, selectedId, segments, listQuery, undefined, mixesCategories(scope))}</li>
+            <li key={def.id}>
+              {renderAttributeRow(
+                def,
+                selectedId,
+                segments,
+                listQuery,
+                undefined,
+                mixesCategories(scope),
+                scope.options,
+              )}
+            </li>
           ))}
         </ul>
       )}
@@ -269,6 +293,7 @@ function renderAttributeRow(
   listQuery: string,
   dragHandle?: ReactNode,
   showCategory = false,
+  categoryOptions: CategoryOption[] = [],
 ) {
   const active = selectedId === def.id
   return (
@@ -280,7 +305,7 @@ function renderAttributeRow(
         <span className="inbox-chat-link-main">
           {showCategory ? (
             <span className="inbox-chat-line">
-              <span>{categoryLabel(def.category, scope.options)}</span>
+              <span>{categoryLabel(def.category, categoryOptions)}</span>
             </span>
           ) : null}
           <span className="inbox-chat-row-top">
