@@ -14,6 +14,7 @@ import {
 } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserAreasService } from '../users/user-areas.service';
+import type { BusinessAccessScope } from '../business-model/business-access.context';
 import type { AuthUser, JwtPayload } from './auth.types';
 import {
   isRoleSlug,
@@ -341,6 +342,26 @@ export class AuthService {
     const t0 = Date.now();
     const user = await this.prisma.users.findUnique({
       where: { id: payload.sub },
+      select: {
+        id: true,
+        email: true,
+        area: true,
+        role_slug: true,
+        is_master: true,
+        is_provisioned: true,
+        must_change_password: true,
+        can_edit_ai_prompt: true,
+        can_view_audit_logs: true,
+        can_view_integration: true,
+        can_edit_business_hours: true,
+        can_view_reports: true,
+        can_assign_conversations: true,
+        can_manage_attributes: true,
+        can_manage_segments: true,
+        can_view_conversation_stats: true,
+        can_view_campaign_stats: true,
+        can_manage_leads: true,
+      },
     });
     if (!user) {
       throw new UnauthorizedException('Usuario no encontrado');
@@ -512,23 +533,24 @@ export class AuthService {
       isProvisioned = true;
     }
 
-    const allowedAreas = isProvisioned
-      ? await this.userAreas.fetchAllowedAreasForUser({
-          userId: row.id,
-          primaryArea,
-          isMaster,
-        })
-      : [];
-    const area = isProvisioned
-      ? this.userAreas.resolveActiveArea(
-          sessionArea,
-          primaryArea,
-          allowedAreas,
-        )
-      : primaryArea;
+    let allowedAreas: AuthUser['allowedAreas'] = [];
+    let area = primaryArea;
+    let access: { roleSlug: string; scope: BusinessAccessScope } | undefined;
 
-    const access = isProvisioned && !isMaster
-      ? await this.userAreas.resolveBusinessAccess(row.id, area) : undefined;
+    if (isProvisioned) {
+      const resolved = await this.userAreas.resolveProvisionedAccess({
+        userId: row.id,
+        primaryArea,
+        isMaster,
+        sessionArea,
+      });
+      allowedAreas = resolved.allowedAreas;
+      area = resolved.area;
+      access = resolved.access
+        ? { roleSlug: resolved.access.roleSlug, scope: resolved.access.scope }
+        : undefined;
+    }
+
     const selectedRole = access?.roleSlug ?? row.role_slug;
     const roleSlug: RoleSlug | null = isRoleSlug(selectedRole) ? selectedRole : null;
 
