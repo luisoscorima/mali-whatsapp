@@ -7,9 +7,10 @@ export type MessageDeliveryInfo = {
 
 type ChatDeliveryStatusProps = {
   delivery: MessageDeliveryInfo
+  onRetry?: () => void
 }
 
-export function ChatDeliveryStatus({ delivery }: ChatDeliveryStatusProps) {
+export function ChatDeliveryStatus({ delivery, onRetry }: ChatDeliveryStatusProps) {
   const statusClass =
     delivery.status === 'read'
       ? 'chat-delivery--read'
@@ -55,6 +56,18 @@ export function ChatDeliveryStatus({ delivery }: ChatDeliveryStatusProps) {
         </span>
       )}
       <span className="chat-delivery-label">{delivery.label}</span>
+      {delivery.status === 'failed' && onRetry ? (
+        <button
+          type="button"
+          className="chat-delivery-retry"
+          onClick={(event) => {
+            event.stopPropagation()
+            onRetry()
+          }}
+        >
+          Reintentar
+        </button>
+      ) : null}
     </div>
   )
 }

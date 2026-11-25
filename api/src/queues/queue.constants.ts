@@ -9,7 +9,12 @@ export const CampaignJobName = {
 
 export const OutboundJobName = {
   SEND_REPLY: 'send-reply',
+  SEND_MEDIA: 'send-media',
+  SEND_TEMPLATE: 'send-template',
 } as const;
+
+/** El worker avisa al servicio de conversaciones para cerrar el envío de plantilla. */
+export const OUTBOUND_TEMPLATE_DELIVER = 'outbound.template.deliver';
 
 export const MaintenanceJobName = {
   PROMOTE_SCHEDULED: 'promote-scheduled',

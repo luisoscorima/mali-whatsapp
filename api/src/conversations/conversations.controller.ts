@@ -32,6 +32,7 @@ import { ConversationsService } from './conversations.service';
 import type {
   EnsureConversationResult,
   InboxDetail,
+  InboxMessage,
   InboxListResult,
   InboxOlderMessagesResult,
   InboxUnreadCountResult,
@@ -319,6 +320,21 @@ export class ConversationsController {
     );
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(buffer);
+  }
+
+  @Post(':id/messages/:messageId/retry')
+  async retryMessage(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('messageId', ParseIntPipe) messageId: number,
+  ): Promise<ApiResponse<InboxMessage>> {
+    assertCanManageConversations(user);
+    const data = await this.conversationsService.retryOutboundMessage(
+      user,
+      id,
+      messageId,
+    );
+    return { ok: true, data };
   }
 
   @Post(':id/messages/:messageId/react')

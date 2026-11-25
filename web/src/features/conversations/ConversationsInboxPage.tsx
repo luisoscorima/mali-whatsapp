@@ -1418,6 +1418,44 @@ function ServiceReplyQuotaList({ lines }: { lines: ServiceReplyLine[] }) {
   )
 }
 
+const CHAT_SKELETON_BUBBLES = [
+  { side: 'in', size: 'a' },
+  { side: 'out', size: 'b' },
+  { side: 'in', size: 'c' },
+  { side: 'out', size: 'd' },
+  { side: 'in', size: 'b' },
+] as const
+
+function ChatLoadingSkeleton() {
+  return (
+    <div className="inbox-chat-skeleton" role="status" aria-busy="true">
+      <span className="sr-only">Cargando chat…</span>
+      <header className="inbox-chat-header">
+        <span className="inbox-chat-skeleton__avatar" />
+        <span className="inbox-chat-skeleton__who">
+          <span className="inbox-chat-skeleton__bar inbox-chat-skeleton__bar--name" />
+          <span className="inbox-chat-skeleton__bar inbox-chat-skeleton__bar--sub" />
+        </span>
+      </header>
+      <div className="inbox-chat-body">
+        <div className="chat-thread--inbox">
+          {CHAT_SKELETON_BUBBLES.map((bubble, index) => (
+            <div
+              key={index}
+              className={`chat-bubble-wrap chat-bubble-wrap--${bubble.side} inbox-chat-skeleton__wrap--${bubble.size}`}
+            >
+              <span className="inbox-chat-skeleton__bubble" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <footer className="inbox-compose">
+        <span className="inbox-chat-skeleton__compose" />
+      </footer>
+    </div>
+  )
+}
+
 export function ConversationsInboxPage() {
   markTtfcNavStart()
   const { id: idParam } = useParams()
@@ -2949,6 +2987,29 @@ export function ConversationsInboxPage() {
     })
   }
 
+  async function onRetryMessage(message: InboxMessage) {
+    if (!detail || message.delivery?.status !== 'failed') return
+    const result = await apiClient.post<InboxMessage>(
+      `/api/conversations/${detail.conversation.id}/messages/${message.id}/retry`,
+      {},
+    )
+    if (!result.ok) {
+      notify.error(result.error)
+      return
+    }
+    setDetail((prev) => {
+      if (!prev || prev.conversation.id !== detail.conversation.id) return prev
+      const next = {
+        ...prev,
+        messages: prev.messages.map((row) =>
+          row.id === message.id ? result.data : row,
+        ),
+      }
+      rememberDetail(next)
+      return next
+    })
+  }
+
   async function onSendReply(event: FormEvent) {
     event.preventDefault()
     if (!selectedId || selectedId <= 0 || !detail?.can_reply) return
@@ -4054,7 +4115,7 @@ export function ConversationsInboxPage() {
             </WaEmptyPane>
           )
         ) : loadingDetail && !detail ? (
-          <WaEmptyPane heading="Cargando chat…" />
+          <ChatLoadingSkeleton />
         ) : error && !detail ? (
           <WaEmptyPane heading="No se pudo cargar">
             <div className="inbox-empty-hint space-y-3">
@@ -4190,6 +4251,7 @@ export function ConversationsInboxPage() {
                         onReply={onMessageReply}
                         onCopy={onMessageCopy}
                         onReact={(msg, emoji) => void onMessageReact(msg, emoji)}
+                        onRetry={(msg) => void onRetryMessage(msg)}
                       />
                     )
                   })

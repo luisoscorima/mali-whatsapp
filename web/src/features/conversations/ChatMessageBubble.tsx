@@ -160,6 +160,7 @@ type ChatMessageBubbleProps = {
   onReply?: (message: ChatMessage) => void
   onCopy?: (message: ChatMessage) => void
   onReact?: (message: ChatMessage, emoji: string) => void
+  onRetry?: (message: ChatMessage) => void
 }
 
 export function ChatMessageBubble({
@@ -171,6 +172,7 @@ export function ChatMessageBubble({
   onReply,
   onCopy,
   onReact,
+  onRetry,
 }: ChatMessageBubbleProps) {
   const [imageOpen, setImageOpen] = useState(false)
   const [pdfOpen, setPdfOpen] = useState(false)
@@ -407,7 +409,14 @@ export function ChatMessageBubble({
       </div>
 
       {outbound && message.delivery ? (
-        <ChatDeliveryStatus delivery={message.delivery} />
+        <ChatDeliveryStatus
+          delivery={message.delivery}
+          onRetry={
+            message.delivery.status === 'failed' && onRetry
+              ? () => onRetry(message)
+              : undefined
+          }
+        />
       ) : null}
 
       {message.reaction?.emoji ? (
