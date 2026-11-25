@@ -58,6 +58,23 @@ PAM opera en Museo con el **+51 907 825 846**, línea interna `2`, cuenta de
 mensajes `3141752249499039` y nombre visible **MALI Museo de Arte de Lima PAM**.
 Recepción y respuesta verificadas. Meta aprobó las cinco plantillas de utilidad.
 
+El 25 de noviembre de 2026 se reunieron en producción **16 pares de chats de
+PAM** que Meta asoció al mismo teléfono con identificadores distintos tras
+el traslado a Museo. Se movieron **89 mensajes** a sus chats históricos, se
+conservaron las fichas de esos chats y se copió un campo que faltaba. Las
+fichas duplicadas se desactivaron. El respaldo de las filas afectadas y de
+los IDs de mensajes está en `pam_repair_20261125.bsuid_reconciliation`.
+
+El chat `84133` sigue pendiente de identificación porque su
+evento entrante no incluye teléfono.
+
+Se preparó un ajuste para el webhook de PAM, pendiente de desplegar. Ante
+un cambio de identificador por este traslado, conserva el chat histórico
+si Meta confirma el mismo teléfono en ambos números, o si confirma el mismo
+nombre de usuario y el contacto responde a un mensaje de ese chat. El
+ajuste registra el vínculo en PAM sin modificar la identidad compartida
+de la persona.
+
 **Pendiente en Meta.** Eliminar en Educación la cuenta de mensajes anterior
 `983584127989245`. El número +51 923 998 190 ya fue eliminado según lo
 reportado. Meta bloquea el cierre por un saldo de S/ 0.01 y el pago devuelve

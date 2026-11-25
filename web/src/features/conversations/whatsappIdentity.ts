@@ -21,10 +21,14 @@ export function displayPhoneNumber(value: string | null): string {
   return `+51 ${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}`
 }
 
-export function chatSecondaryLabel(phone: string | null): string {
-  return phone && !isWhatsAppBsuid(phone)
-    ? displayPhoneNumber(phone)
-    : 'Número privado'
+function displayUsername(value?: string | null): string {
+  const username = String(value ?? '').trim().replace(/^@+/, '')
+  return username ? `@${username}` : ''
+}
+
+export function chatSecondaryLabel(phone: string | null, username?: string | null): string {
+  if (phone?.trim() && !isWhatsAppBsuid(phone)) return displayPhoneNumber(phone)
+  return displayUsername(username) || 'Número privado'
 }
 
 export function chatDisplayName(input: {
@@ -35,8 +39,8 @@ export function chatDisplayName(input: {
 }): string {
   const contactName = String(input.contactName ?? '').trim()
   if (contactName) return contactName
-  const username = String(input.username ?? '').trim().replace(/^@/, '')
-  if (!input.phone && username) return `@${username}`
+  const username = displayUsername(input.username)
+  if ((!input.phone?.trim() || isWhatsAppBsuid(input.phone)) && username) return username
   const profileName = String(input.profileName ?? '').trim()
   return profileName || input.phone || 'Usuario de WhatsApp'
 }

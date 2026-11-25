@@ -3421,6 +3421,7 @@ export function ConversationsInboxPage() {
               const crmName = String(item.contact_name ?? '').trim()
               const waAlias = String(item.wa_profile_name ?? '').trim()
               const name = displayName(item)
+              const secondaryLabel = chatSecondaryLabel(item.phone, item.wa_username)
               const hasContactName = Boolean(crmName)
               const hasWaAlias = !hasContactName && Boolean(waAlias || item.wa_username)
               const showPhoneRow = hasContactName || hasWaAlias || !item.phone
@@ -3571,9 +3572,9 @@ export function ConversationsInboxPage() {
                               </span>
                               {showPhoneRow ? (
                                 <span className="inbox-chat-phone-row">
-                                  <span className="inbox-chat-phone">
-                                    {chatSecondaryLabel(item.phone)}
-                                  </span>
+                                  {(!secondaryLabel.startsWith('@') || secondaryLabel !== name) ? (
+                                    <span className="inbox-chat-phone">{secondaryLabel}</span>
+                                  ) : null}
                                   {leadScore ? <LeadScoreBadge score={leadScore} /> : null}
                                   <ConversationBadges
                                     status={item.conversation_status}

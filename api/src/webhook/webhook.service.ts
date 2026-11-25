@@ -38,6 +38,7 @@ import {
   getWhatsAppLineByPhoneNumberId,
 } from '../templates/whatsapp-meta.util';
 import { processInboundReferral } from './meta-ctwa-referral.util';
+import { rebindPamCutoverIdentity } from './pam-cutover-identity.util';
 import { resolveInboundArea } from './webhook-area.util';
 import {
   extractInboundButtonPayload,
@@ -637,7 +638,22 @@ export class WebhookService {
       );
       const catalogLine = getWhatsAppLineByPhoneNumberId(linePhoneNumberId);
 
-      const contactByUserId = userId
+      const pamCutover = await rebindPamCutoverIdentity(this.prisma, {
+        area,
+        metadataPhoneId: value.metadata?.phone_number_id,
+        line: catalogLine,
+        record,
+        contacts: value.contacts,
+        phone,
+        userId,
+      });
+      if (pamCutover?.reboundChatId) {
+        this.logger.log(
+          `Webhook PAM: identidad actualizada en conversación ${pamCutover.reboundChatId}`,
+        );
+      }
+
+      const contactByUserId = userId && !pamCutover
         ? await this.prisma.contacts.findFirst({
             where: { area, whatsapp_user_id: userId },
             select: {
@@ -652,7 +668,7 @@ export class WebhookService {
             },
           })
         : null;
-      const contactByPhone = phone
+      const contactByPhone = phone && !pamCutover
         ? await this.prisma.contacts.findFirst({
             where: { area, phone },
             select: {
@@ -708,7 +724,7 @@ export class WebhookService {
         );
       }
       let contactInArea = contactMatch.match;
-      let contactId = contactInArea?.id ?? null;
+      let contactId = pamCutover?.contactId ?? contactInArea?.id ?? null;
       if (!contactId && (phone || userId)) {
         try {
           const profileName = extractInboundProfileName(
