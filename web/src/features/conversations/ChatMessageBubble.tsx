@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { apiClient } from '../../shared/api/api-client'
 import { formatDateTime } from '../../shared/format'
 import { notify } from '../../shared/notify'
@@ -11,8 +11,13 @@ import { ChatMessageBubbleMenu } from './ChatMessageBubbleMenu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/shadcn/tooltip'
 import { ChatAudioPlayer } from './ChatAudioPlayer'
 import { ChatImageLightbox } from './ChatImageLightbox'
-import { ChatPdfLightbox } from './ChatPdfLightbox'
-import { ChatPdfPreview } from './ChatPdfPreview'
+
+const ChatPdfPreview = lazy(() =>
+  import('./ChatPdfPreview').then((m) => ({ default: m.ChatPdfPreview })),
+)
+const ChatPdfLightbox = lazy(() =>
+  import('./ChatPdfLightbox').then((m) => ({ default: m.ChatPdfLightbox })),
+)
 
 export type ChatMessage = {
   id: number
@@ -335,7 +340,9 @@ export function ChatMessageBubble({
 
       {mediaUrl && mt === 'document' && isPdf ? (
         <div className="chat-bubble__media chat-image-frame">
-          <ChatPdfPreview downloadUrl={downloadHref} />
+          <Suspense fallback={<p className="muted">Cargando vista previa…</p>}>
+            <ChatPdfPreview downloadUrl={downloadHref} />
+          </Suspense>
           <MediaHoverActions
             viewLabel="Ver PDF"
             onView={() => setPdfOpen(true)}
@@ -343,11 +350,15 @@ export function ChatMessageBubble({
             downloadHref={downloadHref}
             onDownload={onDownloadClick}
           />
-          <ChatPdfLightbox
-            open={pdfOpen}
-            downloadUrl={downloadHref}
-            onOpenChange={setPdfOpen}
-          />
+          {pdfOpen ? (
+            <Suspense fallback={null}>
+              <ChatPdfLightbox
+                open={pdfOpen}
+                downloadUrl={downloadHref}
+                onOpenChange={setPdfOpen}
+              />
+            </Suspense>
+          ) : null}
         </div>
       ) : null}
 

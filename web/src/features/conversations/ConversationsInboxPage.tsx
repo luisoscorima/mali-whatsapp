@@ -184,6 +184,30 @@ type LeadStatusContext = {
 const INBOX_POLL_MS = 8000
 /** Con conexión en vivo: resincronización de seguridad (solo si hubo cambios). */
 const INBOX_LIVE_RESYNC_MS = 60000
+const DETAIL_CACHE_MAX = 20
+
+function inboxListCacheKey(area: string) {
+  return `wa_inbox_list:${area}`
+}
+
+function readInboxListCache(area: string): InboxListResult | null {
+  try {
+    const raw = sessionStorage.getItem(inboxListCacheKey(area))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as InboxListResult
+    return parsed?.items ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function writeInboxListCache(area: string, list: InboxListResult) {
+  try {
+    sessionStorage.setItem(inboxListCacheKey(area), JSON.stringify(list))
+  } catch {
+    /* cuota llena: seguir sin caché */
+  }
+}
 /** Agrupa recargas de lista cuando la vista tiene filtros que solo resuelve el servidor. */
 const LIST_PUSH_RELOAD_MS = 1200
 const SEARCH_DEBOUNCE_MS = 300
@@ -1409,6 +1433,7 @@ export function ConversationsInboxPage() {
   const openContactChatRef = useRef(openContactChat)
   openContactChatRef.current = openContactChat
   const [list, setList] = useState<InboxListResult | null>(null)
+  const detailCacheRef = useRef(new Map<number, InboxDetail>())
   const [inboxLines, setInboxLines] = useState<InboxLineOption[]>([])
   const [authorizedOpenLines, setAuthorizedOpenLines] = useState<InboxLineOption[]>([])
   const [serviceReplies, setServiceReplies] = useState<ServiceReplyQuota | null>(null)
@@ -1605,6 +1630,8 @@ export function ConversationsInboxPage() {
           return
         }
         setList(result.data)
+        const area = user?.area
+        if (area && !opts?.silent) writeInboxListCache(area, result.data)
         if (!opts?.silent) {
           reportTtfcFirstConversations({ path: window.location.pathname })
         }
@@ -1617,7 +1644,7 @@ export function ConversationsInboxPage() {
           listInFlightRef.current = false
         }
       })
-  }, [filterQuerySuffix])
+  }, [filterQuerySuffix, user?.area])
 
   const serviceReplyCategoryKey = searchParams.getAll('category').slice().sort().join('\0')
 
@@ -1784,8 +1811,19 @@ export function ConversationsInboxPage() {
     setSearchParams(next)
   }
 
+  const rememberDetail = useCallback((data: InboxDetail) => {
+    const cache = detailCacheRef.current
+    cache.delete(data.conversation.id)
+    cache.set(data.conversation.id, data)
+    while (cache.size > DETAIL_CACHE_MAX) {
+      const oldest = cache.keys().next().value
+      if (oldest == null) break
+      cache.delete(oldest)
+    }
+  }, [])
+
   const loadDetail = useCallback(
-    (conversationId: number, messageId?: number | null) => {
+    (conversationId: number, messageId?: number | null, opts?: { silent?: boolean }) => {
       detailAbortRef.current?.abort()
       pageAbortRef.current?.abort()
       pageAbortRef.current = null
@@ -1793,7 +1831,7 @@ export function ConversationsInboxPage() {
       const controller = new AbortController()
       detailAbortRef.current = controller
       const requestId = ++detailRequestIdRef.current
-      setLoadingDetail(true)
+      if (!opts?.silent) setLoadingDetail(true)
       setLoadingMessagePage(false)
       setError('')
       return apiClient
@@ -1812,6 +1850,7 @@ export function ConversationsInboxPage() {
             return
           }
           setDetail(result.data)
+          rememberDetail(result.data)
           if (!messageId)
             requestAnimationFrame(() => {
               if (requestId === detailRequestIdRef.current)
@@ -1862,7 +1901,7 @@ export function ConversationsInboxPage() {
             detailAbortRef.current = null
         })
     },
-    [],
+    [rememberDetail],
   )
 
   const loadMessagePage = useCallback(async (direction: 'before' | 'after') => {
@@ -2188,10 +2227,14 @@ export function ConversationsInboxPage() {
   }, [loadList, loadServiceReplies, pollConversationUpdates, selectedId])
 
   useEffect(() => {
+    const area = user?.area
+    if (area) {
+      setList((prev) => prev ?? readInboxListCache(area))
+    }
     setError('')
     void loadList()
     return () => listAbortRef.current?.abort()
-  }, [loadList])
+  }, [loadList, user?.area])
 
   useEffect(() => {
     if (selectedId == null || Number.isNaN(selectedId)) {
@@ -2203,10 +2246,16 @@ export function ConversationsInboxPage() {
       return
     }
 
-    setDetail(null)
+    const cached = highlightMsgId ? undefined : detailCacheRef.current.get(selectedId)
+    if (cached) {
+      setDetail(cached)
+      setLoadingDetail(false)
+    } else {
+      setDetail(null)
+      setLoadingDetail(true)
+    }
     setContactAttributes({})
     setError('')
-    setLoadingDetail(true)
 
     if (selectedId < 0) {
       const contactId = -selectedId
@@ -2235,7 +2284,7 @@ export function ConversationsInboxPage() {
       return
     }
 
-    void loadDetail(selectedId, highlightMsgId)
+    void loadDetail(selectedId, highlightMsgId, cached ? { silent: true } : undefined)
   }, [selectedId, highlightMsgId, navigate, loadDetail, conversationPath])
 
   useEffect(() => () => {
