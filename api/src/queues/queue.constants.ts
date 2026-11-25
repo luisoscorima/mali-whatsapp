@@ -1,9 +1,14 @@
 export const CAMPAIGNS_QUEUE = 'campaigns';
 export const MAINTENANCE_QUEUE = 'maintenance';
+export const OUTBOUND_QUEUE = 'outbound';
 
 export const CampaignJobName = {
   SEND: 'send',
   RETRY: 'retry',
+} as const;
+
+export const OutboundJobName = {
+  SEND_REPLY: 'send-reply',
 } as const;
 
 export const MaintenanceJobName = {

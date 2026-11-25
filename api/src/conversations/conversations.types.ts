@@ -53,6 +53,12 @@ export type InboxListItem = {
   line_program: string | null;
 };
 
+export type InboxPushRow = {
+  area: string;
+  whatsappLineId: number | null;
+  item: InboxListItem;
+};
+
 export type InboxListResult = {
   items: InboxListItem[];
   total_count: number;

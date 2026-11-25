@@ -6,8 +6,14 @@ import { LeadsModule } from '../leads/leads.module';
 import { CampaignQueueProcessor } from './campaign-queue.processor';
 import { CampaignQueueService } from './campaign-queue.service';
 import { MaintenanceQueueProcessor } from './maintenance-queue.processor';
+import { OutboundQueueProcessor } from './outbound-queue.processor';
+import { OutboundQueueService } from './outbound-queue.service';
 import { QueueBootstrapService } from './queue-bootstrap.service';
-import { CAMPAIGNS_QUEUE, MAINTENANCE_QUEUE } from './queue.constants';
+import {
+  CAMPAIGNS_QUEUE,
+  MAINTENANCE_QUEUE,
+  OUTBOUND_QUEUE,
+} from './queue.constants';
 import { readRedisConnection } from './redis.util';
 
 @Global()
@@ -19,6 +25,7 @@ import { readRedisConnection } from './redis.util';
     BullModule.registerQueue(
       { name: CAMPAIGNS_QUEUE },
       { name: MAINTENANCE_QUEUE },
+      { name: OUTBOUND_QUEUE },
     ),
     forwardRef(() => CampaignsModule),
     forwardRef(() => FlowsModule),
@@ -26,10 +33,12 @@ import { readRedisConnection } from './redis.util';
   ],
   providers: [
     CampaignQueueService,
+    OutboundQueueService,
     QueueBootstrapService,
     CampaignQueueProcessor,
     MaintenanceQueueProcessor,
+    OutboundQueueProcessor,
   ],
-  exports: [CampaignQueueService],
+  exports: [CampaignQueueService, OutboundQueueService],
 })
 export class QueuesModule {}

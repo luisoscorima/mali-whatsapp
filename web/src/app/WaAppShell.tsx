@@ -7,9 +7,18 @@ import { hasInboxDetailRoute } from '@/shared/layout/inboxDetailRoute'
 import { TooltipProvider } from '@/shared/ui/shadcn/tooltip'
 import { WaLayout } from '@/shared/ui/shell/WaLayout'
 import { WaRail } from '@/shared/ui/shell/WaRail'
+import {
+  connectInboxRealtime,
+  disconnectInboxRealtime,
+  isInboxRealtimeConnected,
+  onInboxInvalidated,
+  onInboxPush,
+  onInboxRealtimeStatus,
+} from '@/shared/realtime/inboxRealtime'
 import type { AppShellOutletContext } from './appOutletContext'
 
 const UNREAD_POLL_MS = 15000
+const UNREAD_PUSH_THROTTLE_MS = 2000
 const APP_TITLE = 'MALI ONE WhatsApp'
 
 export function WaAppShell() {
@@ -36,15 +45,25 @@ export function WaAppShell() {
   }, [user?.area])
 
   useEffect(() => {
+    if (!user) return
+    connectInboxRealtime(`${user.id}:${user.area}`)
+    return () => disconnectInboxRealtime()
+  }, [user?.id, user?.area])
+
+  useEffect(() => {
     if (!user) {
       setConversationsUnreadCount(0)
       return
     }
     let cancelled = false
     let inFlight = false
-    async function tick() {
+    let lastRun = 0
+    let throttleTimer: number | null = null
+    async function tick(force = false) {
       if (cancelled || inFlight || document.visibilityState === 'hidden') return
+      if (!force && isInboxRealtimeConnected()) return
       inFlight = true
+      lastRun = Date.now()
       try {
         const result = await apiClient.get<{ unread_count?: number }>(
           '/api/conversations/unread-count',
@@ -57,15 +76,34 @@ export function WaAppShell() {
         inFlight = false
       }
     }
-    void tick()
+    function requestTick() {
+      if (throttleTimer != null) return
+      const wait = Math.max(0, UNREAD_PUSH_THROTTLE_MS - (Date.now() - lastRun))
+      throttleTimer = window.setTimeout(() => {
+        throttleTimer = null
+        void tick(true)
+      }, wait)
+    }
+    void tick(true)
     const timer = window.setInterval(() => void tick(), UNREAD_POLL_MS)
+    const offPush = onInboxPush((push) => {
+      if (push.unread_changed) requestTick()
+    })
+    const offInvalidated = onInboxInvalidated(requestTick)
+    const offStatus = onInboxRealtimeStatus((connected) => {
+      if (connected) requestTick()
+    })
     function onVisibility() {
-      if (document.visibilityState === 'visible') void tick()
+      if (document.visibilityState === 'visible') void tick(true)
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => {
       cancelled = true
       window.clearInterval(timer)
+      if (throttleTimer != null) window.clearTimeout(throttleTimer)
+      offPush()
+      offInvalidated()
+      offStatus()
       document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [user?.id, user?.area])

@@ -237,10 +237,29 @@ export class WebhookService {
           response = COALESCE(response, '{}'::jsonb) || ${statusJson}::jsonb
       WHERE whatsapp_message_id = ${messageId}
     `;
+    // No retroceder: pending < sent < delivered < read (failed siempre aplica).
     await this.prisma.$executeRaw`
       UPDATE chat_messages
       SET raw_payload = COALESCE(raw_payload, '{}'::jsonb) || jsonb_build_object('delivery_status', ${statusJson}::jsonb)
       WHERE wa_message_id = ${messageId}
+        AND (
+          ${mappedStatus} = 'failed'
+          OR CASE LOWER(COALESCE(raw_payload->'delivery_status'->>'status', raw_payload->>'status', ''))
+               WHEN 'read' THEN 4
+               WHEN 'delivered' THEN 3
+               WHEN 'sent' THEN 2
+               WHEN 'accepted' THEN 2
+               WHEN 'pending' THEN 1
+               ELSE 0
+             END
+             < CASE ${mappedStatus}
+                 WHEN 'read' THEN 4
+                 WHEN 'delivered' THEN 3
+                 WHEN 'sent' THEN 2
+                 WHEN 'accepted' THEN 2
+                 ELSE 1
+               END
+        )
     `;
   }
 

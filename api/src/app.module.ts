@@ -26,12 +26,15 @@ import { CrmModule } from './crm/crm.module';
 import { FlowsModule } from './flows/flows.module';
 import { AdvisorNotesModule } from './advisor-notes/advisor-notes.module';
 import { PerfModule } from './perf/perf.module';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { RealtimeModule } from './realtime/realtime.module';
 
 @Module({
   imports: [
     AppConfigModule,
     PrismaModule,
     PerfModule,
+    EventEmitterModule.forRoot(),
     AuditModule,
     QueuesModule,
     MetaSettingsModule,
@@ -52,6 +55,7 @@ import { PerfModule } from './perf/perf.module';
     AdvisorNotesModule,
     WebhookModule,
     AdminModule,
+    RealtimeModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_INTERCEPTOR, useClass: BusinessAccessInterceptor }],

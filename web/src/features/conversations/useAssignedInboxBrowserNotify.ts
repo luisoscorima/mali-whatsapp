@@ -7,9 +7,12 @@ import {
   type BrowserNotifyPermission,
 } from '@/shared/browserNotify'
 import { notify } from '@/shared/notify'
+import { isInboxRealtimeConnected, onInboxPush } from '@/shared/realtime/inboxRealtime'
 import { chatDisplayName } from './whatsappIdentity'
 
 const MINE_NOTIFY_POLL_MS = 15000
+/** Solo mensajes entrantes recientes (no respuestas salientes en chats no leídos). */
+const PUSH_NOTIFY_MAX_AGE_MS = 60000
 const PREF_STORAGE_KEY = 'mali-inbox-browser-notify-enabled'
 
 type MineListItem = {
@@ -29,7 +32,9 @@ type MineListResult = {
   items: MineListItem[]
 }
 
-function itemDisplayName(item: MineListItem): string {
+function itemDisplayName(
+  item: Pick<MineListItem, 'phone' | 'contact_name' | 'wa_profile_name' | 'wa_username'>,
+): string {
   return chatDisplayName({
     phone: item.phone,
     contactName: item.contact_name,
@@ -116,6 +121,10 @@ export function useAssignedInboxBrowserNotify(opts: {
 
     async function pollMine() {
       if (cancelled || inFlight || document.visibilityState !== 'hidden') return
+      if (isInboxRealtimeConnected()) {
+        seeded = false
+        return
+      }
       inFlight = true
       try {
         const result = await apiClient.get<MineListResult>(
@@ -176,10 +185,30 @@ export function useAssignedInboxBrowserNotify(opts: {
     }
     document.addEventListener('visibilitychange', onVisibilityChange)
 
+    const notifiedUserAt = new Map<number, string>()
+    const offPush = onInboxPush((push) => {
+      const item = push.conversation
+      if (!item || !push.events.includes('message.created')) return
+      if (item.assigned_user_id !== userId || item.archived || !item.inbox_unread) return
+      const userAt = item.last_user_message_at
+      if (!userAt || notifiedUserAt.get(item.id) === userAt) return
+      if (Date.now() - Date.parse(userAt) > PUSH_NOTIFY_MAX_AGE_MS) return
+      if (document.visibilityState !== 'hidden') return
+      if (selectedIdRef.current === item.id) return
+      notifiedUserAt.set(item.id, userAt)
+      showBrowserNotification({
+        title: itemDisplayName(item),
+        body: String(item.preview ?? '').trim() || 'Nuevo mensaje',
+        tag: `inbox-mine-${item.id}`,
+        onClick: () => onOpenRef.current(item.id),
+      })
+    })
+
     return () => {
       cancelled = true
       window.clearInterval(timer)
       document.removeEventListener('visibilitychange', onVisibilityChange)
+      offPush()
     }
   }, [userId, active])
 

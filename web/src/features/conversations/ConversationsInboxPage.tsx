@@ -5,6 +5,12 @@ import { canonicalArea, onCategorySelection, readCategorySelection } from '@/sha
 import { apiClient } from '../../shared/api'
 import { formatChatListTime, chatListReplyStatus } from '../../shared/format'
 import { markTtfcNavStart, reportTtfcFirstConversations } from '@/shared/perf/ttfc'
+import {
+  isInboxRealtimeConnected,
+  onInboxInvalidated,
+  onInboxPush,
+  onInboxRealtimeStatus,
+} from '@/shared/realtime/inboxRealtime'
 import { notify } from '@/shared/notify'
 import {
   PERMISSION,
@@ -176,6 +182,10 @@ type LeadStatusContext = {
 }
 
 const INBOX_POLL_MS = 8000
+/** Con conexión en vivo: resincronización de seguridad (solo si hubo cambios). */
+const INBOX_LIVE_RESYNC_MS = 60000
+/** Agrupa recargas de lista cuando la vista tiene filtros que solo resuelve el servidor. */
+const LIST_PUSH_RELOAD_MS = 1200
 const SEARCH_DEBOUNCE_MS = 300
 
 function segmentLabel(slug: string, segments: SegmentOption[]): string {
@@ -951,6 +961,95 @@ function normalizeInboxChatParam(
   return chat as InboxListResult['filters']['chat']
 }
 
+/**
+ * ¿La fila recibida en tiempo real pertenece a la vista actual?
+ * `null` = filtro que solo el servidor resuelve (búsqueda, fechas, segmentos…): recargar.
+ */
+function pushRowMatchesView(
+  row: InboxListItem,
+  filters: InboxListResult['filters'],
+  userId: number,
+): boolean | null {
+  if (
+    filters.q ||
+    filters.window_max != null ||
+    filters.line_id != null ||
+    filters.segment_slugs.length > 0 ||
+    filters.include_none ||
+    filters.range === 'custom' ||
+    filters.chat === 'unanswered'
+  )
+    return null
+  if (filters.categories.length > 0) {
+    if (!row.line_program) return null
+    if (!filters.categories.includes(row.line_program)) return false
+  }
+  const hasUser = row.last_user_message_at != null
+  const active = !row.archived && hasUser
+  const status = (row.conversation_status ?? '').trim().toLowerCase()
+  switch (filters.chat) {
+    case 'archived':
+      return row.archived || !hasUser
+    case 'archived_auto':
+      return !hasUser
+    case 'archived_manual':
+      return row.archived && hasUser
+    case 'unread':
+      return active && row.inbox_unread
+    case 'bot':
+      return active && status === 'bot'
+    case 'human':
+      return active && status === 'human'
+    case 'mine':
+      return active && row.assigned_user_id === userId
+    case 'unassigned':
+      return active && row.assigned_user_id == null
+    default:
+      return active
+  }
+}
+
+/** Mismo orden que el API: no leídos primero, luego último mensaje. */
+function compareInboxRows(a: InboxListItem, b: InboxListItem): number {
+  if (a.inbox_unread !== b.inbox_unread) return a.inbox_unread ? -1 : 1
+  return (b.last_message_at ?? '').localeCompare(a.last_message_at ?? '')
+}
+
+function applyInboxPushRow(
+  prev: InboxListResult,
+  row: InboxListItem,
+  matches: boolean,
+  unreadChanged: boolean,
+): InboxListResult {
+  const old = prev.items.find((item) => item.id === row.id)
+  let unread = prev.unread_count ?? 0
+  if (old ? old.inbox_unread !== row.inbox_unread : unreadChanged) {
+    unread += row.inbox_unread ? 1 : -1
+  }
+  let items = prev.items
+  let total = prev.total_count
+  if (!matches) {
+    if (old) {
+      items = items.filter((item) => item.id !== row.id)
+      total -= 1
+    }
+  } else if (old) {
+    items = items.map((item) =>
+      item.id === row.id ? { ...row, matched_message_id: item.matched_message_id } : item,
+    )
+    if (prev.page === 1) items = [...items].sort(compareInboxRows)
+  } else if (prev.page === 1) {
+    items = [...items, row].sort(compareInboxRows)
+    total += 1
+  }
+  return {
+    ...prev,
+    items,
+    total_count: Math.max(0, total),
+    unread_count: Math.max(0, unread),
+  }
+}
+
 function isYmdDateParam(raw: string | null): raw is string {
   return Boolean(raw && /^\d{4}-\d{2}-\d{2}$/.test(raw.trim()))
 }
@@ -1378,6 +1477,10 @@ export function ConversationsInboxPage() {
   const updatesAbortRef = useRef<AbortController | null>(null)
   const detailRef = useRef(detail)
   detailRef.current = detail
+  const listRef = useRef(list)
+  listRef.current = list
+  const listDirtyRef = useRef(false)
+  const pendingUpdatesRef = useRef(false)
   const searchParamsRef = useRef(searchParams)
   searchParamsRef.current = searchParams
   const [showSummary, setShowSummary] = useState(false)
@@ -1959,19 +2062,104 @@ export function ConversationsInboxPage() {
     lastAuditIdRef.current = maxAuditId(detail?.events ?? [])
   }, [detail?.conversation.id, detail?.messages, detail?.events])
 
+  const requestConversationUpdates = useCallback(
+    (conversationId: number) => {
+      if (sendingReplyRef.current || updatesAbortRef.current) {
+        pendingUpdatesRef.current = true
+        return
+      }
+      pendingUpdatesRef.current = false
+      void pollConversationUpdates(conversationId).finally(() => {
+        if (!pendingUpdatesRef.current || sendingReplyRef.current) return
+        if (detailRef.current?.conversation.id === conversationId) {
+          requestConversationUpdates(conversationId)
+        }
+      })
+    },
+    [pollConversationUpdates],
+  )
+
   useEffect(() => {
     sendingReplyRef.current = sendingReply
-  }, [sendingReply])
+    if (!sendingReply && pendingUpdatesRef.current && selectedId != null && selectedId > 0) {
+      requestConversationUpdates(selectedId)
+    }
+  }, [sendingReply, selectedId, requestConversationUpdates])
+
+  const userId = user?.id
+  useEffect(() => {
+    if (userId == null) return
+    let reloadTimer: number | null = null
+    let wasConnected = isInboxRealtimeConnected()
+    function scheduleListReload() {
+      if (reloadTimer != null) return
+      reloadTimer = window.setTimeout(() => {
+        reloadTimer = null
+        listDirtyRef.current = false
+        void loadList({ silent: true })
+      }, LIST_PUSH_RELOAD_MS)
+    }
+    const offPush = onInboxPush<InboxListItem>((push) => {
+      const current = listRef.current
+      const row = push.conversation
+      if (current && row) {
+        listDirtyRef.current = true
+        const matches = pushRowMatchesView(row, current.filters, userId)
+        if (matches === null) {
+          setList((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  items: prev.items.map((item) =>
+                    item.id === row.id
+                      ? { ...row, matched_message_id: item.matched_message_id }
+                      : item,
+                  ),
+                }
+              : prev,
+          )
+          scheduleListReload()
+        } else {
+          setList((prev) =>
+            prev ? applyInboxPushRow(prev, row, matches, push.unread_changed) : prev,
+          )
+        }
+      }
+      if (push.conversation_id === detailRef.current?.conversation.id) {
+        requestConversationUpdates(push.conversation_id)
+      }
+    })
+    const offInvalidated = onInboxInvalidated(scheduleListReload)
+    const offStatus = onInboxRealtimeStatus((connected) => {
+      if (connected && wasConnected) {
+        scheduleListReload()
+        const openId = detailRef.current?.conversation.id
+        if (openId) requestConversationUpdates(openId)
+      }
+      if (connected) wasConnected = true
+    })
+    return () => {
+      if (reloadTimer != null) window.clearTimeout(reloadTimer)
+      offPush()
+      offInvalidated()
+      offStatus()
+    }
+  }, [userId, loadList, requestConversationUpdates])
 
   useEffect(() => {
     let lastListPoll = Date.now()
     let lastQuotaPoll = Date.now()
+    let lastDetailPoll = Date.now()
     function tick() {
       if (document.visibilityState === 'hidden') return
       const now = Date.now()
-      if (now - lastListPoll >= 15000) {
+      const live = isInboxRealtimeConnected()
+      if (now - lastListPoll >= (live ? INBOX_LIVE_RESYNC_MS : 15000)) {
         lastListPoll = now
-        void loadList({ silent: true, skipIfInFlight: true })
+        if (!live || listDirtyRef.current) {
+          listDirtyRef.current = false
+          void loadList({ silent: true, skipIfInFlight: true })
+        }
       }
       if (now - lastQuotaPoll >= 60000) {
         lastQuotaPoll = now
@@ -1980,8 +2168,10 @@ export function ConversationsInboxPage() {
       if (
         selectedId != null &&
         selectedId > 0 &&
-        !sendingReplyRef.current
+        !sendingReplyRef.current &&
+        (!live || now - lastDetailPoll >= INBOX_LIVE_RESYNC_MS)
       ) {
+        lastDetailPoll = now
         void pollConversationUpdates(selectedId)
       }
     }

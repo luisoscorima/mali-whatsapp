@@ -138,6 +138,7 @@ import type {
   InboxDetail,
   InboxListItem,
   InboxListResult,
+  InboxPushRow,
   InboxMessage,
   InboxMessageReaction,
   InboxMessageDelivery,
@@ -180,6 +181,7 @@ import { fetchConversationSummary } from './conversation-analytics.util';
 import { EducationLeadWorkflowService } from '../leads/education-lead-workflow.service';
 import { PersonResolverService } from '../people/person-resolver.service';
 import { canonicalBusinessArea } from '../config/areas';
+import { OutboundQueueService } from '../queues/outbound-queue.service';
 
 const INBOX_LIST_PAGE_SIZE = 50;
 const INBOX_DETAIL_MESSAGE_PAGE_SIZE = 50;
@@ -223,6 +225,7 @@ export class ConversationsService {
     private readonly userAreas: UserAreasService,
     private readonly educationLeads: EducationLeadWorkflowService,
     private readonly people: PersonResolverService,
+    private readonly outboundQueue: OutboundQueueService,
   ) {}
 
   private conversationLookup(area: string, id: number) {
@@ -817,86 +820,7 @@ export class ConversationsService {
       : Prisma.sql`NULL::int`;
 
     const rows = await this.prisma.$queryRaw<InboxRow[]>(Prisma.sql`
-      SELECT
-        c.id,
-        c.phone,
-        c.whatsapp_user_id,
-        c.last_message_at,
-        c.last_user_message_at,
-        (
-          SELECT MAX(m_out.created_at)
-          FROM chat_messages m_out
-          WHERE m_out.conversation_id = c.id
-            AND m_out.direction = 'outbound'
-        ) AS last_outbound_message_at,
-        c.inbox_unread,
-        c.unread_message_count,
-        c.archived,
-        c.status AS conversation_status,
-        c.assigned_user_id,
-        c.automation_touched_at,
-        ${this.inboxAssignedUserLabelSql()} AS assigned_user_label,
-        CASE
-          WHEN ct.area IN ('educacion', 'educacion_ca', 'educacion_ep') THEN (
-            SELECT elc.lead_score
-            FROM education_lead_cycles elc
-            WHERE elc.person_id = ct.person_id
-              AND elc.closed_at IS NULL
-              AND (
-                (
-                  scope_line.program_id IS NOT NULL
-                  AND elc.program_id = scope_line.program_id
-                )
-                OR (
-                  scope_line.program_id IS NULL
-                  AND elc.program_id IS NULL
-                  AND elc.area = 'educacion'
-                )
-              )
-            ORDER BY elc.started_at DESC, elc.id DESC
-            LIMIT 1
-          )
-          ELSE ct.lead_score
-        END AS contact_lead_score,
-        COALESCE(
-          ${this.inboxContactNameSql('ct')},
-          (
-            SELECT ${this.inboxContactNameSql('ct_alt')}
-            FROM contacts ct_alt
-            WHERE ct_alt.phone = c.phone AND (ct.id IS NULL OR ct_alt.id <> ct.id)
-            ORDER BY ct_alt.updated_at DESC NULLS LAST
-            LIMIT 1
-          )
-        ) AS contact_name,
-        NULLIF(TRIM(COALESCE(c.wa_profile_name, '')), '') AS wa_profile_name,
-        NULLIF(TRIM(COALESCE(c.wa_username, '')), '') AS wa_username,
-        COALESCE((
-          SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
-          FROM contact_segments cs
-          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
-          WHERE cs.contact_id = ct.id
-            AND cs.area = ct.area
-            AND ${segmentMatchesOuterLineSql()}
-        ), ARRAY[]::varchar[]) AS contact_segment_slugs,
-        (SELECT LEFT(m.body_text, 160) FROM chat_messages m
-         WHERE m.conversation_id = c.id
-         ORDER BY m.created_at DESC
-         LIMIT 1) AS preview,
-        COALESCE((
-          SELECT array_agg(tg.label ORDER BY tg.label)
-          FROM conversation_tags tg
-          WHERE tg.conversation_id = c.id
-        ), ARRAY[]::varchar[]) AS conversation_tags,
-        ${matchedMessageSql} AS matched_message_id,
-        ct.id AS contact_id,
-        NULLIF(TRIM(COALESCE(scope_line.label, '')), '') AS line_label,
-        NULLIF(TRIM(COALESCE(scope_line.display_phone_number, '')), '') AS line_display_phone,
-        NULLIF(TRIM(COALESCE(scope_program.slug, scope_line.program_key, '')), '') AS line_program
-      FROM conversations c
-      ${this.inboxResolvedContactJoinSql(area)}
-      LEFT JOIN users au ON au.id = c.assigned_user_id
-      LEFT JOIN whatsapp_lines scope_line ON scope_line.id = c.whatsapp_line_id
-      LEFT JOIN business_programs scope_program ON scope_program.id = scope_line.program_id
+      ${this.inboxRowSelectSql(matchedMessageSql)}
       WHERE ${categories ? inboxConversationPredicate('c', area, categories) : conversationAreaPredicate('c', area)}
       ${segmentSql}
       ${searchSql}
@@ -975,6 +899,114 @@ export class ConversationsService {
     `);
 
     return rows.concat(virtualRows);
+  }
+
+  /**
+   * Filas del Inbox (misma forma que la lista) para el envío en tiempo real.
+   * Sin filtro de acceso: el gateway decide quién recibe cada fila por área/línea.
+   */
+  async loadInboxPushRows(ids: number[]): Promise<InboxPushRow[]> {
+    if (!ids.length) return [];
+    const rows = await this.prisma.$queryRaw<
+      Array<InboxRow & { area: string; whatsapp_line_id: number | null }>
+    >(Prisma.sql`
+      ${this.inboxRowSelectSql(Prisma.sql`NULL::int`, Prisma.sql`, c.area, c.whatsapp_line_id`)}
+      WHERE c.id IN (${Prisma.join(ids)})
+    `);
+    return rows.map((row) => ({
+      area: row.area,
+      whatsappLineId: row.whatsapp_line_id == null ? null : Number(row.whatsapp_line_id),
+      item: this.mapListRow(row),
+    }));
+  }
+
+  private inboxRowSelectSql(
+    matchedMessageSql: Prisma.Sql,
+    extraColumns: Prisma.Sql = Prisma.empty,
+  ): Prisma.Sql {
+    return Prisma.sql`
+      SELECT
+        c.id,
+        c.phone,
+        c.whatsapp_user_id,
+        c.last_message_at,
+        c.last_user_message_at,
+        (
+          SELECT MAX(m_out.created_at)
+          FROM chat_messages m_out
+          WHERE m_out.conversation_id = c.id
+            AND m_out.direction = 'outbound'
+        ) AS last_outbound_message_at,
+        c.inbox_unread,
+        c.unread_message_count,
+        c.archived,
+        c.status AS conversation_status,
+        c.assigned_user_id,
+        c.automation_touched_at,
+        ${this.inboxAssignedUserLabelSql()} AS assigned_user_label,
+        CASE
+          WHEN ct.area IN ('educacion', 'educacion_ca', 'educacion_ep') THEN (
+            SELECT elc.lead_score
+            FROM education_lead_cycles elc
+            WHERE elc.person_id = ct.person_id
+              AND elc.closed_at IS NULL
+              AND (
+                (
+                  scope_line.program_id IS NOT NULL
+                  AND elc.program_id = scope_line.program_id
+                )
+                OR (
+                  scope_line.program_id IS NULL
+                  AND elc.program_id IS NULL
+                  AND elc.area = 'educacion'
+                )
+              )
+            ORDER BY elc.started_at DESC, elc.id DESC
+            LIMIT 1
+          )
+          ELSE ct.lead_score
+        END AS contact_lead_score,
+        COALESCE(
+          ${this.inboxContactNameSql('ct')},
+          (
+            SELECT ${this.inboxContactNameSql('ct_alt')}
+            FROM contacts ct_alt
+            WHERE ct_alt.phone = c.phone AND (ct.id IS NULL OR ct_alt.id <> ct.id)
+            ORDER BY ct_alt.updated_at DESC NULLS LAST
+            LIMIT 1
+          )
+        ) AS contact_name,
+        NULLIF(TRIM(COALESCE(c.wa_profile_name, '')), '') AS wa_profile_name,
+        NULLIF(TRIM(COALESCE(c.wa_username, '')), '') AS wa_username,
+        COALESCE((
+          SELECT array_agg(cs.segment_slug ORDER BY sd.sort_order NULLS LAST, cs.segment_slug)
+          FROM contact_segments cs
+          JOIN segment_definitions sd ON sd.area = cs.area AND sd.slug = cs.segment_slug AND sd.program_id IS NOT DISTINCT FROM cs.program_id
+          WHERE cs.contact_id = ct.id
+            AND cs.area = ct.area
+            AND ${segmentMatchesOuterLineSql()}
+        ), ARRAY[]::varchar[]) AS contact_segment_slugs,
+        (SELECT LEFT(m.body_text, 160) FROM chat_messages m
+         WHERE m.conversation_id = c.id
+         ORDER BY m.created_at DESC
+         LIMIT 1) AS preview,
+        COALESCE((
+          SELECT array_agg(tg.label ORDER BY tg.label)
+          FROM conversation_tags tg
+          WHERE tg.conversation_id = c.id
+        ), ARRAY[]::varchar[]) AS conversation_tags,
+        ${matchedMessageSql} AS matched_message_id,
+        ct.id AS contact_id,
+        NULLIF(TRIM(COALESCE(scope_line.label, '')), '') AS line_label,
+        NULLIF(TRIM(COALESCE(scope_line.display_phone_number, '')), '') AS line_display_phone,
+        NULLIF(TRIM(COALESCE(scope_program.slug, scope_line.program_key, '')), '') AS line_program
+        ${extraColumns}
+      FROM conversations c
+      ${this.inboxResolvedContactJoinSql()}
+      LEFT JOIN users au ON au.id = c.assigned_user_id
+      LEFT JOIN whatsapp_lines scope_line ON scope_line.id = c.whatsapp_line_id
+      LEFT JOIN business_programs scope_program ON scope_program.id = scope_line.program_id
+    `;
   }
 
   private async countInboxConversations(
@@ -3087,33 +3119,51 @@ export class ConversationsService {
 
     try {
       if (!file) {
-        const apiResponse = await sendSessionTextMessage({
-          to: conversationRecipient(conversation),
-          text,
-          area,
-          phoneNumberId: linePhoneNumberId,
-          replyToWaMessageId,
-        });
-        const msgId = apiResponse.messages?.[0]?.id || null;
+        // Estilo Chatwoot: guardar ya (pending) y enviar a Meta en cola.
+        const pendingPayload = withRoutingPhoneNumberId(
+          setMessageSender(
+            setMessageReplyTo(
+              { status: 'pending', delivery_status: { status: 'pending' } },
+              replyToMeta,
+            ),
+            actorLabel,
+            user.id,
+          ),
+          linePhoneNumberId,
+        );
         const row = await this.prisma.chat_messages.create({
           data: {
             conversation_id: conversationId,
             direction: 'outbound',
-            wa_message_id: msgId,
+            wa_message_id: null,
             body_text: text.slice(0, 8000),
             message_type: 'text',
-            raw_payload: withRoutingPhoneNumberId(
-              setMessageSender(
-                setMessageReplyTo(sanitizeApiResponse(apiResponse), replyToMeta),
-                actorLabel,
-                user.id,
-              ),
-              linePhoneNumberId,
-            ) as PrismaTypes.InputJsonValue,
+            raw_payload: pendingPayload as PrismaTypes.InputJsonValue,
             is_ai: false,
           },
         });
+        await this.prisma.conversations.update({
+          where: { id: conversationId },
+          data: {
+            last_message_at: new Date(),
+            updated_at: new Date(),
+          },
+        });
+        await this.outboundQueue.enqueueReply({
+          messageId: row.id,
+          conversationId,
+          area,
+          to: conversationRecipient(conversation),
+          text,
+          phoneNumberId: linePhoneNumberId,
+          replyToWaMessageId: replyToWaMessageId ?? null,
+          reservedLeadId,
+          actorUserId: user.id,
+          actorEmail: user.email,
+          actorArea: user.area,
+        });
         createdMessages.push(this.mapMessageRow(row));
+        return { messages: createdMessages };
       } else {
         const { waType } = classifyConversationUpload(
           file.mimetype,

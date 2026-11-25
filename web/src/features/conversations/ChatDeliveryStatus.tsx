@@ -17,7 +17,9 @@ export function ChatDeliveryStatus({ delivery }: ChatDeliveryStatusProps) {
         ? 'chat-delivery--failed'
         : delivery.status === 'delivered'
           ? 'chat-delivery--delivered'
-          : 'chat-delivery--sent'
+          : delivery.status === 'pending'
+            ? 'chat-delivery--pending'
+            : 'chat-delivery--sent'
 
   return (
     <div
@@ -39,7 +41,7 @@ export function ChatDeliveryStatus({ delivery }: ChatDeliveryStatusProps) {
             <path d="M8 12l3 3L22 5" />
           </svg>
         </span>
-      ) : delivery.status === 'delivered' ? (
+      ) : delivery.status === 'delivered' || delivery.status === 'sent' ? (
         <span className="chat-delivery-icon" aria-hidden="true">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
             <path d="M20 6L9 17l-5-5" />

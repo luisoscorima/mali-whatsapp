@@ -10,5 +10,6 @@ import { ConversationsService } from './conversations.service';
   imports: [AuthModule, FlowsModule, LeadsModule, PeopleModule],
   controllers: [ConversationsController],
   providers: [ConversationsService],
+  exports: [ConversationsService],
 })
 export class ConversationsModule {}
