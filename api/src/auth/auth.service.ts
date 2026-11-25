@@ -29,6 +29,7 @@ import {
   newGoogleUserData,
   parseGoogleProfileNames,
 } from './user-access.util';
+import { perfStore } from '../perf/perf-store';
 
 /** Misma ventana que el middleware last_seen de v1 (main). */
 const LOGIN_LOG_SEEN_BUMP_MS = 60 * 1000;
@@ -333,7 +334,11 @@ export class AuthService {
     return this.jwtService.sign(payload);
   }
 
-  async validateJwtPayload(payload: JwtPayload): Promise<AuthUser> {
+  async validateJwtPayload(
+    payload: JwtPayload,
+    req?: Request,
+  ): Promise<AuthUser> {
+    const t0 = Date.now();
     const user = await this.prisma.users.findUnique({
       where: { id: payload.sub },
     });
@@ -348,6 +353,11 @@ export class AuthService {
     );
     if (payload.lid != null) authUser.loginLogId = payload.lid;
     this.bumpLoginLogSeen(authUser.loginLogId);
+    const authDurationMs = Date.now() - t0;
+    perfStore.record('auth', authDurationMs);
+    if (req) {
+      (req as Request & { perfAuthMs?: number }).perfAuthMs = authDurationMs;
+    }
     return authUser;
   }
 

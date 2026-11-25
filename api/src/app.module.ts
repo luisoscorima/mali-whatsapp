@@ -25,11 +25,13 @@ import { PrismaModule } from './prisma/prisma.module';
 import { CrmModule } from './crm/crm.module';
 import { FlowsModule } from './flows/flows.module';
 import { AdvisorNotesModule } from './advisor-notes/advisor-notes.module';
+import { PerfModule } from './perf/perf.module';
 
 @Module({
   imports: [
     AppConfigModule,
     PrismaModule,
+    PerfModule,
     AuditModule,
     QueuesModule,
     MetaSettingsModule,

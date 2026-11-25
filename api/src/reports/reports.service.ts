@@ -58,6 +58,7 @@ import type {
   EducationSlaReportResult,
   SegmentHistoryReportResult,
 } from './reports.types';
+import { withExportTiming } from '../perf/export-timing.util';
 
 const AUDIT_PAGE_SIZE = 25;
 const REPORT_PAGE_SIZE = 25;
@@ -195,28 +196,32 @@ export class ReportsService {
     opts: import('./audit-log-query.util').AuditLogQueryOpts,
     filenamePrefix: string,
   ): Promise<{ buffer: Buffer; filename: string }> {
-    const { whereSql, params } = buildAuditLogWhere(query, opts);
-    const exportParams = [...params, REPORT_EXPORT_MAX];
-    const limIdx = params.length + 1;
+    return withExportTiming(`audit:${filenamePrefix}`, async () => {
+      const { whereSql, params } = buildAuditLogWhere(query, opts);
+      const exportParams = [...params, REPORT_EXPORT_MAX];
+      const limIdx = params.length + 1;
 
-    const rows = await this.prisma.$queryRawUnsafe<AuditDbRow[]>(
-      `SELECT created_at, level, event_type, message, actor_user_id, actor_email, area, client_ip, request_id, meta
-       FROM audit_logs ${whereSql}
-       ORDER BY created_at DESC, id DESC
-       LIMIT $${limIdx}`,
-      ...exportParams,
-    );
+      const rows = await this.prisma.$queryRawUnsafe<AuditDbRow[]>(
+        `SELECT created_at, level, event_type, message, actor_user_id, actor_email, area, client_ip, request_id, meta
+         FROM audit_logs ${whereSql}
+         ORDER BY created_at DESC, id DESC
+         LIMIT $${limIdx}`,
+        ...exportParams,
+      );
 
-    const { contactPhones, conversationPhones } = await this.loadAuditPhoneMaps(rows);
-    const enrichedRows = rows.map((row) => ({
-      ...row,
-      phone: resolveAuditPhone(row.meta, contactPhones, conversationPhones),
-    }));
+      const { contactPhones, conversationPhones } =
+        await this.loadAuditPhoneMaps(rows);
+      const enrichedRows = rows.map((row) => ({
+        ...row,
+        phone: resolveAuditPhone(row.meta, contactPhones, conversationPhones),
+      }));
 
-    return {
-      buffer: buildAuditLogXlsxBuffer(enrichedRows),
-      filename: auditLogExportFilename(filenamePrefix),
-    };
+      return {
+        buffer: buildAuditLogXlsxBuffer(enrichedRows),
+        filename: auditLogExportFilename(filenamePrefix),
+        rowCount: enrichedRows.length,
+      };
+    }, (r) => r.rowCount).then(({ buffer, filename }) => ({ buffer, filename }));
   }
 
   private async loadAuditPhoneMaps(rows: { meta: unknown }[]): Promise<{
@@ -319,16 +324,23 @@ export class ReportsService {
     this.assertReportsAccess(user);
     const area = user.area;
     const filters = this.parseCommunicationFilters(query);
-    const { rows } = await fetchContactCommunicationReport(
-      this.prisma,
-      area,
-      filters,
-      { limit: REPORT_EXPORT_MAX, offset: 0 },
-    );
-    return {
-      buffer: buildContactCommunicationXlsxBuffer(rows, area),
-      filename: contactCommunicationExportFilename(area),
-    };
+    return withExportTiming(
+      'communications',
+      async () => {
+        const { rows } = await fetchContactCommunicationReport(
+          this.prisma,
+          area,
+          filters,
+          { limit: REPORT_EXPORT_MAX, offset: 0 },
+        );
+        return {
+          buffer: buildContactCommunicationXlsxBuffer(rows, area),
+          filename: contactCommunicationExportFilename(area),
+          rowCount: rows.length,
+        };
+      },
+      (r) => r.rowCount,
+    ).then(({ buffer, filename }) => ({ buffer, filename }));
   }
 
   async listSegmentHistory(
@@ -371,14 +383,26 @@ export class ReportsService {
   ): Promise<{ buffer: Buffer; filename: string }> {
     this.assertReportsAccess(user);
     const area = user.area;
-    const { rows } = await fetchSegmentHistoryReport(this.prisma, area, query, {
-      limit: REPORT_EXPORT_MAX,
-      offset: 0,
-    });
-    return {
-      buffer: buildSegmentHistoryXlsxBuffer(rows, area),
-      filename: segmentHistoryExportFilename(area),
-    };
+    return withExportTiming(
+      'segment-history',
+      async () => {
+        const { rows } = await fetchSegmentHistoryReport(
+          this.prisma,
+          area,
+          query,
+          {
+            limit: REPORT_EXPORT_MAX,
+            offset: 0,
+          },
+        );
+        return {
+          buffer: buildSegmentHistoryXlsxBuffer(rows, area),
+          filename: segmentHistoryExportFilename(area),
+          rowCount: rows.length,
+        };
+      },
+      (r) => r.rowCount,
+    ).then(({ buffer, filename }) => ({ buffer, filename }));
   }
 
   async listConversationHistory(
@@ -423,16 +447,23 @@ export class ReportsService {
   ): Promise<{ buffer: Buffer; filename: string }> {
     this.assertReportsAccess(user);
     const area = user.area;
-    const { rows } = await fetchConversationHistoryReport(
-      this.prisma,
-      area,
-      query,
-      { limit: REPORT_EXPORT_MAX, offset: 0 },
-    );
-    return {
-      buffer: buildConversationHistoryXlsxBuffer(rows, area),
-      filename: conversationHistoryExportFilename(area),
-    };
+    return withExportTiming(
+      'conversation-history',
+      async () => {
+        const { rows } = await fetchConversationHistoryReport(
+          this.prisma,
+          area,
+          query,
+          { limit: REPORT_EXPORT_MAX, offset: 0 },
+        );
+        return {
+          buffer: buildConversationHistoryXlsxBuffer(rows, area),
+          filename: conversationHistoryExportFilename(area),
+          rowCount: rows.length,
+        };
+      },
+      (r) => r.rowCount,
+    ).then(({ buffer, filename }) => ({ buffer, filename }));
   }
 
   private assertEducationReportsAccess(user: AuthUser): void {
@@ -468,14 +499,17 @@ export class ReportsService {
     const categories = parseCategorySlugs(
       query.category as string | string[] | undefined,
     );
-    const result = await fetchEducationSlaReport(this.prisma, {
-      from: typeof query.from === 'string' ? query.from : undefined,
-      to: typeof query.to === 'string' ? query.to : undefined,
-      categories,
-    });
-    return {
-      buffer: buildEducationSlaXlsxBuffer(result),
-      filename: educationSlaExportFilename(),
-    };
+    return withExportTiming('education-sla', async () => {
+      const result = await fetchEducationSlaReport(this.prisma, {
+        from: typeof query.from === 'string' ? query.from : undefined,
+        to: typeof query.to === 'string' ? query.to : undefined,
+        categories,
+      });
+      return {
+        buffer: buildEducationSlaXlsxBuffer(result),
+        filename: educationSlaExportFilename(),
+        rowCount: result.by_advisor?.length,
+      };
+    }, (r) => r.rowCount).then(({ buffer, filename }) => ({ buffer, filename }));
   }
 }

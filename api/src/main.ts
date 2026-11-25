@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import { RequestMethod, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { perfHttpMiddleware } from './perf/perf-http.middleware';
 
 config({ path: path.resolve(__dirname, '../../.env') });
 
@@ -16,6 +17,8 @@ async function bootstrap() {
       { path: 'webhook/(.*)', method: RequestMethod.ALL },
     ],
   });
+  // Antes de guards Nest: captura tiempo total (auth incluida).
+  app.use(perfHttpMiddleware);
   app.use(cookieParser());
   app.enableCors({ origin: true, credentials: true });
   app.useGlobalPipes(

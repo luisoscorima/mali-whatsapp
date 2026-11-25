@@ -4,6 +4,7 @@ import { useAppUser } from '@/app/appOutletContext'
 import { canonicalArea, onCategorySelection, readCategorySelection } from '@/shared/area/category-selection'
 import { apiClient } from '../../shared/api'
 import { formatChatListTime, chatListReplyStatus } from '../../shared/format'
+import { markTtfcNavStart, reportTtfcFirstConversations } from '@/shared/perf/ttfc'
 import { notify } from '@/shared/notify'
 import {
   PERMISSION,
@@ -1295,6 +1296,7 @@ function ServiceReplyQuotaList({ lines }: { lines: ServiceReplyLine[] }) {
 }
 
 export function ConversationsInboxPage() {
+  markTtfcNavStart()
   const { id: idParam } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -1500,6 +1502,9 @@ export function ConversationsInboxPage() {
           return
         }
         setList(result.data)
+        if (!opts?.silent) {
+          reportTtfcFirstConversations({ path: window.location.pathname })
+        }
       })
       .catch(() => {
         if (!controller.signal.aborted && !opts?.silent) setError('No se pudo cargar la bandeja. Intenta de nuevo.')

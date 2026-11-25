@@ -23,13 +23,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       ]),
       ignoreExpiration: false,
       secretOrKey: config.jwtSecret,
+      passReqToCallback: true,
     });
   }
 
-  async validate(payload: JwtPayload): Promise<AuthUser> {
+  async validate(req: Request, payload: JwtPayload): Promise<AuthUser> {
     if (!payload?.sub) {
       throw new UnauthorizedException('Token inválido');
     }
-    return this.authService.validateJwtPayload(payload);
+    return this.authService.validateJwtPayload(payload, req);
   }
 }
