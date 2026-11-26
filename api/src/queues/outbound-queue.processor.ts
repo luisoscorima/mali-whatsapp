@@ -264,6 +264,11 @@ export class OutboundQueueProcessor extends WorkerHost {
         throw new Error('No se pudo leer el archivo guardado');
       }
       const buffer = Buffer.from(await downloaded.arrayBuffer());
+      if (data.voiceNote) {
+        this.logger.log(
+          `Nota de voz a Graph: ${buffer.length} bytes, inicio=${buffer.subarray(0, 4).toString()}`,
+        );
+      }
       const upload = await uploadMediaToWhatsApp({
         area: data.area,
         buffer,

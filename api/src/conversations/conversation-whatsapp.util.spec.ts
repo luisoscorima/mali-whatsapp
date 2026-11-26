@@ -1,12 +1,13 @@
 import * as whatsappMeta from '../templates/whatsapp-meta.util';
 import { uploadMediaToWhatsApp } from './conversation-whatsapp.util';
+import { VOICE_NOTE_MIME } from './voice-note.util';
 
 describe('WhatsApp media uploads', () => {
   afterEach(() => jest.restoreAllMocks());
 
   it.each([
-    ['audio/ogg; codecs=opus', 'audio/ogg', 'nota-de-voz.ogg'],
-    ['audio/ogg', 'audio/ogg', 'nota.ogg'],
+    [VOICE_NOTE_MIME, VOICE_NOTE_MIME, 'nota-de-voz.ogg'],
+    ['audio/ogg', VOICE_NOTE_MIME, 'nota.ogg'],
     ['audio/mpeg', 'audio/mpeg', 'audio.mp3'],
   ])('declares %s as %s', async (mimeType, wireType, filename) => {
     jest.spyOn(whatsappMeta, 'getWhatsAppCredentialsForArea').mockReturnValue({
