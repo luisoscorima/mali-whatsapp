@@ -9,7 +9,6 @@ import {
 } from '../templates/whatsapp-meta.util';
 import { MAX_SESSION_TEXT_LEN } from '../settings/business-hours.util';
 import { whatsappRecipientField } from './whatsapp-recipient.util';
-import { VOICE_NOTE_MIME } from './voice-note.util';
 
 const GRAPH_BASE = 'https://graph.facebook.com/v23.0';
 
@@ -303,10 +302,8 @@ export async function uploadMediaToWhatsApp(input: {
     input.buffer.length,
   );
   const safeName = sanitizeUploadFilename(input.filename, waType);
-  const mime =
-    input.mimeType === VOICE_NOTE_MIME
-      ? VOICE_NOTE_MIME
-      : String(input.mimeType).split(';')[0].trim();
+  // WhatsApp solo acepta el tipo base. `audio/ogg; codecs=opus` se sube y luego falla la entrega.
+  const mime = String(input.mimeType).split(';')[0].trim();
 
   const form = new FormData();
   form.append('messaging_product', 'whatsapp');

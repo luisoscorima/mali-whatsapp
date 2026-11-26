@@ -77,10 +77,30 @@ export function readMessageDelivery(rawPayload: unknown): MessageDeliveryInfo {
   }
   const info = mapDeliveryInfo(resolveStatusToken(obj));
   const providerResult = parseJsonObject(obj.delivery_status);
-  if (info.status === 'failed' && (obj.outbound_accepted_wamid || providerResult?.id)) {
-    return { ...info, retryable: false };
+  if (info.status === 'failed') {
+    const detail = deliveryFailureDetail(providerResult);
+    const withDetail = detail ? { ...info, label: `Error de entrega: ${detail}` } : info;
+    if (obj.outbound_accepted_wamid || providerResult?.id) {
+      return { ...withDetail, retryable: false };
+    }
+    return withDetail;
   }
   return info;
+}
+
+function deliveryFailureDetail(delivery: Record<string, unknown> | null): string {
+  const errors = delivery?.errors;
+  const first = Array.isArray(errors) ? errors[0] : null;
+  if (!first || typeof first !== 'object') return '';
+  const row = first as Record<string, unknown>;
+  const data =
+    row.error_data && typeof row.error_data === 'object'
+      ? (row.error_data as Record<string, unknown>)
+      : null;
+  return String(data?.details || row.title || row.message || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 180);
 }
 
 /** Orden de entrega: pending < sent < delivered < read. failed no escala. */

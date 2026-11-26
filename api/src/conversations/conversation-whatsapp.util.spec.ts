@@ -6,9 +6,9 @@ describe('WhatsApp media uploads', () => {
   afterEach(() => jest.restoreAllMocks());
 
   it.each([
-    [VOICE_NOTE_MIME, 'nota-de-voz.ogg'],
-    ['audio/mpeg', 'audio.mp3'],
-  ])('declares %s on both multipart fields', async (mimeType, filename) => {
+    [VOICE_NOTE_MIME, 'audio/ogg', 'nota-de-voz.ogg'],
+    ['audio/mpeg', 'audio/mpeg', 'audio.mp3'],
+  ])('declares %s as base type %s', async (mimeType, wireType, filename) => {
     jest.spyOn(whatsappMeta, 'getWhatsAppCredentialsForArea').mockReturnValue({
       area: 'ti',
       phoneNumberId: '123',
@@ -33,10 +33,10 @@ describe('WhatsApp media uploads', () => {
 
     const body = fetchMock.mock.calls[0][1]?.body;
     expect(body).toBeInstanceOf(FormData);
-    expect((body as FormData).get('type')).toBe(mimeType);
+    expect((body as FormData).get('type')).toBe(wireType);
     const wire = await new Response(body).text();
     expect(wire).toContain(
-      `filename="${filename}"\r\nContent-Type: ${mimeType}\r\n`,
+      `filename="${filename}"\r\nContent-Type: ${wireType}\r\n`,
     );
   });
 });

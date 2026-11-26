@@ -230,6 +230,22 @@ export class WebhookService {
       .toLowerCase();
     if (!messageId || !mappedStatus) return;
 
+    if (mappedStatus === 'failed') {
+      const errors = Array.isArray(status.errors) ? status.errors : [];
+      const first =
+        errors[0] && typeof errors[0] === 'object'
+          ? (errors[0] as Record<string, unknown>)
+          : null;
+      const data =
+        first?.error_data && typeof first.error_data === 'object'
+          ? (first.error_data as Record<string, unknown>)
+          : null;
+      const detail = String(data?.details || first?.title || first?.message || '').trim();
+      this.logger.warn(
+        `Webhook entrega fallida id=${messageId} code=${String(first?.code ?? 'n/a')} ${detail}`.trim(),
+      );
+    }
+
     const statusJson = JSON.stringify(status);
     await this.prisma.$executeRaw`
       UPDATE campaign_logs
