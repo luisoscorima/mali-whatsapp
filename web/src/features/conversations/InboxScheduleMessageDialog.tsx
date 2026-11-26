@@ -11,41 +11,24 @@ import {
 
 const LIMA_OFFSET = '-05:00'
 
-function pad2(n: number) {
-  return String(n).padStart(2, '0')
-}
-
-/** Fecha/hora locales de Lima a partir de ahora. */
-function limaParts(from = new Date()) {
+/** Fecha local de Lima a partir de un instante. */
+function limaDate(from = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Lima',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
   }).formatToParts(from)
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
-  return {
-    date: `${get('year')}-${get('month')}-${get('day')}`,
-    hour: Number(get('hour')),
-    minute: Number(get('minute')),
-  }
+  return `${get('year')}-${get('month')}-${get('day')}`
 }
 
 function defaultScheduleFields() {
-  const now = limaParts()
-  // Próxima hora en punto, mínimo +1 h respecto a la hora actual de Lima.
-  let hour = now.hour + 1
-  let date = now.date
-  if (hour >= 24) {
-    hour = 0
-    const next = new Date(`${now.date}T12:00:00${LIMA_OFFSET}`)
-    next.setUTCDate(next.getUTCDate() + 1)
-    date = limaParts(next).date
-  }
-  return { date, time: `${pad2(hour)}:00` }
+  const today = limaDate()
+  // Mañana (día actual + 1) a las 8:00 a. m. (Lima).
+  const next = new Date(`${today}T12:00:00${LIMA_OFFSET}`)
+  next.setUTCDate(next.getUTCDate() + 1)
+  return { date: limaDate(next), time: '08:00' }
 }
 
 export function scheduledAtToIso(date: string, time: string): string {

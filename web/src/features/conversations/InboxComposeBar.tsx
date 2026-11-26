@@ -192,6 +192,7 @@ export function InboxComposeBar({
   const quickRepliesRef = useRef<HTMLDivElement>(null)
   const primaryActionRef = useRef<HTMLButtonElement>(null)
   const cancelRecordingRef = useRef<HTMLButtonElement>(null)
+  const stopRecordingRef = useRef<HTMLButtonElement>(null)
   const wasRecording = useRef(false)
   const sendAfterRecordRef = useRef(false)
   const [fileAccept, setFileAccept] = useState<string>(ATTACH_OPTIONS[0].accept)
@@ -240,9 +241,8 @@ export function InboxComposeBar({
 
   useEffect(() => {
     if (voice.status === 'requesting') cancelRecordingRef.current?.focus()
-    if (voice.status === 'recording' || voice.status === 'finishing') {
-      primaryActionRef.current?.focus()
-    }
+    if (voice.status === 'recording') stopRecordingRef.current?.focus()
+    if (voice.status === 'finishing') primaryActionRef.current?.focus()
     if (voice.status === 'idle' && wasRecording.current) primaryActionRef.current?.focus()
     wasRecording.current = voice.status !== 'idle'
   }, [voice.status])
@@ -661,19 +661,15 @@ export function InboxComposeBar({
               )}
 
               <div className="inbox-compose-actions">
-                {onSchedule ? (
+                {onSchedule && hasOutgoing ? (
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-sm"
                     title="Programar mensaje"
                     aria-label="Programar mensaje"
-                    disabled={sendingReply || schedulingReply || !hasOutgoing}
+                    disabled={sendingReply || schedulingReply}
                     onClick={() => {
-                      if (!hasOutgoing) {
-                        notify.error('Escribe un mensaje o adjunta un archivo')
-                        return
-                      }
                       setSlash(null)
                       stopTyping()
                       setScheduleOpen(true)
@@ -737,6 +733,25 @@ export function InboxComposeBar({
             <div className="inbox-compose-grow min-h-[36px]" />
           )}
         </div>
+        {canReply && voice.status === 'recording' ? (
+          <Button
+            ref={stopRecordingRef}
+            type="button"
+            size="icon"
+            variant="outline"
+            className="inbox-compose-primary text-bad"
+            aria-label="Detener grabación"
+            title="Detener para escuchar"
+            onClick={() => {
+              sendAfterRecordRef.current = false
+              voice.finish()
+            }}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+              <rect x="6" y="6" width="12" height="12" rx="1.5" />
+            </svg>
+          </Button>
+        ) : null}
         {canReply ? (
           <Button
             ref={primaryActionRef}

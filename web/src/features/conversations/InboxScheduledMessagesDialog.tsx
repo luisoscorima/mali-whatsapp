@@ -115,13 +115,31 @@ export function InboxScheduledMessagesDialog({
                     <div className="mt-2 flex justify-end">
                       <Button
                         type="button"
-                        size="sm"
+                        size="icon-sm"
                         variant="ghost"
                         className="text-bad"
+                        title="Cancelar mensaje"
+                        aria-label="Cancelar mensaje"
                         disabled={cancellingId === msg.id}
                         onClick={() => void cancelOne(msg.id)}
                       >
-                        {cancellingId === msg.id ? '…' : 'Cancelar'}
+                        {cancellingId === msg.id ? (
+                          '…'
+                        ) : (
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.75"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden
+                          >
+                            <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5m4-5v5" />
+                          </svg>
+                        )}
                       </Button>
                     </div>
                   </li>
