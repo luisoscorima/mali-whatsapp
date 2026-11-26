@@ -143,6 +143,25 @@ function IconSchedule() {
   )
 }
 
+function IconBold() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" />
+      <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" />
+    </svg>
+  )
+}
+
+function IconItalic() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <line x1="19" x2="10" y1="4" y2="4" />
+      <line x1="14" x2="5" y1="20" y2="20" />
+      <line x1="15" x2="9" y1="4" y2="20" />
+    </svg>
+  )
+}
+
 export type ReplyToMessage = {
   id: number
   preview: string
@@ -661,7 +680,7 @@ export function InboxComposeBar({
                   aria-label="Negrita"
                   onPressedChange={() => applyFormat('*')}
                 >
-                  <strong>B</strong>
+                  <IconBold />
                 </Toggle>
                 <Toggle
                   size="sm"
@@ -670,7 +689,7 @@ export function InboxComposeBar({
                   aria-label="Cursiva"
                   onPressedChange={() => applyFormat('_')}
                 >
-                  <span aria-hidden="true" className="inbox-compose-italic">I</span>
+                  <IconItalic />
                 </Toggle>
               </div>
 
