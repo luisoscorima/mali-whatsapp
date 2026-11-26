@@ -198,7 +198,7 @@ export function InboxAdvisorNotesPopover({
           type="button"
           variant="secondary"
           size="sm"
-          className="inbox-compose-notes-btn shrink-0 gap-1.5 px-2.5"
+          className="inbox-compose-notes-btn h-8 shrink-0 gap-1.5 px-2.5"
           title="Mis notas"
           aria-label="Mis notas"
         >

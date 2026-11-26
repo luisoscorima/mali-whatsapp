@@ -2792,12 +2792,17 @@ html[data-theme='dark'] .chat-bubble__reply-to {
   min-width: 0;
 }
 
+.inbox-compose-schedule {
+  align-self: center;
+}
+
 button.inbox-compose-primary {
   width: 42px;
   height: 42px;
   min-width: 42px;
   padding: 0;
   border-radius: 999px;
+  align-self: center;
 }
 
 .inbox-compose-italic {
@@ -2811,7 +2816,7 @@ button.inbox-compose-primary {
 .inbox-compose-bar {
   display: flex;
   flex-wrap: nowrap;
-  align-items: flex-end;
+  align-items: center;
   gap: 6px;
   padding: 8px 10px;
   border-radius: 12px;
@@ -2914,17 +2919,25 @@ button.inbox-compose-primary {
   flex-shrink: 0;
   align-items: center;
   gap: 2px;
-  min-height: 36px;
+  min-height: 32px;
 }
 
 .inbox-compose-actions {
   gap: 6px;
 }
 
+.inbox-compose-field {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 120px;
+  min-height: 32px;
+}
+
 .inbox-compose-textarea {
   flex: 1;
   min-width: 0;
-  min-height: 36px;
+  min-height: 32px;
   max-height: 160px;
   resize: none;
   overflow-y: auto;
@@ -2933,9 +2946,9 @@ button.inbox-compose-primary {
   background: transparent;
   font-family: inherit;
   font-size: 0.9rem;
-  line-height: 1.4;
+  line-height: 1.35;
   color: var(--ink);
-  padding: 8px 4px;
+  padding: 6px 4px;
   margin: 0;
   box-sizing: border-box;
 }
@@ -2976,8 +2989,7 @@ button.inbox-compose-primary {
   background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
 }
 
-.inbox-compose-bar .inbox-compose-grow,
-.inbox-compose-field {
+.inbox-compose-bar .inbox-compose-grow {
   flex: 1;
   min-width: 120px;
 }
@@ -3052,14 +3064,14 @@ button.inbox-compose-primary {
 
   .inbox-compose-row--compose .inbox-compose-schedule {
     grid-area: schedule;
-    align-self: end;
+    align-self: center;
     width: 42px;
     height: 42px;
   }
 
   .inbox-compose-row--compose .inbox-compose-primary {
     grid-area: primary;
-    align-self: end;
+    align-self: center;
   }
 }
 
@@ -3276,7 +3288,8 @@ html[data-theme='dark'] .contact-filter-pill[data-seg-tone='slate'] {
   .inbox-layout-wa .inbox-chat-header {
     row-gap: 6px;
     column-gap: 6px;
-    padding-top: max(8px, env(safe-area-inset-top, 0px));
+    /* Fondo opaco bajo el Liquid Glass / status bar de iOS (no es blur nuestro). */
+    padding-top: max(10px, env(safe-area-inset-top, 0px));
     padding-bottom: 8px;
     padding-left: max(10px, env(safe-area-inset-left, 0px));
     padding-right: max(10px, env(safe-area-inset-right, 0px));
@@ -3287,9 +3300,7 @@ html[data-theme='dark'] .contact-filter-pill[data-seg-tone='slate'] {
     gap: 12px;
   }
 
-  .inbox-layout-wa .inbox-compose {
-    padding-bottom: max(0px, env(safe-area-inset-bottom, 0px));
-  }
+  /* safe-area-bottom vive en el rail (.wa-rail); no duplicarlo aquí. */
 
   .contact-fab {
     right: 12px;

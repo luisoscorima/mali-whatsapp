@@ -698,9 +698,11 @@
   }
 
   .inbox-sidebar-header {
+    /* Opaco + safe-area: el “glass” superior es UI del sistema iOS 26. */
     padding-top: max(14px, env(safe-area-inset-top, 0px));
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
+    background: var(--wa-list-bg);
   }
 
   .wa-layout--inbox .wa-rail,

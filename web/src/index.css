@@ -163,11 +163,14 @@ select {
   background-color: var(--input-bg);
 }
 
+/* iOS Safari hace zoom al focus si el control queda < 16px. Las clases
+   (.inbox-compose-textarea, .inbox-search-input, .text-sm) ganan al selector
+   de elemento; !important mantiene el umbral en móvil. */
 @media (max-width: 768px) {
   input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
   textarea,
   select {
-    font-size: 16px;
+    font-size: 16px !important;
   }
 }
 
