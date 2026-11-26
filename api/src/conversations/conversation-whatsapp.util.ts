@@ -14,6 +14,7 @@ import { VOICE_NOTE_MIME } from './voice-note.util';
 const GRAPH_BASE = 'https://graph.facebook.com/v23.0';
 
 export const MAX_MEDIA_CAPTION_LEN = 1024;
+export const MAX_CONVERSATION_ATTACHMENT_INPUT_BYTES = 50 * 1024 * 1024;
 const MAX_MEDIA_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_MEDIA_VIDEO_BYTES = 16 * 1024 * 1024;
 const MAX_MEDIA_AUDIO_BYTES = 16 * 1024 * 1024;
@@ -92,9 +93,8 @@ function guessConversationUploadMime(filename: string): string | null {
   return null;
 }
 
-export function classifyConversationUpload(
+export function getConversationUploadType(
   mimeType: string,
-  sizeBytes: number,
   filename?: string,
 ): { waType: ConversationWaType; maxBytes: number; mime: string } {
   let mime = String(mimeType || '')
@@ -110,7 +110,6 @@ export function classifyConversationUpload(
       'Tipo de archivo no permitido. Usa JPEG/PNG, MP4, audio (MP3/OGG/AAC/M4A) o PDF.',
     );
   }
-  if (sizeBytes <= 0) throw new Error('Archivo vacío o inválido');
   let waType: ConversationWaType;
   let maxBytes: number;
   if (mime === 'image/jpeg' || mime === 'image/jpg' || mime === 'image/png') {
@@ -126,12 +125,23 @@ export function classifyConversationUpload(
     waType = 'audio';
     maxBytes = MAX_MEDIA_AUDIO_BYTES;
   }
+  return { waType, maxBytes, mime };
+}
+
+export function classifyConversationUpload(
+  mimeType: string,
+  sizeBytes: number,
+  filename?: string,
+) {
+  const upload = getConversationUploadType(mimeType, filename);
+  if (sizeBytes <= 0) throw new Error('Archivo vacío o inválido');
+  const { maxBytes } = upload;
   if (typeof sizeBytes === 'number' && sizeBytes > maxBytes) {
     throw new Error(
       `Archivo demasiado grande (máx. ${Math.round(maxBytes / (1024 * 1024))} MB para este tipo).`,
     );
   }
-  return { waType, maxBytes, mime };
+  return upload;
 }
 
 function sanitizeUploadFilename(

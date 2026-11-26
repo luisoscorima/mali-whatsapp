@@ -76,6 +76,7 @@ import {
 import {
   classifyConversationUpload,
   downloadWhatsAppMediaBuffer,
+  getConversationUploadType,
   MAX_MEDIA_CAPTION_LEN,
   MEDIA_TYPE_LABEL,
   sendSessionMediaMessage,
@@ -84,6 +85,7 @@ import {
   uploadMediaToWhatsApp,
   type ConversationWaType,
 } from './conversation-whatsapp.util';
+import { compressConversationAttachment } from './conversation-attachment-compression.util';
 import { prepareVoiceNote } from './voice-note.util';
 import {
   buildConversationExportRows,
@@ -3613,16 +3615,24 @@ export class ConversationsService {
     }
     let classified: ReturnType<typeof classifyConversationUpload> | undefined;
     if (file) {
+      let uploadType: ReturnType<typeof getConversationUploadType>;
       try {
-        classified = classifyConversationUpload(file.mimetype, file.buffer.length, file.originalname);
+        uploadType = getConversationUploadType(file.mimetype, file.originalname);
       } catch (error) {
         throw new BadRequestException(error instanceof Error ? error.message : 'Archivo no válido');
       }
-      if (classified.waType !== 'audio' && text.length > MAX_MEDIA_CAPTION_LEN) {
+      if (uploadType.waType !== 'audio' && text.length > MAX_MEDIA_CAPTION_LEN) {
         throw new BadRequestException(
           `El texto de este adjunto admite hasta ${MAX_MEDIA_CAPTION_LEN} caracteres. Acórtalo o envíalo por separado.`,
         );
       }
+      if (!voiceNote) {
+        file = await compressConversationAttachment(file, uploadType);
+      }
+      classified = getConversationUploadType(file.mimetype, file.originalname);
+    }
+    if (scheduledAt && scheduledAt.getTime() <= Date.now()) {
+      throw new BadRequestException('La hora programada ya pasó. Elige un horario nuevo.');
     }
     const linePhoneNumberId =
       String(conversation.whatsapp_phone_number_id || '').trim() || undefined;

@@ -29,7 +29,7 @@ import {
   hasPermission,
 } from '../auth/permission.util';
 import { PERMISSION } from '../auth/roles';
-import { MAX_MEDIA_DOCUMENT_BYTES } from './conversation-whatsapp.util';
+import { MAX_CONVERSATION_ATTACHMENT_INPUT_BYTES } from './conversation-whatsapp.util';
 import { ConversationsService } from './conversations.service';
 import type {
   EnsureConversationResult,
@@ -208,7 +208,7 @@ export class ConversationsController {
   @Post(':id/reply')
   @UseInterceptors(
     FileInterceptor('file', {
-      limits: { fileSize: MAX_MEDIA_DOCUMENT_BYTES + 1, files: 1 },
+      limits: { fileSize: MAX_CONVERSATION_ATTACHMENT_INPUT_BYTES + 1, files: 1 },
     }),
   )
   async reply(
@@ -237,7 +237,7 @@ export class ConversationsController {
   @Post(':id/schedule')
   @UseInterceptors(
     FileInterceptor('file', {
-      limits: { fileSize: MAX_MEDIA_DOCUMENT_BYTES + 1, files: 1 },
+      limits: { fileSize: MAX_CONVERSATION_ATTACHMENT_INPUT_BYTES + 1, files: 1 },
     }),
   )
   async schedule(

@@ -7,6 +7,7 @@ type InboxAttachmentProps = {
   filename: string
   onRemove: () => void
   className?: string
+  compressOnSend?: boolean
 }
 
 export type InboxReplyAttachment = { file: File; voiceNote?: boolean }
@@ -93,7 +94,7 @@ export function InboxVoiceAttachment({
   )
 }
 
-export function InboxAttachment({ filename, onRemove, className }: InboxAttachmentProps) {
+export function InboxAttachment({ filename, onRemove, className, compressOnSend }: InboxAttachmentProps) {
   return (
     <div
       className={cn(
@@ -101,8 +102,9 @@ export function InboxAttachment({ filename, onRemove, className }: InboxAttachme
         className,
       )}
     >
-      <span className="min-w-0 truncate">
-        <span className="text-muted">Adjunto:</span> {filename}
+      <span className="min-w-0">
+        <span className="block truncate"><span className="text-muted">Adjunto:</span> {filename}</span>
+        {compressOnSend && <span className="block text-xs text-muted">Se optimizará el tamaño al enviar o programar</span>}
       </span>
       <Button
         type="button" variant="ghost" size="icon" className="rounded-full text-bad"

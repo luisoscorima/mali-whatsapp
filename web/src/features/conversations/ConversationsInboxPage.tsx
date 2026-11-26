@@ -75,9 +75,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/shadcn/popo
 const ConversationsSummaryPane = lazy(() => import('./ConversationsSummaryPane').then((m) => ({ default: m.ConversationsSummaryPane })))
 import { InboxComposeBar, type InboxComposeBarHandle, type ReplyToMessage } from './InboxComposeBar'
 import { InboxChatDropZone } from './InboxChatDropZone'
+import { InboxGuideExample } from './InboxGuideExample'
 import type { InboxReplyAttachment } from './InboxAttachment'
 import { InboxSavedViews, InboxSavedViewShortcuts } from './InboxSavedViews'
 import { useInboxSavedViews } from './useInboxSavedViews'
+import { useInboxGuide } from './useInboxGuide'
 import { InboxMessageScroller, type InboxMessageScrollerHandle } from './InboxMessageScroller'
 import {
   chatActionsFromDetail,
@@ -506,6 +508,7 @@ function ProfileBlock({
         </span>
         <div className="inbox-chat-header-identity">
           <span
+            data-inbox-guide="chat-window"
             className={`inbox-chat-window-pill ${detail.user_service_window_open ? 'is-open' : 'is-closed'}`}
             title={
               detail.user_service_window_open
@@ -1600,6 +1603,9 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
   searchParamsRef.current = searchParams
   const applyingSavedView = useRef(false)
   const [showSummary, setShowSummary] = useState(false)
+  const [showMobileExample, setShowMobileExample] = useState(false)
+  const mobileExampleTrigger = useRef<HTMLButtonElement>(null)
+  const mobileExampleBack = useRef<HTMLButtonElement>(null)
   const [listScrollAtEnd, setListScrollAtEnd] = useState(false)
   const [listCanScroll, setListCanScroll] = useState(false)
 
@@ -1660,6 +1666,8 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
   }, [user?.area, user?.canManageLeads, detailCycleId])
 
   const selectedId = idParam ? Number(idParam) : null
+  const mobileExampleOpen = selectedId == null && showMobileExample
+  const startGuide = useInboxGuide(selectedId)
   const draftKey = user && selectedId && selectedId > 0
     ? `${user.id}:${user.loginLogId ?? 'session'}:${user.area}:${selectedId}`
     : null
@@ -3703,7 +3711,7 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
     (searchQuery && rangeAll && !explicitFrom && !explicitTo ? 1 : 0)
   const filterPills = (
     <>
-      <div className="inbox-chat-filter-pills inbox-chat-filter-pills--row inbox-chat-filter-pills--compact" aria-label="Vistas de chats">
+      <div className="inbox-chat-filter-pills inbox-chat-filter-pills--row inbox-chat-filter-pills--compact" aria-label="Vistas de chats" data-inbox-guide="inbox-views">
         {(['all', 'mine', 'unassigned'] as const).map(key => (
           <Button key={key} type="button" size="sm" variant={chatFilter === key ? 'default' : 'outline'}
             className="rounded-full" aria-pressed={chatFilter === key} onClick={() => setChatFilter(key)}>
@@ -3713,11 +3721,11 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
       </div>
       <div className="inbox-filters space-y-2">
         <div className="inbox-search-row">
-          <input type="search" value={searchInput} onChange={e => setSearchInput(e.target.value)}
+          <input type="search" data-inbox-guide="inbox-search" value={searchInput} onChange={e => setSearchInput(e.target.value)}
             onKeyDown={onSearchKeyDown} placeholder="Buscar nombre o teléfono…" className="inbox-search-input" aria-label="Buscar en chats" />
           <Popover>
             <PopoverTrigger asChild>
-              <Button type="button" size="sm" variant={activeFilterCount ? 'secondary' : 'outline'}>
+              <Button type="button" size="sm" variant={activeFilterCount ? 'secondary' : 'outline'} data-inbox-guide="inbox-filters">
                 Filtros{activeFilterCount ? ' · ' + activeFilterCount : ''}
               </Button>
             </PopoverTrigger>
@@ -3978,6 +3986,30 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
         className="relative conversations-inbox-sidebar"
         actions={
           <>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            aria-label="Ver guía de la bandeja"
+            onClick={(event) => void startGuide('inbox', event.currentTarget)}
+          >
+            Ver guía
+          </Button>
+          {selectedId == null && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="inbox-guide-mobile-control"
+              ref={mobileExampleTrigger}
+              onClick={() => {
+                setShowSummary(false)
+                setShowMobileExample(true)
+                requestAnimationFrame(() => mobileExampleBack.current?.focus())
+              }}
+            >
+              Ver ejemplo
+            </Button>
+          )}
           {serviceReplies ? <Popover><PopoverTrigger asChild>
             <button type="button" className="small-btn compact" aria-label="Ver consumo mensual de respuestas" title="Consumo mensual">ⓘ</button>
           </PopoverTrigger><PopoverContent side="right" align="start" sideOffset={16} collisionPadding={12} className="w-80 max-w-[calc(100vw-24px)] p-0">
@@ -4085,7 +4117,7 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
               ) : null}
             </li>
           ) : (
-            (listMatchesFilters || showStaleList ? list.items : []).map((item) => {
+            (listMatchesFilters || showStaleList ? list.items : []).map((item, index) => {
               const active = selectedId === item.id
               const crmName = String(item.contact_name ?? '').trim()
               const waAlias = String(item.wa_profile_name ?? '').trim()
@@ -4119,6 +4151,7 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
                 <ContextMenu key={item.id}>
                   <ContextMenuTrigger asChild>
                     <li
+                      data-inbox-guide={index === 0 ? 'inbox-conversations' : undefined}
                       className={`inbox-chat-item ${item.inbox_unread ? 'inbox-chat-item--unread' : ''} ${active ? 'is-active' : ''}`}
                     >
                       <div className="inbox-chat-item-shell">
@@ -4470,13 +4503,29 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
         </ul>
       </WaSidebar>
 
-      <WaMainPane>
+      <WaMainPane className={mobileExampleOpen ? 'inbox-main--example-open' : ''}>
+        {mobileExampleOpen && (
+          <div className="inbox-guide-mobile-control border-b border-line p-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              ref={mobileExampleBack}
+              onClick={() => {
+                setShowMobileExample(false)
+                setShowSummary(false)
+                requestAnimationFrame(() => mobileExampleTrigger.current?.focus())
+              }}
+            >
+              Volver a chats
+            </Button>
+          </div>
+        )}
         {selectedId == null ? (
           showSummary ? <Suspense fallback={<p className="p-4 text-muted">Cargando resumen…</p>}><ConversationsSummaryPane /></Suspense> : (
-            <WaEmptyPane>
-              <p>Selecciona una conversación para ver sus mensajes.</p>
-              <button type="button" className="small-btn" onClick={() => setShowSummary(true)}>Ver resumen de conversaciones</button>
-            </WaEmptyPane>
+            <InboxGuideExample
+              onStart={(trigger) => void startGuide('example', trigger)}
+              onShowSummary={() => setShowSummary(true)}
+            />
           )
         ) : loadingDetail && !detail ? (
           <ChatLoadingSkeleton />
@@ -4542,26 +4591,38 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
                     })
                   }
                   actions={
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="icon-sm"
-                      title="Opciones del chat"
-                      aria-label="Opciones del chat"
-                      onClick={() =>
-                        openChatActions(
-                          chatActionsFromDetail(
-                            detail,
-                            detailHeading,
-                            detail.ai_area_enabled,
-                          ),
-                        )
-                      }
-                    >
-                      <span className="inbox-header-more-icon" aria-hidden>
-                        ⋮
-                      </span>
-                    </Button>
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        title="Ver guía del chat"
+                        aria-label="Ver guía del chat"
+                        onClick={(event) => void startGuide('chat', event.currentTarget)}
+                      >
+                        <span aria-hidden="true">?</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="icon-sm"
+                        title="Opciones del chat"
+                        aria-label="Opciones del chat"
+                        onClick={() =>
+                          openChatActions(
+                            chatActionsFromDetail(
+                              detail,
+                              detailHeading,
+                              detail.ai_area_enabled,
+                            ),
+                          )
+                        }
+                      >
+                        <span className="inbox-header-more-icon" aria-hidden>
+                          ⋮
+                        </span>
+                      </Button>
+                    </>
                   }
                 />
               </div>

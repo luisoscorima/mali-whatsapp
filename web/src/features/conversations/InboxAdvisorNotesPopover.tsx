@@ -198,6 +198,7 @@ export function InboxAdvisorNotesPopover({
           className="inbox-compose-notes-btn h-8 shrink-0 gap-1.5 px-2.5"
           title="Mis notas"
           aria-label="Mis notas"
+          data-inbox-guide="chat-notes"
         >
           {triggerIcon ?? <span aria-hidden>N</span>}
           <span className="inbox-compose-notes-btn__label">Notas</span>

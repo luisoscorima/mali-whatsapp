@@ -1,6 +1,8 @@
 import * as whatsappMeta from '../templates/whatsapp-meta.util';
+import { compressConversationAttachment } from './conversation-attachment-compression.util';
 import {
   classifyConversationUpload,
+  getConversationUploadType,
   MAX_MEDIA_DOCUMENT_BYTES,
   uploadMediaToWhatsApp,
 } from './conversation-whatsapp.util';
@@ -56,5 +58,19 @@ describe('WhatsApp media uploads', () => {
   it('keeps explicit unsupported types invalid even with a supported extension', () => {
     expect(() => classifyConversationUpload('image/gif', 10, 'test.pdf'))
       .toThrow('Tipo de archivo no permitido');
+  });
+
+  it('preserves the original attachment when it fits', async () => {
+    const file = { buffer: Buffer.from('test'), mimetype: 'audio/mpeg', originalname: 'test.mp3' };
+    await expect(compressConversationAttachment(file, getConversationUploadType(file.mimetype)))
+      .resolves.toBe(file);
+  });
+
+  it('refuses to rewrite a signed PDF above the limit', async () => {
+    const buffer = Buffer.alloc(MAX_MEDIA_DOCUMENT_BYTES + 1);
+    buffer.write('/ByteRange');
+    const file = { buffer, mimetype: 'application/pdf', originalname: 'signed.pdf' };
+    await expect(compressConversationAttachment(file, getConversationUploadType(file.mimetype)))
+      .rejects.toThrow('invalidaría su firma digital');
   });
 });

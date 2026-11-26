@@ -55,31 +55,32 @@ const COMMON_EMOJIS = [
 ]
 
 const MB = 1024 * 1024
+const MAX_ATTACHMENT_INPUT_BYTES = 50 * MB
 const ATTACH_OPTIONS = [
   {
     key: 'image',
-    label: 'Imagen (JPEG/PNG · 5 MB)',
+    label: 'Imagen (JPEG/PNG)',
     accept: 'image/jpeg,image/png',
     mimes: ['image/jpeg', 'image/jpg', 'image/png'],
     maxBytes: 5 * MB,
   },
   {
     key: 'video',
-    label: 'Video (MP4 · 16 MB)',
+    label: 'Video (MP4)',
     accept: 'video/mp4',
     mimes: ['video/mp4'],
     maxBytes: 16 * MB,
   },
   {
     key: 'audio',
-    label: 'Audio (16 MB)',
+    label: 'Audio',
     accept: 'audio/mpeg,audio/mp3,audio/ogg,audio/aac,audio/mp4,audio/x-m4a,audio/m4a',
     mimes: ['audio/mpeg', 'audio/mp3', 'audio/ogg', 'application/ogg', 'audio/aac', 'audio/mp4', 'audio/x-m4a', 'audio/m4a'],
     maxBytes: 16 * MB,
   },
   {
     key: 'pdf',
-    label: 'PDF (25 MB)',
+    label: 'PDF',
     accept: 'application/pdf',
     mimes: ['application/pdf'],
     maxBytes: 25 * MB,
@@ -108,20 +109,23 @@ function normalizeAttachFile(file: File): File {
   return new File([file], file.name, { type: guessed, lastModified: file.lastModified })
 }
 
-function validateAttachFile(file: File): string | null {
+function attachOption(file: File) {
   const mime = file.type.toLowerCase().split(';')[0].trim()
-  const option = ATTACH_OPTIONS.find((item) => (item.mimes as readonly string[]).includes(mime))
-  if (!option) {
+  return ATTACH_OPTIONS.find((item) => (item.mimes as readonly string[]).includes(mime))
+}
+
+function validateAttachFile(file: File): string | null {
+  if (!attachOption(file)) {
     return 'Tipo de archivo no permitido. Usa JPEG/PNG, MP4, audio (MP3/OGG/AAC/M4A) o PDF.'
   }
   if (!file.size) return 'El archivo está vacío.'
-  if (file.size > option.maxBytes) {
-    return `Archivo demasiado grande (máx. ${Math.round(option.maxBytes / MB)} MB para este tipo).`
+  if (file.size > MAX_ATTACHMENT_INPUT_BYTES) {
+    return 'El archivo supera los 50 MB admitidos para la compresión.'
   }
   return null
 }
 
-function IconAttach() {
+export function IconAttach() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
@@ -140,7 +144,7 @@ function IconEmoji() {
   )
 }
 
-function IconPostIt() {
+export function IconPostIt() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
       <path
@@ -177,7 +181,7 @@ function IconChevronDown() {
   )
 }
 
-function IconMicrophone() {
+export function IconMicrophone() {
   return (
     <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
       <rect x="9" y="2.5" width="6" height="12" rx="3" />
@@ -194,7 +198,7 @@ function IconSend() {
   )
 }
 
-function IconSchedule() {
+export function IconSchedule() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <circle cx="12" cy="12" r="9" />
@@ -324,6 +328,12 @@ export function InboxComposeBar({
   const voice = useVoiceRecorder(canReply, (file) => onReplyFileChange({ file, voiceNote: true }))
   const recording = voice.status !== 'idle'
   const hasOutgoing = Boolean(replyText.trim() || replyFile)
+  const attachmentOption = replyFile ? attachOption(replyFile.file) : undefined
+  const compressOnSend = replyFile && attachmentOption && (
+    attachmentOption.key === 'image' ||
+    attachmentOption.key === 'video' ||
+    replyFile.file.size > attachmentOption.maxBytes
+  )
   const showSend = hasOutgoing || sendingReply || schedulingReply || recording
   const primaryLabel = sendingReply || schedulingReply || voice.status === 'finishing' ? 'Enviando'
     : recording ? 'Enviar nota de voz'
@@ -615,14 +625,18 @@ export function InboxComposeBar({
           </div>
         ) : null}
         {replyFile && canReply && !replyFile.voiceNote ? (
-          <InboxAttachment filename={replyFile.file.name} onRemove={() => onReplyFileChange(null)} />
+          <InboxAttachment
+            filename={replyFile.file.name}
+            compressOnSend={Boolean(compressOnSend)}
+            onRemove={() => onReplyFileChange(null)}
+          />
         ) : null}
         {voice.error && canReply && !hasOutgoing && (
           <p role="alert" className="px-1 text-xs text-bad">{voice.error}</p>
         )}
 
         {!canReply ? (
-          <div className="flex flex-col gap-2 px-1 pb-1">
+          <div className="flex flex-col gap-2 px-1 pb-1" data-inbox-guide="chat-blocked">
             <p className="text-xs text-muted">
               {blockedByBot
                 ? 'Este chat está en modo Bot. Pásalo a Asesor para escribir libremente.'
@@ -751,7 +765,14 @@ export function InboxComposeBar({
               <div className="inbox-compose-tools">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button type="button" variant="ghost" size="icon-sm" title="Adjuntar archivo">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      title="Adjuntar archivo"
+                      aria-label="Adjuntar archivo"
+                      data-inbox-guide="chat-attach"
+                    >
                       <IconAttach />
                     </Button>
                   </DropdownMenuTrigger>
@@ -819,6 +840,7 @@ export function InboxComposeBar({
               <div className="inbox-compose-field inbox-compose-grow relative">
                 <textarea
                   ref={textareaRef}
+                  data-inbox-guide="chat-compose"
                   value={replyText}
                   onChange={(event) => {
                     onReplyTextChange(event.target.value)
@@ -941,6 +963,7 @@ export function InboxComposeBar({
             className="inbox-compose-schedule shrink-0 rounded-full text-muted"
             title="Programar mensaje"
             aria-label="Programar mensaje"
+            data-inbox-guide="chat-schedule"
             disabled={sendingReply || schedulingReply}
             onClick={() => {
               setSlash(null)
@@ -976,6 +999,7 @@ export function InboxComposeBar({
             type={recording || !showSend ? 'button' : 'submit'}
             size="icon"
             className="inbox-compose-primary"
+            data-inbox-guide={primaryIconState === 'mic' && voice.status === 'idle' ? 'chat-voice' : undefined}
             disabled={
               sendingReply
               || schedulingReply
@@ -1017,6 +1041,7 @@ export function InboxComposeBar({
 
         {canReply ? (
           <p
+            data-inbox-guide="chat-shortcuts"
             className={cn(
               'inbox-compose-hint-inline muted hidden sm:block',
               (recording || replyFile?.voiceNote) && 'invisible',

@@ -807,11 +807,11 @@
   }
 
   /* Lista de chats: ocultar el panel principal. No aplicar a pantallas full-width (Captación, etc.). */
-  .wa-layout--inbox.conversations-inbox:not(.conversations-inbox--detail) .inbox-main:not(.inbox-main--span) {
+  .wa-layout--inbox.conversations-inbox:not(.conversations-inbox--detail) .inbox-main:not(.inbox-main--span, .inbox-main--example-open) {
     display: none !important;
   }
 
-  .wa-layout--inbox.conversations-inbox.conversations-inbox--detail .inbox-sidebar {
+  .wa-layout--inbox.conversations-inbox:is(.conversations-inbox--detail, :has(.inbox-main--example-open)) .inbox-sidebar {
     display: none !important;
   }
 

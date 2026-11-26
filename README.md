@@ -41,19 +41,26 @@ En producción: **[https://whatsapp.mali.pe](https://whatsapp.mali.pe)**.
 - **Transferencia a humano:** palabra clave configurable (por defecto `[TRANSFERIR]`); si la IA falla, puede pasar a asesor con mensaje de cortesía.
 - **Fuera de horario:** mensaje automático configurable por área cuando no hay atención humana.
 
-## Stack
+## Stack tecnológico
+
+Monorepo **npm workspaces** (`api` + `web`), TypeScript en ambos lados, contenedores con **Docker Compose**.
 
 | Capa | Tecnología |
 |------|------------|
-| API | NestJS + Prisma + BullMQ |
-| Web | React + Vite + Tailwind (SPA) |
-| Datos | PostgreSQL |
-| Colas | Redis |
-| Auth | Google OAuth `@mali.pe` + JWT |
+| **API** | NestJS 11 (Express), Prisma 6, BullMQ, Socket.IO, Passport (Google OAuth 20 + JWT), class-validator / class-transformer |
+| **Web** | React 19 + Vite 8 + Tailwind CSS 4 (SPA), React Router 7, Radix UI, Socket.IO client, Recharts, dnd-kit, XYFlow |
+| **Runtime** | Node.js 20 |
+| **Datos** | PostgreSQL 16 |
+| **Colas** | Redis 7 + BullMQ (campañas, reintentos) |
+| **Auth** | Google OAuth `@mali.pe` + JWT (cookies / sesión) |
+| **Media** | AWS S3 (`@aws-sdk/client-s3`); ffmpeg / qpdf en el contenedor API |
+| **IA** | Groq (API compatible OpenAI, `llama-3.1-8b-instant`) |
+| **Integraciones** | Meta WhatsApp Cloud API / Graph (mensajes, plantillas, Lead Ads, CTWA); CRM PAM (MALI ONE); leads TikTok / Widget / wa.me |
+| **Infra** | Docker Compose; web servida con nginx; proxy NPM (`nginx-proxy-manager`); producción en [whatsapp.mali.pe](https://whatsapp.mali.pe) |
 
 ```txt
 mali-whatsapp/
-  api/                 # NestJS + Prisma + BullMQ
+  api/                 # NestJS + Prisma + BullMQ + Socket.IO
   web/                 # React + Vite + Tailwind
   docs/                # Dominios de producto (vivo + changelog)
   docker-compose.yml   # Producción: api + web + postgres + redis
