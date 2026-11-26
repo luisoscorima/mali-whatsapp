@@ -4523,7 +4523,8 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
         {selectedId == null ? (
           showSummary ? <Suspense fallback={<p className="p-4 text-muted">Cargando resumen…</p>}><ConversationsSummaryPane /></Suspense> : (
             <InboxGuideExample
-              onStart={(trigger) => void startGuide('example', trigger)}
+              key={mobileExampleOpen ? 'mobile' : 'default'}
+              onStart={(trigger, onEnd) => void startGuide('example', trigger, onEnd)}
               onShowSummary={() => setShowSummary(true)}
             />
           )

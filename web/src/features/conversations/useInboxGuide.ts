@@ -24,7 +24,7 @@ const chatFeatures: GuideStep[] = [
     target: 'chat-schedule',
     fallback: 'chat-compose',
     title: 'Programa un envío',
-    description: 'El reloj aparece al escribir o adjuntar un archivo. Elige la fecha y hora dentro de la ventana de atención. Desde el aviso del historial puedes ver o cancelar el envío pendiente.',
+    description: 'Escribe un mensaje o adjunta un archivo para que aparezca el reloj junto al botón de enviar. Pulsa el reloj para elegir la fecha y hora dentro de la ventana de atención. Usa el aviso del historial para ver o cancelar un envío pendiente.',
     side: 'top',
   },
   {
@@ -118,10 +118,11 @@ export function useInboxGuide(conversationId: number | null) {
     active.current?.destroy()
   }, [conversationId])
 
-  return async function startGuide(section: GuideSection, trigger: HTMLElement) {
+  return async function startGuide(section: GuideSection, trigger: HTMLElement, onEnd?: (restoreFocus: boolean) => void) {
     pending.current?.abort()
     const request = new AbortController()
     pending.current = request
+    let started = false
     try {
       const [{ driver }] = await Promise.all([
         import('driver.js'),
@@ -153,13 +154,15 @@ export function useInboxGuide(conversationId: number | null) {
         smoothScroll: !reduceMotion,
         onDestroyed: (_element, _step, { driver: ended, reason }) => {
           if (active.current === ended) active.current = null
-          if (reason !== 'api' && reason !== 'replaced' && trigger.isConnected) {
-            trigger.focus({ preventScroll: true })
-          }
+          if (!trigger.isConnected) return
+          const restoreFocus = reason !== 'api' && reason !== 'replaced'
+          if (onEnd) onEnd(restoreFocus)
+          else if (restoreFocus) trigger.focus({ preventScroll: true })
         },
       })
       active.current = tour
       tour.drive()
+      started = true
     } catch {
       if (!request.signal.aborted) {
         active.current?.destroy()
@@ -167,6 +170,7 @@ export function useInboxGuide(conversationId: number | null) {
       }
     } finally {
       if (pending.current === request) pending.current = null
+      if (!started && trigger.isConnected) onEnd?.(!request.signal.aborted)
     }
   }
 }

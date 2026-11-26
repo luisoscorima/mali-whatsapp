@@ -2045,22 +2045,9 @@ html[data-theme='dark'] .inbox-lead-score-pick--mid.is-on {
   font-weight: 600;
 }
 
-.inbox-guide-empty {
-  display: flex;
-  flex-direction: column;
-}
-
-.inbox-guide-example {
-  margin-block: auto;
-}
-
-.inbox-guide-example__history {
-  background-color: var(--wa-chat-bg);
-  background-image: radial-gradient(var(--wa-chat-bg-pattern) 1px, transparent 1px);
-  background-size: 16px 16px;
-}
-
 .inbox-guide-example__drop {
+  align-items: start;
+  padding: 16px 8px 8px;
   visibility: hidden;
 }
 
@@ -2068,8 +2055,25 @@ html[data-theme='dark'] .inbox-lead-score-pick--mid.is-on {
   visibility: visible;
 }
 
-.inbox-guide-example:has(.driver-active-element) .inbox-guide-example__summary {
-  visibility: hidden;
+.inbox-guide-example__schedule {
+  opacity: 0;
+}
+
+.inbox-guide-example__schedule.driver-active-element {
+  opacity: 1;
+}
+
+.inbox-guide-example__composer:has(> .inbox-guide-example__schedule.driver-active-element) {
+  column-gap: 48px;
+}
+
+.inbox-guide-example__when-scheduling,
+.inbox-guide-example__composer:has(> .inbox-guide-example__schedule.driver-active-element) .inbox-guide-example__when-idle {
+  display: none;
+}
+
+.inbox-guide-example__composer:has(> .inbox-guide-example__schedule.driver-active-element) .inbox-guide-example__when-scheduling {
+  display: inline;
 }
 
 @media (min-width: 769px) {
