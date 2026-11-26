@@ -23,10 +23,12 @@ export function InboxVoiceAttachment({
   file,
   onRemove,
   embedded = false,
+  fadingOut = false,
 }: {
   file: File
   onRemove: () => void
   embedded?: boolean
+  fadingOut?: boolean
 }) {
   const [url, setUrl] = useState('')
 
@@ -44,7 +46,12 @@ export function InboxVoiceAttachment({
 
   if (embedded) {
     return (
-      <div className="inbox-compose-voice-preview inbox-compose-grow flex w-full min-w-0 items-center gap-2">
+      <div
+        className={cn(
+          'inbox-compose-voice-preview inbox-compose-grow flex w-full min-w-0 items-center gap-2',
+          fadingOut ? 'inbox-compose-fade-out' : 'inbox-compose-fade',
+        )}
+      >
         <Button
           type="button"
           variant="ghost"
@@ -52,6 +59,7 @@ export function InboxVoiceAttachment({
           className="shrink-0 rounded-full text-muted"
           aria-label="Descartar nota de voz"
           title="Descartar nota de voz"
+          disabled={fadingOut}
           onClick={onRemove}
         >
           <InboxTrashIcon />

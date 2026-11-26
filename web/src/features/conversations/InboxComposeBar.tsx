@@ -1,5 +1,34 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { insertAtSelection, wrapSelection } from '@/shared/textSelection'
+
+type ComposeSurface = 'compose' | 'recording' | 'preview' | 'blocked'
+
+const COMPOSE_FADE_OUT_MS = 120
+
+/** Solo retrasa el unmount al salir de grabación/preview (fade-out de opacidad). */
+function useComposeSurface(next: ComposeSurface) {
+  const [surface, setSurface] = useState(next)
+  const [fadingOut, setFadingOut] = useState(false)
+
+  useEffect(() => {
+    if (next === surface) return
+    const leavingVoice = surface === 'recording' || surface === 'preview'
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (!leavingVoice || reduceMotion) {
+      setSurface(next)
+      setFadingOut(false)
+      return
+    }
+    setFadingOut(true)
+    const id = window.setTimeout(() => {
+      setSurface(next)
+      setFadingOut(false)
+    }, COMPOSE_FADE_OUT_MS)
+    return () => window.clearTimeout(id)
+  }, [next, surface])
+
+  return { surface, fadingOut }
+}
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { Button } from '@/shared/ui/shadcn/button'
@@ -367,6 +396,26 @@ export function InboxComposeBar({
   const blockedByBot = !canReply && replyBlockedReason === 'bot_mode'
   const blockedByWindow = !canReply && !blockedByBot
   const hasSecondary = canReply && (windowOpen ? flows.length > 0 : canSendTemplate)
+  const targetSurface: ComposeSurface = !canReply
+    ? 'blocked'
+    : replyFile?.voiceNote
+      ? 'preview'
+      : recording
+        ? 'recording'
+        : 'compose'
+  const { surface, fadingOut } = useComposeSurface(targetSurface)
+  const voicePreviewFileRef = useRef<File | null>(null)
+  if (replyFile?.voiceNote) voicePreviewFileRef.current = replyFile.file
+  const voicePreviewFile = replyFile?.voiceNote
+    ? replyFile.file
+    : surface === 'preview'
+      ? voicePreviewFileRef.current
+      : null
+  const primaryIconState = sendingReply || voice.status === 'finishing'
+    ? 'busy'
+    : showSend
+      ? 'send'
+      : 'mic'
 
   return (
     <>
@@ -480,17 +529,23 @@ export function InboxComposeBar({
             if (!event.currentTarget.contains(event.relatedTarget)) setSlash(null)
           }}
         >
-          {canReply && replyFile?.voiceNote ? (
+          {surface === 'preview' && voicePreviewFile ? (
             <InboxVoiceAttachment
               embedded
-              file={replyFile.file}
+              fadingOut={fadingOut}
+              file={voicePreviewFile}
               onRemove={() => {
                 onReplyFileChange(null)
                 primaryActionRef.current?.focus()
               }}
             />
-          ) : canReply && recording ? (
-            <div className="inbox-compose-recording inbox-compose-grow flex w-full items-center gap-2">
+          ) : surface === 'recording' ? (
+            <div
+              className={cn(
+                'inbox-compose-recording inbox-compose-grow flex w-full items-center gap-2',
+                fadingOut ? 'inbox-compose-fade-out' : 'inbox-compose-fade',
+              )}
+            >
               <Button
                 ref={cancelRecordingRef}
                 type="button"
@@ -499,7 +554,7 @@ export function InboxComposeBar({
                 className="shrink-0 rounded-full text-muted"
                 aria-label="Descartar grabación"
                 title="Descartar grabación"
-                disabled={voice.status === 'finishing'}
+                disabled={voice.status === 'finishing' || fadingOut}
                 onClick={() => {
                   sendAfterRecordRef.current = false
                   voice.cancel()
@@ -508,8 +563,8 @@ export function InboxComposeBar({
                 <InboxTrashIcon />
               </Button>
               <div className="flex min-w-0 flex-1 items-center gap-2 px-1 text-sm">
-                {voice.status === 'recording' ? (
-                  <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-bad" />
+                {voice.status === 'recording' && !fadingOut ? (
+                  <span aria-hidden="true" className="inbox-compose-rec-dot" />
                 ) : null}
                 {voice.status === 'requesting' || voice.status === 'finishing' ? (
                   <span role="status" className="truncate text-muted">
@@ -520,7 +575,7 @@ export function InboxComposeBar({
                 ) : (
                   <span role="status" className="sr-only">Grabando</span>
                 )}
-                {voice.status === 'recording' || voice.status === 'finishing' ? (
+                {voice.status === 'recording' || voice.status === 'finishing' || fadingOut ? (
                   <span
                     role="timer"
                     aria-label="Tiempo de grabación"
@@ -532,7 +587,7 @@ export function InboxComposeBar({
                 ) : null}
               </div>
             </div>
-          ) : canReply ? (
+          ) : surface === 'compose' ? (
             <>
               <div className="inbox-compose-tools">
                 <DropdownMenu>
@@ -745,7 +800,7 @@ export function InboxComposeBar({
             type="button"
             size="icon"
             variant="outline"
-            className="inbox-compose-primary text-bad"
+            className="inbox-compose-primary inbox-compose-fade text-bad"
             aria-label="Detener grabación"
             title="Detener para escuchar"
             onClick={() => {
@@ -787,11 +842,17 @@ export function InboxComposeBar({
                     }
             }
           >
-            {sendingReply || voice.status === 'finishing'
-              ? '…'
-              : showSend
-                ? <IconSend />
-                : <IconMicrophone />}
+            <span className="inbox-compose-icon-swap" data-state={primaryIconState} aria-hidden="true">
+              <span className="inbox-compose-icon-swap__icon" data-icon="mic">
+                <IconMicrophone />
+              </span>
+              <span className="inbox-compose-icon-swap__icon" data-icon="send">
+                <IconSend />
+              </span>
+              <span className="inbox-compose-icon-swap__icon inbox-compose-icon-swap__busy" data-icon="busy">
+                …
+              </span>
+            </span>
           </Button>
         ) : null}
         </div>

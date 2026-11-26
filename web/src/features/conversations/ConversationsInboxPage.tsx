@@ -3282,10 +3282,33 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
         : null,
       media_preview: previewUrl ? { url: previewUrl, mime: file?.type || null } : null,
     }
+    const whenLabel = (() => {
+      const date = new Date(scheduledAtIso)
+      if (Number.isNaN(date.getTime())) return null
+      const day = date
+        .toLocaleDateString('es-PE', {
+          day: 'numeric',
+          month: 'short',
+          timeZone: 'America/Lima',
+        })
+        .replace(/\./g, '')
+      const time = date
+        .toLocaleTimeString('es-PE', {
+          hour: 'numeric',
+          minute: '2-digit',
+          timeZone: 'America/Lima',
+        })
+        .replace(/\s+/g, ' ')
+        .replace(/\.\s*/g, '')
+        .toLowerCase()
+      return `${day} ${time}`
+    })()
     const optimisticEvent: InboxTimelineEvent = {
       id: `local-sched-${echoId}`,
       created_at: echo.created_at,
-      label: 'Programaste un mensaje.',
+      label: whenLabel
+        ? `Mensaje programado para ${whenLabel}`
+        : 'Mensaje programado',
       action: 'view_scheduled',
     }
 

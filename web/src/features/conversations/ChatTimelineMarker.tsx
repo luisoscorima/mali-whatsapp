@@ -41,13 +41,16 @@ export function ChatTimelineEventMarker({
           </svg>
           <span>{label}</span>
           {onAction ? (
-            <button
-              type="button"
-              className="chat-timeline-event__link"
-              onClick={onAction}
-            >
-              Ver
-            </button>
+            <>
+              <span aria-hidden> -</span>
+              <button
+                type="button"
+                className="chat-timeline-event__link"
+                onClick={onAction}
+              >
+                Ver
+              </button>
+            </>
           ) : null}
         </span>
       </div>

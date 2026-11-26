@@ -66,6 +66,30 @@ function actorDisplay(email: string | null | undefined): string {
   return local || raw;
 }
 
+function formatScheduledAtLabel(raw: unknown): string | null {
+  const iso = String(raw ?? '').trim();
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  const day = date
+    .toLocaleDateString('es-PE', {
+      day: 'numeric',
+      month: 'short',
+      timeZone: DISPLAY_TIMEZONE,
+    })
+    .replace(/\./g, '');
+  const time = date
+    .toLocaleTimeString('es-PE', {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: DISPLAY_TIMEZONE,
+    })
+    .replace(/\s+/g, ' ')
+    .replace(/\.\s*/g, '')
+    .toLowerCase();
+  return `${day} ${time}`;
+}
+
 function readMeta(meta: unknown): Record<string, unknown> {
   if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return {};
   return meta as Record<string, unknown>;
@@ -139,7 +163,10 @@ export function formatInboxTimelineEventLabel(
   }
 
   if (eventType === AuditEvent.CONVERSATION_MESSAGE_SCHEDULED) {
-    return 'Programaste un mensaje.';
+    const when = formatScheduledAtLabel(meta.scheduled_at);
+    return when
+      ? `Mensaje programado para ${when}`
+      : 'Mensaje programado';
   }
 
   if (eventType === AuditEvent.CONVERSATION_MARK_UNREAD) {

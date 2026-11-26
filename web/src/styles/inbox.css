@@ -2824,6 +2824,74 @@ button.inbox-compose-primary {
   min-width: 0;
 }
 
+.inbox-compose-fade {
+  animation: inbox-compose-fade-in 140ms ease both;
+}
+
+.inbox-compose-fade-out {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.inbox-compose-rec-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bad);
+  animation: inbox-compose-rec-pulse 1.2s ease-in-out infinite;
+}
+
+.inbox-compose-icon-swap {
+  display: inline-grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+}
+
+.inbox-compose-icon-swap__icon {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.inbox-compose-icon-swap__busy {
+  font-size: 1rem;
+  line-height: 1;
+  letter-spacing: 0.05em;
+}
+
+.inbox-compose-icon-swap[data-state="mic"] .inbox-compose-icon-swap__icon[data-icon="mic"],
+.inbox-compose-icon-swap[data-state="send"] .inbox-compose-icon-swap__icon[data-icon="send"],
+.inbox-compose-icon-swap[data-state="busy"] .inbox-compose-icon-swap__icon[data-icon="busy"] {
+  opacity: 1;
+}
+
+@keyframes inbox-compose-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes inbox-compose-rec-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inbox-compose-fade,
+  .inbox-compose-fade-out,
+  .inbox-compose-rec-dot,
+  .inbox-compose-icon-swap__icon {
+    animation: none !important;
+    transition: none !important;
+    opacity: 1;
+  }
+}
+
 .inbox-compose-tools,
 .inbox-compose-actions {
   display: flex;
