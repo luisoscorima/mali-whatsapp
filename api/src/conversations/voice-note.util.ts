@@ -7,7 +7,8 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 
-export const VOICE_NOTE_MIME = 'audio/ogg; codecs=opus';
+/** La subida a Graph usa el tipo base. El códec Opus va en el archivo, no en el MIME. */
+export const VOICE_NOTE_MIME = 'audio/ogg';
 const MAX_VOICE_NOTE_BYTES = 16 * 1024 * 1024;
 
 const inputExtensions = new Map([
@@ -38,7 +39,11 @@ export async function prepareVoiceNote(file: {
     await writeFile(inputPath, file.buffer);
     await transcodeVoiceNote(inputPath, outputPath);
     const buffer = await readFile(outputPath);
-    if (!buffer.length || buffer.length > MAX_VOICE_NOTE_BYTES) {
+    if (
+      buffer.length < 4
+      || buffer.subarray(0, 4).toString() !== 'OggS'
+      || buffer.length > MAX_VOICE_NOTE_BYTES
+    ) {
       throw new BadRequestException(
         'No se pudo procesar la grabación. Vuelve a grabarla.',
       );
@@ -61,27 +66,13 @@ function transcodeVoiceNote(inputPath: string, outputPath: string): Promise<void
         '-nostdin',
         '-i',
         inputPath,
-        '-map',
-        '0:a:0',
-        '-map_metadata',
-        '-1',
         '-vn',
         '-t',
         '301',
-        '-ac',
-        '1',
-        '-ar',
-        '48000',
         '-c:a',
         'libopus',
-        '-b:a',
-        '32k',
-        '-application',
-        'voip',
-        '-frame_duration',
-        '20',
-        '-f',
-        'ogg',
+        '-ac',
+        '1',
         outputPath,
       ],
       { timeout: 20_000, windowsHide: true },

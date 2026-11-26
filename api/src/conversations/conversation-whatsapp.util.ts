@@ -302,8 +302,7 @@ export async function uploadMediaToWhatsApp(input: {
     input.buffer.length,
   );
   const safeName = sanitizeUploadFilename(input.filename, waType);
-  // WhatsApp solo acepta el tipo base. `audio/ogg; codecs=opus` se sube y luego falla la entrega.
-  const mime = String(input.mimeType).split(';')[0].trim();
+  const mime = String(input.mimeType).split(';')[0].trim().toLowerCase();
 
   const form = new FormData();
   form.append('messaging_product', 'whatsapp');
@@ -354,9 +353,11 @@ export async function sendSessionMediaMessage(input: {
       ? String(input.caption).trim().slice(0, MAX_MEDIA_CAPTION_LEN)
       : '';
 
+  const recipient = whatsappRecipientField(input.to);
   const payload: Record<string, unknown> = {
     messaging_product: 'whatsapp',
-    ...whatsappRecipientField(input.to),
+    ...('to' in recipient && input.voiceNote ? { recipient_type: 'individual' } : {}),
+    ...recipient,
     type: input.waType,
   };
 

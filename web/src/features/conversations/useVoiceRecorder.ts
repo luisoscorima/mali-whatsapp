@@ -22,6 +22,20 @@ type Capture = {
 
 type Status = 'idle' | 'requesting' | 'recording' | 'finishing'
 
+function openMicrophone() {
+  const shared = { echoCancellation: true, noiseSuppression: true }
+  return navigator.mediaDevices.getUserMedia({
+    audio: { ...shared, channelCount: { exact: 1 } },
+  }).catch((reason: unknown) => {
+    if (reason instanceof DOMException && reason.name === 'OverconstrainedError') {
+      return navigator.mediaDevices.getUserMedia({
+        audio: { ...shared, channelCount: { ideal: 1 } },
+      })
+    }
+    throw reason
+  })
+}
+
 export function useVoiceRecorder(enabled: boolean, onRecorded: (file: File) => void) {
   const captureRef = useRef<Capture | null>(null)
   const [status, setStatus] = useState<Status>('idle')
@@ -76,7 +90,7 @@ export function useVoiceRecorder(enabled: boolean, onRecorded: (file: File) => v
     setError('')
     setStatus('requesting')
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: { ideal: 1 } } })
+      const stream = await openMicrophone()
       if (captureRef.current !== capture) {
         stream.getTracks().forEach((track) => track.stop())
         return
