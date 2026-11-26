@@ -11,7 +11,7 @@ import {
 } from '@/shared/ui/shadcn/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/shadcn/popover'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
-import { InboxAttachment, InboxVoiceAttachment, type InboxReplyAttachment } from './InboxAttachment'
+import { InboxAttachment, InboxTrashIcon, InboxVoiceAttachment, type InboxReplyAttachment } from './InboxAttachment'
 import { InboxAdvisorNotesPopover } from './InboxAdvisorNotesPopover'
 import { resolveNotePlaceholders, useAdvisorNotes } from './advisorNotes'
 import { useInboxTyping } from './useInboxTyping'
@@ -24,10 +24,10 @@ const COMMON_EMOJIS = [
 ]
 
 const ATTACH_OPTIONS = [
-  { key: 'image', label: 'Imagen (JPEG/PNG)', accept: 'image/jpeg,image/png' },
-  { key: 'video', label: 'Video (MP4)', accept: 'video/mp4' },
-  { key: 'audio', label: 'Audio', accept: 'audio/mpeg,audio/mp3,audio/ogg,audio/aac,audio/mp4,audio/x-m4a,audio/m4a' },
-  { key: 'pdf', label: 'PDF', accept: 'application/pdf' },
+  { key: 'image', label: 'Imagen (JPEG/PNG · 5 MB)', accept: 'image/jpeg,image/png' },
+  { key: 'video', label: 'Video (MP4 · 16 MB)', accept: 'video/mp4' },
+  { key: 'audio', label: 'Audio (16 MB)', accept: 'audio/mpeg,audio/mp3,audio/ogg,audio/aac,audio/mp4,audio/x-m4a,audio/m4a' },
+  { key: 'pdf', label: 'PDF (25 MB)', accept: 'application/pdf' },
 ] as const
 
 function IconAttach() {
@@ -385,7 +385,10 @@ export function InboxComposeBar({
           </div>
         ) : null}
         {replyFile && canReply && (replyFile.voiceNote
-          ? <InboxVoiceAttachment file={replyFile.file} onRemove={() => onReplyFileChange(null)} />
+          ? <InboxVoiceAttachment file={replyFile.file} onRemove={() => {
+              onReplyFileChange(null)
+              primaryActionRef.current?.focus()
+            }} />
           : <InboxAttachment filename={replyFile.file.name} onRemove={() => onReplyFileChange(null)} />)}
         {voice.error && canReply && !hasOutgoing && (
           <p role="alert" className="px-1 text-xs text-bad">{voice.error}</p>
@@ -446,6 +449,7 @@ export function InboxComposeBar({
           </div>
         ) : null}
 
+        <div className="inbox-compose-row">
         <div
           className="inbox-compose-bar relative"
           onBlur={(event) => {
@@ -468,12 +472,22 @@ export function InboxComposeBar({
                   </span>
                 )}
               </div>
-              <Button ref={cancelRecordingRef} type="button" variant="ghost" size="sm" onClick={voice.cancel}>
-                Cancelar
+              <Button
+                ref={cancelRecordingRef} type="button" variant="ghost" size="icon"
+                className="rounded-full text-muted" aria-label="Descartar grabación"
+                title="Descartar grabación" onClick={voice.cancel}
+              >
+                <InboxTrashIcon />
               </Button>
               {voice.status === 'recording' && (
-                <Button ref={stopRecordingRef} type="button" size="sm" onClick={voice.finish}>
-                  Detener
+                <Button
+                  ref={stopRecordingRef} type="button" variant="outline" size="icon"
+                  className="rounded-full text-bad" aria-label="Detener grabación"
+                  title="Detener grabación" onClick={voice.finish}
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+                    <rect x="6" y="6" width="12" height="12" />
+                  </svg>
                 </Button>
               )}
             </div>
@@ -546,7 +560,7 @@ export function InboxComposeBar({
                   aria-label="Cursiva"
                   onClick={() => applyFormat('_')}
                 >
-                  <em>I</em>
+                  <span aria-hidden="true" className="inbox-compose-italic">I</span>
                 </Button>
               </div>
 
@@ -624,74 +638,72 @@ export function InboxComposeBar({
                   }}
                 />
 
-                <div className="inbox-compose-send-split">
-                  <Button
-                    ref={primaryActionRef}
-                    type={showSend ? 'submit' : 'button'}
-                    size="icon"
-                    disabled={sendingReply}
-                    aria-label={primaryLabel}
-                    title={primaryLabel}
-                    onClick={showSend ? undefined : () => {
-                      setSlash(null)
-                      stopTyping()
-                      void voice.start()
-                    }}
-                    className={cn(
-                      'inbox-compose-send inbox-compose-send--icon',
-                      hasSecondary ? 'inbox-compose-send--split-main' : '',
-                    )}
-                  >
-                    {sendingReply ? '…' : showSend ? <IconSend /> : <IconMicrophone />}
-                  </Button>
-                  {hasSecondary ? (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          type="button"
-                          disabled={flowBusy}
-                          className="inbox-compose-send inbox-compose-send--split-more"
-                          aria-label="Más acciones de envío"
-                          title="Más acciones"
-                        >
-                          <IconChevronDown />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="max-w-xs">
-                        {windowOpen
-                          ? flows.map((f) => (
-                              <DropdownMenuItem
-                                key={f.id}
-                                disabled={flowBusy}
-                                onSelect={() => void startFlow(f.id, f.name)}
-                              >
-                                <span className="flex flex-col gap-0.5">
-                                  <span>Iniciar flujo: {f.name}</span>
-                                  <span className="font-mono text-[10px] text-muted">
-                                    {f.trigger_payload}
-                                  </span>
+                {hasSecondary ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button" variant="ghost" size="icon-sm"
+                        disabled={flowBusy}
+                        className="rounded-full text-muted"
+                        aria-label="Más acciones de envío"
+                        title="Más acciones"
+                      >
+                        <IconChevronDown />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="max-w-xs">
+                      {windowOpen
+                        ? flows.map((f) => (
+                            <DropdownMenuItem
+                              key={f.id}
+                              disabled={flowBusy}
+                              onSelect={() => void startFlow(f.id, f.name)}
+                            >
+                              <span className="flex flex-col gap-0.5">
+                                <span>Iniciar flujo: {f.name}</span>
+                                <span className="font-mono text-[10px] text-muted">
+                                  {f.trigger_payload}
                                 </span>
-                              </DropdownMenuItem>
-                            ))
-                          : (
-                              <DropdownMenuItem onSelect={() => onOpenTemplate()}>
-                                Enviar plantilla
-                              </DropdownMenuItem>
-                            )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  ) : null}
-                </div>
+                              </span>
+                            </DropdownMenuItem>
+                          ))
+                        : (
+                            <DropdownMenuItem onSelect={() => onOpenTemplate()}>
+                              Enviar plantilla
+                            </DropdownMenuItem>
+                        )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : null}
               </div>
             </>
           ) : (
             <div className="inbox-compose-grow min-h-[36px]" />
           )}
         </div>
+        {canReply && !recording ? (
+          <Button
+            ref={primaryActionRef}
+            type={showSend ? 'submit' : 'button'}
+            size="icon"
+            className="inbox-compose-primary"
+            disabled={sendingReply}
+            aria-label={primaryLabel}
+            title={primaryLabel}
+            onClick={showSend ? undefined : () => {
+              setSlash(null)
+              stopTyping()
+              void voice.start()
+            }}
+          >
+            {sendingReply ? '…' : showSend ? <IconSend /> : <IconMicrophone />}
+          </Button>
+        ) : null}
+        </div>
 
         {canReply && !recording ? (
-          <p className="inbox-compose-hint-inline muted">
-            ⏎ envía · ⇧⏎ nueva línea. WhatsApp: *negrita*, _cursiva_. JPEG/PNG (5 MB), MP4 (16 MB), audio (16 MB), PDF (25 MB).
+          <p className="inbox-compose-hint-inline muted hidden sm:block">
+            Enter para enviar · Shift + Enter para nueva línea
           </p>
         ) : null}
       </form>

@@ -74,7 +74,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/shadcn/popo
 const ConversationsSummaryPane = lazy(() => import('./ConversationsSummaryPane').then((m) => ({ default: m.ConversationsSummaryPane })))
 import { InboxComposeBar, type ReplyToMessage } from './InboxComposeBar'
 import type { InboxReplyAttachment } from './InboxAttachment'
-import { InboxSavedViews } from './InboxSavedViews'
+import { InboxSavedViews, InboxSavedViewShortcuts } from './InboxSavedViews'
+import { useInboxSavedViews } from './useInboxSavedViews'
 import { InboxMessageScroller, type InboxMessageScrollerHandle } from './InboxMessageScroller'
 import {
   chatActionsFromDetail,
@@ -1661,6 +1662,7 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
   }
 
   const savedViewsKey = user ? `mali.inbox.saved-views:${user.id}:${user.area}` : null
+  const { views: savedViews, saveViews } = useInboxSavedViews(savedViewsKey)
   const filterQuerySuffix = useMemo(() => {
     const sp = new URLSearchParams(searchParams)
     sp.delete('msg')
@@ -3515,6 +3517,15 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
               <div className="flex items-center justify-between"><strong>Filtros de chats</strong>
                 <button type="button" className="text-xs text-muted underline" onClick={clearListFilters}>Restablecer</button>
               </div>
+              {savedViewsKey && (
+                <InboxSavedViews
+                  key={savedViewsKey}
+                  views={savedViews}
+                  saveViews={saveViews}
+                  getQuery={currentSavedViewQuery}
+                  onApply={applySavedView}
+                />
+              )}
               <p className="text-xs text-muted">Elige una vista y afínala con línea, segmentos, fechas y ventana.</p>
               <fieldset className="inbox-filter-group space-y-2">
                 <legend className="text-sm font-medium">Búsqueda</legend>
@@ -3659,14 +3670,7 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
             </PopoverContent>
           </Popover>
         </div>
-        {savedViewsKey && (
-          <InboxSavedViews
-            key={savedViewsKey}
-            storageKey={savedViewsKey}
-            getQuery={currentSavedViewQuery}
-            onApply={applySavedView}
-          />
-        )}
+        <InboxSavedViewShortcuts views={savedViews} onApply={applySavedView} />
         <div className="inbox-active-filters" aria-label="Filtros activos">
           {chatFilter !== 'all' ? <button type="button" className="inbox-filter-chip" onClick={() => setChatFilter('all')} aria-label={'Quitar filtro ' + chatFilterLabels[chatFilter]}>{chatFilterLabels[chatFilter]} <span aria-hidden>×</span></button> : null}
           {selectedSegments.map(slug => <button key={slug} type="button" className="inbox-filter-chip" onClick={() => toggleSegment(slug)} aria-label={'Quitar segmento ' + selectedSegmentLabel(slug)}>{selectedSegmentLabel(slug)} <span aria-hidden>×</span></button>)}

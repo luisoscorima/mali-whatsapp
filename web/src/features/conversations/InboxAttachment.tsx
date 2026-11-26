@@ -10,6 +10,14 @@ type InboxAttachmentProps = {
 
 export type InboxReplyAttachment = { file: File; voiceNote?: boolean }
 
+export function InboxTrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5m4-5v5" />
+    </svg>
+  )
+}
+
 export function InboxVoiceAttachment({ file, onRemove }: { file: File; onRemove: () => void }) {
   const [url, setUrl] = useState('')
 
@@ -25,8 +33,11 @@ export function InboxVoiceAttachment({ file, onRemove }: { file: File; onRemove:
       {url && (
         <audio src={url} controls preload="metadata" aria-label="Escuchar nota de voz" className="h-9 min-w-36 max-w-80 flex-1" />
       )}
-      <Button type="button" variant="ghost" size="sm" className="ml-auto" onClick={onRemove}>
-        Quitar
+      <Button
+        type="button" variant="ghost" size="icon" className="ml-auto rounded-full text-muted"
+        aria-label="Descartar nota de voz" title="Descartar nota de voz" onClick={onRemove}
+      >
+        <InboxTrashIcon />
       </Button>
     </div>
   )
@@ -43,8 +54,11 @@ export function InboxAttachment({ filename, onRemove, className }: InboxAttachme
       <span className="min-w-0 truncate">
         <span className="text-muted">Adjunto:</span> {filename}
       </span>
-      <Button type="button" variant="ghost" size="sm" onClick={onRemove}>
-        Quitar
+      <Button
+        type="button" variant="ghost" size="icon" className="rounded-full text-muted"
+        aria-label="Quitar adjunto" title="Quitar adjunto" onClick={onRemove}
+      >
+        <InboxTrashIcon />
       </Button>
     </div>
   )

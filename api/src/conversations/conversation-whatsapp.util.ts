@@ -303,13 +303,15 @@ export async function uploadMediaToWhatsApp(input: {
     input.buffer.length,
   );
   const safeName = sanitizeUploadFilename(input.filename, waType);
-  const mime = String(input.mimeType).split(';')[0].trim();
-  const fileMime = input.mimeType === VOICE_NOTE_MIME ? VOICE_NOTE_MIME : mime;
+  const mime =
+    input.mimeType === VOICE_NOTE_MIME
+      ? VOICE_NOTE_MIME
+      : String(input.mimeType).split(';')[0].trim();
 
   const form = new FormData();
   form.append('messaging_product', 'whatsapp');
   form.append('type', mime);
-  form.append('file', new Blob([new Uint8Array(input.buffer)], { type: fileMime }), safeName);
+  form.append('file', new Blob([new Uint8Array(input.buffer)], { type: mime }), safeName);
 
   const response = await fetch(`${GRAPH_BASE}/${phoneNumberId}/media`, {
     method: 'POST',
