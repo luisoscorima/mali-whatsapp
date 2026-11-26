@@ -2100,6 +2100,46 @@ html[data-theme='dark'] .inbox-lead-score-pick--mid.is-on {
   line-height: 1.35;
 }
 
+.chat-timeline-event--pill {
+  display: flex;
+  justify-content: center;
+}
+
+.chat-timeline-event__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(100%, 28rem);
+  padding: 4px 10px;
+  border-radius: 8px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
+  border: 1px solid var(--line);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.chat-timeline-event__link {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.chat-timeline-event__link:hover {
+  text-decoration: underline;
+}
+
+.chat-bubble__scheduled {
+  margin: 0 0 4px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: center;
+}
+
 .inbox-layout-wa .chat-bubble--in {
   align-self: flex-start;
   background: var(--wa-bubble-in);
@@ -2772,6 +2812,10 @@ button.inbox-compose-primary {
   border-radius: 12px;
   background: var(--surface-strong);
   border: 1px solid var(--line);
+}
+
+.inbox-compose-bar:has(.inbox-compose-recording) {
+  align-items: center;
 }
 
 .inbox-compose-tools,

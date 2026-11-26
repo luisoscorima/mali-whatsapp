@@ -10,6 +10,7 @@ export const INBOX_TIMELINE_EVENT_TYPES = [
   AuditEvent.CONVERSATION_MODE,
   AuditEvent.CONVERSATION_OPEN,
   AuditEvent.CONVERSATION_MARK_UNREAD,
+  AuditEvent.CONVERSATION_MESSAGE_SCHEDULED,
   AuditEvent.CONTACT_LEAD_SCORE,
   AuditEvent.CONTACT_LEAD_STATUS,
   AuditEvent.CONTACT_UPDATED,
@@ -137,6 +138,10 @@ export function formatInboxTimelineEventLabel(
     return `${actor} abrió el chat`;
   }
 
+  if (eventType === AuditEvent.CONVERSATION_MESSAGE_SCHEDULED) {
+    return 'Programaste un mensaje.';
+  }
+
   if (eventType === AuditEvent.CONVERSATION_MARK_UNREAD) {
     return `${actor} marcó como no leído`;
   }
@@ -189,10 +194,14 @@ export function mapAuditRowsToTimelineEvents(
       segmentLabelBySlug,
     );
     if (!label) continue;
+    const eventType = String(row.event_type || '').trim();
     events.push({
       id: String(row.id),
       created_at: row.created_at.toISOString(),
       label,
+      ...(eventType === AuditEvent.CONVERSATION_MESSAGE_SCHEDULED
+        ? { action: 'view_scheduled' as const }
+        : {}),
     });
   }
   return events;

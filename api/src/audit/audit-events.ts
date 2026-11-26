@@ -30,6 +30,7 @@ export const AuditEvent = {
   CONVERSATION_MARK_UNREAD: 'conversation.mark_unread',
   CONVERSATION_ARCHIVE: 'conversation.archive',
   CONVERSATION_REPLY: 'conversation.reply',
+  CONVERSATION_MESSAGE_SCHEDULED: 'conversation.message_scheduled',
   CONVERSATION_ASSIGN: 'conversation.assign',
   CONVERSATION_EXPORT: 'conversation.export',
   CONVERSATION_MEDIA_DOWNLOAD: 'conversation.media_download',

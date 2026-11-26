@@ -56,6 +56,7 @@ import { InboxAssociatePaymentDialog } from './InboxAssociatePaymentDialog'
 import { InboxContactSheet } from './InboxContactSheet'
 import { areaLabel } from '../admin/areaLabels'
 import { InboxSendTemplateDialog } from './InboxSendTemplateDialog'
+import { InboxScheduledMessagesDialog } from './InboxScheduledMessagesDialog'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -868,6 +869,7 @@ type InboxTimelineEvent = {
   id: string
   created_at: string
   label: string
+  action?: 'view_scheduled'
 }
 
 type InboxMessage = {
@@ -881,10 +883,11 @@ type InboxMessage = {
   reaction?: InboxMessageReaction | null
   reply_to?: { message_id: number; preview: string; outbound: boolean } | null
   delivery?: {
-    status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed'
+    status: 'scheduled' | 'pending' | 'sent' | 'delivered' | 'read' | 'failed'
     label: string
     retryable?: boolean
   } | null
+  scheduled_at?: string | null
   sender_label?: string | null
   media_preview?: { url: string; mime?: string | null } | null
   campaign_preview?: {
@@ -1527,6 +1530,8 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
   const [bulkActionsOpen, setBulkActionsOpen] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
+  const [scheduledMessagesOpen, setScheduledMessagesOpen] = useState(false)
+  const [schedulingReply, setSchedulingReply] = useState(false)
   const [actionsContext, setActionsContext] = useState<ChatActionsContext | null>(null)
   const [contactSheetOpen, setContactSheetOpen] = useState(false)
   const [contactSheetMode, setContactSheetMode] = useState<'edit' | 'create'>('edit')
@@ -3244,6 +3249,141 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
     if (previewUrl) requestAnimationFrame(() => URL.revokeObjectURL(previewUrl))
   }
 
+  async function onScheduleMessage(scheduledAtIso: string) {
+    if (!draftKey || !selectedId || detail?.conversation.id !== selectedId ||
+        !detail.can_reply || sendingReplyRef.current || schedulingReply) return
+    const submittedDraft = replyDrafts.current.get(draftKey)
+    const text = replyText.trim()
+    const file = replyFile?.file
+    const replyTo = replyToMessage
+    if (!text && !file) {
+      notify.error('Escribe un mensaje o adjunta un archivo')
+      return
+    }
+    const convId = selectedId
+    const echoId = -Date.now()
+    const previewUrl = file ? URL.createObjectURL(file) : ''
+    const echo: InboxMessage = {
+      id: echoId,
+      direction: 'outbound',
+      body_text: replyFile?.voiceNote ? 'Nota de voz' : text || (file ? file.name : ''),
+      message_type: file ? echoMessageType(file) : 'text',
+      created_at: new Date().toISOString(),
+      is_ai: false,
+      has_downloadable_media: false,
+      delivery: { status: 'scheduled', label: 'Programado' },
+      scheduled_at: scheduledAtIso,
+      reply_to: replyTo
+        ? {
+            message_id: replyTo.id,
+            preview: replyTo.preview,
+            outbound: replyTo.outbound,
+          }
+        : null,
+      media_preview: previewUrl ? { url: previewUrl, mime: file?.type || null } : null,
+    }
+    const optimisticEvent: InboxTimelineEvent = {
+      id: `local-sched-${echoId}`,
+      created_at: echo.created_at,
+      label: 'Programaste un mensaje.',
+      action: 'view_scheduled',
+    }
+
+    setSchedulingReply(true)
+    setReplyFile(null)
+    setReplyToMessage(null)
+    setDetail((prev) => {
+      if (!prev || prev.conversation.id !== convId) return prev
+      const next = {
+        ...prev,
+        messages: sortInboxMessages([...prev.messages, echo]),
+        events: [...prev.events, optimisticEvent],
+        conversation: {
+          ...prev.conversation,
+          last_message_at: echo.created_at,
+        },
+      }
+      rememberDetail(next)
+      return next
+    })
+    requestAnimationFrame(() => scrollerRef.current?.scrollToBottom('smooth'))
+
+    const result = await (file
+      ? (() => {
+          const formData = new FormData()
+          if (text) formData.append('message', text)
+          formData.append('file', file)
+          formData.append('scheduled_at', scheduledAtIso)
+          if (replyFile?.voiceNote) formData.append('voice_note', 'true')
+          if (replyTo) {
+            formData.append('reply_to_message_id', String(replyTo.id))
+          }
+          return apiClient.postFormData<{ messages: InboxMessage[] }>(
+            `/api/conversations/${convId}/schedule`,
+            formData,
+          )
+        })()
+      : apiClient.post<{ messages: InboxMessage[] }>(
+          `/api/conversations/${convId}/schedule`,
+          {
+            message: text,
+            scheduled_at: scheduledAtIso,
+            ...(replyTo ? { reply_to_message_id: replyTo.id } : {}),
+          },
+        )).catch(() => ({
+          ok: false as const,
+          error: 'No se pudo programar el mensaje.',
+        }))
+    setSchedulingReply(false)
+
+    const dropEcho = (messages: InboxMessage[], sent: InboxMessage[] = []) => {
+      const byId = new Map(
+        messages
+          .filter((message) => message.id !== echoId)
+          .map((message) => [message.id, message]),
+      )
+      for (const message of sent) byId.set(message.id, message)
+      return sortInboxMessages([...byId.values()])
+    }
+    const dropLocalEvent = (events: InboxTimelineEvent[]) =>
+      events.filter((event) => event.id !== optimisticEvent.id)
+
+    if (!result.ok) {
+      notify.error(result.error)
+      if (activeDraftKey.current === draftKey) {
+        setReplyFile((current) => current ?? replyFile)
+        setReplyToMessage((current) => current ?? replyTo)
+      }
+      setDetail((prev) => {
+        if (!prev || prev.conversation.id !== convId) return prev
+        const next = {
+          ...prev,
+          messages: dropEcho(prev.messages),
+          events: dropLocalEvent(prev.events),
+        }
+        rememberDetail(next)
+        return next
+      })
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+      return
+    }
+    if (replyDrafts.current.get(draftKey) === submittedDraft) setReplyDraft('')
+    const sent = result.data.messages ?? []
+    notify.success('Mensaje programado')
+    void loadDetail(convId)
+    setDetail((prev) => {
+      if (!prev || prev.conversation.id !== convId) return prev
+      const next = {
+        ...prev,
+        messages: dropEcho(prev.messages, sent),
+        events: dropLocalEvent(prev.events),
+      }
+      rememberDetail(next)
+      return next
+    })
+    if (previewUrl) requestAnimationFrame(() => URL.revokeObjectURL(previewUrl))
+  }
+
   const canAssign =
     detail?.can_assign_conversations ?? list?.can_assign_conversations ?? false
 
@@ -4391,7 +4531,16 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
                     }
                     if (item.type === 'event') {
                       return (
-                        <ChatTimelineEventMarker key={item.key} label={item.event.label} />
+                        <ChatTimelineEventMarker
+                          key={item.key}
+                          label={item.event.label}
+                          action={item.event.action}
+                          onAction={
+                            item.event.action === 'view_scheduled'
+                              ? () => setScheduledMessagesOpen(true)
+                              : undefined
+                          }
+                        />
                       )
                     }
                     const message = messageById.get(item.messageId)
@@ -4435,7 +4584,9 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
                   }
                 }}
                 sendingReply={sendingReply}
+                schedulingReply={schedulingReply}
                 onSubmit={(e) => void onSendReply(e)}
+                onSchedule={(scheduledAt) => void onScheduleMessage(scheduledAt)}
                 replyTo={replyToMessage}
                 onClearReplyTo={() => setReplyToMessage(null)}
                 windowOpen={detail.user_service_window_open}
@@ -4461,6 +4612,22 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
                 }
                 contactEmail={detail.contact?.email || ''}
                 contactDni={detail.contact?.dni || ''}
+              />
+              <InboxScheduledMessagesDialog
+                open={scheduledMessagesOpen}
+                onOpenChange={setScheduledMessagesOpen}
+                conversationId={detail.conversation.id}
+                onCancelled={(messageId) => {
+                  setDetail((prev) => {
+                    if (!prev || prev.conversation.id !== detail.conversation.id) return prev
+                    const next = {
+                      ...prev,
+                      messages: prev.messages.filter((m) => m.id !== messageId),
+                    }
+                    rememberDetail(next)
+                    return next
+                  })
+                }}
               />
             </WaMainFooter>
           </>

@@ -166,7 +166,11 @@ import {
   extractReplyWaMessageIdFromRawPayload,
   type StoredMessageReplyTo,
 } from './chat-reply.util';
-import { readMessageDelivery } from './chat-delivery.util';
+import {
+  isScheduledOutbound,
+  readMessageDelivery,
+  readScheduledAt,
+} from './chat-delivery.util';
 import {
   matchAuditSenderLabel,
   readMessageSenderLabel,
@@ -2693,6 +2697,10 @@ export class ConversationsService {
         row.direction === 'outbound'
           ? readMessageDelivery(row.raw_payload)
           : null,
+      scheduled_at:
+        row.direction === 'outbound'
+          ? readScheduledAt(row.raw_payload)
+          : null,
       sender_label:
         row.direction === 'outbound'
           ? readMessageSenderLabel(row.raw_payload, row.is_ai, row.message_type)
@@ -3051,6 +3059,22 @@ export class ConversationsService {
     return stored ? { emoji: stored.emoji, direction: stored.direction } : null;
   }
 
+  private outboundStatusPayload(scheduledAt?: Date): Record<string, unknown> {
+    if (scheduledAt) {
+      return {
+        status: 'scheduled',
+        scheduled_at: scheduledAt.toISOString(),
+        delivery_status: { status: 'scheduled' },
+      };
+    }
+    return { status: 'pending', delivery_status: { status: 'pending' } };
+  }
+
+  private enqueueDelayOpts(scheduledAt?: Date): { delayMs?: number } | undefined {
+    if (!scheduledAt) return undefined;
+    return { delayMs: Math.max(0, scheduledAt.getTime() - Date.now()) };
+  }
+
   private async queueOutboundAttachment(input: {
     conversationId: number;
     to: string;
@@ -3066,14 +3090,17 @@ export class ConversationsService {
     actorLabel: string;
     user: AuthUser;
     reservedLeadId: number | null;
+    scheduledAt?: Date;
   }): Promise<InboxMessage[]> {
     const created: InboxMessage[] = [];
+    const delayOpts = this.enqueueDelayOpts(input.scheduledAt);
+    const statusPayload = this.outboundStatusPayload(input.scheduledAt);
     const caption =
       input.waType === 'audio' ? '' : input.text ? input.text.slice(0, 1024) : '';
     if (input.waType === 'audio' && input.text) {
       const textPayload = withRoutingPhoneNumberId(
         setMessageSender(
-          { status: 'pending', delivery_status: { status: 'pending' } },
+          { ...statusPayload },
           input.actorLabel,
           input.user.id,
         ),
@@ -3101,7 +3128,7 @@ export class ConversationsService {
         actorUserId: input.user.id,
         actorEmail: input.user.email,
         actorArea: input.user.area,
-      }));
+      }, delayOpts));
       created.push(this.mapMessageRow(textRow));
     }
 
@@ -3122,8 +3149,7 @@ export class ConversationsService {
     const pendingPayload = withRoutingPhoneNumberId(
       setMessageSender(
         setMessageReplyTo({
-          status: 'pending',
-          delivery_status: { status: 'pending' },
+          ...statusPayload,
           local_preview: {
             url: input.localPreview.url,
             ...(input.localPreview.mime ? { mime: input.localPreview.mime } : {}),
@@ -3167,7 +3193,7 @@ export class ConversationsService {
       actorUserId: input.user.id,
       actorEmail: input.user.email,
       actorArea: input.user.area,
-    }));
+    }, delayOpts));
     created.push(this.mapMessageRow(row));
     return created;
   }
@@ -3362,6 +3388,119 @@ export class ConversationsService {
     return this.mapMessageRow(claimed);
   }
 
+  private parseFutureScheduledAt(raw: string): Date {
+    const scheduledAt = new Date(String(raw || '').trim());
+    if (Number.isNaN(scheduledAt.getTime())) {
+      throw new BadRequestException('Fecha de programación inválida');
+    }
+    const minAt = Date.now() + 60_000;
+    if (scheduledAt.getTime() < minAt) {
+      throw new BadRequestException(
+        'Elige una hora al menos 1 minuto en el futuro',
+      );
+    }
+    return scheduledAt;
+  }
+
+  async scheduleReply(
+    user: AuthUser,
+    conversationId: number,
+    messageText: string,
+    scheduledAtRaw: string,
+    file?: { buffer: Buffer; mimetype: string; originalname: string },
+    replyToMessageId?: number,
+    voiceNote = false,
+  ): Promise<ReplyResult> {
+    const scheduledAt = this.parseFutureScheduledAt(scheduledAtRaw);
+    return this.reply(
+      user,
+      conversationId,
+      messageText,
+      file,
+      replyToMessageId,
+      voiceNote,
+      scheduledAt,
+    );
+  }
+
+  async listScheduledMessages(
+    user: AuthUser,
+    conversationId: number,
+  ): Promise<InboxMessage[]> {
+    if (!Number.isInteger(conversationId) || conversationId <= 0) {
+      throw new BadRequestException('Id de conversacion invalido');
+    }
+    const conversation = await this.prisma.conversations.findFirst({
+      where: this.conversationLookup(user.area, conversationId),
+      select: { id: true },
+    });
+    if (!conversation) {
+      throw new NotFoundException('Conversacion no encontrada');
+    }
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: number;
+        direction: string;
+        body_text: string | null;
+        message_type: string;
+        created_at: Date;
+        is_ai: boolean;
+        raw_payload: unknown;
+      }>
+    >`
+      SELECT id, direction, body_text, message_type, created_at, is_ai, raw_payload
+      FROM chat_messages
+      WHERE conversation_id = ${conversationId}
+        AND direction = 'outbound'
+        AND wa_message_id IS NULL
+        AND COALESCE(raw_payload->'delivery_status'->>'status', raw_payload->>'status') = 'scheduled'
+      ORDER BY COALESCE(raw_payload->>'scheduled_at', created_at::text) ASC, id ASC
+    `;
+    return rows.map((row) => this.mapMessageRow(row));
+  }
+
+  async cancelScheduledMessage(
+    user: AuthUser,
+    conversationId: number,
+    messageId: number,
+  ): Promise<{ deleted: true }> {
+    if (!Number.isInteger(conversationId) || conversationId <= 0) {
+      throw new BadRequestException('Id de conversacion invalido');
+    }
+    if (!Number.isInteger(messageId) || messageId <= 0) {
+      throw new BadRequestException('Id de mensaje invalido');
+    }
+    const conversation = await this.prisma.conversations.findFirst({
+      where: this.conversationLookup(user.area, conversationId),
+      select: { id: true },
+    });
+    if (!conversation) {
+      throw new NotFoundException('Conversacion no encontrada');
+    }
+
+    const row = await this.prisma.chat_messages.findFirst({
+      where: {
+        id: messageId,
+        conversation_id: conversationId,
+        direction: 'outbound',
+        wa_message_id: null,
+      },
+      select: { id: true, message_type: true, raw_payload: true },
+    });
+    if (!row || !isScheduledOutbound(row.raw_payload)) {
+      throw new NotFoundException('Mensaje programado no encontrado');
+    }
+
+    const mediaType = String(row.message_type || '').toLowerCase();
+    if (['image', 'video', 'audio', 'document'].includes(mediaType)) {
+      await this.outboundQueue.removeMediaJob(messageId);
+    } else {
+      await this.outboundQueue.removeReplyJob(messageId);
+    }
+    await this.prisma.chat_messages.delete({ where: { id: messageId } });
+    return { deleted: true };
+  }
+
   async reply(
     user: AuthUser,
     conversationId: number,
@@ -3369,6 +3508,7 @@ export class ConversationsService {
     file?: { buffer: Buffer; mimetype: string; originalname: string },
     replyToMessageId?: number,
     voiceNote = false,
+    scheduledAt?: Date,
   ): Promise<ReplyResult> {
     if (!Number.isInteger(conversationId) || conversationId <= 0) {
       throw new BadRequestException('Id de conversacion invalido');
@@ -3556,11 +3696,11 @@ export class ConversationsService {
 
     try {
       if (!file) {
-        // Estilo Chatwoot: guardar ya (pending) y enviar a Meta en cola.
+        // Estilo Chatwoot: guardar ya (pending/scheduled) y enviar a Meta en cola.
         const pendingPayload = withRoutingPhoneNumberId(
           setMessageSender(
             setMessageReplyTo(
-              { status: 'pending', delivery_status: { status: 'pending' } },
+              this.outboundStatusPayload(scheduledAt),
               replyToMeta,
             ),
             actorLabel,
@@ -3598,8 +3738,20 @@ export class ConversationsService {
           actorUserId: user.id,
           actorEmail: user.email,
           actorArea: user.area,
-        }));
+        }, this.enqueueDelayOpts(scheduledAt)));
         createdMessages.push(this.mapMessageRow(row));
+        if (scheduledAt) {
+          await this.auditLog.write({
+            event_type: AuditEvent.CONVERSATION_MESSAGE_SCHEDULED,
+            message: `Mensaje programado en conversación ${conversationId}`,
+            actor: auditActor(user),
+            meta: {
+              conversation_id: conversationId,
+              message_id: row.id,
+              scheduled_at: scheduledAt.toISOString(),
+            },
+          });
+        }
         return { messages: createdMessages };
       } else {
         const { waType } = classifyConversationUpload(
@@ -3638,8 +3790,27 @@ export class ConversationsService {
             actorLabel,
             user,
             reservedLeadId,
+            scheduledAt,
           });
+          if (scheduledAt) {
+            await this.auditLog.write({
+              event_type: AuditEvent.CONVERSATION_MESSAGE_SCHEDULED,
+              message: `Mensaje programado en conversación ${conversationId}`,
+              actor: auditActor(user),
+              meta: {
+                conversation_id: conversationId,
+                message_id: queued[queued.length - 1]?.id ?? null,
+                scheduled_at: scheduledAt.toISOString(),
+              },
+            });
+          }
           return { messages: queued };
+        }
+
+        if (scheduledAt) {
+          throw new BadRequestException(
+            'No se pudo guardar el archivo para programarlo. Intenta de nuevo.',
+          );
         }
 
         const uploadResult = await uploadMediaToWhatsApp({

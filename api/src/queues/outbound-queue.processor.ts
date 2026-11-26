@@ -17,6 +17,8 @@ import {
 } from '../conversations/conversation-whatsapp.util';
 import { EducationLeadWorkflowService } from '../leads/education-lead-workflow.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { isWithinUserServiceWindow } from '../campaigns/campaign-conversation-window.util';
+import { isScheduledOutbound } from '../conversations/chat-delivery.util';
 import {
   claimOutboundDispatch,
   hasOutboundDispatchStarted,
@@ -25,6 +27,7 @@ import {
   markOutboundUncertain,
   needsOutboundSentHeal,
   persistOutboundAccepted,
+  promoteScheduledOutbound,
   readOutboundAcceptedWamid,
   rememberOutboundAccepted,
   settleOutboundFailure,
@@ -84,6 +87,32 @@ export class OutboundQueueProcessor extends WorkerHost {
     );
   }
 
+  /** Promueve scheduled→pending y valida ventana 24h. false = no enviar. */
+  private async prepareScheduledSend(
+    messageId: number,
+    conversationId: number,
+    rawPayload: unknown,
+  ): Promise<boolean> {
+    if (!isScheduledOutbound(rawPayload)) return true;
+    const promoted = await promoteScheduledOutbound(this.prisma, messageId);
+    if (!promoted) return false;
+    const conversation = await this.prisma.conversations.findUnique({
+      where: { id: conversationId },
+      select: { last_user_message_at: true },
+    });
+    if (!conversation) return false;
+    if (!isWithinUserServiceWindow(conversation.last_user_message_at)) {
+      await settleOutboundFailure(
+        this.prisma,
+        messageId,
+        'Ventana de 24 h cerrada al momento del envío programado',
+        'before-dispatch',
+      );
+      return false;
+    }
+    return true;
+  }
+
   private async sendText(job: Job<OutboundReplyJobData>): Promise<void> {
     const data = job.data;
     const row = await this.prisma.chat_messages.findUnique({
@@ -97,6 +126,15 @@ export class OutboundQueueProcessor extends WorkerHost {
     });
     if (!row || row.conversation_id !== data.conversationId) {
       this.logger.warn(`outbound: mensaje ${data.messageId} no encontrado`);
+      return;
+    }
+    if (
+      !(await this.prepareScheduledSend(
+        data.messageId,
+        data.conversationId,
+        row.raw_payload,
+      ))
+    ) {
       return;
     }
     if (isOutboundUncertain(row.raw_payload) && !this.resolveResumeId(row, data)) {
@@ -209,6 +247,15 @@ export class OutboundQueueProcessor extends WorkerHost {
     });
     if (!row || row.conversation_id !== data.conversationId) {
       this.logger.warn(`outbound: mensaje ${data.messageId} no encontrado`);
+      return;
+    }
+    if (
+      !(await this.prepareScheduledSend(
+        data.messageId,
+        data.conversationId,
+        row.raw_payload,
+      ))
+    ) {
       return;
     }
     if (isOutboundUncertain(row.raw_payload) && !this.resolveResumeId(row, data)) {

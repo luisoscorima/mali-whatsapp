@@ -30,10 +30,11 @@ export type ChatMessage = {
   reaction?: { emoji: string; direction: 'inbound' | 'outbound' } | null
   reply_to?: { message_id: number; preview: string; outbound: boolean } | null
   delivery?: {
-    status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed'
+    status: 'scheduled' | 'pending' | 'sent' | 'delivered' | 'read' | 'failed'
     label: string
     retryable?: boolean
   } | null
+  scheduled_at?: string | null
   sender_label?: string | null
   media_preview?: { url: string; mime?: string | null } | null
   campaign_preview?: CampaignMessagePreviewData | null
@@ -104,6 +105,29 @@ function messageAuthorLabel(message: ChatMessage): string | null {
   if (message.direction !== 'outbound') return null
   const label = message.sender_label?.trim()
   return label || null
+}
+
+function formatScheduledForLabel(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return 'Programado'
+  const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(date)
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date())
+  const tomorrowDate = new Date()
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1)
+  const tomorrow = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(tomorrowDate)
+  const time = new Intl.DateTimeFormat('es-PE', {
+    timeZone: 'America/Lima',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date)
+  if (dayKey === today) return `Programado para hoy a la(s) ${time}`
+  if (dayKey === tomorrow) return `Programado para mañana a la(s) ${time}`
+  const day = new Intl.DateTimeFormat('es-PE', {
+    timeZone: 'America/Lima',
+    day: 'numeric',
+    month: 'long',
+  }).format(date)
+  return `Programado para el ${day} a la(s) ${time}`
 }
 
 function MediaHoverActions({
@@ -443,16 +467,28 @@ export function ChatMessageBubble({
     </div>
   )
 
+  const scheduledLabel =
+    outbound &&
+    message.delivery?.status === 'scheduled' &&
+    message.scheduled_at
+      ? formatScheduledForLabel(message.scheduled_at)
+      : null
+
   return (
-    <ChatMessageBubbleMenu
-      outbound={outbound}
-      canInteract={showMenu}
-      hasCopyText={Boolean(copyText)}
-      onReply={() => onReply?.(message)}
-      onCopy={() => onCopy?.(message)}
-      onReact={(emoji) => onReact?.(message, emoji)}
-    >
-      {bubble}
-    </ChatMessageBubbleMenu>
+    <>
+      {scheduledLabel ? (
+        <p className="chat-bubble__scheduled">{scheduledLabel}</p>
+      ) : null}
+      <ChatMessageBubbleMenu
+        outbound={outbound}
+        canInteract={showMenu && message.delivery?.status !== 'scheduled'}
+        hasCopyText={Boolean(copyText)}
+        onReply={() => onReply?.(message)}
+        onCopy={() => onCopy?.(message)}
+        onReact={(emoji) => onReact?.(message, emoji)}
+      >
+        {bubble}
+      </ChatMessageBubbleMenu>
+    </>
   )
 }

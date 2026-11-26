@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -46,6 +47,7 @@ import type {
 } from './conversations.types';
 import {
   ReplyConversationDto,
+  ScheduleConversationDto,
   UpdateConversationModeDto,
   LeadScoreDto,
   AssignConversationDto,
@@ -227,6 +229,61 @@ export class ConversationsController {
       file,
       Number.isInteger(replyToId) && replyToId! > 0 ? replyToId : undefined,
       body.voice_note === 'true',
+    );
+    return { ok: true, data };
+  }
+
+  @Post(':id/schedule')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: MAX_MEDIA_DOCUMENT_BYTES, files: 1 },
+    }),
+  )
+  async schedule(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: ScheduleConversationDto,
+    @UploadedFile()
+    file?: { buffer: Buffer; mimetype: string; originalname: string },
+  ): Promise<ApiResponse<ReplyResult>> {
+    assertCanManageConversations(user);
+    const replyToId =
+      body.reply_to_message_id != null && body.reply_to_message_id !== ''
+        ? Number(body.reply_to_message_id)
+        : undefined;
+    const data = await this.conversationsService.scheduleReply(
+      user,
+      id,
+      body.message ?? '',
+      body.scheduled_at,
+      file,
+      Number.isInteger(replyToId) && replyToId! > 0 ? replyToId : undefined,
+      body.voice_note === 'true',
+    );
+    return { ok: true, data };
+  }
+
+  @Get(':id/scheduled-messages')
+  async listScheduled(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<ApiResponse<InboxMessage[]>> {
+    assertCanManageConversations(user);
+    const data = await this.conversationsService.listScheduledMessages(user, id);
+    return { ok: true, data };
+  }
+
+  @Delete(':id/scheduled-messages/:messageId')
+  async cancelScheduled(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('messageId', ParseIntPipe) messageId: number,
+  ): Promise<ApiResponse<{ deleted: true }>> {
+    assertCanManageConversations(user);
+    const data = await this.conversationsService.cancelScheduledMessage(
+      user,
+      id,
+      messageId,
     );
     return { ok: true, data };
   }

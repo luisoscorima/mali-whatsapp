@@ -51,6 +51,24 @@ export function isConfirmedOutboundFailure(error: unknown): boolean {
     && cause.status >= 400 && cause.status < 500 && cause.status !== 408;
 }
 
+/** Pasa un mensaje programado a pending justo antes del envío. */
+export async function promoteScheduledOutbound(
+  prisma: PrismaService,
+  messageId: number,
+): Promise<boolean> {
+  const patch = JSON.stringify({
+    status: 'pending',
+    delivery_status: { status: 'pending' },
+  });
+  const updated = await prisma.$executeRaw`
+    UPDATE chat_messages
+    SET raw_payload = (COALESCE(raw_payload, '{}'::jsonb) - 'scheduled_at') || ${patch}::jsonb
+    WHERE id = ${messageId} AND wa_message_id IS NULL
+      AND COALESCE(raw_payload->'delivery_status'->>'status', raw_payload->>'status') = 'scheduled'
+  `;
+  return updated === 1;
+}
+
 /** Solo un worker puede cruzar el límite del envío para una fila pendiente. */
 export async function claimOutboundDispatch(
   prisma: PrismaService,

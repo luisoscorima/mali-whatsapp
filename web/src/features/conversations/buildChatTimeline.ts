@@ -8,6 +8,7 @@ export type InboxTimelineEvent = {
   id: string
   created_at: string
   label: string
+  action?: 'view_scheduled'
 }
 
 export type InboxMessageForTimeline = {

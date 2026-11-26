@@ -1,4 +1,5 @@
 export type MessageDeliveryStatus =
+  | 'scheduled'
   | 'pending'
   | 'sent'
   | 'delivered'
@@ -11,6 +12,26 @@ export type MessageDeliveryInfo = {
   /** false = no mostrar Reintentar (p. ej. resultado incierto tras Meta). */
   retryable?: boolean;
 };
+
+export function readScheduledAt(rawPayload: unknown): string | null {
+  if (!rawPayload || typeof rawPayload !== 'object' || Array.isArray(rawPayload)) {
+    return null;
+  }
+  const raw = String(
+    (rawPayload as Record<string, unknown>).scheduled_at ?? '',
+  ).trim();
+  if (!raw) return null;
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+export function isScheduledOutbound(rawPayload: unknown): boolean {
+  if (!rawPayload || typeof rawPayload !== 'object' || Array.isArray(rawPayload)) {
+    return false;
+  }
+  const token = resolveStatusToken(rawPayload as Record<string, unknown>);
+  return token === 'scheduled';
+}
 
 function parseJsonObject(value: unknown): Record<string, unknown> | null {
   if (!value) return null;
@@ -48,6 +69,9 @@ function resolveStatusToken(rawPayload: Record<string, unknown>): string {
 }
 
 function mapDeliveryInfo(statusToken: string): MessageDeliveryInfo {
+  if (statusToken === 'scheduled') {
+    return { status: 'scheduled', label: 'Programado' };
+  }
   if (statusToken === 'read') {
     return { status: 'read', label: 'Leído' };
   }
@@ -103,7 +127,7 @@ function deliveryFailureDetail(delivery: Record<string, unknown> | null): string
     .slice(0, 180);
 }
 
-/** Orden de entrega: pending < sent < delivered < read. failed no escala. */
+/** Orden de entrega: scheduled < pending < sent < delivered < read. failed no escala. */
 export function deliveryStatusRank(status: string): number {
   switch (String(status || '').trim().toLowerCase()) {
     case 'read':
@@ -115,6 +139,8 @@ export function deliveryStatusRank(status: string): number {
       return 2;
     case 'pending':
       return 1;
+    case 'scheduled':
+      return 0.5;
     default:
       return 0;
   }

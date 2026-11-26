@@ -26,6 +26,11 @@ export class ReplyConversationDto {
   voice_note?: 'true';
 }
 
+export class ScheduleConversationDto extends ReplyConversationDto {
+  @IsString()
+  scheduled_at!: string;
+}
+
 export class MessageReactionDto {
   @IsString()
   @MaxLength(16)

@@ -79,6 +79,7 @@ export class OutboundQueueService {
     name: string,
     data: object,
     jobId: string,
+    opts?: { delayMs?: number },
   ): Promise<void> {
     const existing = await this.queue.getJob(jobId);
     if (existing) {
@@ -88,14 +89,28 @@ export class OutboundQueueService {
       }
       await existing.remove();
     }
-    await this.queue.add(name, data, { ...JOB_OPTS, jobId });
+    const delayMs = Math.max(0, Math.floor(opts?.delayMs ?? 0));
+    await this.queue.add(name, data, {
+      ...JOB_OPTS,
+      jobId,
+      ...(delayMs > 0 ? { delay: delayMs } : {}),
+    });
   }
 
-  async enqueueReply(data: OutboundReplyJobData): Promise<void> {
+  private async removeJob(jobId: string): Promise<void> {
+    const existing = await this.queue.getJob(jobId);
+    if (existing) await existing.remove();
+  }
+
+  async enqueueReply(
+    data: OutboundReplyJobData,
+    opts?: { delayMs?: number },
+  ): Promise<void> {
     await this.replaceJob(
       OutboundJobName.SEND_REPLY,
       data,
       `outbound-reply-${data.messageId}`,
+      opts,
     );
   }
 
@@ -103,16 +118,28 @@ export class OutboundQueueService {
     await this.enqueueReply(data);
   }
 
-  async enqueueMedia(data: OutboundMediaJobData): Promise<void> {
+  async removeReplyJob(messageId: number): Promise<void> {
+    await this.removeJob(`outbound-reply-${messageId}`);
+  }
+
+  async enqueueMedia(
+    data: OutboundMediaJobData,
+    opts?: { delayMs?: number },
+  ): Promise<void> {
     await this.replaceJob(
       OutboundJobName.SEND_MEDIA,
       data,
       `outbound-media-${data.messageId}`,
+      opts,
     );
   }
 
   async enqueueMediaRetry(data: OutboundMediaJobData): Promise<void> {
     await this.enqueueMedia(data);
+  }
+
+  async removeMediaJob(messageId: number): Promise<void> {
+    await this.removeJob(`outbound-media-${messageId}`);
   }
 
   async enqueueTemplate(data: OutboundTemplateJobData): Promise<void> {

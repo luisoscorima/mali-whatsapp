@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils'
 
 export type MessageDeliveryInfo = {
-  status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed'
+  status: 'scheduled' | 'pending' | 'sent' | 'delivered' | 'read' | 'failed'
   label: string
   retryable?: boolean
 }
@@ -19,7 +19,7 @@ export function ChatDeliveryStatus({ delivery, onRetry }: ChatDeliveryStatusProp
         ? 'chat-delivery--failed'
         : delivery.status === 'delivered'
           ? 'chat-delivery--delivered'
-          : delivery.status === 'pending'
+          : delivery.status === 'pending' || delivery.status === 'scheduled'
             ? 'chat-delivery--pending'
             : 'chat-delivery--sent'
 

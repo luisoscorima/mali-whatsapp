@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/shadcn/popo
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
 import { InboxAttachment, InboxTrashIcon, InboxVoiceAttachment, type InboxReplyAttachment } from './InboxAttachment'
 import { InboxAdvisorNotesPopover } from './InboxAdvisorNotesPopover'
+import { InboxScheduleMessageDialog } from './InboxScheduleMessageDialog'
 import { resolveNotePlaceholders, useAdvisorNotes } from './advisorNotes'
 import { useInboxTyping } from './useInboxTyping'
 import { useVoiceRecorder } from './useVoiceRecorder'
@@ -103,6 +104,15 @@ function IconSend() {
   )
 }
 
+function IconSchedule() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="12 7 12 12 15.5 14" />
+    </svg>
+  )
+}
+
 export type ReplyToMessage = {
   id: number
   preview: string
@@ -146,6 +156,8 @@ type InboxComposeBarProps = {
   contactEmail?: string
   contactDni?: string
   notesTrigger?: ReactNode
+  schedulingReply?: boolean
+  onSchedule?: (scheduledAtIso: string) => void | Promise<void>
 }
 
 export function InboxComposeBar({
@@ -171,6 +183,8 @@ export function InboxComposeBar({
   contactPhone = '',
   contactEmail = '',
   contactDni = '',
+  schedulingReply = false,
+  onSchedule,
 }: InboxComposeBarProps) {
   const { confirm, confirmDialog } = useConfirmDialog()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -178,20 +192,22 @@ export function InboxComposeBar({
   const quickRepliesRef = useRef<HTMLDivElement>(null)
   const primaryActionRef = useRef<HTMLButtonElement>(null)
   const cancelRecordingRef = useRef<HTMLButtonElement>(null)
-  const stopRecordingRef = useRef<HTMLButtonElement>(null)
   const wasRecording = useRef(false)
+  const sendAfterRecordRef = useRef(false)
   const [fileAccept, setFileAccept] = useState<string>(ATTACH_OPTIONS[0].accept)
   const [emojiOpen, setEmojiOpen] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
   const [flows, setFlows] = useState<FlowOption[]>([])
   const [flowBusy, setFlowBusy] = useState(false)
   const { notes, loading: notesLoading, loadNotes } = useAdvisorNotes()
   const voice = useVoiceRecorder(canReply, (file) => onReplyFileChange({ file, voiceNote: true }))
   const recording = voice.status !== 'idle'
   const hasOutgoing = Boolean(replyText.trim() || replyFile)
-  const showSend = hasOutgoing || sendingReply
-  const primaryLabel = sendingReply ? 'Enviando'
-    : !hasOutgoing ? 'Grabar audio'
-      : replyFile?.voiceNote ? 'Enviar nota de voz' : 'Enviar mensaje'
+  const showSend = hasOutgoing || sendingReply || recording
+  const primaryLabel = sendingReply || voice.status === 'finishing' ? 'Enviando'
+    : recording ? 'Enviar nota de voz'
+      : !hasOutgoing ? 'Grabar audio'
+        : replyFile?.voiceNote ? 'Enviar nota de voz' : 'Enviar mensaje'
   const { names: typingNames, signalTyping, stopTyping } = useInboxTyping(
     conversationId > 0 ? conversationId : null,
     typingAdvisorId,
@@ -224,11 +240,22 @@ export function InboxComposeBar({
 
   useEffect(() => {
     if (voice.status === 'requesting') cancelRecordingRef.current?.focus()
-    if (voice.status === 'recording') stopRecordingRef.current?.focus()
-    if (voice.status === 'finishing') cancelRecordingRef.current?.focus()
+    if (voice.status === 'recording' || voice.status === 'finishing') {
+      primaryActionRef.current?.focus()
+    }
     if (voice.status === 'idle' && wasRecording.current) primaryActionRef.current?.focus()
     wasRecording.current = voice.status !== 'idle'
   }, [voice.status])
+
+  useEffect(() => {
+    if (!sendAfterRecordRef.current || recording || !replyFile?.voiceNote) return
+    sendAfterRecordRef.current = false
+    primaryActionRef.current?.form?.requestSubmit()
+  }, [recording, replyFile])
+
+  useEffect(() => {
+    if (voice.error) sendAfterRecordRef.current = false
+  }, [voice.error])
 
   useEffect(() => {
     if (showNotes) {
@@ -457,39 +484,47 @@ export function InboxComposeBar({
           }}
         >
           {canReply && recording ? (
-            <div className="inbox-compose-grow flex flex-wrap items-center gap-2">
-              <div className="flex min-w-0 flex-1 items-center gap-2 px-1 text-sm">
-                {voice.status === 'recording' && (
-                  <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-bad" />
-                )}
-                <span role="status">
-                  {voice.status === 'requesting' ? 'Esperando acceso al micrófono…'
-                    : voice.status === 'finishing' ? 'Preparando audio…' : 'Grabando'}
-                </span>
-                {voice.status === 'recording' && (
-                  <span role="timer" aria-label="Tiempo de grabación" className="font-mono tabular-nums">
-                    {Math.floor(voice.elapsedSeconds / 60)}:{String(voice.elapsedSeconds % 60).padStart(2, '0')}
-                  </span>
-                )}
-              </div>
+            <div className="inbox-compose-recording inbox-compose-grow flex w-full items-center gap-2">
               <Button
-                ref={cancelRecordingRef} type="button" variant="ghost" size="icon"
-                className="rounded-full text-muted" aria-label="Descartar grabación"
-                title="Descartar grabación" onClick={voice.cancel}
+                ref={cancelRecordingRef}
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="shrink-0 rounded-full text-muted"
+                aria-label="Descartar grabación"
+                title="Descartar grabación"
+                disabled={voice.status === 'finishing'}
+                onClick={() => {
+                  sendAfterRecordRef.current = false
+                  voice.cancel()
+                }}
               >
                 <InboxTrashIcon />
               </Button>
-              {voice.status === 'recording' && (
-                <Button
-                  ref={stopRecordingRef} type="button" variant="outline" size="icon"
-                  className="rounded-full text-bad" aria-label="Detener grabación"
-                  title="Detener grabación" onClick={voice.finish}
-                >
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
-                    <rect x="6" y="6" width="12" height="12" />
-                  </svg>
-                </Button>
-              )}
+              <div className="flex min-w-0 flex-1 items-center gap-2 px-1 text-sm">
+                {voice.status === 'recording' ? (
+                  <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-bad" />
+                ) : null}
+                {voice.status === 'requesting' || voice.status === 'finishing' ? (
+                  <span role="status" className="truncate text-muted">
+                    {voice.status === 'requesting'
+                      ? 'Esperando micrófono…'
+                      : 'Preparando audio…'}
+                  </span>
+                ) : (
+                  <span role="status" className="sr-only">Grabando</span>
+                )}
+                {voice.status === 'recording' || voice.status === 'finishing' ? (
+                  <span
+                    role="timer"
+                    aria-label="Tiempo de grabación"
+                    className="font-mono tabular-nums"
+                  >
+                    {Math.floor(voice.elapsedSeconds / 60)}:
+                    {String(voice.elapsedSeconds % 60).padStart(2, '0')}
+                  </span>
+                ) : null}
+              </div>
             </div>
           ) : canReply ? (
             <>
@@ -626,6 +661,27 @@ export function InboxComposeBar({
               )}
 
               <div className="inbox-compose-actions">
+                {onSchedule ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    title="Programar mensaje"
+                    aria-label="Programar mensaje"
+                    disabled={sendingReply || schedulingReply || !hasOutgoing}
+                    onClick={() => {
+                      if (!hasOutgoing) {
+                        notify.error('Escribe un mensaje o adjunta un archivo')
+                        return
+                      }
+                      setSlash(null)
+                      stopTyping()
+                      setScheduleOpen(true)
+                    }}
+                  >
+                    <IconSchedule />
+                  </Button>
+                ) : null}
                 <InboxAdvisorNotesPopover
                   triggerIcon={<IconPostIt />}
                   notes={notes}
@@ -681,32 +737,67 @@ export function InboxComposeBar({
             <div className="inbox-compose-grow min-h-[36px]" />
           )}
         </div>
-        {canReply && !recording ? (
+        {canReply ? (
           <Button
             ref={primaryActionRef}
-            type={showSend ? 'submit' : 'button'}
+            type={recording || !showSend ? 'button' : 'submit'}
             size="icon"
             className="inbox-compose-primary"
-            disabled={sendingReply}
+            disabled={
+              sendingReply
+              || voice.status === 'requesting'
+              || voice.status === 'finishing'
+            }
             aria-label={primaryLabel}
             title={primaryLabel}
-            onClick={showSend ? undefined : () => {
-              setSlash(null)
-              stopTyping()
-              void voice.start()
-            }}
+            onClick={
+              voice.status === 'recording'
+                ? () => {
+                    sendAfterRecordRef.current = true
+                    voice.finish()
+                  }
+                : showSend
+                  ? undefined
+                  : () => {
+                      sendAfterRecordRef.current = false
+                      setSlash(null)
+                      stopTyping()
+                      void voice.start()
+                    }
+            }
           >
-            {sendingReply ? '…' : showSend ? <IconSend /> : <IconMicrophone />}
+            {sendingReply || voice.status === 'finishing'
+              ? '…'
+              : showSend
+                ? <IconSend />
+                : <IconMicrophone />}
           </Button>
         ) : null}
         </div>
 
-        {canReply && !recording ? (
-          <p className="inbox-compose-hint-inline muted hidden sm:block">
+        {canReply ? (
+          <p
+            className={cn(
+              'inbox-compose-hint-inline muted hidden sm:block',
+              recording && 'invisible',
+            )}
+            aria-hidden={recording || undefined}
+          >
             Enter para enviar · Shift + Enter para nueva línea
           </p>
         ) : null}
       </form>
+      {onSchedule ? (
+        <InboxScheduleMessageDialog
+          open={scheduleOpen}
+          onOpenChange={setScheduleOpen}
+          busy={schedulingReply}
+          onConfirm={async (scheduledAtIso) => {
+            await onSchedule(scheduledAtIso)
+            setScheduleOpen(false)
+          }}
+        />
+      ) : null}
       {confirmDialog}
     </>
   )

@@ -103,7 +103,7 @@ export type InboxMessageReplyTo = {
 };
 
 export type InboxMessageDelivery = {
-  status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
+  status: 'scheduled' | 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
   label: string;
   retryable?: boolean;
 };
@@ -112,6 +112,7 @@ export type InboxTimelineEvent = {
   id: string;
   created_at: string;
   label: string;
+  action?: 'view_scheduled';
 };
 
 export type InboxMessage = {
@@ -125,6 +126,7 @@ export type InboxMessage = {
   reaction?: InboxMessageReaction | null;
   reply_to?: InboxMessageReplyTo | null;
   delivery?: InboxMessageDelivery | null;
+  scheduled_at?: string | null;
   sender_label?: string | null;
   media_preview?: { url: string; mime?: string | null } | null;
   campaign_preview?: {
