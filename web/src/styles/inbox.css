@@ -2819,6 +2819,11 @@ button.inbox-compose-primary {
   align-items: center;
 }
 
+.inbox-compose-voice-preview .chat-audio {
+  width: 100%;
+  min-width: 0;
+}
+
 .inbox-compose-tools,
 .inbox-compose-actions {
   display: flex;

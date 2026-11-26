@@ -3,9 +3,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/shadcn/tool
 
 type ChatAudioPlayerProps = {
   src: string
-  canDownload: boolean
-  downloadHref: string
-  onDownload: (event: { preventDefault: () => void }) => void
+  canDownload?: boolean
+  downloadHref?: string
+  onDownload?: (event: { preventDefault: () => void }) => void
 }
 
 function formatAudioTime(seconds: number): string {
@@ -18,8 +18,8 @@ function formatAudioTime(seconds: number): string {
 
 export function ChatAudioPlayer({
   src,
-  canDownload,
-  downloadHref,
+  canDownload = false,
+  downloadHref = '',
   onDownload,
 }: ChatAudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -99,7 +99,7 @@ export function ChatAudioPlayer({
           {formatAudioTime(current)} / {formatAudioTime(duration)}
         </span>
       </div>
-      {canDownload ? (
+      {canDownload && onDownload ? (
         <Tooltip>
           <TooltipTrigger asChild>
             <a

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/shared/ui/shadcn/button'
+import { ChatAudioPlayer } from './ChatAudioPlayer'
 
 type InboxAttachmentProps = {
   filename: string
@@ -35,9 +36,15 @@ export function InboxVoiceAttachment({
     return () => URL.revokeObjectURL(next)
   }, [file])
 
+  const player = url ? (
+    <ChatAudioPlayer src={url} />
+  ) : (
+    <span className="text-sm text-muted">Nota de voz</span>
+  )
+
   if (embedded) {
     return (
-      <div className="inbox-compose-voice-preview inbox-compose-grow flex w-full items-center gap-2">
+      <div className="inbox-compose-voice-preview inbox-compose-grow flex w-full min-w-0 items-center gap-2">
         <Button
           type="button"
           variant="ghost"
@@ -49,29 +56,16 @@ export function InboxVoiceAttachment({
         >
           <InboxTrashIcon />
         </Button>
-        {url ? (
-          <audio
-            src={url}
-            controls
-            preload="metadata"
-            aria-label="Escuchar nota de voz"
-            className="h-9 min-w-0 flex-1"
-          />
-        ) : (
-          <span className="text-sm text-muted">Nota de voz</span>
-        )}
+        <div className="min-w-0 flex-1">{player}</div>
       </div>
     )
   }
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-surface-strong px-3 py-2">
-      <span className="text-sm font-medium">Nota de voz</span>
-      {url && (
-        <audio src={url} controls preload="metadata" aria-label="Escuchar nota de voz" className="h-9 min-w-36 max-w-80 flex-1" />
-      )}
+      <div className="min-w-0 flex-1">{player}</div>
       <Button
-        type="button" variant="ghost" size="icon" className="ml-auto rounded-full text-muted"
+        type="button" variant="ghost" size="icon" className="rounded-full text-muted"
         aria-label="Descartar nota de voz" title="Descartar nota de voz" onClick={onRemove}
       >
         <InboxTrashIcon />
