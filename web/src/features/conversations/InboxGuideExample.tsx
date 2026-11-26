@@ -21,72 +21,63 @@ function ignoreFileDrop(event: DragEvent<HTMLElement>) {
 }
 
 export function InboxGuideExample({ onStart, onShowSummary }: InboxGuideExampleProps) {
-  const [showExample, setShowExample] = useState(false)
+  const [expanded, setExpanded] = useState(false)
 
   function startExample(trigger: HTMLButtonElement) {
-    // Driver.js needs the example controls in the DOM before it resolves the steps.
-    flushSync(() => setShowExample(true))
+    // Driver.js measures the controls after the chat expands.
+    flushSync(() => setExpanded(true))
     onStart(trigger, (restoreFocus) => {
-      setShowExample(false)
-      if (restoreFocus) requestAnimationFrame(() => trigger.focus({ preventScroll: true }))
+      setExpanded(false)
+      if (restoreFocus) requestAnimationFrame(() => trigger.focus())
     })
   }
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col" aria-label="Guía del chat" data-inbox-guide-example>
-      <div className={showExample ? 'hidden' : 'inbox-empty-pane gap-5'}>
-        <div className="flex flex-col items-center gap-2">
-          <h2 className="text-base font-semibold text-ink">Descubre las novedades del chat</h2>
-          <Button
-            variant="outline"
-            className="border-accent bg-accent-soft font-semibold text-accent-ink hover:border-accent-hover"
-            onClick={(event) => startExample(event.currentTarget)}
-          >
-            Iniciar recorrido
-          </Button>
-        </div>
-        <div className="flex flex-col items-center gap-2">
-          <p>Selecciona una conversación para ver sus mensajes.</p>
-          <Button variant="secondary" onClick={onShowSummary}>Ver resumen de conversaciones</Button>
-        </div>
-      </div>
+    <section
+      className={expanded ? 'flex min-h-0 flex-1 flex-col' : 'flex min-h-0 flex-1 flex-col items-center gap-3 overflow-y-auto p-4 sm:p-6'}
+      aria-label="Guía del chat"
+      data-inbox-guide-example
+    >
+      <h2 className={expanded ? 'hidden' : 'mt-auto shrink-0 text-center text-base font-semibold text-ink'}>
+        Descubre las novedades del chat
+      </h2>
 
-      {showExample && (
-        <>
-          <WaMainHeader>
-            <div className="flex min-w-0 items-center gap-3">
-              <span className="inbox-chat-avatar inbox-chat-avatar--header" aria-hidden="true">LG</span>
-              <div className="min-w-0">
-                <h2 className="inbox-chat-heading">Luis Gustavo</h2>
-                <p className="inbox-chat-sub">Chat de ejemplo · Sin envíos reales</p>
-              </div>
+      <div className={expanded ? 'flex min-h-0 flex-1 flex-col' : 'inbox-guide-example__preview flex w-full max-w-lg shrink-0 flex-col overflow-hidden rounded-xl border border-line'}>
+        <WaMainHeader>
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="inbox-chat-avatar inbox-chat-avatar--header" aria-hidden="true">LG</span>
+            <div className="min-w-0">
+              <h2 className="inbox-chat-heading">Luis Gustavo</h2>
+              <p className="inbox-chat-sub">Chat de ejemplo · Sin envíos reales</p>
             </div>
-          </WaMainHeader>
+          </div>
+        </WaMainHeader>
 
-          <div
-            className="inbox-chat-drop-zone inbox-guide-example__drop-zone"
-            data-inbox-guide="chat-attach"
-            onDragOver={ignoreFileDrop}
-            onDrop={ignoreFileDrop}
-          >
-            <WaMainBody>
-              <div className="mt-auto flex shrink-0 flex-col gap-2">
-                <p className="chat-bubble chat-bubble--in text-sm">Hola, ¿me puedes enviar el catálogo?</p>
-                <p className="chat-bubble chat-bubble--out flex items-center gap-2 text-sm">
-                  <IconMicrophone />
-                  <span>Nota de voz</span>
-                  <span className="text-xs tabular-nums">0:08</span>
-                </p>
-                <p className="chat-timeline-event chat-timeline-event--pill">
-                  <span className="chat-timeline-event__pill">
-                    <span className="shrink-0"><IconSchedule /></span>
-                    <span>Mensaje programado para hoy, 4:00 p. m.</span>
-                    <span className="font-medium text-accent-ink">Ver</span>
-                  </span>
-                </p>
-              </div>
-            </WaMainBody>
+        <div
+          className="inbox-chat-drop-zone inbox-guide-example__drop-zone"
+          data-inbox-guide="chat-attach"
+          onDragOver={ignoreFileDrop}
+          onDrop={ignoreFileDrop}
+        >
+          <WaMainBody>
+            <div className="mt-auto flex shrink-0 flex-col gap-2">
+              <p className="chat-bubble chat-bubble--in text-sm">Hola, ¿me puedes enviar el catálogo?</p>
+              <p className="chat-bubble chat-bubble--out flex items-center gap-2 text-sm">
+                <IconMicrophone />
+                <span>Nota de voz</span>
+                <span className="text-xs tabular-nums">0:08</span>
+              </p>
+            </div>
+          </WaMainBody>
 
+          <div className="inbox-guide-example__scheduled-send" data-inbox-guide="chat-schedule">
+            <p className="chat-timeline-event chat-timeline-event--pill inbox-guide-example__schedule-notice">
+              <span className="chat-timeline-event__pill">
+                <span className="shrink-0"><IconSchedule /></span>
+                <span>Mensaje programado para hoy, 4:00 p. m.</span>
+                <span className="font-medium text-accent-ink">Ver</span>
+              </span>
+            </p>
             <WaMainFooter>
               <div className="inbox-guide-example__composer relative flex items-center gap-1.5">
                 <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-line bg-surface-strong px-2 py-1 text-sm text-muted">
@@ -103,7 +94,6 @@ export function InboxGuideExample({ onStart, onShowSummary }: InboxGuideExampleP
                 </div>
                 <span
                   className="inbox-guide-example__schedule absolute end-12 grid size-9 place-items-center rounded-full text-muted"
-                  data-inbox-guide="chat-schedule"
                   aria-hidden="true"
                 >
                   <IconSchedule />
@@ -145,13 +135,27 @@ export function InboxGuideExample({ onStart, onShowSummary }: InboxGuideExampleP
                 <kbd className="font-sans font-medium text-ink">Enter</kbd> para enviar · <kbd className="font-sans font-medium text-ink">Shift + Enter</kbd> para nueva línea
               </p>
             </WaMainFooter>
-
-            <div className="inbox-guide-example__drop inbox-chat-drop-zone__overlay" aria-hidden="true">
-              <span>Zona para soltar archivos</span>
-            </div>
           </div>
-        </>
-      )}
+
+          <div className="inbox-guide-example__drop inbox-chat-drop-zone__overlay" aria-hidden="true">
+            <span>Zona para soltar archivos</span>
+          </div>
+        </div>
+      </div>
+
+      <div className={expanded ? 'hidden' : 'mb-auto flex shrink-0 flex-col items-center gap-5 text-center'}>
+        <Button
+          variant="outline"
+          className="border-accent bg-accent-soft font-semibold text-accent-ink hover:border-accent-hover"
+          onClick={(event) => startExample(event.currentTarget)}
+        >
+          Iniciar recorrido
+        </Button>
+        <div className="flex flex-col items-center gap-2">
+          <p>Selecciona una conversación para ver sus mensajes.</p>
+          <Button variant="secondary" onClick={onShowSummary}>Ver resumen de conversaciones</Button>
+        </div>
+      </div>
     </section>
   )
 }

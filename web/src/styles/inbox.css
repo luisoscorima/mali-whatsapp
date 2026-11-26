@@ -2045,6 +2045,25 @@ html[data-theme='dark'] .inbox-lead-score-pick--mid.is-on {
   font-weight: 600;
 }
 
+.inbox-layout-wa .inbox-guide-example__preview .inbox-chat-header,
+.inbox-layout-wa .inbox-guide-example__preview .inbox-compose {
+  padding: 8px 12px;
+}
+
+.inbox-guide-example__preview .inbox-chat-avatar--header {
+  width: 32px;
+  height: 32px;
+  font-size: 0.75rem;
+}
+
+.inbox-layout-wa .inbox-guide-example__preview .inbox-chat-heading {
+  font-size: 0.875rem;
+}
+
+.inbox-layout-wa .inbox-guide-example__preview .inbox-chat-sub {
+  font-size: 0.75rem;
+}
+
 .inbox-guide-example__drop {
   align-items: start;
   padding: 16px 8px 8px;
@@ -2059,28 +2078,42 @@ html[data-theme='dark'] .inbox-lead-score-pick--mid.is-on {
   opacity: 0;
 }
 
+.inbox-guide-example__schedule-notice {
+  margin: 0;
+  padding: 0 12px 12px;
+}
+
+.inbox-guide-example__scheduled-send.driver-active-element :is(.chat-timeline-event__pill, .inbox-guide-example__schedule) {
+  outline: 2px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
 .inbox-guide-example__panel:not(.driver-active-element) > * {
   visibility: hidden;
 }
 
-.inbox-guide-example__composer:has(> :is(.inbox-guide-example__schedule, .inbox-guide-example__quick-replies).driver-active-element) {
+.inbox-guide-example__scheduled-send.driver-active-element .inbox-guide-example__composer,
+.inbox-guide-example__composer:has(> .inbox-guide-example__quick-replies.driver-active-element) {
   column-gap: 48px;
 }
 
-.inbox-guide-example__composer:has(> :is(.inbox-guide-example__schedule, .inbox-guide-example__quick-replies).driver-active-element) > .inbox-guide-example__schedule {
+.inbox-guide-example__scheduled-send.driver-active-element .inbox-guide-example__schedule,
+.inbox-guide-example__composer:has(> .inbox-guide-example__quick-replies.driver-active-element) > .inbox-guide-example__schedule {
   opacity: 1;
 }
 
 .inbox-guide-example__when-scheduling,
 .inbox-guide-example__when-searching,
 .inbox-guide-example__send,
-.inbox-guide-example__composer:has(> :is(.inbox-guide-example__schedule, .inbox-guide-example__quick-replies).driver-active-element) .inbox-guide-example__when-idle {
+.inbox-guide-example__scheduled-send.driver-active-element .inbox-guide-example__when-idle,
+.inbox-guide-example__composer:has(> .inbox-guide-example__quick-replies.driver-active-element) .inbox-guide-example__when-idle {
   display: none;
 }
 
-.inbox-guide-example__composer:has(> .inbox-guide-example__schedule.driver-active-element) .inbox-guide-example__when-scheduling,
+.inbox-guide-example__scheduled-send.driver-active-element :is(.inbox-guide-example__when-scheduling, .inbox-guide-example__send),
 .inbox-guide-example__composer:has(> .inbox-guide-example__quick-replies.driver-active-element) .inbox-guide-example__when-searching,
-.inbox-guide-example__composer:has(> :is(.inbox-guide-example__schedule, .inbox-guide-example__quick-replies).driver-active-element) .inbox-guide-example__send {
+.inbox-guide-example__composer:has(> .inbox-guide-example__quick-replies.driver-active-element) .inbox-guide-example__send {
   display: inline;
 }
 
