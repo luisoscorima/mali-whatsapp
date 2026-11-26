@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/shadcn/tooltip'
 
 type ChatAudioPlayerProps = {
@@ -16,6 +16,37 @@ function formatAudioTime(seconds: number): string {
   return `${minutes}:${String(rest).padStart(2, '0')}`
 }
 
+function readFiniteDuration(audio: HTMLAudioElement): number {
+  const value = audio.duration
+  return Number.isFinite(value) && value > 0 ? value : 0
+}
+
+/** WebM/blob de MediaRecorder a menudo reporta Infinity hasta forzar un seek. */
+function resolveDuration(audio: HTMLAudioElement, onResolved: (seconds: number) => void) {
+  const known = readFiniteDuration(audio)
+  if (known) {
+    onResolved(known)
+    return
+  }
+
+  const finish = () => {
+    audio.removeEventListener('seeked', finish)
+    audio.removeEventListener('durationchange', finish)
+    const next = readFiniteDuration(audio)
+    if (next) onResolved(next)
+    if (audio.currentTime !== 0) audio.currentTime = 0
+  }
+
+  audio.addEventListener('seeked', finish)
+  audio.addEventListener('durationchange', finish)
+  try {
+    audio.currentTime = Number.MAX_SAFE_INTEGER
+  } catch {
+    audio.removeEventListener('seeked', finish)
+    audio.removeEventListener('durationchange', finish)
+  }
+}
+
 export function ChatAudioPlayer({
   src,
   canDownload = false,
@@ -26,6 +57,12 @@ export function ChatAudioPlayer({
   const [playing, setPlaying] = useState(false)
   const [current, setCurrent] = useState(0)
   const [duration, setDuration] = useState(0)
+
+  useEffect(() => {
+    setPlaying(false)
+    setCurrent(0)
+    setDuration(0)
+  }, [src])
 
   function toggle() {
     const audio = audioRef.current
@@ -48,8 +85,19 @@ export function ChatAudioPlayer({
         preload="metadata"
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
-        onTimeUpdate={(event) => setCurrent(event.currentTarget.currentTime)}
-        onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
+        onLoadedMetadata={(event) => {
+          resolveDuration(event.currentTarget, setDuration)
+        }}
+        onDurationChange={(event) => {
+          const next = readFiniteDuration(event.currentTarget)
+          if (next) setDuration(next)
+        }}
+        onTimeUpdate={(event) => {
+          const audio = event.currentTarget
+          setCurrent(audio.currentTime)
+          const next = readFiniteDuration(audio)
+          if (next) setDuration((prev) => (prev === next ? prev : next))
+        }}
         onEnded={(event) => {
           event.currentTarget.currentTime = 0
           setPlaying(false)

@@ -2,6 +2,10 @@
 
 Vigente: [CONVERSACIONES.md](./CONVERSACIONES.md).
 
+## 2026-11-26 — Composer: drag & drop de adjuntos
+
+- Soltar JPEG/PNG, MP4, audio o PDF en el composer (mismas reglas que el clip); highlight al arrastrar.
+
 ## 2026-11-26 — Composer: Toggle shadcn para negrita/cursiva
 
 - Negrita y cursiva usan `Toggle` (`@radix-ui/react-toggle`); `pressed` según la selección.

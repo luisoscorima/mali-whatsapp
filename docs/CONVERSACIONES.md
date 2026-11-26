@@ -30,6 +30,7 @@ Barra de respuesta del hilo (texto, adjuntos, nota de voz, programar, notas ráp
 | Pieza | Regla |
 |-------|--------|
 | Primario | Vacío → micrófono (grabar); con texto/adjunto/voz → enviar; al enviar → “…” |
+| Adjuntos | Clip o drag & drop al composer; mismos tipos/límites (JPEG/PNG 5 MB, MP4 16 MB, audio 16 MB, PDF 25 MB) |
 | Formato | Negrita (`*`) y cursiva (`_`) con Toggle shadcn; estado `pressed` según selección |
 | Nota de voz | Grabar → detener (stop) o enviar directo → preview con player → enviar o descartar |
 | Motion | Solo opacidad, corto: swap mic↔enviar, pulse del punto al grabar, fade in/out de grabación/preview/stop. Respeta `prefers-reduced-motion` |

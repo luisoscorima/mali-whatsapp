@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { insertAtSelection, selectionHasMarker, wrapSelection } from '@/shared/textSelection'
 
 type ComposeSurface = 'compose' | 'recording' | 'preview' | 'blocked'
@@ -54,12 +54,62 @@ const COMMON_EMOJIS = [
   '👍', '👏', '🙏', '❤️', '🔥', '✅', '⭐', '🎉', '💬', '📎',
 ]
 
+const MB = 1024 * 1024
 const ATTACH_OPTIONS = [
-  { key: 'image', label: 'Imagen (JPEG/PNG · 5 MB)', accept: 'image/jpeg,image/png' },
-  { key: 'video', label: 'Video (MP4 · 16 MB)', accept: 'video/mp4' },
-  { key: 'audio', label: 'Audio (16 MB)', accept: 'audio/mpeg,audio/mp3,audio/ogg,audio/aac,audio/mp4,audio/x-m4a,audio/m4a' },
-  { key: 'pdf', label: 'PDF (25 MB)', accept: 'application/pdf' },
+  {
+    key: 'image',
+    label: 'Imagen (JPEG/PNG · 5 MB)',
+    accept: 'image/jpeg,image/png',
+    mimes: ['image/jpeg', 'image/jpg', 'image/png'],
+    maxBytes: 5 * MB,
+  },
+  {
+    key: 'video',
+    label: 'Video (MP4 · 16 MB)',
+    accept: 'video/mp4',
+    mimes: ['video/mp4'],
+    maxBytes: 16 * MB,
+  },
+  {
+    key: 'audio',
+    label: 'Audio (16 MB)',
+    accept: 'audio/mpeg,audio/mp3,audio/ogg,audio/aac,audio/mp4,audio/x-m4a,audio/m4a',
+    mimes: ['audio/mpeg', 'audio/mp3', 'audio/ogg', 'application/ogg', 'audio/aac', 'audio/mp4', 'audio/x-m4a', 'audio/m4a'],
+    maxBytes: 16 * MB,
+  },
+  {
+    key: 'pdf',
+    label: 'PDF (25 MB)',
+    accept: 'application/pdf',
+    mimes: ['application/pdf'],
+    maxBytes: 25 * MB,
+  },
 ] as const
+
+function matchAttachOption(file: File) {
+  const mime = file.type.toLowerCase().split(';')[0].trim()
+  if (mime) {
+    const byMime = ATTACH_OPTIONS.find((opt) => (opt.mimes as readonly string[]).includes(mime))
+    if (byMime) return byMime
+  }
+  const name = file.name.toLowerCase()
+  if (/\.(jpe?g|png)$/.test(name)) return ATTACH_OPTIONS[0]
+  if (/\.mp4$/.test(name)) return ATTACH_OPTIONS[1]
+  if (/\.(mp3|ogg|aac|m4a)$/.test(name)) return ATTACH_OPTIONS[2]
+  if (/\.pdf$/.test(name)) return ATTACH_OPTIONS[3]
+  return null
+}
+
+function validateAttachFile(file: File): string | null {
+  const option = matchAttachOption(file)
+  if (!option) {
+    return 'Tipo de archivo no permitido. Usa JPEG/PNG, MP4, audio (MP3/OGG/AAC/M4A) o PDF.'
+  }
+  if (file.size > option.maxBytes) {
+    return `Archivo demasiado grande (máx. ${Math.round(option.maxBytes / MB)} MB para este tipo).`
+  }
+  return null
+}
 
 function IconAttach() {
   return (
@@ -266,8 +316,48 @@ export function InboxComposeBar({
   const [activeNote, setActiveNote] = useState(0)
   const [boldOn, setBoldOn] = useState(false)
   const [italicOn, setItalicOn] = useState(false)
+  const [draggingFile, setDraggingFile] = useState(false)
   const notesListId = useId()
   const showNotes = canReply && slash != null
+
+  function attachFile(file: File | undefined) {
+    if (!file) return
+    if (!canReply) {
+      notify.error('No puedes adjuntar archivos en este chat ahora.')
+      return
+    }
+    if (recording) {
+      notify.error('Detén la grabación para adjuntar un archivo.')
+      return
+    }
+    const error = validateAttachFile(file)
+    if (error) {
+      notify.error(error)
+      return
+    }
+    onReplyFileChange({ file })
+  }
+
+  function onComposeDragOver(event: DragEvent<HTMLFormElement>) {
+    if (!canReply || recording) return
+    if (![...event.dataTransfer.types].includes('Files')) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+    if (!draggingFile) setDraggingFile(true)
+  }
+
+  function onComposeDragLeave(event: DragEvent<HTMLFormElement>) {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setDraggingFile(false)
+    }
+  }
+
+  function onComposeDrop(event: DragEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setDraggingFile(false)
+    if (!canReply || recording) return
+    attachFile(event.dataTransfer.files?.[0])
+  }
 
   function syncFormatToggles(el: HTMLTextAreaElement | null = textareaRef.current) {
     if (!el) {
@@ -469,7 +559,13 @@ export function InboxComposeBar({
           event.preventDefault()
           voice.cancel()
         }}
-        className="inbox-compose-stack inbox-compose-stack--with-emoji"
+        className={cn(
+          'inbox-compose-stack inbox-compose-stack--with-emoji',
+          draggingFile && 'inbox-compose-stack--dragging',
+        )}
+        onDragOver={onComposeDragOver}
+        onDragLeave={onComposeDragLeave}
+        onDrop={onComposeDrop}
       >
         <div role="status" className={typingNames.length ? 'px-1 text-xs text-muted' : 'sr-only'}>
           {typingNames.length > 0 &&
@@ -645,8 +741,7 @@ export function InboxComposeBar({
                   accept={fileAccept}
                   className="sr-only"
                   onChange={(event) => {
-                    const file = event.currentTarget.files?.[0]
-                    if (file) onReplyFileChange({ file })
+                    attachFile(event.currentTarget.files?.[0])
                     event.currentTarget.value = ''
                   }}
                 />
