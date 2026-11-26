@@ -82,6 +82,7 @@ import {
   uploadMediaToWhatsApp,
   type ConversationWaType,
 } from './conversation-whatsapp.util';
+import { prepareVoiceNote } from './voice-note.util';
 import {
   buildConversationExportRows,
   buildConversationXlsxBuffer,
@@ -163,6 +164,7 @@ import {
   readMessageReplyTo,
   setMessageReplyTo,
   extractReplyWaMessageIdFromRawPayload,
+  type StoredMessageReplyTo,
 } from './chat-reply.util';
 import { readMessageDelivery } from './chat-delivery.util';
 import {
@@ -3056,6 +3058,9 @@ export class ConversationsService {
     mimeType: string;
     filename: string;
     waType: ConversationWaType;
+    voiceNote?: boolean;
+    replyToWaMessageId?: string | null;
+    replyToMeta?: StoredMessageReplyTo | null;
     localPreview: { url: string; mime: string | null };
     linePhoneNumberId?: string;
     actorLabel: string;
@@ -3100,7 +3105,7 @@ export class ConversationsService {
       created.push(this.mapMessageRow(textRow));
     }
 
-    const label = MEDIA_TYPE_LABEL[input.waType] || 'Archivo';
+    const label = input.voiceNote ? 'Nota de voz' : MEDIA_TYPE_LABEL[input.waType];
     const bodyText = caption
       ? caption.slice(0, 8000)
       : `[${label}] ${input.filename}`.slice(0, 8000);
@@ -3110,10 +3115,13 @@ export class ConversationsService {
       filename: input.filename.slice(0, 200),
       waType: input.waType,
       caption,
+      ...(input.voiceNote
+        ? { voiceNote: true, replyToWaMessageId: input.replyToWaMessageId ?? null }
+        : {}),
     };
     const pendingPayload = withRoutingPhoneNumberId(
       setMessageSender(
-        {
+        setMessageReplyTo({
           status: 'pending',
           delivery_status: { status: 'pending' },
           local_preview: {
@@ -3121,7 +3129,7 @@ export class ConversationsService {
             ...(input.localPreview.mime ? { mime: input.localPreview.mime } : {}),
           },
           outbound_media: outboundMedia,
-        },
+        }, input.replyToMeta ?? null),
         input.actorLabel,
         input.user.id,
       ),
@@ -3152,6 +3160,8 @@ export class ConversationsService {
       filename: input.filename.slice(0, 200),
       waType: input.waType,
       caption,
+      voiceNote: input.voiceNote,
+      replyToWaMessageId: input.replyToWaMessageId,
       phoneNumberId: input.linePhoneNumberId,
       reservedLeadId: input.waType === 'audio' && input.text ? null : input.reservedLeadId,
       actorUserId: input.user.id,
@@ -3309,6 +3319,8 @@ export class ConversationsService {
               filename?: string;
               waType?: ConversationWaType;
               caption?: string;
+              voiceNote?: boolean;
+              replyToWaMessageId?: string | null;
             }
           | undefined;
         const url = String(media?.url || '').trim();
@@ -3324,6 +3336,8 @@ export class ConversationsService {
           waType: media?.waType || (claimed.message_type as ConversationWaType),
           caption: String(media?.caption || ''),
           phoneNumberId: linePhoneNumberId,
+          voiceNote: media?.voiceNote === true,
+          replyToWaMessageId: media?.replyToWaMessageId,
           ...actor,
         });
       } else {
@@ -3354,6 +3368,7 @@ export class ConversationsService {
     messageText: string,
     file?: { buffer: Buffer; mimetype: string; originalname: string },
     replyToMessageId?: number,
+    voiceNote = false,
   ): Promise<ReplyResult> {
     if (!Number.isInteger(conversationId) || conversationId <= 0) {
       throw new BadRequestException('Id de conversacion invalido');
@@ -3382,6 +3397,10 @@ export class ConversationsService {
     }
 
     await this.assertCanReply(conversation, area);
+    if (voiceNote) {
+      if (!file) throw new BadRequestException('Adjunta la grabación de voz.');
+      file = await prepareVoiceNote(file);
+    }
     const linePhoneNumberId =
       String(conversation.whatsapp_phone_number_id || '').trim() || undefined;
     const createdMessages: InboxMessage[] = [];
@@ -3611,6 +3630,9 @@ export class ConversationsService {
             mimeType: file.mimetype,
             filename: file.originalname,
             waType,
+            voiceNote,
+            replyToWaMessageId: voiceNote ? replyToWaMessageId : null,
+            replyToMeta: voiceNote ? replyToMeta : null,
             localPreview,
             linePhoneNumberId,
             actorLabel,
@@ -3675,9 +3697,11 @@ export class ConversationsService {
               ? uploadResult.safeFilename
               : undefined,
           phoneNumberId: linePhoneNumberId,
+          voiceNote,
+          replyToWaMessageId: voiceNote ? replyToWaMessageId : null,
         });
         const msgId = sendResp.messages?.[0]?.id || null;
-        const label = MEDIA_TYPE_LABEL[uploadResult.waType] || 'Archivo';
+        const label = voiceNote ? 'Nota de voz' : MEDIA_TYPE_LABEL[uploadResult.waType];
         const bodyText = captionForMedia
           ? captionForMedia.slice(0, 8000)
           : `[${label}] ${uploadResult.safeFilename}`.slice(0, 8000);
@@ -3691,10 +3715,9 @@ export class ConversationsService {
             message_type: uploadResult.waType,
             raw_payload: withRoutingPhoneNumberId(
               setMessageSender(
-                sanitizeMediaOutboundPayload(
-                  uploadResult.mediaId,
-                  sendResp,
-                  localPreview,
+                setMessageReplyTo(
+                  sanitizeMediaOutboundPayload(uploadResult.mediaId, sendResp, localPreview),
+                  voiceNote ? replyToMeta : null,
                 ),
                 actorLabel,
                 user.id,

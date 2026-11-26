@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { insertAtSelection, wrapSelection } from '@/shared/textSelection'
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
@@ -11,8 +11,11 @@ import {
 } from '@/shared/ui/shadcn/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/shadcn/popover'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
-import { InboxAttachment } from './InboxAttachment'
+import { InboxAttachment, InboxVoiceAttachment, type InboxReplyAttachment } from './InboxAttachment'
 import { InboxAdvisorNotesPopover } from './InboxAdvisorNotesPopover'
+import { resolveNotePlaceholders, useAdvisorNotes } from './advisorNotes'
+import { useInboxTyping } from './useInboxTyping'
+import { useVoiceRecorder } from './useVoiceRecorder'
 import { cn } from '@/lib/utils'
 
 const COMMON_EMOJIS = [
@@ -83,6 +86,23 @@ function IconChevronDown() {
   )
 }
 
+function IconMicrophone() {
+  return (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+      <rect x="9" y="2.5" width="6" height="12" rx="3" />
+      <path d="M5 10.5v1a7 7 0 0 0 14 0v-1M12 18.5v3" />
+    </svg>
+  )
+}
+
+function IconSend() {
+  return (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M21 3l-6.5 18-3.6-7.9L3 9.5 21 3ZM10.9 13.1 21 3" />
+    </svg>
+  )
+}
+
 export type ReplyToMessage = {
   id: number
   preview: string
@@ -98,11 +118,15 @@ type FlowOption = {
   trigger_payload: string
 }
 
+function normalizeNoteSearch(text: string) {
+  return text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
+}
+
 type InboxComposeBarProps = {
   replyText: string
   onReplyTextChange: (value: string) => void
-  replyFile: File | null
-  onReplyFileChange: (file: File | null) => void
+  replyFile: InboxReplyAttachment | null
+  onReplyFileChange: (attachment: InboxReplyAttachment | null) => void
   sendingReply: boolean
   onSubmit: (e: FormEvent) => void
   replyTo?: ReplyToMessage | null
@@ -111,6 +135,7 @@ type InboxComposeBarProps = {
   canReply: boolean
   replyBlockedReason?: ReplyBlockedReason
   conversationId: number
+  typingAdvisorId?: number
   canSendTemplate: boolean
   onOpenTemplate: () => void
   onSwitchToHuman?: () => void | Promise<void>
@@ -136,6 +161,7 @@ export function InboxComposeBar({
   canReply,
   replyBlockedReason = null,
   conversationId,
+  typingAdvisorId,
   canSendTemplate,
   onOpenTemplate,
   onSwitchToHuman,
@@ -149,10 +175,87 @@ export function InboxComposeBar({
   const { confirm, confirmDialog } = useConfirmDialog()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const quickRepliesRef = useRef<HTMLDivElement>(null)
+  const primaryActionRef = useRef<HTMLButtonElement>(null)
+  const cancelRecordingRef = useRef<HTMLButtonElement>(null)
+  const stopRecordingRef = useRef<HTMLButtonElement>(null)
+  const wasRecording = useRef(false)
   const [fileAccept, setFileAccept] = useState<string>(ATTACH_OPTIONS[0].accept)
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [flows, setFlows] = useState<FlowOption[]>([])
   const [flowBusy, setFlowBusy] = useState(false)
+  const { notes, loading: notesLoading, loadNotes } = useAdvisorNotes()
+  const voice = useVoiceRecorder(canReply, (file) => onReplyFileChange({ file, voiceNote: true }))
+  const recording = voice.status !== 'idle'
+  const hasOutgoing = Boolean(replyText.trim() || replyFile)
+  const showSend = hasOutgoing || sendingReply
+  const primaryLabel = sendingReply ? 'Enviando'
+    : !hasOutgoing ? 'Grabar audio'
+      : replyFile?.voiceNote ? 'Enviar nota de voz' : 'Enviar mensaje'
+  const { names: typingNames, signalTyping, stopTyping } = useInboxTyping(
+    conversationId > 0 ? conversationId : null,
+    typingAdvisorId,
+  )
+  const [slash, setSlash] = useState<{ start: number; end: number; query: string } | null>(null)
+  const [activeNote, setActiveNote] = useState(0)
+  const notesListId = useId()
+  const showNotes = canReply && slash != null
+
+  function resolveText(text: string) {
+    return resolveNotePlaceholders(text, contactAttributes, {
+      name: contactName, phone: contactPhone, email: contactEmail, dni: contactDni,
+    })
+  }
+
+  const quickReplies = slash == null ? [] : (() => {
+    const terms = normalizeNoteSearch(slash.query).trim().split(/\s+/).filter(Boolean)
+    return notes.map((note) => ({ ...note, preview: resolveText(note.body) }))
+      .filter((note) => {
+        const text = normalizeNoteSearch(`${note.title} ${note.body} ${note.preview}`)
+        return note.preview.trim() && terms.every((term) => text.includes(term))
+      })
+      .slice(0, 8)
+  })()
+  const selectedNote = quickReplies[Math.min(activeNote, quickReplies.length - 1)]
+
+  useEffect(() => {
+    if (showNotes) void loadNotes()
+  }, [showNotes, loadNotes])
+
+  useEffect(() => {
+    if (voice.status === 'requesting') cancelRecordingRef.current?.focus()
+    if (voice.status === 'recording') stopRecordingRef.current?.focus()
+    if (voice.status === 'finishing') cancelRecordingRef.current?.focus()
+    if (voice.status === 'idle' && wasRecording.current) primaryActionRef.current?.focus()
+    wasRecording.current = voice.status !== 'idle'
+  }, [voice.status])
+
+  useEffect(() => {
+    if (showNotes) {
+      quickRepliesRef.current?.querySelector('[aria-current="true"]')?.scrollIntoView({ block: 'nearest' })
+    }
+  }, [showNotes, selectedNote?.id])
+
+  function updateQuickReplies(textarea: HTMLTextAreaElement) {
+    const { value, selectionStart, selectionEnd } = textarea
+    const beforeCaret = value.slice(0, selectionStart)
+    const match = selectionStart === selectionEnd ? /(?:^|\s)\/([^/\n]*)$/.exec(beforeCaret) : null
+    if (!match) {
+      setSlash(null)
+      return
+    }
+    const query = match[1]
+    const start = selectionStart - query.length - 1
+    if (slash?.start === start && slash.end === selectionStart && slash.query === query) return
+    setActiveNote(0)
+    setSlash({ start, end: selectionStart, query })
+  }
+
+  function insertQuickReply(text: string) {
+    if (!slash) return
+    insertAtSelection(textareaRef.current, text, replyText, onReplyTextChange, slash)
+    setSlash(null)
+  }
 
   useEffect(() => {
     if (!windowOpen) return
@@ -206,10 +309,30 @@ export function InboxComposeBar({
   }
 
   function onTextareaKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.nativeEvent.isComposing) return
+    if (showNotes) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setSlash(null)
+        return
+      }
+      if (quickReplies.length && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+        event.preventDefault()
+        const offset = event.key === 'ArrowDown' ? 1 : -1
+        const index = Math.min(activeNote, quickReplies.length - 1)
+        setActiveNote((index + offset + quickReplies.length) % quickReplies.length)
+        return
+      }
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault()
+        if (selectedNote) insertQuickReply(selectedNote.preview)
+        return
+      }
+    }
     if (event.key !== 'Enter') return
     if (event.shiftKey) return
     event.preventDefault()
-    if (sendingReply || !canReply) return
+    if (sendingReply || !canReply || !hasOutgoing) return
     const form = event.currentTarget.form
     if (form) form.requestSubmit()
   }
@@ -222,14 +345,25 @@ export function InboxComposeBar({
     <>
       <form
         onSubmit={(e) => {
-          if (!canReply) {
+          if (!canReply || recording || !hasOutgoing) {
             e.preventDefault()
             return
           }
+          setSlash(null)
+          stopTyping()
           onSubmit(e)
+        }}
+        onKeyDown={(event) => {
+          if (!recording || event.key !== 'Escape') return
+          event.preventDefault()
+          voice.cancel()
         }}
         className="inbox-compose-stack inbox-compose-stack--with-emoji"
       >
+        <div role="status" className={typingNames.length ? 'px-1 text-xs text-muted' : 'sr-only'}>
+          {typingNames.length > 0 &&
+            `${typingNames.join(', ')} ${typingNames.length === 1 ? 'está escribiendo…' : 'están escribiendo…'}`}
+        </div>
         {replyTo && canReply ? (
           <div className="inbox-compose-reply-to">
             <div className="inbox-compose-reply-to__body">
@@ -250,9 +384,12 @@ export function InboxComposeBar({
             </Button>
           </div>
         ) : null}
-        {replyFile && canReply ? (
-          <InboxAttachment filename={replyFile.name} onRemove={() => onReplyFileChange(null)} />
-        ) : null}
+        {replyFile && canReply && (replyFile.voiceNote
+          ? <InboxVoiceAttachment file={replyFile.file} onRemove={() => onReplyFileChange(null)} />
+          : <InboxAttachment filename={replyFile.file.name} onRemove={() => onReplyFileChange(null)} />)}
+        {voice.error && canReply && !hasOutgoing && (
+          <p role="alert" className="px-1 text-xs text-bad">{voice.error}</p>
+        )}
 
         {!canReply ? (
           <div className="flex flex-col gap-2 px-1 pb-1">
@@ -309,8 +446,38 @@ export function InboxComposeBar({
           </div>
         ) : null}
 
-        <div className="inbox-compose-bar">
-          {canReply ? (
+        <div
+          className="inbox-compose-bar relative"
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setSlash(null)
+          }}
+        >
+          {canReply && recording ? (
+            <div className="inbox-compose-grow flex flex-wrap items-center gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-2 px-1 text-sm">
+                {voice.status === 'recording' && (
+                  <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-bad" />
+                )}
+                <span role="status">
+                  {voice.status === 'requesting' ? 'Esperando acceso al micrófono…'
+                    : voice.status === 'finishing' ? 'Preparando audio…' : 'Grabando'}
+                </span>
+                {voice.status === 'recording' && (
+                  <span role="timer" aria-label="Tiempo de grabación" className="font-mono tabular-nums">
+                    {Math.floor(voice.elapsedSeconds / 60)}:{String(voice.elapsedSeconds % 60).padStart(2, '0')}
+                  </span>
+                )}
+              </div>
+              <Button ref={cancelRecordingRef} type="button" variant="ghost" size="sm" onClick={voice.cancel}>
+                Cancelar
+              </Button>
+              {voice.status === 'recording' && (
+                <Button ref={stopRecordingRef} type="button" size="sm" onClick={voice.finish}>
+                  Detener
+                </Button>
+              )}
+            </div>
+          ) : canReply ? (
             <>
               <div className="inbox-compose-tools">
                 <DropdownMenu>
@@ -332,7 +499,11 @@ export function InboxComposeBar({
                   type="file"
                   accept={fileAccept}
                   className="sr-only"
-                  onChange={(e) => onReplyFileChange(e.target.files?.[0] ?? null)}
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0]
+                    if (file) onReplyFileChange({ file })
+                    event.currentTarget.value = ''
+                  }}
                 />
 
                 <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
@@ -382,36 +553,96 @@ export function InboxComposeBar({
               <textarea
                 ref={textareaRef}
                 value={replyText}
-                onChange={(e) => onReplyTextChange(e.target.value)}
+                onChange={(event) => {
+                  onReplyTextChange(event.target.value)
+                  updateQuickReplies(event.currentTarget)
+                  signalTyping(event.target.value)
+                }}
+                onBlur={stopTyping}
+                onSelect={(event) => {
+                  if (showNotes) updateQuickReplies(event.currentTarget)
+                }}
                 onKeyDown={onTextareaKeyDown}
                 rows={1}
-                placeholder="Escribe un mensaje… ⇧+⏎ nueva línea"
-                className="inbox-compose-textarea inbox-compose-grow"
+                aria-label="Escribe un mensaje"
+                aria-controls={showNotes ? notesListId : undefined}
+                placeholder="Escribe un mensaje… / respuestas rápidas"
+                className="inbox-compose-textarea inbox-compose-grow focus-visible:ring-1 focus-visible:ring-accent"
               />
+              {showNotes && (
+                <div
+                  ref={quickRepliesRef}
+                  id={notesListId}
+                  role="region"
+                  aria-label="Respuestas rápidas"
+                  className="absolute inset-x-0 bottom-full z-20 mb-2 max-h-60 max-w-lg overflow-y-auto rounded-xl border border-line bg-surface-strong p-2"
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Escape') return
+                    event.preventDefault()
+                    setSlash(null)
+                    textareaRef.current?.focus()
+                  }}
+                >
+                  <p role="status" className={selectedNote ? 'sr-only' : 'px-2 py-1 text-xs text-muted'}>
+                    {selectedNote
+                      ? `${selectedNote.title}. ${selectedNote.preview}`
+                      : notesLoading ? 'Cargando respuestas…' : 'No hay respuestas que coincidan.'}
+                  </p>
+                  {quickReplies.length > 0 && (
+                    <ul>
+                      {quickReplies.map((note) => (
+                        <li key={note.id}>
+                          <button
+                            type="button"
+                            aria-current={note.id === selectedNote?.id ? 'true' : undefined}
+                            className={cn(
+                              'block w-full rounded-md px-2 py-1.5 text-left hover:bg-accent-soft focus-visible:ring-1 focus-visible:ring-accent',
+                              note.id === selectedNote?.id && 'bg-accent-soft',
+                            )}
+                            onClick={() => insertQuickReply(note.preview)}
+                          >
+                            <span className="block truncate text-sm font-medium">{note.title}</span>
+                            <span className="block truncate text-xs text-muted">{note.preview}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
 
               <div className="inbox-compose-actions">
                 <InboxAdvisorNotesPopover
                   triggerIcon={<IconPostIt />}
-                  contactAttributes={contactAttributes}
-                  contactName={contactName}
-                  contactPhone={contactPhone}
-                  contactEmail={contactEmail}
-                  contactDni={contactDni}
-                  onInsert={(text) =>
+                  notes={notes}
+                  loading={notesLoading}
+                  loadNotes={loadNotes}
+                  resolveText={resolveText}
+                  onInsert={(text) => {
+                    setSlash(null)
                     insertAtSelection(textareaRef.current, text, replyText, onReplyTextChange)
-                  }
+                  }}
                 />
 
                 <div className="inbox-compose-send-split">
                   <Button
-                    type="submit"
-                    disabled={sendingReply || !canReply}
+                    ref={primaryActionRef}
+                    type={showSend ? 'submit' : 'button'}
+                    size="icon"
+                    disabled={sendingReply}
+                    aria-label={primaryLabel}
+                    title={primaryLabel}
+                    onClick={showSend ? undefined : () => {
+                      setSlash(null)
+                      stopTyping()
+                      void voice.start()
+                    }}
                     className={cn(
-                      'inbox-compose-send',
+                      'inbox-compose-send inbox-compose-send--icon',
                       hasSecondary ? 'inbox-compose-send--split-main' : '',
                     )}
                   >
-                    {sendingReply ? '…' : 'Enviar ⏎'}
+                    {sendingReply ? '…' : showSend ? <IconSend /> : <IconMicrophone />}
                   </Button>
                   {hasSecondary ? (
                     <DropdownMenu>
@@ -458,7 +689,7 @@ export function InboxComposeBar({
           )}
         </div>
 
-        {canReply ? (
+        {canReply && !recording ? (
           <p className="inbox-compose-hint-inline muted">
             ⏎ envía · ⇧⏎ nueva línea. WhatsApp: *negrita*, _cursiva_. JPEG/PNG (5 MB), MP4 (16 MB), audio (16 MB), PDF (25 MB).
           </p>

@@ -64,3 +64,7 @@ Los `*-CHANGELOG.md` son evidencia breve (no runbooks). Si chocan con el vivo, m
 | [CRM-API.md](./CRM-API.md) | Contrato HTTP para MALI ONE (sync, audiencia, educación) |
 | [PAYMENT-LOOKUP-WA.md](./PAYMENT-LOOKUP-WA.md) | Proxy asesor: lookup/asociar pago Treasury (Option A, `payment_link`) |
 | [CRM-CONSUMERS.md](./CRM-CONSUMERS.md) | Inventario consumidores CRM API |
+
+## Funcionalidades futuras
+
+- [Llamadas de WhatsApp en el inbox](./LLAMADAS-WHATSAPP.md)

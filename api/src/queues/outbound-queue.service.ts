@@ -35,6 +35,8 @@ export type OutboundMediaJobData = OutboundJobMetaFlags & {
   filename: string;
   waType: 'image' | 'video' | 'audio' | 'document';
   caption: string;
+  voiceNote?: boolean;
+  replyToWaMessageId?: string | null;
   phoneNumberId?: string;
   reservedLeadId?: number | null;
   actorUserId: number;

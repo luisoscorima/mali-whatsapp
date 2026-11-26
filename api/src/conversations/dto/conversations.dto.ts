@@ -20,6 +20,10 @@ export class ReplyConversationDto {
 
   @IsOptional()
   reply_to_message_id?: number | string;
+
+  @IsOptional()
+  @IsIn(['true'])
+  voice_note?: 'true';
 }
 
 export class MessageReactionDto {

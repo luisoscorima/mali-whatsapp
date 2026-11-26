@@ -15,6 +15,7 @@ RUN npm run build -w api
 
 FROM node:20-alpine
 WORKDIR /app
+RUN apk add --no-cache ffmpeg
 
 COPY package.json package-lock.json ./
 COPY api/package.json ./api/

@@ -282,6 +282,8 @@ export class OutboundQueueProcessor extends WorkerHost {
         documentFilename:
           upload.waType === 'document' ? upload.safeFilename : undefined,
         phoneNumberId: data.phoneNumberId,
+        voiceNote: data.voiceNote,
+        replyToWaMessageId: data.replyToWaMessageId,
       });
       msgId = apiResponse.messages?.[0]?.id || null;
       if (!msgId) throw new Error('WhatsApp no devolvió un id de mensaje');

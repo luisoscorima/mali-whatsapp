@@ -1,8 +1,9 @@
 import { lazy, Suspense, type FormEvent, type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import { useAppUser } from '@/app/appOutletContext'
-import { canonicalArea, onCategorySelection, readCategorySelection } from '@/shared/area/category-selection'
+import { canonicalArea, onCategorySelection, readCategorySelection, writeCategorySelection } from '@/shared/area/category-selection'
 import { apiClient } from '../../shared/api'
+import { readInboxDraft, writeInboxDraft } from '@/shared/api/inboxDraftStorage'
 import { formatChatListTime, chatListReplyStatus } from '../../shared/format'
 import { markTtfcNavStart, reportTtfcFirstConversations } from '@/shared/perf/ttfc'
 import {
@@ -72,6 +73,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/shadcn/popover'
 const ConversationsSummaryPane = lazy(() => import('./ConversationsSummaryPane').then((m) => ({ default: m.ConversationsSummaryPane })))
 import { InboxComposeBar, type ReplyToMessage } from './InboxComposeBar'
+import type { InboxReplyAttachment } from './InboxAttachment'
+import { InboxSavedViews } from './InboxSavedViews'
 import { InboxMessageScroller, type InboxMessageScrollerHandle } from './InboxMessageScroller'
 import {
   chatActionsFromDetail,
@@ -1506,9 +1509,14 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
   const [serviceReplies, setServiceReplies] = useState<ServiceReplyQuota | null>(null)
   const [detail, setDetail] = useState<InboxDetail | null>(null)
   const [error, setError] = useState('')
-  const [replyText, setReplyText] = useState('')
-  const [replyFile, setReplyFile] = useState<File | null>(null)
-  const [sendingReply, setSendingReply] = useState(false)
+  const replyDrafts = useRef(new Map<string, { text: string }>())
+  const [, refreshReplyDraft] = useState(0)
+  const [replyFile, setReplyFile] = useState<InboxReplyAttachment | null>(null)
+  const [sendingDraft, setSendingDraft] = useState<{
+    key: string
+    edit: { text: string } | undefined
+  } | null>(null)
+  const sendingReply = sendingDraft != null
   const [searchInput, setSearchInput] = useState(searchParams.get('q') ?? '')
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [loadingMessagePage, setLoadingMessagePage] = useState(false)
@@ -1573,6 +1581,7 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
   const pendingUpdatesRef = useRef(false)
   const searchParamsRef = useRef(searchParams)
   searchParamsRef.current = searchParams
+  const applyingSavedView = useRef(false)
   const [showSummary, setShowSummary] = useState(false)
   const [listScrollAtEnd, setListScrollAtEnd] = useState(false)
   const [listCanScroll, setListCanScroll] = useState(false)
@@ -1634,6 +1643,24 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
   }, [user?.area, user?.canManageLeads, detailCycleId])
 
   const selectedId = idParam ? Number(idParam) : null
+  const draftKey = user && selectedId && selectedId > 0
+    ? `${user.id}:${user.loginLogId ?? 'session'}:${user.area}:${selectedId}`
+    : null
+  const activeDraftKey = useRef(draftKey)
+  activeDraftKey.current = draftKey
+  const draftEdit = draftKey ? replyDrafts.current.get(draftKey) : undefined
+  const replyText = draftKey && !(sendingDraft?.key === draftKey && sendingDraft.edit === draftEdit)
+    ? draftEdit?.text ?? readInboxDraft(draftKey)
+    : ''
+
+  function setReplyDraft(text: string) {
+    if (!draftKey) return
+    replyDrafts.current.set(draftKey, { text })
+    writeInboxDraft(draftKey, text)
+    refreshReplyDraft((current) => current + 1)
+  }
+
+  const savedViewsKey = user ? `mali.inbox.saved-views:${user.id}:${user.area}` : null
   const filterQuerySuffix = useMemo(() => {
     const sp = new URLSearchParams(searchParams)
     sp.delete('msg')
@@ -1661,6 +1688,7 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
   useEffect(() => {
     if (!user || canonicalArea(user.area) !== 'educacion') return
     const apply = () => {
+      if (applyingSavedView.current) return
       const stored = readCategorySelection(user.id, user.area)
       const current = [...searchParamsRef.current.getAll('category')].sort().join('\0')
       const wanted = stored ? [...stored].sort().join('\0') : ''
@@ -1854,6 +1882,41 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
     const next = new URLSearchParams(searchParams)
     for (const key of ['q', 'qm', 'chat', 'window_max', 'line', 'from', 'to', 'range', 'segment', 'page', 'msg']) next.delete(key)
     setSearchInput('')
+    setSearchParams(next)
+  }
+
+  function currentSavedViewQuery() {
+    const params = new URLSearchParams(searchParams)
+    const q = searchInput.trim()
+    params.delete('page')
+    if (q) params.set('q', q)
+    else params.delete('q')
+    return inboxApiQuery(params)
+  }
+
+  function applySavedView(query: string) {
+    const next = new URLSearchParams(inboxApiQuery(new URLSearchParams(query)))
+    next.delete('page')
+    if (user && canonicalArea(user.area) === 'educacion') {
+      const requested = next.getAll('category')
+      const allowed = new Set(categoryScope.options.map((option) => option.slug))
+      const categories = allowed.size ? requested.filter((slug) => allowed.has(slug)) : requested
+      next.delete('category')
+      for (const slug of categories) next.append('category', slug)
+      const stored = readCategorySelection(user.id, user.area) ?? []
+      if ([...categories].sort().join('\0') !== [...stored].sort().join('\0')) {
+        applyingSavedView.current = true
+        try {
+          writeCategorySelection(user.id, user.area, categories.length ? categories : null)
+        } catch {
+          notify.error('No se pudo aplicar la categoría de esta vista.')
+          return
+        } finally {
+          applyingSavedView.current = false
+        }
+      }
+    }
+    setSearchInput(next.get('q') ?? '')
     setSearchParams(next)
   }
 
@@ -2376,10 +2439,9 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
     : ''
 
   useEffect(() => {
-    setReplyText('')
     setReplyFile(null)
     setReplyToMessage(null)
-  }, [selectedId])
+  }, [draftKey])
 
   function openChatActions(ctx: ChatActionsContext) {
     setActionsContext(ctx)
@@ -3025,9 +3087,11 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
 
   async function onSendReply(event: FormEvent) {
     event.preventDefault()
-    if (!selectedId || selectedId <= 0 || !detail?.can_reply) return
+    if (!draftKey || !selectedId || detail?.conversation.id !== selectedId ||
+        !detail.can_reply || sendingReplyRef.current) return
+    const submittedDraft = replyDrafts.current.get(draftKey)
     const text = replyText.trim()
-    const file = replyFile
+    const file = replyFile?.file
     const replyTo = replyToMessage
     if (!text && !file) {
       notify.error('Escribe un mensaje o adjunta un archivo')
@@ -3039,7 +3103,7 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
     const echo: InboxMessage = {
       id: echoId,
       direction: 'outbound',
-      body_text: text || (file ? file.name : ''),
+      body_text: replyFile?.voiceNote ? 'Nota de voz' : text || (file ? file.name : ''),
       message_type: file ? echoMessageType(file) : 'text',
       created_at: new Date().toISOString(),
       is_ai: false,
@@ -3058,10 +3122,10 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
       ? text.length > 120
         ? `${text.slice(0, 120)}…`
         : text
-      : file?.name || ''
+      : replyFile?.voiceNote ? 'Nota de voz' : file?.name || ''
 
-    setSendingReply(true)
-    setReplyText('')
+    sendingReplyRef.current = true
+    setSendingDraft({ key: draftKey, edit: submittedDraft })
     setReplyFile(null)
     setReplyToMessage(null)
     setDetail((prev) => {
@@ -3099,11 +3163,12 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
     const replyPayload = replyTo
       ? { message: text, reply_to_message_id: replyTo.id }
       : { message: text }
-    const result = file
-      ? await (() => {
+    const result = await (file
+      ? (() => {
           const formData = new FormData()
           if (text) formData.append('message', text)
           formData.append('file', file)
+          if (replyFile?.voiceNote) formData.append('voice_note', 'true')
           if (replyTo) {
             formData.append('reply_to_message_id', String(replyTo.id))
           }
@@ -3112,11 +3177,15 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
             formData,
           )
         })()
-      : await apiClient.post<{ messages: InboxMessage[] }>(
+      : apiClient.post<{ messages: InboxMessage[] }>(
           `/api/conversations/${convId}/reply`,
           replyPayload,
-        )
-    setSendingReply(false)
+        )).catch(() => ({
+          ok: false as const,
+          error: 'No se pudo confirmar el envío. Revisa el chat antes de volver a enviarlo.',
+        }))
+    sendingReplyRef.current = false
+    setSendingDraft(null)
     const dropEcho = (messages: InboxMessage[], sent: InboxMessage[] = []) => {
       const byId = new Map(
         messages
@@ -3128,9 +3197,10 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
     }
     if (!result.ok) {
       notify.error(result.error)
-      setReplyText(text)
-      setReplyFile(file)
-      setReplyToMessage(replyTo)
+      if (activeDraftKey.current === draftKey) {
+        setReplyFile((current) => current ?? replyFile)
+        setReplyToMessage((current) => current ?? replyTo)
+      }
       setDetail((prev) => {
         if (!prev || prev.conversation.id !== convId) return prev
         const next = { ...prev, messages: dropEcho(prev.messages) }
@@ -3140,6 +3210,7 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
       if (previewUrl) URL.revokeObjectURL(previewUrl)
       return
     }
+    if (replyDrafts.current.get(draftKey) === submittedDraft) setReplyDraft('')
     void loadServiceReplies()
     const sent = result.data.messages ?? []
     if (
@@ -3588,6 +3659,14 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
             </PopoverContent>
           </Popover>
         </div>
+        {savedViewsKey && (
+          <InboxSavedViews
+            key={savedViewsKey}
+            storageKey={savedViewsKey}
+            getQuery={currentSavedViewQuery}
+            onApply={applySavedView}
+          />
+        )}
         <div className="inbox-active-filters" aria-label="Filtros activos">
           {chatFilter !== 'all' ? <button type="button" className="inbox-filter-chip" onClick={() => setChatFilter('all')} aria-label={'Quitar filtro ' + chatFilterLabels[chatFilter]}>{chatFilterLabels[chatFilter]} <span aria-hidden>×</span></button> : null}
           {selectedSegments.map(slug => <button key={slug} type="button" className="inbox-filter-chip" onClick={() => toggleSegment(slug)} aria-label={'Quitar segmento ' + selectedSegmentLabel(slug)}>{selectedSegmentLabel(slug)} <span aria-hidden>×</span></button>)}
@@ -4342,18 +4421,24 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
 
             <WaMainFooter>
               <InboxComposeBar
+                key={draftKey ?? detail.conversation.id}
                 replyText={replyText}
-                onReplyTextChange={setReplyText}
+                onReplyTextChange={setReplyDraft}
                 replyFile={replyFile}
-                onReplyFileChange={setReplyFile}
+                onReplyFileChange={(attachment) => {
+                  if (draftKey === activeDraftKey.current && selectedId === detail.conversation.id) {
+                    setReplyFile(attachment)
+                  }
+                }}
                 sendingReply={sendingReply}
                 onSubmit={(e) => void onSendReply(e)}
                 replyTo={replyToMessage}
                 onClearReplyTo={() => setReplyToMessage(null)}
                 windowOpen={detail.user_service_window_open}
-                canReply={detail.can_reply}
+                canReply={detail.can_reply && selectedId === detail.conversation.id}
                 replyBlockedReason={detail.reply_blocked_reason}
                 conversationId={detail.conversation.id}
+                typingAdvisorId={selectedId === detail.conversation.id ? user?.id : undefined}
                 canSendTemplate={canSendTemplate}
                 onOpenTemplate={() => setTemplateOpen(true)}
                 onSwitchToHuman={() => void onModeChange('human', detail.conversation.id)}

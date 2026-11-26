@@ -2814,6 +2814,10 @@ html[data-theme='dark'] .chat-bubble__reply-to {
   min-width: 34px;
 }
 
+.inbox-compose-send.inbox-compose-send--icon {
+  padding: 0;
+}
+
 .inbox-compose-send:hover {
   background: var(--accent-hover);
 }

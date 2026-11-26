@@ -1,3 +1,5 @@
+import { clearInboxDrafts } from './inboxDraftStorage';
+
 const TOKEN_KEY = 'mali_v2_token';
 
 export function getToken(): string | null {
@@ -11,4 +13,5 @@ export function setToken(token: string): void {
 
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
+  clearInboxDrafts();
 }

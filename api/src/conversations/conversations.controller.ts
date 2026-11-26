@@ -226,6 +226,7 @@ export class ConversationsController {
       body.message ?? '',
       file,
       Number.isInteger(replyToId) && replyToId! > 0 ? replyToId : undefined,
+      body.voice_note === 'true',
     );
     return { ok: true, data };
   }

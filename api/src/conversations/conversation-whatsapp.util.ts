@@ -9,6 +9,7 @@ import {
 } from '../templates/whatsapp-meta.util';
 import { MAX_SESSION_TEXT_LEN } from '../settings/business-hours.util';
 import { whatsappRecipientField } from './whatsapp-recipient.util';
+import { VOICE_NOTE_MIME } from './voice-note.util';
 
 const GRAPH_BASE = 'https://graph.facebook.com/v23.0';
 
@@ -303,11 +304,12 @@ export async function uploadMediaToWhatsApp(input: {
   );
   const safeName = sanitizeUploadFilename(input.filename, waType);
   const mime = String(input.mimeType).split(';')[0].trim();
+  const fileMime = input.mimeType === VOICE_NOTE_MIME ? VOICE_NOTE_MIME : mime;
 
   const form = new FormData();
   form.append('messaging_product', 'whatsapp');
   form.append('type', mime);
-  form.append('file', new Blob([new Uint8Array(input.buffer)], { type: mime }), safeName);
+  form.append('file', new Blob([new Uint8Array(input.buffer)], { type: fileMime }), safeName);
 
   const response = await fetch(`${GRAPH_BASE}/${phoneNumberId}/media`, {
     method: 'POST',
@@ -335,6 +337,8 @@ export async function sendSessionMediaMessage(input: {
   caption?: string;
   documentFilename?: string;
   phoneNumberId?: string | null;
+  voiceNote?: boolean;
+  replyToWaMessageId?: string | null;
 }): Promise<SessionMessageResult> {
   const { token, phoneNumberId } = resolveWhatsAppSendCredentials({
     area: input.area,
@@ -363,7 +367,7 @@ export async function sendSessionMediaMessage(input: {
     payload.video = { ...mediaRef, ...(cap ? { caption: cap } : {}) };
   } else if (input.waType === 'audio') {
     if (!mediaId) throw new WhatsAppSendNotAttemptedError('Audio requiere media id');
-    payload.audio = { id: mediaId };
+    payload.audio = { id: mediaId, ...(input.voiceNote ? { voice: true } : {}) };
   } else if (input.waType === 'document') {
     const fn =
       input.documentFilename && String(input.documentFilename).trim()
@@ -376,6 +380,9 @@ export async function sendSessionMediaMessage(input: {
     };
   } else {
     throw new WhatsAppSendNotAttemptedError('Tipo de media no soportado');
+  }
+  if (input.replyToWaMessageId) {
+    payload.context = { message_id: input.replyToWaMessageId };
   }
 
   return graphPostJson<SessionMessageResult>(

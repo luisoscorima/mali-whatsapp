@@ -1,5 +1,4 @@
 import {
-  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -19,13 +18,13 @@ import {
 } from '@/shared/ui/shadcn/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/shadcn/popover'
 import { useConfirmDialog } from '@/shared/ui/ConfirmDialog'
-
-type AdvisorNote = {
-  id: number
-  title: string
-  body: string
-  sort_order: number
-}
+import {
+  CONTACT_DNI_KEY,
+  CONTACT_EMAIL_KEY,
+  CONTACT_NAME_KEY,
+  CONTACT_PHONE_KEY,
+  type AdvisorNote,
+} from './advisorNotes'
 
 type AttrDef = { slug: string; label: string; category?: string }
 
@@ -37,65 +36,25 @@ type FixedVariable = {
 
 type InboxAdvisorNotesPopoverProps = {
   onInsert: (text: string) => void
-  contactAttributes?: Record<string, string>
-  contactName?: string
-  contactPhone?: string
-  contactEmail?: string
-  contactDni?: string
+  resolveText: (text: string) => string
+  notes: AdvisorNote[]
+  loading: boolean
+  loadNotes: () => Promise<void>
   triggerIcon?: ReactNode
-}
-
-const CONTACT_NAME_KEY = 'contact.name'
-const CONTACT_PHONE_KEY = 'contact.phone'
-const CONTACT_EMAIL_KEY = 'contact.email'
-const CONTACT_DNI_KEY = 'contact.dni'
-
-function resolveNotePlaceholders(
-  template: string,
-  attrs: Record<string, string>,
-  contact: {
-    name: string
-    phone: string
-    email: string
-    dni: string
-  },
-): string {
-  return template.replace(
-    /\{\{\s*([A-Za-z][A-Za-z0-9_.]*)\s*\}\}/g,
-    (_m, key: string) => {
-      if (key === CONTACT_NAME_KEY) return contact.name.trim()
-      if (key === CONTACT_PHONE_KEY) return contact.phone.trim()
-      if (key === CONTACT_EMAIL_KEY) {
-        const native = contact.email.trim()
-        if (native) return native
-        return String(attrs.email || attrs.correo || '').trim()
-      }
-      if (key === CONTACT_DNI_KEY) {
-        const native = contact.dni.trim()
-        if (native) return native
-        return String(attrs.dni || '').trim()
-      }
-      const v = attrs[key]
-      return v != null && String(v).trim() ? String(v) : ''
-    },
-  )
 }
 
 export function InboxAdvisorNotesPopover({
   onInsert,
-  contactAttributes = {},
-  contactName = '',
-  contactPhone = '',
-  contactEmail = '',
-  contactDni = '',
+  resolveText,
+  notes,
+  loading,
+  loadNotes,
   triggerIcon,
 }: InboxAdvisorNotesPopoverProps) {
   const categoryScope = useCategoryScope()
   const { confirm, confirmDialog } = useConfirmDialog()
   const [open, setOpen] = useState(false)
-  const [notes, setNotes] = useState<AdvisorNote[]>([])
   const [attrDefs, setAttrDefs] = useState<AttrDef[]>([])
-  const [loading, setLoading] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
@@ -149,34 +108,17 @@ export function InboxAdvisorNotesPopover({
     })
   }, [attrDefs, varQuery, categoryScope.options])
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const [notesRes, attrsRes] = await Promise.all([
-      apiClient.get<AdvisorNote[]>('/api/advisor-notes'),
-      apiClient.get<{ slug: string; label: string; category?: string }[]>(
-        '/api/attribute-definitions',
-      ),
-    ])
-    setLoading(false)
-    if (!notesRes.ok) {
-      notify.error(notesRes.error)
-      return
-    }
-    setNotes(notesRes.data)
-    if (attrsRes.ok) {
-      setAttrDefs(
-        attrsRes.data.map((a) => ({
-          slug: a.slug,
-          label: a.label,
-          category: a.category,
-        })),
-      )
-    }
-  }, [])
-
   useEffect(() => {
-    if (open) void load()
-  }, [open, load])
+    if (!open) return
+    const controller = new AbortController()
+    void loadNotes()
+    void apiClient.get<AttrDef[]>('/api/attribute-definitions', { signal: controller.signal })
+      .then((result) => {
+        if (result.ok && !controller.signal.aborted) setAttrDefs(result.data)
+      })
+      .catch(() => {})
+    return () => controller.abort()
+  }, [open, loadNotes])
 
   function resetForm() {
     setEditingId(null)
@@ -207,7 +149,7 @@ export function InboxAdvisorNotesPopover({
       return
     }
     resetForm()
-    await load()
+    await loadNotes()
   }
 
   async function removeNote(id: number) {
@@ -229,7 +171,7 @@ export function InboxAdvisorNotesPopover({
       return
     }
     if (editingId === id) resetForm()
-    await load()
+    await loadNotes()
   }
 
   function startEdit(note: AdvisorNote) {
@@ -243,14 +185,7 @@ export function InboxAdvisorNotesPopover({
   }
 
   function insertNoteIntoComposer(noteBody: string) {
-    onInsert(
-      resolveNotePlaceholders(noteBody, contactAttributes, {
-        name: contactName,
-        phone: contactPhone,
-        email: contactEmail,
-        dni: contactDni,
-      }),
-    )
+    onInsert(resolveText(noteBody))
     setOpen(false)
   }
 
