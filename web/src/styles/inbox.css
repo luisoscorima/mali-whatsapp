@@ -2827,6 +2827,17 @@ button.inbox-compose-primary {
 .inbox-compose-voice-preview .chat-audio {
   width: 100%;
   min-width: 0;
+  padding: 0;
+  gap: 6px;
+}
+
+.inbox-compose-voice-preview .chat-audio__btn {
+  width: 32px;
+  height: 32px;
+}
+
+.inbox-compose-voice-preview .chat-audio__time {
+  font-size: 0.7rem;
 }
 
 .inbox-compose-fade {
@@ -2965,9 +2976,14 @@ button.inbox-compose-primary {
   background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
 }
 
-.inbox-compose-bar .inbox-compose-grow {
+.inbox-compose-bar .inbox-compose-grow,
+.inbox-compose-field {
   flex: 1;
   min-width: 120px;
+}
+
+.inbox-compose-field .inbox-compose-textarea {
+  width: 100%;
 }
 
 .inbox-compose-notes-btn {
@@ -2986,27 +3002,64 @@ button.inbox-compose-primary {
   }
 
   .inbox-compose-notes-btn {
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
+    width: 32px;
+    min-width: 32px;
+    padding-left: 0;
+    padding-right: 0;
   }
 
-  .inbox-compose-bar {
-    flex-wrap: wrap;
+  /* Fila 1: tools + notas · Fila 2: textarea + programar + mic/enviar */
+  .inbox-compose-row--compose {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'tools actions'
+      'field primary';
+    column-gap: 8px;
+    row-gap: 6px;
+    align-items: center;
   }
 
-  .inbox-compose-grow {
-    order: 1;
-    flex: 1 1 100%;
-    min-width: 100%;
+  .inbox-compose-row--compose:has(.inbox-compose-schedule) {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'tools actions actions'
+      'field schedule primary';
   }
 
-  .inbox-compose-tools {
-    order: 2;
+  .inbox-compose-row--compose .inbox-compose-bar {
+    display: contents;
   }
 
-  .inbox-compose-actions {
-    order: 3;
-    margin-left: auto;
+  .inbox-compose-row--compose .inbox-compose-tools {
+    grid-area: tools;
+    min-width: 0;
+  }
+
+  .inbox-compose-row--compose .inbox-compose-actions {
+    grid-area: actions;
+    justify-self: end;
+  }
+
+  .inbox-compose-row--compose .inbox-compose-field {
+    grid-area: field;
+    min-width: 0;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: var(--surface-strong);
+    border: 1px solid var(--line);
+  }
+
+  .inbox-compose-row--compose .inbox-compose-schedule {
+    grid-area: schedule;
+    align-self: end;
+    width: 42px;
+    height: 42px;
+  }
+
+  .inbox-compose-row--compose .inbox-compose-primary {
+    grid-area: primary;
+    align-self: end;
   }
 }
 

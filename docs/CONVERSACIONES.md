@@ -31,6 +31,7 @@ Barra de respuesta del hilo (texto, adjuntos, nota de voz, programar, notas ráp
 |-------|--------|
 | Primario | Vacío → micrófono (grabar); con texto/adjunto/voz → enviar; al enviar → “…” |
 | Adjuntos | Clip o drag & drop al composer; mismos tipos/límites (JPEG/PNG 5 MB, MP4 16 MB, audio 16 MB, PDF 25 MB) |
+| Responsive (≤520px) | Fila 1: tools + notas (icono); fila 2: texto + programar + mic/enviar |
 | Formato | Negrita (`*`) y cursiva (`_`) con Toggle shadcn; estado `pressed` según selección |
 | Nota de voz | Grabar → detener (stop) o enviar directo → preview con player → enviar o descartar |
 | Motion | Solo opacidad, corto: swap mic↔enviar, pulse del punto al grabar, fade in/out de grabación/preview/stop. Respeta `prefers-reduced-motion` |
@@ -48,7 +49,7 @@ Envío diferido desde el composer (misma carga que reply: texto y/o adjunto; no 
 
 | Pieza | Regla |
 |-------|--------|
-| UI | Reloj visible solo con texto/adjunto → modal fecha/hora (default: mañana 08:00) |
+| UI | Reloj entre el texto y enviar (solo con contenido) → modal fecha/hora (default: mañana 08:00) |
 | Persistencia | `chat_messages` outbound con `raw_payload.status = scheduled` + `scheduled_at` |
 | Cola | BullMQ `outbound` con `delay`; al vencer → `pending` y Graph. Si la ventana ya cerró → `failed` |
 | Burbuja | Etiqueta “Programado para…” mientras esté pendiente; al enviar, estado normal de entrega |

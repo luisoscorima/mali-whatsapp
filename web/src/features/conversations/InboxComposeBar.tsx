@@ -653,7 +653,12 @@ export function InboxComposeBar({
           </div>
         ) : null}
 
-        <div className="inbox-compose-row">
+        <div
+          className={cn(
+            'inbox-compose-row',
+            surface === 'compose' && 'inbox-compose-row--compose',
+          )}
+        >
         <div
           className="inbox-compose-bar relative"
           onBlur={(event) => {
@@ -682,7 +687,7 @@ export function InboxComposeBar({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="shrink-0 rounded-full text-muted"
+                className="shrink-0 rounded-full text-bad"
                 aria-label="Descartar grabación"
                 title="Descartar grabación"
                 disabled={voice.status === 'finishing' || fadingOut}
@@ -788,86 +793,71 @@ export function InboxComposeBar({
                 </Toggle>
               </div>
 
-              <textarea
-                ref={textareaRef}
-                value={replyText}
-                onChange={(event) => {
-                  onReplyTextChange(event.target.value)
-                  updateQuickReplies(event.currentTarget)
-                  signalTyping(event.target.value)
-                }}
-                onBlur={stopTyping}
-                onSelect={(event) => {
-                  syncFormatToggles(event.currentTarget)
-                  if (showNotes) updateQuickReplies(event.currentTarget)
-                }}
-                onKeyDown={onTextareaKeyDown}
-                rows={1}
-                aria-label="Escribe un mensaje"
-                aria-controls={showNotes ? notesListId : undefined}
-                placeholder="Escribe un mensaje… / respuestas rápidas"
-                className="inbox-compose-textarea inbox-compose-grow focus-visible:ring-1 focus-visible:ring-accent"
-              />
-              {showNotes && (
-                <div
-                  ref={quickRepliesRef}
-                  id={notesListId}
-                  role="region"
-                  aria-label="Respuestas rápidas"
-                  className="absolute inset-x-0 bottom-full z-20 mb-2 max-h-60 max-w-lg overflow-y-auto rounded-xl border border-line bg-surface-strong p-2"
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Escape') return
-                    event.preventDefault()
-                    setSlash(null)
-                    textareaRef.current?.focus()
+              <div className="inbox-compose-field inbox-compose-grow relative">
+                <textarea
+                  ref={textareaRef}
+                  value={replyText}
+                  onChange={(event) => {
+                    onReplyTextChange(event.target.value)
+                    updateQuickReplies(event.currentTarget)
+                    signalTyping(event.target.value)
                   }}
-                >
-                  <p role="status" className={selectedNote ? 'sr-only' : 'px-2 py-1 text-xs text-muted'}>
-                    {selectedNote
-                      ? `${selectedNote.title}. ${selectedNote.preview}`
-                      : notesLoading ? 'Cargando respuestas…' : 'No hay respuestas que coincidan.'}
-                  </p>
-                  {quickReplies.length > 0 && (
-                    <ul>
-                      {quickReplies.map((note) => (
-                        <li key={note.id}>
-                          <button
-                            type="button"
-                            aria-current={note.id === selectedNote?.id ? 'true' : undefined}
-                            className={cn(
-                              'block w-full rounded-md px-2 py-1.5 text-left hover:bg-accent-soft focus-visible:ring-1 focus-visible:ring-accent',
-                              note.id === selectedNote?.id && 'bg-accent-soft',
-                            )}
-                            onClick={() => insertQuickReply(note.preview)}
-                          >
-                            <span className="block truncate text-sm font-medium">{note.title}</span>
-                            <span className="block truncate text-xs text-muted">{note.preview}</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-
-              <div className="inbox-compose-actions">
-                {onSchedule && hasOutgoing ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    title="Programar mensaje"
-                    aria-label="Programar mensaje"
-                    disabled={sendingReply || schedulingReply}
-                    onClick={() => {
+                  onBlur={stopTyping}
+                  onSelect={(event) => {
+                    syncFormatToggles(event.currentTarget)
+                    if (showNotes) updateQuickReplies(event.currentTarget)
+                  }}
+                  onKeyDown={onTextareaKeyDown}
+                  rows={1}
+                  aria-label="Escribe un mensaje"
+                  aria-controls={showNotes ? notesListId : undefined}
+                  placeholder="Escribe un mensaje… / respuestas rápidas"
+                  className="inbox-compose-textarea focus-visible:ring-1 focus-visible:ring-accent"
+                />
+                {showNotes && (
+                  <div
+                    ref={quickRepliesRef}
+                    id={notesListId}
+                    role="region"
+                    aria-label="Respuestas rápidas"
+                    className="absolute inset-x-0 bottom-full z-20 mb-2 max-h-60 max-w-lg overflow-y-auto rounded-xl border border-line bg-surface-strong p-2"
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Escape') return
+                      event.preventDefault()
                       setSlash(null)
-                      stopTyping()
-                      setScheduleOpen(true)
+                      textareaRef.current?.focus()
                     }}
                   >
-                    <IconSchedule />
-                  </Button>
-                ) : null}
+                    <p role="status" className={selectedNote ? 'sr-only' : 'px-2 py-1 text-xs text-muted'}>
+                      {selectedNote
+                        ? `${selectedNote.title}. ${selectedNote.preview}`
+                        : notesLoading ? 'Cargando respuestas…' : 'No hay respuestas que coincidan.'}
+                    </p>
+                    {quickReplies.length > 0 && (
+                      <ul>
+                        {quickReplies.map((note) => (
+                          <li key={note.id}>
+                            <button
+                              type="button"
+                              aria-current={note.id === selectedNote?.id ? 'true' : undefined}
+                              className={cn(
+                                'block w-full rounded-md px-2 py-1.5 text-left hover:bg-accent-soft focus-visible:ring-1 focus-visible:ring-accent',
+                                note.id === selectedNote?.id && 'bg-accent-soft',
+                              )}
+                              onClick={() => insertQuickReply(note.preview)}
+                            >
+                              <span className="block truncate text-sm font-medium">{note.title}</span>
+                              <span className="block truncate text-xs text-muted">{note.preview}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="inbox-compose-actions">
                 <InboxAdvisorNotesPopover
                   triggerIcon={<IconPostIt />}
                   notes={notes}
@@ -923,6 +913,24 @@ export function InboxComposeBar({
             <div className="inbox-compose-grow min-h-[36px]" />
           )}
         </div>
+        {surface === 'compose' && onSchedule && hasOutgoing ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="inbox-compose-schedule shrink-0 rounded-full text-muted"
+            title="Programar mensaje"
+            aria-label="Programar mensaje"
+            disabled={sendingReply || schedulingReply}
+            onClick={() => {
+              setSlash(null)
+              stopTyping()
+              setScheduleOpen(true)
+            }}
+          >
+            <IconSchedule />
+          </Button>
+        ) : null}
         {canReply && voice.status === 'recording' ? (
           <Button
             ref={stopRecordingRef}
