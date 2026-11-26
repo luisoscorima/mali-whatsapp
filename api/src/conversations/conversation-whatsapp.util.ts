@@ -3,6 +3,8 @@ import { isKnownWhatsAppPhoneNumberId } from '../meta-settings/meta-settings.sto
 import {
   getWhatsAppCredentialsForArea,
   getWhatsAppLineByPhoneNumberId,
+  WhatsAppGraphRequestError,
+  WhatsAppSendNotAttemptedError,
   type WhatsAppCredentials,
 } from '../templates/whatsapp-meta.util';
 import { MAX_SESSION_TEXT_LEN } from '../settings/business-hours.util';
@@ -56,11 +58,11 @@ export function resolveWhatsAppSendCredentials(input: {
       };
     }
     if (isKnownWhatsAppPhoneNumberId(override)) {
-      throw new Error('La línea está inactiva o no tiene credenciales disponibles. Revisa Administración > Líneas WhatsApp.');
+      throw new WhatsAppSendNotAttemptedError('La línea está inactiva o no tiene credenciales disponibles. Revisa Administración > Líneas WhatsApp.');
     }
     const creds = getWhatsAppCredentialsForArea(input.area);
     if (!creds.token) {
-      throw new Error(
+      throw new WhatsAppSendNotAttemptedError(
         'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_*',
       );
     }
@@ -68,7 +70,7 @@ export function resolveWhatsAppSendCredentials(input: {
   }
   const creds = getWhatsAppCredentialsForArea(input.area);
   if (!creds.token || !creds.phoneNumberId) {
-    throw new Error(
+    throw new WhatsAppSendNotAttemptedError(
       'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_* y PHONE_NUMBER_ID_*',
     );
   }
@@ -156,7 +158,7 @@ async function graphPostJson<T>(
     const message =
       parsed?.error?.message ||
       `Meta Graph API error ${response.status} en ${pathSegment}`;
-    throw new Error(message);
+    throw new WhatsAppGraphRequestError(message, response.status);
   }
   return parsed;
 }
@@ -173,9 +175,9 @@ export async function sendSessionTextMessage(input: {
     phoneNumberId: input.phoneNumberId,
   });
   const safe = String(input.text || '').trim();
-  if (!safe) throw new Error('Mensaje vacio');
+  if (!safe) throw new WhatsAppSendNotAttemptedError('Mensaje vacio');
   if (safe.length > MAX_SESSION_TEXT_LEN) {
-    throw new Error(`Mensaje demasiado largo (max ${MAX_SESSION_TEXT_LEN})`);
+    throw new WhatsAppSendNotAttemptedError(`Mensaje demasiado largo (max ${MAX_SESSION_TEXT_LEN})`);
   }
   const replyTo = String(input.replyToWaMessageId ?? '').trim();
   const payload: Record<string, unknown> = {
@@ -341,7 +343,7 @@ export async function sendSessionMediaMessage(input: {
   const mediaId = String(input.mediaId || '').trim();
   const mediaLink = String(input.mediaLink || '').trim();
   if (!mediaId && !mediaLink) {
-    throw new Error('media id o link requerido');
+    throw new WhatsAppSendNotAttemptedError('media id o link requerido');
   }
   const mediaRef = mediaId ? { id: mediaId } : { link: mediaLink };
   const cap =
@@ -360,7 +362,7 @@ export async function sendSessionMediaMessage(input: {
   } else if (input.waType === 'video') {
     payload.video = { ...mediaRef, ...(cap ? { caption: cap } : {}) };
   } else if (input.waType === 'audio') {
-    if (!mediaId) throw new Error('Audio requiere media id');
+    if (!mediaId) throw new WhatsAppSendNotAttemptedError('Audio requiere media id');
     payload.audio = { id: mediaId };
   } else if (input.waType === 'document') {
     const fn =
@@ -373,7 +375,7 @@ export async function sendSessionMediaMessage(input: {
       ...(cap ? { caption: cap } : {}),
     };
   } else {
-    throw new Error('Tipo de media no soportado');
+    throw new WhatsAppSendNotAttemptedError('Tipo de media no soportado');
   }
 
   return graphPostJson<SessionMessageResult>(

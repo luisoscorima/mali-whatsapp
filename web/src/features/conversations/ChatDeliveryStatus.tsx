@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils'
 export type MessageDeliveryInfo = {
   status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed'
   label: string
+  retryable?: boolean
 }
 
 type ChatDeliveryStatusProps = {
@@ -56,7 +57,7 @@ export function ChatDeliveryStatus({ delivery, onRetry }: ChatDeliveryStatusProp
         </span>
       )}
       <span className="chat-delivery-label">{delivery.label}</span>
-      {delivery.status === 'failed' && onRetry ? (
+      {delivery.status === 'failed' && onRetry && delivery.retryable !== false ? (
         <button
           type="button"
           className="chat-delivery-retry"

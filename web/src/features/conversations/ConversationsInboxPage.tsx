@@ -186,13 +186,9 @@ const INBOX_POLL_MS = 8000
 const INBOX_LIVE_RESYNC_MS = 60000
 const DETAIL_CACHE_MAX = 20
 
-function inboxListCacheKey(area: string) {
-  return `wa_inbox_list:${area}`
-}
-
-function readInboxListCache(area: string): InboxListResult | null {
+function readInboxListCache(cacheKey: string): InboxListResult | null {
   try {
-    const raw = sessionStorage.getItem(inboxListCacheKey(area))
+    const raw = sessionStorage.getItem(cacheKey)
     if (!raw) return null
     const parsed = JSON.parse(raw) as InboxListResult
     return parsed?.items ? parsed : null
@@ -201,9 +197,9 @@ function readInboxListCache(area: string): InboxListResult | null {
   }
 }
 
-function writeInboxListCache(area: string, list: InboxListResult) {
+function writeInboxListCache(cacheKey: string, list: InboxListResult) {
   try {
-    sessionStorage.setItem(inboxListCacheKey(area), JSON.stringify(list))
+    sessionStorage.setItem(cacheKey, JSON.stringify(list))
   } catch {
     /* cuota llena: seguir sin caché */
   }
@@ -880,7 +876,11 @@ type InboxMessage = {
   has_downloadable_media: boolean
   reaction?: InboxMessageReaction | null
   reply_to?: { message_id: number; preview: string; outbound: boolean } | null
-  delivery?: { status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed'; label: string } | null
+  delivery?: {
+    status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed'
+    label: string
+    retryable?: boolean
+  } | null
   sender_label?: string | null
   media_preview?: { url: string; mime?: string | null } | null
   campaign_preview?: {
@@ -1474,6 +1474,18 @@ function ChatLoadingSkeleton() {
 }
 
 export function ConversationsInboxPage() {
+  const user = useAppUser()
+  if (!user) return null
+  const access = user.businessAccess
+  const cacheKey = `wa_inbox_list:${JSON.stringify([
+    user.id, user.loginLogId, user.area, user.isMaster, user.roleSlug,
+    access?.mode, [...(access?.lineIds ?? [])].sort(),
+    [...(access?.programIds ?? [])].sort(), access?.categorySlugs?.slice().sort(),
+  ])}`
+  return <ConversationsInbox key={cacheKey} cacheKey={cacheKey} />
+}
+
+function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
   markTtfcNavStart()
   const { id: idParam } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -1549,7 +1561,6 @@ export function ConversationsInboxPage() {
   const reopeningActionsRef = useRef(false)
   const listAbortRef = useRef<AbortController | null>(null)
   const quotaRequestIdRef = useRef(0)
-  const listAreaRef = useRef<string | null>(null)
   const scrollerRef = useRef<InboxMessageScrollerHandle | null>(null)
   const sendingReplyRef = useRef(false)
   const detailAbortRef = useRef<AbortController | null>(null)
@@ -1559,7 +1570,6 @@ export function ConversationsInboxPage() {
   detailRef.current = detail
   const listRef = useRef(list)
   listRef.current = list
-  const listDirtyRef = useRef(false)
   const pendingUpdatesRef = useRef(false)
   const searchParamsRef = useRef(searchParams)
   searchParamsRef.current = searchParams
@@ -1685,8 +1695,7 @@ export function ConversationsInboxPage() {
           return
         }
         setList(result.data)
-        const area = user?.area
-        if (area && !opts?.silent) writeInboxListCache(area, result.data)
+        if (!opts?.silent) writeInboxListCache(cacheKey, result.data)
         if (!opts?.silent) {
           reportTtfcFirstConversations({ path: window.location.pathname })
         }
@@ -1699,7 +1708,7 @@ export function ConversationsInboxPage() {
           listInFlightRef.current = false
         }
       })
-  }, [filterQuerySuffix, user?.area])
+  }, [filterQuerySuffix, cacheKey])
 
   const serviceReplyCategoryKey = searchParams.getAll('category').slice().sort().join('\0')
 
@@ -1777,24 +1786,6 @@ export function ConversationsInboxPage() {
     next.delete('page')
     setSearchParams(next, { replace: true })
   }, [inboxLines, lineFilter, setSearchParams])
-
-  useEffect(() => {
-    const area = user?.area ?? null
-    if (!area) return
-    if (listAreaRef.current === null) {
-      listAreaRef.current = area
-      return
-    }
-    if (listAreaRef.current === area) return
-
-    listAreaRef.current = area
-    listRequestIdRef.current += 1
-    listInFlightRef.current = false
-    setList(null)
-    setDetail(null)
-    setSelectedContactIds(new Set())
-    void loadList()
-  }, [loadList, user?.area])
 
   useEffect(() => {
     setSelectedContactIds(new Set())
@@ -2190,7 +2181,6 @@ export function ConversationsInboxPage() {
       if (reloadTimer != null) return
       reloadTimer = window.setTimeout(() => {
         reloadTimer = null
-        listDirtyRef.current = false
         void loadList({ silent: true })
       }, LIST_PUSH_RELOAD_MS)
     }
@@ -2198,7 +2188,6 @@ export function ConversationsInboxPage() {
       const current = listRef.current
       const row = push.conversation
       if (current && row) {
-        listDirtyRef.current = true
         const matches = pushRowMatchesView(row, current.filters, userId)
         if (matches === null) {
           setList((prev) =>
@@ -2224,7 +2213,11 @@ export function ConversationsInboxPage() {
         requestConversationUpdates(push.conversation_id)
       }
     })
-    const offInvalidated = onInboxInvalidated(scheduleListReload)
+    const offInvalidated = onInboxInvalidated(() => {
+      scheduleListReload()
+      const openId = detailRef.current?.conversation.id
+      if (openId) requestConversationUpdates(openId)
+    })
     const offStatus = onInboxRealtimeStatus((connected) => {
       if (connected && wasConnected) {
         scheduleListReload()
@@ -2251,10 +2244,9 @@ export function ConversationsInboxPage() {
       const live = isInboxRealtimeConnected()
       if (now - lastListPoll >= (live ? INBOX_LIVE_RESYNC_MS : 15000)) {
         lastListPoll = now
-        if (!live || listDirtyRef.current) {
-          listDirtyRef.current = false
-          void loadList({ silent: true, skipIfInFlight: true })
-        }
+        // Con socket vivo también resincroniza: si LISTEN de PG falló un rato,
+        // el cliente puede seguir “conectado” y haberse perdido eventos.
+        void loadList({ silent: true, skipIfInFlight: true })
       }
       if (now - lastQuotaPoll >= 60000) {
         lastQuotaPoll = now
@@ -2283,14 +2275,11 @@ export function ConversationsInboxPage() {
   }, [loadList, loadServiceReplies, pollConversationUpdates, selectedId])
 
   useEffect(() => {
-    const area = user?.area
-    if (area) {
-      setList((prev) => prev ?? readInboxListCache(area))
-    }
+    setList((prev) => prev ?? readInboxListCache(cacheKey))
     setError('')
     void loadList()
     return () => listAbortRef.current?.abort()
-  }, [loadList, user?.area])
+  }, [loadList, cacheKey])
 
   useEffect(() => {
     if (selectedId == null || Number.isNaN(selectedId)) {
@@ -3006,7 +2995,13 @@ export function ConversationsInboxPage() {
   }
 
   async function onRetryMessage(message: InboxMessage) {
-    if (!detail || message.delivery?.status !== 'failed') return
+    if (
+      !detail ||
+      message.delivery?.status !== 'failed' ||
+      message.delivery.retryable === false
+    ) {
+      return
+    }
     const result = await apiClient.post<InboxMessage>(
       `/api/conversations/${detail.conversation.id}/messages/${message.id}/retry`,
       {},

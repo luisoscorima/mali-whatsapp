@@ -6,7 +6,13 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Client } from 'pg';
-import { InboxEvents, type InboxDomainEvent, type InboxEventName } from './inbox-events';
+import { InboxGateway } from './inbox.gateway';
+import {
+  InboxEvents,
+  INBOX_INVALIDATED_SOCKET_EVENT,
+  type InboxDomainEvent,
+  type InboxEventName,
+} from './inbox-events';
 
 const CHANNEL = 'inbox_events';
 const KNOWN = new Set<string>(Object.values(InboxEvents));
@@ -23,8 +29,13 @@ export class InboxDbListenerService implements OnModuleInit, OnModuleDestroy {
   private stopped = false;
   private retryMs = 1000;
   private retryTimer: NodeJS.Timeout | null = null;
+  /** Tras un corte, al volver a escuchar hay que invalidar clientes. */
+  private hadDisconnect = false;
 
-  constructor(private readonly events: EventEmitter2) {}
+  constructor(
+    private readonly events: EventEmitter2,
+    private readonly gateway: InboxGateway,
+  ) {}
 
   onModuleInit(): void {
     if (process.env.INBOX_REALTIME_DISABLED === '1') return;
@@ -53,6 +64,12 @@ export class InboxDbListenerService implements OnModuleInit, OnModuleDestroy {
       this.client = client;
       this.retryMs = 1000;
       this.logger.log('inbox realtime: escuchando inbox_events');
+      if (this.hadDisconnect) {
+        this.hadDisconnect = false;
+        this.gateway.emitAll(INBOX_INVALIDATED_SOCKET_EVENT, {
+          reason: 'listen_reconnect',
+        });
+      }
     } catch (err) {
       this.logger.warn(
         `inbox listener no conectó: ${err instanceof Error ? err.message : String(err)}`,
@@ -64,6 +81,7 @@ export class InboxDbListenerService implements OnModuleInit, OnModuleDestroy {
   private scheduleReconnect(client: Client): void {
     if (this.stopped || this.retryTimer) return;
     if (this.client === client) this.client = null;
+    this.hadDisconnect = true;
     client.removeAllListeners();
     void client.end().catch(() => undefined);
     const delay = this.retryMs;

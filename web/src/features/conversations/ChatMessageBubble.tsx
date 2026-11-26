@@ -29,7 +29,11 @@ export type ChatMessage = {
   has_downloadable_media: boolean
   reaction?: { emoji: string; direction: 'inbound' | 'outbound' } | null
   reply_to?: { message_id: number; preview: string; outbound: boolean } | null
-  delivery?: { status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed'; label: string } | null
+  delivery?: {
+    status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed'
+    label: string
+    retryable?: boolean
+  } | null
   sender_label?: string | null
   media_preview?: { url: string; mime?: string | null } | null
   campaign_preview?: CampaignMessagePreviewData | null
@@ -412,7 +416,9 @@ export function ChatMessageBubble({
         <ChatDeliveryStatus
           delivery={message.delivery}
           onRetry={
-            message.delivery.status === 'failed' && onRetry
+            message.delivery.status === 'failed' &&
+            message.delivery.retryable !== false &&
+            onRetry
               ? () => onRetry(message)
               : undefined
           }

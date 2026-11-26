@@ -8,6 +8,8 @@ export type MessageDeliveryStatus =
 export type MessageDeliveryInfo = {
   status: MessageDeliveryStatus;
   label: string;
+  /** false = no mostrar Reintentar (p. ej. resultado incierto tras Meta). */
+  retryable?: boolean;
 };
 
 function parseJsonObject(value: unknown): Record<string, unknown> | null {
@@ -65,5 +67,42 @@ export function readMessageDelivery(rawPayload: unknown): MessageDeliveryInfo {
   if (!rawPayload || typeof rawPayload !== 'object' || Array.isArray(rawPayload)) {
     return { status: 'pending', label: 'Enviando…' };
   }
-  return mapDeliveryInfo(resolveStatusToken(rawPayload as Record<string, unknown>));
+  const obj = rawPayload as Record<string, unknown>;
+  if (obj.outbound_uncertain === true) {
+    return {
+      status: 'failed',
+      label: 'Estado desconocido',
+      retryable: false,
+    };
+  }
+  const info = mapDeliveryInfo(resolveStatusToken(obj));
+  const providerResult = parseJsonObject(obj.delivery_status);
+  if (info.status === 'failed' && (obj.outbound_accepted_wamid || providerResult?.id)) {
+    return { ...info, retryable: false };
+  }
+  return info;
+}
+
+/** Orden de entrega: pending < sent < delivered < read. failed no escala. */
+export function deliveryStatusRank(status: string): number {
+  switch (String(status || '').trim().toLowerCase()) {
+    case 'read':
+      return 4;
+    case 'delivered':
+      return 3;
+    case 'sent':
+    case 'accepted':
+      return 2;
+    case 'pending':
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+export function readDeliveryStatusToken(rawPayload: unknown): string {
+  if (!rawPayload || typeof rawPayload !== 'object' || Array.isArray(rawPayload)) {
+    return '';
+  }
+  return resolveStatusToken(rawPayload as Record<string, unknown>);
 }

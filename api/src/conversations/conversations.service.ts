@@ -23,6 +23,7 @@ import { restrictedAccess } from '../business-model/business-access.context';
 import { UserAreasService } from '../users/user-areas.service';
 import type { Prisma as PrismaTypes } from '@prisma/client';
 import type { AuthUser } from '../auth/auth.types';
+import { assertCanSendTemplatesFromChat } from '../auth/permission.util';
 import { AuditEvent } from '../audit/audit-events';
 import { auditActor, phoneMetaTail } from '../audit/audit-actor.util';
 import { AuditLogService } from '../audit/audit-log.service';
@@ -182,11 +183,22 @@ import { fetchConversationSummary } from './conversation-analytics.util';
 import { EducationLeadWorkflowService } from '../leads/education-lead-workflow.service';
 import { PersonResolverService } from '../people/person-resolver.service';
 import { canonicalBusinessArea } from '../config/areas';
+import {
+  claimOutboundDispatch,
+  hasOutboundDispatchStarted,
+  isConfirmedOutboundFailure,
+  isOutboundUncertain,
+  persistOutboundAccepted,
+  readOutboundAcceptedWamid,
+  rememberOutboundAccepted,
+  settleOutboundFailure,
+} from '../queues/outbound-accepted.util';
 import { OUTBOUND_TEMPLATE_DELIVER } from '../queues/queue.constants';
 import {
   OutboundQueueService,
   type OutboundTemplateJobData,
 } from '../queues/outbound-queue.service';
+import type { Job } from 'bullmq';
 
 const INBOX_LIST_PAGE_SIZE = 50;
 const INBOX_DETAIL_MESSAGE_PAGE_SIZE = 50;
@@ -552,8 +564,11 @@ export class ConversationsService {
     });
   }
 
-  private async loadAiAreaEnabled(area: string): Promise<boolean> {
-    const row = await this.prisma.app_settings.findFirst({
+  private async loadAiAreaEnabled(
+    area: string,
+    db: Pick<PrismaService, 'app_settings'> = this.prisma,
+  ): Promise<boolean> {
+    const row = await db.app_settings.findFirst({
       where: { area, key: 'ai_config' },
       select: { value: true },
     });
@@ -1550,19 +1565,11 @@ export class ConversationsService {
       await this.outboundQueue.enqueueTemplate(templateJob);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'No se pudo encolar';
-      await this.prisma.chat_messages.update({
-        where: { id: pendingRow.id },
-        data: {
-          raw_payload: {
-            ...(pendingRow.raw_payload as object),
-            status: 'failed',
-            delivery_status: { status: 'failed', error: message.slice(0, 500) },
-          } as PrismaTypes.InputJsonValue,
-        },
-      });
-      await this.prisma.campaigns.update({
-        where: { id: campaign.id },
-        data: { status: 'failed' },
+      await settleOutboundFailure(this.prisma, pendingRow.id, message, 'before-dispatch', async (tx) => {
+        await tx.campaigns.update({
+          where: { id: campaign.id },
+          data: { status: 'failed' },
+        });
       });
       throw new InternalServerErrorException('No se pudo encolar la plantilla');
     }
@@ -1570,70 +1577,57 @@ export class ConversationsService {
     return { campaign_id: campaign.id, message_id: null };
   }
 
-  @OnEvent(OUTBOUND_TEMPLATE_DELIVER)
-  async deliverDirectTemplate(payload: {
-    job: OutboundTemplateJobData;
-    attemptsMade: number;
-    maxAttempts: number;
+  @OnEvent(OUTBOUND_TEMPLATE_DELIVER, { suppressErrors: false })
+  async deliverDirectTemplate({ bullJob }: {
+    bullJob: Job<OutboundTemplateJobData>;
   }): Promise<void> {
-    const job = payload.job;
+    const job = bullJob.data;
     const row = await this.prisma.chat_messages.findUnique({
       where: { id: job.messageId },
-      select: { id: true, conversation_id: true, wa_message_id: true, raw_payload: true },
+      select: {
+        conversation_id: true,
+        wa_message_id: true,
+        raw_payload: true,
+      },
     });
-    if (!row || row.conversation_id !== job.conversationId || row.wa_message_id) return;
+    if (!row || row.conversation_id !== job.conversationId) return;
 
-    const isLast = payload.attemptsMade + 1 >= payload.maxAttempts;
-    try {
-      const result = await sendTemplateWithComponents({
-        to: job.to,
-        templateName: job.templateName,
-        languageCode: job.languageCode,
-        components: job.components,
-        area: job.area,
-        phoneNumberId: job.phoneNumberId,
-      });
-      const waMessageId = result.messages?.[0]?.id ?? null;
-      if (!waMessageId) {
-        throw new Error('WhatsApp no devolvió un id de mensaje. Revisa la configuración.');
-      }
-      await this.prisma.campaign_logs.create({
-        data: {
-          campaign_id: job.campaignId,
-          contact_id: job.contactId,
-          phone: job.to,
-          whatsapp_message_id: waMessageId,
-          status: 'sent',
-          response: result as PrismaTypes.InputJsonValue,
+    const finishAccepted = async (waMessageId: string, apiResponse?: unknown) => {
+      let completedNow = false;
+      await persistOutboundAccepted(this.prisma, {
+        messageId: job.messageId,
+        waMessageId,
+        patch: apiResponse ? { api_response: apiResponse } : undefined,
+        finalize: async (tx, messagePayload) => {
+          const existingLog = await tx.campaign_logs.findFirst({
+            where: { campaign_id: job.campaignId, whatsapp_message_id: waMessageId },
+            select: { id: true },
+          });
+          if (!existingLog) {
+            await tx.campaign_logs.create({
+              data: {
+                campaign_id: job.campaignId,
+                contact_id: job.contactId,
+                phone: job.to,
+                whatsapp_message_id: waMessageId,
+                status: readMessageDelivery(messagePayload).status,
+                response: (messagePayload.api_response ?? {
+                  resumed: true,
+                }) as PrismaTypes.InputJsonValue,
+              },
+            });
+          }
+          const completed = await tx.campaigns.updateMany({
+            where: { id: job.campaignId, status: { not: 'completed' } },
+            data: { status: 'completed' },
+          });
+          completedNow = completed.count > 0;
         },
       });
-      await this.prisma.campaigns.update({
-        where: { id: job.campaignId },
-        data: { status: 'completed' },
-      });
-      const existing =
-        row.raw_payload && typeof row.raw_payload === 'object' && !Array.isArray(row.raw_payload)
-          ? (row.raw_payload as Record<string, unknown>)
-          : {};
-      await this.prisma.chat_messages.update({
-        where: { id: job.messageId },
-        data: {
-          wa_message_id: waMessageId,
-          raw_payload: {
-            ...existing,
-            status: 'sent',
-            delivery_status: { status: 'sent' },
-            api_response: result,
-          } as PrismaTypes.InputJsonValue,
-        },
-      });
+      if (!completedNow) return;
       try {
         await this.assignDirectTemplateSender(
-          {
-            id: job.actorUserId,
-            email: job.actorEmail,
-            area: job.actorArea,
-          } as AuthUser,
+          { id: job.actorUserId, email: job.actorEmail, area: job.actorArea } as AuthUser,
           { id: job.conversationId },
           job.campaignId,
           job.templateName,
@@ -1645,38 +1639,66 @@ export class ConversationsService {
           }`,
         );
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'No se pudo enviar la plantilla';
-      this.logger.warn(`outbound plantilla falló mensaje ${job.messageId}: ${message}`);
-      if (!isLast) throw error;
-      await this.prisma.campaign_logs.create({
-        data: {
-          campaign_id: job.campaignId,
-          contact_id: job.contactId,
-          phone: job.to,
-          whatsapp_message_id: null,
-          status: 'failed',
-          response: { error: message.slice(0, 500) } as PrismaTypes.InputJsonValue,
-        },
-      });
-      await this.prisma.campaigns.update({
-        where: { id: job.campaignId },
-        data: { status: 'failed' },
-      });
-      const existing =
-        row.raw_payload && typeof row.raw_payload === 'object' && !Array.isArray(row.raw_payload)
-          ? (row.raw_payload as Record<string, unknown>)
-          : {};
-      await this.prisma.chat_messages.update({
-        where: { id: job.messageId },
-        data: {
-          raw_payload: {
-            ...existing,
+    };
+
+    const resumeId =
+      row.wa_message_id ||
+      job.acceptedWaMessageId ||
+      readOutboundAcceptedWamid(row.raw_payload);
+    if (resumeId) {
+      await finishAccepted(resumeId);
+      return;
+    }
+    if (isOutboundUncertain(row.raw_payload)) return;
+
+    const settleCampaign = async (
+      reason: string,
+      kind: 'uncertain' | 'rejected',
+    ) => {
+      await settleOutboundFailure(this.prisma, job.messageId, reason, kind, async (tx) => {
+        await tx.campaign_logs.create({
+          data: {
+            campaign_id: job.campaignId,
+            contact_id: job.contactId,
+            phone: job.to,
             status: 'failed',
-            delivery_status: { status: 'failed', error: message.slice(0, 500) },
-          } as PrismaTypes.InputJsonValue,
-        },
+            retryable: false,
+            response: { error: reason.slice(0, 500), uncertain: kind === 'uncertain' },
+          },
+        });
+        await tx.campaigns.update({
+          where: { id: job.campaignId },
+          data: { status: 'failed' },
+        });
       });
+    };
+
+    if (job.metaCallStarted || hasOutboundDispatchStarted(row.raw_payload)) {
+      await settleCampaign('WhatsApp no confirmó el envío anterior', 'uncertain');
+      return;
+    }
+    if (!(await claimOutboundDispatch(this.prisma, job.messageId))) return;
+
+    let waMessageId: string | null = null;
+    try {
+      const result = await sendTemplateWithComponents({
+        to: job.to,
+        templateName: job.templateName,
+        languageCode: job.languageCode,
+        components: job.components,
+        area: job.area,
+        phoneNumberId: job.phoneNumberId,
+      });
+      waMessageId = result.messages?.[0]?.id ?? null;
+      if (!waMessageId) throw new Error('WhatsApp no devolvió un id de mensaje');
+      await finishAccepted(waMessageId, result);
+    } catch (error) {
+      if (waMessageId) {
+        await rememberOutboundAccepted(this.prisma, bullJob, job.messageId, waMessageId);
+        throw error;
+      }
+      const reason = error instanceof Error ? error.message : String(error);
+      await settleCampaign(reason, isConfirmedOutboundFailure(error) ? 'rejected' : 'uncertain');
     }
   }
 
@@ -2552,8 +2574,9 @@ export class ConversationsService {
       last_user_message_at: Date | null;
     },
     area: string,
+    db: Pick<PrismaService, 'app_settings'> = this.prisma,
   ): Promise<void> {
-    const aiEnabled = await this.loadAiAreaEnabled(area);
+    const aiEnabled = await this.loadAiAreaEnabled(area, db);
     if (!isWithinUserServiceWindow(conversation.last_user_message_at)) {
       throw new BadRequestException(
         'Ventana de 24 h cerrada: el usuario debe escribirte de nuevo o usa una plantilla desde Campañas.',
@@ -3062,7 +3085,7 @@ export class ConversationsService {
           is_ai: false,
         },
       });
-      await this.outboundQueue.enqueueReply({
+      await this.enqueuePendingMessage(textRow.id, () => this.outboundQueue.enqueueReply({
         messageId: textRow.id,
         conversationId: input.conversationId,
         area: input.user.area,
@@ -3073,7 +3096,7 @@ export class ConversationsService {
         actorUserId: input.user.id,
         actorEmail: input.user.email,
         actorArea: input.user.area,
-      });
+      }));
       created.push(this.mapMessageRow(textRow));
     }
 
@@ -3119,7 +3142,7 @@ export class ConversationsService {
       where: { id: input.conversationId },
       data: { last_message_at: new Date(), updated_at: new Date() },
     });
-    await this.outboundQueue.enqueueMedia({
+    await this.enqueuePendingMessage(row.id, () => this.outboundQueue.enqueueMedia({
       messageId: row.id,
       conversationId: input.conversationId,
       area: input.user.area,
@@ -3134,9 +3157,19 @@ export class ConversationsService {
       actorUserId: input.user.id,
       actorEmail: input.user.email,
       actorArea: input.user.area,
-    });
+    }));
     created.push(this.mapMessageRow(row));
     return created;
+  }
+
+  private async enqueuePendingMessage(messageId: number, enqueue: () => Promise<void>): Promise<void> {
+    try {
+      await enqueue();
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'No se pudo encolar';
+      await settleOutboundFailure(this.prisma, messageId, reason, 'before-dispatch');
+      throw error;
+    }
   }
 
   async retryOutboundMessage(
@@ -3154,96 +3187,165 @@ export class ConversationsService {
       where: this.conversationLookup(user.area, conversationId),
     });
     if (!conversation) throw new NotFoundException('Conversacion no encontrada');
-    await this.assertCanReply(conversation, user.area);
+    const to = conversationRecipient(conversation);
 
-    const row = await this.prisma.chat_messages.findFirst({
-      where: { id: messageId, conversation_id: conversationId },
+    type LockedRow = {
+      id: number;
+      direction: string;
+      message_type: string;
+      body_text: string | null;
+      wa_message_id: string | null;
+      raw_payload: unknown;
+    };
+
+    // Claim atómico: solo un reintento pasa de failed → pending.
+    const claimed = await this.prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<LockedRow[]>`
+        SELECT id, direction, message_type, body_text, wa_message_id, raw_payload
+        FROM chat_messages
+        WHERE id = ${messageId} AND conversation_id = ${conversationId}
+        FOR UPDATE
+      `;
+      const row = rows[0];
+      if (!row || row.direction !== 'outbound') {
+        throw new NotFoundException('Mensaje no encontrado');
+      }
+      if (row.wa_message_id || readOutboundAcceptedWamid(row.raw_payload)) {
+        throw new BadRequestException('Este mensaje ya se envió');
+      }
+      if (isOutboundUncertain(row.raw_payload) || hasOutboundDispatchStarted(row.raw_payload)) {
+        throw new BadRequestException(
+          'El envío quedó con resultado desconocido. No se puede reintentar.',
+        );
+      }
+      if (readMessageDelivery(row.raw_payload).status !== 'failed') {
+        throw new BadRequestException('Solo se puede reintentar un envío fallido');
+      }
+      if (row.message_type === 'campaign') {
+        assertCanSendTemplatesFromChat(user);
+        if (isWithinUserServiceWindow(conversation.last_user_message_at)) {
+          throw new BadRequestException(
+            'La ventana de 24 h está abierta: responde con un mensaje normal.',
+          );
+        }
+      } else {
+        await this.assertCanReply(conversation, user.area, tx);
+      }
+      const payload =
+        row.raw_payload &&
+        typeof row.raw_payload === 'object' &&
+        !Array.isArray(row.raw_payload)
+          ? { ...(row.raw_payload as Record<string, unknown>) }
+          : {};
+      const pending = {
+        ...payload,
+        status: 'pending',
+        delivery_status: { status: 'pending' },
+      };
+      return tx.chat_messages.update({
+        where: { id: row.id },
+        data: { raw_payload: pending as PrismaTypes.InputJsonValue },
+      });
     });
-    if (!row || row.direction !== 'outbound') {
-      throw new NotFoundException('Mensaje no encontrado');
-    }
-    if (row.wa_message_id) {
-      throw new BadRequestException('Este mensaje ya se envió');
-    }
-    if (readMessageDelivery(row.raw_payload).status !== 'failed') {
-      throw new BadRequestException('Solo se puede reintentar un envío fallido');
-    }
 
     const payload =
-      row.raw_payload && typeof row.raw_payload === 'object' && !Array.isArray(row.raw_payload)
-        ? { ...(row.raw_payload as Record<string, unknown>) }
+      claimed.raw_payload &&
+      typeof claimed.raw_payload === 'object' &&
+      !Array.isArray(claimed.raw_payload)
+        ? (claimed.raw_payload as Record<string, unknown>)
         : {};
-    const pending = {
-      ...payload,
-      status: 'pending',
-      delivery_status: { status: 'pending' },
-    };
     const linePhoneNumberId =
       String(conversation.whatsapp_phone_number_id || '').trim() || undefined;
-    const to = conversationRecipient(conversation);
     const actor = {
       actorUserId: user.id,
       actorEmail: user.email,
       actorArea: user.area,
     };
 
-    if (row.message_type === 'text') {
-      await this.outboundQueue.enqueueReplyRetry({
-        messageId: row.id,
-        conversationId,
-        area: user.area,
-        to,
-        text: String(row.body_text || ''),
-        phoneNumberId: linePhoneNumberId,
-        ...actor,
-      });
-    } else if (row.message_type === 'campaign') {
-      const stored = payload.outbound_template as OutboundTemplateJobData | undefined;
-      if (!stored?.templateName || !stored.components) {
-        throw new BadRequestException('No se puede reintentar esta plantilla');
+    try {
+      if (claimed.message_type === 'text') {
+        const reply = readMessageReplyTo(payload);
+        const quoted = reply ? await this.prisma.chat_messages.findFirst({
+          where: { id: reply.message_id, conversation_id: conversationId },
+          select: { wa_message_id: true },
+        }) : null;
+        await this.outboundQueue.enqueueReplyRetry({
+          messageId: claimed.id,
+          conversationId,
+          area: user.area,
+          to,
+          text: String(claimed.body_text || ''),
+          phoneNumberId: linePhoneNumberId,
+          replyToWaMessageId: quoted?.wa_message_id,
+          ...actor,
+        });
+      } else if (claimed.message_type === 'campaign') {
+        const stored = payload.outbound_template as OutboundTemplateJobData | undefined;
+        if (!stored?.templateName || !stored.components) {
+          throw new BadRequestException('No se puede reintentar esta plantilla');
+        }
+        if (
+          stored.to !== to ||
+          stored.whatsappLineId !== conversation.whatsapp_line_id ||
+          (stored.phoneNumberId || undefined) !== linePhoneNumberId
+        ) {
+          throw new BadRequestException(
+            'El destinatario o la línea cambió. Prepara una nueva plantilla para esta conversación.',
+          );
+        }
+        await this.outboundQueue.enqueueTemplateRetry({
+          ...stored,
+          messageId: claimed.id,
+          conversationId,
+          ...actor,
+        });
+      } else if (
+        ['image', 'video', 'audio', 'document'].includes(claimed.message_type)
+      ) {
+        const media = payload.outbound_media as
+          | {
+              url?: string;
+              mime?: string;
+              filename?: string;
+              waType?: ConversationWaType;
+              caption?: string;
+            }
+          | undefined;
+        const url = String(media?.url || '').trim();
+        if (!url) throw new BadRequestException('No hay archivo para reintentar');
+        await this.outboundQueue.enqueueMediaRetry({
+          messageId: claimed.id,
+          conversationId,
+          area: user.area,
+          to,
+          mediaUrl: url,
+          mimeType: String(media?.mime || ''),
+          filename: String(media?.filename || 'archivo'),
+          waType: media?.waType || (claimed.message_type as ConversationWaType),
+          caption: String(media?.caption || ''),
+          phoneNumberId: linePhoneNumberId,
+          ...actor,
+        });
+      } else {
+        throw new BadRequestException('Este mensaje no se puede reintentar');
       }
-      await this.prisma.campaigns.update({
-        where: { id: stored.campaignId },
-        data: { status: 'sending' },
-      }).catch(() => undefined);
-      await this.outboundQueue.enqueueTemplateRetry({
-        ...stored,
-        messageId: row.id,
-        conversationId,
-        ...actor,
-      });
-    } else if (['image', 'video', 'audio', 'document'].includes(row.message_type)) {
-      const media = payload.outbound_media as {
-        url?: string;
-        mime?: string;
-        filename?: string;
-        waType?: ConversationWaType;
-        caption?: string;
-      } | undefined;
-      const url = String(media?.url || '').trim();
-      if (!url) throw new BadRequestException('No hay archivo para reintentar');
-      await this.outboundQueue.enqueueMediaRetry({
-        messageId: row.id,
-        conversationId,
-        area: user.area,
-        to,
-        mediaUrl: url,
-        mimeType: String(media?.mime || ''),
-        filename: String(media?.filename || 'archivo'),
-        waType: media?.waType || (row.message_type as ConversationWaType),
-        caption: String(media?.caption || ''),
-        phoneNumberId: linePhoneNumberId,
-        ...actor,
-      });
-    } else {
-      throw new BadRequestException('Este mensaje no se puede reintentar');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No se pudo reintentar';
+      await settleOutboundFailure(this.prisma, claimed.id, message, 'before-dispatch');
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException
+      ) {
+        throw error;
+      }
+      if (message.includes('ya se está reenviando')) {
+        throw new BadRequestException(message);
+      }
+      throw new InternalServerErrorException(`No se pudo reintentar: ${message}`);
     }
 
-    const updated = await this.prisma.chat_messages.update({
-      where: { id: row.id },
-      data: { raw_payload: pending as PrismaTypes.InputJsonValue },
-    });
-    return this.mapMessageRow(updated);
+    return this.mapMessageRow(claimed);
   }
 
   async reply(
@@ -3465,7 +3567,7 @@ export class ConversationsService {
             updated_at: new Date(),
           },
         });
-        await this.outboundQueue.enqueueReply({
+        await this.enqueuePendingMessage(row.id, () => this.outboundQueue.enqueueReply({
           messageId: row.id,
           conversationId,
           area,
@@ -3477,7 +3579,7 @@ export class ConversationsService {
           actorUserId: user.id,
           actorEmail: user.email,
           actorArea: user.area,
-        });
+        }));
         createdMessages.push(this.mapMessageRow(row));
         return { messages: createdMessages };
       } else {

@@ -14,6 +14,15 @@ import {
 
 export type { WhatsAppCredentials };
 
+export class WhatsAppGraphRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
+/** Validación local que falló antes de llamar a Meta. */
+export class WhatsAppSendNotAttemptedError extends Error {}
+
 export function getWhatsAppCredentialsForArea(
   area: unknown,
 ): WhatsAppCredentials {
@@ -489,11 +498,12 @@ async function graphPost<T>(
   });
   const parsed = (await response.json()) as T & GraphErrorBody;
   if (!response.ok) {
-    throw new Error(
+    throw new WhatsAppGraphRequestError(
       formatGraphError(
         parsed,
         `Meta Graph API error ${response.status} en ${path}`,
       ),
+      response.status,
     );
   }
   return parsed;
@@ -624,7 +634,7 @@ export async function sendTemplateWithComponents(input: {
     : null;
   const areaCredentials = getWhatsAppCredentialsForArea(input.area);
   if (requestedPhoneNumberId && !exactLine && isKnownWhatsAppPhoneNumberId(requestedPhoneNumberId)) {
-    throw new Error('La línea está inactiva o no tiene credenciales disponibles. Revisa Administración > Líneas WhatsApp.');
+    throw new WhatsAppSendNotAttemptedError('La línea está inactiva o no tiene credenciales disponibles. Revisa Administración > Líneas WhatsApp.');
   }
   const token = exactLine?.token || areaCredentials.token;
   const phoneNumberId =
@@ -632,7 +642,7 @@ export async function sendTemplateWithComponents(input: {
     requestedPhoneNumberId ||
     areaCredentials.phoneNumberId;
   if (!token || !phoneNumberId) {
-    throw new Error(
+    throw new WhatsAppSendNotAttemptedError(
       'Faltan credenciales WhatsApp para esta area: define WHATSAPP_TOKEN_* y PHONE_NUMBER_ID_*',
     );
   }
@@ -660,6 +670,7 @@ export async function sendTemplateWithComponents(input: {
     const err = error as Error & { status?: number };
     const wrapped = new Error(
       err.message || 'Error enviando plantilla',
+      { cause: error },
     ) as Error & {
       response?: { data: unknown };
     };

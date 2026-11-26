@@ -9,6 +9,8 @@ import {
 import type { Server, Socket } from 'socket.io';
 import { AuthService } from '../auth/auth.service';
 import type { AuthUser, JwtPayload } from '../auth/auth.types';
+import { hasPermission } from '../auth/roles/has-permission';
+import { PERMISSION } from '../auth/roles/permission-codes';
 import { AppConfigService } from '../config/app-config.service';
 
 /** Revalida permisos de sockets abiertos (revocación / cambio de líneas). */
@@ -49,12 +51,14 @@ export class InboxGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   async handleConnection(socket: Socket): Promise<void> {
     const user = await this.authenticate(socket);
+    if (!socket.connected) return;
     if (!user) {
       socket.emit('inbox.unauthorized');
       socket.disconnect(true);
       return;
     }
     await this.applyRooms(socket, user);
+    if (!socket.connected) return;
     const timer = setInterval(() => void this.revalidate(socket), REVALIDATE_MS);
     timer.unref();
     socket.data.revalidateTimer = timer;
@@ -68,6 +72,12 @@ export class InboxGateway implements OnGatewayConnection, OnGatewayDisconnect {
   emitTo(rooms: string[], event: string, payload: unknown): void {
     if (!rooms.length || !this.server) return;
     this.server.to(rooms).emit(event, payload);
+  }
+
+  /** Aviso global (p. ej. LISTEN de Postgres se recuperó y pudo haber huecos). */
+  emitAll(event: string, payload: unknown): void {
+    if (!this.server) return;
+    this.server.emit(event, payload);
   }
 
   private async revalidate(socket: Socket): Promise<void> {
@@ -102,7 +112,10 @@ export class InboxGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const payload = this.jwt.verify<JwtPayload>(token);
       if (!payload?.sub) return null;
       const user = await this.auth.validateJwtPayload(payload);
-      return user.isMaster || user.isProvisioned ? user : null;
+      if (!user.isMaster && !user.isProvisioned) return null;
+      // Misma puerta que GET /api/conversations: sin manage no hay filas del Inbox.
+      if (!hasPermission(user, PERMISSION.CONVERSATIONS_MANAGE)) return null;
+      return user;
     } catch (err) {
       this.logger.debug(
         `socket rechazado: ${err instanceof Error ? err.message : String(err)}`,

@@ -3,7 +3,15 @@ import { Injectable } from '@nestjs/common';
 import type { Queue } from 'bullmq';
 import { OUTBOUND_QUEUE, OutboundJobName } from './queue.constants';
 
-export type OutboundReplyJobData = {
+/** Marcadores durables en Redis (sobreviven si PostgreSQL falla tras Meta). */
+export type OutboundJobMetaFlags = {
+  /** Compatibilidad con jobs creados antes de la marca en PostgreSQL. */
+  metaCallStarted?: boolean;
+  /** wamid aceptado; el reintento solo reanuda el persist. */
+  acceptedWaMessageId?: string;
+};
+
+export type OutboundReplyJobData = OutboundJobMetaFlags & {
   messageId: number;
   conversationId: number;
   area: string;
@@ -17,7 +25,7 @@ export type OutboundReplyJobData = {
   actorArea: string;
 };
 
-export type OutboundMediaJobData = {
+export type OutboundMediaJobData = OutboundJobMetaFlags & {
   messageId: number;
   conversationId: number;
   area: string;
@@ -34,7 +42,7 @@ export type OutboundMediaJobData = {
   actorArea: string;
 };
 
-export type OutboundTemplateJobData = {
+export type OutboundTemplateJobData = OutboundJobMetaFlags & {
   messageId: number;
   campaignId: number;
   conversationId: number;
@@ -64,45 +72,56 @@ export class OutboundQueueService {
     @InjectQueue(OUTBOUND_QUEUE) private readonly queue: Queue,
   ) {}
 
+  /** Un solo jobId por mensaje: evita dos reintentos concurrentes. */
+  private async replaceJob(
+    name: string,
+    data: object,
+    jobId: string,
+  ): Promise<void> {
+    const existing = await this.queue.getJob(jobId);
+    if (existing) {
+      const state = await existing.getState();
+      if (state !== 'completed' && state !== 'failed') {
+        throw new Error('Este mensaje ya se está reenviando');
+      }
+      await existing.remove();
+    }
+    await this.queue.add(name, data, { ...JOB_OPTS, jobId });
+  }
+
   async enqueueReply(data: OutboundReplyJobData): Promise<void> {
-    await this.queue.add(OutboundJobName.SEND_REPLY, data, {
-      ...JOB_OPTS,
-      jobId: `outbound-reply-${data.messageId}`,
-    });
+    await this.replaceJob(
+      OutboundJobName.SEND_REPLY,
+      data,
+      `outbound-reply-${data.messageId}`,
+    );
   }
 
   async enqueueReplyRetry(data: OutboundReplyJobData): Promise<void> {
-    await this.queue.add(OutboundJobName.SEND_REPLY, data, {
-      ...JOB_OPTS,
-      jobId: `outbound-reply-retry-${data.messageId}-${Date.now()}`,
-    });
+    await this.enqueueReply(data);
   }
 
   async enqueueMedia(data: OutboundMediaJobData): Promise<void> {
-    await this.queue.add(OutboundJobName.SEND_MEDIA, data, {
-      ...JOB_OPTS,
-      jobId: `outbound-media-${data.messageId}`,
-    });
+    await this.replaceJob(
+      OutboundJobName.SEND_MEDIA,
+      data,
+      `outbound-media-${data.messageId}`,
+    );
   }
 
   async enqueueMediaRetry(data: OutboundMediaJobData): Promise<void> {
-    await this.queue.add(OutboundJobName.SEND_MEDIA, data, {
-      ...JOB_OPTS,
-      jobId: `outbound-media-retry-${data.messageId}-${Date.now()}`,
-    });
+    await this.enqueueMedia(data);
   }
 
   async enqueueTemplate(data: OutboundTemplateJobData): Promise<void> {
-    await this.queue.add(OutboundJobName.SEND_TEMPLATE, data, {
-      ...JOB_OPTS,
-      jobId: `outbound-template-${data.messageId}`,
-    });
+    await this.replaceJob(
+      OutboundJobName.SEND_TEMPLATE,
+      data,
+      `outbound-template-${data.messageId}`,
+    );
   }
 
   async enqueueTemplateRetry(data: OutboundTemplateJobData): Promise<void> {
-    await this.queue.add(OutboundJobName.SEND_TEMPLATE, data, {
-      ...JOB_OPTS,
-      jobId: `outbound-template-retry-${data.messageId}-${Date.now()}`,
-    });
+    await this.enqueueTemplate(data);
   }
 }

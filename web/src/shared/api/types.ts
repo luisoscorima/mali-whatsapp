@@ -15,6 +15,13 @@ export type ApiResponse<T> = ApiSuccess<T> | ApiFailure;
 
 export type AuthUser = {
   id: number;
+  loginLogId?: number;
+  businessAccess?: {
+    mode: 'all' | 'restricted';
+    lineIds: number[];
+    programIds: number[];
+    categorySlugs: string[] | null;
+  };
   email: string;
   area: string;
   allowedAreas: string[];

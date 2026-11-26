@@ -105,6 +105,7 @@ export type InboxMessageReplyTo = {
 export type InboxMessageDelivery = {
   status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
   label: string;
+  retryable?: boolean;
 };
 
 export type InboxTimelineEvent = {
