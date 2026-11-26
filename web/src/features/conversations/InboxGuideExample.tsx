@@ -9,6 +9,11 @@ type InboxGuideExampleProps = {
   onShowSummary: () => void
 }
 
+const exampleNote = {
+  title: 'Envío de catálogo',
+  body: '¡Claro! Te comparto el catálogo para que puedas revisar los productos.',
+}
+
 function ignoreFileDrop(event: DragEvent<HTMLElement>) {
   if (!Array.from(event.dataTransfer.types).includes('Files')) return
   event.preventDefault()
@@ -29,9 +34,9 @@ export function InboxGuideExample({ onStart, onShowSummary }: InboxGuideExampleP
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Guía del chat" data-inbox-guide-example>
-      <div className={showExample ? 'hidden' : 'inbox-empty-pane gap-3'}>
-        <p>Selecciona una conversación para ver sus mensajes.</p>
-        <div className="flex flex-wrap justify-center gap-2">
+      <div className={showExample ? 'hidden' : 'inbox-empty-pane gap-5'}>
+        <div className="flex flex-col items-center gap-2">
+          <h2 className="text-base font-semibold text-ink">Descubre las novedades del chat</h2>
           <Button
             variant="outline"
             className="border-accent bg-accent-soft font-semibold text-accent-ink hover:border-accent-hover"
@@ -39,6 +44,9 @@ export function InboxGuideExample({ onStart, onShowSummary }: InboxGuideExampleP
           >
             Iniciar recorrido
           </Button>
+        </div>
+        <div className="flex flex-col items-center gap-2">
+          <p>Selecciona una conversación para ver sus mensajes.</p>
           <Button variant="secondary" onClick={onShowSummary}>Ver resumen de conversaciones</Button>
         </div>
       </div>
@@ -83,11 +91,12 @@ export function InboxGuideExample({ onStart, onShowSummary }: InboxGuideExampleP
               <div className="inbox-guide-example__composer relative flex items-center gap-1.5">
                 <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-line bg-surface-strong px-2 py-1 text-sm text-muted">
                   <span className="shrink-0"><IconAttach /></span>
-                  <span className="min-w-0 flex-1 truncate px-0.5 py-1" data-inbox-guide="chat-compose">
+                  <span className="min-w-0 flex-1 truncate px-0.5 py-1">
                     <span className="inbox-guide-example__when-idle">/ respuestas rápidas</span>
                     <span className="inbox-guide-example__when-scheduling text-ink">Te envío el catálogo.</span>
+                    <span className="inbox-guide-example__when-searching text-ink">/cat</span>
                   </span>
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-line bg-accent-soft px-1.5 py-1 text-xs font-medium text-accent-ink" data-inbox-guide="chat-notes">
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-line bg-accent-soft px-1.5 py-1 text-xs font-medium text-accent-ink">
                     <IconPostIt />
                     Notas
                   </span>
@@ -99,10 +108,38 @@ export function InboxGuideExample({ onStart, onShowSummary }: InboxGuideExampleP
                 >
                   <IconSchedule />
                 </span>
-                <span className="grid size-[42px] shrink-0 place-items-center rounded-full border border-accent bg-accent-soft text-accent-ink" data-inbox-guide="chat-voice">
+                <span className="grid size-[42px] shrink-0 place-items-center rounded-full bg-accent text-white [[data-theme=dark]_&]:text-wa-chat-bg" data-inbox-guide="chat-voice">
                   <span className="inbox-guide-example__when-idle" aria-label="Micrófono" role="img"><IconMicrophone /></span>
-                  <span className="inbox-guide-example__when-scheduling" aria-label="Enviar mensaje" role="img"><IconSend /></span>
+                  <span className="inbox-guide-example__send" aria-label="Enviar mensaje" role="img"><IconSend /></span>
                 </span>
+
+                <div
+                  className="inbox-guide-example__panel pointer-events-none absolute end-0 bottom-0 w-80 max-w-full pb-[50px] sm:end-12"
+                  data-inbox-guide="chat-notes"
+                >
+                  <div className="space-y-2 rounded-xl border border-line bg-surface-strong p-3 text-ink">
+                    <div>
+                      <h3 className="text-sm font-medium">Mis notas</h3>
+                      <p className="text-xs text-muted">Privadas para ti. Clic para pegar en el mensaje.</p>
+                    </div>
+                    <div className="rounded-lg border border-line bg-surface px-2 py-1.5">
+                      <p className="text-sm font-medium">{exampleNote.title}</p>
+                      <p className="mt-0.5 text-xs text-muted">{exampleNote.body}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  className="inbox-guide-example__panel inbox-guide-example__quick-replies pointer-events-none absolute start-0 bottom-0 w-96 max-w-full pb-[50px]"
+                  data-inbox-guide="chat-compose"
+                >
+                  <div role="region" aria-label="Respuestas rápidas" className="rounded-xl border border-line bg-surface-strong p-2">
+                    <div className="rounded-md bg-accent-soft px-2 py-1.5 text-accent-ink">
+                      <p className="text-sm font-medium">{exampleNote.title}</p>
+                      <p className="text-xs">{exampleNote.body}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
               <p className="mt-2 w-fit text-xs text-muted" data-inbox-guide="chat-shortcuts">
                 <kbd className="font-sans font-medium text-ink">Enter</kbd> para enviar · <kbd className="font-sans font-medium text-ink">Shift + Enter</kbd> para nueva línea

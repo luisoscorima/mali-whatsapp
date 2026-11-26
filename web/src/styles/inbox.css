@@ -2059,20 +2059,28 @@ html[data-theme='dark'] .inbox-lead-score-pick--mid.is-on {
   opacity: 0;
 }
 
-.inbox-guide-example__schedule.driver-active-element {
-  opacity: 1;
+.inbox-guide-example__panel:not(.driver-active-element) > * {
+  visibility: hidden;
 }
 
-.inbox-guide-example__composer:has(> .inbox-guide-example__schedule.driver-active-element) {
+.inbox-guide-example__composer:has(> :is(.inbox-guide-example__schedule, .inbox-guide-example__quick-replies).driver-active-element) {
   column-gap: 48px;
 }
 
+.inbox-guide-example__composer:has(> :is(.inbox-guide-example__schedule, .inbox-guide-example__quick-replies).driver-active-element) > .inbox-guide-example__schedule {
+  opacity: 1;
+}
+
 .inbox-guide-example__when-scheduling,
-.inbox-guide-example__composer:has(> .inbox-guide-example__schedule.driver-active-element) .inbox-guide-example__when-idle {
+.inbox-guide-example__when-searching,
+.inbox-guide-example__send,
+.inbox-guide-example__composer:has(> :is(.inbox-guide-example__schedule, .inbox-guide-example__quick-replies).driver-active-element) .inbox-guide-example__when-idle {
   display: none;
 }
 
-.inbox-guide-example__composer:has(> .inbox-guide-example__schedule.driver-active-element) .inbox-guide-example__when-scheduling {
+.inbox-guide-example__composer:has(> .inbox-guide-example__schedule.driver-active-element) .inbox-guide-example__when-scheduling,
+.inbox-guide-example__composer:has(> .inbox-guide-example__quick-replies.driver-active-element) .inbox-guide-example__when-searching,
+.inbox-guide-example__composer:has(> :is(.inbox-guide-example__schedule, .inbox-guide-example__quick-replies).driver-active-element) .inbox-guide-example__send {
   display: inline;
 }
 
