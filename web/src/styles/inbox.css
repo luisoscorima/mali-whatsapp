@@ -2814,7 +2814,8 @@ button.inbox-compose-primary {
   border: 1px solid var(--line);
 }
 
-.inbox-compose-bar:has(.inbox-compose-recording) {
+.inbox-compose-bar:has(.inbox-compose-recording),
+.inbox-compose-bar:has(.inbox-compose-voice-preview) {
   align-items: center;
 }
 

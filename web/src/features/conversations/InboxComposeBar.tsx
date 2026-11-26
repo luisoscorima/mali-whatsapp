@@ -411,12 +411,9 @@ export function InboxComposeBar({
             </Button>
           </div>
         ) : null}
-        {replyFile && canReply && (replyFile.voiceNote
-          ? <InboxVoiceAttachment file={replyFile.file} onRemove={() => {
-              onReplyFileChange(null)
-              primaryActionRef.current?.focus()
-            }} />
-          : <InboxAttachment filename={replyFile.file.name} onRemove={() => onReplyFileChange(null)} />)}
+        {replyFile && canReply && !replyFile.voiceNote ? (
+          <InboxAttachment filename={replyFile.file.name} onRemove={() => onReplyFileChange(null)} />
+        ) : null}
         {voice.error && canReply && !hasOutgoing && (
           <p role="alert" className="px-1 text-xs text-bad">{voice.error}</p>
         )}
@@ -483,7 +480,16 @@ export function InboxComposeBar({
             if (!event.currentTarget.contains(event.relatedTarget)) setSlash(null)
           }}
         >
-          {canReply && recording ? (
+          {canReply && replyFile?.voiceNote ? (
+            <InboxVoiceAttachment
+              embedded
+              file={replyFile.file}
+              onRemove={() => {
+                onReplyFileChange(null)
+                primaryActionRef.current?.focus()
+              }}
+            />
+          ) : canReply && recording ? (
             <div className="inbox-compose-recording inbox-compose-grow flex w-full items-center gap-2">
               <Button
                 ref={cancelRecordingRef}
@@ -794,9 +800,9 @@ export function InboxComposeBar({
           <p
             className={cn(
               'inbox-compose-hint-inline muted hidden sm:block',
-              recording && 'invisible',
+              (recording || replyFile?.voiceNote) && 'invisible',
             )}
-            aria-hidden={recording || undefined}
+            aria-hidden={recording || replyFile?.voiceNote || undefined}
           >
             Enter para enviar · Shift + Enter para nueva línea
           </p>

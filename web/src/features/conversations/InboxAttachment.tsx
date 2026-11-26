@@ -18,7 +18,15 @@ export function InboxTrashIcon() {
   )
 }
 
-export function InboxVoiceAttachment({ file, onRemove }: { file: File; onRemove: () => void }) {
+export function InboxVoiceAttachment({
+  file,
+  onRemove,
+  embedded = false,
+}: {
+  file: File
+  onRemove: () => void
+  embedded?: boolean
+}) {
   const [url, setUrl] = useState('')
 
   useEffect(() => {
@@ -26,6 +34,35 @@ export function InboxVoiceAttachment({ file, onRemove }: { file: File; onRemove:
     setUrl(next)
     return () => URL.revokeObjectURL(next)
   }, [file])
+
+  if (embedded) {
+    return (
+      <div className="inbox-compose-voice-preview inbox-compose-grow flex w-full items-center gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="shrink-0 rounded-full text-muted"
+          aria-label="Descartar nota de voz"
+          title="Descartar nota de voz"
+          onClick={onRemove}
+        >
+          <InboxTrashIcon />
+        </Button>
+        {url ? (
+          <audio
+            src={url}
+            controls
+            preload="metadata"
+            aria-label="Escuchar nota de voz"
+            className="h-9 min-w-0 flex-1"
+          />
+        ) : (
+          <span className="text-sm text-muted">Nota de voz</span>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-surface-strong px-3 py-2">
