@@ -445,8 +445,16 @@ export function InboxComposeBar({
   useEffect(() => {
     const el = textareaRef.current
     if (!el) return
-    el.style.height = '0px'
-    const next = Math.min(Math.max(el.scrollHeight, 36), 160)
+    /* Altura base = h-8 (32). Partir de 32 (no de 0) evita que scrollHeight
+       infle la barra y cambie al ir a grabar / preview / enviar. */
+    const minPx = 32
+    const maxPx = 160
+    if (typeof CSS !== 'undefined' && CSS.supports?.('field-sizing', 'content')) {
+      el.style.height = ''
+      return
+    }
+    el.style.height = `${minPx}px`
+    const next = Math.min(Math.max(el.scrollHeight, minPx), maxPx)
     el.style.height = `${next}px`
   }, [replyText, canReply])
 
@@ -686,7 +694,7 @@ export function InboxComposeBar({
                 ref={cancelRecordingRef}
                 type="button"
                 variant="ghost"
-                size="icon"
+                size="icon-sm"
                 className="shrink-0 rounded-full text-bad"
                 aria-label="Descartar grabación"
                 title="Descartar grabación"
@@ -910,7 +918,7 @@ export function InboxComposeBar({
               </div>
             </>
           ) : (
-            <div className="inbox-compose-grow min-h-[36px]" />
+            <div className="inbox-compose-grow min-h-[32px]" />
           )}
         </div>
         {surface === 'compose' && onSchedule && hasOutgoing ? (

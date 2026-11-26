@@ -2818,7 +2818,10 @@ button.inbox-compose-primary {
   flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
-  padding: 8px 10px;
+  /* 6 + 32 + 6: misma caja en texto / grabar / preview / enviar */
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 6px 10px;
   border-radius: 12px;
   background: var(--surface-strong);
   border: 1px solid var(--line);
@@ -2829,9 +2832,15 @@ button.inbox-compose-primary {
   align-items: center;
 }
 
+.inbox-compose-recording,
+.inbox-compose-voice-preview {
+  min-height: 32px;
+}
+
 .inbox-compose-voice-preview .chat-audio {
   width: 100%;
   min-width: 0;
+  min-height: 32px;
   padding: 0;
   gap: 6px;
 }
@@ -2937,6 +2946,8 @@ button.inbox-compose-primary {
 .inbox-compose-textarea {
   flex: 1;
   min-width: 0;
+  /* Misma caja que botones h-8: line-height 24 + padding 4+4 = 32 */
+  field-sizing: content;
   min-height: 32px;
   max-height: 160px;
   resize: none;
@@ -2946,9 +2957,9 @@ button.inbox-compose-primary {
   background: transparent;
   font-family: inherit;
   font-size: 0.9rem;
-  line-height: 1.35;
+  line-height: 24px;
   color: var(--ink);
-  padding: 6px 4px;
+  padding: 4px 4px;
   margin: 0;
   box-sizing: border-box;
 }
@@ -3020,6 +3031,11 @@ button.inbox-compose-primary {
     padding-right: 0;
   }
 
+  /* Misma altura mínima que compose en 2 filas: evita salto al grabar/preview */
+  .inbox-compose-row:not(.inbox-compose-row--compose) {
+    min-height: 80px;
+  }
+
   /* Fila 1: tools + notas · Fila 2: textarea + programar + mic/enviar */
   .inbox-compose-row--compose {
     display: grid;
@@ -3030,6 +3046,7 @@ button.inbox-compose-primary {
     column-gap: 8px;
     row-gap: 6px;
     align-items: center;
+    min-height: 80px;
   }
 
   .inbox-compose-row--compose:has(.inbox-compose-schedule) {

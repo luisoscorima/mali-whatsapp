@@ -138,17 +138,17 @@ body:has(.login-shell) {
 }
 
 .page-wa {
-  margin: 0;
+  /* Fijo + visualViewport (--app-vvh): evita que iOS empuje el layout con el
+     teclado y deje hueco bajo el rail al cerrar. Fallback svh (estable). */
+  position: fixed;
+  top: var(--app-vv-top, 0px);
+  left: 0;
+  right: 0;
   width: 100%;
   max-width: 100%;
-  /* En iOS Safari -webkit-fill-available resuelve al viewport grande: el rail
-     inferior quedaba bajo la barra del navegador y sin scroll para alcanzarlo. */
-  min-height: 100vh;
-  min-height: 100dvh;
-  height: 100vh;
-  height: 100dvh;
-  max-height: 100vh;
-  max-height: 100dvh;
+  height: var(--app-vvh, 100svh);
+  max-height: var(--app-vvh, 100svh);
+  min-height: 0;
   overflow: hidden;
   background: var(--wa-shell-bg);
 }

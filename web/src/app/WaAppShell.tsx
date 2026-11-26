@@ -33,6 +33,32 @@ export function WaAppShell() {
     return () => onUnauthorized(() => {})
   }, [setUser])
 
+  /* iOS Safari: teclado mueve visualViewport; sin sync queda hueco bajo el rail. */
+  useEffect(() => {
+    const root = document.documentElement
+    const vv = window.visualViewport
+
+    function syncViewport() {
+      const height = vv?.height ?? window.innerHeight
+      const top = vv?.offsetTop ?? 0
+      root.style.setProperty('--app-vvh', `${Math.round(height)}px`)
+      root.style.setProperty('--app-vv-top', `${Math.round(top)}px`)
+      if (window.scrollY !== 0 || window.scrollX !== 0) window.scrollTo(0, 0)
+    }
+
+    syncViewport()
+    vv?.addEventListener('resize', syncViewport)
+    vv?.addEventListener('scroll', syncViewport)
+    window.addEventListener('orientationchange', syncViewport)
+    return () => {
+      vv?.removeEventListener('resize', syncViewport)
+      vv?.removeEventListener('scroll', syncViewport)
+      window.removeEventListener('orientationchange', syncViewport)
+      root.style.removeProperty('--app-vvh')
+      root.style.removeProperty('--app-vv-top')
+    }
+  }, [])
+
   useEffect(() => {
     if (!user?.area) {
       document.title = APP_TITLE
