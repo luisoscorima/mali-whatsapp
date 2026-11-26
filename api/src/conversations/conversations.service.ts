@@ -29,6 +29,7 @@ import { auditActor, phoneMetaTail } from '../audit/audit-actor.util';
 import { AuditLogService } from '../audit/audit-log.service';
 import {
   isWithinUserServiceWindow,
+  userServiceWindowEndsAt,
   readSessionWindowMs,
 } from '../campaigns/campaign-conversation-window.util';
 import { estimateServiceReplyOverage } from '../campaigns/campaign-pricing.util';
@@ -75,6 +76,7 @@ import {
 import {
   classifyConversationUpload,
   downloadWhatsAppMediaBuffer,
+  MAX_MEDIA_CAPTION_LEN,
   MEDIA_TYPE_LABEL,
   sendSessionMediaMessage,
   sendSessionTextMessage,
@@ -785,7 +787,16 @@ export class ConversationsService {
           SELECT 1 FROM chat_messages m_out
           WHERE m_out.conversation_id = c.id
             AND m_out.direction = 'outbound'
-            AND m_out.created_at >= c.last_user_message_at
+            AND m_out.wa_message_id IS NOT NULL
+            AND COALESCE(
+              m_out.raw_payload->'delivery_status'->>'status',
+              m_out.raw_payload->>'status',
+              ''
+            ) NOT IN ('scheduled', 'pending', 'failed', 'undelivered')
+            AND COALESCE(
+              NULLIF(m_out.raw_payload->>'sent_at', '')::timestamptz,
+              m_out.created_at
+            ) >= c.last_user_message_at
         )`;
     }
     // Búsqueda en «Todos»: incluir archivados / históricos (como contactos).
@@ -1986,6 +1997,8 @@ export class ConversationsService {
       can_reply: windowOpen && !botModeBlock,
       reply_blocked_reason: replyBlockedReason,
       user_service_window_open: windowOpen,
+      user_service_window_ends_at:
+        userServiceWindowEndsAt(activeConversation.last_user_message_at)?.toISOString() ?? null,
       ai_area_enabled: aiAreaEnabled,
       can_assign_conversations: this.canAssignConversations(user),
     };
@@ -3086,6 +3099,8 @@ export class ConversationsService {
     replyToWaMessageId?: string | null;
     replyToMeta?: StoredMessageReplyTo | null;
     localPreview: { url: string; mime: string | null };
+    /** URL que Graph debe subir (p. ej. Ogg); por defecto = localPreview. */
+    sendMediaUrl?: string;
     linePhoneNumberId?: string;
     actorLabel: string;
     user: AuthUser;
@@ -3095,8 +3110,8 @@ export class ConversationsService {
     const created: InboxMessage[] = [];
     const delayOpts = this.enqueueDelayOpts(input.scheduledAt);
     const statusPayload = this.outboundStatusPayload(input.scheduledAt);
-    const caption =
-      input.waType === 'audio' ? '' : input.text ? input.text.slice(0, 1024) : '';
+    const sendMediaUrl = input.sendMediaUrl || input.localPreview.url;
+    const caption = input.waType === 'audio' ? '' : input.text;
     if (input.waType === 'audio' && input.text) {
       const textPayload = withRoutingPhoneNumberId(
         setMessageSender(
@@ -3137,7 +3152,7 @@ export class ConversationsService {
       ? caption.slice(0, 8000)
       : `[${label}] ${input.filename}`.slice(0, 8000);
     const outboundMedia = {
-      url: input.localPreview.url,
+      url: sendMediaUrl,
       mime: input.mimeType,
       filename: input.filename.slice(0, 200),
       waType: input.waType,
@@ -3181,7 +3196,7 @@ export class ConversationsService {
       conversationId: input.conversationId,
       area: input.user.area,
       to: input.to,
-      mediaUrl: input.localPreview.url,
+      mediaUrl: sendMediaUrl,
       mimeType: input.mimeType,
       filename: input.filename.slice(0, 200),
       waType: input.waType,
@@ -3240,6 +3255,7 @@ export class ConversationsService {
         SELECT id, direction, message_type, body_text, wa_message_id, raw_payload
         FROM chat_messages
         WHERE id = ${messageId} AND conversation_id = ${conversationId}
+          AND direction = 'outbound'
         FOR UPDATE
       `;
       const row = rows[0];
@@ -3409,16 +3425,33 @@ export class ConversationsService {
     scheduledAtRaw: string,
     file?: { buffer: Buffer; mimetype: string; originalname: string },
     replyToMessageId?: number,
-    voiceNote = false,
   ): Promise<ReplyResult> {
     const scheduledAt = this.parseFutureScheduledAt(scheduledAtRaw);
+    const conversation = await this.prisma.conversations.findFirst({
+      where: this.conversationLookup(user.area, conversationId),
+      select: { last_user_message_at: true },
+    });
+    if (!conversation) {
+      throw new NotFoundException('Conversacion no encontrada');
+    }
+    const windowEndsAt = userServiceWindowEndsAt(conversation.last_user_message_at);
+    if (!windowEndsAt || windowEndsAt.getTime() <= Date.now()) {
+      throw new BadRequestException(
+        'Ventana de 24 h cerrada: el usuario debe escribirte de nuevo o usa una plantilla desde Campañas.',
+      );
+    }
+    if (scheduledAt.getTime() >= windowEndsAt.getTime()) {
+      throw new BadRequestException(
+        'La hora programada queda fuera de la ventana de 24 h. Elige un horario anterior o espera a que el cliente escriba de nuevo.',
+      );
+    }
     return this.reply(
       user,
       conversationId,
       messageText,
       file,
       replyToMessageId,
-      voiceNote,
+      false,
       scheduledAt,
     );
   }
@@ -3478,26 +3511,47 @@ export class ConversationsService {
       throw new NotFoundException('Conversacion no encontrada');
     }
 
-    const row = await this.prisma.chat_messages.findFirst({
-      where: {
-        id: messageId,
-        conversation_id: conversationId,
-        direction: 'outbound',
-        wa_message_id: null,
-      },
-      select: { id: true, message_type: true, raw_payload: true },
+    // Borrado atómico: si el worker ya promovió/envió entre check y delete, no se borra.
+    type LockedRow = {
+      id: number;
+      message_type: string;
+      wa_message_id: string | null;
+      raw_payload: unknown;
+    };
+    const mediaType = await this.prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<LockedRow[]>`
+        SELECT id, message_type, wa_message_id, raw_payload
+        FROM chat_messages
+        WHERE id = ${messageId} AND conversation_id = ${conversationId}
+        FOR UPDATE
+      `;
+      const row = rows[0];
+      if (!row) {
+        throw new NotFoundException('Mensaje programado no encontrado');
+      }
+      if (
+        row.wa_message_id ||
+        readOutboundAcceptedWamid(row.raw_payload) ||
+        hasOutboundDispatchStarted(row.raw_payload) ||
+        !isScheduledOutbound(row.raw_payload)
+      ) {
+        throw new BadRequestException(
+          'Ya no se puede cancelar: el mensaje se está enviando o ya salió',
+        );
+      }
+      await tx.chat_messages.delete({ where: { id: messageId } });
+      return String(row.message_type || '').toLowerCase();
     });
-    if (!row || !isScheduledOutbound(row.raw_payload)) {
-      throw new NotFoundException('Mensaje programado no encontrado');
-    }
 
-    const mediaType = String(row.message_type || '').toLowerCase();
-    if (['image', 'video', 'audio', 'document'].includes(mediaType)) {
-      await this.outboundQueue.removeMediaJob(messageId);
-    } else {
-      await this.outboundQueue.removeReplyJob(messageId);
-    }
-    await this.prisma.chat_messages.delete({ where: { id: messageId } });
+    const cleanup = ['image', 'video', 'audio', 'document'].includes(mediaType)
+      ? this.outboundQueue.removeMediaJob(messageId)
+      : this.outboundQueue.removeReplyJob(messageId);
+    void cleanup.catch((error) => {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Cancelación ${messageId} aplicada en DB; no se pudo quitar el job: ${reason}`,
+      );
+    });
     return { deleted: true };
   }
 
@@ -3517,7 +3571,7 @@ export class ConversationsService {
     if (!text && !file) {
       throw new BadRequestException('Escribe un mensaje o adjunta un archivo');
     }
-    if (!file && text.length > MAX_SESSION_TEXT_LEN) {
+    if (text.length > MAX_SESSION_TEXT_LEN) {
       throw new BadRequestException(
         `Mensaje demasiado largo (max ${MAX_SESSION_TEXT_LEN})`,
       );
@@ -3537,9 +3591,38 @@ export class ConversationsService {
     }
 
     await this.assertCanReply(conversation, area);
+    // Safari < 18.4 no reproduce Ogg Opus: vista previa AAC/MP4 en bandeja.
+    let voicePlaybackPreview: { url: string; mime: string | null } | null = null;
     if (voiceNote) {
       if (!file) throw new BadRequestException('Adjunta la grabación de voz.');
-      file = await prepareVoiceNote(file);
+      const prepared = await prepareVoiceNote(file);
+      file = {
+        buffer: prepared.buffer,
+        mimetype: prepared.mimetype,
+        originalname: prepared.originalname,
+      };
+      try {
+        voicePlaybackPreview = await saveOutboundChatMediaFile({
+          buffer: prepared.playback.buffer,
+          conversationId,
+          mimeType: prepared.playback.mimetype,
+        });
+      } catch {
+        voicePlaybackPreview = null;
+      }
+    }
+    let classified: ReturnType<typeof classifyConversationUpload> | undefined;
+    if (file) {
+      try {
+        classified = classifyConversationUpload(file.mimetype, file.buffer.length, file.originalname);
+      } catch (error) {
+        throw new BadRequestException(error instanceof Error ? error.message : 'Archivo no válido');
+      }
+      if (classified.waType !== 'audio' && text.length > MAX_MEDIA_CAPTION_LEN) {
+        throw new BadRequestException(
+          `El texto de este adjunto admite hasta ${MAX_MEDIA_CAPTION_LEN} caracteres. Acórtalo o envíalo por separado.`,
+        );
+      }
     }
     const linePhoneNumberId =
       String(conversation.whatsapp_phone_number_id || '').trim() || undefined;
@@ -3753,23 +3836,15 @@ export class ConversationsService {
           });
         }
         return { messages: createdMessages };
-      } else {
-        const { waType } = classifyConversationUpload(
-          file.mimetype,
-          file.buffer.length,
-        );
-        if (waType === 'audio' && text && text.length > MAX_SESSION_TEXT_LEN) {
-          throw new BadRequestException(
-            `Con audio, el texto no puede superar ${MAX_SESSION_TEXT_LEN} caracteres`,
-          );
-        }
+      } else if (classified) {
+        const { waType, mime: uploadMime } = classified;
 
         let localPreview: { url: string; mime: string | null } | null = null;
         try {
           localPreview = await saveOutboundChatMediaFile({
             buffer: file.buffer,
             conversationId,
-            mimeType: file.mimetype,
+            mimeType: uploadMime,
           });
         } catch {
           localPreview = null;
@@ -3779,13 +3854,14 @@ export class ConversationsService {
             conversationId,
             to: conversationRecipient(conversation),
             text,
-            mimeType: file.mimetype,
+            mimeType: uploadMime,
             filename: file.originalname,
             waType,
             voiceNote,
             replyToWaMessageId: voiceNote ? replyToWaMessageId : null,
             replyToMeta: voiceNote ? replyToMeta : null,
-            localPreview,
+            localPreview: voicePlaybackPreview ?? localPreview,
+            sendMediaUrl: localPreview.url,
             linePhoneNumberId,
             actorLabel,
             user,
@@ -3816,7 +3892,7 @@ export class ConversationsService {
         const uploadResult = await uploadMediaToWhatsApp({
           area,
           buffer: file.buffer,
-          mimeType: file.mimetype,
+          mimeType: uploadMime,
           filename: file.originalname,
           phoneNumberId: linePhoneNumberId,
         });
@@ -3850,12 +3926,7 @@ export class ConversationsService {
           createdMessages.push(this.mapMessageRow(textRow));
         }
 
-        const captionForMedia =
-          uploadResult.waType === 'audio'
-            ? ''
-            : text
-              ? text.slice(0, 1024)
-              : '';
+        const captionForMedia = uploadResult.waType === 'audio' ? '' : text;
 
         const sendResp = await sendSessionMediaMessage({
           to: conversationRecipient(conversation),
@@ -3887,7 +3958,11 @@ export class ConversationsService {
             raw_payload: withRoutingPhoneNumberId(
               setMessageSender(
                 setMessageReplyTo(
-                  sanitizeMediaOutboundPayload(uploadResult.mediaId, sendResp, localPreview),
+                  sanitizeMediaOutboundPayload(
+                    uploadResult.mediaId,
+                    sendResp,
+                    voicePlaybackPreview ?? localPreview,
+                  ),
                   voiceNote ? replyToMeta : null,
                 ),
                 actorLabel,
@@ -3928,11 +4003,8 @@ export class ConversationsService {
             text_preview: text.slice(0, 120),
           },
         });
-      } else {
-        const { waType } = classifyConversationUpload(
-          file.mimetype,
-          file.buffer.length,
-        );
+      } else if (classified) {
+        const { waType } = classified;
         await this.auditLog.write({
           event_type: AuditEvent.CONVERSATION_REPLY,
           message: `Respuesta WhatsApp (${waType}) en conversación ${conversationId}`,
@@ -4368,6 +4440,8 @@ export class ConversationsService {
       can_reply: windowOpen && !botModeBlock,
       reply_blocked_reason: replyBlockedReason,
       user_service_window_open: windowOpen,
+      user_service_window_ends_at:
+        userServiceWindowEndsAt(conversation.last_user_message_at)?.toISOString() ?? null,
     };
   }
 

@@ -251,12 +251,14 @@ export class ContactsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseIntPipe) id: number,
     @Query('category') category?: string,
+    @Query('include_general') includeGeneral?: string,
   ): Promise<ApiResponse<ContactDetail>> {
     assertCanReadContactForWrite(user);
     const data = await this.contactsService.getById(
       user.area,
       id,
       category?.trim().toLowerCase() || null,
+      includeGeneral === 'true',
     );
     return { ok: true, data };
   }

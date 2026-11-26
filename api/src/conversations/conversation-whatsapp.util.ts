@@ -78,19 +78,39 @@ export function resolveWhatsAppSendCredentials(input: {
   return creds;
 }
 
+/** MIME a partir de la extensión cuando el navegador manda octet-stream u omite type. */
+function guessConversationUploadMime(filename: string): string | null {
+  const name = String(filename || '').toLowerCase();
+  if (/\.jpe?g$/.test(name)) return 'image/jpeg';
+  if (/\.png$/.test(name)) return 'image/png';
+  if (/\.mp4$/.test(name)) return 'video/mp4';
+  if (/\.mp3$/.test(name)) return 'audio/mpeg';
+  if (/\.ogg$/.test(name)) return 'audio/ogg';
+  if (/\.aac$/.test(name)) return 'audio/aac';
+  if (/\.m4a$/.test(name)) return 'audio/mp4';
+  if (/\.pdf$/.test(name)) return 'application/pdf';
+  return null;
+}
+
 export function classifyConversationUpload(
   mimeType: string,
   sizeBytes: number,
-): { waType: ConversationWaType; maxBytes: number } {
-  const mime = String(mimeType || '')
+  filename?: string,
+): { waType: ConversationWaType; maxBytes: number; mime: string } {
+  let mime = String(mimeType || '')
     .toLowerCase()
     .split(';')[0]
     .trim();
+  if (!mime || mime === 'application/octet-stream') {
+    const guessed = guessConversationUploadMime(filename || '');
+    if (guessed) mime = guessed;
+  }
   if (!mime || !ALLOWED_MEDIA_MIMES.has(mime)) {
     throw new Error(
       'Tipo de archivo no permitido. Usa JPEG/PNG, MP4, audio (MP3/OGG/AAC/M4A) o PDF.',
     );
   }
+  if (sizeBytes <= 0) throw new Error('Archivo vacío o inválido');
   let waType: ConversationWaType;
   let maxBytes: number;
   if (mime === 'image/jpeg' || mime === 'image/jpg' || mime === 'image/png') {
@@ -111,7 +131,7 @@ export function classifyConversationUpload(
       `Archivo demasiado grande (máx. ${Math.round(maxBytes / (1024 * 1024))} MB para este tipo).`,
     );
   }
-  return { waType, maxBytes };
+  return { waType, maxBytes, mime };
 }
 
 function sanitizeUploadFilename(
@@ -298,13 +318,14 @@ export async function uploadMediaToWhatsApp(input: {
   if (!Buffer.isBuffer(input.buffer) || input.buffer.length === 0) {
     throw new Error('Archivo vacío o inválido');
   }
-  const { waType } = classifyConversationUpload(
+  const { waType, mime } = classifyConversationUpload(
     input.mimeType,
     input.buffer.length,
+    input.filename,
   );
   const safeName = sanitizeUploadFilename(input.filename, waType);
   // El split solo clasifica. En OGG el FormData lleva el MIME completo con codecs=opus.
-  const baseType = String(input.mimeType).split(';')[0].trim().toLowerCase();
+  const baseType = mime.split(';')[0].trim().toLowerCase();
   const wireMime = baseType === 'audio/ogg' ? VOICE_NOTE_MIME : baseType;
 
   const form = new FormData();

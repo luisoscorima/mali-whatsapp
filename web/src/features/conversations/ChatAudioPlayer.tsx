@@ -57,24 +57,61 @@ export function ChatAudioPlayer({
   const [playing, setPlaying] = useState(false)
   const [current, setCurrent] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     setPlaying(false)
     setCurrent(0)
     setDuration(0)
+    setError('')
   }, [src])
 
   function toggle() {
     const audio = audioRef.current
-    if (!audio) return
+    if (!audio || error) return
     if (audio.paused) {
       document.querySelectorAll('audio').forEach((other) => {
         if (other !== audio) other.pause()
       })
-      void audio.play()
+      void audio.play().catch((cause: unknown) => {
+        if (audioRef.current !== audio || audio.getAttribute('src') !== src) return
+        if (cause instanceof DOMException && cause.name === 'AbortError') return
+        setPlaying(false)
+        setError('No se puede reproducir este audio en este navegador')
+      })
       return
     }
     audio.pause()
+  }
+
+  if (error) {
+    return (
+      <div className="chat-audio">
+        <p className="muted" style={{ margin: 0, fontSize: '0.8rem' }}>
+          {error}
+          {canDownload && onDownload ? ' · puedes descargarlo' : ''}
+        </p>
+        {canDownload && onDownload ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <a
+                className="chat-audio__btn"
+                href={downloadHref}
+                aria-label="Descargar"
+                onClick={onDownload}
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <path d="M12 4v12" />
+                  <path d="m7 12 5 5 5-5" />
+                  <path d="M5 20h14" />
+                </svg>
+              </a>
+            </TooltipTrigger>
+            <TooltipContent>Descargar</TooltipContent>
+          </Tooltip>
+        ) : null}
+      </div>
+    )
   }
 
   return (
@@ -85,6 +122,10 @@ export function ChatAudioPlayer({
         preload="metadata"
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
+        onError={() => {
+          setPlaying(false)
+          setError('No se puede reproducir este audio en este navegador')
+        }}
         onLoadedMetadata={(event) => {
           resolveDuration(event.currentTarget, setDuration)
         }}

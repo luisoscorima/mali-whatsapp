@@ -2016,6 +2016,35 @@ html[data-theme='dark'] .inbox-lead-score-pick--mid.is-on {
   }
 }
 
+.inbox-chat-drop-zone {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.inbox-chat-drop-zone__overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  border: 2px dashed var(--accent);
+  background: color-mix(in srgb, var(--accent-soft) 45%, transparent);
+}
+
+.inbox-chat-drop-zone__overlay > span {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
 .inbox-layout-wa .inbox-chat-body {
   display: flex;
   flex-direction: column;
@@ -2991,13 +3020,6 @@ button.inbox-compose-primary {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.inbox-compose-stack--dragging {
-  border-radius: 12px;
-  outline: 2px dashed var(--accent);
-  outline-offset: 2px;
-  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
 }
 
 .inbox-compose-bar .inbox-compose-grow {

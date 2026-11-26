@@ -296,15 +296,25 @@ export class ContactsService {
   private async loadContactAttributes(
     contactId: number,
     programId: number | null = null,
+    includeGeneral = false,
   ): Promise<Record<string, string>> {
+    // Con programa: generales + del programa (el programa pisa claves repetidas).
     const rows = await this.prisma.contact_attributes.findMany({
-      where: { contact_id: contactId, program_id: programId },
+      where: {
+        contact_id: contactId,
+        ...(includeGeneral && programId !== null && programId > 0
+          ? { OR: [{ program_id: null }, { program_id: programId }] }
+          : { program_id: programId }),
+      },
       orderBy: { attr_key: 'asc' },
-      select: { attr_key: true, attr_value: true },
+      select: { attr_key: true, attr_value: true, program_id: true },
     });
     const map: Record<string, string> = {};
     for (const row of rows) {
-      map[row.attr_key] = row.attr_value;
+      if (row.program_id == null) map[row.attr_key] = row.attr_value;
+    }
+    for (const row of rows) {
+      if (row.program_id != null) map[row.attr_key] = row.attr_value;
     }
     const contact = await this.prisma.contacts.findUnique({
       where: { id: contactId },
@@ -1103,9 +1113,10 @@ export class ContactsService {
     },
     segmentSlugs: string[],
     programId?: number | null,
+    includeGeneral = false,
   ): Promise<ContactDetail> {
     const allDefs = await this.loadAttributeDefinitions(area, programId);
-    const attributes = await this.loadContactAttributes(row.id, programId ?? null);
+    const attributes = await this.loadContactAttributes(row.id, programId ?? null, includeGeneral);
     const originRows = await this.prisma.contact_origins.findMany({
       where: { contact_id: row.id, ...areaFamilyWhere(area) },
       orderBy: { last_seen_at: 'desc' },
@@ -1168,6 +1179,7 @@ export class ContactsService {
     area: AuthUser['area'],
     id: number,
     category?: string | null,
+    includeGeneral = false,
   ): Promise<ContactDetail> {
     const row = await this.prisma.contacts.findFirst({
       where: { id, ...areaFamilyWhere(area) },
@@ -1189,7 +1201,7 @@ export class ContactsService {
       scoped ? area : undefined,
       programId,
     );
-    const detail = await this.mapContactDetail(area, row, segmentSlugs, programId);
+    const detail = await this.mapContactDetail(area, row, segmentSlugs, programId, includeGeneral);
     if (!isEducationAttentionArea(area)) return detail;
 
     // Educación: estado del ciclo de la categoría, nunca el del contacto.

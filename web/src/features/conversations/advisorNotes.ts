@@ -23,26 +23,25 @@ export function resolveNotePlaceholders(
     email: string
     dni: string
   },
-): string {
-  return template.replace(
-    /\{\{\s*([A-Za-z][A-Za-z0-9_.]*)\s*\}\}/g,
-    (_m, key: string) => {
-      if (key === CONTACT_NAME_KEY) return contact.name.trim()
-      if (key === CONTACT_PHONE_KEY) return contact.phone.trim()
-      if (key === CONTACT_EMAIL_KEY) {
-        const native = contact.email.trim()
-        if (native) return native
-        return String(attrs.email || attrs.correo || '').trim()
-      }
-      if (key === CONTACT_DNI_KEY) {
-        const native = contact.dni.trim()
-        if (native) return native
-        return String(attrs.dni || '').trim()
-      }
-      const v = attrs[key]
-      return v != null && String(v).trim() ? String(v) : ''
+): { text: string; missing: string[] } {
+  const missing = new Set<string>()
+  const values: Record<string, string> = {
+    ...attrs,
+    [CONTACT_NAME_KEY]: contact.name,
+    [CONTACT_PHONE_KEY]: contact.phone,
+    [CONTACT_EMAIL_KEY]: contact.email.trim() || attrs.email?.trim() || attrs.correo || '',
+    [CONTACT_DNI_KEY]: contact.dni.trim() || attrs.dni || '',
+  }
+  const text = template.replace(
+    /\{\{\s*([A-Za-z0-9_][A-Za-z0-9_.]*)\s*\}\}/g,
+    (placeholder, key: string) => {
+      const value = Object.hasOwn(values, key) ? values[key].trim() : ''
+      if (value) return value
+      missing.add(key)
+      return placeholder
     },
   )
+  return { text, missing: [...missing] }
 }
 
 export function useAdvisorNotes() {

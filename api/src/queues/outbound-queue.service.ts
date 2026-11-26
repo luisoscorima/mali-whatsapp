@@ -9,6 +9,7 @@ export type OutboundJobMetaFlags = {
   metaCallStarted?: boolean;
   /** wamid aceptado; el reintento solo reanuda el persist. */
   acceptedWaMessageId?: string;
+  acceptedAt?: string;
 };
 
 export type OutboundReplyJobData = OutboundJobMetaFlags & {

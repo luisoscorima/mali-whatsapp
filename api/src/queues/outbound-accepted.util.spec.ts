@@ -9,6 +9,7 @@ import {
   isOutboundUncertain,
   markOutboundUncertain,
   persistOutboundAccepted,
+  promoteScheduledOutbound,
   settleOutboundFailure,
   stashOutboundAcceptedWamid,
 } from './outbound-accepted.util';
@@ -78,6 +79,38 @@ describe('durable outbound dispatch', () => {
     await markOutboundUncertain(prisma, 1, 'Meta reply lost');
     expect(isOutboundUncertain((await message()).raw_payload)).toBe(true);
     expect(await claimOutboundDispatch(prisma, 1)).toBe(false);
+  });
+
+  it('marks a scheduled message failed when enqueue never reaches Redis', async () => {
+    await db.query(
+      'UPDATE chat_messages SET raw_payload = $1 WHERE id = 1',
+      [JSON.stringify({
+        status: 'scheduled',
+        scheduled_at: '2099-01-01T12:00:00.000Z',
+        delivery_status: { status: 'scheduled' },
+      })],
+    );
+    await settleOutboundFailure(prisma, 1, 'Redis down', 'before-dispatch');
+    expect(readMessageDelivery((await message()).raw_payload)).toMatchObject({
+      status: 'failed',
+    });
+  });
+
+  it('records the send time only once Meta accepts a scheduled message', async () => {
+    await db.query(
+      'UPDATE chat_messages SET raw_payload = $1 WHERE id = 1',
+      [JSON.stringify({ status: 'scheduled', scheduled_at: '2099-01-01T12:00:00.000Z' })],
+    );
+    expect(await promoteScheduledOutbound(prisma, 1)).toBe(true);
+    expect((await message()).raw_payload).not.toHaveProperty('sent_at');
+
+    const acceptedAt = '2099-01-01T12:05:00.000Z';
+    await stashOutboundAcceptedWamid(prisma, 1, 'wamid.1', acceptedAt);
+    await persistOutboundAccepted(prisma, { messageId: 1, waMessageId: 'wamid.1' });
+    expect((await message()).raw_payload).toMatchObject({
+      status: 'sent',
+      sent_at: acceptedAt,
+    });
   });
 
   it('rolls back a failed campaign finalization and resumes from an accepted ID', async () => {

@@ -100,6 +100,7 @@ export async function persistOutboundAccepted(
   input: {
     messageId: number;
     waMessageId: string;
+    acceptedAt?: string;
     patch?: Record<string, unknown>;
     finalize?: (tx: Prisma.TransactionClient, payload: Record<string, unknown>) => Promise<void>;
   },
@@ -130,8 +131,10 @@ export async function persistOutboundAccepted(
     const next: Record<string, unknown> = {
       ...current,
       ...(input.patch || {}),
+      ...(input.acceptedAt ? { sent_at: input.acceptedAt } : {}),
       [ACCEPTED_KEY]: waMessageId,
     };
+    delete next.scheduled_at;
     delete next[OUTBOUND_UNCERTAIN_KEY];
     delete next[DISPATCH_KEY];
 
@@ -166,10 +169,14 @@ export async function stashOutboundAcceptedWamid(
   prisma: PrismaService,
   messageId: number,
   waMessageId: string,
+  acceptedAt?: string,
 ): Promise<void> {
   const id = String(waMessageId || '').trim();
   if (!id) throw new Error('waMessageId requerido para stash');
-  const patch = JSON.stringify({ [ACCEPTED_KEY]: id });
+  const patch = JSON.stringify({
+    [ACCEPTED_KEY]: id,
+    ...(acceptedAt ? { sent_at: acceptedAt } : {}),
+  });
   await prisma.$executeRaw`
     UPDATE chat_messages
     SET raw_payload = COALESCE(raw_payload, '{}'::jsonb) || ${patch}::jsonb
@@ -183,15 +190,17 @@ export async function rememberOutboundAccepted<T extends OutboundJobMetaFlags>(
   job: Job<T>,
   messageId: number,
   waMessageId: string,
+  acceptedAt?: string,
 ): Promise<void> {
   await Promise.allSettled([
-    job.updateData({ ...job.data, acceptedWaMessageId: waMessageId }),
-    stashOutboundAcceptedWamid(prisma, messageId, waMessageId),
+    job.updateData({ ...job.data, acceptedWaMessageId: waMessageId, acceptedAt }),
+    stashOutboundAcceptedWamid(prisma, messageId, waMessageId, acceptedAt),
   ]);
 }
 
 export function needsOutboundSentHeal(rawPayload: unknown): boolean {
-  return readDeliveryStatusToken(rawPayload) === 'pending';
+  const status = readDeliveryStatusToken(rawPayload);
+  return status === 'pending' || status === 'scheduled';
 }
 
 export function isOutboundUncertain(rawPayload: unknown): boolean {
@@ -232,9 +241,13 @@ export async function settleOutboundFailure(
     if (!row) return;
     if (row.wa_message_id || readOutboundAcceptedWamid(row.raw_payload)) return;
     const current = asObject(row.raw_payload);
-    if (readDeliveryStatusToken(current) !== 'pending') return;
+    const token = readDeliveryStatusToken(current);
+    // pending = cola/inmediato; scheduled = programado que nunca llegó a Redis.
+    if (token !== 'pending' && token !== 'scheduled') return;
     if (kind === 'before-dispatch' && hasOutboundDispatchStarted(current)) return;
     delete current[DISPATCH_KEY];
+    delete current.scheduled_at;
+    delete current.sent_at;
     if (kind === 'uncertain') current[OUTBOUND_UNCERTAIN_KEY] = true;
     await tx.chat_messages.update({
       where: { id: messageId },

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -207,7 +208,7 @@ export class ConversationsController {
   @Post(':id/reply')
   @UseInterceptors(
     FileInterceptor('file', {
-      limits: { fileSize: MAX_MEDIA_DOCUMENT_BYTES, files: 1 },
+      limits: { fileSize: MAX_MEDIA_DOCUMENT_BYTES + 1, files: 1 },
     }),
   )
   async reply(
@@ -236,7 +237,7 @@ export class ConversationsController {
   @Post(':id/schedule')
   @UseInterceptors(
     FileInterceptor('file', {
-      limits: { fileSize: MAX_MEDIA_DOCUMENT_BYTES, files: 1 },
+      limits: { fileSize: MAX_MEDIA_DOCUMENT_BYTES + 1, files: 1 },
     }),
   )
   async schedule(
@@ -247,6 +248,11 @@ export class ConversationsController {
     file?: { buffer: Buffer; mimetype: string; originalname: string },
   ): Promise<ApiResponse<ReplyResult>> {
     assertCanManageConversations(user);
+    if (body.voice_note === 'true') {
+      throw new BadRequestException(
+        'No se pueden programar notas de voz. Envía la nota ahora o programa un audio como adjunto.',
+      );
+    }
     const replyToId =
       body.reply_to_message_id != null && body.reply_to_message_id !== ''
         ? Number(body.reply_to_message_id)
@@ -258,7 +264,6 @@ export class ConversationsController {
       body.scheduled_at,
       file,
       Number.isInteger(replyToId) && replyToId! > 0 ? replyToId : undefined,
-      body.voice_note === 'true',
     );
     return { ok: true, data };
   }

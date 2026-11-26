@@ -4,11 +4,17 @@ export function readSessionWindowMs(): number {
   return 24 * 60 * 60 * 1000;
 }
 
+export function userServiceWindowEndsAt(
+  lastUserMessageAt: Date | string | null | undefined,
+): Date | null {
+  if (!lastUserMessageAt) return null;
+  const endsAt = new Date(new Date(lastUserMessageAt).getTime() + readSessionWindowMs());
+  return Number.isFinite(endsAt.getTime()) ? endsAt : null;
+}
+
 export function isWithinUserServiceWindow(
   lastUserMessageAt: Date | string | null | undefined,
 ): boolean {
-  if (!lastUserMessageAt) return false;
-  const t = new Date(lastUserMessageAt).getTime();
-  if (Number.isNaN(t)) return false;
-  return Date.now() - t <= readSessionWindowMs();
+  const endsAt = userServiceWindowEndsAt(lastUserMessageAt);
+  return endsAt !== null && Date.now() <= endsAt.getTime();
 }

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useId, useImperativeHandle, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode, type Ref } from 'react'
 import { insertAtSelection, selectionHasMarker, wrapSelection } from '@/shared/textSelection'
 
 type ComposeSurface = 'compose' | 'recording' | 'preview' | 'blocked'
@@ -86,25 +86,35 @@ const ATTACH_OPTIONS = [
   },
 ] as const
 
-function matchAttachOption(file: File) {
-  const mime = file.type.toLowerCase().split(';')[0].trim()
-  if (mime) {
-    const byMime = ATTACH_OPTIONS.find((opt) => (opt.mimes as readonly string[]).includes(mime))
-    if (byMime) return byMime
-  }
-  const name = file.name.toLowerCase()
-  if (/\.(jpe?g|png)$/.test(name)) return ATTACH_OPTIONS[0]
-  if (/\.mp4$/.test(name)) return ATTACH_OPTIONS[1]
-  if (/\.(mp3|ogg|aac|m4a)$/.test(name)) return ATTACH_OPTIONS[2]
-  if (/\.pdf$/.test(name)) return ATTACH_OPTIONS[3]
+function guessAttachMime(filename: string): string | null {
+  const name = filename.toLowerCase()
+  if (/\.jpe?g$/.test(name)) return 'image/jpeg'
+  if (/\.png$/.test(name)) return 'image/png'
+  if (/\.mp4$/.test(name)) return 'video/mp4'
+  if (/\.mp3$/.test(name)) return 'audio/mpeg'
+  if (/\.ogg$/.test(name)) return 'audio/ogg'
+  if (/\.aac$/.test(name)) return 'audio/aac'
+  if (/\.m4a$/.test(name)) return 'audio/mp4'
+  if (/\.pdf$/.test(name)) return 'application/pdf'
   return null
 }
 
+/** Alinea el MIME con la extensión cuando el navegador manda octet-stream. */
+function normalizeAttachFile(file: File): File {
+  const mime = file.type.toLowerCase().split(';')[0].trim()
+  if (mime && mime !== 'application/octet-stream') return file
+  const guessed = guessAttachMime(file.name)
+  if (!guessed) return file
+  return new File([file], file.name, { type: guessed, lastModified: file.lastModified })
+}
+
 function validateAttachFile(file: File): string | null {
-  const option = matchAttachOption(file)
+  const mime = file.type.toLowerCase().split(';')[0].trim()
+  const option = ATTACH_OPTIONS.find((item) => (item.mimes as readonly string[]).includes(mime))
   if (!option) {
     return 'Tipo de archivo no permitido. Usa JPEG/PNG, MP4, audio (MP3/OGG/AAC/M4A) o PDF.'
   }
+  if (!file.size) return 'El archivo está vacío.'
   if (file.size > option.maxBytes) {
     return `Archivo demasiado grande (máx. ${Math.round(option.maxBytes / MB)} MB para este tipo).`
   }
@@ -231,7 +241,13 @@ function normalizeNoteSearch(text: string) {
   return text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
 }
 
+export type InboxComposeBarHandle = {
+  canAttachFiles: boolean
+  attachFiles: (files: readonly File[]) => void
+}
+
 type InboxComposeBarProps = {
+  ref?: Ref<InboxComposeBarHandle>
   replyText: string
   onReplyTextChange: (value: string) => void
   replyFile: InboxReplyAttachment | null
@@ -256,10 +272,13 @@ type InboxComposeBarProps = {
   contactDni?: string
   notesTrigger?: ReactNode
   schedulingReply?: boolean
-  onSchedule?: (scheduledAtIso: string) => void | Promise<void>
+  serviceWindowEndsAt?: string | null
+  /** true = programado OK (cerrar diálogo); false = falló (mantener abierto). */
+  onSchedule?: (scheduledAtIso: string) => boolean | Promise<boolean>
 }
 
 export function InboxComposeBar({
+  ref,
   replyText,
   onReplyTextChange,
   replyFile,
@@ -283,6 +302,7 @@ export function InboxComposeBar({
   contactEmail = '',
   contactDni = '',
   schedulingReply = false,
+  serviceWindowEndsAt = null,
   onSchedule,
 }: InboxComposeBarProps) {
   const { confirm, confirmDialog } = useConfirmDialog()
@@ -290,6 +310,7 @@ export function InboxComposeBar({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const quickRepliesRef = useRef<HTMLDivElement>(null)
   const primaryActionRef = useRef<HTMLButtonElement>(null)
+  const scheduleTriggerRef = useRef<HTMLButtonElement>(null)
   const cancelRecordingRef = useRef<HTMLButtonElement>(null)
   const stopRecordingRef = useRef<HTMLButtonElement>(null)
   const wasRecording = useRef(false)
@@ -303,8 +324,8 @@ export function InboxComposeBar({
   const voice = useVoiceRecorder(canReply, (file) => onReplyFileChange({ file, voiceNote: true }))
   const recording = voice.status !== 'idle'
   const hasOutgoing = Boolean(replyText.trim() || replyFile)
-  const showSend = hasOutgoing || sendingReply || recording
-  const primaryLabel = sendingReply || voice.status === 'finishing' ? 'Enviando'
+  const showSend = hasOutgoing || sendingReply || schedulingReply || recording
+  const primaryLabel = sendingReply || schedulingReply || voice.status === 'finishing' ? 'Enviando'
     : recording ? 'Enviar nota de voz'
       : !hasOutgoing ? 'Grabar audio'
         : replyFile?.voiceNote ? 'Enviar nota de voz' : 'Enviar mensaje'
@@ -316,48 +337,35 @@ export function InboxComposeBar({
   const [activeNote, setActiveNote] = useState(0)
   const [boldOn, setBoldOn] = useState(false)
   const [italicOn, setItalicOn] = useState(false)
-  const [draggingFile, setDraggingFile] = useState(false)
   const notesListId = useId()
   const showNotes = canReply && slash != null
 
-  function attachFile(file: File | undefined) {
-    if (!file) return
-    if (!canReply) {
-      notify.error('No puedes adjuntar archivos en este chat ahora.')
+  function attachFiles(files: readonly File[]) {
+    if (!files.length) return
+    if (!canReply || recording) {
+      notify.error(recording
+        ? 'Detén la grabación para adjuntar un archivo.'
+        : 'No puedes adjuntar archivos en este chat ahora.')
       return
     }
-    if (recording) {
-      notify.error('Detén la grabación para adjuntar un archivo.')
+    if (files.length === 1) {
+      const file = normalizeAttachFile(files[0])
+      const error = validateAttachFile(file)
+      if (error) notify.error(error)
+      else onReplyFileChange({ file })
       return
     }
-    const error = validateAttachFile(file)
-    if (error) {
-      notify.error(error)
+    for (const candidate of files) {
+      const file = normalizeAttachFile(candidate)
+      if (validateAttachFile(file)) continue
+      onReplyFileChange({ file })
+      notify.info(`Solo se adjuntó ${file.name}. Se admite un archivo por mensaje.`)
       return
     }
-    onReplyFileChange({ file })
+    notify.error('Ninguno de los archivos cumple los requisitos de tipo y tamaño.')
   }
 
-  function onComposeDragOver(event: DragEvent<HTMLFormElement>) {
-    if (!canReply || recording) return
-    if (![...event.dataTransfer.types].includes('Files')) return
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'copy'
-    if (!draggingFile) setDraggingFile(true)
-  }
-
-  function onComposeDragLeave(event: DragEvent<HTMLFormElement>) {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-      setDraggingFile(false)
-    }
-  }
-
-  function onComposeDrop(event: DragEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setDraggingFile(false)
-    if (!canReply || recording) return
-    attachFile(event.dataTransfer.files?.[0])
-  }
+  useImperativeHandle(ref, () => ({ canAttachFiles: canReply && !recording, attachFiles }))
 
   function syncFormatToggles(el: HTMLTextAreaElement | null = textareaRef.current) {
     if (!el) {
@@ -377,7 +385,7 @@ export function InboxComposeBar({
 
   const quickReplies = slash == null ? [] : (() => {
     const terms = normalizeNoteSearch(slash.query).trim().split(/\s+/).filter(Boolean)
-    return notes.map((note) => ({ ...note, preview: resolveText(note.body) }))
+    return notes.map((note) => ({ ...note, preview: resolveText(note.body).text }))
       .filter((note) => {
         const text = normalizeNoteSearch(`${note.title} ${note.body} ${note.preview}`)
         return note.preview.trim() && terms.every((term) => text.includes(term))
@@ -417,22 +425,33 @@ export function InboxComposeBar({
   function updateQuickReplies(textarea: HTMLTextAreaElement) {
     const { value, selectionStart, selectionEnd } = textarea
     const beforeCaret = value.slice(0, selectionStart)
-    const match = selectionStart === selectionEnd ? /(?:^|\s)\/([^/\n]*)$/.exec(beforeCaret) : null
+    // Solo `/comando` (sin espacio tras la barra). Evita «sí / no».
+    const match =
+      selectionStart === selectionEnd
+        ? /(?:^|\s)\/([^\s/\n]*)$/.exec(beforeCaret)
+        : null
     if (!match) {
       setSlash(null)
       return
     }
     const query = match[1]
     const start = selectionStart - query.length - 1
-    if (slash?.start === start && slash.end === selectionStart && slash.query === query) return
+    const suffix = /^[^\s/]*/.exec(value.slice(selectionStart))?.[0] ?? ''
+    const end = selectionStart + suffix.length
+    if (slash?.start === start && slash.end === end && slash.query === query) return
     setActiveNote(0)
-    setSlash({ start, end: selectionStart, query })
+    setSlash({ start, end, query })
   }
 
-  function insertQuickReply(text: string) {
-    if (!slash) return
-    insertAtSelection(textareaRef.current, text, replyText, onReplyTextChange, slash)
+  function insertQuickReply(body: string, replaceCommand = true): boolean {
+    const { text, missing } = resolveText(body)
+    if (missing.length) {
+      notify.error(`Faltan datos del contacto para insertar la nota: ${missing.join(', ')}.`)
+      return false
+    }
+    insertAtSelection(textareaRef.current, text, replyText, onReplyTextChange, replaceCommand ? slash : null)
     setSlash(null)
+    return true
   }
 
   useEffect(() => {
@@ -512,16 +531,18 @@ export function InboxComposeBar({
         setActiveNote((index + offset + quickReplies.length) % quickReplies.length)
         return
       }
-      if (event.key === 'Enter' && !event.shiftKey) {
+      if (event.key === 'Enter' && !event.shiftKey && selectedNote) {
         event.preventDefault()
-        if (selectedNote) insertQuickReply(selectedNote.preview)
+        insertQuickReply(selectedNote.body)
         return
       }
+      // Sin coincidencia: cerrar el buscador y dejar que Enter envíe el mensaje.
+      if (event.key === 'Enter' && !event.shiftKey) setSlash(null)
     }
     if (event.key !== 'Enter') return
     if (event.shiftKey) return
     event.preventDefault()
-    if (sendingReply || !canReply || !hasOutgoing) return
+    if (sendingReply || schedulingReply || !canReply || !hasOutgoing) return
     const form = event.currentTarget.form
     if (form) form.requestSubmit()
   }
@@ -554,7 +575,7 @@ export function InboxComposeBar({
     <>
       <form
         onSubmit={(e) => {
-          if (!canReply || recording || !hasOutgoing) {
+          if (!canReply || recording || schedulingReply || !hasOutgoing) {
             e.preventDefault()
             return
           }
@@ -567,13 +588,7 @@ export function InboxComposeBar({
           event.preventDefault()
           voice.cancel()
         }}
-        className={cn(
-          'inbox-compose-stack inbox-compose-stack--with-emoji',
-          draggingFile && 'inbox-compose-stack--dragging',
-        )}
-        onDragOver={onComposeDragOver}
-        onDragLeave={onComposeDragLeave}
-        onDrop={onComposeDrop}
+        className="inbox-compose-stack inbox-compose-stack--with-emoji"
       >
         <div role="status" className={typingNames.length ? 'px-1 text-xs text-muted' : 'sr-only'}>
           {typingNames.length > 0 &&
@@ -754,7 +769,7 @@ export function InboxComposeBar({
                   accept={fileAccept}
                   className="sr-only"
                   onChange={(event) => {
-                    attachFile(event.currentTarget.files?.[0])
+                    attachFiles(Array.from(event.currentTarget.files ?? []))
                     event.currentTarget.value = ''
                   }}
                 />
@@ -852,7 +867,7 @@ export function InboxComposeBar({
                                 'block w-full rounded-md px-2 py-1.5 text-left hover:bg-accent-soft focus-visible:ring-1 focus-visible:ring-accent',
                                 note.id === selectedNote?.id && 'bg-accent-soft',
                               )}
-                              onClick={() => insertQuickReply(note.preview)}
+                              onClick={() => insertQuickReply(note.body)}
                             >
                               <span className="block truncate text-sm font-medium">{note.title}</span>
                               <span className="block truncate text-xs text-muted">{note.preview}</span>
@@ -871,11 +886,7 @@ export function InboxComposeBar({
                   notes={notes}
                   loading={notesLoading}
                   loadNotes={loadNotes}
-                  resolveText={resolveText}
-                  onInsert={(text) => {
-                    setSlash(null)
-                    insertAtSelection(textareaRef.current, text, replyText, onReplyTextChange)
-                  }}
+                  onInsert={(text) => insertQuickReply(text, false)}
                 />
 
                 {hasSecondary ? (
@@ -921,8 +932,9 @@ export function InboxComposeBar({
             <div className="inbox-compose-grow min-h-[32px]" />
           )}
         </div>
-        {surface === 'compose' && onSchedule && hasOutgoing ? (
+        {surface === 'compose' && onSchedule && hasOutgoing && !replyFile?.voiceNote ? (
           <Button
+            ref={scheduleTriggerRef}
             type="button"
             variant="ghost"
             size="icon"
@@ -966,6 +978,7 @@ export function InboxComposeBar({
             className="inbox-compose-primary"
             disabled={
               sendingReply
+              || schedulingReply
               || voice.status === 'requesting'
               || voice.status === 'finishing'
             }
@@ -1014,14 +1027,19 @@ export function InboxComposeBar({
           </p>
         ) : null}
       </form>
-      {onSchedule ? (
+      {onSchedule && scheduleOpen ? (
         <InboxScheduleMessageDialog
-          open={scheduleOpen}
           onOpenChange={setScheduleOpen}
           busy={schedulingReply}
+          serviceWindowEndsAt={serviceWindowEndsAt}
+          restoreFocus={() => {
+            const trigger = scheduleTriggerRef.current
+            if (trigger && !trigger.disabled) trigger.focus()
+            else textareaRef.current?.focus()
+          }}
           onConfirm={async (scheduledAtIso) => {
-            await onSchedule(scheduledAtIso)
-            setScheduleOpen(false)
+            const ok = await onSchedule(scheduledAtIso)
+            if (ok) setScheduleOpen(false)
           }}
         />
       ) : null}

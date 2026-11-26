@@ -183,6 +183,7 @@ export class FlowsService {
       const classified = classifyConversationUpload(
         file.mimetype,
         file.buffer.length,
+        file.originalname,
       );
       if (classified.waType !== 'image' && classified.waType !== 'document') {
         throw new BadRequestException(
@@ -190,6 +191,10 @@ export class FlowsService {
         );
       }
       waType = classified.waType;
+      file = {
+        ...file,
+        mimetype: classified.mime,
+      };
     } catch (error) {
       throw new BadRequestException(
         error instanceof Error ? error.message : 'Archivo no válido',

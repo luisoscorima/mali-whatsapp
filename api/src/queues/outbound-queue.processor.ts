@@ -18,7 +18,7 @@ import {
 import { EducationLeadWorkflowService } from '../leads/education-lead-workflow.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { isWithinUserServiceWindow } from '../campaigns/campaign-conversation-window.util';
-import { isScheduledOutbound } from '../conversations/chat-delivery.util';
+import { isScheduledOutbound, readDeliveryStatusToken } from '../conversations/chat-delivery.util';
 import {
   claimOutboundDispatch,
   hasOutboundDispatchStarted,
@@ -87,15 +87,11 @@ export class OutboundQueueProcessor extends WorkerHost {
     );
   }
 
-  /** Promueve scheduled→pending y valida ventana 24h. false = no enviar. */
-  private async prepareScheduledSend(
+  private async checkSendWindow(
     messageId: number,
     conversationId: number,
-    rawPayload: unknown,
+    scheduled: boolean,
   ): Promise<boolean> {
-    if (!isScheduledOutbound(rawPayload)) return true;
-    const promoted = await promoteScheduledOutbound(this.prisma, messageId);
-    if (!promoted) return false;
     const conversation = await this.prisma.conversations.findUnique({
       where: { id: conversationId },
       select: { last_user_message_at: true },
@@ -105,12 +101,26 @@ export class OutboundQueueProcessor extends WorkerHost {
       await settleOutboundFailure(
         this.prisma,
         messageId,
-        'Ventana de 24 h cerrada al momento del envío programado',
+        scheduled
+          ? 'Ventana de 24 h cerrada al momento del envío programado'
+          : 'Ventana de 24 h cerrada al momento del envío',
         'before-dispatch',
       );
       return false;
     }
     return true;
+  }
+
+  private async prepareSend(
+    messageId: number,
+    conversationId: number,
+    rawPayload: unknown,
+  ): Promise<boolean> {
+    const status = readDeliveryStatusToken(rawPayload);
+    if (status !== 'pending' && status !== 'scheduled') return false;
+    const scheduled = status === 'scheduled';
+    if (!(await this.checkSendWindow(messageId, conversationId, scheduled))) return false;
+    return !scheduled || promoteScheduledOutbound(this.prisma, messageId);
   }
 
   private async sendText(job: Job<OutboundReplyJobData>): Promise<void> {
@@ -128,25 +138,13 @@ export class OutboundQueueProcessor extends WorkerHost {
       this.logger.warn(`outbound: mensaje ${data.messageId} no encontrado`);
       return;
     }
-    if (
-      !(await this.prepareScheduledSend(
-        data.messageId,
-        data.conversationId,
-        row.raw_payload,
-      ))
-    ) {
-      return;
-    }
-    if (isOutboundUncertain(row.raw_payload) && !this.resolveResumeId(row, data)) {
-      return;
-    }
-
     const resumeId = this.resolveResumeId(row, data);
     if (resumeId) {
       if (!row.wa_message_id || needsOutboundSentHeal(row.raw_payload)) {
         await persistOutboundAccepted(this.prisma, {
           messageId: data.messageId,
           waMessageId: resumeId,
+          acceptedAt: data.acceptedAt,
           patch: withRoutingPhoneNumberId({}, data.phoneNumberId),
         });
       }
@@ -155,6 +153,7 @@ export class OutboundQueueProcessor extends WorkerHost {
       }
       return;
     }
+    if (isOutboundUncertain(row.raw_payload)) return;
 
     if (data.metaCallStarted || hasOutboundDispatchStarted(row.raw_payload)) {
       await markOutboundUncertain(
@@ -166,8 +165,10 @@ export class OutboundQueueProcessor extends WorkerHost {
     }
 
     let msgId: string | null = null;
+    let acceptedAt: string | undefined;
     let dispatchStarted = false;
     try {
+      if (!(await this.prepareSend(data.messageId, data.conversationId, row.raw_payload))) return;
       if (!(await claimOutboundDispatch(this.prisma, data.messageId))) return;
       dispatchStarted = true;
       const apiResponse = await sendSessionTextMessage({
@@ -179,6 +180,7 @@ export class OutboundQueueProcessor extends WorkerHost {
       });
       msgId = apiResponse.messages?.[0]?.id || null;
       if (!msgId) throw new Error('WhatsApp no devolvió un id de mensaje');
+      acceptedAt = new Date().toISOString();
 
       const existing =
         row.raw_payload &&
@@ -189,6 +191,7 @@ export class OutboundQueueProcessor extends WorkerHost {
       await persistOutboundAccepted(this.prisma, {
         messageId: data.messageId,
         waMessageId: msgId,
+        acceptedAt,
         patch: withRoutingPhoneNumberId(
           {
             ...sanitizeApiResponse(apiResponse),
@@ -221,7 +224,7 @@ export class OutboundQueueProcessor extends WorkerHost {
       });
     } catch (error) {
       if (msgId) {
-        await rememberOutboundAccepted(this.prisma, job, data.messageId, msgId);
+        await rememberOutboundAccepted(this.prisma, job, data.messageId, msgId, acceptedAt);
         this.logger.warn(
           `outbound: Meta aceptó ${msgId} pero falló el guardado; se reanudará sin reenviar`,
         );
@@ -249,19 +252,6 @@ export class OutboundQueueProcessor extends WorkerHost {
       this.logger.warn(`outbound: mensaje ${data.messageId} no encontrado`);
       return;
     }
-    if (
-      !(await this.prepareScheduledSend(
-        data.messageId,
-        data.conversationId,
-        row.raw_payload,
-      ))
-    ) {
-      return;
-    }
-    if (isOutboundUncertain(row.raw_payload) && !this.resolveResumeId(row, data)) {
-      return;
-    }
-
     const resumeId = this.resolveResumeId(row, data);
     if (resumeId) {
       if (!row.wa_message_id || needsOutboundSentHeal(row.raw_payload)) {
@@ -274,6 +264,7 @@ export class OutboundQueueProcessor extends WorkerHost {
         await persistOutboundAccepted(this.prisma, {
           messageId: data.messageId,
           waMessageId: resumeId,
+          acceptedAt: data.acceptedAt,
           patch: withRoutingPhoneNumberId(
             {
               ...(existing.outbound_media
@@ -293,6 +284,7 @@ export class OutboundQueueProcessor extends WorkerHost {
       }
       return;
     }
+    if (isOutboundUncertain(row.raw_payload)) return;
 
     if (data.metaCallStarted || hasOutboundDispatchStarted(row.raw_payload)) {
       await markOutboundUncertain(
@@ -304,8 +296,10 @@ export class OutboundQueueProcessor extends WorkerHost {
     }
 
     let msgId: string | null = null;
+    let acceptedAt: string | undefined;
     let dispatchStarted = false;
     try {
+      if (!(await this.prepareSend(data.messageId, data.conversationId, row.raw_payload))) return;
       const downloaded = await fetch(data.mediaUrl);
       if (!downloaded.ok) {
         throw new Error('No se pudo leer el archivo guardado');
@@ -323,6 +317,11 @@ export class OutboundQueueProcessor extends WorkerHost {
         filename: data.filename,
         phoneNumberId: data.phoneNumberId,
       });
+      if (!(await this.checkSendWindow(
+        data.messageId,
+        data.conversationId,
+        isScheduledOutbound(row.raw_payload),
+      ))) return;
       if (!(await claimOutboundDispatch(this.prisma, data.messageId))) return;
       dispatchStarted = true;
       const apiResponse = await sendSessionMediaMessage({
@@ -339,6 +338,7 @@ export class OutboundQueueProcessor extends WorkerHost {
       });
       msgId = apiResponse.messages?.[0]?.id || null;
       if (!msgId) throw new Error('WhatsApp no devolvió un id de mensaje');
+      acceptedAt = new Date().toISOString();
 
       const existing =
         row.raw_payload &&
@@ -349,6 +349,7 @@ export class OutboundQueueProcessor extends WorkerHost {
       await persistOutboundAccepted(this.prisma, {
         messageId: data.messageId,
         waMessageId: msgId,
+        acceptedAt,
         patch: withRoutingPhoneNumberId(
           {
             ...sanitizeMediaOutboundPayload(upload.mediaId, apiResponse, {
@@ -359,6 +360,10 @@ export class OutboundQueueProcessor extends WorkerHost {
             ...(existing.reply_to ? { reply_to: existing.reply_to } : {}),
             ...(existing.outbound_media
               ? { outbound_media: existing.outbound_media }
+              : {}),
+            // Conservar MP4/AAC de bandeja; no pisar con el Ogg de Graph.
+            ...(existing.local_preview
+              ? { local_preview: existing.local_preview }
               : {}),
           },
           data.phoneNumberId,
@@ -387,7 +392,7 @@ export class OutboundQueueProcessor extends WorkerHost {
       });
     } catch (error) {
       if (msgId) {
-        await rememberOutboundAccepted(this.prisma, job, data.messageId, msgId);
+        await rememberOutboundAccepted(this.prisma, job, data.messageId, msgId, acceptedAt);
         this.logger.warn(
           `outbound media: Meta aceptó ${msgId} pero falló el guardado; se reanudará sin reenviar`,
         );

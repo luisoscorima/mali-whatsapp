@@ -208,6 +208,7 @@ export type InboxDetail = {
   can_reply: boolean;
   reply_blocked_reason: '24h' | 'bot_mode' | null;
   user_service_window_open: boolean;
+  user_service_window_ends_at: string | null;
   ai_area_enabled: boolean;
   can_assign_conversations: boolean;
 };
@@ -287,4 +288,5 @@ export type InboxConversationUpdates = {
   can_reply: boolean;
   reply_blocked_reason: '24h' | 'bot_mode' | null;
   user_service_window_open: boolean;
+  user_service_window_ends_at: string | null;
 };

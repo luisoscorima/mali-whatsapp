@@ -35,8 +35,7 @@ type FixedVariable = {
 }
 
 type InboxAdvisorNotesPopoverProps = {
-  onInsert: (text: string) => void
-  resolveText: (text: string) => string
+  onInsert: (text: string) => boolean
   notes: AdvisorNote[]
   loading: boolean
   loadNotes: () => Promise<void>
@@ -45,7 +44,6 @@ type InboxAdvisorNotesPopoverProps = {
 
 export function InboxAdvisorNotesPopover({
   onInsert,
-  resolveText,
   notes,
   loading,
   loadNotes,
@@ -185,8 +183,7 @@ export function InboxAdvisorNotesPopover({
   }
 
   function insertNoteIntoComposer(noteBody: string) {
-    onInsert(resolveText(noteBody))
-    setOpen(false)
+    if (onInsert(noteBody)) setOpen(false)
   }
 
   return (

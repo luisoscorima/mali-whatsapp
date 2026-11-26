@@ -73,7 +73,8 @@ import {
 } from '@/shared/ui/shadcn/context-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/shadcn/popover'
 const ConversationsSummaryPane = lazy(() => import('./ConversationsSummaryPane').then((m) => ({ default: m.ConversationsSummaryPane })))
-import { InboxComposeBar, type ReplyToMessage } from './InboxComposeBar'
+import { InboxComposeBar, type InboxComposeBarHandle, type ReplyToMessage } from './InboxComposeBar'
+import { InboxChatDropZone } from './InboxChatDropZone'
 import type { InboxReplyAttachment } from './InboxAttachment'
 import { InboxSavedViews, InboxSavedViewShortcuts } from './InboxSavedViews'
 import { useInboxSavedViews } from './useInboxSavedViews'
@@ -951,6 +952,7 @@ type InboxDetail = {
   can_reply: boolean
   reply_blocked_reason: '24h' | 'bot_mode' | null
   user_service_window_open: boolean
+  user_service_window_ends_at: string | null
   ai_area_enabled: boolean
   can_assign_conversations: boolean
 }
@@ -981,6 +983,7 @@ type InboxConversationUpdates = {
   can_reply: boolean
   reply_blocked_reason: '24h' | 'bot_mode' | null
   user_service_window_open: boolean
+  user_service_window_ends_at: string | null
 }
 
 function normalizeInboxChatParam(
@@ -1515,7 +1518,10 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
   const [error, setError] = useState('')
   const replyDrafts = useRef(new Map<string, { text: string }>())
   const [, refreshReplyDraft] = useState(0)
-  const [replyFile, setReplyFile] = useState<InboxReplyAttachment | null>(null)
+  const [replyExtras, setReplyExtras] = useState<Record<string, {
+    file: InboxReplyAttachment | null
+    quote: ReplyToMessage | null
+  }>>({})
   const [sendingDraft, setSendingDraft] = useState<{
     key: string
     edit: { text: string } | undefined
@@ -1531,7 +1537,9 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
   const [actionsOpen, setActionsOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
   const [scheduledMessagesOpen, setScheduledMessagesOpen] = useState(false)
-  const [schedulingReply, setSchedulingReply] = useState(false)
+  const [scheduledDraft, setScheduledDraft] = useState<typeof sendingDraft>(null)
+  const schedulingReplyRef = useRef(false)
+  const schedulingReply = scheduledDraft != null
   const [actionsContext, setActionsContext] = useState<ChatActionsContext | null>(null)
   const [contactSheetOpen, setContactSheetOpen] = useState(false)
   const [contactSheetMode, setContactSheetMode] = useState<'edit' | 'create'>('edit')
@@ -1546,8 +1554,10 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
     category: string
     conversationId: number | null
   } | null>(null)
-  const [replyToMessage, setReplyToMessage] = useState<ReplyToMessage | null>(null)
-  const [contactAttributes, setContactAttributes] = useState<Record<string, string>>({})
+  const [contactAttributes, setContactAttributes] = useState<{
+    conversationId: number
+    values: Record<string, string>
+  } | null>(null)
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false)
   const [assignContext, setAssignContext] = useState<AssignContext | null>(null)
   const [leadStatusContext, setLeadStatusContext] = useState<LeadStatusContext | null>(
@@ -1576,6 +1586,7 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
   const listAbortRef = useRef<AbortController | null>(null)
   const quotaRequestIdRef = useRef(0)
   const scrollerRef = useRef<InboxMessageScrollerHandle | null>(null)
+  const composerRef = useRef<InboxComposeBarHandle>(null)
   const sendingReplyRef = useRef(false)
   const detailAbortRef = useRef<AbortController | null>(null)
   const pageAbortRef = useRef<AbortController | null>(null)
@@ -1655,9 +1666,37 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
   const activeDraftKey = useRef(draftKey)
   activeDraftKey.current = draftKey
   const draftEdit = draftKey ? replyDrafts.current.get(draftKey) : undefined
-  const replyText = draftKey && !(sendingDraft?.key === draftKey && sendingDraft.edit === draftEdit)
+  const submittingDraft = sendingDraft ?? scheduledDraft
+  const replyText = draftKey && !(submittingDraft?.key === draftKey && submittingDraft.edit === draftEdit)
     ? draftEdit?.text ?? readInboxDraft(draftKey)
     : ''
+  const currentExtras = draftKey ? replyExtras[draftKey] : undefined
+  const replyFile = currentExtras?.file ?? null
+  const replyToMessage = currentExtras?.quote ?? null
+
+  function updateReplyExtras(
+    update: (current: { file: InboxReplyAttachment | null; quote: ReplyToMessage | null }) =>
+      { file: InboxReplyAttachment | null; quote: ReplyToMessage | null },
+  ) {
+    if (!draftKey) return
+    setReplyExtras((drafts) => {
+      const current = drafts[draftKey] ?? { file: null, quote: null }
+      const next = update(current)
+      if (next.file || next.quote) return { ...drafts, [draftKey]: next }
+      if (!drafts[draftKey]) return drafts
+      const updated = { ...drafts }
+      delete updated[draftKey]
+      return updated
+    })
+  }
+
+  function setReplyFile(file: InboxReplyAttachment | null) {
+    updateReplyExtras((current) => ({ ...current, file }))
+  }
+
+  function setReplyToMessage(quote: ReplyToMessage | null) {
+    updateReplyExtras((current) => ({ ...current, quote }))
+  }
 
   function setReplyDraft(text: string) {
     if (!draftKey) return
@@ -1962,7 +2001,7 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
             notify.error(result.error)
             setError(result.error)
             setDetail(null)
-            setContactAttributes({})
+            setContactAttributes(null)
             return
           }
           setDetail(result.data)
@@ -1974,19 +2013,23 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
             })
           const cid = result.data.conversation.contact_id
           if (cid) {
+            const category =
+              result.data.conversation.line_program?.trim() || 'general'
+            const qs = new URLSearchParams({ category, include_general: 'true' })
             apiClient
               .get<{ attributes: Record<string, string> }>(
-                `/api/contacts/${cid}`,
+                `/api/contacts/${cid}?${qs}`,
                 { signal: controller.signal },
               )
               .then((cr) => {
                 if (requestId !== detailRequestIdRef.current) return
-                if (cr.ok) setContactAttributes(cr.data.attributes || {})
-                else setContactAttributes({})
+                setContactAttributes(cr.ok
+                  ? { conversationId, values: cr.data.attributes || {} }
+                  : null)
               })
               .catch(() => {})
           } else {
-            setContactAttributes({})
+            setContactAttributes(null)
           }
           setList((prev) => {
             if (!prev) return prev
@@ -2170,6 +2213,7 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
             can_reply: result.data.can_reply,
             reply_blocked_reason: result.data.reply_blocked_reason,
             user_service_window_open: result.data.user_service_window_open,
+            user_service_window_ends_at: result.data.user_service_window_ends_at,
           }
         })
 
@@ -2355,7 +2399,7 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
     if (selectedId == null || Number.isNaN(selectedId)) {
       detailRequestIdRef.current += 1
       setDetail(null)
-      setContactAttributes({})
+      setContactAttributes(null)
       setLoadingDetail(false)
       setError('')
       return
@@ -2369,7 +2413,7 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
       setDetail(null)
       setLoadingDetail(true)
     }
-    setContactAttributes({})
+    setContactAttributes(null)
     setError('')
 
     if (selectedId < 0) {
@@ -2444,11 +2488,6 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
         })
       })()
     : ''
-
-  useEffect(() => {
-    setReplyFile(null)
-    setReplyToMessage(null)
-  }, [draftKey])
 
   function openChatActions(ctx: ChatActionsContext) {
     setActionsContext(ctx)
@@ -3095,7 +3134,7 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
   async function onSendReply(event: FormEvent) {
     event.preventDefault()
     if (!draftKey || !selectedId || detail?.conversation.id !== selectedId ||
-        !detail.can_reply || sendingReplyRef.current) return
+        !detail.can_reply || sendingReplyRef.current || schedulingReplyRef.current) return
     const submittedDraft = replyDrafts.current.get(draftKey)
     const text = replyText.trim()
     const file = replyFile?.file
@@ -3133,8 +3172,7 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
 
     sendingReplyRef.current = true
     setSendingDraft({ key: draftKey, edit: submittedDraft })
-    setReplyFile(null)
-    setReplyToMessage(null)
+    updateReplyExtras(() => ({ file: null, quote: null }))
     setDetail((prev) => {
       if (!prev || prev.conversation.id !== convId) return prev
       const next = {
@@ -3204,10 +3242,10 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
     }
     if (!result.ok) {
       notify.error(result.error)
-      if (activeDraftKey.current === draftKey) {
-        setReplyFile((current) => current ?? replyFile)
-        setReplyToMessage((current) => current ?? replyTo)
-      }
+      updateReplyExtras((current) => ({
+        file: current.file ?? replyFile,
+        quote: current.quote ?? replyTo,
+      }))
       setDetail((prev) => {
         if (!prev || prev.conversation.id !== convId) return prev
         const next = { ...prev, messages: dropEcho(prev.messages) }
@@ -3249,24 +3287,31 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
     if (previewUrl) requestAnimationFrame(() => URL.revokeObjectURL(previewUrl))
   }
 
-  async function onScheduleMessage(scheduledAtIso: string) {
+  async function onScheduleMessage(scheduledAtIso: string): Promise<boolean> {
     if (!draftKey || !selectedId || detail?.conversation.id !== selectedId ||
-        !detail.can_reply || sendingReplyRef.current || schedulingReply) return
+        !detail.can_reply || sendingReplyRef.current || schedulingReplyRef.current) {
+      return false
+    }
+    if (replyFile?.voiceNote) {
+      notify.error('No se pueden programar notas de voz. Envíala ahora.')
+      return false
+    }
     const submittedDraft = replyDrafts.current.get(draftKey)
     const text = replyText.trim()
     const file = replyFile?.file
     const replyTo = replyToMessage
     if (!text && !file) {
       notify.error('Escribe un mensaje o adjunta un archivo')
-      return
+      return false
     }
     const convId = selectedId
+    const scheduleDraftKey = draftKey
     const echoId = -Date.now()
     const previewUrl = file ? URL.createObjectURL(file) : ''
     const echo: InboxMessage = {
       id: echoId,
       direction: 'outbound',
-      body_text: replyFile?.voiceNote ? 'Nota de voz' : text || (file ? file.name : ''),
+      body_text: text || (file ? file.name : ''),
       message_type: file ? echoMessageType(file) : 'text',
       created_at: new Date().toISOString(),
       is_ai: false,
@@ -3312,19 +3357,14 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
       action: 'view_scheduled',
     }
 
-    setSchedulingReply(true)
-    setReplyFile(null)
-    setReplyToMessage(null)
+    schedulingReplyRef.current = true
+    setScheduledDraft({ key: scheduleDraftKey, edit: submittedDraft })
     setDetail((prev) => {
       if (!prev || prev.conversation.id !== convId) return prev
       const next = {
         ...prev,
         messages: sortInboxMessages([...prev.messages, echo]),
         events: [...prev.events, optimisticEvent],
-        conversation: {
-          ...prev.conversation,
-          last_message_at: echo.created_at,
-        },
       }
       rememberDetail(next)
       return next
@@ -3337,7 +3377,6 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
           if (text) formData.append('message', text)
           formData.append('file', file)
           formData.append('scheduled_at', scheduledAtIso)
-          if (replyFile?.voiceNote) formData.append('voice_note', 'true')
           if (replyTo) {
             formData.append('reply_to_message_id', String(replyTo.id))
           }
@@ -3357,7 +3396,9 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
           ok: false as const,
           error: 'No se pudo programar el mensaje.',
         }))
-    setSchedulingReply(false)
+    schedulingReplyRef.current = false
+    setScheduledDraft(null)
+    if (activeDraftKey.current !== scheduleDraftKey) detailCacheRef.current.delete(convId)
 
     const dropEcho = (messages: InboxMessage[], sent: InboxMessage[] = []) => {
       const byId = new Map(
@@ -3373,10 +3414,6 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
 
     if (!result.ok) {
       notify.error(result.error)
-      if (activeDraftKey.current === draftKey) {
-        setReplyFile((current) => current ?? replyFile)
-        setReplyToMessage((current) => current ?? replyTo)
-      }
       setDetail((prev) => {
         if (!prev || prev.conversation.id !== convId) return prev
         const next = {
@@ -3388,12 +3425,19 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
         return next
       })
       if (previewUrl) URL.revokeObjectURL(previewUrl)
-      return
+      return false
     }
-    if (replyDrafts.current.get(draftKey) === submittedDraft) setReplyDraft('')
+    if (replyDrafts.current.get(scheduleDraftKey) === submittedDraft) setReplyDraft('')
+    updateReplyExtras((current) => ({
+      file: current.file === replyFile ? null : current.file,
+      quote: current.quote === replyTo ? null : current.quote,
+    }))
     const sent = result.data.messages ?? []
     notify.success('Mensaje programado')
-    void loadDetail(convId)
+    // activeDraftKey: detailRef puede seguir en el chat anterior durante la transición.
+    if (activeDraftKey.current === scheduleDraftKey) {
+      void loadDetail(convId)
+    }
     setDetail((prev) => {
       if (!prev || prev.conversation.id !== convId) return prev
       const next = {
@@ -3405,6 +3449,7 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
       return next
     })
     if (previewUrl) requestAnimationFrame(() => URL.revokeObjectURL(previewUrl))
+    return true
   }
 
   const canAssign =
@@ -4522,137 +4567,143 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
               </div>
             </WaMainHeader>
 
-            <div className="inbox-chat-body">
-              <InboxMessageScroller
-                ref={scrollerRef}
-                conversationId={detail.conversation.id}
-                scrollToMessageId={resolvedHighlightMsgId}
-                onLoadOlder={() => void loadMessagePage('before')}
-                onLoadNewer={() => void loadMessagePage('after')}
-                onJumpToLatest={detail.has_newer_messages ? () => void loadDetail(detail.conversation.id) : undefined}
-              >
-                {detail.has_older_messages ? (
-                  <div className="flex justify-center py-2">
-                    <button
-                      type="button"
-                      className="small-btn compact"
-                      disabled={loadingMessagePage}
-                      onClick={() => void loadMessagePage('before')}
-                    >
-                      {loadingMessagePage
-                        ? 'Cargando…'
-                        : 'Cargar mensajes anteriores'}
-                    </button>
-                  </div>
-                ) : null}
-                {timelineItems.length === 0 ? (
-                  <p className="text-center text-sm text-muted">Sin mensajes aún.</p>
-                ) : (
-                  timelineItems.map((item) => {
-                    if (item.type === 'date') {
-                      return <ChatTimelineDateMarker key={item.key} label={item.label} />
-                    }
-                    if (item.type === 'event') {
+            <InboxChatDropZone key={detail.conversation.id} composerRef={composerRef}>
+              <div className="inbox-chat-body">
+                <InboxMessageScroller
+                  ref={scrollerRef}
+                  conversationId={detail.conversation.id}
+                  scrollToMessageId={resolvedHighlightMsgId}
+                  onLoadOlder={() => void loadMessagePage('before')}
+                  onLoadNewer={() => void loadMessagePage('after')}
+                  onJumpToLatest={detail.has_newer_messages ? () => void loadDetail(detail.conversation.id) : undefined}
+                >
+                  {detail.has_older_messages ? (
+                    <div className="flex justify-center py-2">
+                      <button
+                        type="button"
+                        className="small-btn compact"
+                        disabled={loadingMessagePage}
+                        onClick={() => void loadMessagePage('before')}
+                      >
+                        {loadingMessagePage
+                          ? 'Cargando…'
+                          : 'Cargar mensajes anteriores'}
+                      </button>
+                    </div>
+                  ) : null}
+                  {timelineItems.length === 0 ? (
+                    <p className="text-center text-sm text-muted">Sin mensajes aún.</p>
+                  ) : (
+                    timelineItems.map((item) => {
+                      if (item.type === 'date') {
+                        return <ChatTimelineDateMarker key={item.key} label={item.label} />
+                      }
+                      if (item.type === 'event') {
+                        return (
+                          <ChatTimelineEventMarker
+                            key={item.key}
+                            label={item.event.label}
+                            action={item.event.action}
+                            onAction={
+                              item.event.action === 'view_scheduled'
+                                ? () => setScheduledMessagesOpen(true)
+                                : undefined
+                            }
+                          />
+                        )
+                      }
+                      const message = messageById.get(item.messageId)
+                      if (!message) return null
                       return (
-                        <ChatTimelineEventMarker
+                        <ChatMessageBubble
                           key={item.key}
-                          label={item.event.label}
-                          action={item.event.action}
-                          onAction={
-                            item.event.action === 'view_scheduled'
-                              ? () => setScheduledMessagesOpen(true)
-                              : undefined
-                          }
+                          message={message}
+                          conversationId={detail.conversation.id}
+                          highlightQuery={searchQuery}
+                          isHighlighted={resolvedHighlightMsgId === message.id}
+                          canInteract={detail.can_reply}
+                          onReply={onMessageReply}
+                          onCopy={onMessageCopy}
+                          onReact={(msg, emoji) => void onMessageReact(msg, emoji)}
+                          onRetry={(msg) => void onRetryMessage(msg)}
                         />
                       )
-                    }
-                    const message = messageById.get(item.messageId)
-                    if (!message) return null
-                    return (
-                      <ChatMessageBubble
-                        key={item.key}
-                        message={message}
-                        conversationId={detail.conversation.id}
-                        highlightQuery={searchQuery}
-                        isHighlighted={resolvedHighlightMsgId === message.id}
-                        canInteract={detail.can_reply}
-                        onReply={onMessageReply}
-                        onCopy={onMessageCopy}
-                        onReact={(msg, emoji) => void onMessageReact(msg, emoji)}
-                        onRetry={(msg) => void onRetryMessage(msg)}
-                      />
-                    )
-                  })
-                )}
-                {detail.has_newer_messages ? (
-                  <div className="flex justify-center py-2">
-                    <button type="button" className="small-btn compact" disabled={loadingMessagePage}
-                      onClick={() => void loadMessagePage('after')}>
-                      {loadingMessagePage ? 'Cargando…' : 'Cargar mensajes siguientes'}
-                    </button>
-                  </div>
-                ) : null}
-              </InboxMessageScroller>
-            </div>
+                    })
+                  )}
+                  {detail.has_newer_messages ? (
+                    <div className="flex justify-center py-2">
+                      <button type="button" className="small-btn compact" disabled={loadingMessagePage}
+                        onClick={() => void loadMessagePage('after')}>
+                        {loadingMessagePage ? 'Cargando…' : 'Cargar mensajes siguientes'}
+                      </button>
+                    </div>
+                  ) : null}
+                </InboxMessageScroller>
+              </div>
 
-            <WaMainFooter>
-              <InboxComposeBar
-                key={draftKey ?? detail.conversation.id}
-                replyText={replyText}
-                onReplyTextChange={setReplyDraft}
-                replyFile={replyFile}
-                onReplyFileChange={(attachment) => {
-                  if (draftKey === activeDraftKey.current && selectedId === detail.conversation.id) {
-                    setReplyFile(attachment)
-                  }
-                }}
-                sendingReply={sendingReply}
-                schedulingReply={schedulingReply}
-                onSubmit={(e) => void onSendReply(e)}
-                onSchedule={(scheduledAt) => void onScheduleMessage(scheduledAt)}
-                replyTo={replyToMessage}
-                onClearReplyTo={() => setReplyToMessage(null)}
-                windowOpen={detail.user_service_window_open}
-                canReply={detail.can_reply && selectedId === detail.conversation.id}
-                replyBlockedReason={detail.reply_blocked_reason}
-                conversationId={detail.conversation.id}
-                typingAdvisorId={selectedId === detail.conversation.id ? user?.id : undefined}
-                canSendTemplate={canSendTemplate}
-                onOpenTemplate={() => setTemplateOpen(true)}
-                onSwitchToHuman={() => void onModeChange('human', detail.conversation.id)}
-                onFlowStarted={() => void loadDetail(detail.conversation.id)}
-                contactAttributes={contactAttributes}
-                contactName={
-                  formatContactName(
-                    detail.contact?.name,
-                    detail.contact?.last_name,
-                  ) ||
-                  String(detail.conversation.wa_profile_name ?? '').trim()
-                }
-                contactPhone={
-                  detail.contact?.phone ||
-                  (isContactPhone(detail.conversation.phone) ? detail.conversation.phone || '' : '')
-                }
-                contactEmail={detail.contact?.email || ''}
-                contactDni={detail.contact?.dni || ''}
-              />
-              <InboxScheduledMessagesDialog
-                open={scheduledMessagesOpen}
-                onOpenChange={setScheduledMessagesOpen}
-                conversationId={detail.conversation.id}
-                onCancelled={(messageId) => {
-                  setDetail((prev) => {
-                    if (!prev || prev.conversation.id !== detail.conversation.id) return prev
-                    const next = {
-                      ...prev,
-                      messages: prev.messages.filter((m) => m.id !== messageId),
+              <WaMainFooter>
+                <InboxComposeBar
+                  ref={composerRef}
+                  key={draftKey ?? detail.conversation.id}
+                  replyText={replyText}
+                  onReplyTextChange={setReplyDraft}
+                  replyFile={replyFile}
+                  onReplyFileChange={(attachment) => {
+                    if (draftKey === activeDraftKey.current && selectedId === detail.conversation.id) {
+                      setReplyFile(attachment)
                     }
-                    rememberDetail(next)
-                    return next
-                  })
-                }}
-              />
-            </WaMainFooter>
+                  }}
+                  sendingReply={sendingReply}
+                  schedulingReply={schedulingReply}
+                  onSubmit={(e) => void onSendReply(e)}
+                  onSchedule={(scheduledAt) => onScheduleMessage(scheduledAt)}
+                  replyTo={replyToMessage}
+                  onClearReplyTo={() => setReplyToMessage(null)}
+                  windowOpen={detail.user_service_window_open}
+                  serviceWindowEndsAt={detail.user_service_window_ends_at}
+                  canReply={detail.can_reply && selectedId === detail.conversation.id}
+                  replyBlockedReason={detail.reply_blocked_reason}
+                  conversationId={detail.conversation.id}
+                  typingAdvisorId={selectedId === detail.conversation.id ? user?.id : undefined}
+                  canSendTemplate={canSendTemplate}
+                  onOpenTemplate={() => setTemplateOpen(true)}
+                  onSwitchToHuman={() => void onModeChange('human', detail.conversation.id)}
+                  onFlowStarted={() => void loadDetail(detail.conversation.id)}
+                  contactAttributes={contactAttributes && contactAttributes.conversationId === detail.conversation.id
+                    ? contactAttributes.values
+                    : undefined}
+                  contactName={
+                    formatContactName(
+                      detail.contact?.name,
+                      detail.contact?.last_name,
+                    ) ||
+                    String(detail.conversation.wa_profile_name ?? '').trim()
+                  }
+                  contactPhone={
+                    detail.contact?.phone ||
+                    (isContactPhone(detail.conversation.phone) ? detail.conversation.phone || '' : '')
+                  }
+                  contactEmail={detail.contact?.email || ''}
+                  contactDni={detail.contact?.dni || ''}
+                />
+                <InboxScheduledMessagesDialog
+                  open={scheduledMessagesOpen}
+                  onOpenChange={setScheduledMessagesOpen}
+                  conversationId={detail.conversation.id}
+                  onCancelled={(messageId) => {
+                    setDetail((prev) => {
+                      if (!prev || prev.conversation.id !== detail.conversation.id) return prev
+                      const next = {
+                        ...prev,
+                        messages: prev.messages.filter((m) => m.id !== messageId),
+                      }
+                      rememberDetail(next)
+                      return next
+                    })
+                  }}
+                />
+              </WaMainFooter>
+            </InboxChatDropZone>
           </>
         ) : null}
       </WaMainPane>
