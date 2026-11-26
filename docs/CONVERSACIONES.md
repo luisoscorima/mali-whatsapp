@@ -21,14 +21,44 @@ Histórico: [CONVERSACIONES-CHANGELOG.md](./CONVERSACIONES-CHANGELOG.md). Relaci
 
 - `/conversations` · `/conversations/:id` — lista + hilo
 - Filtros: asignado / sin asignar, búsqueda, chips de segmento y anuncio
-- Acciones: asignar, enviar plantilla (`templates.send_from_chat`), marcar no leído, adjuntos/descarga, export (permiso), bot ↔ humano
+- Acciones: asignar, enviar plantilla (`templates.send_from_chat`), programar mensaje, notas rápidas, marcar no leído, adjuntos/descarga, export (permiso), bot ↔ humano
+
+## Composer (`InboxComposeBar`)
+
+Barra de respuesta del hilo (texto, adjuntos, nota de voz, programar, notas rápidas).
+
+| Pieza | Regla |
+|-------|--------|
+| Primario | Vacío → micrófono (grabar); con texto/adjunto/voz → enviar; al enviar → “…” |
+| Formato | Negrita (`*`) y cursiva (`_`) con Toggle shadcn; estado `pressed` según selección |
+| Nota de voz | Grabar → detener (stop) o enviar directo → preview con player → enviar o descartar |
+| Motion | Solo opacidad, corto: swap mic↔enviar, pulse del punto al grabar, fade in/out de grabación/preview/stop. Respeta `prefers-reduced-motion` |
 
 ## Ventana y medios
 
 - Respuestas libres / IA: ventana de **24 h** desde el último inbound (reglas Meta).
 - CTWA / botón FB: ventana de servicio extendida (72 h) en pricing Meta; ver [META-WABA.md](./META-WABA.md).
-- Estados `sent` / `delivered` / `read` / `failed` por webhook.
+- Estados `scheduled` / `sent` / `delivered` / `read` / `failed` (programados y webhook).
 - Descarga: `GET /conversations/:conversationId/messages/:messageId/download`.
+
+## Mensajes programados
+
+Envío diferido desde el composer (misma carga que reply: texto y/o adjunto; no plantillas). Requiere ventana 24 h abierta al programar. Zona horaria UI: `America/Lima`.
+
+| Pieza | Regla |
+|-------|--------|
+| UI | Reloj visible solo con texto/adjunto → modal fecha/hora (default: mañana 08:00) |
+| Persistencia | `chat_messages` outbound con `raw_payload.status = scheduled` + `scheduled_at` |
+| Cola | BullMQ `outbound` con `delay`; al vencer → `pending` y Graph. Si la ventana ya cerró → `failed` |
+| Burbuja | Etiqueta “Programado para…” mientras esté pendiente; al enviar, estado normal de entrega |
+| Timeline | Evento `conversation.message_scheduled`: “Mensaje programado para 26 nov 8:00 am - Ver” |
+| Ver / cancelar | Modal con pendientes; cancelar borra mensaje + job (el evento de timeline permanece) |
+
+API:
+
+- `POST /conversations/:id/schedule` — body como reply + `scheduled_at` (ISO futuro, mín. +1 min)
+- `GET /conversations/:id/scheduled-messages`
+- `DELETE /conversations/:id/scheduled-messages/:messageId`
 
 ## Fuera de horario
 

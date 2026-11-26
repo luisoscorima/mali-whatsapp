@@ -21,6 +21,25 @@ export function insertAtSelection(
   })
 }
 
+/** True when the current selection is already wrapped with the marker. */
+export function selectionHasMarker(
+  el: TextField | null,
+  marker: string,
+  current: string,
+) {
+  if (!el) return false
+  const start = el.selectionStart ?? 0
+  const end = el.selectionEnd ?? 0
+  if (start === end) return false
+  const selected = current.slice(start, end)
+  const m = marker
+  return (
+    selected.length >= m.length * 2
+    && selected.startsWith(m)
+    && selected.endsWith(m)
+  )
+}
+
 /** Wrap selection with marker (e.g. `*` or `_`). Toggles off if already wrapped. */
 export function wrapSelection(
   el: TextField | null,

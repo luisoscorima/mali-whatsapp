@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { insertAtSelection, wrapSelection } from '@/shared/textSelection'
+import { insertAtSelection, selectionHasMarker, wrapSelection } from '@/shared/textSelection'
 
 type ComposeSurface = 'compose' | 'recording' | 'preview' | 'blocked'
 
@@ -32,6 +32,7 @@ function useComposeSurface(next: ComposeSurface) {
 import { apiClient } from '../../shared/api'
 import { notify } from '@/shared/notify'
 import { Button } from '@/shared/ui/shadcn/button'
+import { Toggle } from '@/shared/ui/shadcn/toggle'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -244,8 +245,20 @@ export function InboxComposeBar({
   )
   const [slash, setSlash] = useState<{ start: number; end: number; query: string } | null>(null)
   const [activeNote, setActiveNote] = useState(0)
+  const [boldOn, setBoldOn] = useState(false)
+  const [italicOn, setItalicOn] = useState(false)
   const notesListId = useId()
   const showNotes = canReply && slash != null
+
+  function syncFormatToggles(el: HTMLTextAreaElement | null = textareaRef.current) {
+    if (!el) {
+      setBoldOn(false)
+      setItalicOn(false)
+      return
+    }
+    setBoldOn(selectionHasMarker(el, '*', el.value))
+    setItalicOn(selectionHasMarker(el, '_', el.value))
+  }
 
   function resolveText(text: string) {
     return resolveNotePlaceholders(text, contactAttributes, {
@@ -339,7 +352,10 @@ export function InboxComposeBar({
   }
 
   function applyFormat(marker: string) {
-    wrapSelection(textareaRef.current, marker, replyText, onReplyTextChange)
+    wrapSelection(textareaRef.current, marker, replyText, (value) => {
+      onReplyTextChange(value)
+      requestAnimationFrame(() => syncFormatToggles())
+    })
   }
 
   async function startFlow(flowId: number, flowName: string) {
@@ -638,26 +654,24 @@ export function InboxComposeBar({
                   </PopoverContent>
                 </Popover>
 
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
+                <Toggle
+                  size="sm"
+                  pressed={boldOn}
                   title="Negrita"
                   aria-label="Negrita"
-                  onClick={() => applyFormat('*')}
+                  onPressedChange={() => applyFormat('*')}
                 >
                   <strong>B</strong>
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
+                </Toggle>
+                <Toggle
+                  size="sm"
+                  pressed={italicOn}
                   title="Cursiva"
                   aria-label="Cursiva"
-                  onClick={() => applyFormat('_')}
+                  onPressedChange={() => applyFormat('_')}
                 >
                   <span aria-hidden="true" className="inbox-compose-italic">I</span>
-                </Button>
+                </Toggle>
               </div>
 
               <textarea
@@ -670,6 +684,7 @@ export function InboxComposeBar({
                 }}
                 onBlur={stopTyping}
                 onSelect={(event) => {
+                  syncFormatToggles(event.currentTarget)
                   if (showNotes) updateQuickReplies(event.currentTarget)
                 }}
                 onKeyDown={onTextareaKeyDown}
