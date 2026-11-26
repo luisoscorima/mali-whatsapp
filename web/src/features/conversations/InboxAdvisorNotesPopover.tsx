@@ -236,20 +236,49 @@ export function InboxAdvisorNotesPopover({
                       {note.body}
                     </span>
                   </button>
-                  <div className="mt-1 flex gap-2">
+                  <div className="mt-1 flex gap-1">
                     <button
                       type="button"
-                      className="text-[11px] text-muted hover:text-ink"
+                      className="rounded p-0.5 text-muted hover:text-ink"
+                      title="Editar"
+                      aria-label="Editar"
                       onClick={() => startEdit(note)}
                     >
-                      Editar
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.75"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden
+                      >
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                      </svg>
                     </button>
                     <button
                       type="button"
-                      className="text-[11px] text-bad"
+                      className="rounded p-0.5 text-bad"
+                      title="Eliminar"
+                      aria-label="Eliminar"
                       onClick={() => void removeNote(note.id)}
                     >
-                      Eliminar
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.75"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden
+                      >
+                        <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5m4-5v5" />
+                      </svg>
                     </button>
                   </div>
                 </li>
@@ -277,90 +306,90 @@ export function InboxAdvisorNotesPopover({
               maxLength={4000}
               onChange={(e) => setBody(e.target.value)}
             />
-            <DropdownMenu
-              onOpenChange={(next) => {
-                if (!next) setVarQuery('')
-              }}
-            >
-              <DropdownMenuTrigger asChild>
-                <Button type="button" size="sm" variant="outline">
-                  Variable
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                className="max-h-64 w-64 overflow-y-auto p-1"
+            <div className="flex flex-wrap gap-2">
+              <DropdownMenu
+                onOpenChange={(next) => {
+                  if (!next) setVarQuery('')
+                }}
               >
-                <div
-                  className="sticky top-0 z-10 bg-surface-strong p-1"
-                  onKeyDown={(e) => e.stopPropagation()}
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" size="sm" variant="outline">
+                    Variable
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  className="max-h-64 w-64 overflow-y-auto p-1"
                 >
-                  <input
-                    type="search"
-                    value={varQuery}
-                    onChange={(e) => setVarQuery(e.target.value)}
-                    placeholder="Buscar variable…"
-                    className="inbox-search-input"
-                    onClick={(e) => e.stopPropagation()}
-                    onPointerDown={(e) => e.stopPropagation()}
-                  />
-                </div>
-                {filteredFixed.map((v, index) => (
-                  <div key={v.key}>
-                    {index === 0 ||
-                    filteredFixed[index - 1].group !== v.group ? (
-                      <div className="mt-2 mb-1 border-t border-line px-2 pt-2 text-xs font-bold text-muted">
-                        {v.group}
-                      </div>
-                    ) : null}
-                    <DropdownMenuItem onSelect={() => insertVariable(v.key)}>
-                      <span className="flex flex-col">
-                        <span>{v.label}</span>
-                        <span className="font-mono text-[10px] text-muted">
-                          {`{{${v.key}}}`}
-                        </span>
-                      </span>
-                    </DropdownMenuItem>
+                  <div
+                    className="sticky top-0 z-10 bg-surface-strong p-1"
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="search"
+                      value={varQuery}
+                      onChange={(e) => setVarQuery(e.target.value)}
+                      placeholder="Buscar variable…"
+                      className="inbox-search-input"
+                      onClick={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    />
                   </div>
-                ))}
-                {filteredAttrs.map((a, index) => {
-                  const group = showAttrCategory
-                    ? categoryLabel(a.category, categoryScope.options)
-                    : 'Atributos'
-                  const prevGroup =
-                    index === 0
-                      ? null
-                      : showAttrCategory
-                        ? categoryLabel(
-                            filteredAttrs[index - 1]?.category,
-                            categoryScope.options,
-                          )
-                        : 'Atributos'
-                  const showHeader = index === 0 || prevGroup !== group
-                  return (
-                    <div key={a.slug}>
-                      {showHeader ? (
+                  {filteredFixed.map((v, index) => (
+                    <div key={v.key}>
+                      {index === 0 ||
+                      filteredFixed[index - 1].group !== v.group ? (
                         <div className="mt-2 mb-1 border-t border-line px-2 pt-2 text-xs font-bold text-muted">
-                          {group}
+                          {v.group}
                         </div>
                       ) : null}
-                      <DropdownMenuItem onSelect={() => insertVariable(a.slug)}>
+                      <DropdownMenuItem onSelect={() => insertVariable(v.key)}>
                         <span className="flex flex-col">
-                          <span>Atributo: {a.label}</span>
+                          <span>{v.label}</span>
                           <span className="font-mono text-[10px] text-muted">
-                            {`{{${a.slug}}}`}
+                            {`{{${v.key}}}`}
                           </span>
                         </span>
                       </DropdownMenuItem>
                     </div>
-                  )
-                })}
-                {filteredFixed.length === 0 && filteredAttrs.length === 0 ? (
-                  <p className="px-2 py-2 text-xs text-muted">Sin coincidencias</p>
-                ) : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <div className="flex gap-2">
+                  ))}
+                  {filteredAttrs.map((a, index) => {
+                    const group = showAttrCategory
+                      ? categoryLabel(a.category, categoryScope.options)
+                      : 'Atributos'
+                    const prevGroup =
+                      index === 0
+                        ? null
+                        : showAttrCategory
+                          ? categoryLabel(
+                              filteredAttrs[index - 1]?.category,
+                              categoryScope.options,
+                            )
+                          : 'Atributos'
+                    const showHeader = index === 0 || prevGroup !== group
+                    return (
+                      <div key={a.slug}>
+                        {showHeader ? (
+                          <div className="mt-2 mb-1 border-t border-line px-2 pt-2 text-xs font-bold text-muted">
+                            {group}
+                          </div>
+                        ) : null}
+                        <DropdownMenuItem onSelect={() => insertVariable(a.slug)}>
+                          <span className="flex flex-col">
+                            <span>Atributo: {a.label}</span>
+                            <span className="font-mono text-[10px] text-muted">
+                              {`{{${a.slug}}}`}
+                            </span>
+                          </span>
+                        </DropdownMenuItem>
+                      </div>
+                    )
+                  })}
+                  {filteredFixed.length === 0 && filteredAttrs.length === 0 ? (
+                    <p className="px-2 py-2 text-xs text-muted">Sin coincidencias</p>
+                  ) : null}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button
                 type="button"
                 size="sm"

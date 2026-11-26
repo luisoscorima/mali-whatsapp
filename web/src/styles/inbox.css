@@ -2738,7 +2738,7 @@ html[data-theme='dark'] .chat-bubble__reply-to {
 
 .inbox-compose-row {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px;
 }
 
@@ -2795,6 +2795,7 @@ button.inbox-compose-primary {
   resize: none;
   overflow-y: auto;
   border: none;
+  border-radius: 8px;
   background: transparent;
   font-family: inherit;
   font-size: 0.9rem;
