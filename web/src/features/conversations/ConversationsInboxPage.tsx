@@ -1258,6 +1258,23 @@ function maxAuditId(events: InboxTimelineEvent[]): bigint {
   return max
 }
 
+function sortInboxMessages(messages: InboxMessage[]): InboxMessage[] {
+  return [...messages].sort((a, b) => {
+    const aEcho = a.id < 0
+    const bEcho = b.id < 0
+    if (aEcho !== bEcho) return aEcho ? 1 : -1
+    return a.id - b.id
+  })
+}
+
+function echoMessageType(file: File): string {
+  const mime = file.type.toLowerCase()
+  if (mime.startsWith('image/')) return 'image'
+  if (mime.startsWith('video/')) return 'video'
+  if (mime.startsWith('audio/')) return 'audio'
+  return 'document'
+}
+
 function messageReplyPreview(message: InboxMessage): string {
   const text = message.body_text?.trim()
   if (text) return text.length > 120 ? `${text.slice(0, 120)}…` : text
@@ -1979,7 +1996,7 @@ export function ConversationsInboxPage() {
         const incoming = result.data.messages.filter((m) => !known.has(m.id))
         return {
           ...prev,
-          messages: [...prev.messages, ...incoming].sort((a, b) => a.id - b.id),
+          messages: sortInboxMessages([...prev.messages, ...incoming]),
           events: mergeTimelineEvents(prev.events, result.data.events ?? []),
           ...(direction === 'before'
             ? { has_older_messages: result.data.has_older_messages }
@@ -2067,12 +2084,12 @@ export function ConversationsInboxPage() {
           for (const message of incoming) {
             if (!known.has(message.id)) merged.push(message)
           }
-          merged.sort((a, b) => a.id - b.id)
+          const ordered = sortInboxMessages(merged)
           return {
             ...prev,
             has_newer_messages: result.data.has_newer_messages,
             messages: mergeMessageDeliveries(
-              mergeMessageReactions(merged, reactionPatches),
+              mergeMessageReactions(ordered, reactionPatches),
               deliveryPatches,
             ),
             events: mergeTimelineEvents(prev.events ?? [], incomingEvents),
@@ -2134,7 +2151,8 @@ export function ConversationsInboxPage() {
     if (!detail?.messages.length) {
       lastMessageIdRef.current = 0
     } else {
-      lastMessageIdRef.current = Math.max(...detail.messages.map((message) => message.id))
+      const realIds = detail.messages.map((message) => message.id).filter((id) => id > 0)
+      lastMessageIdRef.current = realIds.length ? Math.max(...realIds) : 0
     }
     lastAuditIdRef.current = maxAuditId(detail?.events ?? [])
   }, [detail?.conversation.id, detail?.messages, detail?.events])
@@ -3020,7 +3038,69 @@ export function ConversationsInboxPage() {
       notify.error('Escribe un mensaje o adjunta un archivo')
       return
     }
+    const convId = selectedId
+    const echoId = -Date.now()
+    const previewUrl = file ? URL.createObjectURL(file) : ''
+    const echo: InboxMessage = {
+      id: echoId,
+      direction: 'outbound',
+      body_text: text || (file ? file.name : ''),
+      message_type: file ? echoMessageType(file) : 'text',
+      created_at: new Date().toISOString(),
+      is_ai: false,
+      has_downloadable_media: false,
+      delivery: { status: 'pending', label: 'Enviando…' },
+      reply_to: replyTo
+        ? {
+            message_id: replyTo.id,
+            preview: replyTo.preview,
+            outbound: replyTo.outbound,
+          }
+        : null,
+      media_preview: previewUrl ? { url: previewUrl, mime: file?.type || null } : null,
+    }
+    const previewText = text
+      ? text.length > 120
+        ? `${text.slice(0, 120)}…`
+        : text
+      : file?.name || ''
+
     setSendingReply(true)
+    setReplyText('')
+    setReplyFile(null)
+    setReplyToMessage(null)
+    setDetail((prev) => {
+      if (!prev || prev.conversation.id !== convId) return prev
+      const next = {
+        ...prev,
+        messages: sortInboxMessages([...prev.messages, echo]),
+        conversation: {
+          ...prev.conversation,
+          last_message_at: echo.created_at,
+        },
+      }
+      rememberDetail(next)
+      return next
+    })
+    setList((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        items: prev.items.map((row) =>
+          row.id === convId
+            ? {
+                ...row,
+                preview: previewText || row.preview,
+                last_message_at: echo.created_at,
+                last_outbound_message_at: echo.created_at,
+                inbox_unread: false,
+              }
+            : row,
+        ),
+      }
+    })
+    requestAnimationFrame(() => scrollerRef.current?.scrollToBottom('smooth'))
+
     const replyPayload = replyTo
       ? { message: text, reply_to_message_id: replyTo.id }
       : { message: text }
@@ -3033,34 +3113,56 @@ export function ConversationsInboxPage() {
             formData.append('reply_to_message_id', String(replyTo.id))
           }
           return apiClient.postFormData<{ messages: InboxMessage[] }>(
-            `/api/conversations/${selectedId}/reply`,
+            `/api/conversations/${convId}/reply`,
             formData,
           )
         })()
       : await apiClient.post<{ messages: InboxMessage[] }>(
-          `/api/conversations/${selectedId}/reply`,
+          `/api/conversations/${convId}/reply`,
           replyPayload,
         )
     setSendingReply(false)
+    const dropEcho = (messages: InboxMessage[], sent: InboxMessage[] = []) => {
+      const byId = new Map(
+        messages
+          .filter((message) => message.id !== echoId)
+          .map((message) => [message.id, message]),
+      )
+      for (const message of sent) byId.set(message.id, message)
+      return sortInboxMessages([...byId.values()])
+    }
     if (!result.ok) {
       notify.error(result.error)
+      setReplyText(text)
+      setReplyFile(file)
+      setReplyToMessage(replyTo)
+      setDetail((prev) => {
+        if (!prev || prev.conversation.id !== convId) return prev
+        const next = { ...prev, messages: dropEcho(prev.messages) }
+        rememberDetail(next)
+        return next
+      })
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
       return
     }
-    setReplyText('')
-    setReplyFile(null)
-    setReplyToMessage(null)
     void loadServiceReplies()
-
     const sent = result.data.messages ?? []
-    const convId = selectedId
-    if (detailRef.current?.has_newer_messages) void loadDetail(convId)
+    if (
+      detailRef.current?.conversation.id === convId &&
+      detailRef.current.has_newer_messages
+    ) {
+      void loadDetail(convId)
+    }
     setDetail((prev) => {
-      if (!prev || prev.conversation.id !== convId || prev.has_newer_messages) return prev
-      const byId = new Map(prev.messages.map((message) => [message.id, message]))
-      for (const message of sent) byId.set(message.id, message)
-      const merged = [...byId.values()].sort((a, b) => a.id - b.id)
+      if (!prev || prev.conversation.id !== convId) return prev
+      if (prev.has_newer_messages) {
+        const next = { ...prev, messages: dropEcho(prev.messages) }
+        rememberDetail(next)
+        return next
+      }
+      const merged = dropEcho(prev.messages, sent)
       const last = merged[merged.length - 1]
-      return {
+      const next = {
         ...prev,
         messages: merged,
         conversation: {
@@ -3068,34 +3170,10 @@ export function ConversationsInboxPage() {
           last_message_at: last?.created_at ?? prev.conversation.last_message_at,
         },
       }
+      rememberDetail(next)
+      return next
     })
-
-    const previewText = text
-      ? text.length > 120
-        ? `${text.slice(0, 120)}…`
-        : text
-      : file
-        ? file.name
-        : ''
-    const nowIso = new Date().toISOString()
-    setList((prev) => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        items: prev.items.map((row) =>
-          row.id === convId
-            ? {
-                ...row,
-                preview: previewText || row.preview,
-                last_message_at: nowIso,
-                last_outbound_message_at: nowIso,
-                inbox_unread: false,
-              }
-            : row,
-        ),
-      }
-    })
-    requestAnimationFrame(() => scrollerRef.current?.scrollToBottom('smooth'))
+    if (previewUrl) requestAnimationFrame(() => URL.revokeObjectURL(previewUrl))
   }
 
   const canAssign =
