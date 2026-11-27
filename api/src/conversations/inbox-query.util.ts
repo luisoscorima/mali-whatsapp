@@ -226,6 +226,8 @@ export function parseSegmentQueryParam(
 export type InboxSegmentFilter = SegmentListFilter & {
   ids?: number[];
   categories?: string[] | null;
+  excludeIds?: number[];
+  excludeSlugs?: string[];
 };
 
 export function parseInboxSegmentFilter(
@@ -259,6 +261,18 @@ export function parseInboxSegmentFilter(
   return { ids, slugs, includeNone, categories };
 }
 
+/** Misma validación que la inclusión. «Sin segmento» no se excluye: esos contactos siguen en la lista. */
+export function parseInboxExcludeSegmentFilter(
+  raw: string[],
+  options: Array<{ id: number; slug: string }>,
+  categories: string[] | null,
+): InboxSegmentFilter {
+  if (raw.includes('__none__')) {
+    throw new BadRequestException('No se puede excluir contactos sin segmento');
+  }
+  return parseInboxSegmentFilter(raw, options, categories);
+}
+
 function segmentMembershipSql(
   filter: InboxSegmentFilter,
   conversation: boolean,
@@ -289,6 +303,25 @@ function segmentMembershipSql(
   )`;
 }
 
+function excludeMembershipSql(
+  filter: InboxSegmentFilter,
+  conversation: boolean,
+): Prisma.Sql | null {
+  const ids = filter.excludeIds ?? [];
+  const slugs = filter.excludeSlugs ?? [];
+  if (!ids.length && !slugs.length) return null;
+  return segmentMembershipSql(
+    {
+      ids,
+      slugs,
+      includeNone: false,
+      categories: filter.categories ?? null,
+    },
+    conversation,
+    true,
+  );
+}
+
 function buildSegmentSql(
   filter: InboxSegmentFilter,
   conversation: boolean,
@@ -300,8 +333,12 @@ function buildSegmentSql(
     clauses.push(
       Prisma.sql`NOT ${segmentMembershipSql(filter, conversation, false)}`,
     );
-  if (!clauses.length) return Prisma.empty;
-  return Prisma.sql` AND (${Prisma.join(clauses, ' OR ')})`;
+  const include = clauses.length
+    ? Prisma.sql` AND (${Prisma.join(clauses, ' OR ')})`
+    : Prisma.empty;
+  const exclude = excludeMembershipSql(filter, conversation);
+  if (!exclude) return include;
+  return Prisma.sql`${include} AND NOT ${exclude}`;
 }
 
 export function buildConversationSegmentSql(

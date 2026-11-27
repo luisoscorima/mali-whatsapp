@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import {
   buildConversationSegmentSql,
   buildContactSegmentSql,
+  parseInboxExcludeSegmentFilter,
   parseInboxSegmentFilter,
 } from './inbox-query.util';
 import { ConversationsService } from './conversations.service';
@@ -38,8 +39,15 @@ describe('segmentos de la bandeja por identidad y categoría', () => {
     await db?.close();
   });
 
-  async function ids(tokens: string[], categories: string[] | null = null) {
+  async function ids(
+    tokens: string[],
+    categories: string[] | null = null,
+    exclude: string[] = [],
+  ) {
     const filter = parseInboxSegmentFilter(tokens, options, categories);
+    const excluded = parseInboxExcludeSegmentFilter(exclude, options, categories);
+    filter.excludeIds = excluded.ids;
+    filter.excludeSlugs = excluded.slugs;
     const sql = Prisma.sql`SELECT c.id FROM conversations c LEFT JOIN contacts ct ON ct.id=c.contact_id
       WHERE c.area='educacion' ${buildConversationSegmentSql(filter)} ORDER BY c.id`;
     return (await db.query<{ id: number }>(sql.text, sql.values)).rows.map(
@@ -94,6 +102,39 @@ describe('segmentos de la bandeja por identidad y categoría', () => {
     expect((await db.query(sql.text, sql.values)).rows).toEqual([
       { id: expected },
     ]);
+  });
+
+  it.each([
+    [['id:2'], [1, 3, 5, 6]],
+    [['id:2', 'id:3'], [1, 5, 6]],
+  ])('excluir %j deja fuera solo esa identidad de línea', async (exclude, expected) => {
+    expect(await ids([], null, exclude as string[])).toEqual(expected);
+  });
+
+  it('un slug compartido solo excluye el programa de la categoría', async () => {
+    expect(await ids([], ['ca'], ['interesados'])).toEqual([1, 3, 5, 6]);
+  });
+
+  it('la exclusión gana cuando el mismo chat también está incluido', async () => {
+    expect(await ids(['id:1', 'id:2', 'id:3'], null, ['id:2'])).toEqual([1, 3]);
+  });
+
+  it('sin inclusión, un contacto sin segmento sigue en la lista', async () => {
+    expect(await ids([], null, ['id:1'])).toEqual([2, 3, 4, 5, 6]);
+  });
+
+  it('rechaza excluir un segmento ajeno o «sin segmento»', () => {
+    expect(() => parseInboxExcludeSegmentFilter(['id:999'], options, null)).toThrow();
+    expect(() => parseInboxExcludeSegmentFilter(['__none__'], options, null)).toThrow();
+  });
+
+  it('excluye contactos virtuales y conserva los que no tienen segmento', async () => {
+    const excluded = parseInboxExcludeSegmentFilter(['id:2'], options, ['ca']);
+    const filter = parseInboxSegmentFilter([], options, ['ca']);
+    filter.excludeIds = excluded.ids;
+    filter.excludeSlugs = excluded.slugs;
+    const sql = Prisma.sql`SELECT ct.id FROM contacts ct WHERE ct.area='educacion' ${buildContactSegmentSql(filter)} ORDER BY ct.id`;
+    expect((await db.query(sql.text, sql.values)).rows).toEqual([{ id: 2 }]);
   });
 
   it('filtra contactos virtuales por la misma identidad exacta', async () => {

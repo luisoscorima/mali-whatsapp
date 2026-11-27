@@ -77,7 +77,7 @@ import { InboxComposeBar, type InboxComposeBarHandle, type ReplyToMessage } from
 import { InboxChatDropZone } from './InboxChatDropZone'
 import { InboxGuideExample } from './InboxGuideExample'
 import type { InboxReplyAttachment } from './InboxAttachment'
-import { InboxSavedViews, InboxSavedViewShortcuts } from './InboxSavedViews'
+import { InboxSavedViewShortcuts } from './InboxSavedViews'
 import { useInboxSavedViews } from './useInboxSavedViews'
 import { useInboxGuide } from './useInboxGuide'
 import { InboxMessageScroller, type InboxMessageScrollerHandle } from './InboxMessageScroller'
@@ -149,26 +149,6 @@ function WindowClockIcon() {
   )
 }
 
-/** Caja + flecha abajo, estilo WhatsApp / archive. */
-function ArchiveChatsIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <polyline points="21 8 21 21 3 21 3 8" />
-      <rect x="1" y="3" width="22" height="5" rx="1" />
-      <line x1="10" y1="12" x2="14" y2="12" />
-    </svg>
-  )
-}
 
 type AssignContext = {
   conversationId: number
@@ -849,6 +829,7 @@ type InboxListResult = {
     applied_to: string | null
     segment_slugs: string[]
     include_none: boolean
+    exclude_segment_slugs: string[]
     categories: string[]
     line_id: number | null
   }
@@ -1013,6 +994,7 @@ function pushRowMatchesView(
     filters.line_id != null ||
     filters.segment_slugs.length > 0 ||
     filters.include_none ||
+    (filters.exclude_segment_slugs?.length ?? 0) > 0 ||
     filters.range === 'custom' ||
     filters.chat === 'unanswered'
   )
@@ -1124,6 +1106,7 @@ function inboxApiQuery(searchParams: URLSearchParams, extra?: { msg?: number }):
   if (hasTo) qs.set('to', to.trim())
   if (!hasFrom && !hasTo && searchParams.get('range') === 'all') qs.set('range', 'all')
   searchParams.getAll('segment').forEach((slug) => qs.append('segment', slug))
+  searchParams.getAll('exclude_segment').forEach((slug) => qs.append('exclude_segment', slug))
   searchParams.getAll('category').forEach((slug) => qs.append('category', slug))
   const line = Number(searchParams.get('line') ?? '')
   if (Number.isInteger(line) && line > 0) qs.set('line', String(line))
@@ -1166,14 +1149,23 @@ function inboxDateKeyFromResult(filters: InboxListResult['filters']): string {
   return 'default'
 }
 
+function inboxSegmentTokens(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort()
+}
+
+function inboxSegmentKey(values: string[]): string {
+  return inboxSegmentTokens(values).join('\0')
+}
+
 function inboxFilterKeyFromParams(searchParams: URLSearchParams): string {
   const q = (searchParams.get('q') ?? '').trim()
   const qm = q && inboxSearchMessagesParam(searchParams) ? '1' : ''
   const chat = normalizeInboxChatParam(searchParams.get('chat'))
   const windowMax = parseWindowMaxFilter(searchParams.get('window_max')) ?? ''
   const line = parseInboxLineParam(searchParams.get('line')) ?? ''
-  const segments = searchParams.getAll('segment').sort().join('\0')
-  return `${q}\n${qm}\n${chat}\n${windowMax}\n${line}\n${inboxDateKeyFromParams(searchParams)}\n${segments}`
+  const segments = inboxSegmentKey(searchParams.getAll('segment'))
+  const excluded = inboxSegmentKey(searchParams.getAll('exclude_segment'))
+  return `${q}\n${qm}\n${chat}\n${windowMax}\n${line}\n${inboxDateKeyFromParams(searchParams)}\n${segments}\n${excluded}`
 }
 
 function inboxFilterKeyFromResult(filters: InboxListResult['filters']): string {
@@ -1182,7 +1174,7 @@ function inboxFilterKeyFromResult(filters: InboxListResult['filters']): string {
   const windowMax = filters.window_max ?? ''
   const line = filters.line_id ?? ''
   const qm = filters.q && filters.qm ? '1' : ''
-  return `${filters.q}\n${qm}\n${filters.chat}\n${windowMax}\n${line}\n${inboxDateKeyFromResult(filters)}\n${segments.sort().join('\0')}`
+  return `${filters.q}\n${qm}\n${filters.chat}\n${windowMax}\n${line}\n${inboxDateKeyFromResult(filters)}\n${inboxSegmentKey(segments)}\n${inboxSegmentKey(filters.exclude_segment_slugs ?? [])}`
 }
 
 function inboxInitials(contactName: string, phone: string | null): string {
@@ -1732,7 +1724,8 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
     ? searchParams.get('to')!.trim()
     : ''
   const rangeAll = searchParams.get('range') === 'all'
-  const selectedSegments = searchParams.getAll('segment')
+  const selectedSegments = inboxSegmentTokens(searchParams.getAll('segment'))
+  const excludedSegments = inboxSegmentTokens(searchParams.getAll('exclude_segment'))
   const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1)
   const activeFilterKey = useMemo(
     () => inboxFilterKeyFromParams(searchParams),
@@ -1750,6 +1743,7 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
       const next = new URLSearchParams(searchParamsRef.current)
       next.delete('category')
       next.delete('segment')
+      next.delete('exclude_segment')
       next.delete('page')
       if (stored) stored.forEach((slug) => next.append('category', slug))
       setSearchParams(next, { replace: true })
@@ -1927,15 +1921,59 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
     windowMaxFilter != null ||
     lineFilter != null ||
     selectedSegments.length > 0 ||
+    excludedSegments.length > 0 ||
     Boolean(searchQuery) ||
     Boolean(explicitFrom) ||
     Boolean(explicitTo) ||
     rangeAll
+  const canSaveView =
+    hasActiveListFilters || searchParams.getAll('category').length > 0
 
   function clearListFilters() {
     const next = new URLSearchParams(searchParams)
-    for (const key of ['q', 'qm', 'chat', 'window_max', 'line', 'from', 'to', 'range', 'segment', 'page', 'msg']) next.delete(key)
+    for (const key of ['q', 'qm', 'chat', 'window_max', 'line', 'from', 'to', 'range', 'segment', 'exclude_segment', 'page', 'msg']) next.delete(key)
     setSearchInput('')
+    setSearchParams(next)
+  }
+
+  function clearRefineFilters() {
+    const next = new URLSearchParams(searchParams)
+    next.delete('page')
+    next.delete('window_max')
+    next.delete('line')
+    next.delete('segment')
+    next.delete('exclude_segment')
+    next.delete('from')
+    next.delete('to')
+    if (!searchQuery) next.delete('range')
+    setSearchParams(next)
+  }
+
+  function commitSearchText(next: URLSearchParams) {
+    const q = searchInput.trim()
+    if (q === (next.get('q') ?? '').trim()) return
+    next.delete('msg')
+    if (q) next.set('q', q)
+    else next.delete('q')
+  }
+
+  function setSearchMessages(enabled: boolean) {
+    const next = new URLSearchParams(searchParams)
+    next.delete('page')
+    commitSearchText(next)
+    if (enabled) next.set('qm', '1')
+    else next.delete('qm')
+    setSearchParams(next)
+  }
+
+  function setSearchAllHistory(enabled: boolean) {
+    const next = new URLSearchParams(searchParams)
+    next.delete('page')
+    next.delete('from')
+    next.delete('to')
+    commitSearchText(next)
+    if (enabled) next.set('range', 'all')
+    else next.delete('range')
     setSearchParams(next)
   }
 
@@ -2697,17 +2735,22 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
     setSearchParams(next)
   }
 
-  function toggleSegment(slug: string) {
+  function toggleSegmentParam(key: 'segment' | 'exclude_segment', slug: string) {
     const next = new URLSearchParams(searchParams)
     next.delete('page')
-    const current = next.getAll('segment')
-    if (current.includes(slug)) {
-      next.delete('segment')
-      current.filter((s) => s !== slug).forEach((s) => next.append('segment', s))
-    } else {
-      next.append('segment', slug)
-    }
+    const current = inboxSegmentTokens(next.getAll(key))
+    next.delete(key)
+    const kept = current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug]
+    kept.forEach((item) => next.append(key, item))
     setSearchParams(next)
+  }
+
+  function toggleSegment(slug: string) {
+    toggleSegmentParam('segment', slug)
+  }
+
+  function toggleExcludedSegment(slug: string) {
+    toggleSegmentParam('exclude_segment', slug)
   }
 
   function onSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -3699,99 +3742,89 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
     const category = segment.category === 'general' ? 'General' : segment.category?.toUpperCase()
     return canonicalArea(user?.area ?? '') === 'educacion' && category ? category + ' · ' + segment.label : segment.label
   }
+  const segmentFilterOptions = segments.map(segment => ({
+    ...segment,
+    slug: segment.id ? 'id:' + segment.id : segment.slug,
+    group: canonicalArea(user?.area ?? '') === 'educacion'
+      ? segment.category === 'general' ? 'General' : segment.category?.toUpperCase()
+      : undefined,
+  }))
   const showLineFilter = inboxLines.length > 1
   const lineFilterMixesCategories = new Set(inboxLines.map((line) => line.category)).size > 1
   const selectedLine = lineFilter != null
     ? inboxLines.find((line) => line.id === lineFilter) ?? null
     : null
-  const activeFilterCount = (chatFilter !== 'all' ? 1 : 0) + selectedSegments.length +
-    (windowMaxFilter != null ? 1 : 0) + (lineFilter != null ? 1 : 0) +
-    (dateFromFilter || dateToFilter ? 1 : 0) +
-    (searchQuery && inboxSearchMessagesParam(searchParams) ? 1 : 0) +
-    (searchQuery && rangeAll && !explicitFrom && !explicitTo ? 1 : 0)
+  const placeFilters = ['mine', 'unassigned', 'all'] as const
+  const focusFilters: Array<'unread' | 'unanswered' | 'bot'> = [
+    'unread',
+    'unanswered',
+    ...(list?.ai_area_enabled || chatFilter === 'bot' ? ['bot' as const] : []),
+  ]
+  const archiveKinds = ['archived', 'archived_auto', 'archived_manual'] as const
+  const archiveKindLabels = {
+    archived: 'Todos',
+    archived_auto: 'Sin respuesta',
+    archived_manual: 'Manuales',
+  } as const
+  const listAllHistory = rangeAll && !searchQuery && !explicitFrom && !explicitTo
+  const refineFilterCount =
+    selectedSegments.length +
+    (windowMaxFilter != null ? 1 : 0) +
+    (lineFilter != null ? 1 : 0) +
+    (explicitFrom || explicitTo ? 1 : 0) +
+    (listAllHistory ? 1 : 0) +
+    excludedSegments.length
+  const searching = searchInput.trim().length > 0
   const filterPills = (
     <>
       <div className="inbox-chat-filter-pills inbox-chat-filter-pills--row inbox-chat-filter-pills--compact" aria-label="Vistas de chats" data-inbox-guide="inbox-views">
-        {(['all', 'mine', 'unassigned'] as const).map(key => (
+        {placeFilters.map(key => (
           <Button key={key} type="button" size="sm" variant={chatFilter === key ? 'default' : 'outline'}
             className="rounded-full" aria-pressed={chatFilter === key} onClick={() => setChatFilter(key)}>
             {chatFilterLabels[key]}
           </Button>
         ))}
+        <span className="inbox-place-sep" aria-hidden />
+        {focusFilters.map(key => (
+          <Button key={key} type="button" size="sm" variant={chatFilter === key ? 'default' : 'outline'}
+            className="rounded-full" aria-pressed={chatFilter === key} onClick={() => setChatFilter(key)}>
+            {chatFilterLabels[key]}{key === 'unread' && list?.unread_count ? ` (${list.unread_count})` : ''}
+          </Button>
+        ))}
+        <span className="inbox-place-sep" aria-hidden />
+        <Button
+          type="button" size="sm" className="ml-auto rounded-full"
+          variant={isArchivedChatFilter(chatFilter) ? 'default' : 'outline'}
+          aria-pressed={isArchivedChatFilter(chatFilter)}
+          onClick={() => setChatFilter(isArchivedChatFilter(chatFilter) ? 'all' : 'archived')}
+        >
+          Archivo{list?.archived_count ? ` (${list.archived_count})` : ''}
+        </Button>
       </div>
+      {isArchivedChatFilter(chatFilter) ? (
+        <div className="inbox-chat-filter-pills inbox-chat-filter-pills--row inbox-chat-filter-pills--compact" aria-label="Tipo de archivo">
+          {archiveKinds.map(key => (
+            <Button key={key} type="button" size="sm" variant={chatFilter === key ? 'default' : 'outline'}
+              className="rounded-full" aria-pressed={chatFilter === key} onClick={() => setChatFilter(key)}>
+              {archiveKindLabels[key]}
+            </Button>
+          ))}
+        </div>
+      ) : null}
       <div className="inbox-filters space-y-2">
         <div className="inbox-search-row">
           <input type="search" data-inbox-guide="inbox-search" value={searchInput} onChange={e => setSearchInput(e.target.value)}
             onKeyDown={onSearchKeyDown} placeholder="Buscar nombre o teléfono…" className="inbox-search-input" aria-label="Buscar en chats" />
           <Popover>
             <PopoverTrigger asChild>
-              <Button type="button" size="sm" variant={activeFilterCount ? 'secondary' : 'outline'} data-inbox-guide="inbox-filters">
-                Filtros{activeFilterCount ? ' · ' + activeFilterCount : ''}
+              <Button type="button" size="sm" variant={refineFilterCount ? 'secondary' : 'outline'} data-inbox-guide="inbox-filters">
+                Filtros{refineFilterCount ? ' · ' + refineFilterCount : ''}
               </Button>
             </PopoverTrigger>
             <PopoverContent side="right" align="start" sideOffset={16} collisionPadding={12} className="w-80 max-w-[calc(100vw-24px)] max-h-[70vh] overflow-y-auto space-y-4">
               <div className="flex items-center justify-between"><strong>Filtros de chats</strong>
-                <button type="button" className="text-xs text-muted underline" onClick={clearListFilters}>Restablecer</button>
+                <button type="button" className="text-xs text-muted underline" onClick={clearRefineFilters}>Restablecer</button>
               </div>
-              {savedViewsKey && (
-                <InboxSavedViews
-                  key={savedViewsKey}
-                  views={savedViews}
-                  saveViews={saveViews}
-                  getQuery={currentSavedViewQuery}
-                  onApply={applySavedView}
-                />
-              )}
-              <p className="text-xs text-muted">Elige una vista y afínala con línea, segmentos, fechas y ventana.</p>
-              <fieldset className="inbox-filter-group space-y-2">
-                <legend className="text-sm font-medium">Búsqueda</legend>
-                <label className="flex items-center gap-2 text-sm" title="Busca también en el texto de los mensajes (mín. 4 caracteres, o 3 dígitos de teléfono)">
-                  <input
-                    type="checkbox"
-                    checked={inboxSearchMessagesParam(searchParams)}
-                    disabled={!searchQuery}
-                    onChange={(e) => {
-                      const next = new URLSearchParams(searchParams)
-                      next.delete('page')
-                      if (e.target.checked) next.set('qm', '1')
-                      else next.delete('qm')
-                      setSearchParams(next)
-                    }}
-                  />
-                  Incluir mensajes
-                </label>
-                {searchQuery && inboxSearchMessagesParam(searchParams) && !inboxSearchMayScanMessages(searchQuery, true) ? (
-                  <p className="text-xs text-muted">Escribe al menos 4 caracteres (o 3 dígitos) para buscar en mensajes.</p>
-                ) : null}
-                <label className="flex items-center gap-2 text-sm" title="Sin límite de fechas. Por defecto la búsqueda mira los últimos 30 días.">
-                  <input
-                    type="checkbox"
-                    checked={rangeAll && !explicitFrom && !explicitTo}
-                    disabled={!searchQuery}
-                    onChange={(e) => {
-                      const next = new URLSearchParams(searchParams)
-                      next.delete('page')
-                      next.delete('from')
-                      next.delete('to')
-                      if (e.target.checked) next.set('range', 'all')
-                      else next.delete('range')
-                      setSearchParams(next)
-                    }}
-                  />
-                  Buscar en todo el historial
-                </label>
-                {searchQuery && !rangeAll && !explicitFrom && !explicitTo ? (
-                  <p className="text-xs text-muted">Ventana actual: últimos 30 días.</p>
-                ) : null}
-              </fieldset>
-              <fieldset className="inbox-filter-group space-y-2"><legend className="text-sm font-medium">Atención</legend>
-                {(['all','mine','unassigned','unread','unanswered', ...(list?.ai_area_enabled ? ['bot'] : [])] as const).map(key => (
-                  <label key={key} className="flex items-center gap-2 text-sm">
-                    <input type="radio" name="inbox-view" checked={chatFilter === key} onChange={() => setChatFilter(key as InboxListResult['filters']['chat'])} />
-                    {chatFilterLabels[key]}{key === 'unread' && list?.unread_count ? ' (' + list.unread_count + ')' : ''}
-                  </label>
-                ))}
-              </fieldset>
               {showLineFilter ? (
                 <fieldset className="inbox-filter-group space-y-2">
                   <legend className="text-sm font-medium">Línea</legend>
@@ -3816,12 +3849,27 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
               ) : null}
               <fieldset className="inbox-filter-group space-y-2"><legend className="text-sm font-medium">Clasificación · Segmentos</legend>
           <SegmentFilterSelect
-            segments={segments.map(segment => ({ ...segment, slug: segment.id ? 'id:' + segment.id : segment.slug, group: canonicalArea(user?.area ?? '') === 'educacion' ? segment.category === 'general' ? 'General' : segment.category?.toUpperCase() : undefined }))}
+            segments={segmentFilterOptions}
             selectedSlugs={selectedSegments}
             onToggle={toggleSegment}
             onClearAll={() => {
               const next = new URLSearchParams(searchParams)
               next.delete('segment')
+              next.delete('page')
+              setSearchParams(next)
+            }}
+          />
+          <p className="text-xs text-muted">Excluir segmentos</p>
+          <SegmentFilterSelect
+            segments={segmentFilterOptions}
+            selectedSlugs={excludedSegments}
+            onToggle={toggleExcludedSegment}
+            showNoneOption={false}
+            emptyLabel="Ninguno"
+            ariaLabel="Excluir segmentos"
+            onClearAll={() => {
+              const next = new URLSearchParams(searchParams)
+              next.delete('exclude_segment')
               next.delete('page')
               setSearchParams(next)
             }}
@@ -3876,20 +3924,48 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
                   </select>
                 </label> : null}
               </fieldset>
-              <fieldset className="inbox-filter-group space-y-2"><legend className="flex items-center gap-1 text-sm font-medium"><ArchiveChatsIcon /> Archivo{list?.archived_count != null ? ' (' + list.archived_count + ')' : ''}</legend>
-                {(['archived','archived_auto','archived_manual'] as const).map(key => (
-                  <label key={key} className="flex items-center gap-2 text-sm">
-                    <input type="radio" name="inbox-view" checked={chatFilter === key} onChange={() => setChatFilter(key)} />{chatFilterLabels[key]}
-                  </label>
-                ))}
-              </fieldset>
             </PopoverContent>
           </Popover>
         </div>
-        <InboxSavedViewShortcuts views={savedViews} onApply={applySavedView} />
+        {searching ? (
+          <div className="inbox-search-options" role="group" aria-label="Alcance de la búsqueda">
+            <label title="Busca también en el texto de los mensajes (mín. 4 caracteres, o 3 dígitos de teléfono)">
+              <input
+                type="checkbox"
+                checked={inboxSearchMessagesParam(searchParams)}
+                onChange={(e) => setSearchMessages(e.target.checked)}
+              />
+              Incluir mensajes
+            </label>
+            <label title="Sin límite de fechas. Por defecto la búsqueda mira los últimos 30 días.">
+              <input
+                type="checkbox"
+                checked={rangeAll && !explicitFrom && !explicitTo}
+                onChange={(e) => setSearchAllHistory(e.target.checked)}
+              />
+              Todo el historial
+            </label>
+            {searchQuery && inboxSearchMessagesParam(searchParams) && !inboxSearchMayScanMessages(searchQuery, true) ? (
+              <span>Escribe al menos 4 caracteres (o 3 dígitos) para buscar en mensajes.</span>
+            ) : null}
+            {searchQuery && !rangeAll && !explicitFrom && !explicitTo ? (
+              <span>Últimos 30 días.</span>
+            ) : null}
+          </div>
+        ) : null}
+        {savedViewsKey ? (
+          <InboxSavedViewShortcuts
+            views={savedViews}
+            saveViews={saveViews}
+            getQuery={currentSavedViewQuery}
+            onApply={applySavedView}
+            canSave={canSaveView}
+          />
+        ) : null}
         <div className="inbox-active-filters" aria-label="Filtros activos">
-          {chatFilter !== 'all' ? <button type="button" className="inbox-filter-chip" onClick={() => setChatFilter('all')} aria-label={'Quitar filtro ' + chatFilterLabels[chatFilter]}>{chatFilterLabels[chatFilter]} <span aria-hidden>×</span></button> : null}
+          {chatFilter === 'human' ? <button type="button" className="inbox-filter-chip" onClick={() => setChatFilter('all')} aria-label="Quitar filtro Atención humana">Atención humana <span aria-hidden>×</span></button> : null}
           {selectedSegments.map(slug => <button key={slug} type="button" className="inbox-filter-chip" onClick={() => toggleSegment(slug)} aria-label={'Quitar segmento ' + selectedSegmentLabel(slug)}>{selectedSegmentLabel(slug)} <span aria-hidden>×</span></button>)}
+          {excludedSegments.map(slug => <button key={'exclude-' + slug} type="button" className="inbox-filter-chip" onClick={() => toggleExcludedSegment(slug)} aria-label={'Quitar exclusión ' + selectedSegmentLabel(slug)}>Excluir {selectedSegmentLabel(slug)} <span aria-hidden>×</span></button>)}
           {lineFilter != null ? (
             <button
               type="button"
@@ -3905,42 +3981,8 @@ function ConversationsInbox({ cacheKey }: { cacheKey: string }) {
             </button>
           ) : null}
           {windowMaxFilter != null ? <button type="button" className="inbox-filter-chip" onClick={() => setWindowMaxFilter(null)} aria-label="Quitar filtro de ventana">Ventana ≤{windowMaxFilter}h <span aria-hidden>×</span></button> : null}
-          {dateFromFilter || dateToFilter ? <button type="button" className="inbox-filter-chip" onClick={clearDateRangeFilter} aria-label="Quitar filtro de fechas">{showingDefaultRange ? 'Últimos 15 días' : [dateFromFilter ? 'Desde ' + dateFromFilter : '', dateToFilter ? 'Hasta ' + dateToFilter : ''].filter(Boolean).join(' · ')} <span aria-hidden>×</span></button> : null}
-          {searchQuery && inboxSearchMessagesParam(searchParams) ? (
-            <button
-              type="button"
-              className="inbox-filter-chip"
-              onClick={() => {
-                const next = new URLSearchParams(searchParams)
-                next.delete('qm')
-                next.delete('page')
-                setSearchParams(next)
-              }}
-              aria-label="Quitar búsqueda en mensajes"
-            >
-              Mensajes{inboxSearchMayScanMessages(searchQuery, true) ? '' : ' (corto)'} <span aria-hidden>×</span>
-            </button>
-          ) : null}
-          {searchQuery && rangeAll && !explicitFrom && !explicitTo ? (
-            <button
-              type="button"
-              className="inbox-filter-chip"
-              onClick={() => {
-                const next = new URLSearchParams(searchParams)
-                next.delete('range')
-                next.delete('page')
-                setSearchParams(next)
-              }}
-              aria-label="Quitar búsqueda en todo el historial"
-            >
-              Todo el historial <span aria-hidden>×</span>
-            </button>
-          ) : null}
-          {searchQuery && !rangeAll && !explicitFrom && !explicitTo ? (
-            <span className="inbox-filter-chip inbox-filter-chip--static" title="La búsqueda usa los últimos 30 días salvo que actives todo el historial">
-              Búsqueda · 30 días
-            </span>
-          ) : null}
+          {explicitFrom || explicitTo ? <button type="button" className="inbox-filter-chip" onClick={clearDateRangeFilter} aria-label="Quitar filtro de fechas">{[explicitFrom ? 'Desde ' + explicitFrom : '', explicitTo ? 'Hasta ' + explicitTo : ''].filter(Boolean).join(' · ')} <span aria-hidden>×</span></button> : null}
+          {listAllHistory ? <button type="button" className="inbox-filter-chip" onClick={restoreDefaultDateRange} aria-label="Volver a los últimos 15 días">Todo el historial <span aria-hidden>×</span></button> : null}
         </div>
       </div>
       {canBulkSelect && selectedContactIds.size > 0 ? (

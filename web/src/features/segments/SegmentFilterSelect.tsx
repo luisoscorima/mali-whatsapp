@@ -21,6 +21,8 @@ type SegmentFilterSelectProps = {
   compact?: boolean
   disabled?: boolean
   className?: string
+  emptyLabel?: string
+  ariaLabel?: string
 }
 
 function triggerLabel(
@@ -54,11 +56,16 @@ export function SegmentFilterSelect({
   compact = false,
   disabled = false,
   className = '',
+  emptyLabel,
+  ariaLabel,
 }: SegmentFilterSelectProps) {
   const { theme } = useTheme()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const hasSelection = selectedSlugs.length > 0
+  const label = !hasSelection && emptyLabel
+    ? emptyLabel
+    : triggerLabel(segments, selectedSlugs, variant, compact)
   const noneActive = selectedSlugs.includes(SEGMENT_NONE)
   const clearLabel = variant === 'form' ? 'Ninguno' : 'Todos'
   const effectiveShowNone = variant === 'form' ? false : showNoneOption
@@ -108,16 +115,16 @@ export function SegmentFilterSelect({
               compact ? 'w-auto max-w-[7.5rem] shrink-0' : 'w-full'
             } ${hasSelection ? 'border-accent/40' : ''}`}
             aria-label={
-              variant === 'form' ? 'Seleccionar segmentos' : 'Filtrar por segmento'
+              ariaLabel ?? (variant === 'form' ? 'Seleccionar segmentos' : 'Filtrar por segmento')
             }
             title={
-              variant === 'filter' && hasSelection
+              !emptyLabel && variant === 'filter' && hasSelection
                 ? 'Unión: resultados en cualquiera de los segmentos seleccionados'
-                : triggerLabel(segments, selectedSlugs, variant, compact)
+                : label
             }
           >
             <span className="min-w-0 truncate">
-              {triggerLabel(segments, selectedSlugs, variant, compact)}
+              {label}
             </span>
             <span className="shrink-0 text-muted" aria-hidden>
               ▾

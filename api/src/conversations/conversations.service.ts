@@ -113,6 +113,7 @@ import {
 import {
   buildContactSegmentSql,
   parseInboxSegmentFilter,
+  parseInboxExcludeSegmentFilter,
   type InboxSegmentFilter,
   buildConversationSegmentSql,
   buildLastMessageDateRangeSql,
@@ -1224,8 +1225,12 @@ export class ConversationsService {
     const categoryOptions = await this.listEducationCategories(user);
     const categories = this.selectedEducationCategories(area, categoryOptions, query.category);
     const segmentRaw = parseSegmentQueryParam(query.segment);
+    const excludeRaw = parseSegmentQueryParam(query.exclude_segment);
     const segmentOptions = await this.loadSegmentOptions(area, categories);
     const segmentFilter = parseInboxSegmentFilter(segmentRaw, segmentOptions, categories);
+    const excluded = parseInboxExcludeSegmentFilter(excludeRaw, segmentOptions, categories);
+    segmentFilter.excludeIds = excluded.ids;
+    segmentFilter.excludeSlugs = excluded.slugs;
     const requestedLineId = parseInboxLineFilter(
       Array.isArray(query.line) ? query.line[0] : query.line,
     );
@@ -1341,6 +1346,10 @@ export class ConversationsService {
         applied_to: dateFilter.appliedTo,
         segment_slugs: [...segmentFilter.slugs, ...(segmentFilter.ids ?? []).map(id => `id:${id}`)],
         include_none: segmentFilter.includeNone,
+        exclude_segment_slugs: [
+          ...(segmentFilter.excludeSlugs ?? []),
+          ...(segmentFilter.excludeIds ?? []).map((id) => `id:${id}`),
+        ],
         categories: categories ?? [],
         line_id: lineId,
       },

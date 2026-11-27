@@ -562,6 +562,16 @@
   background: var(--wa-list-bg);
 }
 
+.inbox-sidebar-filters .inbox-chat-filter-pills--compact {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.inbox-sidebar-filters .inbox-active-filters {
+  padding: 0;
+}
+
 .inbox-sidebar-filters .inbox-chat-filter-pills--row {
   flex-wrap: nowrap;
   overflow-x: auto;

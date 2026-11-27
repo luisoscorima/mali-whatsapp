@@ -59,17 +59,17 @@ const guideSteps: Record<GuideSection, GuideStep[]> = {
     {
       target: 'inbox-views',
       title: 'Organiza tu bandeja',
-      description: 'En Mis chats aparecen las conversaciones que te asignaron. Usa Sin asignar para encontrar las que aún no tienen asesor.',
+      description: 'Mis chats son las que te asignaron y Sin asignar las que aún no tienen asesor. Sin leer y Sin responder enfocan esa lista. Archivo cambia de lugar.',
     },
     {
       target: 'inbox-search',
       title: 'Encuentra una conversación',
-      description: 'Busca por nombre o teléfono. Desde Filtros puedes incluir también el texto de los mensajes.',
+      description: 'Busca por nombre o teléfono. Al escribir puedes incluir el texto de los mensajes y buscar en todo el historial.',
     },
     {
       target: 'inbox-filters',
-      title: 'Prioriza lo que falta atender',
-      description: 'Usa Sin responder o Sin leer para enfocar la bandeja. Puedes combinar estos filtros con otros disponibles y guardar la vista.',
+      title: 'Afina la lista',
+      description: 'Línea, segmentos, fechas y ventana se suman a la vista de arriba. Guarda esa combinación en la fila de vistas.',
     },
     {
       target: 'inbox-conversations',

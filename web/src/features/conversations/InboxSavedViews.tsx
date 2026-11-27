@@ -2,19 +2,22 @@ import { useId, useRef, useState, type FormEvent } from 'react'
 import { Button } from '@/shared/ui/shadcn/button'
 import type { SavedView } from './useInboxSavedViews'
 
-export function InboxSavedViews({ views, saveViews, getQuery, onApply }: {
+export function InboxSavedViewShortcuts({ views, onApply, saveViews, getQuery, canSave = false }: {
   views: SavedView[]
-  saveViews: (views: SavedView[]) => boolean
-  getQuery: () => string
   onApply: (query: string) => void
+  saveViews?: (views: SavedView[]) => boolean
+  getQuery?: () => string
+  canSave?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [error, setError] = useState('')
   const saveButtonRef = useRef<HTMLButtonElement>(null)
   const formId = useId()
+  const allowSave = Boolean(canSave && saveViews && getQuery)
 
   function persist(next: SavedView[]) {
+    if (!saveViews) return false
     const saved = saveViews(next)
     setError(saved ? '' : 'No se pudieron guardar los cambios en este navegador.')
     return saved
@@ -22,6 +25,7 @@ export function InboxSavedViews({ views, saveViews, getQuery, onApply }: {
 
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!getQuery) return
     const label = name.trim()
     if (!label) return
     if (views.some((view) => view.name.toLocaleLowerCase() === label.toLocaleLowerCase())) {
@@ -35,22 +39,46 @@ export function InboxSavedViews({ views, saveViews, getQuery, onApply }: {
     }
   }
 
+  if (!views.length && !allowSave) return null
+
   return (
-    <section className="space-y-2 border-b border-line pb-3" aria-label="Vistas guardadas">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium">Vistas guardadas</span>
-        <Button
-          ref={saveButtonRef} type="button" size="sm" variant="ghost"
-          aria-expanded={open} aria-controls={open ? formId : undefined}
-          onClick={() => {
-            setOpen(!open)
-            setError('')
-          }}
-        >
-          {open ? 'Cancelar' : 'Guardar vista'}
-        </Button>
-      </div>
-      {open && (
+    <div className="inbox-saved-view-bar">
+      <ul className="flex min-w-0 gap-1.5 overflow-x-auto p-0.5" aria-label="Vistas guardadas">
+        {views.map((view) => (
+          <li key={view.name} className="flex shrink-0 items-center">
+            <Button
+              type="button" size="sm" variant="secondary" className="max-w-44"
+              title={view.name} onClick={() => onApply(view.query)}
+            >
+              <span className="truncate">{view.name}</span>
+            </Button>
+            {saveViews ? (
+              <Button
+                type="button" size="sm" variant="ghost" className="px-2"
+                aria-label={`Eliminar vista ${view.name}`}
+                onClick={() => persist(views.filter((item) => item.name !== view.name))}
+              >
+                ×
+              </Button>
+            ) : null}
+          </li>
+        ))}
+        {allowSave ? (
+          <li className="shrink-0">
+            <Button
+              ref={saveButtonRef} type="button" size="sm" variant="outline"
+              aria-expanded={open} aria-controls={open ? formId : undefined}
+              onClick={() => {
+                setOpen(!open)
+                setError('')
+              }}
+            >
+              {open ? 'Cancelar' : 'Guardar vista'}
+            </Button>
+          </li>
+        ) : null}
+      </ul>
+      {allowSave && open && (
         <form id={formId} onSubmit={save} className="flex items-center gap-2">
           <input
             type="text" value={name} maxLength={48} required autoFocus
@@ -67,49 +95,7 @@ export function InboxSavedViews({ views, saveViews, getQuery, onApply }: {
           </Button>
         </form>
       )}
-      {views.length > 0 && (
-        <ul className="max-h-40 space-y-1 overflow-y-auto">
-          {views.map((view) => (
-            <li key={view.name} className="flex items-center gap-2">
-              <Button
-                type="button" size="sm" variant="ghost" className="min-w-0 flex-1 justify-start"
-                title={view.name} onClick={() => onApply(view.query)}
-              >
-                <span className="truncate">{view.name}</span>
-              </Button>
-              <Button
-                type="button" size="sm" variant="ghost"
-                aria-label={`Eliminar vista ${view.name}`}
-                onClick={() => persist(views.filter((item) => item.name !== view.name))}
-              >
-                Eliminar
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
       {error && <p role="alert" className="text-xs text-bad">{error}</p>}
-    </section>
-  )
-}
-
-export function InboxSavedViewShortcuts({ views, onApply }: {
-  views: SavedView[]
-  onApply: (query: string) => void
-}) {
-  if (!views.length) return null
-  return (
-    <ul className="flex min-w-0 gap-1.5 overflow-x-auto p-0.5" aria-label="Accesos a vistas guardadas">
-      {views.map((view) => (
-        <li key={view.name} className="shrink-0">
-          <Button
-            type="button" size="sm" variant="secondary" className="max-w-44"
-            title={view.name} onClick={() => onApply(view.query)}
-          >
-            <span className="truncate">{view.name}</span>
-            </Button>
-        </li>
-      ))}
-    </ul>
+    </div>
   )
 }
