@@ -3,7 +3,6 @@ import { Prisma } from '@prisma/client';
 import { normalizeArea } from '../config/areas';
 import { PrismaService } from '../prisma/prisma.service';
 import { CampaignQueueService } from '../queues/campaign-queue.service';
-import { normalizeWhatsAppRecipient } from '../conversations/whatsapp-recipient.util';
 import {
   buildTemplateDefinition,
   buildWhatsappGraphComponents,
@@ -33,6 +32,11 @@ import {
   sqlCampaignLogIsError,
   sqlInList,
 } from './campaign-log-statuses.util';
+import {
+  requireCampaignAcceptedMessageId,
+  settleExistingCampaignWaWithoutResend,
+} from './campaign-delivery-status.util';
+import { resolveCampaignRetryRecipient } from './campaign-retry-recipient.util';
 
 const SALIDA_OK_IN = sqlInList(SALIDA_OK_STATUSES);
 const ERROR_STATUS_IN = sqlInList(ERROR_STATUSES);
@@ -171,7 +175,12 @@ export class CampaignRetryService {
         SELECT m.wa_message_id
         FROM chat_messages m
         INNER JOIN conversations conv ON conv.id = m.conversation_id
-        WHERE (conv.phone = ${phone} OR conv.whatsapp_user_id = ${phone})
+        WHERE COALESCE(
+            NULLIF(BTRIM(m.raw_payload #>> '{api_response,contacts,0,input}'), ''),
+            conv.phone,
+            conv.whatsapp_user_id,
+            ''
+          ) = ${phone}
           AND m.direction = 'outbound'
           AND m.message_type = 'campaign'
           AND NULLIF(BTRIM(m.raw_payload->>'campaign_id'), '') ~ '^[0-9]+$'
@@ -208,30 +217,17 @@ export class CampaignRetryService {
     return claimed[0] ?? null;
   }
 
-  private async recoverWithoutResend(input: {
+  private async persistRecoveredChatWithoutResend(input: {
     campaignId: number;
-    logId: number;
     phone: string;
     contactId: number | null;
     waMessageId: string;
-    nextAttempt: number;
     area: string;
     templateName: string;
     preview: ReturnType<typeof buildCampaignMessagePreview>;
     whatsappLineId: number | null;
     whatsappPhoneNumberId: string | null;
   }): Promise<void> {
-    await this.prisma.campaign_logs.update({
-      where: { id: input.logId },
-      data: {
-        status: 'sent',
-        whatsapp_message_id: input.waMessageId,
-        attempt: input.nextAttempt,
-        retryable: false,
-        last_retry_at: new Date(),
-      },
-    });
-
     try {
       await persistCampaignChatMessage(this.prisma, {
         area: input.area,
@@ -384,7 +380,14 @@ export class CampaignRetryService {
         await wait(retryDelayMs);
       }
 
-      const phoneNorm = normalizeWhatsAppRecipient(row.phone);
+      const candidateContact = row.contact_id
+        ? contactById.get(row.contact_id)
+        : null;
+      const recipient = resolveCampaignRetryRecipient(
+        row.phone,
+        candidateContact?.phone,
+      );
+      const phoneNorm = recipient.phone;
       if (!phoneNorm) {
         stillFailed += 1;
         continue;
@@ -419,18 +422,34 @@ export class CampaignRetryService {
       const templateName = String(sendCtx.templateSnapshot.name || '');
 
       const existingWaId =
-        String(claimed.whatsapp_message_id || '').trim() ||
+        (recipient.targetChanged
+          ? ''
+          : String(claimed.whatsapp_message_id || '').trim()) ||
         (await this.findExistingCampaignChatWaId(campaignId, phoneNorm));
 
       // Meta ya aceptó (hay wamid en log o en chat): no volver a enviar.
       if (existingWaId) {
-        await this.recoverWithoutResend({
+        const outcome = await settleExistingCampaignWaWithoutResend(
+          this.prisma,
+          {
+            logId: claimed.id,
+            waMessageId: existingWaId,
+            nextAttempt,
+          },
+        );
+        if (outcome === 'failed') {
+          this.logger.log(
+            `Campaña #${campaignId}: wamid existente con error de entrega (${phoneNorm}); se mantiene failed`,
+          );
+          skippedWithoutResend += 1;
+          stillFailed += 1;
+          continue;
+        }
+        await this.persistRecoveredChatWithoutResend({
           campaignId,
-          logId: claimed.id,
           phone: phoneNorm,
           contactId: claimed.contact_id,
           waMessageId: existingWaId,
-          nextAttempt,
           area: sendCtx.area,
           templateName,
           preview,
@@ -502,12 +521,13 @@ export class CampaignRetryService {
           phoneNumberId: campaign.whatsapp_line?.phone_number_id ?? null,
         });
 
-        const messageId = apiResponse.messages?.[0]?.id || null;
+        const messageId = requireCampaignAcceptedMessageId(apiResponse);
 
         await this.prisma.campaign_logs.update({
           where: { id: claimed.id },
           data: {
             status: 'sent',
+            phone: phoneNorm,
             whatsapp_message_id: messageId,
             response: sanitizeApiResponse(apiResponse) as object,
             attempt: nextAttempt,

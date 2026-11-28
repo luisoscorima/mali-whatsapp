@@ -32,6 +32,7 @@ import {
   buildCampaignMessagePreview,
 } from './campaign-message-preview.util';
 import { persistCampaignChatMessage } from './campaign-chat-message.util';
+import { requireCampaignAcceptedMessageId } from './campaign-delivery-status.util';
 
 export type CampaignTemplateSnapshot = {
   id: number;
@@ -359,7 +360,7 @@ export class CampaignSenderService {
               phoneNumberId: whatsappPhoneNumberId,
             });
 
-            const messageId = apiResponse.messages?.[0]?.id || null;
+            const messageId = requireCampaignAcceptedMessageId(apiResponse);
             acceptedMessageId = messageId;
             acceptedApiResponse = apiResponse;
             const preview = applyCampaignImageFallback(
